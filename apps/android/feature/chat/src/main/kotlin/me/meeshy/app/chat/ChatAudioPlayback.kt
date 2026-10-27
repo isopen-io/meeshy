@@ -21,6 +21,26 @@ internal class ChatAudioPlayback private constructor(
         return ChatAudioPlayback(audio.attachmentId, base.toggle(url))
     }
 
+    /** Le système demande la pause (focus perdu, casque débranché, notification) : sans effet à l'arrêt. */
+    fun paused(): ChatAudioPlayback {
+        val url = transport.currentUrl ?: return this
+        return if (transport.isPlaying) with(transport.toggle(url)) else this
+    }
+
+    /** Reprise là où le vocal s'est arrêté : sans effet pendant un chargement ou sur un vocal qui joue. */
+    fun resumed(): ChatAudioPlayback {
+        val url = transport.currentUrl ?: return this
+        return if (!transport.isPlaying && !transport.isLoading) with(transport.toggle(url)) else this
+    }
+
+    /** « Arrêter » : le vocal est lâché, plus aucune bulle ne le montre chargé. */
+    fun stopped(): ChatAudioPlayback = Idle
+
+    fun skipped(seconds: Double): ChatAudioPlayback = with(transport.skip(seconds))
+
+    fun seekedTo(positionSeconds: Double): ChatAudioPlayback =
+        if (transport.hasDuration) with(transport.seek(positionSeconds / transport.durationSeconds)) else this
+
     fun ready(): ChatAudioPlayback = with(transport.ready())
 
     fun failed(): ChatAudioPlayback = with(transport.failed())

@@ -123,7 +123,7 @@ internal fun ChatMessageRow(
             onReactionLongPress = { actions.onReactionLongPress(messageId) },
             onImageClick = { index -> actions.onImageClick(messageId, index) },
             onLocationClick = { location -> actions.onLocationClick(messageId, location) },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
