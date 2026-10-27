@@ -84,6 +84,7 @@ diamond.fill
 doc.fill
 doc.on.doc
 doc.plaintext.fill
+dollarsign.circle.fill
 dot.radiowaves.left.and.right
 ellipsis
 ellipsis.circle.fill

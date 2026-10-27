@@ -520,6 +520,12 @@
    "reason": "Icons.AutoMirrored.Filled.Article (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
   },
   {
+   "symbol": "dollarsign.circle.fill",
+   "status": "mapped",
+   "role": "MonetizationOn",
+   "reason": "Icons.Filled.MonetizationOn; variante .fill rendue en Filled (carte « Liens affiliés » de LinksHubView, symbole passé en paramètre)"
+  },
+  {
    "symbol": "dot.radiowaves.left.and.right",
    "status": "mapped",
    "role": "Sensors",
@@ -2481,6 +2487,10 @@
    "directional": false
   },
   "MicOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "MonetizationOn": {
    "origin": "material",
    "directional": false
   },

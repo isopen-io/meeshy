@@ -159,7 +159,7 @@ private fun LinksHubEntry.icon(): ImageVector = when (this) {
     LinksHubEntry.SHARE -> MeeshyIcons.Link
     LinksHubEntry.TRACKING -> MeeshyIcons.ChartLine
     LinksHubEntry.COMMUNITY -> MeeshyIcons.Groups
-    LinksHubEntry.AFFILIATE -> MeeshyIcons.Gift
+    LinksHubEntry.AFFILIATE -> MeeshyIcons.MonetizationOn
 }
 
 private fun LinksHubEntry.titleRes(): Int = when (this) {

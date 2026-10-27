@@ -130,6 +130,7 @@ import androidx.compose.material.icons.filled.Memory as FiMemory
 import androidx.compose.material.icons.filled.Menu as FiMenu
 import androidx.compose.material.icons.filled.Mic as FiMic
 import androidx.compose.material.icons.filled.MicOff as FiMicOff
+import androidx.compose.material.icons.filled.MonetizationOn as FiMonetizationOn
 import androidx.compose.material.icons.filled.MoreHoriz as FiMoreHoriz
 import androidx.compose.material.icons.filled.Movie as FiMovie
 import androidx.compose.material.icons.filled.MusicNote as FiMusicNote
@@ -426,6 +427,7 @@ public object MeeshyIcons {
     public val Menu: ImageVector get() = Icons.Filled.FiMenu
     public val Mic: ImageVector get() = Icons.Filled.FiMic
     public val MicOff: ImageVector get() = Icons.Filled.FiMicOff
+    public val MonetizationOn: ImageVector get() = Icons.Filled.FiMonetizationOn
     public val MoreHorizontal: ImageVector get() = Icons.Filled.FiMoreHoriz
     public val Movie: ImageVector get() = Icons.Filled.FiMovie
     public val MusicNote: ImageVector get() = Icons.Filled.FiMusicNote
