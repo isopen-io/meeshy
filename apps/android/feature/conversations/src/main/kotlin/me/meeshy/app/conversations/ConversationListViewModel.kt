@@ -216,7 +216,11 @@ class ConversationListViewModel @Inject constructor(
     fun setReaction(id: String, emoji: String?) = actions.setReaction(id, emoji)
 
     fun setTags(id: String, tags: List<String>) = actions.setTags(id, tags)
-    fun markRead(id: String) = actions.markRead(id)
+    /** Lire défait la marque « non lu » : sinon la réconciliation d'un rafraîchissement la rétablirait. */
+    fun markRead(id: String) {
+        loadingDeps.explicitUnreadMarks.clear(id)
+        actions.markRead(id)
+    }
     fun markUnread(id: String) {
         loadingDeps.explicitUnreadMarks.note(id)
         actions.markUnread(id)

@@ -191,6 +191,7 @@ class ConversationListViewModelTest {
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
+        loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, presence, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
@@ -198,6 +199,7 @@ class ConversationListViewModelTest {
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
         idleRowSignalsSource(),
+        loadingDeps,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -1310,6 +1312,25 @@ class ConversationListViewModelTest {
 
         coVerify { repo.markUnreadOptimistic("c1") }
         verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun mark_read_after_mark_unread_drops_the_explicit_unread_mark() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns true
+        coEvery { repo.markReadOptimistic("c1") } returns true
+        val deps = ConversationListLoadingDeps.detached()
+        val vm = viewModel(repo, loadingDeps = deps)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        assertThat(deps.explicitUnreadMarks.snapshot()).containsExactly("c1")
+        vm.markRead("c1")
+        advanceUntilIdle()
+
+        assertThat(deps.explicitUnreadMarks.snapshot()).isEmpty()
     }
 
     @Test
