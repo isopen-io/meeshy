@@ -25,6 +25,7 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import me.meeshy.app.R
 import me.meeshy.app.navigation.graph.CommunityRoutes
+import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.chrome.FloatingMenuLadder
 import me.meeshy.ui.component.auth.AnimatedBrandLogo
@@ -179,7 +180,7 @@ private fun RootMenuLadderEntry.label(): String = stringResource(
 
 private fun NavController.openLadderEntry(entry: RootMenuLadderEntry) {
     when (entry) {
-        RootMenuLadderEntry.LINKS -> navigate(Routes.MY_SHARE_LINKS)
+        RootMenuLadderEntry.LINKS -> navigate(LinksRoutes.HUB)
         RootMenuLadderEntry.NOTIFICATIONS -> navigateToTopLevel(Routes.NOTIFICATIONS)
         RootMenuLadderEntry.CALLS -> navigateToTopLevel(Routes.CALLS)
         RootMenuLadderEntry.DISCOVER -> navigate(Routes.CONTACTS_DISCOVER)
