@@ -1,6 +1,6 @@
 package me.meeshy.app.game.progression
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -17,7 +17,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,17 +139,18 @@ private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.
 private fun ConceptGauge(target: Float, concept: ProgressionConcept) {
     val reduce = LocalReduceMotion.current
     val tokens = MeeshyTheme.tokens
-    val fill by animateFloatAsState(
-        targetValue = target.coerceIn(0f, 1f),
-        animationSpec = tween(if (reduce) 0 else GAUGE_MILLIS),
-        label = "conceptGauge",
-    )
+    val goal = target.coerceIn(0f, 1f)
+    val fill = remember { Animatable(if (reduce) goal else 0f) }
+    LaunchedEffect(goal, reduce) {
+        if (reduce) fill.snapTo(goal) else fill.animateTo(goal, tween(GAUGE_MILLIS))
+    }
     val tint = concept.tint()
     val track = tokens.textMuted.copy(alpha = TRACK_ALPHA)
     Canvas(Modifier.fillMaxWidth().height(GAUGE_HEIGHT)) {
         val radius = CornerRadius(size.height / 2f)
         drawRoundRect(track, size = size, cornerRadius = radius)
-        if (fill > 0f) drawRoundRect(tint, size = Size(size.width * fill, size.height), cornerRadius = radius)
+        val shown = fill.value
+        if (shown > 0f) drawRoundRect(tint, size = Size(size.width * shown, size.height), cornerRadius = radius)
     }
 }
 
