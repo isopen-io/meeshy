@@ -131,6 +131,11 @@ internal class CallMediaSources(
         }
     }
 
+    /** Bascule entre la caméra avant et arrière (iOS `switchCamera`) ; sans effet sans capture en cours. */
+    fun switchCamera() {
+        runCatching { videoCapturer?.switchCamera(null) }
+    }
+
     /** Arrête la capture et dispose les sources ; à appeler AVANT de disposer le `PeerConnection`. */
     fun releaseVideo() {
         runCatching { videoCapturer?.stopCapture() }

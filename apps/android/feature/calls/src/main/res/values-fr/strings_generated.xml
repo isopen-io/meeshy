@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_flip_camera">Basculer la caméra avant/arrière</string>
+    <string name="call_control_flip_camera_caption">Retourner</string>
+    <string name="call_control_flip_camera_hint">Bascule entre la caméra avant et arrière</string>
     <string name="call_journal_cancel">Annuler</string>
     <string name="call_journal_clear_action">Effacer</string>
     <string name="call_journal_clear_all">Tout effacer</string>

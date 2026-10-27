@@ -157,7 +157,11 @@ internal fun CallConnectedColumn(
         val stopsRecording = action == CallAction.Recording && recording.phase.isActive
         CallScreenPanel.entries.firstOrNull { it.action == action && !stopsRecording }?.let(chrome::open)
         CallScreenMode.entries.firstOrNull { it.action == action }?.let(chrome::enter)
-        if (action == CallAction.Camera) viewModel.toggleCamera() else dispatcher.dispatch(action)
+        when (action) {
+            CallAction.Camera -> viewModel.toggleCamera()
+            CallAction.FlipCamera -> viewModel.flipCamera()
+            else -> dispatcher.dispatch(action)
+        }
     }
 
     BoxWithConstraints(

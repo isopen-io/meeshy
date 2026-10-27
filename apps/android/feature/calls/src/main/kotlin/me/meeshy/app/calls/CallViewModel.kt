@@ -327,6 +327,12 @@ class CallViewModel @Inject constructor(
         emitIfIdentified { signalManager.emitToggleVideo(it, enabled = media.isCameraOn) }
     }
 
+    /** Basculer la caméra avant/arrière (iOS `switchCamera`) : sans effet caméra coupée, jamais signalé. */
+    fun flipCamera() {
+        if (!media.isCameraOn) return
+        coordinator.switchCamera()
+    }
+
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
 

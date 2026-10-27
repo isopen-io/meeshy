@@ -153,6 +153,9 @@ class WebRtcCallCoordinator @Inject constructor(
 
     fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
 
+    /** Caméra avant ⇄ arrière : local, jamais signalé au pair. */
+    fun switchCamera() = engine.switchCamera()
+
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
     fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
 

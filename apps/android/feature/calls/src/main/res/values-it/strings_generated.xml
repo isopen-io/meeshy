@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_flip_camera">Passa dalla fotocamera anteriore a quella posteriore</string>
+    <string name="call_control_flip_camera_caption">Gira</string>
+    <string name="call_control_flip_camera_hint">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_journal_cancel">Annulla</string>
     <string name="call_journal_clear_action">Elimina</string>
     <string name="call_journal_clear_all">Elimina tutto</string>

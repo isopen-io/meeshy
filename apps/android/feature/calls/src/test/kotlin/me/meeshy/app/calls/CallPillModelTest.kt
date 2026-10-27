@@ -28,6 +28,14 @@ class CallPillModelTest {
     }
 
     @Test
+    fun `the flip camera action rides with a live camera only`() {
+        assertThat(CallPillModel.flipItem(state())!!.action).isEqualTo(CallAction.FlipCamera)
+        assertThat(CallPillModel.flipItem(state(camera = false))).isNull()
+        assertThat(CallPillModel.flipItem(state(isVideo = false))).isNull()
+        assertThat(CallPillModel.items(state(), emptyList()).keys).containsAtLeast(CallAction.Camera, CallAction.FlipCamera)
+    }
+
+    @Test
     fun `the camera toggle is active while the camera is on`() {
         assertThat(CallPillModel.cameraItem(state())!!.kind).isEqualTo(CallPillKind.Active)
         assertThat(CallPillModel.cameraItem(state(camera = false))!!.kind).isEqualTo(CallPillKind.Normal)

@@ -339,6 +339,28 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `flipping the camera switches the capturer locally and never signals the peer`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+
+        verify(exactly = 1) { coordinator.switchCamera() }
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `flipping with the camera off does nothing`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.flipCamera()
+
+        verify(exactly = 0) { coordinator.switchCamera() }
+    }
+
+    @Test
     fun `an audio call never reports the camera on even after a toggle`() {
         val vm = vm()
         vm.start(incomingAudio)
