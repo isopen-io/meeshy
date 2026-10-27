@@ -176,7 +176,7 @@ final class GameNotificationRoutingTests: XCTestCase {
     /// Les Réglages du jeu ne portent plus de chemin transverse : « Gérer ma ligue », « Comment ça marche » et
     /// « Carnet » sont des portes d'AUTRES écrans (la fiche de la ligue, la première page).
     func test_theGameSettings_carryNoCrossPath() throws {
-        let settings = try source("Meeshy/Features/Main/Game/Wave2/GameSettingsViews.swift")
+        let settings = try source("Meeshy/Features/Game/Wave2/GameSettingsViews.swift")
         for gone in ["router.push(", "game.settings.league.manage", "game.settings.help", "game.settings.notebook"] {
             XCTAssertFalse(settings.contains(gone), "« \(gone) » : un chemin transverse depuis les Réglages du jeu")
         }

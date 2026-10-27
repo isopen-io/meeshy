@@ -200,7 +200,7 @@ Transposition Android : GameBounceButton -> clickable avec échelle ressort ; ac
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptViews.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptViews.swift`
 
 </details>
 
@@ -223,7 +223,7 @@ Transposition Android : fullScreenCover(item:) -> destination plein écran ; she
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptPage.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptPage.swift`
 
 </details>
 
@@ -245,10 +245,10 @@ Rendu : Pas de rendu : la loi décide de la hiérarchie (nom en petit, valeur en
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptModel.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptFiche.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionFactIdentity.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptCopy.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptModel.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptFiche.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionFactIdentity.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptCopy.swift`
 
 </details>
 
@@ -288,14 +288,14 @@ Transposition Android : String(localized:) + xcstrings -> strings.xml + plurals 
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameCopy.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ProgressionCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionConceptCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameDetailCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameFicheCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameSparksCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameMintCostCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/PlayerBannerCopy.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionConceptCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameDetailCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameFicheCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameSparksCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift`
+- `apps/ios/Meeshy/Features/Game/PlayerBannerCopy.swift`
 - `apps/ios/Meeshy/Features/Main/Views/AchievementCopy.swift`
 
 </details>
@@ -322,11 +322,11 @@ Transposition Android : GameHaptics.shared -> HapticFeedback/Vibrator avec motif
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameHeroView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameHeroModel.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameHeroParts.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameSparkPairs.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameSparksCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameHeroView.swift`
+- `apps/ios/Meeshy/Features/Game/GameHeroModel.swift`
+- `apps/ios/Meeshy/Features/Game/GameHeroParts.swift`
+- `apps/ios/Meeshy/Features/Game/GameSparkPairs.swift`
+- `apps/ios/Meeshy/Features/Game/GameSparksCopy.swift`
 
 </details>
 
@@ -417,9 +417,9 @@ Transposition Android : HapticFeedback pattern strike -> VibrationEffect composi
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameMintPreviewView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameMintSequence.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameMintCostCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameMintPreviewView.swift`
+- `apps/ios/Meeshy/Features/Game/GameMintSequence.swift`
+- `apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift`
 
 </details>
 
@@ -443,7 +443,7 @@ Transposition Android : TimelineView(.periodic) -> LaunchedEffect + delay ; phot
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameMissionsView.swift`
+- `apps/ios/Meeshy/Features/Game/GameMissionsView.swift`
 
 </details>
 
@@ -464,9 +464,9 @@ Transposition Android : Route enum + NavigationStack -> NavHost destinations + d
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameNavigationMap.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameLink.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideTarget.swift`
+- `apps/ios/Meeshy/Features/Game/GameNavigationMap.swift`
+- `apps/ios/Meeshy/Features/Game/GameLink.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideTarget.swift`
 
 </details>
 
@@ -489,9 +489,9 @@ Transposition Android : struct immuable + replacing -> data class + copy ; Equat
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameOptimistic.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameBlock+Replacing.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameLevelConfirmation.swift`
+- `apps/ios/Meeshy/Features/Game/GameOptimistic.swift`
+- `apps/ios/Meeshy/Features/Game/GameBlock+Replacing.swift`
+- `apps/ios/Meeshy/Features/Game/GameLevelConfirmation.swift`
 
 </details>
 
@@ -515,8 +515,8 @@ Transposition Android : NavigationStack + Route.gamePage -> NavHost destinations
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GamePage.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Parts.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GamePage.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2Parts.swift`
 
 </details>
 
@@ -542,8 +542,8 @@ Transposition Android : CollapsibleHeader + NavigationStack push -> LargeTopAppB
 <details><summary>Sources iOS (3)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionFrontList.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionHeaderStanding.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionHeaderStanding.swift`
 
 </details>
 
@@ -593,7 +593,7 @@ Transposition Android : CacheFirstLoader/CacheCoordinator -> repository Room + F
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Game/ProgressionViewModel+Game.swift`
+- `apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift`
 
 </details>
 
@@ -668,12 +668,12 @@ Transposition Android : String(localized:) / Localizable.xcstrings -> res/values
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyCommon.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyCollection.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyGuide.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyLeague.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopySettings.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveCopy.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyCommon.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyCollection.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyGuide.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopySettings.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameArchiveCopy.swift`
 
 </details>
 
@@ -697,8 +697,8 @@ Transposition Android : ObservableObject @MainActor -> ViewModel + StateFlow dan
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Model.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Optimistic.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2Model.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2Optimistic.swift`
 
 </details>
 
@@ -721,7 +721,7 @@ Transposition Android : Caches/ iOS -> Context.cacheDir (purgeable) ; UserDefaul
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Support.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2Support.swift`
 
 </details>
 
@@ -792,7 +792,7 @@ Transposition Android : LanguageData.info(for:).colorHex -> palette de langues A
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameAtlasViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameAtlasViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameAtlas.swift`
 
 </details>
@@ -815,7 +815,7 @@ Transposition Android : EnvironmentKey -> CompositionLocal ; haptics.play(badgeL
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameBadgeShelf.swift`
+- `apps/ios/Meeshy/Features/Game/GameBadgeShelf.swift`
 
 </details>
 
@@ -932,7 +932,7 @@ Transposition Android : ChestView SwiftUI -> Canvas Compose (couvercle pivotant)
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/ChestStage.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/ChestStage.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameChest.swift`
 
 </details>
@@ -957,9 +957,9 @@ Transposition Android : TimelineView(.animation) -> withFrameNanos en boucle (Ch
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/ChoreographyClock.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/GameTimeline.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/GameBounce.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/ChoreographyClock.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/GameTimeline.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/GameBounce.swift`
 
 </details>
 
@@ -980,7 +980,7 @@ Transposition Android : Path/Canvas SwiftUI -> DrawScope.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameConceptEmblems.swift`
+- `apps/ios/Meeshy/Features/Game/GameConceptEmblems.swift`
 
 </details>
 
@@ -1003,7 +1003,7 @@ Transposition Android : Aucun équivalent plateforme particulier ; boutons Mater
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameDuoViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameDuoViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameDuo.swift`
 
 </details>
@@ -1027,9 +1027,9 @@ Transposition Android : presentationDetents([.height(measured), .large]) + prese
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameElementDetail.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameElementSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameDetailCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameElementDetail.swift`
+- `apps/ios/Meeshy/Features/Game/GameElementSheet.swift`
+- `apps/ios/Meeshy/Features/Game/GameDetailCopy.swift`
 
 </details>
 
@@ -1048,7 +1048,7 @@ Rendu : GameCard titre bodySize bold ; notes en muted ; boutons GameActionButton
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameFlamePanelView.swift`
+- `apps/ios/Meeshy/Features/Game/GameFlamePanelView.swift`
 
 </details>
 
@@ -1094,11 +1094,11 @@ Transposition Android : UserDefaults -> DataStore ; MeeStickerFilmView -> lecteu
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideCard.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideCardView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideEvents.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideSession.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideCard.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideCardView.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideEvents.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideSession.swift`
 
 </details>
 
@@ -1121,7 +1121,7 @@ Transposition Android : UserDefaults -> DataStore Preferences (JSON de l'instant
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameGuideV2.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameGuideV2.swift`
 
 </details>
 
@@ -1141,8 +1141,8 @@ Rendu : Nom en petit au-dessus, chiffre en grand, puis le contenant suivant et l
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameFicheHeads.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameFicheCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameFicheHeads.swift`
+- `apps/ios/Meeshy/Features/Game/GameFicheCopy.swift`
 
 </details>
 
@@ -1163,7 +1163,7 @@ Transposition Android : Aucun équivalent plateforme particulier.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameDoorsView.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameDoorsView.swift`
 
 </details>
 
@@ -1288,7 +1288,7 @@ Transposition Android : TabBar maison de deux boutons -> Row de deux boutons tog
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameLeagueViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameLeagueViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameLeague.swift`
 
 </details>
@@ -1312,8 +1312,8 @@ Transposition Android : fullScreenCover(item:) sans animation -> Dialog plein é
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyCover.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyRun.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyCover.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyRun.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameMintCeremony.swift`
 
 </details>
@@ -1339,10 +1339,10 @@ Transposition Android : TimelineView(.animation)+Canvas SwiftUI -> Canvas Compos
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyChoreography.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyLayers.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyParticles.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyScene.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyChoreography.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyLayers.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyParticles.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyScene.swift`
 
 </details>
 
@@ -1368,8 +1368,8 @@ Transposition Android : UIApplication.didEnterBackground/didBecomeActive -> Proc
 <details><summary>Sources iOS (3)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshyUI/Game/PlayerBannerView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/PlayerBannerHost.swift`
-- `apps/ios/Meeshy/Features/Main/Game/PlayerBannerCopy.swift`
+- `apps/ios/Meeshy/Features/Game/PlayerBannerHost.swift`
+- `apps/ios/Meeshy/Features/Game/PlayerBannerCopy.swift`
 
 </details>
 
@@ -1416,7 +1416,7 @@ Transposition Android : withAnimation spring -> animateFloatAsState/Animatable a
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GamePrestigeViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GamePrestigeViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GamePrestige.swift`
 
 </details>
@@ -1440,7 +1440,7 @@ Transposition Android : UIRectCorner physiques -> RoundedCornerShape(topStart/to
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameBannerBadge.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameBannerBadge.swift`
 
 </details>
 
@@ -1504,7 +1504,7 @@ Transposition Android : Aucun équivalent plateforme particulier.
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameRarityViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameRarityViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameRarity.swift`
 
 </details>
@@ -1529,10 +1529,10 @@ Transposition Android : ScrollViewReader.scrollTo -> LazyListState.animateScroll
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameRulesView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameRulesAtlas.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameRulesAtlasView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/GameGuideCopy.swift`
+- `apps/ios/Meeshy/Features/Game/GameRulesView.swift`
+- `apps/ios/Meeshy/Features/Game/GameRulesAtlas.swift`
+- `apps/ios/Meeshy/Features/Game/GameRulesAtlasView.swift`
+- `apps/ios/Meeshy/Features/Game/GameGuideCopy.swift`
 
 </details>
 
@@ -1556,7 +1556,7 @@ Transposition Android : LazyVGrid(5 colonnes flexibles) -> LazyVerticalGrid(Grid
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameSeasonViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameSeasonViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameSeason.swift`
 
 </details>
@@ -1603,7 +1603,7 @@ Transposition Android : UserPreferencesManager.updateNotification -> préférenc
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameSettingsViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameSettingsViews.swift`
 
 </details>
 
@@ -1626,8 +1626,8 @@ Transposition Android : Monter/descendre en boutons plutôt que drag-and-drop po
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseRules.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseRules.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseViews.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameTrophies.swift`
 
 </details>
@@ -1650,7 +1650,7 @@ Transposition Android : Services protocol-injectés Swift -> interfaces Kotlin +
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameIntegration.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameIntegration.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameIntegrationModels.swift`
 
 </details>
@@ -1674,7 +1674,7 @@ Transposition Android : DateFormatter/Locale -> java.time + android.text.format.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Names.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameWave2Names.swift`
 
 </details>
 
@@ -1697,9 +1697,9 @@ Transposition Android : Lien universel -> intent-filter + NavDeepLink ; Reachabi
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveModel.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveViews.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveCopy.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameArchiveModel.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameArchiveViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameArchiveCopy.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameArchive.swift`
 
 </details>
@@ -1722,7 +1722,7 @@ Transposition Android : Clip + offset Compose ; ChoreographyClock défini plus h
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/BadgeStage.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/BadgeStage.swift`
 
 </details>
 
@@ -1781,7 +1781,7 @@ Transposition Android : Canvas SwiftUI -> Canvas Compose ; flipsForRightToLeftLa
 <details><summary>Sources iOS (2)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameConstellation.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseViews.swift`
 
 </details>
 
@@ -1803,8 +1803,8 @@ Transposition Android : AnyView injecté à une place fixe de la feuille de prof
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameProfileViews.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Wave2/GameStandingViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameProfileViews.swift`
+- `apps/ios/Meeshy/Features/Game/Wave2/GameStandingViews.swift`
 
 </details>
 
@@ -1826,7 +1826,7 @@ Transposition Android : CTFontManagerRegisterFontsForURL à la demande -> Typefa
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Frames/GloryFrameFonts.swift`
+- `apps/ios/Meeshy/Features/Game/Frames/GloryFrameFonts.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GameGloryFrames.swift`
 
 </details>
@@ -1849,7 +1849,7 @@ Transposition Android : CHHapticEngine -> VibratorManager/VibrationEffect.Compos
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/GameHaptics.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/GameHaptics.swift`
 
 </details>
 
@@ -1868,7 +1868,7 @@ Rendu : Carte teintée avec gemme à gauche, place et points au centre, chevron 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameLeagueDetailCard.swift`
+- `apps/ios/Meeshy/Features/Game/GameLeagueDetailCard.swift`
 
 </details>
 
@@ -1890,7 +1890,7 @@ Transposition Android : Shaders Metal -> AGSL ; haptique strike -> game-haptic-p
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/MintStrikeScene.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/MintStrikeScene.swift`
 
 </details>
 
@@ -1907,7 +1907,7 @@ Transposition Android : ObservableObject singleton -> object avec MutableStateFl
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameMomentPresence.swift`
+- `apps/ios/Meeshy/Features/Game/GameMomentPresence.swift`
 
 </details>
 
@@ -1928,7 +1928,7 @@ Transposition Android : UIActivityViewController -> Intent.createChooser(ACTION_
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameNotebookView.swift`
+- `apps/ios/Meeshy/Features/Game/GameNotebookView.swift`
 
 </details>
 
@@ -1949,7 +1949,7 @@ Transposition Android : rotationEffect -> graphicsLayer rotationZ ; shadow -> Mo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GameAuthorCardView.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GameAuthorCardView.swift`
 
 </details>
 
@@ -1972,9 +1972,9 @@ Transposition Android : LottieLayerView (moteur unique iOS) -> lottie-compose (n
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GameAuthorPlateView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoAuthorPlate.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoAuthorPlateMotion.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GameAuthorPlateView.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoAuthorPlate.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoAuthorPlateMotion.swift`
 
 </details>
 
@@ -1995,7 +1995,7 @@ Transposition Android : Lois pures + enveloppe Kotlin.
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCatchUp.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoCatchUp.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoCatchUpLaw.swift`
 
 </details>
@@ -2020,9 +2020,9 @@ Transposition Android : fullScreenCover -> destination plein écran ; PhotosPick
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoFlow.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoFlowView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoSession.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoFlow.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoFlowView.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoSession.swift`
 
 </details>
 
@@ -2045,9 +2045,9 @@ Transposition Android : ImageRenderer (iOS 16+) -> GraphicsLayer.toImageBitmap /
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCanvasView.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoComposer.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoCanvasView.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoLayout.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoComposer.swift`
 
 </details>
 
@@ -2069,7 +2069,7 @@ Transposition Android : AVCaptureSession -> CameraX ProcessCameraProvider ; refu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCamera.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoCamera.swift`
 
 </details>
 
@@ -2091,7 +2091,7 @@ Transposition Android : Lois pures :core:model.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoMoments.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoMoments.swift`
 
 </details>
 
@@ -2114,8 +2114,8 @@ Transposition Android : Application Support -> Context.filesDir (app-privé) ; c
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoNotebook.swift`
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GameNotebookViewModel.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoNotebook.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GameNotebookViewModel.swift`
 
 </details>
 
@@ -2136,7 +2136,7 @@ Transposition Android : ProgressionCard -> MeeshyCard ; MeeStickerFilmView -> le
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoOfferView.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoOfferView.swift`
 
 </details>
 
@@ -2159,7 +2159,7 @@ Transposition Android : Push d'invitation -> FCM data message + NotificationChan
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCoordinator.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GamePhotoCoordinator.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoAlerts.swift`
 
 </details>
@@ -2182,7 +2182,7 @@ Transposition Android : QR : zxing-core déjà utilisé par ProfileShareSheet (f
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Photo/GameReferralCard.swift`
+- `apps/ios/Meeshy/Features/Game/Photo/GameReferralCard.swift`
 
 </details>
 
@@ -2204,7 +2204,7 @@ Transposition Android : CoreMotion CMMotionManager -> SensorManager ; shaders Me
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/GameTilt.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/GameTilt.swift`
 
 </details>
 
@@ -2226,7 +2226,7 @@ Transposition Android : Idem ChoreographyClock ; overlay Canvas pour les éclats
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/Choreography/RankBlasonStage.swift`
+- `apps/ios/Meeshy/Features/Game/Choreography/RankBlasonStage.swift`
 
 </details>
 
@@ -2295,7 +2295,7 @@ Transposition Android : presentationDetents/dismiss -> destinations du nav graph
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GamePageScaffold.swift`
+- `apps/ios/Meeshy/Features/Game/GamePageScaffold.swift`
 
 </details>
 
@@ -2319,7 +2319,7 @@ Transposition Android : theme.surfaceGradient(tint:) -> Brush.verticalGradient d
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameSurface.swift`
+- `apps/ios/Meeshy/Features/Game/GameSurface.swift`
 
 </details>
 
@@ -2344,7 +2344,7 @@ Transposition Android : CIQRCodeGenerator écarté pour l'iso -> encodeur Kotlin
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Game/GameReferralLink.swift`
+- `apps/ios/Meeshy/Features/Game/GameReferralLink.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Game/GameQRCode.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Game/GameReferralQR.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Game/GameReferralBannerView.swift`

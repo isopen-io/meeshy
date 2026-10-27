@@ -359,7 +359,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         // Depuis #9564 la première page monte l'en-tête partagé PAR le gabarit de toutes les pages de Progression.
         let source = try read("Meeshy/Features/Main/Views/ProgressionView.swift")
         XCTAssertTrue(source.contains("GamePageScaffold("), "Progression ne passe pas par le gabarit à en-tête partagé.")
-        let scaffold = try read("Meeshy/Features/Main/Game/GamePageScaffold.swift")
+        let scaffold = try read("Meeshy/Features/Game/GamePageScaffold.swift")
         XCTAssertTrue(scaffold.contains("CollapsibleHeader("), "Le gabarit ne monte pas l'en-tête partagé.")
         XCTAssertTrue(scaffold.contains("ScrollOffsetReader(relay: relay)"),
                       "L'en-tête du gabarit ne lit pas le défilement : il ne se réduira pas.")

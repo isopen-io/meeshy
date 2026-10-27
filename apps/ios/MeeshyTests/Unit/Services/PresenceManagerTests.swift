@@ -111,7 +111,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
         "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
-        "Main/Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
+        "Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
         "Main/Views/WidgetPreviewView.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingCards.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingIllustrations.swift": "décor, illustration ou son — aucune personne",

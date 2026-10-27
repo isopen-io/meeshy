@@ -10461,7 +10461,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Resources/Fonts/GloryFrames/NOTICE.md",
    "apps/ios/Meeshy/Resources/Fonts/GloryFrames/GloryFrameFonts-OFL.txt",
-   "apps/ios/Meeshy/Features/Main/Game/Frames/GloryFrameFonts.swift"
+   "apps/ios/Meeshy/Features/Game/Frames/GloryFrameFonts.swift"
   ],
   "feature_keys": [
    "res-fonts-glory-frames"

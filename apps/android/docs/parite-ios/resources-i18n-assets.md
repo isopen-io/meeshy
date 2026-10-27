@@ -378,7 +378,7 @@ Transposition Android : Création d'un module :feature:game ; ses chaînes sont 
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes game., game2., progression., achievement.)`
-- `apps/ios/Meeshy/Features/Main/Game`
+- `apps/ios/Meeshy/Features/Game`
 
 </details>
 

@@ -18,7 +18,7 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard } fro
 
 /**
  * UNE SAISON PASSÉE OU FUTURE, UNE SEMAINE PASSÉE, QUAND UN LIEN LES OUVRE
- * (#10018) — miroir de `apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveViews.swift`.
+ * (#10018) — miroir de `apps/ios/Meeshy/Features/Game/Wave2/GameArchiveViews.swift`.
  *
  * L'écran se décide par une règle PURE (`seasonShown`, `leagueShown`) : la
  * saison et la semaine EN COURS gardent l'écran d'avant, inchangé ; la saison à

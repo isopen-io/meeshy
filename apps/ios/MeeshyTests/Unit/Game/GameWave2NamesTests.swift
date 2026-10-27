@@ -57,7 +57,7 @@ final class GameWave2NamesTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(
-            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GamePrestigeViews.swift"), encoding: .utf8)
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Game/Wave2/GamePrestigeViews.swift"), encoding: .utf8)
         XCTAssertTrue(source.contains("GameText.prestigeConfirmationLines"))
         XCTAssertFalse(source.contains("[GameText.prestigeConfirmResets"), "une liste locale rouvrirait l'oubli du consentement")
     }
