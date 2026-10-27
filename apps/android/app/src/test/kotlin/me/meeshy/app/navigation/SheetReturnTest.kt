@@ -2,6 +2,8 @@ package me.meeshy.app.navigation
 
 import androidx.lifecycle.ViewModelStore
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.DialogNavigator
 import androidx.navigation.compose.composable
@@ -86,6 +88,11 @@ class SheetReturnTest {
                 composable("root") {}
                 composable("detail") {}
                 sheetComposable(Routes.DASHBOARD, self) { _, _ -> }
+                sheetComposable(
+                    route = Routes.USER_POSTS,
+                    navController = self,
+                    arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+                ) { _, _ -> }
             }
         }
 
@@ -124,6 +131,19 @@ class SheetReturnTest {
         assertThat(after.destination.route).isEqualTo(Routes.DASHBOARD)
         assertThat(after.viewModelStore).isSameInstanceAs(before.viewModelStore)
         assertThat(after.savedStateHandle.get<Int>("scroll")).isEqualTo(12)
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - a sheet with arguments comes back with the same arguments`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.userPosts("u1"))
+        nav.navigate("detail")
+        nav.popBackStack()
+
+        assertThat(nav.currentDestination?.route).isEqualTo(Routes.USER_POSTS)
+        assertThat(nav.currentBackStackEntry?.arguments?.getString("userId")).isEqualTo("u1")
         job.cancel()
     }
 }
