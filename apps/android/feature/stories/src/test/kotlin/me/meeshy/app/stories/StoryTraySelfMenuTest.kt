@@ -28,8 +28,10 @@ class StoryTraySelfMenuTest {
     }
 
     @Test
-    fun `without a live story the menu only offers to add one`() {
-        assertThat(StoryTraySelfMenu.actions(ring(count = 0))).containsExactly(StoryTraySelfAction.AddStory)
-        assertThat(StoryTraySelfMenu.actions(null)).containsExactly(StoryTraySelfAction.AddStory)
+    fun `without a live story the menu still reaches the archive, then offers to add one`() {
+        assertThat(StoryTraySelfMenu.actions(ring(count = 0)))
+            .containsExactly(StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory).inOrder()
+        assertThat(StoryTraySelfMenu.actions(null))
+            .containsExactly(StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory).inOrder()
     }
 }
