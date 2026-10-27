@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
 import me.meeshy.sdk.model.chrome.FloatingButtonsLayout
+import me.meeshy.sdk.model.chrome.FloatingChromeReserve
 import me.meeshy.sdk.model.layout.PointDp
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.layout.currentMeeshyWindowInfo
@@ -122,6 +125,10 @@ public fun MeeshyFloatingButtons(
 
         if (geometry.isMeasured) {
             val layout = geometry.layout(leftPending ?: leftStorage, rightPending ?: rightStorage)
+            val reserve = LocalFloatingChromeReserve.current
+            val reserved = FloatingChromeReserve.bottomDp(layout, maxHeight.value)
+            SideEffect { reserve.publish(reserved.dp) }
+            DisposableEffect(reserve) { onDispose { reserve.publish(0.dp) } }
             behindButtons()
             FloatingDisc(
                 center = layout.feed,
