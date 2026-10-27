@@ -20,11 +20,18 @@ class RiverVolumeTest {
         silenceWindowMs = silenceWindowMs,
     )
 
-    private fun millis(block: () -> Unit): Long {
-        val start = System.nanoTime()
-        block()
-        return (System.nanoTime() - start) / 1_000_000
-    }
+    /**
+     * Le MEILLEUR de [runs] passages : une machine chargée (CI, suite parallèle, GC) ne fait
+     * qu'AJOUTER du temps, jamais en retirer — le minimum mesure le coût de l'algorithme, pas celui
+     * du voisinage. Un chemin quadratique reste hors budget à chaque passage, donc aussi au minimum :
+     * le témoin rougit toujours sur l'ancien code (196 ms par appel d'en-têtes, délai dépassé à 60 000).
+     */
+    private fun fastestMillis(runs: Int, block: () -> Unit): Long =
+        (1..runs).minOf {
+            val start = System.nanoTime()
+            block()
+            (System.nanoTime() - start) / 1_000_000
+        }
 
     @Test
     fun `une voix qui ne se tait jamais garde un segment unique, resolu sans recopie quadratique`() {
@@ -32,7 +39,7 @@ class RiverVolumeTest {
         RiverLaneResolver.resolveRiverLanes(alternating(count = 200, voices = 1))
 
         lateinit var geometry: RiverGeometry
-        val elapsed = millis { geometry = RiverLaneResolver.resolveRiverLanes(input) }
+        val elapsed = fastestMillis(runs = 3) { geometry = RiverLaneResolver.resolveRiverLanes(input) }
 
         assertThat(geometry.rankCount).isEqualTo(60_000)
         assertThat(geometry.lanes.single().spans.single().nodes).hasSize(60_000)
@@ -45,7 +52,7 @@ class RiverVolumeTest {
         RiverLaneResolver.resolveRiverLanes(alternating(count = 200, voices = 1, silenceWindowMs = 1_000.0))
 
         lateinit var geometry: RiverGeometry
-        val elapsed = millis { geometry = RiverLaneResolver.resolveRiverLanes(input) }
+        val elapsed = fastestMillis(runs = 3) { geometry = RiverLaneResolver.resolveRiverLanes(input) }
 
         val spans = geometry.lanes.single().spans
         assertThat(spans).hasSize(60_000)
@@ -62,7 +69,7 @@ class RiverVolumeTest {
         RiverLaneHeaders.resolveRiverLaneHeaders(focus)
 
         lateinit var headers: List<RiverLaneHeader>
-        val elapsed = millis { repeat(10) { headers = RiverLaneHeaders.resolveRiverLaneHeaders(focus) } } / 10
+        val elapsed = fastestMillis(runs = 10) { headers = RiverLaneHeaders.resolveRiverLaneHeaders(focus) }
 
         assertThat(headers.map { it.laneId }).containsExactly("u0")
         assertThat(elapsed).isLessThan(16L)

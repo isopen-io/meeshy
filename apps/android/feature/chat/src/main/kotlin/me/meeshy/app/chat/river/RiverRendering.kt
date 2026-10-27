@@ -3,6 +3,7 @@ package me.meeshy.app.chat.river
 import androidx.compose.runtime.Immutable
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.river.RiverBubble
 import me.meeshy.sdk.model.reading.river.RiverConversationMapping
@@ -57,6 +58,8 @@ internal data class RiverBubbleContent(
     val blurReveal: BubbleBlurRevealSpec?,
     val protection: RiverProtection,
     val isPending: Boolean,
+    /** L'échéance d'un message éphémère (epoch ms) : passée, la bulle se retire comme dans le fil. */
+    val expiresAtMs: Long? = null,
 )
 
 /**
@@ -144,6 +147,7 @@ internal object RiverRenderingBuilder {
             blurReveal = source.blurReveal,
             protection = protection(source),
             isPending = source.isPending,
+            expiresAtMs = isoToEpochMillisOrNull(source.expiresAtIso),
         )
     }
 
@@ -154,6 +158,10 @@ internal object RiverRenderingBuilder {
         if (author.isEmpty() && text.isEmpty()) return null
         return RiverReplyPreview(author, text)
     }
+
+    /** Un éphémère dont l'échéance est atteinte n'a plus rien à montrer (le fil le retire au même instant). */
+    fun isExpired(content: RiverBubbleContent, nowMs: Long): Boolean =
+        content.expiresAtMs?.let { nowMs >= it } == true
 
     /** Un message que rien ne déchiffre ou que la vue unique a brûlé ne rend jamais son texte. */
     fun protection(source: BubbleContent): RiverProtection = when {
