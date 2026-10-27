@@ -35,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -62,7 +61,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 /** Les pages de la feuille : une feuille montée sur une feuille est irreprésentable, le sélecteur remplace la page. */
 private enum class AudiencePage { AUDIENCE, ONLY, EXCEPT, MENTION }
 
-private val WarningTint = Color(0xFFFBBF24)
 
 /**
  * La feuille d'AUDIENCE (vue `2l`) — qui verra, qui est nommé et sous quel mode, ce qui part avec
@@ -266,7 +264,7 @@ private fun MentionsSection(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (reach.warns) {
-                    Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = WarningTint, modifier = Modifier.size(18.dp))
+                    Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { onRemove(handle) }) {
                     Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.stories_audience_mention_remove))
@@ -276,7 +274,7 @@ private fun MentionsSection(
                 Text(
                     stringResource(R.string.composer_audience_mention_outside),
                     style = MaterialTheme.typography.bodySmall,
-                    color = WarningTint,
+                    color = MeeshyPalette.Warning,
                 )
             }
         }
