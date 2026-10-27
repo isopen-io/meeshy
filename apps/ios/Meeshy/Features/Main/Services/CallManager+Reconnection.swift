@@ -82,9 +82,8 @@ extension CallManager {
             // Cancel the periodic 80%-TTL scheduler first (mirrors `didReconnect`
             // below) — otherwise its deadline can fire in this same window and
             // race a second, redundant `call:request-ice-servers` emit.
-            turnRefreshTask?.cancel()
-            turnRefreshTask = nil
-            requestFreshTurnCredentials(callId: callId)
+            turnCredentials.cancelPeriodicRefresh()
+            turnCredentials.requestFreshTurnCredentials(callId: callId)
         }
 
         let backoffSeconds = CallReliabilityPolicy.reconnectBackoffSeconds(
@@ -141,75 +140,6 @@ extension CallManager {
             }
             guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
-        }
-    }
-
-    /// After configuring WebRTC for an incoming VoIP/notification call, decide whether
-    /// the periodic refresh is enough or a real credential fetch is needed right away.
-    /// A VoIP push payload never carries a TTL, and when it also carries no usable ICE
-    /// servers (missing/malformed/all dropped by `parseIceServers`'s credential-length
-    /// guard) `WebRTCService.configure` falls back to STUN-only — which reliably fails
-    /// to connect behind symmetric/CGNAT (common on cellular). Request real per-user
-    /// TURN credentials immediately in that case instead of waiting up to
-    /// `turnDefaultCredentialTTLSeconds * 0.8` for the periodic scheduler.
-    func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?) {
-        guard let iceServers, !iceServers.isEmpty else {
-            Logger.calls.warning("VoIP push carried no usable ICE servers — configured STUN-only fallback; requesting fresh TURN credentials immediately")
-            requestFreshTurnCredentials(callId: callId)
-            return
-        }
-        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
-    }
-
-    // Schedules a TURN credential refresh at 80% of the credential TTL.
-    // Emits `call:request-ice-servers`; gateway responds with `call:ice-servers-refreshed`
-    // which `CallSignalingRouter` applies via `webRTCService.updateIceServers`.
-    func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
-        turnRefreshTask?.cancel()
-        turnRefreshWatchdogTask?.cancel()
-        turnRefreshWatchdogTask = nil
-        turnRefreshRetryAttempt = 0
-        // Floor-clamped: a degenerate TTL (zero / negative / short) schedules at
-        // the minimum cadence instead of silently disarming the refresh — the
-        // old `guard ttl >= 60 else return` left mid-call credentials expiring
-        // with no refresh armed at all. See CallReliabilityPolicy.turnRefreshDelay.
-        let refreshDelay = CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)
-        Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
-        turnRefreshTask = Task { @MainActor [weak self] in
-            guard await cancellableSleep(for: .seconds(refreshDelay)), !Task.isCancelled, let self, self.callState.isActive,
-                  let callId = self.currentCallId else { return }
-            self.requestFreshTurnCredentials(callId: callId)
-        }
-    }
-
-    /// Emits `call:request-ice-servers` and arms the retry watchdog. Shared by
-    /// the periodic scheduler, the socket-reconnect resync, and the
-    /// reconnection-cycle refresh — every requester gets the same
-    /// no-ACK-loss protection.
-    func requestFreshTurnCredentials(callId: String) {
-        Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
-        MessageSocketManager.shared.emitRequestIceServers(callId: callId)
-        armTurnRefreshWatchdog(callId: callId)
-    }
-
-    /// Retries `requestFreshTurnCredentials` if `call:ice-servers-refreshed`
-    /// hasn't arrived within `turnRefreshRetryTimeoutSeconds`, bounded by
-    /// `CallReliabilityPolicy.turnRefreshShouldRetry`. Once retries are
-    /// exhausted, falls back to re-arming the next periodic cycle at the
-    /// floor delay instead of leaving the call with no refresh armed at all.
-    private func armTurnRefreshWatchdog(callId: String) {
-        turnRefreshWatchdogTask?.cancel()
-        turnRefreshWatchdogTask = Task { @MainActor [weak self] in
-            guard await cancellableSleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds)), !Task.isCancelled, let self, self.callState.isActive,
-                  self.currentCallId == callId else { return }
-            self.turnRefreshRetryAttempt += 1
-            guard CallReliabilityPolicy.turnRefreshShouldRetry(attempt: self.turnRefreshRetryAttempt) else {
-                Logger.calls.error("TURN credential refresh got no response after \(self.turnRefreshRetryAttempt) retries for call \(callId) — re-arming next cycle")
-                self.scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnMinRefreshDelaySeconds)
-                return
-            }
-            Logger.calls.warning("TURN credential refresh got no response — retry #\(self.turnRefreshRetryAttempt) for call \(callId)")
-            self.requestFreshTurnCredentials(callId: callId)
         }
     }
 

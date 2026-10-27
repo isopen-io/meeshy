@@ -495,11 +495,11 @@ final class CallIncomingRing: CallIncomingRingProviding {
     /// in parallel.
     private func startRingingPipeline(callId: String, isVideo: Bool, iceServers: [IceServer]?, source: IncomingCallSource) {
         guard let call else { return }
-        call.armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
+        call.turnCredentials.armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         call.applyNegotiationRole()
         if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin") }
         call.configureAudioSession()
-        call.startReliabilityMonitor()
+        call.reliabilityMonitor.startReliabilityMonitor()
         // Audit fix (calling-stack audit 2026-08-24) — arm the background
         // observer HERE, at ring time, not only from transitionToConnected().
         // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the

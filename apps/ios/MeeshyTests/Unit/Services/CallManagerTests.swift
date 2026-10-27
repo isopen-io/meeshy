@@ -3192,13 +3192,16 @@ final class EndCallInternalTeardownOrderTests: XCTestCase {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("turnRefreshTask?.cancel()"),
-            "endCallInternal must cancel turnRefreshTask to stop TURN credential refreshes " +
-            "on a dead call."
+            body.contains("turnCredentials.cancelAll()"),
+            "endCallInternal must cancel the TURN refresh and its watchdog to stop TURN credential " +
+            "refreshes on a dead call."
         )
+        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll()", in: source) else {
+            XCTFail("CallTurnCredentials.cancelAll() not found in the CallManager unit"); return
+        }
         XCTAssertTrue(
-            body.contains("turnRefreshTask = nil"),
-            "endCallInternal must nil turnRefreshTask after cancelling to release the Task object."
+            cancelAll.contains("turnRefreshTask?.cancel()") && cancelAll.contains("turnRefreshTask = nil"),
+            "cancelAll must cancel turnRefreshTask and nil it to release the Task object."
         )
     }
 
@@ -5093,7 +5096,7 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
             XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("turnRefreshTask?.cancel()"),
+            body.contains("turnCredentials.cancelPeriodicRefresh()"),
             "Socket reconnect must cancel the periodic TURN refresh task before requesting " +
             "fresh credentials — otherwise the old deadline fires in parallel causing duplicate requests."
         )

@@ -415,13 +415,6 @@ final class CallManager: ObservableObject, Sendable {
     // immediately stop their work loop on cancel.
     var durationTask: Task<Void, Never>?
     var heartbeatTask: Task<Void, Never>?
-    /// §5.8 — single periodic monitor that owns BOTH the `.connecting` watchdog
-    /// (timeout → ICE restart → fail) and the `.connected` half-open self-heal
-    /// (inbound stalled while outbound flows → one ICE restart). It reads
-    /// `callState` each tick and applies `CallReliabilityPolicy`, so there is a
-    /// single wiring point instead of a timer per state. Replaces the old
-    /// purely-informational `rtpGateTask`.
-    var reliabilityMonitorTask: Task<Void, Never>?
     /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
     /// Tracks the startLocalMedia Task so that:
     ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
@@ -516,18 +509,6 @@ final class CallManager: ObservableObject, Sendable {
     /// kill de l'app en background ne perd plus la télémétrie de l'appel.
     var analyticsSnapshotTask: Task<Void, Never>?
 
-    /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
-    var turnRefreshTask: Task<Void, Never>?
-    /// Watchdog armed after every `call:request-ice-servers` emit — retries if
-    /// `call:ice-servers-refreshed` doesn't arrive within
-    /// `turnRefreshRetryTimeoutSeconds`. `emitRequestIceServers` carries no ACK,
-    /// so without this a single dropped emit/reply killed the refresh chain for
-    /// the rest of the call. Cancelled on call end and on every successful
-    /// response (via `scheduleTURNCredentialRefresh`).
-    var turnRefreshWatchdogTask: Task<Void, Never>?
-    /// Consecutive watchdog retries for the current refresh cycle. Reset to 0
-    /// whenever a fresh cycle starts (`scheduleTURNCredentialRefresh`).
-    var turnRefreshRetryAttempt = 0
     var participantJoinedCancellable: AnyCancellable?
     /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
     /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
@@ -715,6 +696,10 @@ final class CallManager: ObservableObject, Sendable {
     let incomingRing: CallIncomingRingProviding
     /// L'appel qui part, sa nouvelle tentative et sa reprise (`CallOutgoingDial`).
     let outgoingDial: CallOutgoingDialProviding
+    /// Le rafraîchissement des identifiants TURN (`CallTurnCredentials`).
+    let turnCredentials: CallTurnCredentialsProviding
+    /// La surveillance des états transitoires (`CallReliabilityMonitor`).
+    let reliabilityMonitor: CallReliabilityMonitorProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
@@ -722,7 +707,9 @@ final class CallManager: ObservableObject, Sendable {
         audioSystemObserver: CallAudioSystemObserverProviding = CallAudioSystemObserver(),
         appStateObserver: CallAppStateObserverProviding = CallAppStateObserver(),
         incomingRing: CallIncomingRingProviding = CallIncomingRing(),
-        outgoingDial: CallOutgoingDialProviding = CallOutgoingDial()
+        outgoingDial: CallOutgoingDialProviding = CallOutgoingDial(),
+        turnCredentials: CallTurnCredentialsProviding = CallTurnCredentials(),
+        reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
@@ -730,6 +717,8 @@ final class CallManager: ObservableObject, Sendable {
         self.appStateObserver = appStateObserver
         self.incomingRing = incomingRing
         self.outgoingDial = outgoingDial
+        self.turnCredentials = turnCredentials
+        self.reliabilityMonitor = reliabilityMonitor
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -765,6 +754,8 @@ final class CallManager: ObservableObject, Sendable {
         appStateObserver.attach(to: self)
         incomingRing.attach(to: self)
         outgoingDial.attach(to: self)
+        turnCredentials.attach(to: self)
+        reliabilityMonitor.attach(to: self)
         signalingRouter.start(routingTo: self)
         startNetworkMonitoring()
         audioSystemObserver.start(observing: self)

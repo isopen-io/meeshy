@@ -186,8 +186,7 @@ extension CallManager {
     fileprivate func cancelCallScopedWork() {
         durationTask?.cancel()
         durationTask = nil
-        reliabilityMonitorTask?.cancel()
-        reliabilityMonitorTask = nil
+        reliabilityMonitor.stopReliabilityMonitor()
         localMediaTask?.cancel()
         localMediaTask = nil
         callJoinTask?.cancel()
@@ -203,11 +202,7 @@ extension CallManager {
         // appel déjà clos.
         setupCallTask?.cancel()
         setupCallTask = nil
-        turnRefreshTask?.cancel()
-        turnRefreshTask = nil
-        turnRefreshWatchdogTask?.cancel()
-        turnRefreshWatchdogTask = nil
-        turnRefreshRetryAttempt = 0
+        turnCredentials.cancelAll()
         stopHeartbeat()
         appStateObserver.stopScreenCaptureMonitoring()
         appStateObserver.stopBackgroundMonitoring()

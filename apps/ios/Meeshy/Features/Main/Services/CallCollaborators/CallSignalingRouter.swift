@@ -318,9 +318,8 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                     call.screenShare.announceIfSharing()
                     // Identifiants TURN frais : le scheduler périodique est annulé
                     // d'abord ; `call:ice-servers-refreshed` le réarme au nouveau TTL.
-                    call.turnRefreshTask?.cancel()
-                    call.turnRefreshTask = nil
-                    call.requestFreshTurnCredentials(callId: callId)
+                    call.turnCredentials.cancelPeriodicRefresh()
+                    call.turnCredentials.requestFreshTurnCredentials(callId: callId)
                     Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
                 }
             }
@@ -429,7 +428,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 call.webRTCService.updateIceServers(event.iceServers.map {
                     IceServer(urls: $0.urls.asArray, username: $0.username, credential: $0.credential)
                 })
-                call.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
+                call.turnCredentials.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
                 // #8074 — `updateIceServers` ne fait que `setConfiguration` : sans
                 // relance, les allocations gardent des identifiants qui expirent.
                 switch TurnCredentialRefreshPolicy.iceAction(after: call.callState) {

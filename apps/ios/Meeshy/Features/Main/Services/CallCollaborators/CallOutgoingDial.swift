@@ -280,11 +280,11 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
                 call.failCall("Failed to initiate call")
                 return
             }
-            call.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
+            call.turnCredentials.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
             call.applyNegotiationRole()
             Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
             call.configureAudioSession()
-            call.startReliabilityMonitor()
+            call.reliabilityMonitor.startReliabilityMonitor()
             Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             await call.performLocalMediaStart(isVideo: isVideo, callId: ack.callId)
             guard call.currentCallId == ack.callId else { return }
@@ -388,10 +388,10 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
             call.failCall("Failed to configure WebRTC")
             return false
         }
-        call.armTurnCredentialsAfterConfigure(callId: callId, iceServers: nil)
+        call.turnCredentials.armTurnCredentialsAfterConfigure(callId: callId, iceServers: nil)
         call.applyNegotiationRole()
         call.configureAudioSession()
-        call.startReliabilityMonitor()
+        call.reliabilityMonitor.startReliabilityMonitor()
 
         call.joinCallRoomReliably(callId: callId)
         Logger.calls.info("Rejoining active call — reliable call:join dispatched: \(callId)")

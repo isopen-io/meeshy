@@ -2495,7 +2495,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             XCTFail("requestFreshTurnCredentials(callId:) not found in the CallManager unit"); return
         }
         XCTAssertTrue(
-            sink.contains("call.requestFreshTurnCredentials(callId: callId)"),
+            sink.contains("call.turnCredentials.requestFreshTurnCredentials(callId: callId)"),
             "socket.didReconnect sink must request fresh TURN credentials after rejoining the call room")
         XCTAssertTrue(
             request.contains("emitRequestIceServers"),
@@ -3724,8 +3724,8 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
         // the reconnect handler so the old deadline cannot fire while the fresh
         // response is in flight, causing duplicate credential requests.
         let beforeRequest = String(handlerBody[..<requestRange.lowerBound])
-        guard let cancelRange = beforeRequest.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
-            XCTFail("turnRefreshTask?.cancel() must precede requestFreshTurnCredentials on the reconnect path"); return
+        guard let cancelRange = beforeRequest.range(of: "turnCredentials.cancelPeriodicRefresh()", options: .backwards) else {
+            XCTFail("turnCredentials.cancelPeriodicRefresh() must precede requestFreshTurnCredentials on the reconnect path"); return
         }
         // Verify the cancel is in the same reconnect context by checking there's
         // no function definition boundary between the cancel and the request.
@@ -3989,7 +3989,7 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
             "report .healthy after an ICE restart from pre-restart traffic."
         )
         XCTAssertTrue(
-            monitorBody.contains("epoch: self.connectionEpoch"),
+            monitorBody.contains("epoch: call.connectionEpoch"),
             "HalfOpenMonitorState must be keyed off self.connectionEpoch so a " +
             "reconnect that completes between two poll ticks still re-arms detection."
         )
