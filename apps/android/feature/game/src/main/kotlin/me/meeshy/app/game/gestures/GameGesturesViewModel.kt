@@ -18,17 +18,24 @@ import me.meeshy.sdk.game.GameGestureRepository
 import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.DailyChest
 import me.meeshy.sdk.model.game.GameIntentIds
+import me.meeshy.sdk.model.game.GameMintPreview
+import me.meeshy.sdk.model.game.MeeshEdition
+import me.meeshy.sdk.model.game.engagement.MeeshMintOutcome
+import me.meeshy.sdk.model.game.engagement.outcome
 import me.meeshy.sdk.model.game.GameRefusalLaw
 import me.meeshy.sdk.network.NetworkMonitor
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
-enum class GameGesture { Reroll, Chest, Freeze, Relight }
+enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint }
 
 /**
  * Le refus du DERNIER essai d'un geste. Jamais un code affiché : l'écran le met en phrase ([offline] ⇒ rien n'est
  * parti, [code] ⇒ la passerelle a répondu).
  */
 data class GameGestureFailure(val offline: Boolean, val code: String?)
+
+/** La pièce que la passerelle vient de frapper — le numéro et l'édition sont CEUX DE SA RÉPONSE. [key] rejoue la scène. */
+data class MintCelebration(val number: Int, val edition: MeeshEdition?, val key: Int)
 
 data class GameGesturesUiState(
     /** Le réseau est là. Hors ligne, un geste est INDISPONIBLE (il n'est ni envoyé ni mis en file : un débit n'attend pas). */
@@ -38,6 +45,9 @@ data class GameGesturesUiState(
     val chestOpening: Boolean = false,
     val buyingFreeze: Boolean = false,
     val relighting: Boolean = false,
+    val minting: Boolean = false,
+    /** La dernière frappe confirmée par la passerelle ; `null` tant qu'aucune ne l'a été sur cet écran. */
+    val celebration: MintCelebration? = null,
     val failures: Map<GameGesture, GameGestureFailure> = emptyMap(),
     /** Le contenu du coffre TEL QUE LA PASSERELLE L'A RENDU — posé à la réponse, jamais deviné. */
     val chestReward: DailyChest? = null,
@@ -78,16 +88,19 @@ class GameGesturesViewModel internal constructor(
     private val rerollingMission = MutableStateFlow<String?>(null)
     private val failures = MutableStateFlow<Map<GameGesture, GameGestureFailure>>(emptyMap())
     private val chestReward = MutableStateFlow<DailyChest?>(null)
+    private val celebrationFlow = MutableStateFlow<MintCelebration?>(null)
 
     val state: StateFlow<GameGesturesUiState> = combine(
-        network.isOnline, inFlight, rerollingMission, failures, chestReward,
-    ) { online, busy, rerolling, failed, reward ->
+        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow) { a, b -> a to b },
+    ) { online, busy, rerolling, failed, (reward, celebration) ->
         GameGesturesUiState(
             online = online,
             rerollingMissionId = rerolling,
             chestOpening = GameGesture.Chest in busy,
             buyingFreeze = GameGesture.Freeze in busy,
             relighting = GameGesture.Relight in busy,
+            minting = GameGesture.Mint in busy,
+            celebration = celebration,
             failures = failed,
             chestReward = reward,
         )
@@ -115,6 +128,25 @@ class GameGesturesViewModel internal constructor(
     /** Rallumer la Flamme éteinte : 3 Meeshes, 48 h, une fois par mois. La série rendue est celle de la passerelle. */
     fun relight() {
         run(GameGesture.Relight, "relight") { id -> gestures.relightFlame(id) }
+    }
+
+    /**
+     * Frapper la Meesh suivante. Le prix que l'écran a montré part avec la frappe ([GameMintPreview.price]) : au-delà,
+     * la passerelle refuse (`PRICE_CHANGED`) sans rien débiter. La pièce, son numéro et son édition sont ceux de la
+     * RÉPONSE ; le solde, le niveau et le prix suivant sont relus sur la progression servie.
+     */
+    fun mint(preview: GameMintPreview) {
+        run(
+            GameGesture.Mint,
+            "mint",
+            onDone = { result ->
+                if (result.outcome == MeeshMintOutcome.MINTED) {
+                    celebrationFlow.update { MintCelebration(result.number ?: preview.number, result.edition ?: preview.edition, (it?.key ?: 0) + 1) }
+                } else if (result.outcome != MeeshMintOutcome.ALREADY_MINTED) {
+                    failures.update { it + (GameGesture.Mint to GameGestureFailure(offline = false, code = null)) }
+                }
+            },
+        ) { id -> gestures.mint(id, preview.price) }
     }
 
     private fun <T : Any> run(

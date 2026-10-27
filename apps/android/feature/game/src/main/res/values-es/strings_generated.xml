@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">la Reserva se abre con %s</string>
     <string name="game_fiche_heritage_opens_tresor">el Tesoro se abre con %s</string>
     <string name="game_fiche_light_to_heritage">Abrir tu Legado</string>
+    <string name="game_fiche_mint_mee_gold">Esta será de oro: tus ancestros la verán.</string>
+    <string name="game_fiche_mint_mee_next_gold">La n.º %s será de oro.</string>
+    <string name="game_fiche_mint_mee_next_prism">La n.º %s será de prisma.</string>
+    <string name="game_fiche_mint_mee_prism">Esta será de prisma: todos los idiomas brillarán en ella.</string>
+    <string name="game_fiche_mint_mee_wait">Un poco más de luz y acuñamos juntos.</string>
+    <string name="game_fiche_mint_missing">Aún faltan %s para acuñarla.</string>
+    <string name="game_fiche_mint_sentence">Fija %1$s de tu luz, que cuenta %2$s.</string>
     <string name="game_fiche_more">Ir más lejos</string>
     <string name="game_fiche_use">Cómo usarlo</string>
     <string name="game_fiche_what">¿Qué es?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">Ninguna Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Acuñar con Mee y Meo</string>
+    <string name="game_mint_blocked_debt">Una sombra cubre %s chispas de tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
     <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán. Mientras esté ahí, no se acuña.</string>
+    <string name="game_mint_blocked_reserve">Esta Meesh abriría la reserva «%1$s»: hace falta el rango %2$s.</string>
+    <string name="game_mint_chip_glory">+%s de gloria</string>
+    <string name="game_mint_minted_line">Meesh n.º %1$s acuñada, %2$s.</string>
+    <string name="game_mint_minting">Acuñando…</string>
+    <string name="game_mint_next_title">La Meesh n.º %s</string>
+    <string name="game_mint_offline">Sin conexión: la acuñación se reanudará con la conexión.</string>
     <string name="game_mission_comment_stranger_post_one">Comentar la publicación pública de alguien que no conoces</string>
     <string name="game_mission_comment_stranger_post_other">Comentar %s publicaciones públicas de personas que no conoces</string>
     <string name="game_mission_comment_text_one">Comentar la publicación de alguien</string>
@@ -575,4 +590,5 @@
     <string name="game_treasury_next">%1$s hasta %2$s</string>
     <string name="game_treasury_reserve">Reserva</string>
     <string name="game_treasury_tresor">Tesoro</string>
+    <string name="progression_meesh_mint_error">La acuñación no se completó — inténtalo de nuevo</string>
 </resources>

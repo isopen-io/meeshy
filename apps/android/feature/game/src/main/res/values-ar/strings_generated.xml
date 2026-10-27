@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">يُفتح الاحتياطي عند ⁦%s⁩</string>
     <string name="game_fiche_heritage_opens_tresor">يُفتح الكنز عند ⁦%s⁩</string>
     <string name="game_fiche_light_to_heritage">افتح إرثك</string>
+    <string name="game_fiche_mint_mee_gold">هذه ستكون ذهبية: سيراها أجدادك.</string>
+    <string name="game_fiche_mint_mee_next_gold">Meesh رقم ⁦%s⁩ ستكون ذهبية.</string>
+    <string name="game_fiche_mint_mee_next_prism">Meesh رقم ⁦%s⁩ ستكون موشورية.</string>
+    <string name="game_fiche_mint_mee_prism">هذه ستكون موشورية: كل اللغات ستسطع فيها.</string>
+    <string name="game_fiche_mint_mee_wait">قليل من النور بعد، ونسكّ معًا.</string>
+    <string name="game_fiche_mint_missing">ما زال ينقص ⁦%s⁩ لسكّها.</string>
+    <string name="game_fiche_mint_sentence">تُثبّت ⁦%1$s⁩ من نورك، الذي يبلغ ⁦%2$s⁩.</string>
     <string name="game_fiche_more">للمزيد</string>
     <string name="game_fiche_use">كيف أستعمله</string>
     <string name="game_fiche_what">ما هو؟</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">لا Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meesh</string>
+    <string name="game_mint_action">اسكّها مع مي وميو</string>
+    <string name="game_mint_blocked_debt">ظلّ يحجب %s شرارة من نورك: شراراتك القادمة ستبدّده، ثم يمكنك السكّ.</string>
     <string name="game_mint_blocked_debt_plain">ظلّ يحجب نورك: شراراتك القادمة ستبدّده. وما دام قائمًا، لا سكّ.</string>
+    <string name="game_mint_blocked_reserve">ستفتح هذه الـMeesh احتياطي «%1$s»: يلزمك رتبة %2$s.</string>
+    <string name="game_mint_chip_glory">⁦+%s⁩ من المجد</string>
+    <string name="game_mint_minted_line">تم سك Meesh رقم %1$s، %2$s.</string>
+    <string name="game_mint_minting">جارٍ السك…</string>
+    <string name="game_mint_next_title">Meesh رقم %s</string>
+    <string name="game_mint_offline">بلا اتصال: سيُستأنف السك عند عودة الاتصال.</string>
     <string name="game_mission_comment_stranger_post_one">علّق على منشور عام لشخص لا تعرفه</string>
     <string name="game_mission_comment_stranger_post_other">علّق على %s منشورات عامة لأشخاص لا تعرفهم</string>
     <string name="game_mission_comment_text_one">علّق على منشور شخص آخر</string>
@@ -584,4 +599,5 @@
     <string name="game_treasury_next">%1$s حتى %2$s</string>
     <string name="game_treasury_reserve">احتياطي</string>
     <string name="game_treasury_tresor">كنز</string>
+    <string name="progression_meesh_mint_error">فشلت عملية السك — أعد المحاولة</string>
 </resources>

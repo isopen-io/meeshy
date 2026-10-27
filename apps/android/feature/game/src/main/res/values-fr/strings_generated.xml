@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">la Réserve s’ouvre à %s</string>
     <string name="game_fiche_heritage_opens_tresor">le Trésor s’ouvre à %s</string>
     <string name="game_fiche_light_to_heritage">Ouvrir ton Héritage</string>
+    <string name="game_fiche_mint_mee_gold">Celle-ci sera d’or : tes aïeux la verront.</string>
+    <string name="game_fiche_mint_mee_next_gold">La n° %s sera d’or.</string>
+    <string name="game_fiche_mint_mee_next_prism">La n° %s sera de prisme.</string>
+    <string name="game_fiche_mint_mee_prism">Celle-ci sera de prisme : toutes les langues y brilleront.</string>
+    <string name="game_fiche_mint_mee_wait">Encore un peu de lumière, et on frappe ensemble.</string>
+    <string name="game_fiche_mint_missing">Il en manque encore %s pour la frapper.</string>
+    <string name="game_fiche_mint_sentence">Elle fige %1$s de ta lumière, qui en compte %2$s.</string>
     <string name="game_fiche_more">Aller plus loin</string>
     <string name="game_fiche_use">Comment m’en servir</string>
     <string name="game_fiche_what">C’est quoi ?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">Aucune Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Frapper avec Mee et Meo</string>
+    <string name="game_mint_blocked_debt">Une ombre voile %s étincelles de ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.</string>
     <string name="game_mint_blocked_debt_plain">Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.</string>
+    <string name="game_mint_blocked_reserve">Cette Meesh ouvrirait la réserve « %1$s » : il faut le rang %2$s.</string>
+    <string name="game_mint_chip_glory">+%s de gloire</string>
+    <string name="game_mint_minted_line">Meesh n° %1$s frappée, %2$s.</string>
+    <string name="game_mint_minting">Frappe en cours…</string>
+    <string name="game_mint_next_title">La Meesh n° %s</string>
+    <string name="game_mint_offline">Hors ligne : la frappe reprendra avec la connexion.</string>
     <string name="game_mission_comment_stranger_post_one">Commenter le post public de quelqu’un que tu ne connais pas</string>
     <string name="game_mission_comment_stranger_post_other">Commenter %s posts publics de personnes que tu ne connais pas</string>
     <string name="game_mission_comment_text_one">Commenter le post de quelqu’un</string>
@@ -575,4 +590,5 @@
     <string name="game_treasury_next">%1$s jusqu’au %2$s</string>
     <string name="game_treasury_reserve">Réserve</string>
     <string name="game_treasury_tresor">Trésor</string>
+    <string name="progression_meesh_mint_error">La frappe n\'a pas abouti — réessayez</string>
 </resources>

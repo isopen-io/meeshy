@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">la Riserva si apre a %s</string>
     <string name="game_fiche_heritage_opens_tresor">il Tesoro si apre a %s</string>
     <string name="game_fiche_light_to_heritage">Apri la tua Eredità</string>
+    <string name="game_fiche_mint_mee_gold">Questa sarà d’oro: i tuoi antenati la vedranno.</string>
+    <string name="game_fiche_mint_mee_next_gold">La n. %s sarà d’oro.</string>
+    <string name="game_fiche_mint_mee_next_prism">La n. %s sarà di prisma.</string>
+    <string name="game_fiche_mint_mee_prism">Questa sarà di prisma: tutte le lingue vi brilleranno.</string>
+    <string name="game_fiche_mint_mee_wait">Ancora un po’ di luce, e coniamo insieme.</string>
+    <string name="game_fiche_mint_missing">Ne mancano ancora %s per coniarla.</string>
+    <string name="game_fiche_mint_sentence">Fissa %1$s della tua luce, che ne conta %2$s.</string>
     <string name="game_fiche_more">Per saperne di più</string>
     <string name="game_fiche_use">Come usarlo</string>
     <string name="game_fiche_what">Che cos’è?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">Nessuna Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Conia con Mee e Meo</string>
+    <string name="game_mint_blocked_debt">Un’ombra vela %s scintille della tua luce: le tue prossime scintille la dissiperanno, poi potrai coniare.</string>
     <string name="game_mint_blocked_debt_plain">Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno. Finché c’è, non si conia.</string>
+    <string name="game_mint_blocked_reserve">Questa Meesh aprirebbe la riserva «%1$s»: serve il rango %2$s.</string>
+    <string name="game_mint_chip_glory">+%s di gloria</string>
+    <string name="game_mint_minted_line">Meesh n. %1$s coniata, %2$s.</string>
+    <string name="game_mint_minting">Conio in corso…</string>
+    <string name="game_mint_next_title">La Meesh n. %s</string>
+    <string name="game_mint_offline">Offline: il conio riprenderà con la connessione.</string>
     <string name="game_mission_comment_stranger_post_one">Commentare il post pubblico di qualcuno che non conosci</string>
     <string name="game_mission_comment_stranger_post_other">Commentare %s post pubblici di persone che non conosci</string>
     <string name="game_mission_comment_text_one">Commentare il post di qualcuno</string>
@@ -575,4 +590,5 @@
     <string name="game_treasury_next">%1$s fino a %2$s</string>
     <string name="game_treasury_reserve">Riserva</string>
     <string name="game_treasury_tresor">Tesoro</string>
+    <string name="progression_meesh_mint_error">Il conio non è riuscito — riprova</string>
 </resources>
