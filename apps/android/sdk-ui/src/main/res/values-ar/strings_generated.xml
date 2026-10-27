@@ -125,6 +125,18 @@
     <string name="retouch_text_align_center">توسيط</string>
     <string name="retouch_text_align_left">يسار</string>
     <string name="retouch_text_align_right">يمين</string>
+    <string name="retouch_text_background">خلفية النص</string>
+    <string name="retouch_text_bg_amber">كهرماني</string>
+    <string name="retouch_text_bg_black">أسود</string>
+    <string name="retouch_text_bg_black65" formatted="false">أسود 65%</string>
+    <string name="retouch_text_bg_glass">زجاج</string>
+    <string name="retouch_text_bg_green">أخضر</string>
+    <string name="retouch_text_bg_indigo">نيلي</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">نيلي 65%</string>
+    <string name="retouch_text_bg_pink">وردي</string>
+    <string name="retouch_text_bg_red">أحمر</string>
+    <string name="retouch_text_bg_white">أبيض</string>
+    <string name="retouch_text_bg_white65" formatted="false">أبيض 65%</string>
     <string name="retouch_text_color">لون النص</string>
     <string name="retouch_text_style_bold">عريض</string>
     <string name="retouch_text_style_classic">كلاسيكي</string>

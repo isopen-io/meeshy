@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.retouch
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,12 +53,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import me.meeshy.sdk.model.StoryTextStyle
 import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
 import me.meeshy.sdk.model.imageedit.CropRect
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.hexColor
 
@@ -73,12 +77,16 @@ internal fun RetouchTextLayer(
     interactive: Boolean,
     newId: () -> String,
     onBoard: (ComposerRetouchTextBoard) -> Unit,
+    glass: Bitmap? = null,
 ) {
     val current = rememberUpdatedState(board)
     val visible = board.texts.filter { it.id != board.typingId }
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             if (display.width < 1f || display.height < 1f) return@Canvas
+            glass?.let {
+                drawImage(it.asImageBitmap(), dstOffset = IntOffset(display.left.roundToInt(), display.top.roundToInt()), dstSize = IntSize(display.width.roundToInt(), display.height.roundToInt()))
+            }
             drawIntoCanvas { canvas ->
                 canvas.nativeCanvas.save()
                 canvas.nativeCanvas.translate(display.left, display.top)
@@ -158,6 +166,7 @@ internal fun RetouchTextToolbar(board: ComposerRetouchTextBoard, newId: () -> St
                     Chip(stringResource(alignName(align)), (typing.textAlign ?: ComposerRetouchTextBoard.DEFAULT_ALIGN) == align) { onBoard(board.aligning(typing.id, align)) }
                 }
             }
+            RetouchTextBackgroundRow(StoryTextBackground.resolve(typing.backgroundStyle, typing.textBg)) { onBoard(board.backgrounding(typing.id, it)) }
             val colorLabel = stringResource(R.string.retouch_text_color)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 ComposerRetouchTextBoard.PALETTE.forEach { hex ->

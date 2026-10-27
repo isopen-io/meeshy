@@ -160,4 +160,23 @@ class ComposerRetouchScreenTest {
         rendered.bitmap.getPixels(pixels, 0, rendered.bitmap.width, 0, 0, rendered.bitmap.width, rendered.bitmap.height)
         assertThat(pixels.any { Color.green(it) > 150 }).isTrue()
     }
+
+    @Test
+    fun `le fond Noir choisi sous le texte se cuit dans la photo`() {
+        show()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).performTextInput("MEESHY")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Black").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)
+        rendered.bitmap.getPixels(pixels, 0, rendered.bitmap.width, 0, 0, rendered.bitmap.width, rendered.bitmap.height)
+        assertThat(pixels.count { Color.red(it) < 30 && Color.green(it) < 30 && Color.blue(it) < 30 }).isGreaterThan(20)
+    }
 }

@@ -116,6 +116,18 @@
     <string name="retouch_text_align_center">CENTRO</string>
     <string name="retouch_text_align_left">IZQUIERDA</string>
     <string name="retouch_text_align_right">DERECHA</string>
+    <string name="retouch_text_background">Fondo de texto</string>
+    <string name="retouch_text_bg_amber">Ámbar</string>
+    <string name="retouch_text_bg_black">Negro</string>
+    <string name="retouch_text_bg_black65" formatted="false">Negro 65%</string>
+    <string name="retouch_text_bg_glass">Cristal</string>
+    <string name="retouch_text_bg_green">Verde</string>
+    <string name="retouch_text_bg_indigo">Índigo</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">Índigo 65%</string>
+    <string name="retouch_text_bg_pink">Rosa</string>
+    <string name="retouch_text_bg_red">Rojo</string>
+    <string name="retouch_text_bg_white">Blanco</string>
+    <string name="retouch_text_bg_white65" formatted="false">Blanco 65%</string>
     <string name="retouch_text_color">Color de texto</string>
     <string name="retouch_text_style_bold">NEGRITA</string>
     <string name="retouch_text_style_classic">CLÁSICA</string>
