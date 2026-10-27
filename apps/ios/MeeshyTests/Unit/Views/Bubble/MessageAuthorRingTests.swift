@@ -102,7 +102,7 @@ final class MessageAuthorRingTests: XCTestCase {
             "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
-            "Meeshy/Features/Main/Views/ProfileDecorSheet.swift",
+            "Meeshy/Features/Profile/Views/ProfileDecorSheet.swift",
         ]
         for path in surfaces {
             let text = try source(path)
@@ -137,8 +137,8 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Notifications/NotificationToastView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),
         "Main/Views/LoginView.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
         "Main/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
-        "Main/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
-        "Main/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
+        "Profile/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
+        "Profile/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
         "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
         "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
         "Main/Views/PublicationViewersSheet.swift": (2, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),

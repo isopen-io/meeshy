@@ -62,7 +62,7 @@ final class PostEditRouteTests: XCTestCase {
         for chemin in [
             "Meeshy/Features/Main/Views/PostDetailView.swift",
             "Meeshy/Features/Main/Views/FeedView.swift",
-            "Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
+            "Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
             "Meeshy/Features/Main/Views/RootViewComponents.swift",
         ] {

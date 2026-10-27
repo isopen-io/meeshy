@@ -88,7 +88,7 @@ final class GameMintCostCopyTests: XCTestCase {
     }
 
     func test_theViewModel_saysTheRefusal() throws {
-        let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift"))
+        let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/ViewModels/ProgressionViewModel.swift"))
         XCTAssertTrue(vm.contains("GameMintCostCopy.mintFailureMessage(code: refusal"))
     }
 

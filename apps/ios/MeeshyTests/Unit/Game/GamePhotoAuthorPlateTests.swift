@@ -230,7 +230,7 @@ final class GamePhotoAuthorPlateTests: XCTestCase {
     func test_theCelebration_isAPosedCardThatNamesItsAuthor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/AchievementRevealView.swift"), encoding: .utf8)
+        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Profile/Views/AchievementRevealView.swift"), encoding: .utf8)
         XCTAssertTrue(view.contains(".clearCoverBackground()"), "l'écran couvert reste visible sous la carte")
         XCTAssertTrue(view.contains(".frame(maxWidth: Self.cardWidth)"), "la carte est bornée")
         XCTAssertTrue(view.contains("GameAuthorPlateLive("), "la carte nomme son auteur")

@@ -177,7 +177,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `UserPreferencesManager`, `PrivacyPreferences`, `EncryptionPreference`, `AnalyticsManager`.
 - **Android-port note**: Same DataStore-backed prefs repository. Analytics toggle must gate the analytics SDK collection at runtime (Firebase `setAnalyticsCollectionEnabled`). `blockScreenshots` → `FLAG_SECURE` on the window.
 
-## apps/ios/Meeshy/Features/Main/Views/ProfileView.swift
+## apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift
 
 - **Purpose**: Current-user profile screen — view/edit identity, contact, languages, stats, friend requests, member-since; avatar/banner upload.
 - **Public API**: `struct ProfileView: View`. Private extension `MeeshyUser.applyingProfileEdits(...)` (optimistic copy builder).

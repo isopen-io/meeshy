@@ -159,8 +159,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoMemberRow.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCopy.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
-        "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
-        "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
+        "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
@@ -317,7 +317,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
         // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
@@ -437,8 +437,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",  // 14
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
         // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
         // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
@@ -552,7 +552,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
         "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",  // 10
         "apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift",  // 9
@@ -603,7 +603,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
         "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",  // 3
+        "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2

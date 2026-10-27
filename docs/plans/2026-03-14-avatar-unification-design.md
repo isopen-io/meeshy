@@ -167,7 +167,7 @@ No per-context exceptions. If story is already viewed (.read/.none), onTap natur
 - `Features/Main/Views/RootViewComponents.swift` — migrate custom avatar
 - `Features/Main/Views/FeedPostCard.swift` — migrate custom avatars
 - `Features/Main/Views/StoryViewerView+Content.swift` — migrate CachedAsyncImage
-- `Features/Main/Views/ProfileView.swift` — migrate to .profileBanner
+- `Features/Profile/Views/ProfileView.swift` — migrate to .profileBanner
 - `Features/Main/Views/ThreadView.swift` — migrate to .messageBubble
 - `Features/Main/Views/EditProfileView.swift` — migrate to .profileEdit
 - Plus: GlobalSearchView, SharePickerView, ForwardPickerSheet, MessageDetailSheet, etc.

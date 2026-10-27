@@ -1153,7 +1153,7 @@ public final class StatsService {
 
 ### Task C3: UserStatsView.swift (apps/ios)
 
-**File to CREATE**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
+**File to CREATE**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift`
 
 Uses SwiftUI Charts for the timeline bar chart. Sections: Account, Messages, Conversations, Translations, Achievements.
 

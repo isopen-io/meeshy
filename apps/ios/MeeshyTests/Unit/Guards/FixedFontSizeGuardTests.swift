@@ -176,7 +176,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
         // aucune et sort de la liste, comme la règle 4 l'exige.
         "Features/Composer/MeeshyComposerHost+Overflow.swift",
-        "Features/Main/Views/AchievementBadgeView.swift",
+        "Features/Profile/Views/AchievementBadgeView.swift",
         "Features/Settings/Views/ActiveSessionsView.swift",
         "Features/Links/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
@@ -286,7 +286,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/MyStoryCard.swift",
         // #5218 — le carrousel de cinq pages est parti avec son unique site
         // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
-        "Features/Main/Views/ParticipantProfileSheet.swift",
+        "Features/Profile/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         // #7625 — RELOCALISATION pure : la couche audio d'un réel (glyphe héros de
         // 220 pt et bouton de 84 pt, cadres fixes plein écran) quitte l'hôte hors
@@ -329,7 +329,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
         "Features/Settings/Views/SupportView.swift",
         "Features/Links/Views/TrackingLinksView.swift",
-        "Features/Main/Views/UserStatsView.swift",
+        "Features/Profile/Views/UserStatsView.swift",
         "Features/Settings/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",

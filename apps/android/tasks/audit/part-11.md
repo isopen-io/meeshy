@@ -196,7 +196,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose `LazyColumn`; `StarredMessagesStore` → a repository backed by local DB. Navigation via the shared event bus carrying `conversationId` + `highlightMessageId`.
 
-## apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift
+## apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift
 
 **Purpose**: 30-day activity line/area chart.
 

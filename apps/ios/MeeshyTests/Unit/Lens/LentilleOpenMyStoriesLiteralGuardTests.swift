@@ -36,7 +36,7 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/iPadRootView.swift",
         "Meeshy/Features/Main/Views/ConversationListView.swift",
-        "Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
+        "Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
         // Les écouteurs des deux racines vivent dans leurs couches (#5837).
         "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
         "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"

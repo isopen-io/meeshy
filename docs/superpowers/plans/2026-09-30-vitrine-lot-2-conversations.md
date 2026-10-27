@@ -1505,7 +1505,7 @@ git commit -m "feat(vitrine): le fil et les médias rangés avant le montage des
 - Create: `apps/ios/Meeshy/Features/Vitrine/VitrineRendu.swift`
 - Modify: `apps/ios/Meeshy/Features/Vitrine/VitrineStage.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` (`markAsRead`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift` (`.task`)
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift` (`.task`)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` (fin de `body`)
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift`
 - Modify: `scripts/marketing-kit/vitrine/tests-sdk.sh`
@@ -1641,7 +1641,7 @@ Dans `VitrineSourceGuardTests.test_everyVitrineReference_outsideItsFolder_isInsi
             "apps/ios/Meeshy/MeeshyApp.swift",
             "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
             "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
-            "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift",
+            "apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift",
             "apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
@@ -1875,7 +1875,7 @@ Expected: `TEST SUCCEEDED`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Vitrine/VitrineRendu.swift apps/ios/Meeshy/Features/Vitrine/VitrineStage.swift apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift packages/MeeshySDK/Tests/MeeshyUITests/JoinFlowViewModelVitrineTests.swift apps/ios/MeeshyTests/Unit/Vitrine/VitrineRenduTests.swift apps/ios/MeeshyTests/Unit/Vitrine/VitrineSourceGuardTests.swift scripts/marketing-kit/vitrine/tests-sdk.sh apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Vitrine/VitrineRendu.swift apps/ios/Meeshy/Features/Vitrine/VitrineStage.swift apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift packages/MeeshySDK/Tests/MeeshyUITests/JoinFlowViewModelVitrineTests.swift apps/ios/MeeshyTests/Unit/Vitrine/VitrineRenduTests.swift apps/ios/MeeshyTests/Unit/Vitrine/VitrineSourceGuardTests.swift scripts/marketing-kit/vitrine/tests-sdk.sh apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(vitrine): « prêt » ne tombe que sur un écran rendu — conversation affichée, progression chargée, aperçu du lien servi, fil peint (Refs #8855, #8921)"
 ```
 

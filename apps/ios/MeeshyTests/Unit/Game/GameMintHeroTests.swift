@@ -135,7 +135,7 @@ final class GameMintHeroTests: XCTestCase {
 
     /// Le compteur de l'en-tête ne joue plus la frappe : il ouvre la fiche des Meeshes, où Mee et Meo la jouent.
     func test_theCounterNoLongerStrikes_theMeeshSheetPlaysTheScene() throws {
-        let entry = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let entry = try source("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift")
         let compteur = entry.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first?
             .components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
         XCTAssertFalse(compteur.contains("MintStrikeScene("), "le compteur ne joue plus de scène de frappe")

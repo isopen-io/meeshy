@@ -522,7 +522,7 @@ git commit -m "feat(ios): collapsible header on ConversationListView"
 ### Task 6: Apply CollapsibleHeader to ProfileView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 - [ ] **Step 1: Replace static header with CollapsibleHeader**
 
@@ -539,7 +539,7 @@ Run: `./apps/ios/meeshy.sh build`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ProfileView.swift
+git add apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift
 git commit -m "feat(ios): collapsible header on ProfileView"
 ```
 

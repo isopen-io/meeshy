@@ -891,7 +891,7 @@ git commit -m "refactor(ios): migrate participant views to ParticipantService ba
 ### Task 6: Migrate UserProfileViewModel
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
 
 **Step 1: Replace usage**
@@ -925,7 +925,7 @@ await CacheCoordinator.shared.profiles.invalidate(for: userId)
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift \
+git add apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift \
        apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift
 git commit -m "refactor(ios): migrate UserProfileViewModel to CacheCoordinator"
 ```

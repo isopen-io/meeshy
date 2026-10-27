@@ -27,11 +27,11 @@ final class ProgressionSectionNavigationTests: XCTestCase {
     }
 
     private func tableauDeBord() throws -> String {
-        try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
     }
 
     private func hub() throws -> String {
-        try source("Meeshy/Features/Main/Views/ProgressionHub.swift")
+        try source("Meeshy/Features/Profile/Views/ProgressionHub.swift")
     }
 
     private func routeur() throws -> String {

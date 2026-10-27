@@ -8562,7 +8562,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Game/Wave2/GamePage.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift"
   ],
   "feature_keys": [
    "game-progression-home",
@@ -8934,7 +8934,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Resources/Shaders",
    "apps/ios/Meeshy/Features/Game/Choreography/GameTilt.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Resources/Shaders/GameShaders.metal",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift"
   ],
   "feature_keys": [
    "game-shader-effects",
@@ -9486,7 +9486,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ProgressionConcepts.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ProgressionLayout.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/AchievementCatalog.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AchievementCopy.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/AchievementCopy.swift",
    "packages/shared/utils/progression-layout.ts",
    "packages/shared/utils/achievement-view.ts"
   ],
@@ -9544,7 +9544,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Game/GameSurface.swift",
    "apps/ios/Meeshy/Features/Game/GamePageScaffold.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionComponents.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionComponents.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameSpend.swift"
   ],
   "feature_keys": [
@@ -9619,8 +9619,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AchievementRevealView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AchievementRevealMedal.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/AchievementRevealView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/AchievementRevealMedal.swift",
    "apps/ios/Meeshy/Features/Game/GameMomentPresence.swift",
    "apps/ios/Meeshy/Features/Game/Wave2/GameRarityViews.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/EngagementReveal.swift",
@@ -10398,7 +10398,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/socket/RealtimeSessionCoordinatorTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProgressionViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/EngagementProgressService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameBlockModels.swift",
    "packages/shared/types/game-sync.ts"
@@ -11144,7 +11144,7 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/ProgressionMintTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProgressionViewModel.swift",
    "apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift",
    "apps/ios/Meeshy/Features/Game/GameOptimistic.swift",
    "apps/ios/Meeshy/Features/Game/GameLevelConfirmation.swift"
@@ -11221,7 +11221,7 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/push/NotificationChannelInstallerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProgressionViewModel.swift",
    "apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift",
    "apps/ios/Meeshy/Features/Main/Services/StreakReminderPlan.swift",
    "apps/ios/Meeshy/Features/Main/Services/StreakReminderScheduler.swift",
@@ -11392,9 +11392,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/ProgressionHubTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionHub.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionComponents.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionHub.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionCopy.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionComponents.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/EngagementAxisKey+Symbol.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/EngagementHero.swift"
   ],
@@ -11455,7 +11455,7 @@
    "apps/ios/Meeshy/Features/Game/GameMintPreviewView.swift",
    "apps/ios/Meeshy/Features/Game/GameMintSequence.swift",
    "apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift",
    "apps/ios/Meeshy/Features/Game/Choreography/MintStrikeScene.swift"
   ],
   "feature_keys": [
@@ -11698,10 +11698,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/HiddenGameCardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift",
    "apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift",
    "apps/ios/Meeshy/Features/Game/ProgressionHeaderStanding.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift",
    "apps/ios/Meeshy/Features/Game/Wave2/GameDoorsView.swift"
   ],
   "feature_keys": [
@@ -12352,11 +12352,11 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/GameBannerBadgeModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileProgressionEntry.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileProgressionEntry.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",
    "apps/ios/Meeshy/Features/Game/Wave2/GameBannerBadge.swift",
    "apps/ios/Meeshy/Features/Game/Wave2/GameProfileViews.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "game-profile-entry",

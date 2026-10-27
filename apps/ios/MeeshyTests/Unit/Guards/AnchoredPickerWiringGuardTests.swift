@@ -51,7 +51,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
     }
 
     func test_deadPopoverAdaptationTwin_isGone() throws {
-        let source = try code("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let source = try code("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift")
         XCTAssertFalse(source.contains("presentationCompactAdaptationPopoverIfAvailable"))
     }
 }

@@ -30,8 +30,8 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Contacts/PeopleDiscoveryView.swift",
         "Meeshy/Features/Contacts/PhonebookListView.swift",
         "Meeshy/Features/Game/ProgressionConceptPage.swift",
-        "Meeshy/Features/Main/Views/ProgressionHub.swift",
-        "Meeshy/Features/Main/Views/ProgressionView.swift",
+        "Meeshy/Features/Profile/Views/ProgressionHub.swift",
+        "Meeshy/Features/Profile/Views/ProgressionView.swift",
         "Meeshy/Features/Links/Views/CommunityLinksView.swift",
         "Meeshy/Features/Links/Views/LinksHubView.swift",
         "Meeshy/Features/Settings/Views/SettingsView.swift",
@@ -48,7 +48,7 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/ConversationListView.swift",
         "Meeshy/Features/Main/Views/ConversationListView+Tail.swift",
         "Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift",
-        "Meeshy/Features/Main/Views/ProfileView.swift",
+        "Meeshy/Features/Profile/Views/ProfileView.swift",
         "Meeshy/Features/Main/Views/StarredMessagesView.swift",
         "Meeshy/Features/Main/Views/WidgetPreviewView.swift"
     ]
