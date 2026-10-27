@@ -942,7 +942,7 @@ git commit -m "refactor(ios): migrate UserProfileViewModel to CacheCoordinator"
 - `apps/ios/Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble+Media.swift`
 - `apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift`
 - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`

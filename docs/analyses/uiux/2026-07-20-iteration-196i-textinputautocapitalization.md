@@ -4,8 +4,8 @@
 **Scope:** iOS only
 **Area:** Native platform integration / API modernization / design-system consistency — text-entry fields
 **Files touched:**
-- `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift` (email-change field)
-- `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift` (confirmation-phrase field)
+- `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift` (email-change field)
+- `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift` (confirmation-phrase field)
 
 (2 files, 0 logic change, 0 new i18n key, 0 SDK change, 0 new test — behavior-preserving.)
 

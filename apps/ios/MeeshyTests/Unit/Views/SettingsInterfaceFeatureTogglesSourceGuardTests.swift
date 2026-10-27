@@ -31,7 +31,7 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
     }
 
     private func settingsCode() throws -> String {
-        try code("Features/Main/Views/SettingsView.swift")
+        try code("Features/Settings/Views/SettingsView.swift")
     }
 
     // MARK: - La bêta a disparu

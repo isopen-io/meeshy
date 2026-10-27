@@ -14,7 +14,7 @@ la mesure confirme le classement inchangé :
 | fichier | clés non traduites |
 |---|---|
 | **`Features/Main/Views/CreateShareLinkView.swift`** | **55** |
-| `Features/Main/Views/NotificationSettingsView.swift` | 52 |
+| `Features/Settings/Views/NotificationSettingsView.swift` | 52 |
 | `Features/Main/Components/MessageDetailSheet.swift` | 47 |
 | `Features/Main/Components/ConversationInfoSheet.swift` | 43 |
 

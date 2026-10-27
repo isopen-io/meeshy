@@ -5586,7 +5586,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/VoiceProfile/VoiceProfileWizardView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfileModels.swift"
   ],
   "feature_keys": [
@@ -5635,7 +5635,7 @@
    "apps/android/feature/settings/src/main/res/values/strings_voice_manage.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/VoiceProfileService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfileModels.swift"
   ],
@@ -5865,7 +5865,7 @@
    "apps/ios/Meeshy/Features/Main/Services/MediaSaveCoordinator.swift",
    "apps/ios/Meeshy/Features/Main/Components/MediaSaveFlowHost.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/PhotoAlbumSaveFeedback.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryDeduplicator.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryImageWrite.swift",
@@ -8593,7 +8593,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Contacts/BlockedTab.swift",
    "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift"
   ],
   "feature_keys": [
    "cf-blocked-users-list"
@@ -10745,7 +10745,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Contacts/PhonePromptPolicy.swift",
    "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift"
   ],
   "feature_keys": [
    "cf-phone-prompt"

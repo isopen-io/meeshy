@@ -102,7 +102,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
+        "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
@@ -110,7 +110,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
-        "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
+        "Settings/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
         "Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
         "Main/Views/WidgetPreviewView.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingCards.swift": "décor, illustration ou son — aucune personne",
@@ -353,7 +353,7 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_settingsAvatar_neverHardcodesItsOwnPresence() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SettingsView.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Settings/Views/SettingsView.swift"))
         XCTAssertFalse(source.contains("presenceState: .online"), "les Réglages ne peignent pas la pastille du compte connecté")
     }
 

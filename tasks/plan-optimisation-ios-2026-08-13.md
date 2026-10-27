@@ -33,7 +33,7 @@ Le bug est documenté dans `ScrollOffsetRelay.swift:5-16` (body complet ré-éva
 - [ ] `MeeshyUI/Community/CommunityListView.swift:15/200`
 - [ ] `MeeshyUI/Profile/UserProfileSheet.swift:69/206`
 - [ ] `Features/Main/Views/ProfileView.swift:43/227`
-- [ ] `Features/Main/Views/SettingsView.swift:43/185`
+- [ ] `Features/Settings/Views/SettingsView.swift:43/185`
 - [ ] `Features/Main/Views/LinksHubView.swift:21/49`
 - [ ] `Features/Main/Views/PostDetailView.swift:671`
 - [ ] `Features/Contacts/ContactsHubView.swift:20` (+ `ContactsShared.swift:131`)

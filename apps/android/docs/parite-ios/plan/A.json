@@ -7411,7 +7411,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SettingsViewModelNotificationTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift"
   ],
   "feature_keys": [

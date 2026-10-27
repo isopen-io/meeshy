@@ -86,7 +86,7 @@ final class ViewModelErrorLocalizationTests: XCTestCase {
         // ViewModel is localized, but the screen substitutes a hardcoded French string
         // whenever the ViewModel has not published one.
         let source = try String(
-            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/TwoFactorSetupView.swift"),
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Settings/Views/TwoFactorSetupView.swift"),
             encoding: .utf8
         )
         XCTAssertFalse(

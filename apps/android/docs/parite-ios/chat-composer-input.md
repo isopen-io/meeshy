@@ -217,7 +217,7 @@ Transposition Android : CollapsibleHeaderPage => TopAppBar a collapse (LargeTopA
 
 - `packages/MeeshySDK/Sources/MeeshyUI/Packs/PackShopView.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Packs/UnifiedShopView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift`
 
 </details>
 
@@ -458,7 +458,7 @@ Transposition Android : UserDefaults JSON => DataStore Preferences/Proto; Sectio
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift`
+- `apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift`
 
 </details>

@@ -548,7 +548,7 @@ git commit -m "feat(ios): collapsible header on ProfileView"
 ### Task 7: Apply CollapsibleHeader to SettingsView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 - [ ] **Step 1: Replace static header with CollapsibleHeader**
 
@@ -561,7 +561,7 @@ Run: `./apps/ios/meeshy.sh build`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 git commit -m "feat(ios): collapsible header on SettingsView"
 ```
 

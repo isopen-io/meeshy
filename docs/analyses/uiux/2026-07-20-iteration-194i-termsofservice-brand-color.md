@@ -4,7 +4,7 @@
 **Scope:** iOS only — `TermsOfServiceView` (Réglages → Conditions d'utilisation)
 **Type:** Design-system / brand-color consolidation
 **Branch:** `claude/laughing-thompson-qk04t7`
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift` (1 file, 1 line, 0 logic, 0 i18n, 0 test)
+**File touched:** `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift` (1 file, 1 line, 0 logic, 0 i18n, 0 test)
 
 ## Context
 

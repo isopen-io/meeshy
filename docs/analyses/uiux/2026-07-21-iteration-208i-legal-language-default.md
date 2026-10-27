@@ -2,7 +2,7 @@
 
 **Track**: iOS UI/UX (suffix `i`)
 **Date**: 2026-07-21
-**Scope**: `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift`, `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift`
+**Scope**: `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`, `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
 
 ## Problem
 

@@ -34,7 +34,7 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/ProgressionView.swift",
         "Meeshy/Features/Main/Views/CommunityLinksView.swift",
         "Meeshy/Features/Main/Views/LinksHubView.swift",
-        "Meeshy/Features/Main/Views/SettingsView.swift",
+        "Meeshy/Features/Settings/Views/SettingsView.swift",
         "Meeshy/Features/Main/Views/GlobalSearchView.swift",
         "Meeshy/Features/Main/Views/ConversationSearchCommunitiesBand.swift",
         "Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",

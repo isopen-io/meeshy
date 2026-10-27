@@ -1474,7 +1474,7 @@ The SettingsView already has `@State private var showDataExport = false` and `.s
 
 From the SettingsView code, it references `DataExportView()` directly. If it does not exist, create a simple GDPR data export request view:
 
-**File to CREATE**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/DataExportView.swift`
+**File to CREATE**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift`
 
 ---
 

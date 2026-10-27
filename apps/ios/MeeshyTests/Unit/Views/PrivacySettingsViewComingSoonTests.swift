@@ -122,7 +122,7 @@ final class CallAddressPrivacyTests: XCTestCase {
             XCTAssertFalse(code.contains("RTCConfiguration()"), "\(nom) : une connexion construite à la main échappe au réglage")
             XCTAssertTrue(code.contains("transport: CallAddressPrivacySetting.transport()"), nom)
         }
-        let reglages = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Main/Views/PrivacySettingsView.swift"),
+        let reglages = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Settings/Views/PrivacySettingsView.swift"),
                                   encoding: .utf8)
         XCTAssertTrue(reglages.contains("@AppStorage(CallAddressPrivacySetting.key)"), "le réglage vit dans Confidentialité")
     }

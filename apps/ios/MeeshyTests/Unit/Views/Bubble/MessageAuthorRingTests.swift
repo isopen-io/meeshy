@@ -119,7 +119,7 @@ final class MessageAuthorRingTests: XCTestCase {
     /// dépasse jamais celui nommé ici avec sa raison — un registre EXACT : il ne fait que descendre, et une entrée qui ne compte plus rien rougit.
     private static let avatarsWithoutRing: [String: (count: Int, reason: String)] = [
         "Contacts/BlockedTab.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
-        "Main/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
+        "Settings/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
         "Contacts/CallDetailSheet.swift": (2, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),
         "Contacts/CallLinkConfirmation.swift": (1, "lien d'appel — la cible résolue ne sert pas le contour (#10957)"),
         "Contacts/CallsTab.swift": (1, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),

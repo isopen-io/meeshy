@@ -66,7 +66,7 @@ Dependencies: `StoryViewModel`, `Router`, `ConversationListViewModel`, `StatusVi
 
 Android-port note: Story viewer → full-screen `Pager` (`HorizontalPager` for groups). The prefetcher sliding window → preload images/players for adjacent pages via Coil + ExoPlayer pre-buffering; Compose `Pager` already pre-composes neighbors. No type-metadata-crash concern in Kotlin — the extracted structs are an iOS-only workaround, collapse them back into composables freely. The legacy/gated dual timer is tech debt: implement ONE content-gated auto-advance. EnvironmentObject re-injection issue does not exist with Hilt/CompositionLocal.
 
-## apps/ios/Meeshy/Features/Main/Views/SupportView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SupportView.swift
 
 Purpose: Static "Aide et support" screen — help center / FAQ links, contact (email, Twitter), bug/feature report mailto links, app version/build/platform info.
 
@@ -76,7 +76,7 @@ Key behaviors: Pure static content; `Link` to URLs (https + mailto). Hardcoded s
 
 Android-port note: Trivial `@Composable` with a `LazyColumn` of link rows; URLs via `Intent.ACTION_VIEW`. Version from `BuildConfig.VERSION_NAME`/`VERSION_CODE`. No state.
 
-## apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift
+## apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift
 
 Purpose: Static Terms of Service screen with FR/EN toggle; 9 numbered sections per language hardcoded in a `[String: [(title, content)]]` dictionary.
 
@@ -186,7 +186,7 @@ Dependencies: `TrackingLink`/`TrackingLinkStats`, `TrackingLinkService`, `CacheC
 
 Android-port note: `LazyColumn` + `pullRefresh`; SWR pattern → Repository emitting cached-then-network `Flow`. `NavigationLink` → nav route to detail.
 
-## apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift
+## apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift
 
 Purpose: 2FA enrollment wizard, disable flow, and backup-codes regeneration.
 
@@ -239,7 +239,7 @@ Dependencies: `CallManager.shared`, `VideoFilterConfig`/`VideoFilterPreset`, `Vi
 
 Android-port note: Preset chips → `LazyRow`. Filter pipeline (color matrix, background blur via segmentation, skin smoothing) is heavy GPU work — on Android use a `GLSurfaceView`/`Surface` shader or ML Kit selfie segmentation; the auto-degrade fallback is important to preserve. Two-way sync with a call manager → shared `StateFlow`.
 
-## apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift
+## apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift
 
 Purpose: Voice-profile management screen — status, info, cloning toggle, sample list (add/delete), GDPR-compliant profile deletion.
 
@@ -253,7 +253,7 @@ Dependencies: `VoiceProfileManageViewModel`, `VoiceProfile`/`VoiceSample`/`Voice
 
 Android-port note: Status enum → sealed class / enum. Sample list → `LazyColumn`. Recording → `MediaRecorder` + permission. Confirmation → `AlertDialog`. GDPR delete must stay explicit/irreversible-warned.
 
-## apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift
+## apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift
 
 Purpose: Voice-profile creation wizard — consent → age verification → recording → processing → complete.
 

@@ -11,7 +11,7 @@ import MeeshySDK
 @MainActor
 final class PackShopUnifiedRoutingGuardTests: XCTestCase {
 
-    private static let path = "Meeshy/Features/Main/Views/PacksSettingsView.swift"
+    private static let path = "Meeshy/Features/Settings/Views/PacksSettingsView.swift"
 
     func test_lesReglagesRoutentStickersEtCadresVersLaVitrineUnique() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))

@@ -11,7 +11,7 @@ réutilisable, `surfaceGradient`/`border` tintés), mais **0/10** `.font(.system
 `sectionHeader` sans traits a11y de header. On aligne `LicensesView` sur la doctrine `AboutView`.
 
 ## Périmètre (1 fichier)
-`apps/ios/Meeshy/Features/Main/Views/LicensesView.swift`
+`apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift`
 
 ## Changements
 1. **Dynamic Type — 10/10** `.font(.system(size: N, weight:[, design:]))` → `MeeshyFont.relative(...)`

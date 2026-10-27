@@ -62,7 +62,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   searchable list. Keep the `systemLanguage`/`regionalLanguage` resolution order (Prisme rule:
   never use device UI locale for content language).
 
-## apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift
+## apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift
 
 - Purpose: List of blocked users with unblock (swipe action + button + confirm alert).
 - Public API surface: `struct BlockedUsersView: View`; uses `[BlockedUser]` model.
@@ -466,7 +466,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
 - Public API surface: `final class TopLevelCommentCell` — `configure(with: CommentRecord)`.
 - Android port note: Compose comment item.
 
-## apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift
+## apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift
 
 - Purpose: Change-password form (current, new, confirm) with validation + strength meter.
 - Public API surface: `struct ChangePasswordView: View`; private `Field` focus enum.

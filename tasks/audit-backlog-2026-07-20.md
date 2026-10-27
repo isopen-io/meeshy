@@ -11,7 +11,7 @@ _Tout le noyau auth : MeeshyApp.swift, AuthManager.swift, APIClient.swift, Meesh
 - [P1] Cold start avec JWT expiré + réseau dégradé : splash bloqué jusqu'à 60s derrière refreshSession awaité sur le chemin critique alors que session+liste sont en cache. Borner (race timeout 3-5s) ou détacher le refresh proactif.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
 - [P1] Systémique : les catch `APIError.serverError` ne matchent JAMAIS (APIClient ne lance que MeeshyError) — flush handler MeeshyApp:281 (4xx rejoué à l'infini), SecurityView:1034/957/1006 (messages serveur perdus, code SMS incorrect illisible), UserProfileViewModel:80 (isBlockedByTarget jamais posé), AuthManager:254 et 5 autres sites (code mort). Matcher MeeshyError.server partout.
-  fichiers: apps/ios/Meeshy/MeeshyApp.swift, apps/ios/Meeshy/Features/Main/Views/SecurityView.swift, apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift, packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
+  fichiers: apps/ios/Meeshy/MeeshyApp.swift, apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift, apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift, packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
 - [P1] UserProfileViewModel:43 lit l'état 'bloqué' depuis le snapshot de login (currentUser.blockedUserIds) au lieu de BlockService (source canonique injectée mais inutilisée) — un blocage en session s'affiche non-bloqué à la réouverture.
   fichiers: apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift (area settings-profile)
 - [P2] AuthManager hygiène : (a) logout serveur D5 — token lu APRÈS suspension, retries systématiquement sans Authorization → capturer token avant le wipe ; (b) revalidation background appelle AuthService.shared.me() en dur au lieu du seam authService injectable.
@@ -183,7 +183,7 @@ _Écrans satellites tous violant cache-first/OfflineQueue : chacun est un fichie
 - [P1] OutboxKind .sendFriendRequest mort (dispatcher prêt, 0 enqueue) : Discover/ConnectionActionView font du REST direct — offline la demande échoue avec toast. Router par la queue avec flip optimiste (corrige aussi le haptic success prématuré de DiscoverViewModel). Portions UserProfileSheet/NewConversationViewModel traitées dans leurs lanes.
   fichiers: apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Profile/ConnectionActionView.swift, packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift (area offline-instant)
 - [P1] BlockedUsersView (Réglages) : network-only ignorant le store blockedUsers ET échec silencieux routé vers 'Aucun utilisateur bloqué' (faux offline) — réutiliser BlockedViewModel cache-first + état d'erreur.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift (area offline-instant)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift (area offline-instant)
 - [P2] Détail des réactions : fetch network-only, aucun seed depuis message.reactions déjà affichées — offline l'écran dit 'Aucune réaction' sous une bulle qui en montre. Seeder + conserver le seed sur échec.
   fichiers: apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift (area offline-instant)
 - [P2] SharePickerViewModel.send et ForwardPickerSheet.forwardTo : envoi REST direct sans OfflineQueue ni optimiste — contenu partagé perdu offline. Router par l'outbox.
@@ -194,17 +194,17 @@ _Écrans satellites tous violant cache-first/OfflineQueue : chacun est un fichie
 ## LANE: Réglages & préférences (placebo, langue UI, sync)
 _SettingsView/PrivacySettingsView/NotificationSettingsView/UserPreferencesManager : toggles inopérants et sync bidirectionnelle. Le moteur auto-download mort s'y greffe (même fichier UserPreferencesManager)._
 - [P1] 5 toggles de confidentialité placebo (hideProfileFromSearch, blockScreenshots, allowCallsFromNonContacts, saveMediaToGallery, shareUsageData) : persistés/synchronisés mais appliqués nulle part (ni iOS ni gateway) — faux sentiment de confidentialité. Appliquer ou griser 'Bientôt disponible'.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift (area settings-profile)
 - [P1] Picker 'Langue de l'interface' sans effet : interfaceLanguage écrit mais jamais lu (aucun .environment(locale)) — appliquer à la racine ou retirer le picker.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/SettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift (area settings-profile)
 - [P1] applyRemote 'server wins' écrase les modifications locales en attente de sync (fenêtre debounce 1s) puis PATCHe la valeur périmée — skipper les catégories dirty/syncTask pendant.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift (area settings-profile)
 - [P2] Second moteur auto-download MORT et divergent dans UserPreferencesManager (shouldAutoDownloadMedia, 0 appelant prod, ignore autoDownloadOnWifi) — supprimer ou déléguer à MediaDownloadPolicyEngine, statuer sur les champs serveur autoDownload*.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift (area sdk-purity)
 - [P2] Heures 'Ne pas déranger' en TextField libre : tout format ≠ HH:mm désactive silencieusement la fenêtre DnD (parseTime strict) — DatePicker .hourAndMinute.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift (area settings-profile)
 - [P3] Sync thème unidirectionnelle : application.theme poussé au backend mais jamais relu vers ThemeManager (divergence multi-device silencieuse) — mapper au applyRemote/login ou cesser de le synchroniser.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/SettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift (area settings-profile)
 
 ## LANE: Appels — retry, fin d'appel & privacy
 _CallManager/CallView/FloatingCallPillView/BubbleCallNoticeView : états de fin d'appel, retry, signaux — fortement couplés, fichiers exclusifs._

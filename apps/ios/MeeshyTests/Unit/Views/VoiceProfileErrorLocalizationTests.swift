@@ -34,8 +34,8 @@ final class VoiceProfileErrorLocalizationTests: XCTestCase {
     ]
 
     private let viewModels = [
-        "Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",
-        "Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift",
+        "Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift",
+        "Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",
     ]
 
     private func catalogStrings() throws -> [String: Any] {

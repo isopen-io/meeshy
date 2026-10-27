@@ -6,7 +6,7 @@ final class LicensesMatchResolvedDependenciesGuardTests: XCTestCase {
     func test_chaqueLicenceGitHubDeLicensesViewNommeUneDependanceResolue() throws {
         let root = repoRoot()
         let view = try String(
-            contentsOf: root.appendingPathComponent("apps/ios/Meeshy/Features/Main/Views/LicensesView.swift"),
+            contentsOf: root.appendingPathComponent("apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift"),
             encoding: .utf8
         )
         let resolved = try String(

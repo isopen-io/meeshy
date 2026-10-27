@@ -177,7 +177,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // aucune et sort de la liste, comme la règle 4 l'exige.
         "Features/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
-        "Features/Main/Views/ActiveSessionsView.swift",
+        "Features/Settings/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
@@ -192,7 +192,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Call/Views/CallView+Header.swift",
         // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
         // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
-        "Features/Main/Views/ChangePasswordView.swift",
+        "Features/Settings/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
         // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
@@ -239,8 +239,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ComposerAttachmentZone.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
-        "Features/Main/Views/DataExportView.swift",
-        "Features/Main/Views/DeleteAccountView.swift",
+        "Features/Settings/Views/DataExportView.swift",
+        "Features/Settings/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         // #6040 — RELOCALISATION pure, même forme qu'au #4084 et au #4102 : la
         // FEUILLE de composition quitte `FeedView+Attachments.swift` (1 391
@@ -327,10 +327,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
-        "Features/Main/Views/SupportView.swift",
+        "Features/Settings/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
-        "Features/Main/Views/VoiceProfileWizardView.swift",
+        "Features/Settings/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",
         "Features/Stories/Notifications/StoryNotificationOfflineContent.swift",

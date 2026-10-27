@@ -2902,7 +2902,7 @@
    "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift",
    "apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift",
    "apps/ios/Meeshy/Features/Focal/Preferences/MeeshyFeatureFlags.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "cl-lentille-feature-flags",
@@ -3256,8 +3256,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-ui-atoms"
@@ -3319,7 +3319,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-entry-points",
@@ -3377,8 +3377,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/account/PhoneChangeFlowTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift"
   ],
   "feature_keys": [
    "sps-security-hub",
@@ -3431,8 +3431,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SettingsViewModelSyncTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-entry-points"
@@ -3496,9 +3496,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/settings/SettingsHubCatalogTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift",
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-hub"
@@ -4162,13 +4162,13 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Localizable.xcstrings",
-   "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
    "apps/ios/Meeshy/Core/UILanguageOverride.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "res-strings-domain-settings-account",
@@ -7155,7 +7155,7 @@
    "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
    "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ConnectionAccount.swift"
   ],
@@ -9228,9 +9228,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/session/SessionsListReducerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift"
   ],
   "feature_keys": [
    "sps-active-sessions"
@@ -9396,7 +9396,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/session/SessionRepositoryHasPasswordTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/PasswordChangeForm.swift"
   ],
   "feature_keys": [
@@ -9440,8 +9440,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/DataExportViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/DataExportService.swift"
   ],
   "feature_keys": [
@@ -9496,7 +9496,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/PrivacySettingsViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift"
   ],
@@ -9602,7 +9602,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift"
   ],
   "feature_keys": [
    "sps-active-sessions"
@@ -9773,9 +9773,9 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/ActiveSessionsUiMapperTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift"
   ],
   "feature_keys": [
@@ -9848,7 +9848,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/CacheMediaAttributionTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SelectiveCachePurgeView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/CachePurgeService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheMediaAttribution.swift",
@@ -9900,7 +9900,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SecurityLockViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",
    "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",
    "apps/ios/Meeshy/Features/Main/Services/ConversationLockManager.swift"
   ],
@@ -9962,10 +9962,10 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/auth/AuthRepositoryTwoFactorTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/TwoFactorService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift"
   ],
   "feature_keys": [
    "sps-two-factor"
@@ -10014,7 +10014,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SignOutViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift"
   ],
   "feature_keys": [
@@ -10144,7 +10144,7 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/LocalesConfigGuardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "apps/ios/Meeshy/Core/UILanguageOverride.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift"
   ],
@@ -10198,7 +10198,7 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/settings/SettingsHubCatalogGatingTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift"
   ],
   "feature_keys": [
@@ -11666,8 +11666,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/device/DeviceMediaTierTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SupportView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SupportView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/MediaTransferProfile.swift"
   ],
   "feature_keys": [
@@ -11717,9 +11717,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/licenses/OpenSourceLicensePresentationBuilderTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift"
   ],
   "feature_keys": [
    "sps-legal-documents",

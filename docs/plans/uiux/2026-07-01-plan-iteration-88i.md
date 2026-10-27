@@ -2,7 +2,7 @@
 
 **Branche** : `claude/upbeat-euler-bhrdy6` (resync sur `main` HEAD `e89c7c1a`)
 **Suffixe `i`** = piste iOS (parallèle web/android).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift` (écran suppression de compte — à enjeu élevé, destructif).
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift` (écran suppression de compte — à enjeu élevé, destructif).
 **Contention** : 0 PR iOS ouverte au moment du run (`list_pull_requests` = []). Numéro `88i` = > 87i (plus haute analyse iOS mergée).
 
 ## Diagnostic (au-delà du sweep répétitif)

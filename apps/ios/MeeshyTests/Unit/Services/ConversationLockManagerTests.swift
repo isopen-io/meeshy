@@ -920,7 +920,7 @@ final class ConversationLockManagerTests: XCTestCase {
     /// codes du trousseau tant qu'elle est inconnue) et ne proposent de
     /// supprimer le PIN maître que sur la décision du gestionnaire.
     func test_theSecuritySettings_countTheContentLockSet_andAskBeforeOfferingRemoval() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SecurityView.swift"))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Settings/Views/SecurityView.swift"))
 
         XCTAssertTrue(code.contains("lockManager.contentLockedConversationIds.count"))
         XCTAssertTrue(code.contains("lockManager.offersMasterPinRemoval"))
