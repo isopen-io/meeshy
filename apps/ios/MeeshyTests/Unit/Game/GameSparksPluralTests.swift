@@ -45,7 +45,7 @@ final class GameSparksPluralTests: XCTestCase {
     }
 
     func test_theCopy_readsThePluralKeys() throws {
-        let copy = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameCopy.swift"))
+        let copy = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Game/GameCopy.swift"))
         XCTAssertTrue(copy.contains("\"game.sparks.count\""))
         XCTAssertTrue(copy.contains("\"game.sparks.convertible.count\""))
         XCTAssertFalse(copy.contains("\"game.points.one\""))

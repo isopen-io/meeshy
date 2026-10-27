@@ -8516,9 +8516,9 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameSVGPath.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameAccessibility.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameOnScreen.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/ChoreographyClock.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/GameTimeline.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/GameBounce.swift"
+   "apps/ios/Meeshy/Features/Game/Choreography/ChoreographyClock.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/GameTimeline.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/GameBounce.swift"
   ],
   "feature_keys": [
    "game-brick-foundations",
@@ -8561,7 +8561,7 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameScreenNamesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GamePage.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GamePage.swift",
    "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift"
   ],
   "feature_keys": [
@@ -8614,11 +8614,11 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameErrorMessagesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameFicheCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameSparksCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameMintCostCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/PlayerBannerCopy.swift"
+   "apps/ios/Meeshy/Features/Game/GameCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameFicheCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameSparksCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift",
+   "apps/ios/Meeshy/Features/Game/PlayerBannerCopy.swift"
   ],
   "feature_keys": [
    "game-copy-i18n"
@@ -8932,7 +8932,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameShaders.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Resources/Shaders",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/GameTilt.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/GameTilt.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Resources/Shaders/GameShaders.metal",
    "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift"
   ],
@@ -9140,7 +9140,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Game/RankBlasonView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameHeraldry.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameRankCrest.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/RankBlasonStage.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/RankBlasonStage.swift",
    "packages/shared/utils/game/rank-crest.ts"
   ],
   "feature_keys": [
@@ -9351,7 +9351,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameTrophies.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseRules.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseRules.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameConstellation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameAtlas.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePrestige.swift",
@@ -9542,8 +9542,8 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameSpendRowsTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameSurface.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GamePageScaffold.swift",
+   "apps/ios/Meeshy/Features/Game/GameSurface.swift",
+   "apps/ios/Meeshy/Features/Game/GamePageScaffold.swift",
    "apps/ios/Meeshy/Features/Main/Views/ProgressionComponents.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameSpend.swift"
   ],
@@ -9621,8 +9621,8 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/AchievementRevealView.swift",
    "apps/ios/Meeshy/Features/Main/Views/AchievementRevealMedal.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameMomentPresence.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameRarityViews.swift",
+   "apps/ios/Meeshy/Features/Game/GameMomentPresence.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameRarityViews.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/EngagementReveal.swift",
    "apps/ios/Meeshy/Features/Main/Views/EngagementRevealHost.swift",
    "apps/ios/Meeshy/Features/Main/Views/EngagementRevealQueue.swift",
@@ -9812,8 +9812,8 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/session/DefaultSessionTeardownGameTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Support.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameIntegration.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Support.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameIntegration.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameIntegrationModels.swift"
   ],
   "feature_keys": [
@@ -9868,10 +9868,10 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/ProgressionStateLineTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionFactIdentity.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionFrontList.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionHeaderStanding.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptModel.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionFactIdentity.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionHeaderStanding.swift",
    "packages/shared/utils/game/progression-concepts.ts",
    "packages/shared/utils/game/progression-state.ts"
   ],
@@ -9964,8 +9964,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameMintCeremony.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyChoreography.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyParticles.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyChoreography.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyParticles.swift",
    "packages/shared/utils/game/mint-ceremony.ts"
   ],
   "feature_keys": [
@@ -10017,9 +10017,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameNavigationTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameNavigationMap.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLink.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideTarget.swift",
+   "apps/ios/Meeshy/Features/Game/GameNavigationMap.swift",
+   "apps/ios/Meeshy/Features/Game/GameLink.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideTarget.swift",
    "packages/shared/utils/game/game-links.ts"
   ],
   "feature_keys": [
@@ -10070,9 +10070,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/GameLevelConfirmationTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameOptimistic.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameBlock+Replacing.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLevelConfirmation.swift",
+   "apps/ios/Meeshy/Features/Game/GameOptimistic.swift",
+   "apps/ios/Meeshy/Features/Game/GameBlock+Replacing.swift",
+   "apps/ios/Meeshy/Features/Game/GameLevelConfirmation.swift",
    "packages/shared/utils/game/level-wire.ts",
    "packages/shared/types/game-sync-order.ts"
   ],
@@ -10127,8 +10127,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/GameGloryFramesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoMoments.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCatchUp.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoMoments.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoCatchUp.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoCatchUpLaw.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoAlerts.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameGloryFrames.swift",
@@ -10184,7 +10184,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Services/GameService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameRoutes.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameWriteModels.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Model.swift"
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Model.swift"
   ],
   "feature_keys": [
    "game-sdk-service"
@@ -10237,12 +10237,12 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/GameFicheHeadsTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptFiche.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameHeroModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameHeroParts.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameSparkPairs.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameFicheHeads.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameFicheCopy.swift"
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptFiche.swift",
+   "apps/ios/Meeshy/Features/Game/GameHeroModel.swift",
+   "apps/ios/Meeshy/Features/Game/GameHeroParts.swift",
+   "apps/ios/Meeshy/Features/Game/GameSparkPairs.swift",
+   "apps/ios/Meeshy/Features/Game/GameFicheHeads.swift",
+   "apps/ios/Meeshy/Features/Game/GameFicheCopy.swift"
   ],
   "feature_keys": [
    "game-concept-model-law",
@@ -10284,8 +10284,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/game/ProgressionConceptCardWave2Test.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameDoorsView.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptModel.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameDoorsView.swift",
    "packages/shared/utils/game/progression-concepts.ts"
   ],
   "feature_keys": [
@@ -10343,10 +10343,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameElementSheetTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameElementDetail.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameElementSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameDetailCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/GameBounce.swift"
+   "apps/ios/Meeshy/Features/Game/GameElementDetail.swift",
+   "apps/ios/Meeshy/Features/Game/GameElementSheet.swift",
+   "apps/ios/Meeshy/Features/Game/GameDetailCopy.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/GameBounce.swift"
   ],
   "feature_keys": [
    "game-element-detail-sheet"
@@ -10454,12 +10454,12 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameGuideCardViewTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideCard.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideCardView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideEvents.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideSession.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/PlayerBannerHost.swift"
+   "apps/ios/Meeshy/Features/Game/GameGuideCard.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideCardView.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideEvents.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideSession.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideCopy.swift",
+   "apps/ios/Meeshy/Features/Game/PlayerBannerHost.swift"
   ],
   "feature_keys": [
    "game-guide-mee-meo"
@@ -10510,9 +10510,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/ceremony/MintCeremonySceneTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyScene.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyLayers.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyParticles.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyScene.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyLayers.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyParticles.swift",
    "apps/web/src/lib/game/choreography-mint-ceremony.ts"
   ],
   "feature_keys": [
@@ -10561,10 +10561,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/photo/GameAuthorCardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GameAuthorPlateView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoAuthorPlate.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoAuthorPlateMotion.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GameAuthorCardView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GameAuthorPlateView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoAuthorPlate.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoAuthorPlateMotion.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GameAuthorCardView.swift",
    "packages/shared/utils/game/author-plate.ts"
   ],
   "feature_keys": [
@@ -10616,9 +10616,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/notebook/GameNotebookScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoNotebook.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GameNotebookViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameNotebookView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoNotebook.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GameNotebookViewModel.swift",
+   "apps/ios/Meeshy/Features/Game/GameNotebookView.swift",
    "packages/shared/utils/game/notebook.ts"
   ],
   "feature_keys": [
@@ -10678,7 +10678,7 @@
    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/game/GameReferralBannerViewTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameReferralLink.swift",
+   "apps/ios/Meeshy/Features/Game/GameReferralLink.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameQRCode.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameReferralQR.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Game/GameReferralBannerView.swift",
@@ -10735,10 +10735,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameRulesScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameRulesView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameRulesAtlas.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameRulesAtlasView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideCopy.swift"
+   "apps/ios/Meeshy/Features/Game/GameRulesView.swift",
+   "apps/ios/Meeshy/Features/Game/GameRulesAtlas.swift",
+   "apps/ios/Meeshy/Features/Game/GameRulesAtlasView.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideCopy.swift"
   ],
   "feature_keys": [
    "game-rules-book"
@@ -10789,9 +10789,9 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameSeasonScheduleStore.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameIntegration.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Support.swift"
+   "apps/ios/Meeshy/Features/Game/Wave2/GameArchiveModel.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameIntegration.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Support.swift"
   ],
   "feature_keys": [
    "game-season-schedule-sync",
@@ -10856,9 +10856,9 @@
    "apps/android/feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileDetailRows.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameBadgeShelf.swift",
+   "apps/ios/Meeshy/Features/Game/GameBadgeShelf.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/BadgeGuide.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/BadgeStage.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/BadgeStage.swift",
    "packages/shared/utils/game/badge-guide.ts"
   ],
   "feature_keys": [
@@ -10920,9 +10920,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameStaggeredEntranceTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameConceptEmblems.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionFrontList.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptViews.swift",
+   "apps/ios/Meeshy/Features/Game/GameConceptEmblems.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift",
    "packages/shared/utils/game/concept-emblems.ts"
   ],
   "feature_keys": [
@@ -10965,8 +10965,8 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameElementDetailsCollectiblesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameElementDetail.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameDetailCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameElementDetail.swift",
+   "apps/ios/Meeshy/Features/Game/GameDetailCopy.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameRarity.swift"
   ],
   "feature_keys": [
@@ -11018,8 +11018,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameGuideV2.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameGuideV2.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyGuide.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameGuideV2.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyGuide.swift",
    "packages/shared/utils/game/guide-v2.ts"
   ],
   "feature_keys": [
@@ -11086,11 +11086,11 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/photo/GamePhotoCameraStateTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCamera.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCanvasView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoComposer.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Frames/GloryFrameFonts.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoCamera.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoCanvasView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoLayout.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoComposer.swift",
+   "apps/ios/Meeshy/Features/Game/Frames/GloryFrameFonts.swift",
    "packages/shared/utils/game/layout.ts"
   ],
   "feature_keys": [
@@ -11145,9 +11145,9 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionViewModel+Game.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameOptimistic.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLevelConfirmation.swift"
+   "apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift",
+   "apps/ios/Meeshy/Features/Game/GameOptimistic.swift",
+   "apps/ios/Meeshy/Features/Game/GameLevelConfirmation.swift"
   ],
   "feature_keys": [
    "game-progression-viewmodel",
@@ -11222,7 +11222,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionViewModel+Game.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift",
    "apps/ios/Meeshy/Features/Main/Services/StreakReminderPlan.swift",
    "apps/ios/Meeshy/Features/Main/Services/StreakReminderScheduler.swift",
    "apps/ios/Meeshy/Features/Main/Services/StreakActivityMark.swift"
@@ -11279,9 +11279,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/wave2/GameWave2OptimisticTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Model.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Optimistic.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Support.swift"
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Model.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Optimistic.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Support.swift"
   ],
   "feature_keys": [
    "game-wave2-gesture-model"
@@ -11333,11 +11333,11 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameFicheHeadsViewTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameHeroView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameHeroParts.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameFicheHeads.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameSparkPairs.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLevelConfirmation.swift"
+   "apps/ios/Meeshy/Features/Game/GameHeroView.swift",
+   "apps/ios/Meeshy/Features/Game/GameHeroParts.swift",
+   "apps/ios/Meeshy/Features/Game/GameFicheHeads.swift",
+   "apps/ios/Meeshy/Features/Game/GameSparkPairs.swift",
+   "apps/ios/Meeshy/Features/Game/GameLevelConfirmation.swift"
   ],
   "feature_keys": [
    "game-hero-level-rank",
@@ -11452,11 +11452,11 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameMintPreviewTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameMintPreviewView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameMintSequence.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameMintCostCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameMintPreviewView.swift",
+   "apps/ios/Meeshy/Features/Game/GameMintSequence.swift",
+   "apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift",
    "apps/ios/Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintStrikeScene.swift"
+   "apps/ios/Meeshy/Features/Game/Choreography/MintStrikeScene.swift"
   ],
   "feature_keys": [
    "game-mint-frame",
@@ -11511,9 +11511,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/FlamePanelCardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameMissionsView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameFlamePanelView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/ChestStage.swift",
+   "apps/ios/Meeshy/Features/Game/GameMissionsView.swift",
+   "apps/ios/Meeshy/Features/Game/GameFlamePanelView.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/ChestStage.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameMissionClock.swift"
   ],
   "feature_keys": [
@@ -11567,10 +11567,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/wave2/GameVisibilityPickerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GamePage.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Parts.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2Names.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyCommon.swift"
+   "apps/ios/Meeshy/Features/Game/Wave2/GamePage.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Parts.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2Names.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyCommon.swift"
   ],
   "feature_keys": [
    "game-pages-shell",
@@ -11632,12 +11632,12 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/photo/GamePhotoFlowScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoFlow.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoFlowView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoSession.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoOfferView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Photo/GameReferralCard.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoFlow.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoFlowView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoSession.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoCoordinator.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GamePhotoOfferView.swift",
+   "apps/ios/Meeshy/Features/Game/Photo/GameReferralCard.swift",
    "packages/shared/utils/game/flow.ts"
   ],
   "feature_keys": [
@@ -11699,10 +11699,10 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionFrontList.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionHeaderStanding.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionHeaderStanding.swift",
    "apps/ios/Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameDoorsView.swift"
+   "apps/ios/Meeshy/Features/Game/Wave2/GameDoorsView.swift"
   ],
   "feature_keys": [
    "game-progression-home",
@@ -11758,9 +11758,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/ConceptGesturesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptPage.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptFiche.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameNavigationMap.swift"
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptPage.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptFiche.swift",
+   "apps/ios/Meeshy/Features/Game/GameNavigationMap.swift"
   ],
   "feature_keys": [
    "game-concept-fiche-page"
@@ -11816,9 +11816,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/GameLeagueDetailCardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameLeagueViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameDuoViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLeagueDetailCard.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameLeagueViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameDuoViews.swift",
+   "apps/ios/Meeshy/Features/Game/GameLeagueDetailCard.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameLeague.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameDuo.swift"
   ],
@@ -11870,7 +11870,7 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/wave2/GamePrestigeScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GamePrestigeViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GamePrestigeViews.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePrestige.swift"
   ],
   "feature_keys": [
@@ -11925,10 +11925,10 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/wave2/GameArchiveModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameSeasonViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveModel.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameArchiveCopy.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameSeasonViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameArchiveViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameArchiveModel.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameArchiveCopy.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameSeason.swift"
   ],
   "feature_keys": [
@@ -11989,8 +11989,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SettingsViewModelGameTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameSettingsViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopySettings.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameSettingsViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopySettings.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameIntegrationModels.swift"
   ],
   "feature_keys": [
@@ -12043,9 +12043,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/wave2/GameConstellationCardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameShowcaseRules.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameAtlasViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameShowcaseRules.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameAtlasViews.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameConstellation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameAtlas.swift"
   ],
@@ -12099,10 +12099,10 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Localizable.xcstrings",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyCommon.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameWave2CopyLeague.swift",
-   "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameGuideCopy.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyCommon.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift",
+   "apps/ios/Meeshy/Features/Game/ProgressionConceptCopy.swift",
+   "apps/ios/Meeshy/Features/Game/GameGuideCopy.swift",
    "apps/web/src/lib/interface-catalogs/catalog-game-fr.ts"
   ],
   "feature_keys": [
@@ -12153,9 +12153,9 @@
    "apps/android/feature/game/src/test/kotlin/me/meeshy/app/game/ceremony/MintCeremonyAnswerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyCover.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/MintCeremonyRun.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Choreography/GameHaptics.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyCover.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/MintCeremonyRun.swift",
+   "apps/ios/Meeshy/Features/Game/Choreography/GameHaptics.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GameMintCeremony.swift"
   ],
   "feature_keys": [
@@ -12211,8 +12211,8 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/navigation/GameLaunchRouteTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/GameNavigationMap.swift",
-   "apps/ios/Meeshy/Features/Main/Game/GameLink.swift",
+   "apps/ios/Meeshy/Features/Game/GameNavigationMap.swift",
+   "apps/ios/Meeshy/Features/Game/GameLink.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyNotificationType.swift",
    "packages/shared/utils/game/notifications.ts",
    "packages/shared/utils/game/game-links.ts"
@@ -12284,8 +12284,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Game/PlayerBannerView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/PlayerBannerHost.swift",
-   "apps/ios/Meeshy/Features/Main/Game/PlayerBannerCopy.swift",
+   "apps/ios/Meeshy/Features/Game/PlayerBannerHost.swift",
+   "apps/ios/Meeshy/Features/Game/PlayerBannerCopy.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePlayerBanner.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Game/GamePlayerBannerOpening.swift",
    "packages/shared/utils/game/player-banner.ts"
@@ -12354,8 +12354,8 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ProfileProgressionEntry.swift",
    "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameBannerBadge.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameProfileViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameBannerBadge.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameProfileViews.swift",
    "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
   ],
   "feature_keys": [
@@ -12401,8 +12401,8 @@
    "apps/android/feature/contacts/src/test/kotlin/me/meeshy/app/contacts/GameContactStripViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameStandingViews.swift",
-   "apps/ios/Meeshy/Features/Main/Game/Wave2/GameProfileViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameStandingViews.swift",
+   "apps/ios/Meeshy/Features/Game/Wave2/GameProfileViews.swift",
    "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift"
   ],
   "feature_keys": [

@@ -201,7 +201,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
         let main = iosRoot.appendingPathComponent("Meeshy/Features/Main")
         let views = try FileManager.default.contentsOfDirectory(at: main.appendingPathComponent("Views"), includingPropertiesForKeys: nil)
             .filter { ($0.lastPathComponent.hasPrefix("Progression") || $0.lastPathComponent.hasPrefix("ProfileProgression")) && $0.pathExtension == "swift" }
-        let game = (FileManager.default.enumerator(at: main.appendingPathComponent("Game"), includingPropertiesForKeys: nil)?
+        let game = (FileManager.default.enumerator(at: iosRoot.appendingPathComponent("Meeshy/Features/Game"), includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL } ?? [])
             .filter { $0.pathExtension == "swift" }
         return try (views + game).map { url in

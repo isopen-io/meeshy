@@ -302,7 +302,7 @@ final class GameCopyTests: XCTestCase {
     func test_theMissionCard_hidesItsActionOncePastTheEnd() throws {
         let here = URL(fileURLWithPath: #filePath)
         let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/GameMissionsView.swift"), encoding: .utf8)
+        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Game/GameMissionsView.swift"), encoding: .utf8)
         XCTAssertTrue(view.contains("phase?.allowsAction"), "l'action disparaît passé la fin")
         XCTAssertTrue(view.contains("missions.personal"), "la mission personnelle a sa carte")
         XCTAssertTrue(view.contains("TimelineView"), "le minuteur vit")

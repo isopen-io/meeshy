@@ -357,7 +357,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_gameScreens_retainInsteadOfClosing() throws {
-        for file in ["Features/Main/Game/Photo/GamePhotoFlowView.swift",
+        for file in ["Features/Game/Photo/GamePhotoFlowView.swift",
                      "Features/Main/Views/AchievementRevealView.swift"] {
             XCTAssertEqual(try occurrences(of: ".retainsAgainstConversationOpening(.game)", in: file), 1, file)
             XCTAssertEqual(try occurrences(of: "closesForConversationOpening", in: file), 0,

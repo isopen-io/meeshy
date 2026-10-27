@@ -95,7 +95,7 @@ final class GameMintCostCopyTests: XCTestCase {
     /// Le cadre de la frappe dit ce qui la ferme, jamais le calcul de son prix : le prix de base et le tarif du niveau
     /// vivent dans les règles (épopée § 3.3 et § 5, #11180).
     func test_theMintFrame_showsTheBlocker_neverTheCostCalculation() throws {
-        let hero = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameMintPreviewView.swift"))
+        let hero = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Game/GameMintPreviewView.swift"))
         XCTAssertFalse(hero.contains("GameMintCostCopy.costLine("), "aucun calcul sur une fiche")
         XCTAssertTrue(hero.contains("GameMintCostCopy.blockerMessage(mint)"))
         XCTAssertTrue(hero.contains("pocket: game.level.sparkFacts.pocket"), "la poche paie, jamais le cycle")
