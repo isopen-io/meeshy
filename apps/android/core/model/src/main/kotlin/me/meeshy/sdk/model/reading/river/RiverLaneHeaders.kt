@@ -25,17 +25,19 @@ object RiverLaneHeaders {
         return if (fadeRanks == 0) 1.0 else (margin / fadeRanks).coerceIn(0.0, 1.0)
     }
 
-    /** Sérialisé : les GROUPES de bulles consécutives d'un même auteur ; un avis système n'occupe rien. */
-    private fun serializedOccupancies(geometry: RiverGeometry): List<Occupancy> =
-        geometry.bubbles.fold(emptyList()) { groups, bubble ->
-            val current = groups.lastOrNull()
-            when {
-                bubble.isSystem -> groups
-                bubble.isFirstInGroup || current == null ->
-                    groups + Occupancy(bubble.laneId, 0, bubble.rank, bubble.rank, false)
-                else -> groups.dropLast(1) + current.copy(endRank = bubble.rank)
-            }
+    /**
+     * Sérialisé : les GROUPES de bulles consécutives d'un même auteur ; un avis système n'occupe rien.
+     * Un groupe court de sa tête jusqu'à la bulle qui précède la tête suivante : une passe LINÉAIRE,
+     * car la peau rappelle cette loi à chaque image de défilement.
+     */
+    private fun serializedOccupancies(geometry: RiverGeometry): List<Occupancy> {
+        val voices = geometry.bubbles.filter { !it.isSystem }
+        val heads = voices.indices.filter { it == 0 || voices[it].isFirstInGroup }
+        return heads.mapIndexed { order, headIndex ->
+            val lastIndex = heads.getOrNull(order + 1)?.minus(1) ?: voices.lastIndex
+            Occupancy(voices[headIndex].laneId, 0, voices[headIndex].rank, voices[lastIndex].rank, false)
         }
+    }
 
     private fun laneOccupancies(geometry: RiverGeometry): List<Occupancy> =
         geometry.lanes.flatMap { lane ->

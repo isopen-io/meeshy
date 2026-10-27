@@ -63,21 +63,29 @@ object RiverLaneResolver {
      * contenu dans la fenêtre qui suit sa dernière interaction.
      */
     private fun toSpans(events: List<Event>, rankTimes: List<Double>, silenceWindowMs: Double): List<RiverLaneSpan> {
-        val bursts = events.sortedBy { it.rank }.fold(emptyList<List<Event>>()) { groups, event ->
-            val current = groups.lastOrNull()
-            if (current == null || event.timeMs - current.last().timeMs > silenceWindowMs) {
-                groups + listOf(listOf(event))
-            } else {
-                groups.dropLast(1) + listOf(current + event)
-            }
-        }
+        val sorted = events.sortedBy { it.rank }
+        // Une rafale s'ouvre au premier événement, et après tout silence plus long que la fenêtre :
+        // découpe en une passe, sans recopier les rafales déjà formées.
+        val starts = sorted.indices.filter { it == 0 || sorted[it].timeMs - sorted[it - 1].timeMs > silenceWindowMs }
+        val bursts = starts.mapIndexed { order, start -> sorted.subList(start, starts.getOrNull(order + 1) ?: sorted.size) }
         val lastRank = rankTimes.size - 1
         return bursts.map { burst ->
             val deathTime = burst.last().timeMs + silenceWindowMs
-            val reachedRank = rankTimes.count { it <= deathTime } - 1
+            val reachedRank = countAtMost(rankTimes, deathTime) - 1
             val endRank = maxOf(burst.last().rank, reachedRank)
             RiverLaneSpan(burst.first().rank, endRank, endRank == lastRank, burst.map(Event::toNode))
         }
+    }
+
+    /** Combien de rangs (triés par le temps) tombent au plus tard à [limit] : une recherche dichotomique. */
+    private fun countAtMost(rankTimes: List<Double>, limit: Double): Int {
+        var low = 0
+        var high = rankTimes.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (rankTimes[middle] <= limit) low = middle + 1 else high = middle
+        }
+        return low
     }
 
     /**
