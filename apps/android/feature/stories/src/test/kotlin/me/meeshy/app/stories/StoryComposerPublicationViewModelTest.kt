@@ -22,6 +22,8 @@ import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.sdk.model.composer.sound.ApiSound
+import me.meeshy.sdk.model.composer.sound.ApiSoundUploader
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.session.SessionRepository
@@ -287,5 +289,22 @@ class StoryComposerPublicationViewModelTest {
         vm.onEnterComposer()
 
         assertThat(vm.state.value.draft.visibilityUserIds).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `un son emprunte seul part par la voie durable avec son soundId, et le brouillon garde jusqu'a la confirmation le porte`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onBorrowSound(
+            ApiSound(id = "s1", title = "Pulse", fileUrl = "https://cdn/s1.m4a", durationMs = 6000, uploader = ApiSoundUploader("u", "belva")),
+        )
+
+        assertThat(vm.state.value.canPublish).isTrue()
+        val body = vm.published()
+
+        assertThat(body.storyEffects?.audioPlayerObjects?.single()?.soundId).isEqualTo("s1")
+        val kept = store.load()
+        assertThat(kept?.awaitingPublication).containsExactly("cmid")
+        assertThat(kept?.slides?.single()?.audio?.single()?.soundId).isEqualTo("s1")
     }
 }
