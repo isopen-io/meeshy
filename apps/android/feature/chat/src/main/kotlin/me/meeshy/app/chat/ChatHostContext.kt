@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.selection.MessageSelection
 
 /**
  * Navigation-level callbacks the screen receives from its host (the nav graph): leaving the
@@ -102,6 +103,8 @@ internal class ChatHostContext(
     val readingMode: ChatReadingModeBinding? = null,
     /** Le lieu choisi dans le sélecteur, en attente du prochain envoi. */
     val pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
+    /** Le mode sélection multiple (#13294) : inactif tant qu'aucun appui long n'a choisi « Sélectionner ». */
+    val selection: MessageSelection = MessageSelection.Inactive,
 )
 
 /** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
@@ -135,13 +138,14 @@ internal fun rememberChatHostContext(
     header: ChatHeaderState = ChatHeaderState(),
     readingMode: ChatReadingModeBinding? = null,
     pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
+    selection: MessageSelection = MessageSelection.Inactive,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -229,6 +233,16 @@ internal class ChatHostActions(
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
+    /** « Sélectionner » du menu d'appui long : entre dans le mode en semant ce message. */
+    val beginSelection: (String) -> Unit = {},
+    /** Coche ou décoche un message ; le verdict dit si le plafond de 100 est atteint. */
+    val toggleSelection: (String) -> MessageSelection.Toggle = { MessageSelection.Toggle.Ignored },
+    val endSelection: () -> Unit = {},
+    /** Transférer la sélection (ids dans l'ordre du fil). */
+    val forwardSelection: (List<String>) -> Unit = {},
+    val deleteSelectionForEveryone: (List<String>) -> Unit = {},
+    val deleteSelectionForMe: (List<String>) -> Unit = {},
+    val toggleStars: (List<String>) -> Unit = {},
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -312,4 +326,11 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     closeForward = this::closeForward,
     onForwardQueryChange = this::onForwardQueryChange,
     forwardTo = this::forwardTo,
+    beginSelection = { id -> controllers.find<MessageSelectionController>()?.begin(id) },
+    toggleSelection = { id -> controllers.find<MessageSelectionController>()?.toggle(id) ?: MessageSelection.Toggle.Ignored },
+    endSelection = { controllers.find<MessageSelectionController>()?.end() },
+    forwardSelection = this::openForwardSelection,
+    deleteSelectionForEveryone = this::deleteSelectionForEveryone,
+    deleteSelectionForMe = this::deleteSelectionForMe,
+    toggleStars = this::toggleStars,
 )

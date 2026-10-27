@@ -216,6 +216,8 @@ data class ChatUiState(
  */
 data class ForwardUiState(
     val sourceMessageId: String,
+    /** The rest of a multi-selection forward (#13294), in thread order; they travel with the source. */
+    val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
     val targets: List<ForwardTarget> = emptyList(),
     val sendingConversationId: String? = null,

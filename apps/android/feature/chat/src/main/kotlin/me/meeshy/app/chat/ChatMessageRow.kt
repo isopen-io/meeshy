@@ -64,6 +64,8 @@ internal class ChatMessageRowActions(
     val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
+    /** Un toucher sur une rangée en mode sélection (#13294) : la coche ou la décoche. */
+    val onToggleSelection: (messageId: String) -> Unit = {},
 )
 
 /**
@@ -99,6 +101,9 @@ internal fun ChatMessageRow(
     /** Focal : la rangée plate est l'élue de la scène (cadre, loupe [focalScale], chips). */
     focalElected: Boolean = false,
     focalScale: Float = 1f,
+    /** Le mode sélection multiple est ouvert (#13294) : la rangée ne glisse plus, un toucher la coche. */
+    selecting: Boolean = false,
+    selected: Boolean = false,
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -189,12 +194,18 @@ internal fun ChatMessageRow(
             )
         }
     }
+    SelectableRowFrame(
+        selecting = selecting,
+        selected = selected,
+        accentColor = accentColor,
+        onToggle = { actions.onToggleSelection(messageId) },
+    ) {
     SwipeRowContainer(
         isOutgoing = bubble.isOutgoing,
         createdAtIso = bubble.createdAtIso,
         resistance = swipeResistance,
-        onReply = onSwipeReply,
-        onForward = onSwipeForward,
+        onReply = onSwipeReply.takeUnless { selecting },
+        onForward = onSwipeForward.takeUnless { selecting },
         modifier = Modifier.onGloballyPositioned {
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
@@ -223,6 +234,7 @@ internal fun ChatMessageRow(
             audioPlayback = audioPlayback,
             bodyAccessory = linkAccessory,
         )
+    }
     }
     // iOS n'a plus de pastille « N réponses » sous la bulle (le fil s'ouvre par l'appui long →
     // Plus → Fil) : elle n'apparaît que si [showReplyCountPill] le demande.

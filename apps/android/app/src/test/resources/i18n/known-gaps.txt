@@ -1605,3 +1605,5 @@ bare-specifier :feature:chat en summary_episode_messages_other
 bare-specifier :feature:chat en summary_header_messages_count
 bare-specifier :feature:chat en summary_header_partial_window
 bare-specifier :feature:chat en summary_header_people_count
+bare-specifier :feature:chat en chat_delete_confirm_title_many
+bare-specifier :feature:chat en chat_selection_count

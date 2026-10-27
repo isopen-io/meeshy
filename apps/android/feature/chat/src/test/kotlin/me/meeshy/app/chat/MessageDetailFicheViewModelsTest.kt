@@ -124,6 +124,6 @@ class MessageDetailFicheViewModelsTest {
     fun `whoever hides their read receipts is not offered who read`() {
         assertThat(hostedDetailEntries(showReadReceipts = true)).contains(MessageAction.Views)
         assertThat(hostedDetailEntries(showReadReceipts = false))
-            .containsExactly(MessageAction.History, MessageAction.Sentiment, MessageAction.Map)
+            .containsExactly(MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select)
     }
 }

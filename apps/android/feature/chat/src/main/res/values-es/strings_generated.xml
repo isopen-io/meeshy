@@ -13,6 +13,11 @@
     <string name="chat_delete_confirm_cancel">Cancelar</string>
     <string name="chat_delete_confirm_hint">Eliminar para todos está disponible durante 2 h después del envío.</string>
     <string name="chat_delete_confirm_title">¿Eliminar este mensaje?</string>
+    <plurals name="chat_delete_confirm_title_many">
+        <item quantity="one">¿Eliminar %d mensaje?</item>
+        <item quantity="many">¿Eliminar %d mensajes?</item>
+        <item quantity="other">¿Eliminar %d mensajes?</item>
+    </plurals>
     <string name="chat_exit_blocked_after_read">Desaparece tras leerse: no se reenvía, no se guarda ni se comparte.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Este elemento ya no forma parte del mensaje.</string>
     <string name="chat_exit_blocked_encrypted_source">Este contenido cifrado se copia desde este dispositivo.</string>
@@ -20,6 +25,9 @@
     <string name="chat_exit_blocked_title">Este mensaje no sale de Meeshy</string>
     <string name="chat_exit_blocked_understood">Entendido</string>
     <string name="chat_exit_blocked_view_once">Es de visualización única: no se reenvía, no se guarda ni se comparte. Se queda en la conversación hasta que se vea.</string>
+    <string name="chat_selection_cap_reached">Máximo 100 mensajes</string>
+    <string name="chat_selection_count">%d seleccionados</string>
+    <string name="chat_selection_toggle_message">Mensaje</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clear_search">Borrar la búsqueda</string>
     <string name="common_confirm">Confirmar</string>

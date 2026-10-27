@@ -57,13 +57,23 @@ internal class ChatForwardController(
      * action sheet and paints the eligible targets cache-first from whatever
      * conversation list is already loaded (the collector fills it in live).
      */
-    fun open(messageId: String) {
-        val refusal = refusalFor(messageId)
+    fun open(messageId: String) = open(listOf(messageId))
+
+    /**
+     * Opens the picker for a whole selection ([messageIds] in thread order, #13294). Only the
+     * messages the exit law lets out are carried; when none does, the refusal card of the first
+     * one is shown. The first carried message is the picker's source, the rest travel with it.
+     */
+    fun open(messageIds: List<String>) {
+        val carried = messageIds.filter { refusalFor(it) == null }
+        val messageId = carried.firstOrNull() ?: messageIds.first()
+        val refusal = if (carried.isEmpty()) refusalFor(messageId) else null
         state.update {
             it.copy(
                 actionMessageId = null,
                 forward = ForwardUiState(
                     sourceMessageId = messageId,
+                    additionalSourceMessageIds = carried.drop(1),
                     sendingConversationId = sendingForwards[messageId],
                     refusal = refusal,
                 ),
@@ -113,13 +123,17 @@ internal class ChatForwardController(
         if (sendingForwards.containsKey(sourceMessageId)) return
         if (targetConversationId in forward.sentConversationIds) return
         val user = sessionRepository.currentUser.value ?: return
-        val source = messages.value
-            .firstOrNull { it.message.id == sourceMessageId && it.sendState == LocalSendState.SYNCED }
-            ?.message ?: return
-        // The copy's protection, as the gateway will impose it: a timed flame keeps its
+        val synced = messages.value.filter { it.sendState == LocalSendState.SYNCED }.map { it.message }
+        val sources = (listOf(sourceMessageId) + forward.additionalSourceMessageIds)
+            .mapNotNull { id -> synced.firstOrNull { it.id == id } }
+        if (sources.isEmpty()) return
+        // Each copy's protection, as the gateway will impose it: a timed flame keeps its
         // flame with a duration bounded by the source, a blurred source (message or piece)
-        // hands its blur down. `null` = the law refuses: nothing is sent.
-        val copy = ContentExitLaw.forwardedCopyProtection(source.contentExitSubject, null) ?: return
+        // hands its blur down. `null` = the law refuses that message: it is not sent.
+        val copies = sources.mapNotNull { source ->
+            ContentExitLaw.forwardedCopyProtection(source.contentExitSubject, null)?.let { source to it }
+        }
+        if (copies.isEmpty()) return
         sendingForwards[sourceMessageId] = targetConversationId
         state.update { s ->
             if (s.forward?.sourceMessageId == sourceMessageId) {
@@ -130,15 +144,17 @@ internal class ChatForwardController(
         }
         scope.launch {
             try {
-                messageRepository.sendOptimistic(
-                    conversationId = targetConversationId,
-                    content = source.content,
-                    originalLanguage = source.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
-                    sender = user,
-                    forwardedFromId = source.id,
-                    forwardedFromConversationId = conversationId,
-                    effects = MessageEffects(flags = copy.effectFlags, ephemeralDuration = copy.ephemeralDuration),
-                )
+                copies.forEach { (source, copy) ->
+                    messageRepository.sendOptimistic(
+                        conversationId = targetConversationId,
+                        content = source.content,
+                        originalLanguage = source.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+                        sender = user,
+                        forwardedFromId = source.id,
+                        forwardedFromConversationId = conversationId,
+                        effects = MessageEffects(flags = copy.effectFlags, ephemeralDuration = copy.ephemeralDuration),
+                    )
+                }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 sendingForwards.remove(sourceMessageId)
                 state.update { s ->

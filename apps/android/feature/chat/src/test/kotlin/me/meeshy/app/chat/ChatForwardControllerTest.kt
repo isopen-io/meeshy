@@ -205,4 +205,43 @@ class ChatForwardControllerTest {
 
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
+
+    @Test
+    fun `a multi-selection forward carries every message the exit law lets out, in order`() = runTest {
+        val viewOnce = LocalMessage(
+            ApiMessage(id = "m0", conversationId = "c1", senderId = "other", content = "secret", originalLanguage = "fr", isViewOnce = true),
+            sendState = LocalSendState.SYNCED,
+        )
+        val second = LocalMessage(
+            ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "suite", originalLanguage = "fr"),
+            sendState = LocalSendState.SYNCED,
+        )
+        val r = rig(listOf(viewOnce, source(), second))
+
+        r.controller.open(listOf("m0", "m1", "m2"))
+
+        assertThat(r.forward?.sourceMessageId).isEqualTo("m1")
+        assertThat(r.forward?.additionalSourceMessageIds).containsExactly("m2")
+        assertThat(r.forward?.refusal).isNull()
+
+        r.controller.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "salut", "fr", me, null, null, "m1", "c1") }
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "suite", "fr", me, null, null, "m2", "c1") }
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), "secret", any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a multi-selection of messages that all stay in Meeshy shows the refusal card`() = runTest {
+        val viewOnce = LocalMessage(
+            ApiMessage(id = "m0", conversationId = "c1", senderId = "other", content = "secret", originalLanguage = "fr", isViewOnce = true),
+            sendState = LocalSendState.SYNCED,
+        )
+        val r = rig(listOf(viewOnce))
+
+        r.controller.open(listOf("m0"))
+
+        assertThat(r.forward?.refusal).isNotNull()
+    }
 }

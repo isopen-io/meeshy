@@ -25,7 +25,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import me.meeshy.sdk.model.selection.MessageSelection
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -245,7 +249,10 @@ internal fun ChatListHost(
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
-    val rowActions = remember(actions, bubbleFrames, profileOpener) {
+    val haptics = rememberMeeshyHaptics()
+    val selectionContext = LocalContext.current
+    val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
+    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -266,6 +273,16 @@ internal fun ChatListHost(
             onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
+            onToggleSelection = { messageId ->
+                when (actions.toggleSelection(messageId)) {
+                    is MessageSelection.Toggle.Changed -> haptics.light()
+                    MessageSelection.Toggle.CapReached -> {
+                        haptics.error()
+                        Toast.makeText(selectionContext, capReachedMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    MessageSelection.Toggle.Ignored -> Unit
+                }
+            },
         )
     }
     LaunchedEffect(affordanceMessages, isNearBottom) {
@@ -378,6 +395,8 @@ internal fun ChatListHost(
                         metaAlpha = metaAlpha,
                         focalElected = elected,
                         focalScale = scale,
+                        selecting = host.selection.isActive,
+                        selectedIds = host.selection.ids,
                     ) }
                     if (focalMode) {
                         FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }

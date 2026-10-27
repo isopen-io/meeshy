@@ -694,6 +694,11 @@ class ChatViewModel @Inject constructor(
     /** Open the forward-picker sheet for [messageId], closing the long-press action sheet. */
     fun openForward(messageId: String) = forward.open(messageId)
 
+    /** Opens the forward picker for a whole multi-selection ([messageIds] in thread order, #13294). */
+    fun openForwardSelection(messageIds: List<String>) {
+        if (messageIds.isNotEmpty()) forward.open(messageIds)
+    }
+
     fun onForwardQueryChange(query: String) = forward.onQueryChange(query)
 
     fun closeForward() = forward.close()
@@ -812,6 +817,15 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
         locallyHiddenStore.hide(messageId)
     }
+
+    /** « Pour tous » sur toute une sélection (#13294) : une suppression optimiste par message. */
+    fun deleteSelectionForEveryone(messageIds: List<String>) = messageIds.forEach(::deleteForEveryone)
+
+    /** « Pour moi » sur toute une sélection (#13294) : chaque message est masqué localement. */
+    fun deleteSelectionForMe(messageIds: List<String>) = messageIds.forEach(::deleteForMe)
+
+    /** Étoile (ou désétoile) chaque message de [messageIds] (#13294) ; l'étoile est locale. */
+    fun toggleStars(messageIds: List<String>) = messageIds.forEach(::toggleStar)
 
     /**
      * Pin or unpin a message (iOS `ConversationViewModel.togglePin`): the pin

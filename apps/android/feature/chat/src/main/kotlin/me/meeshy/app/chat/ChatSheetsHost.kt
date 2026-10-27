@@ -17,6 +17,7 @@ import java.util.Locale
 import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
@@ -133,6 +134,16 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
             onMap = { localRoute.open(MessageDetailRoute.Map(actionTarget.messageId)) },
+            onSelect = {
+                // Un lecteur sans interface de sélection (Résumé, Rivière) rend la main au Script.
+                host.readingMode?.let { reading ->
+                    MessageSelectionHost.landing(reading.state.mode)?.let { landing ->
+                        reading.select(landing)
+                        actions.scrollToMessage(actionTarget.messageId)
+                    }
+                }
+                actions.beginSelection(actionTarget.messageId)
+            },
             canWrite = state.viewerMayWrite,
         )
     }
@@ -397,7 +408,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
-    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map)
+    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select)
 
 /**
  * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture

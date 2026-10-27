@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -74,6 +75,9 @@ fun ChatScreen(
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
     val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
+    val selectionController = remember(viewModel) { viewModel.controllers.find<MessageSelectionController>() }
+    val selection by (selectionController?.selection ?: NO_SELECTION).collectAsStateWithLifecycle()
+    BackHandler(enabled = selection.isActive, onBack = actions.endSelection)
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
@@ -106,6 +110,7 @@ fun ChatScreen(
         header = header,
         readingMode = readingMode,
         pendingPlace = pendingPlace,
+        selection = selection,
     )
 
     ChatBackgroundHost(appearance) {

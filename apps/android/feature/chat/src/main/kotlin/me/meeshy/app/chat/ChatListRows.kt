@@ -59,6 +59,9 @@ internal fun ChatListRow(
     /** Focal : cette rangée est l'élue de la scène, sa loupe vaut [focalScale]. */
     focalElected: Boolean = false,
     focalScale: Float = 1f,
+    /** Le mode sélection est ouvert (#13294) ; [selectedIds] est lu pour CETTE rangée seule. */
+    selecting: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -79,6 +82,8 @@ internal fun ChatListRow(
             metaAlpha = metaAlpha,
             focalElected = focalElected,
             focalScale = focalScale,
+            selecting = selecting,
+            selected = selecting && item.bubble.messageId in selectedIds,
         )
     }
 }
