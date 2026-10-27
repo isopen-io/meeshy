@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.StateFlow
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
@@ -36,6 +37,8 @@ internal class ChatNavigationActions(
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
+    /** [ChatViewModel.mayInviteFriends]: whether the info sheet offers « Inviter mes amis ». */
+    val mayInviteFriends: Boolean = false,
     /**
      * La feuille « Partage de position » ouverte par le (i) du sélecteur de lieu. Elle vit dans
      * `:feature:settings`, que `:feature:chat` ne voit pas : l'application la fournit.
@@ -168,6 +171,7 @@ internal class ChatHostActions(
     val openReactionDetails: (String) -> Unit,
     val openImageViewer: (String, Int) -> Unit,
     val onFileAttachmentOpen: (String, String?) -> Unit,
+    val onHubFileOpen: (String, ApiMessageAttachment) -> Unit,
     val onFileAttachmentShare: (String, String?) -> Unit,
     val onReplyPreviewTap: (String) -> Unit,
     val onFlagTap: (String, String) -> Unit,
@@ -264,6 +268,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     openReactionDetails = this::openReactionDetails,
     openImageViewer = this::openImageViewer,
     onFileAttachmentOpen = this::onFileAttachmentOpen,
+    onHubFileOpen = this::onHubFileOpen,
     onFileAttachmentShare = this::onFileAttachmentShare,
     onReplyPreviewTap = this::onReplyPreviewTap,
     onFlagTap = this::onFlagTap,

@@ -22,6 +22,9 @@ import me.meeshy.sdk.model.mediahub.ConversationMediaHubRules
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
 import me.meeshy.sdk.model.mediahub.MediaHubPayload
+import me.meeshy.sdk.model.mediahub.MediaHubRendering
+import me.meeshy.sdk.model.mediahub.MediaHubRowExit
+import me.meeshy.sdk.model.mediahub.MediaHubRowRules
 import me.meeshy.sdk.model.mediahub.MediaHubPhase
 import me.meeshy.sdk.model.mediahub.MediaHubSegment
 import me.meeshy.sdk.net.ApiError
@@ -213,8 +216,16 @@ class ConversationMediaHubViewModel @Inject constructor(
     /** Hors ligne : la requête n'a pas atteint le serveur (aucun statut HTTP), à la différence d'un refus. */
     private fun ApiError.isOffline(): Boolean = httpStatus == null
 
-    /** Ce que devient l'appui sur un élément hors visionneuse : jamais une adresse ouverte telle quelle. */
-    internal fun launchFor(payload: MediaHubPayload): MediaHubLaunch = mediaHubLaunchFor(payload, apiBaseUrl, resolveMedia)
+    /** Ce que le porteur de [item] laisse sortir — fermé tant que le porteur est inconnu (#9573, #9574). */
+    fun rowExit(item: MediaHubItem, isEndToEnd: Boolean): MediaHubRowExit =
+        MediaHubRowExit.of(carrier(item.messageId), isEndToEnd)
+
+    /** Ce que devient l'appui sur un élément hors visionneuse : jamais une adresse ouverte telle quelle, jamais une sortie refusée. */
+    internal fun launchFor(item: MediaHubItem, isEndToEnd: Boolean): MediaHubLaunch =
+        mediaHubLaunchFor(item.payload, apiBaseUrl, resolveMedia, rowExit(item, isEndToEnd))
+
+    /** Le rendu d'une rangée : la même carte que le fil pour le même genre. */
+    fun rendering(item: MediaHubItem): MediaHubRendering = MediaHubRowRules.rendering(item, webOrigin)
 
     /** Le porteur d'un élément affiché — pour les portillons de sortie et « aller au message ». */
     fun carrier(messageId: String): ApiMessage? =

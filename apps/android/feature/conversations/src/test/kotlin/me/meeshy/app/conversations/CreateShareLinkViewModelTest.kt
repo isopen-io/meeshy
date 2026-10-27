@@ -298,4 +298,51 @@ class CreateShareLinkViewModelTest {
             expectNoEvents()
         }
     }
+
+    @Test
+    fun `inviter mes amis cree le lien des l ouverture avec le message par defaut`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api)
+
+        vm.createOnOpen("Rejoins-moi")
+        advanceUntilIdle()
+
+        assertThat(api.requests.single().description).isEqualTo("Rejoins-moi")
+        assertThat(vm.state.value.isCreated).isTrue()
+    }
+
+    @Test
+    fun `rouvrir ne fabrique pas un second lien`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api)
+
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        assertThat(api.requests).hasSize(1)
+    }
+
+    @Test
+    fun `sans conversation amorcee rien ne se cree a l ouverture`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        assertThat(api.requests).isEmpty()
+    }
+
+    @Test
+    fun `personnaliser referme le lien cree et rend le formulaire`() = runTest(dispatcher) {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        vm.customize()
+
+        assertThat(vm.state.value.isCreated).isFalse()
+    }
 }

@@ -18,6 +18,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.MeeshyMediaCache
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -85,14 +86,22 @@ fun ReelVideoSurface(
     fit: Boolean = false,
     /** Un autre son (un vocal, un appel) a pris le focus : la vidéo vient de se mettre en pause d'elle-même. */
     onAudioFocusLost: () -> Unit = {},
+    /**
+     * `false` : le média ne passe PAS par le cache disque (un contenu protégé — flamme, vue unique — ne laisse
+     * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
+     */
+    cached: Boolean = true,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads) {
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached) {
         if (!loads) return@remember null
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl))
+            .setMediaSourceFactory(
+                if (cached) mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl)
+                else DefaultMediaSourceFactory(context),
+            )
             .build().apply {
             setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
@@ -147,7 +156,7 @@ fun ReelVideoSurface(
     val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
-        val releaseLease = mediaCache.lease(mediaUrl)
+        val releaseLease = if (cached) mediaCache.lease(mediaUrl) else ({ })
         currentOnPlayer(ReelPlayerHandle(live))
         val focusListener = object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {

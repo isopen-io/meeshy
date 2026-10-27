@@ -93,7 +93,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 fun ShareLinkDetailScreen(
     onBack: () -> Unit,
     onDeleted: () -> Unit,
+    onSeeAllArrivals: (linkId: String) -> Unit = {},
     viewModel: ShareLinkDetailViewModel = hiltViewModel(),
+    statsViewModel: ShareLinkStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -174,6 +176,8 @@ fun ShareLinkDetailScreen(
                         link = link,
                         presentation = presentation,
                         viewModel = viewModel,
+                        statsViewModel = statsViewModel,
+                        onSeeAllArrivals = onSeeAllArrivals,
                         onCopy = { copyToClipboard(context, presentation.address) },
                         onShare = { shareLink(context, presentation.address) },
                         onDelete = { showDeleteConfirm = true },
@@ -234,6 +238,8 @@ private fun DetailContent(
     link: MyShareLink,
     presentation: ShareLinkDetailPresentation,
     viewModel: ShareLinkDetailViewModel,
+    statsViewModel: ShareLinkStatsViewModel,
+    onSeeAllArrivals: (String) -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
@@ -249,6 +255,8 @@ private fun DetailContent(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
         HeroCard(presentation = presentation, description = link.description, onCopy = onCopy, onShare = onShare)
+        val stats by statsViewModel.state.collectAsStateWithLifecycle()
+        ShareLinkArrivalsSection(state = stats, onSeeAll = { onSeeAllArrivals(link.linkId) })
         ShareLinkConfigurationCard(
             link = link,
             onEdit = { scope.launch { scroll.animateScrollTo(formTop.toInt()) } },

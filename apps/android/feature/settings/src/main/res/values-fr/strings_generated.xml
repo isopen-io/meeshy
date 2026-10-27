@@ -248,6 +248,7 @@
     <string name="settings_title">Paramètres</string>
     <string name="settings_tools_progression">Progression</string>
     <string name="settings_tools_progression_hint">Vos badges, votre niveau et votre série de jours actifs</string>
+    <string name="settings_tools_stats">Statistiques</string>
     <string name="settings_transcription_auto">Transcription automatique</string>
     <string name="settings_transcription_engine">Moteur de transcription</string>
     <string name="settings_transcription_engine_a11y">Moteur de transcription</string>

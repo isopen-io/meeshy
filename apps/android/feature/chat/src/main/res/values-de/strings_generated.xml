@@ -51,6 +51,8 @@
     <string name="composer_recent_grantAccess">Zugriff auf Fotos erlauben</string>
     <string name="composer_recent_grantAccess_hint">Damit deine neuesten Medien hier erscheinen</string>
     <string name="composer_recent_select">Auswählen</string>
+    <string name="contact_card_a11y_label">Geteilter Kontakt: %s</string>
+    <string name="contact_card_shared">Geteilter Kontakt</string>
     <string name="context_invite_friends">Meine Freunde einladen</string>
     <string name="conversation_appearance_accent_auto">Automatisch</string>
     <string name="conversation_appearance_entry_title">Hintergrund der Unterhaltung</string>

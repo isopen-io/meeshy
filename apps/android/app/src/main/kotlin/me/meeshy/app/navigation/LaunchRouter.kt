@@ -72,7 +72,7 @@ object LaunchRouter {
             is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
             is PushTapDestination.Profile -> Routes.profile(destination.userId)
             PushTapDestination.Notifications -> Routes.NOTIFICATIONS
-            PushTapDestination.Progression -> GameRoutes.PROGRESSION
+            is PushTapDestination.Game -> GameRoutes.route(destination.target)
             PushTapDestination.None -> null
         }
     }

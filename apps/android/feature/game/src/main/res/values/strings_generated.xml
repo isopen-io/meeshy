@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">Sapphire</string>
     <string name="game2_league_pseudonym_current">You play under the name %s.</string>
     <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random: not your name, not your username. It changes with every journey.</string>
+    <string name="game2_league_pseudonym_hint_change">3 to 20 characters. Not your name or your username.</string>
+    <string name="game2_league_pseudonym_invalid">This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore.</string>
+    <string name="game2_league_pseudonym_new">New joust name</string>
+    <string name="game2_league_pseudonym_save">Change joust name</string>
     <string name="game2_league_pseudonym_title">Your joust name</string>
     <string name="game2_league_rank_line">Place %1$s of %2$s</string>
     <string name="game2_league_snapshot">The others’ places are set every day at 4 a.m.: nobody sees who is playing right now. Only your own row is live.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">Who sees what</string>
     <string name="game2_showcase_awarded">Earned on %s</string>
     <string name="game2_showcase_empty">Your trophies are waiting for you. Joust and journey cups, Rebirth and Flame trophies take their place here as you win them.</string>
+    <string name="game2_showcase_move_down">Move down: %s</string>
+    <string name="game2_showcase_move_up">Move up: %s</string>
+    <string name="game2_showcase_order_hint">Arrange your trophies: move each one up or down a notch.</string>
     <string name="game2_showcase_title">Your trophies</string>
     <string name="game2_showcase_visibility">Who sees your trophies</string>
     <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date. “Only me” hides your trophies from everyone else.</string>
@@ -511,7 +518,9 @@
     <string name="game_missions_locked">At level 5, your ancestors send you a dream in three acts each night, and an Offering. You are at level %s.</string>
     <string name="game_missions_offline">Offline: changing an act or opening the Offering will resume online.</string>
     <string name="game_missions_prism_day">Prism Day: one of the acts is played in a language other than yours.</string>
+    <string name="game_missions_prism_hour">Prism Hour: %1$s – %2$s — every act counts double.</string>
     <string name="game_missions_title">Tonight’s dream</string>
+    <string name="game_photo_offer_start">Take the photo</string>
     <string name="game_progression_empty">No activity yet. Send a message, post a story… your first medal lights up with your very first move.</string>
     <string name="game_progression_load_error">Couldn’t load your progress</string>
     <string name="game_progression_loading">Loading your progress</string>

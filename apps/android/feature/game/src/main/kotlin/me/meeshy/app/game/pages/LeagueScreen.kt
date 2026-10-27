@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +52,7 @@ import me.meeshy.sdk.model.game.GameLeagueBlock
 import me.meeshy.sdk.model.game.LeagueAccess
 import me.meeshy.sdk.model.game.LeagueFriendsEntry
 import me.meeshy.sdk.model.game.LeagueFriendsResponse
+import me.meeshy.sdk.model.game.pages.GameLeagueRules
 import me.meeshy.sdk.model.game.pages.GameWeekClock
 import me.meeshy.sdk.model.game.pages.LeagueStandings
 import me.meeshy.sdk.model.game.progression.ProgressionNotice
@@ -83,9 +85,11 @@ fun LeagueScreen(
     onBack: () -> Unit,
     progressionViewModel: ProgressionViewModel = hiltViewModel(),
     viewModel: LeagueViewModel = hiltViewModel(),
+    arrangement: GameArrangementViewModel = hiltViewModel(),
 ) {
     val progression by progressionViewModel.state.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val writes by arrangement.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(LeagueTab.Mine) }
     val game = progression.snapshot?.game
     val league = game?.league
@@ -126,11 +130,11 @@ fun LeagueScreen(
         }
         item(key = "tabs") { LeagueTabs(tab) { tab = it } }
         when (tab) {
-            LeagueTab.Mine -> mineSection(game, league, state, offline, viewModel)
+            LeagueTab.Mine -> mineSection(game, league, state, offline, viewModel, writes, arrangement)
             LeagueTab.Friends -> friendsSection(state, viewModel)
         }
-        game.duo?.takeIf { it.shownInReadOnlyPage }?.let { duo ->
-            item(key = "duo") { DuoCard(duo, levelRecord = game.level.shown.record) }
+        game.duo?.let { duo ->
+            item(key = "duo") { DuoCard(duo, levelRecord = game.level.shown.record, writes = writes, arrangement = arrangement, modifier = animateRow()) }
         }
     }
 }
@@ -178,6 +182,8 @@ private fun LazyListScope.mineSection(
     state: LeagueUiState,
     offline: Boolean,
     viewModel: LeagueViewModel,
+    writes: GameArrangementUiState,
+    arrangement: GameArrangementViewModel,
 ) {
     when (league.access) {
         LeagueAccess.Locked -> item(key = "locked") {
@@ -200,7 +206,7 @@ private fun LazyListScope.mineSection(
         LeagueAccess.Open -> {
             item(key = "placed") { PlacedCard(league) }
             standingsSection(state, viewModel)
-            item(key = "account") { AccountCard(league, state, offline, onLeave = { viewModel.setConsent(false) }) }
+            item(key = "account") { AccountCard(league, state, offline, writes, arrangement, onLeave = { viewModel.setConsent(false) }) }
         }
     }
 }
@@ -304,9 +310,17 @@ private fun LazyListScope.standingsSection(state: LeagueUiState, viewModel: Leag
 }
 
 @Composable
-private fun AccountCard(league: GameLeagueBlock, state: LeagueUiState, offline: Boolean, onLeave: () -> Unit) {
+private fun AccountCard(
+    league: GameLeagueBlock,
+    state: LeagueUiState,
+    offline: Boolean,
+    writes: GameArrangementUiState,
+    arrangement: GameArrangementViewModel,
+    onLeave: () -> Unit,
+) {
     GameCard(title = stringResource(R.string.game2_league_pseudonym_title)) {
         league.pseudonym?.let { GameNote(stringResource(R.string.game2_league_pseudonym_current, it)) }
+        if (GameLeagueRules.CHOSEN_PSEUDONYM_OPEN) PseudonymField(writes, offline, arrangement::setPseudonym)
         GameQuietButton(
             title = stringResource(R.string.game2_league_consent_leave),
             enabled = !offline && !state.consentBusy,
@@ -404,32 +418,92 @@ private fun friendName(friend: FriendRequestUser): String =
 // MARK: - L'alliance (lecture)
 
 /**
- * Sans alliance cette semaine, la carte se tait : son seul contenu serait l'invitation d'un ami, un geste d'une partie
- * suivante — la page ne promet rien qu'elle ne sache faire. Verrouillée, elle dit à quel niveau elle s'ouvre.
- */
-private val GameDuoBlock.shownInReadOnlyPage: Boolean get() = !unlocked || status != DuoBlockStatus.None
-
-/**
- * L'alliance de la semaine, EN LECTURE : sa mission, la part de chacun, la récompense que la passerelle sert. Inviter,
- * accepter et quitter sont des gestes d'une partie suivante — cette carte n'en promet aucun.
+ * L'alliance de la semaine : sa mission, la part de chacun, la récompense que la passerelle sert — et les trois gestes
+ * (inviter un ami, accepter, décliner ou quitter). L'identifiant de l'alliance, sa mission et la part de l'autre ne
+ * naissent que chez la passerelle : pendant le vol l'écran dit « en cours », puis relit ce qu'elle sert. Hors ligne, les
+ * gestes se taisent et l'écran le dit.
  */
 @Composable
-private fun DuoCard(duo: GameDuoBlock, levelRecord: Int) {
-    GameCard(title = stringResource(R.string.game2_duo_title)) {
+private fun DuoCard(
+    duo: GameDuoBlock,
+    levelRecord: Int,
+    writes: GameArrangementUiState,
+    arrangement: GameArrangementViewModel,
+    modifier: Modifier = Modifier,
+) {
+    GameCard(title = stringResource(R.string.game2_duo_title), modifier = modifier) {
         if (!duo.unlocked) {
             GameNote(stringResource(R.string.game2_duo_locked, count(GameDuo.MIN_LEVEL), count(levelRecord)))
             return@GameCard
         }
         val partner = duo.partner?.displayName ?: stringResource(R.string.game2_league_friends_unknown)
+        val duoId = duo.duoId
+        val busy = ArrangementWrite.Duo in writes.busy
         when (duo.status) {
-            DuoBlockStatus.Invited -> GameNote(
-                if (duo.role == DuoActor.Invitee) stringResource(R.string.game2_duo_invited_invitee, partner)
-                else stringResource(R.string.game2_duo_invited_inviter, partner),
+            DuoBlockStatus.Invited -> {
+                GameNote(
+                    if (duo.role == DuoActor.Invitee) stringResource(R.string.game2_duo_invited_invitee, partner)
+                    else stringResource(R.string.game2_duo_invited_inviter, partner),
+                )
+                if (duo.role == DuoActor.Invitee && duoId != null) {
+                    GameActionButton(
+                        title = stringResource(R.string.game2_duo_accept),
+                        busy = busy,
+                        enabled = writes.online,
+                        onClick = { arrangement.accept(duoId) },
+                    )
+                }
+                if (duoId != null) {
+                    GameQuietButton(
+                        title = stringResource(if (duo.role == DuoActor.Invitee) R.string.game2_duo_decline else R.string.game2_duo_cancel),
+                        enabled = writes.online && !busy,
+                        destructive = true,
+                        onClick = { arrangement.abandon(duoId) },
+                    )
+                }
+            }
+            DuoBlockStatus.Active, DuoBlockStatus.Completed -> {
+                DuoRunning(duo, partner)
+                if (duo.status == DuoBlockStatus.Active && duoId != null) {
+                    GameQuietButton(
+                        title = stringResource(R.string.game2_duo_abandon),
+                        enabled = writes.online && !busy,
+                        destructive = true,
+                        onClick = { arrangement.abandon(duoId) },
+                    )
+                }
+            }
+            DuoBlockStatus.Abandoned -> DuoIdle(R.string.game2_duo_abandoned, duo, writes, arrangement)
+            DuoBlockStatus.Expired -> DuoIdle(R.string.game2_duo_expired, duo, writes, arrangement)
+            DuoBlockStatus.None -> DuoIdle(R.string.game2_duo_none, duo, writes, arrangement)
+        }
+        GameErrorLine(arrangementFailureMessage(writes.failures[ArrangementWrite.Duo]))
+        GameOfflineNote(online = writes.online)
+    }
+}
+
+/** Sans alliance : huit amis au plus, on invite d'un toucher, sans sélecteur à chercher. */
+@Composable
+private fun DuoIdle(sentence: Int, duo: GameDuoBlock, writes: GameArrangementUiState, arrangement: GameArrangementViewModel) {
+    val pickLabel = stringResource(R.string.game2_duo_pick)
+    GameNote(stringResource(sentence))
+    if (duo.status != DuoBlockStatus.None) return
+    if (writes.friends.isEmpty()) {
+        GameNote(stringResource(R.string.game2_duo_no_friends))
+        return
+    }
+    val busy = ArrangementWrite.Duo in writes.busy
+    Column(
+        Modifier.semantics { contentDescription = pickLabel },
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        writes.friends.forEach { friend ->
+            GameActionButton(
+                title = stringResource(R.string.game2_duo_invite, friend.name),
+                busy = busy && writes.invitingFriendId == friend.id,
+                enabled = writes.online && !busy,
+                onClick = { arrangement.invite(friend) },
             )
-            DuoBlockStatus.Active, DuoBlockStatus.Completed -> DuoRunning(duo, partner)
-            DuoBlockStatus.Abandoned -> GameNote(stringResource(R.string.game2_duo_abandoned))
-            DuoBlockStatus.Expired -> GameNote(stringResource(R.string.game2_duo_expired))
-            DuoBlockStatus.None -> Unit
         }
     }
 }
@@ -468,3 +542,31 @@ private fun DuoRunning(duo: GameDuoBlock, partner: String) {
 
 private const val TAB_ALPHA = 0.14f
 private const val ME_ALPHA = 0.14f
+
+/**
+ * Le champ du nom de joute choisi — FERMÉ tant que le contrat ne l'ouvre pas ([GameLeagueRules.CHOSEN_PSEUDONYM_OPEN]) :
+ * le proposer ferait échouer le geste de qui le remplit. Vide ou invalide, le bouton se tait.
+ */
+@Composable
+private fun PseudonymField(writes: GameArrangementUiState, offline: Boolean, onSave: (String) -> Unit) {
+    var proposed by rememberSaveable { mutableStateOf("") }
+    val trimmed = proposed.trim()
+    val invalid = trimmed.isNotEmpty() && !GameLeague.isValidPseudonym(trimmed)
+    OutlinedTextField(
+        value = proposed,
+        onValueChange = { proposed = it },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+        singleLine = true,
+        label = { Text(stringResource(R.string.game2_league_pseudonym_new)) },
+        isError = invalid,
+    )
+    if (invalid) GameErrorLine(stringResource(R.string.game2_league_pseudonym_invalid))
+    GameNote(stringResource(R.string.game2_league_pseudonym_hint_change))
+    GameErrorLine(arrangementFailureMessage(writes.failures[ArrangementWrite.Pseudonym]))
+    GameActionButton(
+        title = stringResource(R.string.game2_league_pseudonym_save),
+        busy = ArrangementWrite.Pseudonym in writes.busy,
+        enabled = !offline && trimmed.isNotEmpty() && !invalid,
+        onClick = { onSave(trimmed) },
+    )
+}

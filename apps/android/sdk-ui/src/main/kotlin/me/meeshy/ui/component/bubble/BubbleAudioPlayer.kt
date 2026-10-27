@@ -72,7 +72,7 @@ public data class BubbleAudioPlayback(
  * IN the thread (iOS `AudioBubbleRouter` / `MediaConsumptionProgressBar`).
  */
 @Composable
-internal fun AudioBubble(
+public fun AudioBubble(
     audio: BubbleAudio,
     playback: BubbleAudioPlayback?,
     onColor: Color,

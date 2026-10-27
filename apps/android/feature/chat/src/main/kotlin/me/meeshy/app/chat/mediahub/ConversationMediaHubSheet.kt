@@ -9,6 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import android.widget.Toast
+import me.meeshy.app.chat.rememberChatAudioPlayer
+import me.meeshy.ui.component.video.MeeshyVideoViewer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +72,7 @@ import androidx.compose.ui.graphics.toArgb
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.app.chat.openChatLink
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
 import me.meeshy.sdk.model.mediahub.MediaHubPhase
@@ -96,7 +100,9 @@ internal fun ConversationMediaHubSheet(
     conversationId: String,
     accentColor: Color,
     isEndToEnd: Boolean,
+    conversationTitle: String?,
     onGoToMessage: ((String) -> Unit)?,
+    onOpenFile: (messageId: String, attachment: ApiMessageAttachment) -> Unit,
     onDismiss: () -> Unit,
     viewModel: ConversationMediaHubViewModel = hiltViewModel(),
 ) {
@@ -104,6 +110,8 @@ internal fun ConversationMediaHubSheet(
     LaunchedEffect(conversationId) { viewModel.start(conversationId) }
     var query by rememberSaveable { mutableStateOf("") }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
+    var video by remember { mutableStateOf<MediaHubLaunch.Video?>(null) }
+    val audioPlayer = rememberChatAudioPlayer(conversationTitle)
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val reduceMotion = LocalReduceMotion.current
@@ -124,18 +132,24 @@ internal fun ConversationMediaHubSheet(
             viewerIndex = index
             return
         }
-        when (val launch = viewModel.launchFor(item.payload)) {
+        when (val launch = viewModel.launchFor(item, isEndToEnd)) {
             is MediaHubLaunch.ChatLink -> openChatLink(context, launch.url, accentColor.toArgb())
-            is MediaHubLaunch.GatewayFile -> context.openGatewayFile(launch.url, launch.mimeType, item.attachment?.name)
+            is MediaHubLaunch.GatewayFile ->
+                viewModel.carrier(item.messageId)?.attachments?.firstOrNull { it.id == item.attachment?.id }
+                    ?.let { onOpenFile(item.messageId, it) }
+            is MediaHubLaunch.Video -> video = launch
+            MediaHubLaunch.Refused -> Toast.makeText(context, R.string.chat_exit_blocked_title, Toast.LENGTH_SHORT).show()
             MediaHubLaunch.Ignored -> Unit
         }
     }
+    val shieldsCapture = remember(state.items) { state.items.any { viewModel.rowExit(it, isEndToEnd).shieldsCapture } }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
+        HubCaptureShield(active = shieldsCapture)
         LazyVerticalGrid(
             columns = GridCells.Fixed(COLUMNS),
             state = gridState,
@@ -195,12 +209,26 @@ internal fun ConversationMediaHubSheet(
             } else if (state.selectedKind == ConversationMediaKind.VISUAL) {
                 items(state.items, key = { it.id }, contentType = { "tile" }) { item ->
                     val kindLabel = stringResource(if (item.attachment?.isVideo == true) R.string.media_hub_tile_video else R.string.media_hub_tile_image, item.senderName.ifBlank { "—" }, meta(item).substringAfterLast(" · "))
-                    MediaHubVisualTile(item, kindLabel, accentColor, onClick = { open(item) }, modifier = rowAnimation(reduceMotion, this))
+                    MediaHubVisualTile(
+                        item, kindLabel, accentColor, onClick = { open(item) }, modifier = rowAnimation(reduceMotion, this),
+                        onGoToMessage = onGoToMessage?.let { go -> { go(item.messageId) } },
+                    )
                 }
             } else {
                 items(state.items, key = { it.id }, span = { GridItemSpan(maxLineSpan) }, contentType = { "row" }) { item ->
                     Row(rowAnimation(reduceMotion, this)) {
-                        MediaHubRow(item, meta(item), accentColor, onOpen = { open(item) }, onGoToMessage = onGoToMessage?.let { go -> { go(item.messageId) } })
+                        val goTo = onGoToMessage?.let { go -> { go(item.messageId) } }
+                        MediaHubRichRow(
+                            item = item,
+                            meta = meta(item),
+                            accent = accentColor,
+                            rendering = viewModel.rendering(item),
+                            mayLeave = viewModel.rowExit(item, isEndToEnd).mayLeave,
+                            audioPlayer = audioPlayer,
+                            onOpen = { open(item) },
+                            onOpenLink = { url -> openChatLink(context, url, accentColor.toArgb()) },
+                            onGoToMessage = goTo,
+                        )
                     }
                 }
             }
@@ -212,6 +240,8 @@ internal fun ConversationMediaHubSheet(
         }
     }
 
+    video?.let { v -> MeeshyVideoViewer(mediaUrl = v.url, onDismiss = { video = null }, secure = v.shieldsCapture) }
+
     val index = viewerIndex
     if (index != null && photos.isNotEmpty()) {
         MeeshyImageViewer(
@@ -221,6 +251,8 @@ internal fun ConversationMediaHubSheet(
             authors = photos.map { it.senderName.ifBlank { null } },
             thumbnailUrls = photos.map { it.attachment?.thumbnailUrl },
             altTexts = photos.map { it.attachment?.alt },
+            exportable = photos.map { viewModel.rowExit(it, isEndToEnd).mayLeave },
+            secure = photos.any { viewModel.rowExit(it, isEndToEnd).shieldsCapture },
         )
     }
 }
@@ -337,17 +369,5 @@ private fun SegmentBar(selected: ConversationMediaKind, accent: Color, onSelect:
                 Text(kind.label(), Modifier.padding(start = MeeshySpacing.xs), color = tint, fontSize = MeeshyFontSize.label, fontWeight = FontWeight.SemiBold)
             }
         }
-    }
-}
-
-/** Une pièce de la passerelle (https, origine vérifiée par [mediaHubLaunchFor]) confiée à l'app qui déclare son type. */
-private fun android.content.Context.openGatewayFile(url: String, mimeType: String?, name: String?) {
-    runCatching {
-        startActivity(
-            Intent(Intent.ACTION_VIEW)
-                .setDataAndType(Uri.parse(url), FileAttachmentIntentResolver.resolveMimeType(mimeType, name))
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
     }
 }

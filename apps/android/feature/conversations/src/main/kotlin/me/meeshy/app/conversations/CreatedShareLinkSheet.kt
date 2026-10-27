@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -41,7 +42,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CreatedShareLinkSheet(joinUrl: String, onDone: () -> Unit) {
+internal fun CreatedShareLinkSheet(joinUrl: String, onDone: () -> Unit, onCustomize: (() -> Unit)? = null) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -110,6 +111,11 @@ internal fun CreatedShareLinkSheet(joinUrl: String, onDone: () -> Unit) {
                         text = stringResource(R.string.share_link_created_share),
                         modifier = Modifier.padding(start = MeeshySpacing.xs),
                     )
+                }
+            }
+            onCustomize?.let {
+                TextButton(onClick = it, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.invite_customize))
                 }
             }
             MeeshyPrimaryButton(
