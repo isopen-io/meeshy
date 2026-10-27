@@ -131,9 +131,8 @@ extension MeeshyComposerHost {
     }
 
     /// Appelé par les deux sites où la publication est ACCEPTÉE (socle).
-    func discardAutosavedDraft() {
-        autosave.discard()
-    }
+    func discardAutosavedDraft() { autosave.discard() }
+    func handOverAutosavedDraft() { autosave.handOver(to: ComposerPublicationHandoff.take()) { autosaveState() } }
 
     func withComposerAutosave<Content: View>(_ content: Content) -> some View {
         content

@@ -33,36 +33,51 @@ extension OfflineQueue {
     /// (`localMediaURLs` ne porte que ce qui existe encore).
     public func unsentPublications() async -> [UnsentPublication] {
         guard let pool = outboxPool else { return [] }
-        let records: [OutboxRecord]
         do {
-            records = try await pool.read { db in
-                try OutboxRecord
-                    .filter(Column("kind") == OutboxKind.createPost.rawValue)
-                    .filter(Column("cancelRequestedAt") == nil)
-                    .order(Column("createdAt").desc)
-                    .fetchAll(db)
-            }
+            return try await pool.read(UnsentPublication.fetchAll)
         } catch {
             logger.error("unsentPublications read failed: \(error.localizedDescription, privacy: .public)")
             return []
         }
-        return records.compactMap { record in
-            guard let draft = Self.recoveredPost(from: record) else { return nil }
-            return UnsentPublication(draft: draft, state: UnsentPublication.State(record.status),
-                                     lastError: record.lastError)
+    }
+}
+
+extension UnsentPublication {
+    static func fetchAll(_ db: Database) throws -> [UnsentPublication] {
+        try OutboxRecord
+            .filter(Column("kind") == OutboxKind.createPost.rawValue)
+            .filter(Column("cancelRequestedAt") == nil)
+            .order(Column("createdAt").desc)
+            .fetchAll(db)
+            .compactMap { record in
+                RecoveredOfflinePost(record: record).map {
+                    UnsentPublication(draft: $0, state: State(record.status), lastError: record.lastError)
+                }
+            }
+    }
+}
+
+extension UnsentPublication.State {
+    init(_ status: OutboxStatus) {
+        switch status {
+        case .pending: self = .waiting
+        case .inflight: self = .sending
+        case .failed, .exhausted: self = .failed
         }
     }
+}
 
+extension RecoveredOfflinePost {
     /// Le brouillon que porte une ligne `.createPost` — `nil` si elle ne se décode pas.
-    static func recoveredPost(from record: OutboxRecord) -> RecoveredOfflinePost? {
+    init?(record: OutboxRecord) {
         guard let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload) else {
             return nil
         }
         let urls: [URL] = (payload.localMediaPaths ?? []).compactMap { stored in
-            let path = absoluteMediaPath(forStored: stored)
+            let path = OfflineQueue.absoluteMediaPath(forStored: stored)
             return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
         }
-        return RecoveredOfflinePost(
+        self.init(
             clientMutationId: payload.clientMutationId,
             content: payload.content,
             visibility: payload.visibility,
@@ -78,12 +93,26 @@ extension OfflineQueue {
     }
 }
 
-extension UnsentPublication.State {
-    init(_ status: OutboxStatus) {
-        switch status {
-        case .pending: self = .waiting
-        case .inflight: self = .sending
-        case .failed, .exhausted: self = .failed
+/// Les dossiers `Documents/pending-media/<cmid>` (#13415).
+public enum PendingMediaDirectories {
+    /// **Le balayage des dossiers d'attente VIDES** (#13415) : un dossier
+    /// `pending-media/<cmid>` dont les fichiers sont partis (publication
+    /// confirmée, retirée) disparaît. Un FICHIER n'est jamais effacé ici : il
+    /// peut appartenir à une publication d'un autre compte de l'appareil, et il
+    /// ne quitte le disque qu'au succès ou par le geste de son auteur.
+    /// Un dossier vide depuis moins d'une heure est laissé : une mise en file
+    /// peut être en train d'y copier ses fichiers.
+    public static func sweepEmptyDirectories(olderThan age: TimeInterval = 3600, now: Date = Date()) {
+        let root = OfflineQueue.absoluteMediaPath(forStored: OfflineQueue.pendingMediaDirectoryName)
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root) else { return }
+        for entry in entries {
+            let path = (root as NSString).appendingPathComponent(entry)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue,
+                  let contents = try? FileManager.default.contentsOfDirectory(atPath: path), contents.isEmpty,
+                  let modified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
+                  now.timeIntervalSince(modified) >= age else { continue }
+            FileManager.default.removeItemLogging(atPath: path, context: "dossier d'attente vide")
         }
     }
 }

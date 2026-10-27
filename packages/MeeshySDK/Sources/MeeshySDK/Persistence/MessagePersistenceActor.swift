@@ -163,9 +163,8 @@ public actor MessagePersistenceActor {
         let kept = OutboxKind.allCases.filter(\.isKeptUntilTheAuthorDecides).map(\.rawValue)
         return try await dbWriter.write { db in
             try OutboxRecord
-                .filter(Column("status") == OutboxStatus.exhausted.rawValue)
+                .filter(Column("status") == OutboxStatus.exhausted.rawValue && !kept.contains(Column("kind")))
                 .filter(Column("createdAt") < cutoff)
-                .filter(!kept.contains(Column("kind")))
                 .deleteAll(db)
         }
     }

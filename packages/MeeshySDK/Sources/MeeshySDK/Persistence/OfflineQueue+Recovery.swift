@@ -38,7 +38,7 @@ extension OfflineQueue {
             // "Not sent within the minute → offline": only rows stuck longer than
             // the threshold qualify; a just-enqueued row is still actively sending.
             guard record.createdAt <= cutoff else { continue }
-            guard let draft = Self.recoveredPost(from: record) else {
+            guard let draft = RecoveredOfflinePost(record: record) else {
                 logger.error("recoverLastUnsentPost: skipping undecodable draft \(record.id, privacy: .public)")
                 continue
             }
@@ -168,6 +168,7 @@ extension OfflineQueue {
         // `purgeDiscardableTerminalRows`, qui ne jette que ce qu'aucune surface
         // ne relit plus).
         await purgeDiscardableTerminalRows()
+        PendingMediaDirectories.sweepEmptyDirectories()
         return report
     }
 

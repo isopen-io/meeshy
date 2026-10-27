@@ -2,20 +2,6 @@ import Foundation
 import Combine
 import MeeshySDK
 
-/// Ce que la liste « Publications non envoyées » lit et fait dans la file
-/// durable (#13415).
-protocol UnsentPublicationsSource: Sendable {
-    func unsentPublications() async -> [UnsentPublication]
-    func retryPublication(clientMutationId: String) async throws
-    func cancelPendingPublication(clientMutationId: String) async -> PublicationCancellation
-}
-
-extension OfflineQueue: UnsentPublicationsSource {
-    func retryPublication(clientMutationId: String) async throws {
-        try await retryByClientMessageId(clientMutationId)
-    }
-}
-
 /// **Les publications encore sur l'appareil** (#13415) : un post ou un réel
 /// que le serveur n'a pas confirmé y reste jusqu'à sa confirmation ou au geste
 /// « Supprimer » de son auteur. Chaque action répond tout de suite ; la file
@@ -24,80 +10,81 @@ extension OfflineQueue: UnsentPublicationsSource {
 final class UnsentPublicationsViewModel: ObservableObject {
     @Published private(set) var publications: [UnsentPublication] = []
     @Published private(set) var hasLoaded = false
+    @Published private(set) var reopenable: Set<String> = []
 
     private let source: UnsentPublicationsSource
+    private let drafts: UnsentPublicationDrafts
 
-    init(source: UnsentPublicationsSource = OfflineQueue.shared) {
+    init(source: UnsentPublicationsSource = UnsentPublicationsLive.source,
+         drafts: UnsentPublicationDrafts = UnsentPublicationsLive.drafts) {
         self.source = source
+        self.drafts = drafts
     }
 
     var count: Int { publications.count }
 
+    /// Relit la file — et retire le brouillon gardé d'une publication dont la
+    /// ligne est partie : confirmée par le serveur, ou supprimée.
     func load() async {
         publications = await source.unsentPublications()
+        let enFile = Set(publications.map(\.id))
+        let ranges = drafts.parkedPublicationIds()
+        ranges.subtracting(enFile).forEach(drafts.discardDraft(of:))
+        reopenable = ranges.intersection(enFile)
         hasLoaded = true
     }
 
-    func retry(_ id: String) async {
-        guard let index = publications.firstIndex(where: { $0.id == id }) else { return }
+    func canReopen(_ id: String) -> Bool {
+        reopenable.contains(id)
+    }
+
+    /// Retire la publication de la file et rend son brouillon au meuble —
+    /// jamais par-dessus un brouillon déjà ouvert.
+    func reopen(_ id: String) async -> UnsentPublicationReopening {
+        guard reopenable.contains(id) else { return .failed }
+        guard drafts.canReopen() else { return .composerBusy }
+        switch await source.cancelPendingPublication(clientMutationId: id) {
+        case .removed:
+            drafts.reopen(id)
+            publications.removeAll { $0.id == id }
+            reopenable.remove(id)
+            return .reopened
+        case .cancelRequested, .notFound:
+            await load()
+            return .alreadySending
+        case .failed:
+            return .failed
+        }
+    }
+
+    /// `false` si la file n'a pas pu réarmer la ligne.
+    @discardableResult
+    func retry(_ id: String) async -> Bool {
+        guard let index = publications.firstIndex(where: { $0.id == id }) else { return false }
         let before = publications[index]
         publications[index] = UnsentPublication(draft: before.draft, state: .waiting, lastError: nil)
-        do {
-            try await source.retryPublication(clientMutationId: id)
-        } catch {
-            FeedbackToastManager.shared.showError(UnsentPublicationsCopy.retryError)
-        }
+        let rearmed = (try? await source.retryPublication(clientMutationId: id)) != nil
         await load()
+        return rearmed
     }
 
     /// Le SEUL chemin par lequel une publication non envoyée quitte
     /// l'appareil sans être publiée.
-    func delete(_ id: String) async {
-        guard let index = publications.firstIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    func delete(_ id: String) async -> PublicationCancellation {
+        guard let index = publications.firstIndex(where: { $0.id == id }) else { return .notFound }
         let removed = publications.remove(at: index)
-        switch await source.cancelPendingPublication(clientMutationId: id) {
+        let verdict = await source.cancelPendingPublication(clientMutationId: id)
+        switch verdict {
         case .removed, .cancelRequested:
-            FeedbackToastManager.shared.showSuccess(UnsentPublicationsCopy.deleted)
+            drafts.discardDraft(of: id)
+            reopenable.remove(id)
         case .notFound:
-            FeedbackToastManager.shared.showError(UnsentPublicationsCopy.alreadySent)
+            break
         case .failed:
             publications.insert(removed, at: min(index, publications.count))
-            FeedbackToastManager.shared.showError(UnsentPublicationsCopy.deleteError)
         }
+        return verdict
     }
 }
 
-enum UnsentPublicationsCopy {
-    static var title: String {
-        String(localized: "feed.unsent.title", defaultValue: "Publications non envoyées", bundle: .main)
-    }
-    static func banner(_ count: Int) -> String {
-        String(localized: "feed.unsent.banner", defaultValue: "\(count) publication(s) non envoyée(s)", bundle: .main)
-    }
-    static var retry: String { String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main) }
-    static var delete: String { String(localized: "feed.unsent.delete", defaultValue: "Supprimer", bundle: .main) }
-    static var waiting: String { String(localized: "feed.unsent.waiting", defaultValue: "En attente d'envoi", bundle: .main) }
-    static var sending: String { String(localized: "feed.unsent.sending", defaultValue: "Envoi en cours…", bundle: .main) }
-    static var failed: String { String(localized: "feed.unsent.failed", defaultValue: "Non envoyée", bundle: .main) }
-    static var empty: String { String(localized: "feed.unsent.empty", defaultValue: "Tout est publié.", bundle: .main) }
-    static var deleteConfirmTitle: String {
-        String(localized: "feed.unsent.delete.confirm", defaultValue: "Supprimer cette publication ?", bundle: .main)
-    }
-    static var deleteConfirmMessage: String {
-        String(localized: "feed.unsent.delete.message", defaultValue: "Elle n'a pas été publiée : son texte et ses médias quitteront cet appareil.", bundle: .main)
-    }
-    static var cancel: String { String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main) }
-    static var deleted: String { String(localized: "feed.post.pending.withdrawn", defaultValue: "Envoi annulé", bundle: .main) }
-    static var alreadySent: String {
-        String(localized: "feed.post.pending.alreadySent", defaultValue: "Cette publication vient de partir. Supprimez-la une fois en ligne.", bundle: .main)
-    }
-    static var deleteError: String { String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main) }
-    static var retryError: String {
-        String(localized: "feed.unsent.retryError", defaultValue: "Impossible de relancer l'envoi", bundle: .main)
-    }
-    static func typeLabel(_ type: String) -> String {
-        type == "REEL"
-            ? String(localized: "feed.unsent.type.reel", defaultValue: "Réel", bundle: .main)
-            : String(localized: "feed.unsent.type.post", defaultValue: "Post", bundle: .main)
-    }
-}

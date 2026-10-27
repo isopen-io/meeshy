@@ -9,7 +9,7 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
 
     func test_load_listsWhatTheQueueStillHolds() async {
         let source = FakeSource(publications: [Self.publication("a", state: .failed)])
-        let viewModel = UnsentPublicationsViewModel(source: source)
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: FakeDrafts())
 
         await viewModel.load()
 
@@ -19,7 +19,7 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
 
     func test_delete_isTheAuthorsGesture_andCancelsTheRow() async {
         let source = FakeSource(publications: [Self.publication("a", state: .failed)])
-        let viewModel = UnsentPublicationsViewModel(source: source)
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: FakeDrafts())
         await viewModel.load()
 
         await viewModel.delete("a")
@@ -31,7 +31,7 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
 
     func test_delete_whenTheQueueRefusesTheWrite_putsThePublicationBack() async {
         let source = FakeSource(publications: [Self.publication("a", state: .failed)], cancellation: .failed)
-        let viewModel = UnsentPublicationsViewModel(source: source)
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: FakeDrafts())
         await viewModel.load()
 
         await viewModel.delete("a")
@@ -41,7 +41,7 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
 
     func test_retry_rearmsTheRow_andRereadsTheQueue() async {
         let source = FakeSource(publications: [Self.publication("a", state: .failed)])
-        let viewModel = UnsentPublicationsViewModel(source: source)
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: FakeDrafts())
         await viewModel.load()
 
         await viewModel.retry("a")
@@ -49,6 +49,93 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
         let retried = await source.retried
         XCTAssertEqual(retried, ["a"])
         XCTAssertEqual(viewModel.publications.first?.state, .waiting)
+    }
+
+    func test_load_discardsTheKeptDraftOfAPublicationWhoseRowIsGone() async {
+        let source = FakeSource(publications: [Self.publication("a", state: .failed)])
+        let drafts = FakeDrafts(parked: ["a", "confirmed"])
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: drafts)
+
+        await viewModel.load()
+
+        XCTAssertEqual(drafts.discarded, ["confirmed"], "le serveur a confirmé : son brouillon part, celui de « a » reste")
+        XCTAssertTrue(viewModel.canReopen("a"))
+    }
+
+    func test_delete_alsoDiscardsItsKeptDraft() async {
+        let source = FakeSource(publications: [Self.publication("a", state: .failed)])
+        let drafts = FakeDrafts(parked: ["a"])
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: drafts)
+        await viewModel.load()
+
+        await viewModel.delete("a")
+
+        XCTAssertEqual(drafts.discarded, ["a"])
+    }
+
+    func test_reopen_withdrawsTheRow_andHandsItsDraftToTheComposer() async {
+        let source = FakeSource(publications: [Self.publication("a", state: .failed)])
+        let drafts = FakeDrafts(parked: ["a"])
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: drafts)
+        await viewModel.load()
+
+        let outcome = await viewModel.reopen("a")
+
+        XCTAssertEqual(outcome, .reopened)
+        XCTAssertEqual(drafts.reopened, ["a"])
+        let cancelled = await source.cancelled
+        XCTAssertEqual(cancelled, ["a"])
+        XCTAssertTrue(viewModel.publications.isEmpty)
+    }
+
+    func test_reopen_neverOverwritesADraftAlreadyInTheComposer() async {
+        let source = FakeSource(publications: [Self.publication("a", state: .failed)])
+        let drafts = FakeDrafts(parked: ["a"], composerIsFree: false)
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: drafts)
+        await viewModel.load()
+
+        let outcome = await viewModel.reopen("a")
+
+        XCTAssertEqual(outcome, .composerBusy)
+        XCTAssertTrue(drafts.reopened.isEmpty)
+        let cancelled = await source.cancelled
+        XCTAssertTrue(cancelled.isEmpty, "la publication reste en file")
+    }
+
+    func test_reopen_ofAPublicationLeavingRightNow_keepsItsDraftAndRow() async {
+        let source = FakeSource(publications: [Self.publication("a", state: .sending)], cancellation: .cancelRequested)
+        let drafts = FakeDrafts(parked: ["a"])
+        let viewModel = UnsentPublicationsViewModel(source: source, drafts: drafts)
+        await viewModel.load()
+
+        let outcome = await viewModel.reopen("a")
+
+        XCTAssertEqual(outcome, .alreadySending)
+        XCTAssertTrue(drafts.reopened.isEmpty)
+    }
+
+    @MainActor
+    final class FakeDrafts: UnsentPublicationDrafts {
+        var parked: Set<String>
+        let composerIsFree: Bool
+        private(set) var discarded: [String] = []
+        private(set) var reopened: [String] = []
+
+        init(parked: Set<String> = [], composerIsFree: Bool = true) {
+            self.parked = parked
+            self.composerIsFree = composerIsFree
+        }
+
+        func parkedPublicationIds() -> Set<String> { parked }
+        func discardDraft(of publicationId: String) {
+            discarded.append(publicationId)
+            parked.remove(publicationId)
+        }
+        func canReopen() -> Bool { composerIsFree }
+        func reopen(_ publicationId: String) {
+            reopened.append(publicationId)
+            parked.remove(publicationId)
+        }
     }
 
     static func publication(_ id: String, state: UnsentPublication.State) -> UnsentPublication {

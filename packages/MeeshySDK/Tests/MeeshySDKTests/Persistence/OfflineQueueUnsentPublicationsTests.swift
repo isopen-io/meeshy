@@ -70,3 +70,35 @@ final class OfflineQueueUnsentPublicationsTests: XCTestCase {
         }
     }
 }
+
+/// #13415 — le balayage ne retire QUE des dossiers vides : un fichier en
+/// attente n'est jamais effacé hors succès ou geste de l'auteur.
+final class PendingMediaEmptyDirectorySweepTests: XCTestCase {
+
+    func test_sweep_removesEmptyFolders_andKeepsEveryFile() throws {
+        let root = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: OfflineQueue.pendingMediaDirectoryName))
+        let empty = root.appendingPathComponent("cmid_empty_\(UUID().uuidString)", isDirectory: true)
+        let full = root.appendingPathComponent("cmid_full_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: full, withIntermediateDirectories: true)
+        let file = full.appendingPathComponent("0.jpeg")
+        try Data([1]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: full) }
+
+        PendingMediaDirectories.sweepEmptyDirectories(now: Date().addingTimeInterval(7200))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: empty.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    func test_sweep_leavesAFolderAnEnqueueJustCreated() throws {
+        let root = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: OfflineQueue.pendingMediaDirectoryName))
+        let fresh = root.appendingPathComponent("cmid_fresh_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: fresh, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: fresh) }
+
+        PendingMediaDirectories.sweepEmptyDirectories()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path))
+    }
+}
