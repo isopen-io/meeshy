@@ -390,7 +390,7 @@ fun StoryViewerScreen(
                 detectStoryCanvasTaps(
                     isDoubleTapZone = { StoryTapZone.of(it.x, size.width.toFloat()) == StoryTapZone.Center },
                     onDoubleTap = { if (!overlayActiveState.value) viewModel.onCanvasDoubleTap() },
-                    onHold = { if (!overlayActiveState.value) viewModel.pauseByHold() },
+                    onHold = { if (!overlayActiveState.value) viewModel.toggleByHold() },
                 ) { offset ->
                     if (overlayActiveState.value) {
                         closeRailBars()
