@@ -113,7 +113,7 @@ final class ComposerFramePacingTests: XCTestCase {
     }
 
     func test_preview_neverStacksTheSystemLayerUnderMetal() throws {
-        let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         // La règle est lue par une propriété de la vue (#10307), que la couche système reçoit.
         XCTAssertTrue(apercu.contains("ComposerCaptureSurfaceRule.mirrorsSystemLayer(")
                       && apercu.contains("mirrorsFrames: mirrorsSystemLayer"),
@@ -122,7 +122,7 @@ final class ComposerFramePacingTests: XCTestCase {
                       "la couche système ne se détache qu'à la première image Metal")
         XCTAssertTrue(apercu.contains("argument: ComposerCaptureCopy.thermalNotice"),
                       "la mention thermique est annoncée à VoiceOver quand elle paraît")
-        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
+        let surface = try Self.code("Meeshy/Features/Composer/ComposerLiveLookSurface.swift")
         XCTAssertTrue(surface.contains("view.enableSetNeedsDisplay = true"), "la vue ne dessine qu'à l'arrivée d'une trame")
         XCTAssertTrue(surface.contains("view.isPaused = true"))
         XCTAssertFalse(surface.contains("CIContext("), "un seul CIContext, partagé")
@@ -133,13 +133,13 @@ final class ComposerFramePacingTests: XCTestCase {
     /// (`ComposerLookGPU`). Les appels, le partage d'écran et les QR gardent les
     /// leurs : hors du domaine que cette garde balaie.
     func test_storyAndComposerDomains_ownAtMostTwoCIContexts() throws {
-        let proprietaires = try ["packages/MeeshySDK/Sources/MeeshyUI", "apps/ios/Meeshy/Features/Main/Composer"]
+        let proprietaires = try ["packages/MeeshySDK/Sources/MeeshyUI", "apps/ios/Meeshy/Features/Composer"]
             .flatMap { try Self.sources(under: $0) }
             .filter { $0.code.contains("CIContext(") }
             .map(\.path)
             .sorted()
         XCTAssertEqual(proprietaires, [
-            "apps/ios/Meeshy/Features/Main/Composer/ComposerLookPainter.swift",
+            "apps/ios/Meeshy/Features/Composer/ComposerLookPainter.swift",
             "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext.swift",
         ], "un CIContext par domaine : StoryRenderingContext.shared (SDK), ComposerLookGPU (app)")
     }

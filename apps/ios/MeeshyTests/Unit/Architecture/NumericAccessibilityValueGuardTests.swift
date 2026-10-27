@@ -236,7 +236,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
         let hosts = [
             // #9125 — la minuterie de la caméra a SUIVI la capture : l'ancienne
             // vue a quitté le dépôt, le viseur du composeur la porte.
-            "Features/Main/Composer/ComposerSceneCameraBar.swift",
+            "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/MediaKindLabel.swift",
             // #7005 — la minuterie de l'aperçu d'appui long a DÉMÉNAGÉ, elle
             // n'a pas disparu : `OverlayAudioPlayer` a quitté
@@ -282,7 +282,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Views/FloatingCallPillView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
-            "Features/Main/Composer/ComposerSceneCameraBar.swift",
+            "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
         ]
         for host in hosts {

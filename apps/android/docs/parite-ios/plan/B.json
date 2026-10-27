@@ -7417,7 +7417,7 @@
    "apps/android/feature/stories/src/main/res/values/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerTopBar.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerTopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryTextEditTopBar.swift",
    "apps/ios/Meeshy/Features/Main/Components/BackgroundColorPalette.swift"

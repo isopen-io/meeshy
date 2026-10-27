@@ -209,7 +209,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// `lane`.
     func test_leVoletDeLaScene_degageLesRails() throws {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains("EmbeddedSceneCanvas"), "Ce n'est pas la surface de scène.")
         // Les deux rails sont désormais de petits boutons SÉPARÉS, de même
         // largeur (directive porteur 2026-09-27) : la tuile libellée de droite
@@ -243,7 +243,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// viewport (retour porteur 2026-09-27). Deux calques frères désormais.
     func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
                       "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
         XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
@@ -327,7 +327,7 @@ final class ComposerRailGeometryTests: XCTestCase {
         var racine = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
         let url = racine.appendingPathComponent(
-            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(brut.contains("struct ComposerLeadingRail"),
                       "ce n'est pas le rail — la garde lirait à côté")
@@ -349,7 +349,7 @@ final class ComposerRailGeometryTests: XCTestCase {
         var racine = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
         let url = racine.appendingPathComponent(
-            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
 
@@ -463,7 +463,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// rail droit sur la bande rendue — plus sur la gouttière du haut de la zone.
     func test_laSurface_poseLeRailDroitSurLaBandeDeLaCarte() throws {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
         XCTAssertGreaterThan(surface.count, 5_000, "Source introuvable — la garde ne mesurerait rien.")
         XCTAssertTrue(surface.contains("ComposerRailGeometry.trailingRailBand(freeZone:freeZoneFrame,card:sceneCardFrame,"),
                       "La bande se calcule depuis la scène libre et la carte MESURÉES.")
@@ -480,7 +480,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// choisit.
     func test_leRailDroit_defileQuandIlNeTientPas_sortieEtPiedEpingles() throws {
         let rail = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")))
+            "Meeshy/Features/Composer/ComposerTrailingRail.swift")))
         XCTAssertTrue(rail.contains("ViewThatFits(in:.vertical)"))
         XCTAssertTrue(rail.contains("ScrollView(.vertical,showsIndicators:false){optionStack}exitStackfootStack"),
                       "La sortie et l'historique restent hors du défilement.")

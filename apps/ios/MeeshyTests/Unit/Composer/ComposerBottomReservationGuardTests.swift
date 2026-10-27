@@ -23,7 +23,7 @@ import XCTest
 final class ComposerBottomReservationGuardTests: XCTestCase {
 
     private func source() throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift")
     }
 
     private func block(from start: String, to end: String, in text: String) -> String {

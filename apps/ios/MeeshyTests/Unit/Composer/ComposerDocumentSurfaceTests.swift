@@ -698,7 +698,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift")
         let doorURL = url.deletingLastPathComponent().appendingPathComponent("MoodComposerDoor.swift")
         let code = AppSourceGuard.stripComments(
             try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: doorURL, encoding: .utf8))

@@ -52,11 +52,11 @@ final class ComposerTriggerOutlineTests: XCTestCase {
     // MARK: - Le câblage
 
     func test_strip_drawsTheChosenOutlineOutside_neverInsideTheFeed() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertFalse(bande.contains(".strokeBorder(Color.white, lineWidth: 3)"), "plus de trait posé sur le flux")
         XCTAssertEqual(bande.components(separatedBy: "ComposerTriggerOutlineStyle(recording: recording").count - 1, 3,
                        "la case « Aucun » repliée, la miniature seule et la case choisie de la bande")
-        let cadre = try Self.code("Meeshy/Features/Main/Composer/ComposerTriggerOutline.swift")
+        let cadre = try Self.code("Meeshy/Features/Composer/ComposerTriggerOutline.swift")
         XCTAssertTrue(cadre.contains(".padding(-ComposerTriggerOutline.outset)"), "le trait déborde de la case")
     }
 

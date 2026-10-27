@@ -42,7 +42,7 @@ final class FeedInlineComposerGuardTests: XCTestCase {
     //     dure : la régression ne peut pas passer au vert en silence.
     func test_feedInlineComposer_resteDeclare_sansPorteQuiYRoute() throws {
         _ = LegacyComposer.feedInlineComposer
-        let intent = compact(try source("Meeshy/Features/Main/Composer/ComposerIntent.swift"))
+        let intent = compact(try source("Meeshy/Features/Composer/ComposerIntent.swift"))
         XCTAssertTrue(
             intent.contains("feedInlineComposer"),
             "`LegacyComposer` doit DÉCLARER `feedInlineComposer` — le nom de l'overlay inline iPad. Le "

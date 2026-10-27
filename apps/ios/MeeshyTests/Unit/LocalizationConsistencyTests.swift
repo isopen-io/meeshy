@@ -112,7 +112,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Lot 4.8 — `StatusComposerView.swift` a quitté cette liste AVEC le
         // fichier, et pas une ligne avant : la remplaçante était déjà là, si
         // bien qu'aucun écran n'est sorti du cliquet entre les deux lots.
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
+        "apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift",
         // 225i — the registration flow: the first screen a new account ever sees,
         // and the largest single-file gap in the catalog when it was pinned.
         //
@@ -174,13 +174,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",  // 28
         "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
+        "apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
         // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
         // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
         "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
         "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
+        "apps/ios/Meeshy/Features/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
         // #5218 — `OnboardingView` (le carrousel de cinq pages, 16 clés) est
@@ -240,12 +240,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
+        "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
+        "apps/ios/Meeshy/Features/Composer/StickerLibraryPaste.swift",  // 6
         // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
         // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
         // pourquoi il n'en prenait pas plus : « le risque n'est pas par fichier
@@ -273,8 +273,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
         "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift",  // 5
         "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",  // 5
         "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
@@ -284,9 +284,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
         "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift",  // 4
         "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",  // 4
@@ -350,7 +350,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift",  // 1
+        "apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift",  // 1
         "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",  // 1
         "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
@@ -602,7 +602,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Composer/PasteIntoComposer.swift",  // 3
+        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2

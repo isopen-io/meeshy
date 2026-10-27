@@ -42,7 +42,7 @@ final class ComposerCanvasMatterArmsPostTests: XCTestCase {
     private func socle() throws -> String {
         MyStoriesSourceCorpus.strippingComments(
             try MyStoriesSourceCorpus.text(
-                of: "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift"))
+                of: "Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift"))
     }
 
     /// Le terme de matière de canvas ne se verrouille plus sur un format NOMMÉ.

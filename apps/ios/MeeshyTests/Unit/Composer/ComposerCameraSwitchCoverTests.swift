@@ -88,13 +88,13 @@ final class ComposerCameraSwitchCoverTests: XCTestCase {
     }
 
     func test_viewfinder_showsTheCover_andTheBarLocksTheFlip() throws {
-        let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let vues = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("session.camera.switchCover"), "la couverture se pose sur la couche système ET sur Metal")
-        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains(".disabled(flipping)"))
-        let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("flipping: session.barCapture.flipping"))
-        let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let session = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("flipping: camera.isSwitchingCamera"))
     }
 

@@ -761,7 +761,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"),
+                .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift"),
             encoding: .utf8
         ))
         // L'ancre porte son TYPE, et ce n'est pas du zèle : `audiencePickerMode`

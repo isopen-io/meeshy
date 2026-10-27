@@ -67,11 +67,11 @@ final class ComposerLookEffectsFamilyTests: XCTestCase {
     }
 
     func test_painter_photoAndExport_carryTheEffect() throws {
-        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
+        let peintre = try Self.code("Meeshy/Features/Composer/ComposerLookPainter.swift")
         XCTAssertTrue(peintre.contains("faces.apply(look.effect, to: tonifiee, probing: source, still: still)"))
         XCTAssertTrue(peintre.contains("canvas: toile, declared: espace, still: true, overlay: overlay)"),
                       "la photo cherche son visage sur elle, et le texte de la retouche (#12591) part avec elle")
-        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try Self.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("let visages = ComposerFaceEffects.export()"))
         XCTAssertTrue(export.contains("faces: visages, overlay: overlay)"),
                       "la vidéo qui part porte l'effet vu à l'aperçu, et le texte de la retouche (#12591)")
@@ -87,7 +87,7 @@ final class ComposerLookEffectsFamilyTests: XCTestCase {
     }
 
     func test_bottomRow_editing_putsTheBandBesideItsRail_neverAbove() throws {
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("if session.openFamily != nil {\n                familyRow"))
         let rangee = try XCTUnwrap(bas.range(of: "private var familyRow: some View {"))
         let fin = try XCTUnwrap(bas.range(of: "private func mediaTrack", range: rangee.upperBound..<bas.endIndex))

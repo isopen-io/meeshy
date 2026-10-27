@@ -22,7 +22,7 @@ final class ComposerDocumentSurfaceMentionMountGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerDocumentSurface.swift")
     }
 
     private func body(of anchor: String, in code: String) -> String? {

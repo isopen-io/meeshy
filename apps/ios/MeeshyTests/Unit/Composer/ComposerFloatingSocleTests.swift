@@ -149,7 +149,7 @@ final class ComposerFloatingSocleTests: XCTestCase {
     /// claire et leurs glyphes blancs disparaissent (simulateur, 2026-09-27).
     func test_leVerreDeLaBarreHaute_estTeinteDuPlateau() throws {
         let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTopBar.swift"))
+            "Meeshy/Features/Composer/ComposerTopBar.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
                       "La croix doit porter un verre teinté du plateau.")
@@ -177,7 +177,7 @@ final class ComposerFloatingSocleTests: XCTestCase {
     /// qu'une cible vide au même gabarit, et le nom accessible.
     func test_leMenuDeLaBarreHaute_poseSaCibleVideSurLeVisage() throws {
         let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTopBar.swift"))
+            "Meeshy/Features/Composer/ComposerTopBar.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(barre.contains("structComposerTopBarMenu<"),
                       "Le menu de la barre haute a changé de nom — la garde doit être re-pointée.")

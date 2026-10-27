@@ -61,8 +61,8 @@ final class RouterInjectionGuardTests: XCTestCase {
     private static let routerObjectHolders: [(path: String, role: RouterObjectHolder)] = [
         ("Meeshy/Features/Main/Views/ConversationView.swift", .stateReader),
         ("Meeshy/Features/Main/Views/RootViewComponents.swift", .stateReader),
-        ("Meeshy/Features/Main/Composer/StoryEditComposer.swift", .relay),
-        ("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift", .relay),
+        ("Meeshy/Features/Composer/StoryEditComposer.swift", .relay),
+        ("Meeshy/Features/Composer/StoryRepublishComposer.swift", .relay),
         ("Meeshy/Features/Main/Views/BookmarksView.swift", .relay),
         ("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift", .relay),
         ("Meeshy/Features/Main/Views/ConversationView+Presentations.swift", .relay),

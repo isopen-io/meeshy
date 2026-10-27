@@ -162,8 +162,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         //
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
-        "Features/Main/Composer/ComposerMoodSurface.swift",
-        "Features/Main/Composer/ComposerTopBar.swift",
+        "Features/Composer/ComposerMoodSurface.swift",
+        "Features/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -175,7 +175,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
         // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
         // aucune et sort de la liste, comme la règle 4 l'exige.
-        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
+        "Features/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",

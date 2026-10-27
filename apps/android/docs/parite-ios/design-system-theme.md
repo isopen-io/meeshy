@@ -1758,7 +1758,7 @@ Transposition Android : HStack de boutons verre → Row de IconButton glass sur 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTopBar.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTopBar.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryTextEditTopBar.swift`
 

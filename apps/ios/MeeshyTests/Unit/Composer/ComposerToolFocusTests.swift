@@ -78,14 +78,14 @@ final class ComposerToolFocusTests: XCTestCase {
     @MainActor
     func test_leRail_occupeParUnOutil_sAnnonceCommeSesReglages() throws {
         XCTAssertNotEqual(ComposerRailCopy.toolRailLabel, ComposerRailCopy.railLabel)
-        let rail = try source("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
         XCTAssertTrue(rail.contains("mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel"))
     }
 
     // MARK: - Les sites de montage demandent à la règle
 
     func test_surface_neMonteAucuneColonneEnSurplus_etCedeSonChrome() throws {
-        let surface = try source("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+        let surface = try source("Meeshy/Features/Composer/ComposerSceneSurface.swift")
         XCTAssertTrue(surface.contains("struct ComposerSceneSurface"), "le fichier lu n'est pas la surface")
         for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
             XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")
@@ -139,7 +139,7 @@ final class ComposerToolFocusTests: XCTestCase {
     /// Le gabarit commun peint l'encre de la loi et son relief, sans plus
     /// aucun disque de verre ; la pastille de compte porte le même relief.
     func test_10358_leGabaritDuRail_neMontePlusDeVerreParBouton() throws {
-        let rail = try source("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(rail.contains("structComposerLeadingRail"), "le fichier lu n'est pas le rail")
         XCTAssertFalse(rail.contains("ComposerRailButtonGlass("), "plus de bulle de verre autour des outils")
@@ -181,11 +181,11 @@ final class ComposerToolFocusTests: XCTestCase {
     /// document ne montent plus aucun disque de verre : glyphe en relief,
     /// encre de la loi, cible de 44 pt.
     func test_10364_aucunOutilNePorteDeCercle() throws {
-        let verre = try source("Meeshy/Features/Main/Composer/ComposerRailGlass.swift")
+        let verre = try source("Meeshy/Features/Composer/ComposerRailGlass.swift")
         XCTAssertTrue(verre.contains("enum ComposerFloatingRailInk"), "le fichier lu n'est pas celui du verre des rails")
         XCTAssertFalse(verre.contains("ComposerRailButtonGlass"), "le modificateur de disque est supprimé")
 
-        let droit = try source("Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        let droit = try source("Meeshy/Features/Composer/ComposerTrailingRail.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(droit.contains("structComposerTrailingRail"), "le fichier lu n'est pas le rail droit")
         XCTAssertFalse(droit.contains("ComposerRailButtonGlass("))
@@ -196,14 +196,14 @@ final class ComposerToolFocusTests: XCTestCase {
         XCTAssertTrue(droit.contains(".accessibilityAddTraits(isOn?.isSelected:[])"),
                       "l'état actif reste annoncé")
 
-        let editeur = try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let editeur = try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(editeur.contains("privatevartoolRail"), "le couloir d'outils de l'éditeur est introuvable")
         XCTAssertFalse(editeur.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de disque dans l'éditeur d'objet")
         XCTAssertTrue(editeur.contains(".foregroundStyle(ComposerFloatingRailInk.floating(active:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)))"))
         XCTAssertTrue(editeur.contains(".frame(width:44,height:44)"))
 
-        let document = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let document = try source("Meeshy/Features/Composer/ComposerDocumentSurface.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(document.contains("privatefunctoolButton("), "la tuile d'outil du document est introuvable")
         XCTAssertFalse(document.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de cercle dans la rangée du document")

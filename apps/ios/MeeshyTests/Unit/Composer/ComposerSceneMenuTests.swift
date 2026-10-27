@@ -71,7 +71,7 @@ final class ComposerSceneMenuTests: XCTestCase {
     // MARK: - Le câblage : du verre, et plus aucun menu système
 
     func test_leMenu_estPeintParAdaptiveGlass() throws {
-        let code = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerSceneMenu.swift")
+        let code = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerSceneMenu.swift")
         XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl"),
                       "le verre du menu passe par l'unique implémentation du dépôt")
         XCTAssertTrue(code.contains(".dismissOnEscape { onDismiss() }"), "VoiceOver et la touche Échap doivent pouvoir le refermer")
@@ -79,15 +79,15 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_leFond_nePresentePlusDeDialogueSysteme() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost+BackgroundMenu.swift"))
+            "Meeshy/Features/Composer/MeeshyComposerHost+BackgroundMenu.swift"))
         XCTAssertFalse(code.contains(".confirmationDialog("))
         XCTAssertTrue(code.contains("sceneMenuLayer("))
     }
 
     func test_laSurface_remetLAppuiLongAuMeuble() throws {
         let surface = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift",
-            alsoIncluding: ["Meeshy/Features/Main/Composer/ComposerSceneSoundChips.swift"]))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift",
+            alsoIncluding: ["Meeshy/Features/Composer/ComposerSceneSoundChips.swift"]))
         XCTAssertTrue(surface.contains("onItemMenuRequested: onItemMenu"),
                       "le canvas doit remettre l'appui long au meuble, sans quoi le UIMenu système revient")
         XCTAssertTrue(surface.contains("onItemMenu?(son.id, .audio"),
@@ -136,7 +136,7 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_devenirLeFond_retireLAncienApresLaBascule() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneColumns.swift"))
+            "Meeshy/Features/Composer/MeeshyComposerHost+SceneColumns.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         guard let debut = code.range(of: "funcmakeSceneBackground(_id:String){") else {
             return XCTFail("`makeSceneBackground` introuvable")

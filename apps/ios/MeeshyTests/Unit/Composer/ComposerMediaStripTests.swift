@@ -64,7 +64,7 @@ final class ComposerMediaStripTests: XCTestCase {
         // rougissait donc sur un fichier où le ruban n'était plus. Une garde de
         // source ne suit pas le code qu'elle protège : c'est à la main qu'on la
         // déplace, et un gate CIBLÉ ne l'exécute pas pour le dire.
-        let raw = try source("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
+        let raw = try source("Meeshy/Features/Composer/ComposerTopBar.swift")
         XCTAssertTrue(raw.contains("private var slideRail"), "slideRail introuvable ou source vide")
         XCTAssertFalse(raw.contains("private var mediaStrip"),
             "Le ruban vit en DEUX exemplaires — l'ancien en bas, le rail en haut : deux inventaires du "
@@ -86,7 +86,7 @@ final class ComposerMediaStripTests: XCTestCase {
         // lui-même que la troisième avait été perdue au passage d'un lot et
         // rétablie sur constat porteur (2026-09-06) — raison de plus pour
         // qu'un témoin la tienne.
-        let rail = compact(try source("Meeshy/Features/Main/Composer/ComposerSlideRail.swift"))
+        let rail = compact(try source("Meeshy/Features/Composer/ComposerSlideRail.swift"))
         XCTAssertTrue(
             rail.contains("letslides:[StorySlide]"),
             "Le rail doit RECEVOIR ses slides — il reste sans état, le meuble le possède."

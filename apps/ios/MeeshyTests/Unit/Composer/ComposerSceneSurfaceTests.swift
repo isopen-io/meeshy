@@ -57,7 +57,7 @@ final class ComposerSceneSurfaceTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(fichier)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(fichier)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

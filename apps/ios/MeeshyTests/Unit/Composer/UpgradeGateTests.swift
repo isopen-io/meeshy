@@ -264,7 +264,7 @@ final class UpgradeGateTests: XCTestCase {
     /// ci-dessous est précisément ce qu'écrirait quelqu'un qui rajouterait une
     /// sortie (`dismiss()`, un `isPresented = false`, un bouton « Plus tard »).
     func test_upgradeGateView_nOffreAucuneSortie() throws {
-        let texte = try source("Meeshy/Features/Main/Composer/UpgradeGateView.swift")
+        let texte = try source("Meeshy/Features/Composer/UpgradeGateView.swift")
 
         for sortie in ["\\.dismiss", "dismiss()", "isPresented = false",
                        "presentationDragIndicator", "interactiveDismissDisabled(false)"] {

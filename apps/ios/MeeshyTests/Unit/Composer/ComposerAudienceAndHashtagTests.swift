@@ -17,7 +17,7 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

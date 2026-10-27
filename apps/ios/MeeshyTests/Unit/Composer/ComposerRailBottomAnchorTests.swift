@@ -15,7 +15,7 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
 
     private func compact() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift"))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 

@@ -5623,10 +5623,10 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/AppVersionHeader.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/AppEndpoint.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateController.swift",
+   "apps/ios/Meeshy/Features/Composer/UpgradeGateController.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift"
+   "apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift"
   ],
   "feature_keys": [
    "nss-http-upgrade-gate",

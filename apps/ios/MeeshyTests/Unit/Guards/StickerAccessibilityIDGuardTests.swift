@@ -41,7 +41,7 @@ final class StickerAccessibilityIDGuardTests: XCTestCase {
     }
 
     func test_everyComposerRailDoor_carriesItsIdentifier() throws {
-        let source = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        let source = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Composer/ComposerLeadingRail.swift")
         XCTAssertTrue(source.contains(".accessibilityIdentifier(\"composer.rail.\\(door.rawValue)\")"))
     }
 

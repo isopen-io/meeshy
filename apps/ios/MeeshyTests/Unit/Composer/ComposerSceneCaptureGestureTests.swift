@@ -186,7 +186,7 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneCaptureGesture.swift"),
+                .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneCaptureGesture.swift"),
             encoding: .utf8)
         let compacte = regle.components(separatedBy: .whitespacesAndNewlines).joined()
         // La PARENTHÈSE FERMANTE fait tout le travail : sans elle, la

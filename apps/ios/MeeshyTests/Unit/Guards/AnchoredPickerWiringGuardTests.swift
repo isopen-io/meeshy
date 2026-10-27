@@ -24,7 +24,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
         let wired: [(path: String, removed: String)] = [
             ("Meeshy/Features/Main/Views/AudioPostComposerView+Transcription.swift", ".sheet(isPresented: $showLanguagePicker)"),
             ("Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift", ".sheet(isPresented: $showFullEmojiPicker)"),
-            ("Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift", ".sheet(item: $audiencePickerMode)"),
+            ("Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift", ".sheet(item: $audiencePickerMode)"),
         ]
         for site in wired {
             let source = try code(site.path)

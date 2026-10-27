@@ -415,7 +415,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/PublishIntent.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSendRules.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentSendRules.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ReelComposition.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ReelOffer.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PublicationTarget.swift",
@@ -1745,8 +1745,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerOrigin.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerIntent.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerPlateau.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerIntent.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerPlateau.swift"
   ],
   "feature_keys": [
    "scomp-host-doors-surfaces",
@@ -1977,8 +1977,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerObjectTiming.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectTiming.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerObjectEditorCopy.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerObjectTiming.swift"
   ],
   "feature_keys": [
    "scomp-object-editor-fullscreen",
@@ -2294,7 +2294,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Components/CameraModel.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerGallery.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerGallery.swift"
   ],
   "feature_keys": [
    "sct-camera-viewfinder-capture",
@@ -2343,8 +2343,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/host/ComposerHostViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+MountedView.swift"
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift",
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+MountedView.swift"
   ],
   "feature_keys": [
    "scomp-host-doors-surfaces"
@@ -2575,8 +2575,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/capture/CaptureHold.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureGesture.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureFocus.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureGesture.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureFocus.swift"
   ],
   "feature_keys": [
    "scomp-capture-gestures-shutter-lock",
@@ -2908,8 +2908,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerAudienceReach.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerAudienceReach.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerAudienceSheet.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerAudienceReach.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerAudienceSheet.swift"
   ],
   "feature_keys": [
    "scomp-audience-sheet",
@@ -3096,8 +3096,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/scene/ComposerSceneSurface.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSurface.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSurfaceKeys.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerSceneSurface.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerSceneSurfaceKeys.swift"
   ],
   "feature_keys": [
    "scomp-scene-stage-floating-chrome"
@@ -3545,8 +3545,8 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/hashtag/HashtagRepository.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerHashtags.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerHashtagSheet.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerHashtags.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerHashtagSheet.swift"
   ],
   "feature_keys": [
    "scomp-hashtags"
@@ -3587,8 +3587,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerMediaPlacement.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMediaPlacement.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerMediaPlacement.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerMediaPorterStore.swift"
   ],
   "feature_keys": [
    "scomp-media-intake-placement",
@@ -3728,7 +3728,7 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/StoryPublishFailureRestoreTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Draft.swift",
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Draft.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishIntent.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift",
@@ -3779,8 +3779,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerPublishChannel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerPublishMenu.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerPublishMenu.swift"
   ],
   "feature_keys": [
    "scomp-publish-capsule-format-menu",
@@ -3822,7 +3822,7 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/export/SceneRasterizer.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Overflow.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift"
   ],
   "feature_keys": [
@@ -4255,8 +4255,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/capture/CaptureStage.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureMount.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureStage.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureMount.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureStage.swift"
   ],
   "feature_keys": [
    "scomp-capture-viewfinder-mount"
@@ -4427,8 +4427,8 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/CharacterCountLabel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentRules.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentRules.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift",
    "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",
    "apps/ios/Meeshy/Features/Main/Views/FeedComposerAttachmentsRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/FeedComposerQuotedPostPreview.swift",
@@ -4611,8 +4611,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerPreUploadCopy.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerPreUpload.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerPreUploadCopy.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerPreUpload.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerPreUploadCopy.swift"
   ],
   "feature_keys": [
    "scomp-media-preupload",
@@ -4720,8 +4720,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/scene/DescriptionBlur.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerSceneDescriptionPanel.swift"
   ],
   "feature_keys": [
    "scomp-scene-description-panel"
@@ -4763,8 +4763,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerRailMode.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift"
   ],
   "feature_keys": [
    "scomp-leading-rail-doors",
@@ -4807,7 +4807,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Story/SceneThumbnail.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSlideRail.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerSlideRail.swift"
   ],
   "feature_keys": [
    "stc2-scene-thumbnails-composite",
@@ -4875,8 +4875,8 @@
    "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/AudioPostPlacementSection.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Sound.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSoundDisposition.swift",
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Sound.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerSoundDisposition.swift",
    "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",
    "apps/ios/Meeshy/Features/Main/Views/AudioPostStatusCard.swift",
    "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView+Deletion.swift",
@@ -5285,7 +5285,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+Autosave.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerAutosaveCodec.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerAutosaveCodec.swift"
   ],
   "feature_keys": [
    "stc2-draft-autosave-engine",
@@ -5326,8 +5326,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/capture/CaptureSegments.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSegments.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureSegments.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureSession.swift"
   ],
   "feature_keys": [
    "scomp-capture-video-segments"
@@ -5541,8 +5541,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/document/DocumentDurablePublisher.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentDurablePublisher.swift"
+   "apps/ios/Meeshy/Features/Composer/DocumentComposerDoor.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentDurablePublisher.swift"
   ],
   "feature_keys": [
    "scomp-document-send-durable"
@@ -5790,8 +5790,8 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/status/StatusBarCacheRepository.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodBarePublish.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerMoodBarePublish.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StatusService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StatusEntry.swift"
@@ -5837,8 +5837,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/object/ObjectEditorSections.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Keyboard.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Keyboard.swift"
   ],
   "feature_keys": [
    "scomp-object-editor-fullscreen",
@@ -6016,8 +6016,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/frise/SceneFrise.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerSceneFrise.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Animated.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerSceneFrise.swift",
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Animated.swift"
   ],
   "feature_keys": [
    "scomp-scene-frise-timeline",
@@ -6078,8 +6078,8 @@
    "apps/android/sdk-ui/src/main/res/values*/strings.xml (4 locales : story.sticker.library.*)"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/SceneStickerPose.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryStore.swift",
+   "apps/ios/Meeshy/Features/Composer/SceneStickerPose.swift",
+   "apps/ios/Meeshy/Features/Composer/StickerLibraryStore.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView+Emoji.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView.swift"
   ],
@@ -6702,7 +6702,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/NearbyDiscoverabilityChoice.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/StickerNearbyPlaces.swift",
+   "apps/ios/Meeshy/Features/Composer/StickerNearbyPlaces.swift",
    "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/DiscoverabilityPrecision.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/LocationSharingPreferences.swift"
@@ -6828,8 +6828,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/StoryEditComposer.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/PostEditRoute.swift",
+   "apps/ios/Meeshy/Features/Composer/StoryEditComposer.swift",
+   "apps/ios/Meeshy/Features/Composer/PostEditRoute.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift",
    "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StorySlide+Preview.swift",
@@ -6923,8 +6923,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/ComposerSceneBackgroundTapPolicy.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerFrameBand.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerBackgroundMenu.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerFrameBand.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerBackgroundMenu.swift"
   ],
   "feature_keys": [
    "scomp-background-frame-tools"
@@ -7212,8 +7212,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/media/FilterThumbnailGrid.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMediaAdjust.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerMediaControls.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerMediaAdjust.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerMediaControls.swift"
   ],
   "feature_keys": [
    "stc2-media-filter-grid",
@@ -7835,8 +7835,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/capture/ComposerFramePacing.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerLookStrip.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerLookStripPainting.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerLookStrip.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerLookStripPainting.swift"
   ],
   "feature_keys": [
    "scomp-capture-looks-filters-effects-frames"
@@ -7927,7 +7927,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Components/ComposableAttachmentSurfaces.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift"
+   "apps/ios/Meeshy/Features/Composer/MediaComposerDoor.swift"
   ],
   "feature_keys": [
    "scomp-compose-from-received-media",
@@ -8242,8 +8242,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/capture/looks/FrameBaker.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerFaceEffects.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerFaceEffects.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerLookVideoExporter.swift"
   ],
   "feature_keys": [
    "scomp-capture-looks-filters-effects-frames"
@@ -8282,8 +8282,8 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/composer/capture/edit/CropBrackets.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerTrimRule.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerTrimRule.swift"
   ],
   "feature_keys": [
    "scomp-capture-edit-crop-trim-sound"
@@ -8335,8 +8335,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/RetouchEligibility.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerRetouchSeries.swift",
+   "apps/ios/Meeshy/Features/Composer/ConversationPieceRetouch.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerRetouchSeries.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationImageRetouche.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+SceneRetouch.swift"
   ],
@@ -8387,7 +8387,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/ComposerNavigation.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+   "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift"
   ],
   "feature_keys": [
    "scomp-host-doors-surfaces",

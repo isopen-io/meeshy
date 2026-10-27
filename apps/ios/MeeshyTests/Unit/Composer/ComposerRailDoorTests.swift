@@ -434,7 +434,7 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerLeadingRail.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -1184,7 +1184,7 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
         var racine = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
         let url = racine.appendingPathComponent(
-            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            "Meeshy/Features/Composer/ComposerTrailingRail.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(brut.contains("struct ComposerTrailingRail"),
                       "ce n'est pas le rail droit — la garde lirait à côté")
@@ -1263,7 +1263,7 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerTopBar.swift")
         let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
         XCTAssertFalse(source.contains("historyControls"))
         XCTAssertFalse(source.contains("canUndo"))
@@ -1367,7 +1367,7 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -1607,7 +1607,7 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -1632,7 +1632,7 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerRailMode.swift")
         let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(source.contains("DrawingEditTool.allCases.map"))
         XCTAssertTrue(source.contains("symbolName:$0.sfSymbol"),
@@ -1655,7 +1655,7 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerRailMode.swift")
         let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(source.contains("TextEditTool.all.map"),
                       "Le rail lit `TextEditTool.all` — l'ordre APPRIS par les doigts — jamais "
@@ -1760,7 +1760,7 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     /// cesse de voir ce que fait le consommateur.
     private func objectEditorSource() throws -> String {
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerObjectEditorView.swift"))
     }
 
     /// La BOÎTE, qui possède le contrôleur et l'alimente.

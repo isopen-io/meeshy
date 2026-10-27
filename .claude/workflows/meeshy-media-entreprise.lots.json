@@ -1127,7 +1127,7 @@
    "existe": "8 sites, aucun preferredItemEncoding ; modèle correct : ComposerDropResolver.swift:273, ShareViewController.swift:316",
    "fichiers": [
     "apps/ios/Meeshy/Features/Main/Services/AttachmentPreparationService.swift",
-    "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Ingestion.swift",
+    "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Ingestion.swift",
     "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",
     "apps/ios/MeeshyShareExtension/ShareViewController.swift"
    ],
@@ -1152,7 +1152,7 @@
     "apps/ios/Meeshy/Features/Main/Services/MediaCompressor.swift",
     "apps/ios/Meeshy/Features/Main/Services/AttachmentPreparationService.swift",
     "apps/ios/Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift",
-    "apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoEncoding.swift",
+    "apps/ios/Meeshy/Features/Composer/ComposerPhotoEncoding.swift",
     "packages/MeeshySDK/Sources/MeeshySDK/Media/PhotoCaptureProcessor.swift"
    ],
    "depend": [
@@ -1194,7 +1194,7 @@
    "critere": "MeeshyComposerHost+PreUpload passe par MediaCompressor.compressVideo(context:) (passthrough si dans le budget) ; mime déduit du conteneur ; témoin",
    "existe": "MeeshyComposerHost+PreUpload.swift:64-66 fichier brut, mime par extension",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+PreUpload.swift"
+    "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+PreUpload.swift"
    ],
    "depend": [
     "IC3",
@@ -1303,7 +1303,7 @@
    "fichiers": [
     "packages/MeeshySDK/Sources/MeeshySDK/Audio/WaveformCache.swift",
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Util/AudioWaveform.swift",
-    "apps/ios/Meeshy/Features/Main/Composer/ComposerSoundTraceRow.swift"
+    "apps/ios/Meeshy/Features/Composer/ComposerSoundTraceRow.swift"
    ],
    "depend": []
   },
@@ -1365,7 +1365,7 @@
    "critere": "ComposerLookVideoExporter : look neutre, cadrage identité, gain 1 ⇒ AVAssetExportPresetPassthrough + timeRange ; sinon une seule passe au débit cible ; témoin ; l'interface dit la précision",
    "existe": "ComposerLookVideoExporter.swift:38-39 composition complète dès qu'un timeRange existe",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift"
+    "apps/ios/Meeshy/Features/Composer/ComposerLookVideoExporter.swift"
    ],
    "depend": []
   },
@@ -1519,7 +1519,7 @@
    "existe": "ComposerLookPainter.swift:34-49, CallFaceEffectsRenderer.swift, VideoFilterPipeline.swift:496-557",
    "fichiers": [
     "packages/MeeshySDK/Sources/MeeshyUI/Lens/",
-    "apps/ios/Meeshy/Features/Main/Composer/ComposerLookPainter.swift"
+    "apps/ios/Meeshy/Features/Composer/ComposerLookPainter.swift"
    ],
    "depend": [
     "IC6"
@@ -1619,7 +1619,7 @@
    "critere": "rail existant (#10311) ; capture + export vidéo portent la lens (ComposerLookVideoExporter) ; lensId en métadonnée du média ; un ancien client voit les pixels cuits ; témoins",
    "existe": "rail des effets visage ComposerFaceEffects.swift:6-14",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Composer/"
+    "apps/ios/Meeshy/Features/Composer/"
    ],
    "depend": [
     "IC23",
@@ -1641,7 +1641,7 @@
    "critere": "mode still de LensPainter branché dans la retouche et le composeur de story ; < 100 ms estimé ; témoin",
    "existe": "ComposerFaceEffects.still",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Composer/"
+    "apps/ios/Meeshy/Features/Composer/"
    ],
    "depend": [
     "IC25"

@@ -82,7 +82,7 @@ final class ComposerObjectEditorRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(
             source.contains("@State private var selectedTool: ComposerObjectEditorSection ="),

@@ -21,7 +21,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
 
     private func sceneSurface() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift"))
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift"))
     }
 
     private func compact(_ t: String) -> String {
