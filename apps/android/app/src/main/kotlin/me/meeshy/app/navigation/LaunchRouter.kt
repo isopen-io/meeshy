@@ -2,6 +2,9 @@ package me.meeshy.app.navigation
 
 import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.model.link.EmailLinkSecret
+import me.meeshy.sdk.model.push.PushPayload
+import me.meeshy.sdk.model.push.PushTapDestination
+import me.meeshy.app.navigation.graph.GameRoutes
 
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
@@ -20,6 +23,10 @@ data class LaunchExtras(
     val isVideo: Boolean = false,
     /** Bouton « Répondre » de la notification CallStyle : décrocher directement. */
     val autoAnswer: Boolean = false,
+    /** Les clés `data` du push touché (type, postId, senderId…) : la table [PushTapDestination] les lit. */
+    val tap: PushPayload = PushPayload(),
+    /** Indice de route de la passerelle (`progression`) : un nom d'écran, jamais une adresse. */
+    val routeHint: String? = null,
 )
 
 /**
@@ -47,8 +54,27 @@ object LaunchRouter {
             isVideo = extras.isVideo,
             autoAnswer = extras.autoAnswer,
         )
-        !extras.conversationId.isNullOrBlank() -> Routes.chat(extras.conversationId)
-        else -> null
+        else -> tapRoute(extras)
+    }
+
+    /**
+     * Le toucher d'une notification : la table type -> destination d'iOS ([PushTapDestination]).
+     * Une charge sans type mais avec une conversation (anciennes notifications posees avant les
+     * extras du toucher) ouvre toujours sa conversation.
+     */
+    private fun tapRoute(extras: LaunchExtras): String? {
+        val payload = extras.tap.copy(conversationId = extras.conversationId?.takeIf { it.isNotBlank() } ?: extras.tap.conversationId)
+        return when (val destination = PushTapDestination.resolve(payload, extras.routeHint)) {
+            is PushTapDestination.Conversation -> Routes.chat(destination.conversationId, destination.highlightMessageId)
+            is PushTapDestination.Post -> Routes.postDetail(destination.postId)
+            is PushTapDestination.Reel -> Routes.reels(destination.postId)
+            is PushTapDestination.Story -> Routes.story(destination.userId)
+            is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
+            is PushTapDestination.Profile -> Routes.profile(destination.userId)
+            PushTapDestination.Notifications -> Routes.NOTIFICATIONS
+            PushTapDestination.Progression -> GameRoutes.PROGRESSION
+            PushTapDestination.None -> null
+        }
     }
 
     /**
