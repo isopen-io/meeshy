@@ -52,6 +52,12 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    // lot: viseur-de-capture-du-composeur (#13423) — preview, photo, segments vidéo, torche, zoom, mise au point
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.camerax.video)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
