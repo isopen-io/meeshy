@@ -30,7 +30,7 @@ class TusUploadRepositoryTest {
 
     // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
     // (with the specific matching key) before calling repository() — see the resume tests below.
-    private fun repository() = TusUploadRepository(api, checkpoints)
+    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined))
 
     private fun item(name: String = "story.jpg", mime: String = "image/jpeg") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
@@ -43,6 +43,36 @@ class TusUploadRepositoryTest {
 
     private fun finishResponse(attachment: MediaAttachmentWire?) =
         ApiResponse(success = true, data = TusUploadFinishData(attachment = attachment))
+
+
+    /** Un JPEG minimal dont l'EXIF porte un GPS (marqueur « SECRETGPS » dans une note du fabricant) et un XMP. */
+    private fun geotaggedJpeg(): ByteArray {
+        fun seg(marker: Int, payload: ByteArray) = byteArrayOf(0xFF.toByte(), marker.toByte(), ((payload.size + 2) shr 8).toByte(), (payload.size + 2).toByte()) + payload
+        val tiff = java.nio.ByteBuffer.allocate(96).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        tiff.put("II".toByteArray()).putShort(0x2A).putInt(8).putShort(1)
+        tiff.putShort(0x8825.toShort()).putShort(4).putInt(1).putInt(0x30).putInt(0)
+        tiff.position(0x30); tiff.putShort(1).putShort(1).putShort(2).putInt(2).putInt('N'.code).putInt(0)
+        return byteArrayOf(0xFF.toByte(), 0xD8.toByte()) +
+            seg(0xE1, "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1) + tiff.array()) +
+            seg(0xE1, "http://ns.adobe.com/xap/1.0/\u0000SECRETGPS".toByteArray(Charsets.ISO_8859_1)) +
+            seg(0xDA, byteArrayOf(1, 1, 0, 0, 63, 0)) + byteArrayOf(5, 6, 7) + byteArrayOf(0xFF.toByte(), 0xD9.toByte())
+    }
+
+    @Test
+    fun `a story photo with location is declared and sent without it`() = runTest {
+        val length = slot<Long>()
+        val body = slot<okhttp3.RequestBody>()
+        coEvery { api.createUpload(capture(length), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), capture(body)) } returns finishResponse(null)
+        val original = geotaggedJpeg()
+
+        repository().upload(MediaUploadItem(original, "story.jpg", "image/jpeg"), TusUploadContext.STORY)
+
+        val sent = okio.Buffer().also { body.captured.writeTo(it) }.readByteArray()
+        assertThat(String(sent, Charsets.ISO_8859_1)).doesNotContain("SECRETGPS")
+        assertThat(length.captured).isEqualTo(sent.size.toLong())
+        assertThat(sent.size).isLessThan(original.size)
+    }
 
     @Test
     fun `successful create and patch maps the finish attachment to UploadedMedia`() = runTest {
