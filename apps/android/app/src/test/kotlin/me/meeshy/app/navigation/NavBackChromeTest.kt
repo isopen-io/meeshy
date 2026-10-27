@@ -113,8 +113,7 @@ class NavBackChromeTest {
             when (entry.ios) {
                 IosPresentation.PUSH -> entry.chrome == BackChrome.ARROW
                 IosPresentation.PUSH_CLOSE -> entry.chrome == BackChrome.MODAL
-                IosPresentation.SHEET, IosPresentation.COVER ->
-                    entry.chrome == BackChrome.MODAL || entry.source in PENDING_SHEET
+                IosPresentation.SHEET, IosPresentation.COVER -> entry.chrome == BackChrome.MODAL
                 IosPresentation.NONE -> entry.chrome != BackChrome.MODAL
             }
         }
@@ -125,14 +124,11 @@ class NavBackChromeTest {
     }
 
     @Test
-    fun `the sheets still shown as stacked screens only shrink`() {
-        val pending = NavBackChrome.entries
+    fun `no route iOS presents as a sheet or a cover is still a stacked screen`() {
+        val stacked = NavBackChrome.entries
             .filter { it.chrome == BackChrome.ARROW && it.ios in setOf(IosPresentation.SHEET, IosPresentation.COVER) }
             .map { it.source }
-        assertWithMessage(
-            "Le cliquet #13369 ne grandit pas : un écran qu'iOS présente en feuille se présente en feuille sur Android. " +
-                "Une route convertie sort de PENDING_SHEET.",
-        ).that(pending).containsExactlyElementsIn(PENDING_SHEET)
+        assertWithMessage("#13369 : écran(s) empilé(s) que iOS présente en feuille : $stacked").that(stacked).isEmpty()
     }
 
     @Test
@@ -166,12 +162,5 @@ class NavBackChromeTest {
         assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.NOTIFICATIONS)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(null)).isFalse()
         assertThat(NavBackChrome.edgeSwipeBackEnabled("route-inconnue")).isFalse()
-    }
-
-    private companion object {
-        /** #13369 — feuilles sur iOS, encore écrans empilés sur Android. Ne fait que rétrécir. */
-        val PENDING_SHEET = setOf(
-            "Routes.FORGOT_PASSWORD", "Routes.MAGIC_LINK", "Routes.REGISTRATION", "Routes.GUEST_JOIN", "Routes.WORLD_ENTRY",
-        )
     }
 }

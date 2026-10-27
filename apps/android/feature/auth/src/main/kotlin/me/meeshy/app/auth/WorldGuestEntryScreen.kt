@@ -79,6 +79,8 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 private const val STEP_SLIDE_MS = 320
 private const val STEP_FADE_MS = 200
@@ -197,7 +199,7 @@ private fun TopBar(step: WorldGuestStep, backLabel: String, onBack: () -> Unit) 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-            Icon(MeeshyIcons.Back, contentDescription = backLabel, tint = MeeshyPalette.Indigo500)
+            Icon(leadingNavigationIcon(), contentDescription = leadingNavigationLabel(backLabel), tint = MeeshyPalette.Indigo500)
         }
         Spacer(Modifier.weight(1f))
         Row(

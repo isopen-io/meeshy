@@ -64,13 +64,6 @@ internal object NavBackChrome {
     private fun sheet(source: String, route: String, ios: IosPresentation, evidence: String) =
         RouteChrome(source, route, BackChrome.MODAL, ios, evidence, viaSheetHost = true)
 
-    /**
-     * Feuille sur iOS, encore écran empilé (flèche) sur Android : l'écart que #13369 solde, route par route. Ne
-     * s'ajoute pas — `NavBackChromeTest` refuse qu'un écran nouveau entre ici.
-     */
-    private fun pendingSheet(source: String, route: String, ios: IosPresentation, evidence: String) =
-        RouteChrome(source, route, BackChrome.ARROW, ios, evidence)
-
     private fun settings(file: String) = "$FEATURE/settings/src/main/kotlin/me/meeshy/app/settings/$file"
     private fun auth(file: String) = "$FEATURE/auth/src/main/kotlin/me/meeshy/app/auth/$file"
     private fun conversations(file: String) = "$FEATURE/conversations/src/main/kotlin/me/meeshy/app/conversations/$file"
@@ -86,12 +79,12 @@ internal object NavBackChrome {
     val entries: List<RouteChrome> = listOf(
         // Authentification : la connexion est la racine ; le reste s'y empile.
         root("Routes.LOGIN", Routes.LOGIN),
-        pendingSheet("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
-        pendingSheet("Routes.MAGIC_LINK", Routes.MAGIC_LINK, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
+        sheet("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
+        sheet("Routes.MAGIC_LINK", Routes.MAGIC_LINK, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         root("Routes.MAGIC_LINK_VALIDATE", Routes.MAGIC_LINK_VALIDATE),
-        pendingSheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.SHEET, auth("SignupScreen.kt")),
-        pendingSheet("Routes.GUEST_JOIN", Routes.GUEST_JOIN, IosPresentation.COVER, auth("ShareLinkEntryScreen.kt")),
-        pendingSheet("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, IosPresentation.COVER, auth("WorldGuestEntryScreen.kt")),
+        sheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.SHEET, auth("SignupScreen.kt")),
+        sheet("Routes.GUEST_JOIN", Routes.GUEST_JOIN, IosPresentation.COVER, auth("ShareLinkEntryScreen.kt")),
+        sheet("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, IosPresentation.COVER, auth("WorldGuestEntryScreen.kt")),
         // Conversations.
         root("Routes.CONVERSATIONS", Routes.CONVERSATIONS),
         sheet("Routes.SHARE_LINK_PICKER", Routes.SHARE_LINK_PICKER, IosPresentation.SHEET, conversations("CreateShareLinkScreen.kt")),
