@@ -283,6 +283,7 @@ internal fun ChatComposer(
                     ComposerViewfinderHost(
                         canSendImages = affordances.canSendImages,
                         canSendVideos = affordances.canSendVideos,
+                        captureScope = ioScope,
                         onCaptured = handleCapture,
                         onDismiss = { cameraChooserOpen = false },
                     )
