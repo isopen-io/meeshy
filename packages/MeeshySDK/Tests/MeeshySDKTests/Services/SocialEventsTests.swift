@@ -150,7 +150,7 @@ struct SocialEventsDwellTests {
         #expect(event["dwellMs"] as? Int == 4000)
         #expect(event["watchMs"] as? Int == 3800)
         #expect(event["consent"] as? String == "granted")
-        #expect(event["startedAt"] as? String == "2023-11-14T22:13:20Z")
+        #expect(event["startedAt"] as? String == "2023-11-14T22:13:20.000Z")
         #expect((event["actions"] as? [[String: Any]])?.first?["type"] as? String == "paused")
         #expect((event["watchSamples"] as? [[String: Any]])?.count == 1)
     }

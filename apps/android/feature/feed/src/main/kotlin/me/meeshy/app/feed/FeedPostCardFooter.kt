@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -27,5 +28,6 @@ internal fun FeedPostCardFooter(
         onComments = onComments,
         onRepost = onRepost,
         onQuote = onQuote,
+        modifier = Modifier.floatingChromeLateralReserve(yieldsBothSides = true),
     )
 }

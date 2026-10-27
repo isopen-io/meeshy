@@ -19,6 +19,7 @@ internal fun StorySceneOverlays(
     slideDurationMs: Int,
     playing: Boolean,
     muted: Boolean,
+    onAudioFocusLost: () -> Unit = {},
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
 
@@ -30,6 +31,7 @@ internal fun StorySceneOverlays(
                     playheadSeconds = playheadSeconds,
                     playing = playing,
                     muted = muted,
+                    onAudioFocusLost = onAudioFocusLost,
                 )
             }
         }

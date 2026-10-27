@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aperçu du sélecteur de widgets : la forme du widget, jamais de données fictives. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="110dp"
+    android:viewportWidth="250"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="@color/widget_surface"
+        android:pathData="M22,0 H228 A22,22 0 0 1 250,22 V88 A22,22 0 0 1 228,110 H22 A22,22 0 0 1 0,88 V22 A22,22 0 0 1 22,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_brand"
+        android:pathData="M21,26 a9,9 0 1 1 18,0 a9,9 0 1 1 -18,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_brand"
+        android:pathData="M46,22 h70 v8 h-70 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M20,58 a14,14 0 1 1 28,0 a14,14 0 1 1 -28,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M58,48 h96 v9 h-96 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M58,62 h150 v7 h-150 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M20,90 a14,14 0 1 1 28,0 a14,14 0 1 1 -28,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M58,80 h96 v9 h-96 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M58,94 h150 v7 h-150 Z" />
+</vector>

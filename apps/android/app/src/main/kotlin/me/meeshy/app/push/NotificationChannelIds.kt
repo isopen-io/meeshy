@@ -41,6 +41,19 @@ object NotificationChannelIds {
     const val CHANNEL_SYSTEM: String = "meeshy_system"
 
     /**
+     * Les canaux sur lesquels l'app RENDT elle-même (le pipeline) : vibration, nom localisé. Un
+     * canal est immuable une fois créé et recréer un id supprimé restaure ses anciens réglages —
+     * les installs qui l'ont créé sans vibration (S8 du porteur, #13394) ne la retrouvent que sous
+     * un id neuf. Les trois v1 sont supprimés à l'installation : `MeeshyFcmService.handleIntent`
+     * remet chaque push au pipeline, donc le système ne rend plus jamais sur [CHANNEL_MESSAGES]
+     * (que la passerelle nomme encore) ; si cela arrivait, FCM retombe sur le canal par défaut du
+     * manifeste, [CHANNEL_MESSAGES_V2].
+     */
+    const val CHANNEL_MESSAGES_V2: String = "meeshy_messages_v2"
+    const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
+    const val CHANNEL_SYSTEM_V2: String = "meeshy_system_v2"
+
+    /**
      * Quiet delivery (no banner, no sound) — where a push lands when the preferences refuse an
      * alert in the background (quiet hours, muted type, system Do-Not-Disturb), the
      * counterpart of the iOS `.passive` interruption level.
@@ -48,12 +61,12 @@ object NotificationChannelIds {
     const val CHANNEL_SILENT: String = "meeshy_notifications_silent"
 
     /**
-     * The channel of a category. Messages and every unknown type stay on [CHANNEL_MESSAGES]
-     * — the id the gateway targets, so a historic install keeps its user-tuned channel.
+     * The channel of a category the pipeline renders on. Messages and every unknown type land
+     * on [CHANNEL_MESSAGES_V2].
      */
     fun forCategory(category: PushChannelCategory): String = when (category) {
-        PushChannelCategory.MESSAGES -> CHANNEL_MESSAGES
-        PushChannelCategory.SOCIAL -> CHANNEL_SOCIAL
-        PushChannelCategory.SYSTEM -> CHANNEL_SYSTEM
+        PushChannelCategory.MESSAGES -> CHANNEL_MESSAGES_V2
+        PushChannelCategory.SOCIAL -> CHANNEL_SOCIAL_V2
+        PushChannelCategory.SYSTEM -> CHANNEL_SYSTEM_V2
     }
 }

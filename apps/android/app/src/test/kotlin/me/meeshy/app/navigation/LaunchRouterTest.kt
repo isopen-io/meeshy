@@ -283,4 +283,38 @@ class LaunchRouterTest {
         assertThat(routeOf("https://meeshy.me/auth/magic-link#token=")).isNull()
         assertThat(routeOf("https://meeshy.me/auth/magic-link#other=abc")).isNull()
     }
+
+    private fun tapRoute(vararg data: Pair<String, String>, routeHint: String? = null): String? =
+        LaunchRouter.route(LaunchExtras(tap = me.meeshy.sdk.model.push.PushPayload.decode(mapOf(*data)), routeHint = routeHint))
+
+    @Test
+    fun `a message tap opens the conversation and highlights the message`() {
+        assertThat(tapRoute("type" to "new_message", "conversationId" to "c1", "messageId" to "m1"))
+            .isEqualTo(Routes.chat("c1", "m1"))
+    }
+
+    @Test
+    fun `a post comment tap opens the post, a reel comment opens the reel`() {
+        assertThat(tapRoute("type" to "post_comment", "postId" to "p1")).isEqualTo(Routes.postDetail("p1"))
+        assertThat(tapRoute("type" to "story_thread_reply", "postId" to "p2", "postType" to "REEL"))
+            .isEqualTo(Routes.reels("p2"))
+    }
+
+    @Test
+    fun `a friend request tap opens the sender profile and an account alert the notifications`() {
+        assertThat(tapRoute("type" to "friend_request", "senderId" to "u2")).isEqualTo(Routes.profile("u2"))
+        assertThat(tapRoute("type" to "login_new_device")).isEqualTo(Routes.NOTIFICATIONS)
+    }
+
+    @Test
+    fun `a progression route hint opens the progression screen`() {
+        assertThat(tapRoute("type" to "level_up", routeHint = "progression"))
+            .isEqualTo(me.meeshy.app.navigation.graph.GameRoutes.PROGRESSION)
+    }
+
+    @Test
+    fun `a tap with nothing actionable yields no route`() {
+        assertThat(tapRoute("type" to "post_like")).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras())).isNull()
+    }
 }

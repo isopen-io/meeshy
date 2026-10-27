@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.reading.mode.OrchestratorDecisionReason
 import me.meeshy.sdk.model.reading.mode.ReadingModeConversationType
 import me.meeshy.sdk.model.reading.mode.ReadingModeOrchestrator
 import me.meeshy.sdk.model.reading.mode.ReadingModePreferenceScope
+import me.meeshy.sdk.model.reading.river.RiverModeGate
 import org.junit.Test
 
 class ReadingModeSessionTest {
@@ -131,6 +132,25 @@ class ReadingModeSessionTest {
         session.select(BUBBLES)
         assertThat(session.state.value.nextInCycle).isEqualTo(FOCAL)
         assertThat(session.state.value.rows.single { it.mode == ConversationReadingMode.RIVER }.isAvailable).isTrue()
+    }
+
+    @Test
+    fun `the River is rendered - a large group offers it, selects it and keeps it instead of clamping to Script`() {
+        val store = MemoryStore()
+        val session = open(store, type = "group", members = 8)
+        assertThat(ConversationReadingMode.RIVER).isIn(DELIVERED_READING_MODES)
+        assertThat(session.state.value.rows.single { it.mode == ConversationReadingMode.RIVER }.isAvailable).isTrue()
+        session.select(ConversationReadingMode.RIVER)
+        assertThat(session.state.value.mode).isEqualTo(ConversationReadingMode.RIVER)
+        assertThat(open(store, type = "group", members = 8).state.value.mode).isEqualTo(ConversationReadingMode.RIVER)
+    }
+
+    @Test
+    fun `the settings switch and small conversations keep the River closed, as the mode gate says`() {
+        val off = MemoryStore().apply { isRiviereModeEnabled = false }
+        assertThat(RiverModeGate.isSelectable(open(off, type = "group", members = 8).state.value.capabilities)).isFalse()
+        assertThat(RiverModeGate.isSelectable(open(MemoryStore(), type = "group", members = 3).state.value.capabilities)).isFalse()
+        assertThat(RiverModeGate.isSelectable(open(MemoryStore(), type = "group", members = 8).state.value.capabilities)).isTrue()
     }
 
     @Test

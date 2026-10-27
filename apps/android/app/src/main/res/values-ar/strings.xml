@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Meeshy</string>
+    <string name="splash_tagline">اكسر حاجز اللغة</string>
+    <string name="splash_version_label">Meeshy %1$s · %2$s</string>
+    <string name="brand_signature_credit">Services CEO</string>
+
+    <!-- Navigation tabs -->
+    <string name="tab_feed">التدفق</string>
+    <string name="tab_profile">الملف الشخصي</string>
+    <string name="tab_calls">المكالمات</string>
+    <string name="menu_my_links">روابطي</string>
+    <string name="menu_notifications">الإشعارات</string>
+    <string name="menu_discover">اكتشاف</string>
+    <string name="menu_contacts">جهات الاتصال</string>
+    <string name="menu_settings">الإعدادات</string>
+
+    <!-- Login screen -->
+    <string name="login_welcome_back">مرحبًا بعودتك</string>
+    <string name="login_username_label">اسم المستخدم</string>
+    <string name="login_password_label">كلمة المرور</string>
+    <string name="login_button">تسجيل الدخول</string>
+
+    <!-- Chat screen -->
+    <string name="chat_title">الرسائل</string>
+    <string name="chat_back">رجوع</string>
+    <string name="chat_message_placeholder">رسالة</string>
+    <string name="chat_send">إرسال</string>
+    <string name="chat_no_messages">لا توجد رسائل بعد</string>
+    <string name="chat_retry">إعادة المحاولة</string>
+
+    <!-- Conversation list screen -->
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_logout">تسجيل الخروج</string>
+    <string name="conversations_empty">لا توجد محادثات بعد</string>
+    <string name="conversations_retry">إعادة المحاولة</string>
+    <string name="conversations_no_messages">لا توجد رسائل بعد</string>
+
+    <!-- Notifications screen -->
+    <string name="notifications_title">الإشعارات</string>
+    <string name="notifications_mark_all_read">تعليم الكل كمقروء</string>
+    <string name="notifications_empty">لا توجد إشعارات</string>
+
+    <!-- Feed screen -->
+    <string name="feed_title">التدفق</string>
+    <string name="feed_empty">لا توجد منشورات</string>
+    <string name="feed_like">إعجاب</string>
+
+    <!-- Profile screen -->
+    <string name="profile_title">الملف الشخصي</string>
+    <string name="profile_edit_title">تعديل الملف الشخصي</string>
+    <string name="profile_back">رجوع</string>
+    <string name="profile_edit">تعديل</string>
+    <string name="profile_display_name_label">الاسم المعروض</string>
+    <string name="profile_bio_label">نبذة</string>
+    <string name="profile_cancel">إلغاء</string>
+    <string name="profile_save">حفظ</string>
+    <string name="profile_unknown">غير معروف</string>
+    <string name="call_channel_name">المكالمات</string>
+    <string name="call_channel_description">مكالمات صوتية ومرئية واردة</string>
+    <string name="call_incoming_audio">مكالمة واردة</string>
+    <string name="call_incoming_video">مكالمة فيديو واردة</string>
+    <string name="a11y_floating_menu">قائمة التنقّل</string>
+    <string name="a11y_floating_menu_unread">القائمة، %1$d إشعارات معلّقة</string>
+    <string name="a11y_state_open">مفتوح</string>
+    <string name="a11y_edit_profile">تعديل الملف الشخصي</string>
+
+    <!-- Widget écran d'accueil : compteur de non-lus -->
+    <string name="widget_unread_count_title">الرسائل غير المقروءة</string>
+    <string name="widget_unread_count_description">اعرف عدد رسائلك غير المقروءة بنظرة واحدة</string>
+    <string name="widget_unread_label">غير مقروءة</string>
+    <string name="widget_all_read_label">تمت قراءة كل شيء</string>
+
+    <!-- Widget écran d'accueil : conversations récentes -->
+    <string name="widget_recent_conversations_title">المحادثات الأخيرة</string>
+    <string name="widget_recent_conversations_description">اطّلع على محادثاتك الأخيرة بلمحة</string>
+    <string name="widget_recent_conversations_empty">افتح Meeshy للبدء</string>
+
+    <!-- Widget écran d'accueil : contacts favoris -->
+    <string name="widget_favorite_contacts_title">المفضّلة</string>
+    <string name="widget_favorite_contacts_description">وصول سريع إلى جهات اتصالك المفضّلة</string>
+    <string name="widget_favorite_contacts_empty">ثبّت محادثة مباشرة لإضافة مفضّلة</string>
+
+    <!-- Widget écran d'accueil : réponse rapide -->
+    <string name="widget_quick_reply_title">رد سريع</string>
+    <string name="widget_quick_reply_description">رُدّ بسرعة على الرسائل الأخيرة</string>
+    <string name="widget_quick_reply_empty">افتح Meeshy للبدء</string>
+    <string name="widget_quick_reply_ok">حسنًا</string>
+    <string name="widget_quick_reply_thanks">شكرًا!</string>
+    <string name="widget_quick_reply_call_me">اتصل بي</string>
+</resources>

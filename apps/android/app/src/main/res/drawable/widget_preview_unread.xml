@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aperçu du sélecteur de widgets : la forme du widget, jamais de données fictives. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp"
+    android:height="110dp"
+    android:viewportWidth="110"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="@color/widget_brand_surface"
+        android:pathData="M22,0 H88 A22,22 0 0 1 110,22 V88 A22,22 0 0 1 88,110 H22 A22,22 0 0 1 0,88 V22 A22,22 0 0 1 22,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_on_brand"
+        android:pathData="M39,46 a16,16 0 1 1 32,0 a16,16 0 1 1 -32,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_on_brand"
+        android:pathData="M25,74 h60 v9 h-60 Z" />
+</vector>

@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -120,6 +121,18 @@ class ConversationRepository @Inject constructor(
      * conversation list itself).
      */
     fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
+
+    /**
+     * Une empreinte de la fenêtre que lisent les widgets ([recentCachedConversations]) : elle change
+     * quand une conversation de la fenêtre change (message reçu, lecture, épingle), jamais sinon.
+     * Aucun décodage ni réseau — le déclencheur de repeinte des widgets.
+     */
+    fun recentCachedFingerprint(limit: Int = RECENT_WINDOW): Flow<Int> =
+        conversationDao.observeRecentByUpdatedAt(limit)
+            .map { rows -> rows.fold(1) { hash, row ->
+                31 * (31 * (31 * hash + row.id.hashCode()) + row.payload.hashCode()) + row.unreadCount
+            } }
+            .distinctUntilChanged()
 
     /**
      * The [limit] most-recently-updated cached conversations, decoded — a

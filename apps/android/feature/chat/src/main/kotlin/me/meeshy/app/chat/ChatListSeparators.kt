@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.chat.R
@@ -39,6 +40,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.boundedScale
 
 @Composable
 internal fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
@@ -83,7 +85,8 @@ private fun DayPill(dayMillis: Long, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(MeeshyRadius.pill)
     Text(
         text = label,
-        fontSize = MeeshyFontSize.small,
+        fontSize = MeeshyFontSize.small.boundedScale(max = 1f),
+        lineHeight = DAY_PILL_LINE_HEIGHT.boundedScale(max = 1f),
         fontWeight = FontWeight.SemiBold,
         color = if (isDark) MeeshyPalette.Indigo200 else MeeshyPalette.Indigo700,
         modifier = modifier
@@ -163,3 +166,5 @@ internal fun EncryptionNoticeRow(accentColor: Color, modifier: Modifier = Modifi
         )
     }
 }
+
+private val DAY_PILL_LINE_HEIGHT = 16.sp

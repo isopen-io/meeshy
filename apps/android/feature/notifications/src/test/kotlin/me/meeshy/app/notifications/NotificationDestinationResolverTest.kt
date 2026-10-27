@@ -301,4 +301,21 @@ class NotificationDestinationResolverTest {
 
         assertThat(opened).isEmpty()
     }
+
+    @Test
+    fun `a voice clone ready notice is an account notice like iOS, never a conversation`() {
+        assertThat(NotificationDestinationResolver.resolve(notification("voice_clone_ready", conversationId = "c1")))
+            .isEqualTo(NotificationDestination.None)
+    }
+
+    @Test
+    fun `the row and the system banner of one notification open the same place`() {
+        val row = NotificationDestinationResolver.resolve(notification("post_comment", postId = "p1", postType = "REEL"))
+        val banner = me.meeshy.sdk.model.push.PushTapDestination.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "REEL"),
+        )
+
+        assertThat(row).isEqualTo(NotificationDestination.Reel("p1"))
+        assertThat(banner).isEqualTo(me.meeshy.sdk.model.push.PushTapDestination.Reel("p1"))
+    }
 }

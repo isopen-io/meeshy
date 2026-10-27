@@ -99,4 +99,11 @@ class CollapsibleHeaderMetricsTest {
         assertThat(m.ROUND_CHROME_DIAMETER).isEqualTo(40f)
         assertThat(m.ACTION_TARGET).isEqualTo(48f)
     }
+
+    @Test
+    fun `the surface stays nearly opaque under the title so the page text never reads through`() {
+        assertThat(m.SURFACE_TOP_ALPHA).isAtLeast(0.9f)
+        assertThat(m.SURFACE_BODY_ALPHA).isAtLeast(0.9f)
+        assertThat(m.SURFACE_OPAQUE_UNTIL).isAtLeast(0.75f)
+    }
 }

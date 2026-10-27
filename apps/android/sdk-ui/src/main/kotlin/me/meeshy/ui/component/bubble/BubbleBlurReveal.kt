@@ -85,7 +85,7 @@ internal fun Modifier.viewOnceRetouch(isActive: Boolean, onRetouch: () -> Unit):
  * glue that only replays those keyframes off the clock.
  */
 @Composable
-internal fun BubbleBlurReveal(
+public fun BubbleBlurReveal(
     messageId: String,
     spec: BubbleBlurRevealSpec,
     modifier: Modifier = Modifier,

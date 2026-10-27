@@ -4,6 +4,7 @@ import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Rational
@@ -30,7 +31,9 @@ import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
+import me.meeshy.app.navigation.WarmDeepLink
 import me.meeshy.app.push.MeeshyFcmService
+import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
@@ -83,6 +86,9 @@ class MainActivity : ComponentActivity() {
     lateinit var callPictureInPicture: CallPictureInPictureCoordinator
 
     private var launchRoute by mutableStateOf<String?>(null)
+
+    /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
+    private var warmDeepLink by mutableStateOf<Uri?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
 
@@ -115,6 +121,8 @@ class MainActivity : ComponentActivity() {
                                 sessionExpiry = sessionExpiry,
                                 launchRoute = launchRoute,
                                 onLaunchRouteConsumed = { launchRoute = null },
+                                warmDeepLink = warmDeepLink,
+                                onWarmDeepLinkHandled = { warmDeepLink = null },
                             )
                         }
                     }
@@ -161,6 +169,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        warmDeepLink = if (launchRoute == null) WarmDeepLink.replayable(intent) else null
     }
 
     /**
@@ -226,10 +235,15 @@ private fun LocalizedContent(
  * Thin platform glue: pull the notification extras [MeeshyFcmService] set on the
  * launch/full-screen intent into the pure [LaunchExtras] the [LaunchRouter] decodes.
  */
-private fun Intent.launchExtras(): LaunchExtras = LaunchExtras(
-    callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
-    conversationId = getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID),
-    callerName = getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME),
-    isVideo = getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false),
-    autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
-)
+private fun Intent.launchExtras(): LaunchExtras {
+    val (tap, routeHint) = PushTapExtras.read(this)
+    return LaunchExtras(
+        callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
+        conversationId = getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID),
+        callerName = getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME),
+        isVideo = getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false),
+        autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
+        tap = tap,
+        routeHint = routeHint,
+    )
+}

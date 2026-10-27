@@ -24,6 +24,8 @@ data class EnrichmentRequest(
     val passive: Boolean,
     /** Wall-clock deadline (epoch ms) of the FCM budget : an enricher never works past it. */
     val deadlineMillis: Long,
+    /** L'index `NotificationManager` sous lequel la bannière est posée (les actions et l'historique le retrouvent). */
+    val notificationId: Int = 0,
 )
 
 /**

@@ -7,15 +7,6 @@
 # est périmée (la retirer). Le fichier ne peut donc que rétrécir. Les lignes à ajouter sont
 # imprimées par le test lui-même.
 
-# de et it ont rejoint le menu avec les Réglages (#11885) ; les autres modules les livrent par leur propre lot.
-# --- Langue déclarée dans l'app sans aucune ressource ---------------------------------------
-# ar est dans AppLanguage.supportedCodes (sélecteur de langue d'interface) mais aucun module
-# ne livre values-ar : choisir l'arabe laisse l'interface en anglais. Comblé par le lot qui
-# génère les ressources des sept langues depuis les catalogues iOS (./apps/android/meeshy.sh i18n).
-declared-locale-without-resources - ar -
-declared-locale-without-resources - de -
-declared-locale-without-resources - it -
-
 # --- Spécificateur nu (sans position) -------------------------------------------------------
 # « %d members » ne se réordonne pas en traduction ; la génération depuis iOS produit des
 # spécificateurs positionnels (%1$d). Comblé quand le lot de la fonctionnalité adopte la clé iOS
@@ -1631,3 +1622,6 @@ bare-specifier :feature:chat en summary_header_partial_window
 bare-specifier :feature:chat en summary_header_people_count
 bare-specifier :feature:chat en chat_delete_confirm_title_many
 bare-specifier :feature:chat en chat_selection_count
+bare-specifier :feature:chat en riviere_bubble_reply_to
+bare-specifier :feature:chat en riviere_header_offscreen_left
+bare-specifier :feature:chat en riviere_header_offscreen_right

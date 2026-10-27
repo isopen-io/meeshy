@@ -425,6 +425,8 @@ fun StoryViewerScreen(
                     isActive = playing,
                     rewindWhenInactive = false,
                     muted = state.isMuted,
+                    // Un vocal ou un appel prend le son : la story se fige avec la vidéo (minuterie comprise), comme un appui long.
+                    onAudioFocusLost = viewModel::pauseByHold,
                     // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
                     // quand la source joue en entier.
                     sourceStartMs = slide.backgroundVideoWindow?.startMs,
@@ -492,6 +494,7 @@ fun StoryViewerScreen(
                 slideDurationMs = slideDurationMs,
                 playing = playing,
                 muted = state.isMuted,
+                onAudioFocusLost = viewModel::pauseByHold,
             )
         }
 

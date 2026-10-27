@@ -16,6 +16,7 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
@@ -59,8 +60,8 @@ internal fun NavGraphBuilder.feedNavGraph(
     sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
         MyStoriesScreen(
             onBack = dismiss,
-            onCreateStory = { navController.navigate(Routes.STORY_COMPOSER) },
-            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
+            onCreateStory = { navController.navigateKeepingSheet(Routes.STORY_COMPOSER) },
+            onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
         )
     }
     composable(Routes.SAVED_POSTS) {

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "androidName": "push_action_reply", "status": "android-only" },
+        { "androidName": "push_action_mark_read", "status": "android-only" },
+        { "androidName": "push_action_reply_hint", "status": "android-only" },
+        { "androidName": "push_message_you", "status": "android-only" },
+        { "androidName": "push_channel_messages_name", "status": "android-only" },
+        { "androidName": "push_channel_messages_description", "status": "android-only" }
+      ]
+    }
+  }
+}

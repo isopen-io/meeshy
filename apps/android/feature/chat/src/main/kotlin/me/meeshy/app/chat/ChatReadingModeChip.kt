@@ -50,6 +50,7 @@ import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.boundedScale
 
 /**
  * LE chip de mode de lecture — miroir de `ReadingModeChip` (iOS, spec Magnificence 2026-08-17) :
@@ -114,7 +115,7 @@ internal fun ChatReadingModeChip(
                 if (state.isAuto) {
                     Text(
                         text = autoPrefix,
-                        fontSize = MeeshyFontSize.micro,
+                        fontSize = MeeshyFontSize.micro.boundedScale(),
                         fontWeight = FontWeight.Black,
                         color = labelColor.copy(alpha = 0.65f),
                         maxLines = 1,
@@ -123,11 +124,13 @@ internal fun ChatReadingModeChip(
                 }
                 Text(
                     text = title,
-                    fontSize = MeeshyFontSize.subhead,
+                    fontSize = MeeshyFontSize.subhead.boundedScale(),
                     fontWeight = FontWeight.SemiBold,
                     color = labelColor,
                     maxLines = 1,
                     softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
         }

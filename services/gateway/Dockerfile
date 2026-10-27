@@ -194,21 +194,30 @@ ENV NODE_ENV=production \
 # libheif-examples : `heif-convert` (libheif + libde265), qui décode un HEIC
 # d'iPhone pour le servir en JPEG (#11263, `services/attachments/heif-conversion.ts`)
 # — les binaires de sharp ne portent aucun décodeur HEVC. Sans lui, un HEIC est
-# refusé à l'envoi (415), jamais servi tel quel.
+# refusé à l'envoi (415), jamais servi tel quel. Il vient des BACKPORTS (#13412) :
+# la libheif 1.15 de bookworm refuse les photos d'iPhone récent (« Too many
+# auxiliary image references » : profondeur, carte de gain, mattes), la 1.19 les
+# décode. Depuis la 1.17, le décodeur HEVC est un greffon à part
+# (`libheif-plugin-libde265`) : sans lui, aucun HEIC ne se décode.
 # libjpeg-turbo-progs : `jpegtran`, la rotation JPEG SANS PERTE d'une photo
 # orientée (#11841, `services/attachments/metadata-strip/jpegtran.ts`) — sans
 # lui, la photo est réencodée une fois, droite et sans GPS quand même.
 # libavif-bin : `avifenc`, qui écrit la variante AVIF HDR (10 bits, BT.2100 PQ)
 # d'une photo à carte de gain (#12290, `services/attachments/hdr-avif.ts`) —
 # sharp n'écrit pas l'étiquette CICP. Sans lui, une photo HDR n'a aucun AVIF.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN . /etc/os-release \
+    && echo "deb http://deb.debian.org/debian ${VERSION_CODENAME}-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
     fonts-dejavu-core \
-    libheif-examples \
     libjpeg-turbo-progs \
     libavif-bin \
+    && apt-get install -y --no-install-recommends -t "${VERSION_CODENAME}-backports" \
+    libheif-examples \
+    libheif-plugin-libde265 \
+    && heif-convert --list-decoders | grep -q libde265 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \

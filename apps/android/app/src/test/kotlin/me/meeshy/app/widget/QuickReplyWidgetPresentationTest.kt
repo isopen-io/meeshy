@@ -184,4 +184,21 @@ class QuickReplyWidgetPresentationTest {
 
         assertThat(presentation?.preview).isEqualTo("Aucun message")
     }
+
+    @Test
+    fun `the preview is served in the reader language, at a rank other than the first`() {
+        val english = conversation(id = "c1").copy(
+            lastMessageTranslations = mapOf("fr" to "Bonjour"),
+            lastMessageOriginalLanguage = "en",
+        )
+
+        val presentation = QuickReplyWidgetPresentation.from(
+            conversations = listOf(english),
+            currentUserId = "me",
+            previewLabels = labels,
+            preferredLanguages = listOf("fr", "en"),
+        )
+
+        assertThat(presentation?.preview).isEqualTo("Bonjour")
+    }
 }

@@ -78,6 +78,20 @@
       "rationaleKeys": []
     },
     {
+      "name": "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "justification": "Type de service au premier plan exigé dès l'API 34 pour garder un vocal en lecture hors de l'app (notification, écran verrouillé).",
+      "usage": "app/audio",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.WAKE_LOCK",
+      "justification": "Garder le processeur éveillé pendant la lecture d'un vocal écran éteint.",
+      "usage": "feature/chat",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
       "name": "android.permission.ACCESS_FINE_LOCATION",
       "justification": "Joindre sa position précise à un message ou à un post (action explicite de l'utilisateur).",
       "usage": "feature/feed, feature/chat",
@@ -176,10 +190,6 @@
     {
       "permission": "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
       "arrivesWith": "appels intégrés au système (core-telecom)"
-    },
-    {
-      "permission": "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-      "arrivesWith": "lecture audio en arrière-plan"
     },
     {
       "permission": "android.permission.FOREGROUND_SERVICE_DATA_SYNC",

@@ -22,8 +22,10 @@ final class StoryNeighborWindowSourceGuardTests: XCTestCase {
     }
 
     func test_viewer_preparesNeighborsWhenTheVisibleCanvasReportsItsFirstImage() throws {
-        // Le montage de l'horloge (`onProgressChange`) vit dans `+PrefetchPipeline`, avec la chaleur des voisins.
+        // L'horloge (`onProgressChange`) est montée par `StoryPlaybackPipeline` (#13135) ; le lecteur lui
+        // remet son premier tic par `onFirstTick`, câblé dans `+PrefetchPipeline`.
         let viewer = try source("StoryViewerView.swift") + source("StoryViewerView+PrefetchPipeline.swift")
+            + source("StoryPlaybackPipeline.swift")
         let compact = viewer.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\n", with: "")
 
         XCTAssertTrue(
@@ -31,19 +33,23 @@ final class StoryNeighborWindowSourceGuardTests: XCTestCase {
             "le signal de première image du canvas visible (isContentReady) doit armer prepareNeighborWindow()"
         )
         XCTAssertTrue(
-            compact.contains("ifp>0&&!hasFiredNextPrefetch{hasFiredNextPrefetch=trueprepareNeighborWindow()}"),
+            compact.contains("guardletself,progress>0,!self.hasPreparedNeighborselse{return}self.hasPreparedNeighbors=trueonFirstTick()"),
             "le premier tic de l'horloge (qui ne compte qu'une fois le contenu affiché) sert de filet"
+        )
+        XCTAssertTrue(
+            compact.contains("onFirstTick:{[self]inprepareNeighborWindow(pipeline)}"),
+            "le filet du premier tic prépare la fenêtre de voisinage du lecteur"
         )
         XCTAssertFalse(
             viewer.contains("prefetchStory(at: currentStoryIndex + 1)"),
             "plus d'amorçage de N+1 à 5 s de la fin de la slide"
         )
-        XCTAssertTrue(viewer.contains("authorSwipeWarmItems()"),
+        XCTAssertTrue(viewer.contains("warmItems: StoryNeighborWindow.authorSwipeLandings("),
                       "le canvas voisin chauffé est celui où le balayage d'auteur atterrit")
     }
 
     func test_neighborWindow_isComputedByTheSharedLaw() throws {
-        let prefetch = try source("StoryViewerView+Prefetch.swift")
+        let prefetch = try source("StoryViewerView+PrefetchPipeline.swift") + source("StoryPlaybackPipeline.swift")
 
         XCTAssertTrue(prefetch.contains("StoryNeighborWindow.preparations("))
         XCTAssertTrue(prefetch.contains("StoryNeighborWindow.authorSwipeLandings("))
@@ -52,7 +58,7 @@ final class StoryNeighborWindowSourceGuardTests: XCTestCase {
     func test_slideChange_interruptsTheWindowInsteadOfFiringNeighborsInParallel() throws {
         let content = try source("StoryViewerView+Content.swift")
 
-        XCTAssertTrue(content.contains("interruptNeighborWindow()"))
+        XCTAssertTrue(content.contains("playback.interruptNeighbors()"))
         XCTAssertFalse(content.contains("prefetchStory(at: currentStoryIndex + 1)"))
         XCTAssertFalse(content.contains("prefetchStory(at: currentStoryIndex + 2)"))
     }

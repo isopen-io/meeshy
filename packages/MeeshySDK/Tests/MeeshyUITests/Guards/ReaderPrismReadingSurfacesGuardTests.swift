@@ -37,9 +37,11 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
         "Stories/Views/StoryViewerView+Content+Comments.swift", "Stories/Views/StoryCommentsOverlayHost.swift", "Stories/Views/MyStoriesView.swift",
     ]
     private static let comments = [
-        "Main/Views/CommentRowView.swift", "Main/Views/CommentsSheetLiveSync.swift", "Main/Views/FeedCommentsSheet.swift",
-        "Main/Views/FeedCommentsSheet+Loading.swift", "Main/Views/FeedPostCard+CommentsPreview.swift",
-        "Main/Views/PostDetailCommentThread.swift", "Main/Services/ThreadRepliesLoader.swift",
+        // La feuille et le détail de post chargent par le fil partagé (`CommentThreadViewModel`, #13133)
+        // et demandent une traduction par `CommentSheetRules` : c'est là que le Prisme se lit.
+        "Main/Views/CommentRowView.swift", "Main/Views/CommentsSheetLiveSync.swift",
+        "Main/ViewModels/CommentThreadViewModel.swift", "Main/Views/CommentSheetRules.swift",
+        "Main/Views/FeedPostCard+CommentsPreview.swift", "Main/Services/ThreadRepliesLoader.swift",
     ]
 
     /// Hors social (#11875) : ce que la liste, la recherche, le widget et les
@@ -54,8 +56,10 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
     /// Les lignes de commentaire nomment la langue SERVIE (#11875) — l'aperçu
     /// du fil directement, les lignes de post et de story par la bascule
     /// partagée (#13133), dont `FeedCommentTranslationDisplayTests` prouve la règle.
+    /// Les deux lignes montent l'en-tête commun `CommentAuthorHeader`, qui porte la bascule.
     private static let commentChips = ["Main/Views/FeedPostCard+CommentsPreview.swift"]
     private static let sharedToggleRows = ["Stories/Views/StoryCommentRowView.swift", "Main/Views/CommentRowView.swift"]
+    private static let sharedCommentHeader = "Main/Views/CommentRowParts.swift"
 
     private static var repoRoot: URL {
         URL(fileURLWithPath: #filePath)
@@ -118,9 +122,11 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
                            "\(path) : une seule langue ne descend pas le Prisme")
         }
         for path in Self.sharedToggleRows {
-            XCTAssertTrue(try source(path).contains("CommentTranslationToggle("),
-                          "\(path) : la puce passe par la bascule partagée")
+            XCTAssertTrue(try source(path).contains("CommentAuthorHeader("),
+                          "\(path) : la ligne monte l'en-tête commun qui porte la bascule")
         }
+        XCTAssertTrue(try source(Self.sharedCommentHeader).contains("CommentTranslationToggle("),
+                      "\(Self.sharedCommentHeader) : la puce passe par la bascule partagée")
         XCTAssertTrue(try source("Main/Components/LanguageFlagChip.swift").contains("translatedChipLanguage(readerLanguages:"),
                       "la bascule partagée nomme la langue servie")
     }

@@ -15,6 +15,6 @@
     android:updatePeriodMillis="1800000"
     android:description="@string/widget_unread_count_description"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:previewImage="@mipmap/ic_launcher"
+    android:previewImage="@drawable/widget_preview_unread"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

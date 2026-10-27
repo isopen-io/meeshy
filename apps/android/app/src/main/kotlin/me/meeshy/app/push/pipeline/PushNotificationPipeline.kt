@@ -10,6 +10,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.app.MainActivity
+import me.meeshy.app.R
+import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.push.NotificationChannelIds
@@ -99,16 +101,16 @@ class PushNotificationPipeline @Inject constructor(
         val badge = PushBadgePolicy.badge(payload, preferences, localUnread(payload.unreadCount))
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_stat_meeshy)
             .setContentTitle(title ?: DEFAULT_TITLE)
             .setContentText(body.orEmpty())
             .setAutoCancel(true)
-            .setContentIntent(tapIntent(payload.conversationId, notificationId))
+            .setContentIntent(tapIntent(push, notificationId))
             .setPriority(if (passive) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             // « Sons » coupé ou livraison passive ⇒ ni son ni vibration.
             .setSilent(!playSound)
 
-        val request = EnrichmentRequest(push, preferences, channelId, groupKey, badge, passive, deadline)
+        val request = EnrichmentRequest(push, preferences, channelId, groupKey, badge, passive, deadline, notificationId)
         enrich(builder, request)
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -159,10 +161,10 @@ class PushNotificationPipeline @Inject constructor(
         return true
     }
 
-    private fun tapIntent(conversationId: String?, requestCode: Int): PendingIntent {
+    private fun tapIntent(push: IncomingPush, requestCode: Int): PendingIntent {
         val tapIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            PushTapExtras.put(this, push.data)
         }
         return PendingIntent.getActivity(
             context,
@@ -178,6 +180,5 @@ class PushNotificationPipeline @Inject constructor(
         const val PREFERENCES_BUDGET_MILLIS: Long = 1_000L
         const val DEDUP_CAPACITY: Int = 128
         const val DEFAULT_TITLE: String = "Meeshy"
-        const val EXTRA_CONVERSATION_ID: String = "conversationId"
     }
 }

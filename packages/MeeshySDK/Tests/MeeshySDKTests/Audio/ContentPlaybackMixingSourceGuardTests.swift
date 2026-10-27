@@ -12,7 +12,7 @@ import Foundation
 struct ContentPlaybackMixingSourceGuardTests {
 
     private static let allowed: Set<String> = [
-        "CallManager+AudioSession.swift",
+        "CallAudioSessionTuning.swift",
         "CallManager+Connection.swift",
         "RingbackTonePlayer.swift",
         "StoryTimelineEngine.swift",

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: notifications-riches-android — libellés iOS (notifications.action.*, bubble.reply.you) et canal « Messages ». -->
+<resources>
+    <string name="push_action_reply">رد</string>
+    <string name="push_action_mark_read">تعليم كمقروء</string>
+    <string name="push_action_reply_hint">رسالة…</string>
+    <string name="push_message_you">أنت</string>
+    <string name="push_channel_messages_name">الرسائل</string>
+    <string name="push_channel_messages_description">الرسائل الجديدة والإشارات</string>
+</resources>

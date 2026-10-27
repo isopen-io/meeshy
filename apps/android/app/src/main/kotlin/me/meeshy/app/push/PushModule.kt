@@ -11,9 +11,12 @@ import me.meeshy.app.push.pipeline.BigTextEnricher
 import me.meeshy.app.push.pipeline.EphemeralExpirationEnricher
 import me.meeshy.app.push.pipeline.GroupAndBadgeEnricher
 import me.meeshy.app.push.pipeline.ImageMediaEnricher
+import me.meeshy.app.push.pipeline.MessageActionsEnricher
+import me.meeshy.app.push.pipeline.MessagingStyleEnricher
 import me.meeshy.app.push.pipeline.NotificationEnricher
 import me.meeshy.app.push.pipeline.PushEnvironment
 import me.meeshy.app.push.pipeline.SubtitleEnricher
+import me.meeshy.sdk.session.PerAccountCache
 
 /**
  * The push pipeline's extension points : [PushObserver] and [NotificationEnricher] are
@@ -28,6 +31,10 @@ interface PushModule {
 
     @Multibinds
     fun notificationEnrichers(): Set<@JvmSuppressWildcards NotificationEnricher>
+
+    @Binds
+    @IntoSet
+    fun postedNotificationsTeardown(impl: PostedNotificationsTeardown): PerAccountCache
 
     @Binds
     fun pushEnvironment(impl: AndroidPushEnvironment): PushEnvironment
@@ -51,4 +58,12 @@ interface PushModule {
     @Binds
     @IntoSet
     fun ephemeralExpirationEnricher(impl: EphemeralExpirationEnricher): NotificationEnricher
+
+    @Binds
+    @IntoSet
+    fun messagingStyleEnricher(impl: MessagingStyleEnricher): NotificationEnricher
+
+    @Binds
+    @IntoSet
+    fun messageActionsEnricher(impl: MessageActionsEnricher): NotificationEnricher
 }

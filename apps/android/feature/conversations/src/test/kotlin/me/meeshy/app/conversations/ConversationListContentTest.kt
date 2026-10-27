@@ -139,4 +139,10 @@ class ConversationListContentTest {
         assertThat(awaits(groupedIsEmpty = true, last = 0, corpus = 0)).isFalse()
         assertThat(awaits(groupedIsEmpty = false, last = 0, corpus = 3)).isFalse()
     }
+
+    @Test
+    fun `before the cache has answered the list shows the skeleton, never the empty account`() {
+        assertThat(ConversationListContent.of(ConversationListUiState()))
+            .isEqualTo(ConversationListContent.Skeleton)
+    }
 }

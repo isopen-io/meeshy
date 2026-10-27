@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -64,8 +65,11 @@ fun MeeshyApp(
     sessionExpiry: SessionExpiryNotifier,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
+    warmDeepLink: Uri? = null,
+    onWarmDeepLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    SheetReturnEffect(navController)
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
     // Hoisted to the MeeshyApp root → resolved against the Activity's ViewModelStore
@@ -124,6 +128,17 @@ fun MeeshyApp(
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }
+    }
+
+    // Un lien `meeshy://` / App Link / raccourci d'icône reçu alors que l'app est DÉJÀ ouverte
+    // (MainActivity.onNewIntent) : les navDeepLink du graphe ne sont lus qu'au démarrage, c'est
+    // donc ici qu'on rejoue l'intent, comme le routeur de liens d'iOS (`.onOpenURL`). Il attend la
+    // session, puis la pile se refait avec la liste dessous (le retour revient à la liste).
+    LaunchedEffect(warmDeepLink, authState.isAuthenticated) {
+        val uri = warmDeepLink ?: return@LaunchedEffect
+        if (!authState.isAuthenticated) return@LaunchedEffect
+        WarmDeepLink.open(navController, uri)
+        onWarmDeepLinkHandled()
     }
 
     // App-level ring: a foreground `call:initiated` socket offer navigates into the

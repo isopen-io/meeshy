@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -31,8 +32,17 @@ data class ShareTargetUiState(
     val sentConversationIds: Set<String> = emptySet(),
     val isFinished: Boolean = false,
     val isSignedOut: Boolean = false,
+    /** La session se restaure encore (démarrage à froid) : un chargement, jamais « connectez-vous » à tort. */
+    val isSessionLoading: Boolean = true,
+    /** La conversation choisie, en attente de « Envoyer » : le choix n'envoie rien. */
+    val selectedConversationId: String? = null,
+    /** Ce qui part : le texte et/ou le nom de la pièce jointe. */
+    val previewText: String = "",
+    val previewAttachmentName: String? = null,
     val errorMessage: String? = null,
-)
+) {
+    val selectedTarget: ForwardTarget? get() = targets.firstOrNull { it.conversationId == selectedConversationId }
+}
 
 /**
  * Drives the "share into Meeshy" target (feature-parity §O, "Generic in-app share picker /
@@ -68,6 +78,17 @@ class ShareTargetViewModel @Inject constructor(
     private var allConversations: List<ApiConversation> = emptyList()
 
     init {
+        // Un partage à froid n'a pas de MainActivity pour restaurer la session : c'est ici qu'on la restaure.
+        if (sessionRepository.currentUser.value == null) {
+            viewModelScope.launch { sessionRepository.refresh() }
+        }
+        viewModelScope.launch {
+            combine(sessionRepository.currentUser, sessionRepository.hasResolvedStoredSession) { user, resolved -> user to resolved }
+                .collect { (user, resolved) ->
+                    _state.update { it.copy(isSessionLoading = user == null && !resolved, isSignedOut = user == null && resolved) }
+                    recomputeTargets()
+                }
+        }
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
                 allConversations = result.valueOrNull ?: allConversations
@@ -79,9 +100,7 @@ class ShareTargetViewModel @Inject constructor(
     /** Binds the shared text (trimmed; blank means nothing to send) — call once, right after launch. */
     fun load(text: String) {
         sharedText = text.trim()
-        if (sessionRepository.currentUser.value == null) {
-            _state.update { it.copy(isSignedOut = true) }
-        }
+        _state.update { it.copy(previewText = sharedText) }
     }
 
     /**
@@ -99,6 +118,36 @@ class ShareTargetViewModel @Inject constructor(
             fileName = safeName,
             mimeType = MimeTypeResolver.resolve(declaredMimeType, safeName),
         )
+        _state.update { it.copy(previewAttachmentName = safeName) }
+    }
+
+    /**
+     * Toucher une rangée CHOISIT la conversation, n'envoie rien (comme iOS : aperçu puis Envoyer).
+     * Les conversations chiffrées de bout en bout ne sont jamais des cibles ([mayCurrentUserWrite],
+     * #13110) : rien ne part en clair.
+     */
+    fun select(conversationId: String) {
+        if (_state.value.sendingConversationId != null) return
+        if (_state.value.targets.none { it.conversationId == conversationId }) return
+        _state.update { it.copy(selectedConversationId = conversationId) }
+    }
+
+    /** « Annuler » depuis l'aperçu : on revient au choix, rien n'est parti. */
+    fun cancelSelection() {
+        if (_state.value.sendingConversationId != null) return
+        _state.update { it.copy(selectedConversationId = null, errorMessage = null) }
+    }
+
+    /** « Annuler » depuis le choix : le partage se ferme sans rien envoyer. */
+    fun dismiss() {
+        if (_state.value.sendingConversationId != null) return
+        _state.update { it.copy(isFinished = true) }
+    }
+
+    /** « Envoyer » de l'aperçu : seul chemin qui envoie la sélection. */
+    /** La cible est relue au moment d'envoyer : une conversation devenue chiffrée entre-temps a quitté les cibles, rien ne part. */
+    fun confirmSend() {
+        _state.value.selectedTarget?.conversationId?.let(::sendTo)
     }
 
     fun onQueryChange(query: String) {

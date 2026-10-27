@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Audio/video calls (WebRTC media capture) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -182,6 +184,11 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".audio.VoicePlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- FCM Push -->
         <service
             android:name=".push.MeeshyFcmService"
@@ -190,6 +197,23 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Boutons « Répondre » (saisie en ligne) et « Marquer comme lu » de la bannière d'un message -->
+        <receiver
+            android:name=".push.PushActionReceiver"
+            android:exported="false" />
+
+        <!-- Repli quand le système rend lui-même une bannière : le symbole Meeshy, pas le carré
+             de l'icône de lancement (MeeshyFcmService.handleIntent route d'ordinaire le push
+             vers le pipeline, qui pose sa propre icône). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_meeshy" />
+        <!-- Et le canal « Messages » v2 (NotificationChannelIds.CHANNEL_MESSAGES_V2) : le v1 que la
+             passerelle nomme encore n'est plus installé. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_messages_v2" />
 
         <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
         <receiver

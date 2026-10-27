@@ -4,6 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -133,6 +136,9 @@ internal fun MessageActionsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        // Ouverte en ENTIER, comme le menu iOS : à mi-hauteur, les dernières actions restaient sous la barre système
+        // tant qu'on ne tirait pas la feuille (#13378). Plus haute que l'écran, la liste défile.
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         dragHandle = {
             OverlayDragHandle(
                 accentColor = accentColor,
@@ -151,6 +157,7 @@ internal fun MessageActionsSheet(
         Column(
             modifier = Modifier
                 .offset { IntOffset(0, liftOffset.value.roundToInt()) }
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = MeeshySpacing.xl),
         ) {
             if (ctx.isActionable) {

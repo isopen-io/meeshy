@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.NotificationFilterCategory
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -52,7 +53,7 @@ internal fun NotificationCategoryBar(
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
-        modifier = modifier,
+        modifier = modifier.floatingChromeLateralReserve(yieldsBothSides = true),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {

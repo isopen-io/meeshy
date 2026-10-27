@@ -30,16 +30,20 @@ private data class RowSpan(val top: Float, val bottom: Float, val startGap: Floa
  * À poser en tête de chaîne sur la rangée (ou l'en-tête de section) : la mesure se fait sur la rangée entière.
  * La marge est un état DÉRIVÉ lu à la MISE EN PAGE : le défilement ne recompose aucune rangée, et une rangée
  * n'est remesurée que lorsque SA marge change (rangée qui entre ou sort de la bande, disque déplacé).
+ *
+ * [yieldsBothSides] : une rangée de CONTRÔLES (puces de filtre, bandeau de stories, « Tout effacer ») cède les DEUX côtés
+ * même quand il reste peu de largeur — elle défile ou se range dans ce qui reste, alors qu'un contrôle sous un disque
+ * est intouchable (#12497). Les rangées de texte gardent la règle de largeur minimale.
  */
 @Composable
-public fun Modifier.floatingChromeLateralReserve(): Modifier {
+public fun Modifier.floatingChromeLateralReserve(yieldsBothSides: Boolean = false): Modifier {
     val reserve = LocalFloatingChromeReserve.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val density = LocalDensity.current.density
     val span = remember { mutableStateOf<RowSpan?>(null) }
-    val insets = remember(reserve) {
+    val insets = remember(reserve, yieldsBothSides) {
         derivedStateOf {
-            span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap, it.width) }
+            span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap, if (yieldsBothSides) Float.POSITIVE_INFINITY else it.width) }
                 ?: FloatingChromeLateralReserve.Insets.None
         }
     }
