@@ -57,7 +57,7 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
      * finit pendant qu'elle y est (iOS arrête son PiP avec l'appel) — sans lui, la fenêtre
      * resterait ouverte sur l'écran d'en dessous.
      */
-    fun attachActivity(supportsPip: Boolean, enter: () -> Boolean, dismiss: () -> Unit = {}) {
+    fun attachActivity(supportsPip: Boolean, dismiss: () -> Unit = {}, enter: () -> Boolean) {
         deviceSupportsPip = supportsPip
         this.enter = enter
         this.dismiss = dismiss
