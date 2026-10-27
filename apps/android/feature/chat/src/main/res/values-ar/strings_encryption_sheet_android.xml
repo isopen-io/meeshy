@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">لا يمكن بعد تفعيل التشفير التام بين الطرفين من هذا الهاتف: فهو لا يقرأ ولا يكتب الرسائل المشفّرة تشفيرًا تامًا، ولن تتمكن من الكتابة هنا.</string>
+    <string name="encryption_irreversible_refused">لا يمكن إيقاف التشفير التام بين الطرفين. للتحدث بدونه، ابدأ محادثة جديدة.</string>
+    <string name="encryption_action_failed">تعذّر إجراء التغيير. حاول مرة أخرى.</string>
+    <string name="encryption_offline">أنت غير متصل: أعد الاتصال لقراءة التشفير أو تغييره.</string>
+    <string name="encryption_toggle_forbidden">دورك لا يسمح بتفعيل التشفير أو إيقافه هنا. الخادم هو من يقرر.</string>
+    <string name="encryption_read_failed">تعذّرت قراءة حالة التشفير. حاول مرة أخرى.</string>
+    <string name="encryption_retry">إعادة المحاولة</string>
+    <string name="security_verify_description">الرسائل مع %1$s مشفّرة تشفيرًا تامًا بين الطرفين.</string>
+</resources>

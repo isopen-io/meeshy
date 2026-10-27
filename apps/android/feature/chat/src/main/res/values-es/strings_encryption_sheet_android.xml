@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Activar el cifrado de extremo a extremo aún no es posible desde este teléfono: no sabe leer ni escribir mensajes cifrados de extremo a extremo y dejarías de poder escribir aquí.</string>
+    <string name="encryption_irreversible_refused">El cifrado de extremo a extremo no se desactiva. Para chatear sin él, crea una conversación nueva.</string>
+    <string name="encryption_action_failed">No se pudo hacer el cambio. Inténtalo de nuevo.</string>
+    <string name="encryption_offline">Sin conexión: vuelve a conectarte para leer o cambiar el cifrado.</string>
+    <string name="encryption_toggle_forbidden">Tu rol no permite activar ni desactivar el cifrado aquí. Decide el servidor.</string>
+    <string name="encryption_read_failed">No se pudo leer el estado del cifrado. Inténtalo de nuevo.</string>
+    <string name="encryption_retry">Reintentar</string>
+    <string name="security_verify_description">Los mensajes con %1$s están cifrados de extremo a extremo.</string>
+</resources>

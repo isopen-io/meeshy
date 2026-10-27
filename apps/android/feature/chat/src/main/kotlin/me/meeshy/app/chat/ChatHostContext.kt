@@ -65,6 +65,12 @@ internal class ChatSheetVisibility {
 
     /** « Fond et accent » : le choix personnel du fond de la conversation. */
     var appearance by mutableStateOf(false)
+
+    /** La fiche Chiffrement (#13463). */
+    var encryption by mutableStateOf(false)
+
+    /** La vérification du numéro de sécurité d'un groupe chiffré de bout en bout (#13463). */
+    var securityVerification by mutableStateOf(false)
 }
 
 /**

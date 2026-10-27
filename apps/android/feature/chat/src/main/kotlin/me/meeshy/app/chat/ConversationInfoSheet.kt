@@ -41,7 +41,12 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.NunitoFontFamily
 
 /** Une entrée de la fiche Conversation : elle ouvre une feuille existante. */
-internal class ConversationInfoEntry(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+internal class ConversationInfoEntry(
+    val icon: ImageVector,
+    val label: String,
+    val onClick: () -> Unit,
+    val subtitle: String? = null,
+)
 
 /**
  * La fiche Conversation (pendant minimal de `ConversationInfoSheet` iOS) : ouverte par le
@@ -120,12 +125,16 @@ internal fun ConversationInfoSheet(
                     ) {
                         Icon(entry.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(MeeshySpacing.md))
-                        Text(
-                            text = entry.label,
-                            modifier = Modifier.weight(1f),
-                            fontSize = MeeshyFontSize.body,
-                            color = MeeshyTheme.tokens.textPrimary,
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = entry.label,
+                                fontSize = MeeshyFontSize.body,
+                                color = MeeshyTheme.tokens.textPrimary,
+                            )
+                            entry.subtitle?.let {
+                                Text(text = it, fontSize = MeeshyFontSize.footnote, color = MeeshyTheme.tokens.textSecondary)
+                            }
+                        }
                         Icon(
                             MeeshyIcons.ChevronForward,
                             contentDescription = null,

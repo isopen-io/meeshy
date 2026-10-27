@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Attivare la crittografia end-to-end non è ancora possibile da questo telefono: non sa leggere né scrivere messaggi crittografati end-to-end e non potresti più scrivere qui.</string>
+    <string name="encryption_irreversible_refused">La crittografia end-to-end non si disattiva. Per chattare senza, crea una nuova conversazione.</string>
+    <string name="encryption_action_failed">Non è stato possibile applicare la modifica. Riprova.</string>
+    <string name="encryption_offline">Sei offline: riconnettiti per leggere o modificare la crittografia.</string>
+    <string name="encryption_toggle_forbidden">Il tuo ruolo non consente di attivare o disattivare qui la crittografia. Decide il server.</string>
+    <string name="encryption_read_failed">Impossibile leggere lo stato della crittografia. Riprova.</string>
+    <string name="encryption_retry">Riprova</string>
+    <string name="security_verify_description">I messaggi con %1$s sono crittografati end-to-end.</string>
+</resources>

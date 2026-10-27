@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Activer le chiffrement de bout en bout n’est pas encore possible depuis ce téléphone : il ne sait ni lire ni écrire les messages chiffrés de bout en bout, et vous ne pourriez plus écrire ici.</string>
+    <string name="encryption_irreversible_refused">Le chiffrement de bout en bout ne se désactive pas. Pour échanger sans lui, créez une nouvelle conversation.</string>
+    <string name="encryption_action_failed">Le changement n’a pas pu être fait. Réessayez.</string>
+    <string name="encryption_offline">Vous êtes hors connexion : reconnectez-vous pour lire ou modifier le chiffrement.</string>
+    <string name="encryption_toggle_forbidden">Votre rôle ne permet pas d’activer ou de désactiver le chiffrement ici. C’est le serveur qui décide.</string>
+    <string name="encryption_read_failed">L’état du chiffrement n’a pas pu être lu. Réessayez.</string>
+    <string name="encryption_retry">Réessayer</string>
+    <string name="security_verify_description">Les messages avec %1$s sont chiffrés de bout en bout.</string>
+</resources>
