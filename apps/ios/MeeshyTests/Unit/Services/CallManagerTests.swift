@@ -726,13 +726,15 @@ final class CallManagerEarlyJoinTests: XCTestCase {
 
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
-        guard let body = body(of: "func answerCall()", in: source) else {
-            XCTFail("answerCall() not found")
+        guard let caller = body(of: "func answerCall()", in: source),
+              let body = body(of: "func answerBufferedOffer(", in: source) else {
+            XCTFail("answerCall() or answerBufferedOffer not found")
             return
         }
+        XCTAssertTrue(caller.contains("self.answerBufferedOffer(remoteOffer,"), "answerCall must answer through answerBufferedOffer")
         guard let awaitIdx = body.range(of: "await self.localMediaTask?.value")?.lowerBound,
               let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: remoteOffer)")?.lowerBound else {
-            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerCall")
+            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerBufferedOffer")
             return
         }
         XCTAssertLessThan(
@@ -744,13 +746,15 @@ final class CallManagerEarlyJoinTests: XCTestCase {
 
     func test_answerCallReady_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
-        guard let body = body(of: "func answerCallReady()", in: source) else {
-            XCTFail("answerCallReady() not found")
+        guard let caller = body(of: "func answerCallReady()", in: source),
+              let body = body(of: "func answerBufferedOffer(", in: source) else {
+            XCTFail("answerCallReady() or answerBufferedOffer not found")
             return
         }
+        XCTAssertTrue(caller.contains("self.answerBufferedOffer(remoteOffer,"), "answerCallReady must answer through answerBufferedOffer")
         guard let awaitIdx = body.range(of: "await self.localMediaTask?.value")?.lowerBound,
               let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: remoteOffer)")?.lowerBound else {
-            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerCallReady")
+            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerBufferedOffer")
             return
         }
         XCTAssertLessThan(
@@ -766,11 +770,15 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("handleSignalOffer not found")
             return
         }
-        // The .connecting branch contains both the await and createAnswer(from: sdp)
+        // The .connecting branch answers through answerBufferedOffer, which
+        // awaits local media before createAnswer.
         guard let connectingIdx = body.range(of: "case .connecting:")?.lowerBound,
-              let awaitIdx = body.range(of: "await self.localMediaTask?.value", range: connectingIdx..<body.endIndex)?.lowerBound,
-              let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: sdp)", range: connectingIdx..<body.endIndex)?.lowerBound else {
-            XCTFail("Expected await + createAnswer inside `.connecting` branch of handleSignalOffer")
+              let renegotiationIdx = body.range(of: "case .connected, .reconnecting:")?.lowerBound,
+              body[connectingIdx..<renegotiationIdx].contains("self.answerBufferedOffer(sdp, callId: callId, userId: userId, path: .lateOffer)"),
+              let helper = self.body(of: "func answerBufferedOffer(", in: source),
+              let awaitIdx = helper.range(of: "await self.localMediaTask?.value")?.lowerBound,
+              let createAnswerIdx = helper.range(of: "webRTCService.createAnswer(from: remoteOffer)")?.lowerBound else {
+            XCTFail("Expected the `.connecting` branch of handleSignalOffer to answer through answerBufferedOffer (await + createAnswer)")
             return
         }
         XCTAssertLessThan(
@@ -1611,24 +1619,24 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
     func test_thermalCritical_serializesWithOtherVideoActuationTasks() throws {
         let body = try thermalBody(try callManagerSource())
         XCTAssertTrue(
-            body.contains("let previousToggle = self.videoToggleTask") &&
-            body.contains("let previousHold = self.holdVideoTask") &&
-            body.contains("let previousSurvival = self.survivalVideoTask"),
+            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = self.videoTransitionsInFlight()"),
             "The thermal-critical downgrade must capture all three in-flight video-transition tasks " +
             "before actuating, mirroring toggleVideo/handleHold/applySurvivalVideoSend."
         )
         XCTAssertTrue(
-            body.contains("await previousToggle?.value") &&
-            body.contains("await previousHold?.value") &&
-            body.contains("await previousSurvival?.value"),
+            body.contains("await inFlight.settle()") &&
+            body.contains("await inFlight.settle()") &&
+            body.contains("await inFlight.settle()"),
             "The thermal-critical downgrade must await all three prior tasks before calling " +
             "downgradeFromVideo() — upgradeToVideo/downgradeFromVideo never check cancellation " +
             "mid-flight, so two concurrent actuations would corrupt state."
         )
         guard let assignRange = body.range(of: "self.videoToggleTask = Task"),
-              let awaitRange = body.range(of: "await previousToggle?.value", range: assignRange.upperBound..<body.endIndex),
+              let awaitRange = body.range(of: "await inFlight.settle()", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
-            XCTFail("Expected videoToggleTask = Task, await previousToggle?.value, then downgradeFromVideo() in that order"); return
+            XCTFail("Expected videoToggleTask = Task, await inFlight.settle(), then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
             awaitRange.lowerBound, downgradeRange.lowerBound,
@@ -2239,45 +2247,42 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         guard let funcRange = source.range(of: "func handleHold") else {
             XCTFail("handleHold not found"); return
         }
-        let nextFunc = [
-            source.range(of: "\n    func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
-            source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
-            source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
-        ].compactMap { $0 }.min() ?? source.endIndex
+        let nextFunc = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        let previousHoldCaptures = body.components(separatedBy: "let previousHold = holdVideoTask").count - 1
+        let previousHoldCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousHoldCaptures, 2,
             "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
         )
-        let previousToggleCaptures = body.components(separatedBy: "let previousToggle = videoToggleTask").count - 1
+        let previousToggleCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousToggleCaptures, 2,
             "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
             "a hold transition actuates the same camera/transceiver."
         )
-        let previousSurvivalCaptures = body.components(separatedBy: "let previousSurvival = survivalVideoTask").count - 1
+        let previousSurvivalCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousSurvivalCaptures, 2,
             "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
             "suspend/resume racing a hold transition actuates the same camera/transceiver."
         )
 
-        let awaitedHold = body.components(separatedBy: "await previousHold?.value").count - 1
+        let awaitedHold = body.components(separatedBy: "await inFlight.settle()").count - 1
         XCTAssertEqual(
             awaitedHold, 2,
             "Both branches must await the previous hold task's completion before mutating the camera/transceiver"
         )
-        let awaitedToggle = body.components(separatedBy: "await previousToggle?.value").count - 1
+        let awaitedToggle = body.components(separatedBy: "await inFlight.settle()").count - 1
         XCTAssertEqual(awaitedToggle, 2, "Both branches must await the previous toggle task's completion")
-        let awaitedSurvival = body.components(separatedBy: "await previousSurvival?.value").count - 1
+        let awaitedSurvival = body.components(separatedBy: "await inFlight.settle()").count - 1
         XCTAssertEqual(awaitedSurvival, 2, "Both branches must await the previous survival task's completion")
 
         guard let assignRange = body.range(of: "holdVideoTask = Task"),
-              let awaitRange = body.range(of: "await previousHold?.value", range: assignRange.upperBound..<body.endIndex),
+              let awaitRange = body.range(of: "await inFlight.settle()", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
-            XCTFail("Expected holdVideoTask = Task, await previousHold?.value, then downgradeFromVideo() in that order"); return
+            XCTFail("Expected holdVideoTask = Task, await inFlight.settle(), then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
             awaitRange.lowerBound, downgradeRange.lowerBound,
@@ -2309,10 +2314,10 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
     /// revoked while the call was on hold). Must mirror the do/catch handling
     /// used by `toggleVideo()` and `actuateSurvivalVideoSend`.
     private func unholdBranchBody(_ source: String) throws -> String {
-        guard let elseRange = source.range(of: "} else {\n            if isVideoSuspendedByHold {") else {
-            XCTFail("unhold branch (`} else { if isVideoSuspendedByHold {`) not found in handleHold"); return ""
+        guard let elseRange = source.range(of: "private func actuateUnholdVideo() async {") else {
+            XCTFail("unhold actuation (`actuateUnholdVideo`) not found next to handleHold"); return ""
         }
-        let end = source.range(of: "\n    }\n\n    // MARK: - DTMF Forwarding", range: elseRange.upperBound..<source.endIndex)?.lowerBound
+        let end = source.range(of: "\n    // MARK: - DTMF Forwarding", range: elseRange.upperBound..<source.endIndex)?.lowerBound
                 ?? source.endIndex
         return String(source[elseRange.lowerBound..<end])
     }
@@ -5494,12 +5499,12 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
 
         XCTAssertTrue(
-            toggleFunc.contains("let previousToggle = videoToggleTask"),
+            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
             "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
             "so the new Task can await its completion."
         )
         XCTAssertTrue(
-            toggleFunc.contains("await previousToggle?.value"),
+            toggleFunc.contains("await inFlight.settle()"),
             "toggleVideo must await the previous toggle task's completion before invoking " +
             "upgradeToVideo/downgradeFromVideo, otherwise two toggles can actuate the " +
             "camera/transceiver concurrently (cancel() alone does not stop in-flight work)."
@@ -5508,19 +5513,19 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         // and the network-survival controller — a hold landing exactly as a manual
         // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
         XCTAssertTrue(
-            toggleFunc.contains("let previousHold = holdVideoTask"),
+            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
         )
         XCTAssertTrue(
-            toggleFunc.contains("await previousHold?.value"),
+            toggleFunc.contains("await inFlight.settle()"),
             "toggleVideo must await the previous hold task's completion too."
         )
         XCTAssertTrue(
-            toggleFunc.contains("let previousSurvival = survivalVideoTask"),
+            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
         )
         XCTAssertTrue(
-            toggleFunc.contains("await previousSurvival?.value"),
+            toggleFunc.contains("await inFlight.settle()"),
             "toggleVideo must await the previous survival task's completion too."
         )
     }
@@ -5630,9 +5635,11 @@ final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
 
     func test_handleSignalOffer_createAnswerFailure_emitsCallEnd() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {", in: source) else {
-            XCTFail("handleSignalOffer(callId:sdp:generation:) not found in CallManager.swift"); return
+        guard let caller = functionBody(of: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {", in: source),
+              let body = functionBody(of: "func answerBufferedOffer(", in: source) else {
+            XCTFail("handleSignalOffer(callId:sdp:generation:) or answerBufferedOffer not found in CallManager.swift"); return
         }
+        XCTAssertTrue(caller.contains("path: .lateOffer)"), "the late offer must answer through answerBufferedOffer")
         XCTAssertTrue(
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
             "handleSignalOffer's late-offer createAnswer failure must emit call:end — " +
@@ -5642,9 +5649,11 @@ final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
 
     func test_answerCall_createAnswerFailure_emitsCallEnd() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "func answerCall() {", in: source) else {
-            XCTFail("answerCall() not found in CallManager.swift"); return
+        guard let caller = functionBody(of: "func answerCall() {", in: source),
+              let body = functionBody(of: "func answerBufferedOffer(", in: source) else {
+            XCTFail("answerCall() or answerBufferedOffer not found in CallManager.swift"); return
         }
+        XCTAssertTrue(caller.contains("self.answerBufferedOffer(remoteOffer,"), "answerCall() must answer through answerBufferedOffer")
         XCTAssertTrue(
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
             "answerCall()'s createAnswer failure and SDP-offer-timeout paths must emit " +
@@ -5654,9 +5663,11 @@ final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
 
     func test_answerCallReady_createAnswerFailure_emitsCallEnd() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "func answerCallReady() async {", in: source) else {
-            XCTFail("answerCallReady() not found in CallManager.swift"); return
+        guard let caller = functionBody(of: "func answerCallReady() async {", in: source),
+              let body = functionBody(of: "func answerBufferedOffer(", in: source) else {
+            XCTFail("answerCallReady() or answerBufferedOffer not found in CallManager.swift"); return
         }
+        XCTAssertTrue(caller.contains("self.answerBufferedOffer(remoteOffer,"), "answerCallReady() must answer through answerBufferedOffer")
         XCTAssertTrue(
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
             "answerCallReady()'s createAnswer failure and SDP-offer-timeout paths must " +
@@ -6512,7 +6523,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousToggle?.value") || body.contains("await previousVideoToggle?.value"),
+            body.contains("await inFlight.settle()") || body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the in-flight videoToggleTask before calling performICERestart() — " +
             "otherwise a manual video toggle and an ICE restart can call createOffer() concurrently."
         )
@@ -6525,7 +6536,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousHold?.value"),
+            body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the in-flight holdVideoTask before calling performICERestart() — " +
             "a CallKit hold and a WiFi↔cellular-triggered ICE restart can otherwise race createOffer()."
         )
@@ -6538,7 +6549,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousSurvival?.value"),
+            body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the in-flight survivalVideoTask before calling performICERestart()."
         )
     }
@@ -6557,7 +6568,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            body.contains("await inFlight.settle()") || body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the PREVIOUS in-flight iceRestartTask (not just .cancel() it) before " +
             "calling performICERestart() — cancellation is cooperative and createOffer() has no isCancelled check."
         )
@@ -6572,7 +6583,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            body.contains("await inFlight.settle()") || body.contains("await inFlight.settle()"),
             "toggleVideo must await the in-flight iceRestartTask before calling createOffer() — otherwise a " +
             "manual A/V toggle landing mid-ICE-restart runs two concurrent renegotiations."
         )
@@ -6584,13 +6595,9 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "func sendDTMF(digits: String) {",
             in: try callManagerSource()
         )
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        let holdBranch = try body(from: "private func suspendVideoForHold(callId: String) {", to: "private func actuateUnholdVideo() async {", in: fullBody)
         XCTAssertTrue(
-            holdBranch.contains("await previousICERestart?.value") || holdBranch.contains("await previousIceRestart?.value"),
+            holdBranch.contains("await inFlight.settle()") || holdBranch.contains("await inFlight.settle()"),
             "handleHold's hold branch must await the in-flight iceRestartTask — a CallKit hold firing during an " +
             "ICE restart (WiFi↔cellular handoff) must not run two concurrent createOffer() calls."
         )
@@ -6602,13 +6609,9 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "func sendDTMF(digits: String) {",
             in: try callManagerSource()
         )
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        let unholdBranch = try body(from: "private func restoreVideoAfterHold(callId: String) {", to: "func sendDTMF(digits: String) {", in: fullBody)
         XCTAssertTrue(
-            unholdBranch.contains("await previousICERestart?.value") || unholdBranch.contains("await previousIceRestart?.value"),
+            unholdBranch.contains("await inFlight.settle()") || unholdBranch.contains("await inFlight.settle()"),
             "handleHold's unhold branch must await the in-flight iceRestartTask before renegotiating."
         )
     }
@@ -6620,7 +6623,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            body.contains("await inFlight.settle()") || body.contains("await inFlight.settle()"),
             "applySurvivalVideoSend must await the in-flight iceRestartTask before actuating a survival " +
             "downgrade/upgrade — a network-quality-triggered ICE restart can otherwise race it."
         )
@@ -6633,7 +6636,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            body.contains("await inFlight.settle()") || body.contains("await inFlight.settle()"),
             "Thermal-critical video downgrade must await the in-flight iceRestartTask, matching the other " +
             "three video-transition sites."
         )
@@ -6709,10 +6712,10 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_handleSignalOffer_connectingBranch_chainsOntoVideoTransitionFamily() throws {
         let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
         for expected in [
-            "await previousToggleConnecting?.value",
-            "await previousHoldConnecting?.value",
-            "await previousSurvivalConnecting?.value",
-            "await previousICERestartConnecting?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6730,10 +6733,10 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_handleSignalOffer_renegotiationBranch_chainsOntoVideoTransitionFamily() throws {
         let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
         for expected in [
-            "await previousToggle?.value",
-            "await previousHold?.value",
-            "await previousSurvival?.value",
-            "await previousICERestart?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6757,7 +6760,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousAnswer?.value"),
+            body.contains("await inFlight.settle()"),
             "toggleVideo must await the in-flight signalOfferAnswerTask before calling createOffer() — " +
             "a peer-initiated renegotiation answer in flight must not race a manual toggle's offer."
         )
@@ -6769,13 +6772,9 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "func sendDTMF(digits: String) {",
             in: try callManagerSource()
         )
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        let holdBranch = try body(from: "private func suspendVideoForHold(callId: String) {", to: "private func actuateUnholdVideo() async {", in: fullBody)
         XCTAssertTrue(
-            holdBranch.contains("await previousAnswer?.value"),
+            holdBranch.contains("await inFlight.settle()"),
             "handleHold's hold branch must await the in-flight signalOfferAnswerTask."
         )
     }
@@ -6786,13 +6785,9 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "func sendDTMF(digits: String) {",
             in: try callManagerSource()
         )
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        let unholdBranch = try body(from: "private func restoreVideoAfterHold(callId: String) {", to: "func sendDTMF(digits: String) {", in: fullBody)
         XCTAssertTrue(
-            unholdBranch.contains("await previousAnswer?.value"),
+            unholdBranch.contains("await inFlight.settle()"),
             "handleHold's unhold branch must await the in-flight signalOfferAnswerTask."
         )
     }
@@ -6804,7 +6799,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousAnswer?.value"),
+            body.contains("await inFlight.settle()"),
             "applySurvivalVideoSend must await the in-flight signalOfferAnswerTask before actuating."
         )
     }
@@ -6816,7 +6811,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousAnswer?.value"),
+            body.contains("await inFlight.settle()"),
             "Thermal-critical video downgrade must await the in-flight signalOfferAnswerTask."
         )
     }
@@ -6828,7 +6823,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousAnswer?.value"),
+            body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the in-flight signalOfferAnswerTask before calling " +
             "performICERestart() — a peer-initiated renegotiation answer can otherwise race it."
         )
@@ -6858,11 +6853,11 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_answerCall_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
         let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
         for expected in [
-            "await previousToggle?.value",
-            "await previousHold?.value",
-            "await previousSurvival?.value",
-            "await previousICERestart?.value",
-            "await previousAnswer?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6880,11 +6875,11 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_answerCallReady_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
         let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
         for expected in [
-            "await previousToggle?.value",
-            "await previousHold?.value",
-            "await previousSurvival?.value",
-            "await previousICERestart?.value",
-            "await previousAnswer?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6923,12 +6918,12 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_switchCamera_chainsOntoVideoTransitionFamily() throws {
         let branch = try body(from: "func switchCamera() {", to: "func refreshAvailableCameras() {", in: try callManagerSource())
         for expected in [
-            "await previousCameraSwitch?.value",
-            "await previousToggle?.value",
-            "await previousHold?.value",
-            "await previousSurvival?.value",
-            "await previousICERestart?.value",
-            "await previousAnswer?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6953,12 +6948,12 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_selectCamera_chainsOntoVideoTransitionFamily() throws {
         let branch = try body(from: "func selectCamera(id: String) {", to: "func toggleTranscription() {", in: try callManagerSource())
         for expected in [
-            "await previousCameraSwitch?.value",
-            "await previousToggle?.value",
-            "await previousHold?.value",
-            "await previousSurvival?.value",
-            "await previousICERestart?.value",
-            "await previousAnswer?.value",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
+            "await inFlight.settle()",
         ] {
             XCTAssertTrue(
                 branch.contains(expected),
@@ -6975,7 +6970,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_toggleVideo_awaitsCameraSwitchTask() throws {
         let body = try body(from: "func toggleVideo() {", to: "func switchCamera() {", in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("await previousCameraSwitch?.value"),
+            body.contains("await inFlight.settle()"),
             "toggleVideo must await the in-flight cameraSwitchTask before calling upgradeToVideo()/" +
             "downgradeFromVideo() — both drive the same RTCCameraVideoCapturer as switchCamera()."
         )
@@ -6983,26 +6978,18 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
 
     func test_handleHold_holdBranch_awaitsCameraSwitchTask() throws {
         let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        let holdBranch = try body(from: "private func suspendVideoForHold(callId: String) {", to: "private func actuateUnholdVideo() async {", in: fullBody)
         XCTAssertTrue(
-            holdBranch.contains("await previousCameraSwitch?.value"),
+            holdBranch.contains("await inFlight.settle()"),
             "handleHold's hold branch must await the in-flight cameraSwitchTask."
         )
     }
 
     func test_handleHold_unholdBranch_awaitsCameraSwitchTask() throws {
         let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
-        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
-            XCTFail("Could not split handleHold into hold/unhold branches")
-            return
-        }
-        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        let unholdBranch = try body(from: "private func restoreVideoAfterHold(callId: String) {", to: "func sendDTMF(digits: String) {", in: fullBody)
         XCTAssertTrue(
-            unholdBranch.contains("await previousCameraSwitch?.value"),
+            unholdBranch.contains("await inFlight.settle()"),
             "handleHold's unhold branch must await the in-flight cameraSwitchTask."
         )
     }
@@ -7014,7 +7001,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousCameraSwitch?.value"),
+            body.contains("await inFlight.settle()"),
             "applySurvivalVideoSend must await the in-flight cameraSwitchTask before actuating."
         )
     }
@@ -7026,7 +7013,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousCameraSwitch?.value"),
+            body.contains("await inFlight.settle()"),
             "Thermal-critical video downgrade must await the in-flight cameraSwitchTask — it is a 6th " +
             "site driving the same capturer, previously missed by an earlier audit's site enumeration."
         )
@@ -7039,7 +7026,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             in: try callManagerSource()
         )
         XCTAssertTrue(
-            body.contains("await previousCameraSwitch?.value"),
+            body.contains("await inFlight.settle()"),
             "scheduleICERestart must await the in-flight cameraSwitchTask before calling performICERestart()."
         )
     }
@@ -7047,7 +7034,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_handleSignalOffer_connectingBranch_awaitsCameraSwitchTask() throws {
         let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
         XCTAssertTrue(
-            branch.contains("await previousCameraSwitchConnecting?.value"),
+            branch.contains("await inFlight.settle()"),
             "handleSignalOffer's .connecting branch must await the in-flight cameraSwitchTask."
         )
     }
@@ -7055,7 +7042,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_handleSignalOffer_renegotiationBranch_awaitsCameraSwitchTask() throws {
         let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
         XCTAssertTrue(
-            branch.contains("await previousCameraSwitch?.value"),
+            branch.contains("await inFlight.settle()"),
             "handleSignalOffer's mid-call renegotiation branch must await the in-flight cameraSwitchTask."
         )
     }
@@ -7063,7 +7050,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_answerCall_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
         let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
         XCTAssertTrue(
-            branch.contains("await previousCameraSwitch?.value"),
+            branch.contains("await inFlight.settle()"),
             "answerCall's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
         )
     }
@@ -7071,7 +7058,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_answerCallReady_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
         let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
         XCTAssertTrue(
-            branch.contains("await previousCameraSwitch?.value"),
+            branch.contains("await inFlight.settle()"),
             "answerCallReady's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
         )
     }

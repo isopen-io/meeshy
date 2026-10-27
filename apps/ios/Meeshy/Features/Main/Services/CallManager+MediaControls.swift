@@ -91,12 +91,7 @@ extension CallManager {
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
         guard !screenShare.isSharing else { return }
-        let previousToggle = videoToggleTask
-        let previousHold = holdVideoTask
-        let previousSurvival = survivalVideoTask
-        let previousICERestart = iceRestartTask
-        let previousAnswer = signalOfferAnswerTask
-        let previousCameraSwitch = cameraSwitchTask
+        let inFlight = videoTransitionsInFlight()
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -115,12 +110,7 @@ extension CallManager {
             // concurrent camera/transceiver/createOffer() actuations and corrupt
             // state (audit finding — ICE restart used to be excluded from this
             // chain, see the doc-comment on `survivalVideoTask`).
-            await previousToggle?.value
-            await previousICERestart?.value
-            await previousHold?.value
-            _ = await previousSurvival?.value
-            await previousAnswer?.value
-            await previousCameraSwitch?.value
+            await inFlight.settle()
             guard let self, !Task.isCancelled else { return }
             guard await self.videoToggleMayActuate(target: target) else { return }
             do {
@@ -280,19 +270,9 @@ extension CallManager {
         // — see the doc-comment on `cameraSwitchTask`/`survivalVideoTask`. Chained
         // (not cancelled) onto the previous cameraSwitchTask so a rapid double-flip
         // still applies both flips in order instead of dropping one.
-        let previousToggle = videoToggleTask
-        let previousHold = holdVideoTask
-        let previousSurvival = survivalVideoTask
-        let previousICERestart = iceRestartTask
-        let previousAnswer = signalOfferAnswerTask
-        let previousCameraSwitch = cameraSwitchTask
+        let inFlight = videoTransitionsInFlight()
         cameraSwitchTask = Task { @MainActor [weak self] in
-            await previousCameraSwitch?.value
-            await previousToggle?.value
-            await previousHold?.value
-            _ = await previousSurvival?.value
-            await previousICERestart?.value
-            await previousAnswer?.value
+            await inFlight.settle()
             guard let self, !Task.isCancelled else { return }
             // Audit finding (Vague 159): mirrors the toggleVideo() guard
             // (Vague 158). A hold or a capture-interruption has RELEASED the
@@ -352,19 +332,9 @@ extension CallManager {
         // Serialize with every other in-flight video-transition/renegotiation path
         // — see the doc-comment on `cameraSwitchTask`/`survivalVideoTask`. Same
         // rationale as `switchCamera()`: this drives the same capturer.
-        let previousToggle = videoToggleTask
-        let previousHold = holdVideoTask
-        let previousSurvival = survivalVideoTask
-        let previousICERestart = iceRestartTask
-        let previousAnswer = signalOfferAnswerTask
-        let previousCameraSwitch = cameraSwitchTask
+        let inFlight = videoTransitionsInFlight()
         cameraSwitchTask = Task { @MainActor [weak self] in
-            await previousCameraSwitch?.value
-            await previousToggle?.value
-            await previousHold?.value
-            _ = await previousSurvival?.value
-            await previousICERestart?.value
-            await previousAnswer?.value
+            await inFlight.settle()
             guard let self, !Task.isCancelled else { return }
             // Audit finding (Vague 159): same guard as switchCamera() above —
             // both drive the same capturer through the same OS-level suspension

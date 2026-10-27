@@ -36,20 +36,10 @@ extension CallManager: ThermalStateMonitorDelegate {
                     // check cancellation mid-flight and two concurrent calls
                     // corrupt state). Route through the same chained-task
                     // pattern as toggleVideo/handleHold/applySurvivalVideoSend.
-                    let previousToggle = self.videoToggleTask
-                    let previousHold = self.holdVideoTask
-                    let previousSurvival = self.survivalVideoTask
-                    let previousICERestart = self.iceRestartTask
-                    let previousAnswer = self.signalOfferAnswerTask
-                    let previousCameraSwitch = self.cameraSwitchTask
+                    let inFlight = self.videoTransitionsInFlight()
                     self.videoToggleTask?.cancel()
                     self.videoToggleTask = Task { @MainActor [weak self] in
-                        await previousToggle?.value
-                        await previousHold?.value
-                        _ = await previousSurvival?.value
-                        await previousICERestart?.value
-                        await previousAnswer?.value
-                        await previousCameraSwitch?.value
+                        await inFlight.settle()
                         guard let self, !Task.isCancelled else { return }
                         // §5.4 — use downgradeFromVideo (sets transceiver direction +
                         // stops capture) rather than enableVideo(false) (track.enabled

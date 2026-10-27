@@ -62,39 +62,14 @@ extension CallManager {
             // coupait à 30 s une liaison ICE simplement lente.
             sdpOfferTimeoutTask?.cancel()
             sdpOfferTimeoutTask = nil
-            let previousToggleConnecting = videoToggleTask
-            let previousHoldConnecting = holdVideoTask
-            let previousSurvivalConnecting = survivalVideoTask
-            let previousICERestartConnecting = iceRestartTask
-            let previousAnswerConnecting = signalOfferAnswerTask
-            let previousCameraSwitchConnecting = cameraSwitchTask
+            let inFlight = videoTransitionsInFlight()
             signalOfferAnswerTask = Task { [weak self] in
                 // Serialize with every other in-flight video-transition/renegotiation
                 // path — see the doc-comment on `survivalVideoTask`.
-                await previousToggleConnecting?.value
-                await previousHoldConnecting?.value
-                _ = await previousSurvivalConnecting?.value
-                await previousICERestartConnecting?.value
-                await previousAnswerConnecting?.value
-                await previousCameraSwitchConnecting?.value
-                guard let self else { return }
-                // Phase 2 fix — Bug 2: wait for local media transceivers before
-                // createAnswer (called concurrently with emitCallJoin).
-                await self.localMediaTask?.value
-                guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
-                    guard self.currentCallId == callId else { return }
-                    // Local SDP generation failure is invisible to the peer — without
-                    // this signal the caller sits in .connecting/.ringing until the
-                    // gateway's CallCleanupService cron reaps the zombie (~60s).
-                    MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    self.failCall("Failed to create SDP answer")
-                    return
-                }
-                guard self.currentCallId == callId else {
-                    Logger.calls.info("[CALL] late-offer answer discarded: call ended during createAnswer")
-                    return
-                }
-                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                await inFlight.settle()
+                guard let self,
+                      await self.answerBufferedOffer(sdp, callId: callId, userId: userId, path: .lateOffer)
+                else { return }
                 Logger.calls.info("SDP answer created from late offer for call: \(callId)")
             }
 
@@ -111,19 +86,9 @@ extension CallManager {
             // restart is mid-createOffer() could run createAnswer() concurrently on
             // the same RTCPeerConnection. Chained onto `signalOfferAnswerTask` — see
             // the doc-comment on `survivalVideoTask`.
-            let previousToggle = videoToggleTask
-            let previousHold = holdVideoTask
-            let previousSurvival = survivalVideoTask
-            let previousICERestart = iceRestartTask
-            let previousAnswer = signalOfferAnswerTask
-            let previousCameraSwitch = cameraSwitchTask
+            let inFlight = videoTransitionsInFlight()
             signalOfferAnswerTask = Task { [weak self] in
-                await previousToggle?.value
-                await previousHold?.value
-                _ = await previousSurvival?.value
-                await previousICERestart?.value
-                await previousAnswer?.value
-                await previousCameraSwitch?.value
+                await inFlight.settle()
                 guard let self else { return }
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
                     guard self.currentCallId == callId else { return }

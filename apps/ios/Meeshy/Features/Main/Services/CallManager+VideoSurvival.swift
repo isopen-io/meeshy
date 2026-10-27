@@ -50,12 +50,7 @@ extension CallManager: VideoSurvivalActuating {
         // a call whose video is already off for an unrelated, visible reason.
         if isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption { return false }
 
-        let previousToggle = videoToggleTask
-        let previousHold = holdVideoTask
-        let previousSurvival = survivalVideoTask
-        let previousICERestart = iceRestartTask
-        let previousAnswer = signalOfferAnswerTask
-        let previousCameraSwitch = cameraSwitchTask
+        let inFlight = videoTransitionsInFlight()
         let task = Task<Bool, Never> { @MainActor [weak self] in
             // Serialize with every other in-flight video-transition path (manual
             // toggle, CallKit hold/unhold, ICE restart, peer-initiated renegotiation
@@ -64,12 +59,7 @@ extension CallManager: VideoSurvivalActuating {
             // transition from starting once a restart is under way, but chaining
             // here too closes the reverse window: an ICE restart beginning while
             // THIS task's own createOffer() is in flight.
-            await previousToggle?.value
-            await previousHold?.value
-            _ = await previousSurvival?.value
-            await previousICERestart?.value
-            await previousAnswer?.value
-            await previousCameraSwitch?.value
+            await inFlight.settle()
             guard let self, !Task.isCancelled else { return false }
             // Re-validate every guard: state may have changed while this transition
             // was queued behind a concurrent manual toggle or CallKit hold.

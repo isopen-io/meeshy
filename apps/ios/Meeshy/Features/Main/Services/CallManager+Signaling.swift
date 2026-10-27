@@ -456,12 +456,10 @@ extension CallManager {
     /// discrète, chaînée derrière les mêmes renégociations que
     /// `scheduleICERestart` (même risque de collision sur `createOffer()`).
     private func restartIceOnLiveCall() {
-        let previous = [videoToggleTask, holdVideoTask, iceRestartTask, signalOfferAnswerTask, cameraSwitchTask]
-        let previousSurvival = survivalVideoTask
+        let inFlight = videoTransitionsInFlight()
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
-            for task in previous { await task?.value }
-            _ = await previousSurvival?.value
+            await inFlight.settle()
             guard let self, !Task.isCancelled, self.callState == .connected,
                   let callId = self.currentCallId, let userId = self.remoteUserId,
                   let offer = await self.webRTCService.performICERestart(),

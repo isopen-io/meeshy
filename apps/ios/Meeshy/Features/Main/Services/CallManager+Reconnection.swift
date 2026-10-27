@@ -107,9 +107,6 @@ extension CallManager {
         // the same moment as a WiFi↔cellular handoff (exactly what a GSM call
         // causes) used to let a hold renegotiation and an ICE-restart
         // renegotiation call createOffer() concurrently.
-        let previousToggle = videoToggleTask
-        let previousHold = holdVideoTask
-        let previousSurvival = survivalVideoTask
         // Also chain onto the PREVIOUS iceRestartTask instance itself, not just
         // `.cancel()` it. Cancellation is cooperative and neither
         // `performICERestart()` nor `createOffer()` check `Task.isCancelled` —
@@ -117,20 +114,13 @@ extension CallManager {
         // `attemptReconnection`'s `.coalesce` path) re-arms this task while the
         // previous one may still be mid-flight inside `createOffer()`, and both
         // can call `pc.offer(for:)`/`setLocalDescription` concurrently.
-        let previousICERestart = iceRestartTask
         // Also chain onto `signalOfferAnswerTask` — a peer-initiated renegotiation
         // offer answered concurrently with this restart's createOffer() hits the
         // same glare hazard. See the doc-comment on `survivalVideoTask`.
-        let previousAnswer = signalOfferAnswerTask
-        let previousCameraSwitch = cameraSwitchTask
+        let inFlight = videoTransitionsInFlight()
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
-            await previousToggle?.value
-            await previousHold?.value
-            _ = await previousSurvival?.value
-            await previousICERestart?.value
-            await previousAnswer?.value
-            await previousCameraSwitch?.value
+            await inFlight.settle()
             // Re-validate after the chained awaits: the call may have ended, or a
             // newer reconnect cycle may have already taken over, while this task
             // was waiting behind another renegotiation.
