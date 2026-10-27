@@ -33,6 +33,11 @@ internal class ChatNavigationActions(
     val hasLocalLiveCall: Boolean,
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
+    /**
+     * La feuille « Partage de position » ouverte par le (i) du sélecteur de lieu. Elle vit dans
+     * `:feature:settings`, que `:feature:chat` ne voit pas : l'application la fournit.
+     */
+    val locationSettingsSheet: @Composable (accent: androidx.compose.ui.graphics.Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
 )
 
 /**
@@ -89,6 +94,8 @@ internal class ChatHostContext(
     val chrome: ChatChromeState = ChatChromeState(),
     /** Le mode de lecture et ses deux gestes (chip de l'en-tête) ; `null` tant qu'il n'est pas résolu. */
     val readingMode: ChatReadingModeBinding? = null,
+    /** Le lieu choisi dans le sélecteur, en attente du prochain envoi. */
+    val pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
 )
 
 /** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
@@ -108,13 +115,14 @@ internal fun rememberChatHostContext(
     navigation: ChatNavigationActions,
     header: ChatHeaderState = ChatHeaderState(),
     readingMode: ChatReadingModeBinding? = null,
+    pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -150,6 +158,8 @@ internal class ChatHostActions(
     val cancelEdit: () -> Unit,
     val cancelReply: () -> Unit,
     val removeClipboardContent: () -> Unit,
+    val setPendingPlace: (me.meeshy.sdk.model.SharedPlace) -> Unit,
+    val clearPendingPlace: () -> Unit,
     val pickFile: (ByteArray, String, String?) -> Unit,
     val removePendingAttachment: (String) -> Unit,
     val stagePendingUris: (List<Uri>) -> Unit,
@@ -233,6 +243,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     cancelEdit = this::cancelEdit,
     cancelReply = this::cancelReply,
     removeClipboardContent = this::removeClipboardContent,
+    setPendingPlace = this::setPendingPlace,
+    clearPendingPlace = this::clearPendingPlace,
     pickFile = this::onPickFile,
     removePendingAttachment = { id -> controllers.find<ComposerTrayController>()?.remove(id) },
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },

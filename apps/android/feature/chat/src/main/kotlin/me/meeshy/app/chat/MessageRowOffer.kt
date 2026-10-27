@@ -31,6 +31,7 @@ internal fun BubbleContent.actionContext(
     hasOpenableFile = !isDeleted && files.isNotEmpty(),
     isEdited = isEdited,
     hasText = text.isNotBlank(),
+    hasPlace = !isDeleted && !isEndToEndSealed && locations.any { it.hasCoordinates },
     hostedEntries = hostedEntries,
     exitOffer = exitOffer,
     isNotice = isSystem,

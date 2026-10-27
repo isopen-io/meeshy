@@ -39,6 +39,7 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
+import me.meeshy.ui.component.location.LocationFullscreen
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -240,6 +241,7 @@ internal fun ChatListHost(
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
+    var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
     val rowActions = remember(actions, bubbleFrames, profileOpener) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
@@ -251,6 +253,7 @@ internal fun ChatListHost(
             onFileClick = { messageId, attachmentId ->
                 actions.onFileAttachmentOpen(messageId, attachmentId)
             },
+            onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
             onFlagTap = { messageId, code -> actions.onFlagTap(messageId, code) },
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
@@ -285,6 +288,14 @@ internal fun ChatListHost(
             }
     }
 
+    openedPlace?.let { opened ->
+        LocationFullscreen(
+            place = opened.place,
+            accentColor = state.accentColorHex ?: DEFAULT_PLACE_ACCENT,
+            senderName = state.messages.firstOrNull { it.messageId == opened.messageId }?.senderName,
+            onDismiss = { openedPlace = null },
+        )
+    }
     Box(modifier = modifier.fillMaxSize()) {
         when {
             state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
@@ -380,6 +391,8 @@ internal fun ChatListHost(
         }
     }
 }
+
+private const val DEFAULT_PLACE_ACCENT = "6366F1"
 
 /** La place réservée au bas du fil pour l'indicateur de frappe qui flotte au-dessus de la barre. */
 private val TYPING_RESERVE = 28.dp

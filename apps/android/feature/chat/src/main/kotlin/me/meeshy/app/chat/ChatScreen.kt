@@ -47,6 +47,8 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
+    locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -65,6 +67,7 @@ fun ChatScreen(
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
     val actions = remember(viewModel) { viewModel.hostActions() }
+    val pendingPlace by viewModel.pendingPlace.collectAsStateWithLifecycle()
     val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
@@ -91,9 +94,11 @@ fun ChatScreen(
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
             callEntry = callEntry,
+            locationSettingsSheet = locationSettingsSheet,
         ),
         header = header,
         readingMode = readingMode,
+        pendingPlace = pendingPlace,
     )
 
     ChatBackgroundHost {

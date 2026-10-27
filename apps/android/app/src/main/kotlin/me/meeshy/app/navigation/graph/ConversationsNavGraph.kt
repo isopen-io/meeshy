@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.app.settings.LocationSharingSettingsSheet
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -203,6 +204,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             // A live local call (minimised/floating) suppresses the rejoin
             // pill — don't offer to rejoin the call this device is in.
             hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
+            locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
         )
     }
     composable(Routes.STARRED) {

@@ -130,6 +130,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
+            onMap = { localRoute.open(MessageDetailRoute.Map(actionTarget.messageId)) },
             canWrite = state.viewerMayWrite,
         )
     }
@@ -237,6 +238,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.Views -> MessageViewsSheet(target, state.conversationId, accentColor, sheetModifier)
                     is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
                     else -> Unit
                 }
             }
@@ -370,7 +372,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
-    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment)
+    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map)
 
 /**
  * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture

@@ -535,6 +535,13 @@ class ChatViewModel @Inject constructor(
     /** Discards a captured large-paste attachment (the preview chip's remove button). */
     fun removeClipboardContent() = composer.removeClipboardContent()
 
+    /** Le lieu choisi, en attente du prochain envoi (son propre flux : l'état de l'écran est gelé). */
+    val pendingPlace: StateFlow<me.meeshy.sdk.model.SharedPlace?> get() = composer.pendingPlace
+
+    fun setPendingPlace(place: me.meeshy.sdk.model.SharedPlace) = composer.setPendingPlace(place)
+
+    fun clearPendingPlace() = composer.clearPendingPlace()
+
     /** Overrides the composer's source language from the language picker. */
     fun onComposerLanguagePicked(code: String) = composer.onComposerLanguagePicked(code)
 

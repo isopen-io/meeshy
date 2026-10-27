@@ -38,6 +38,8 @@ enum class MessageAction {
     History,
     /** Opens the sentiment fiche — only for a message carrying text. */
     Sentiment,
+    /** Opens the map fiche — only for a message carrying a shared place. */
+    Map,
     /** Enters multi-select mode starting from this message. */
     Select,
     /** Exports the message as a shareable card. */
@@ -69,6 +71,8 @@ data class MessageActionContext(
     val isEdited: Boolean = false,
     /** The message carries a non-blank text body (gates sentiment and card export). */
     val hasText: Boolean = false,
+    /** The bubble carries a shared place the map fiche can show. */
+    val hasPlace: Boolean = false,
     /** Which of the detail/selection entries the host can actually serve; inert (empty) by default. */
     val hostedEntries: Set<MessageAction> = emptySet(),
     /** What the message lets out of Meeshy — an exit it refuses is absent from the menu, never greyed out. */
@@ -151,6 +155,7 @@ object MessageActionMenu {
             if (MessageAction.Views in ctx.hostedEntries) add(MessageAction.Views)
             if (MessageAction.History in ctx.hostedEntries && ctx.isEdited) add(MessageAction.History)
             if (MessageAction.Sentiment in ctx.hostedEntries && ctx.hasText) add(MessageAction.Sentiment)
+            if (MessageAction.Map in ctx.hostedEntries && ctx.hasPlace) add(MessageAction.Map)
         }
         // Report is a moderation action against *someone else's* content — offered last, and only
         // for an incoming, still-present message. Diverges from iOS (which appends `.report`

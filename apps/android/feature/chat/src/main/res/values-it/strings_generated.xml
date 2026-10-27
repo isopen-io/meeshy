@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_message_location">posizione condivisa</string>
     <string name="chat_composer_edit_title">Modifica il messaggio</string>
     <string name="chat_composer_reply_a11y">Risposta a %1$s: %2$s</string>
     <string name="chat_composer_reply_file">File</string>
@@ -20,6 +21,7 @@
     <string name="chat_exit_blocked_understood">Ho capito</string>
     <string name="chat_exit_blocked_view_once">È a visualizzazione singola: non si inoltra, non si salva e non si condivide. Resta nella conversazione finché non viene vista.</string>
     <string name="common_cancel">Annulla</string>
+    <string name="common_confirm">Conferma</string>
     <string name="common_send">Invia</string>
     <string name="common_unknown">Sconosciuto</string>
     <string name="composer_a11y_addSelection">Aggiungi la selezione</string>
@@ -28,6 +30,7 @@
     <string name="composer_a11y_recentPhoto">Foto recente</string>
     <string name="composer_a11y_recentVideo">Video recente</string>
     <string name="composer_a11y_selectedState">Selezionato</string>
+    <string name="composer_chip_kind_location">LUOGO</string>
     <string name="composer_drop_unnamedItem">elemento senza nome</string>
     <string name="composer_recent_accessDenied">Accesso alle foto negato</string>
     <string name="composer_recent_accessDenied_hint">Tocca per aprire Impostazioni</string>
@@ -39,6 +42,18 @@
     <string name="composer_recent_grantAccess">Consenti l\'accesso alle foto</string>
     <string name="composer_recent_grantAccess_hint">Per ritrovare qui i tuoi contenuti recenti</string>
     <string name="composer_recent_select">Seleziona</string>
+    <string name="location_geocoding">Ricerca dell\'indirizzo…</string>
+    <string name="location_move_prompt">Sposta la mappa per scegliere</string>
+    <string name="location_precision_badge_around">~100 m</string>
+    <string name="location_precision_badge_city">~10 km</string>
+    <string name="location_precision_badge_exact">Esatta</string>
+    <string name="location_precision_badge_neighborhood">~1 km</string>
+    <string name="location_recenter">Centra sulla mia posizione</string>
+    <string name="location_search_placeholder">Cerca un luogo…</string>
+    <string name="location_settings_open">Impostazioni di condivisione della posizione</string>
+    <string name="location_title">Scegli un luogo</string>
+    <string name="location_unknown">Luogo sconosciuto</string>
+    <string name="message_action_copyAddress">Copia indirizzo</string>
     <string name="message_detail_edits_current">Attuale</string>
     <string name="message_detail_edits_empty">La cronologia delle modifiche appare qui</string>
     <string name="message_detail_edits_history_title">Cronologia</string>
@@ -66,6 +81,7 @@
     <string name="message_detail_views_read_all">Letto da tutti</string>
     <string name="message_detail_views_read_empty">Nessuno ha letto questo messaggio</string>
     <string name="message_detail_views_sent">Inviato</string>
+    <string name="permission_location_denied">Posizione negata — consentila in Impostazioni</string>
     <string name="reading_mode_bubbles_subtitle">Le bolle classiche</string>
     <string name="reading_mode_bubbles_title">Bolle</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Passa alla modalità successiva. Tocco prolungato per l\'elenco delle modalità.</string>

@@ -62,6 +62,8 @@ class ChatHostsSmokeTest {
         cancelEdit = { },
         cancelReply = { },
         removeClipboardContent = { },
+        setPendingPlace = { },
+        clearPendingPlace = { },
         pickFile = { _, _, _ -> },
         removePendingAttachment = { _ -> },
         stagePendingUris = { _ -> },

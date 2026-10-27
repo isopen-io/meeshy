@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_message_location">موقع مشارَك</string>
     <string name="chat_composer_edit_title">تعديل الرسالة</string>
     <string name="chat_composer_reply_a11y">رد على %1$s: %2$s</string>
     <string name="chat_composer_reply_file">ملف</string>
@@ -20,6 +21,7 @@
     <string name="chat_exit_blocked_understood">حسنًا</string>
     <string name="chat_exit_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="common_cancel">إلغاء</string>
+    <string name="common_confirm">تأكيد</string>
     <string name="common_send">إرسال</string>
     <string name="common_unknown">غير معروف</string>
     <string name="composer_a11y_addSelection">إضافة التحديد</string>
@@ -28,6 +30,7 @@
     <string name="composer_a11y_recentPhoto">صورة حديثة</string>
     <string name="composer_a11y_recentVideo">فيديو حديث</string>
     <string name="composer_a11y_selectedState">محدّد</string>
+    <string name="composer_chip_kind_location">موقع</string>
     <string name="composer_drop_unnamedItem">عنصر بلا اسم</string>
     <string name="composer_recent_accessDenied">تم رفض الوصول إلى الصور</string>
     <string name="composer_recent_accessDenied_hint">اضغط لفتح الإعدادات</string>
@@ -39,6 +42,18 @@
     <string name="composer_recent_grantAccess">السماح بالوصول إلى الصور</string>
     <string name="composer_recent_grantAccess_hint">لعرض وسائطك الأخيرة هنا</string>
     <string name="composer_recent_select">تحديد</string>
+    <string name="location_geocoding">جارٍ البحث عن العنوان…</string>
+    <string name="location_move_prompt">حرّك الخريطة للاختيار</string>
+    <string name="location_precision_badge_around">~100 م</string>
+    <string name="location_precision_badge_city">~10 كم</string>
+    <string name="location_precision_badge_exact">دقيقة</string>
+    <string name="location_precision_badge_neighborhood">~1 كم</string>
+    <string name="location_recenter">التوسيط على موقعي</string>
+    <string name="location_search_placeholder">البحث عن مكان…</string>
+    <string name="location_settings_open">إعدادات مشاركة الموقع</string>
+    <string name="location_title">اختيار مكان</string>
+    <string name="location_unknown">مكان غير معروف</string>
+    <string name="message_action_copyAddress">نسخ العنوان</string>
     <string name="message_detail_edits_current">الحالي</string>
     <string name="message_detail_edits_empty">يظهر سجل التعديلات هنا</string>
     <string name="message_detail_edits_history_title">السجل</string>
@@ -66,6 +81,7 @@
     <string name="message_detail_views_read_all">قرأه الجميع</string>
     <string name="message_detail_views_read_empty">لم يقرأ أحد هذه الرسالة</string>
     <string name="message_detail_views_sent">أُرسل</string>
+    <string name="permission_location_denied">تم رفض الموقع — اسمح به من الإعدادات</string>
     <string name="reading_mode_bubbles_subtitle">الفقاعات الكلاسيكية</string>
     <string name="reading_mode_bubbles_title">فقاعات</string>
     <string name="reading_mode_chip_a11y_hint_cycle">ينتقل إلى الوضع التالي. اضغط مطولاً لعرض قائمة الأوضاع.</string>

@@ -5,7 +5,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -34,6 +36,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.location.ComposerSendEligibility
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.TypedEmojis
@@ -307,12 +311,26 @@ internal class ChatComposerController(
         stopTypingEmission()
     }
 
+    private val _pendingPlace = MutableStateFlow<SharedPlace?>(null)
+
+    /** Le lieu choisi attend le prochain envoi, comme la pastille « lieu » du plateau iOS. */
+    val pendingPlace: StateFlow<SharedPlace?> = _pendingPlace.asStateFlow()
+
+    fun setPendingPlace(place: SharedPlace) {
+        _pendingPlace.value = place
+    }
+
+    fun clearPendingPlace() {
+        _pendingPlace.value = null
+    }
+
     fun send() {
         val text = composerText.text.trim()
         val clipboard = state.value.clipboardContent
+        val place = _pendingPlace.value
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
-        if (text.isEmpty() && clipboard == null && !hasStaged) return
+        if (!ComposerSendEligibility.canSend(text, hasStaged || clipboard != null, place != null)) return
         // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device.
         if (state.value.isEndToEnd) return
         stopTypingEmission()
@@ -337,6 +355,7 @@ internal class ChatComposerController(
             state.value.slowModeState(sentAtMillis),
         )
         if (!gate.allowed) return
+        if (place != null && !ComposerSendGate.evaluate(ComposerSendKind.LOCATION, state.value.composerAffordances, state.value.slowModeState(sentAtMillis)).allowed) return
         if (!stagedKindsAllowed(tray, sentAtMillis)) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = state.value.replyingToMessageId
@@ -357,6 +376,7 @@ internal class ChatComposerController(
                 composerLanguage = ComposerLanguageState(),
             )
         }
+        _pendingPlace.value = null
         persistDraft("", replyToId = null)
         recordTypedEmojis(text)
         scope.launch {
@@ -367,6 +387,18 @@ internal class ChatComposerController(
                     senderLanguage = LanguageResolver.resolveUserLanguage(user),
                     identifier = languageIdentifier,
                 )
+                // Un lieu qui voyage avec des pièces ou un collage part en message à lui, d'abord :
+                // le texte et les pièces gardent leur envoi, le lieu n'est jamais perdu.
+                val placeAlone = place != null && (batch != null || clipboard != null)
+                if (placeAlone) {
+                    messageRepository.sendOptimistic(
+                        conversationId = conversationId,
+                        content = "",
+                        originalLanguage = sentLanguage,
+                        sender = user,
+                        location = place,
+                    )
+                }
                 if (batch != null) {
                     if (clipboard != null) sendClipboardContent(text, clipboard, user, replyToId, effects)
                     sendStagedBatch(
@@ -383,6 +415,7 @@ internal class ChatComposerController(
                         sender = user,
                         replyToId = replyToId,
                         effects = effects,
+                        location = place.takeUnless { placeAlone },
                     )
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
@@ -390,6 +423,7 @@ internal class ChatComposerController(
                 throw e
             } catch (e: Exception) {
                 state.update { it.copy(errorMessage = e.message) }
+                if (_pendingPlace.value == null) _pendingPlace.value = place
             }
         }
     }

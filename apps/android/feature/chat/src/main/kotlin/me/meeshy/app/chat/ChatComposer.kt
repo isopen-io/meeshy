@@ -96,6 +96,8 @@ internal fun ChatComposer(
     onQuickEmoji: ((String) -> Unit)? = null,
     pendingSlot: (@Composable () -> Unit)? = null,
     pendingAttachmentCount: Int = 0,
+    /** Ouvre le sélecteur de lieu ; `null` = la tuile « Lieu » n'est pas offerte. */
+    onLocationRequest: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
@@ -142,10 +144,8 @@ internal fun ChatComposer(
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
-    // Camera and Emoji joined the ladder in #3738; Location stays off until the gateway's shared-place
-    // wire field has a producer in Android's message model.
-    val ladderTiles = remember(affordances) {
-        ComposerAttachmentLadder.tiles(affordances, hasRecentMediaStrip = true, showCamera = true, showLocation = false, showEmoji = true)
+    val ladderTiles = remember(affordances, onLocationRequest != null) {
+        ComposerAttachmentLadder.tiles(affordances, hasRecentMediaStrip = true, showCamera = true, showLocation = onLocationRequest != null, showEmoji = true)
     }
     // Cursor-aware mirror of `draft` so the Emoji tile inserts at the caret; `draft` stays the source of truth.
     var fieldValue by remember { mutableStateOf(TextFieldValue(draft, selection = TextRange(draft.length))) }
@@ -488,7 +488,7 @@ internal fun ChatComposer(
                                 AttachmentTileKind.Voice -> voice.request()
                                 AttachmentTileKind.Camera -> cameraChooserOpen = true
                                 AttachmentTileKind.Emoji -> emojiPickerOpen = true
-                                AttachmentTileKind.Location -> Unit
+                                AttachmentTileKind.Location -> onLocationRequest?.invoke()
                             }
                         },
                     )

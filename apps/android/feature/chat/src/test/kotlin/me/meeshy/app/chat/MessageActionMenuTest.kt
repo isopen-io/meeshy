@@ -22,6 +22,7 @@ class MessageActionMenuTest {
         hasOpenableFile: Boolean = false,
         isEdited: Boolean = false,
         hasText: Boolean = true,
+        hasPlace: Boolean = false,
         hostedEntries: Set<MessageAction> = emptySet(),
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     ) = MessageActionContext(
@@ -38,6 +39,7 @@ class MessageActionMenuTest {
         hasOpenableFile = hasOpenableFile,
         isEdited = isEdited,
         hasText = hasText,
+        hasPlace = hasPlace,
         hostedEntries = hostedEntries,
         exitOffer = exitOffer,
     )
@@ -352,6 +354,15 @@ class MessageActionMenuTest {
     }
 
     // MARK: - detail / selection entries
+
+    @Test
+    fun a_message_with_a_place_offers_the_map_fiche_once_hosted() {
+        val hosted = setOf(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true, hostedEntries = hosted))).contains(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = false, hostedEntries = hosted))).doesNotContain(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true))).doesNotContain(MessageAction.Map)
+        assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.Map)
+    }
 
     private val allHosted = setOf(
         MessageAction.Views, MessageAction.History, MessageAction.Sentiment,

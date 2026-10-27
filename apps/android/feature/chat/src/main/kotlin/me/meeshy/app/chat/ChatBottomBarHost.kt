@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
@@ -24,6 +27,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
         state.messages.firstOrNull { it.messageId == id }?.let { it.originalText ?: it.text }
     }
     val context = LocalContext.current
+    var pickerOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(actions.trayNotices) {
         actions.trayNotices.collect { notice -> Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
@@ -37,8 +41,10 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
         ChatComposer(
             draft = composerText.text,
             draftRevision = composerText.revision,
-            canSend = composerText.hasText || state.clipboardContent != null || (!pending.isEmpty && !pending.hasPreparing),
-            hasPendingAttachments = !pending.isEmpty,
+            canSend = composerText.hasText || state.clipboardContent != null || host.pendingPlace != null ||
+                (!pending.isEmpty && !pending.hasPreparing),
+            hasPendingAttachments = !pending.isEmpty || host.pendingPlace != null,
+            onLocationRequest = { pickerOpen = true },
             onPickUris = actions.stagePendingUris,
             isEditing = state.isEditing,
             affordances = state.composerAffordances,
@@ -57,13 +63,18 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
                 actions.onDraftChange(emoji)
                 actions.send()
             },
-            pendingSlot = if (pending.items.isEmpty()) null else {
+            pendingSlot = if (pending.items.isEmpty() && host.pendingPlace == null) null else {
                 {
-                    ComposerPendingStrip(
-                        pending.items,
-                        onRemove = actions.removePendingAttachment,
-                        onEdit = editPending,
-                    )
+                    Column {
+                        ComposerPlaceChip(host.pendingPlace, accentColor, onRemove = actions.clearPendingPlace)
+                        if (pending.items.isNotEmpty()) {
+                            ComposerPendingStrip(
+                                pending.items,
+                                onRemove = actions.removePendingAttachment,
+                                onEdit = editPending,
+                            )
+                        }
+                    }
                 }
             },
             canMinimize = false,
@@ -80,6 +91,14 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,
             onPickFile = actions.pickFile,
+        )
+    }
+    if (pickerOpen) {
+        LocationPickerDialog(
+            accent = accentColor,
+            settingsSheet = host.navigation.locationSettingsSheet,
+            onSelect = actions.setPendingPlace,
+            onDismiss = { pickerOpen = false },
         )
     }
 }

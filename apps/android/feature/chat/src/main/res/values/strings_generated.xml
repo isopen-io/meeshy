@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_message_location">shared location</string>
     <string name="chat_composer_edit_title">Edit the message</string>
     <string name="chat_composer_reply_a11y">Replying to %1$s: %2$s</string>
     <string name="chat_composer_reply_file">File</string>
@@ -20,6 +21,7 @@
     <string name="chat_exit_blocked_understood">Got it</string>
     <string name="chat_exit_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
     <string name="common_cancel">Cancel</string>
+    <string name="common_confirm">Confirm</string>
     <string name="common_send">Send</string>
     <string name="common_unknown">Unknown</string>
     <string name="composer_a11y_addSelection">Add selection</string>
@@ -28,6 +30,7 @@
     <string name="composer_a11y_recentPhoto">Recent photo</string>
     <string name="composer_a11y_recentVideo">Recent video</string>
     <string name="composer_a11y_selectedState">Selected</string>
+    <string name="composer_chip_kind_location">PLACE</string>
     <string name="composer_drop_unnamedItem">unnamed item</string>
     <string name="composer_recent_accessDenied">Photo access denied</string>
     <string name="composer_recent_accessDenied_hint">Tap to open Settings</string>
@@ -39,6 +42,18 @@
     <string name="composer_recent_grantAccess">Allow photo access</string>
     <string name="composer_recent_grantAccess_hint">To find your recent media here</string>
     <string name="composer_recent_select">Select</string>
+    <string name="location_geocoding">Looking up the address…</string>
+    <string name="location_move_prompt">Move the map to choose</string>
+    <string name="location_precision_badge_around">~100 m</string>
+    <string name="location_precision_badge_city">~10 km</string>
+    <string name="location_precision_badge_exact">Exact</string>
+    <string name="location_precision_badge_neighborhood">~1 km</string>
+    <string name="location_recenter">Recenter on my location</string>
+    <string name="location_search_placeholder">Search for a place…</string>
+    <string name="location_settings_open">Location sharing settings</string>
+    <string name="location_title">Choose a place</string>
+    <string name="location_unknown">Unknown place</string>
+    <string name="message_action_copyAddress">Copy address</string>
     <string name="message_detail_edits_current">Current</string>
     <string name="message_detail_edits_empty">The edit history appears here</string>
     <string name="message_detail_edits_history_title">History</string>
@@ -66,6 +81,7 @@
     <string name="message_detail_views_read_all">Read by everyone</string>
     <string name="message_detail_views_read_empty">No one has read this message</string>
     <string name="message_detail_views_sent">Sent</string>
+    <string name="permission_location_denied">Location denied — allow it in Settings</string>
     <string name="reading_mode_bubbles_subtitle">The classic bubbles</string>
     <string name="reading_mode_bubbles_title">Bubbles</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Switches to the next mode. Long press for the list of modes.</string>

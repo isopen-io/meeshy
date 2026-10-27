@@ -27,6 +27,7 @@ import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
@@ -526,6 +527,61 @@ class ChatComposerControllerTest {
         assertThat(state.isEndToEnd).isFalse()
         assertThat(state.composerAffordances.canSendText).isTrue()
         assertThat(state.viewerMayWrite).isTrue()
+    }
+
+    // --- shared place (#13316) -----------------------------------------------------------------
+
+    private val tourEiffel = SharedPlace(48.8584, 2.2945, "Tour Eiffel", "Paris", "landmark")
+
+    @Test
+    fun `a place alone is sendable — empty text, the place rides the request`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+        assertThat(r.controller.pendingPlace.value).isNull()
+    }
+
+    @Test
+    fun `a place with text travels on the same message`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("rendez-vous ici")
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "rendez-vous ici", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+    }
+
+    @Test
+    fun `removing the pending place leaves nothing to send`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+        r.controller.clearPendingPlace()
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation sends no place — fail closed`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     private companion object {

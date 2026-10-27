@@ -49,6 +49,8 @@ internal class ChatMessageRowActions(
     val onReactionLongPress: (messageId: String) -> Unit = {},
     val onImageClick: (messageId: String, imageIndex: Int) -> Unit = { _, _ -> },
     val onFileClick: (messageId: String, attachmentId: String?) -> Unit = { _, _ -> },
+    /** Tap sur la carte d'un lieu partagé : la carte plein écran s'ouvre. */
+    val onLocationClick: (messageId: String, location: me.meeshy.ui.component.bubble.BubbleLocation) -> Unit = { _, _ -> },
     val onReplyPreviewClick: (messageId: String) -> Unit = {},
     val onFlagTap: (messageId: String, code: String) -> Unit = { _, _ -> },
     val onReplyCountTap: (messageId: String) -> Unit = {},
@@ -113,9 +115,7 @@ internal fun ChatMessageRow(
             onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
             onReactionLongPress = { actions.onReactionLongPress(messageId) },
             onImageClick = { index -> actions.onImageClick(messageId, index) },
-            onLocationClick = { location ->
-                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
-            },
+            onLocationClick = { location -> actions.onLocationClick(messageId, location) },
             onAudioClick = { audio -> audioPlayer?.toggle(audio) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
@@ -270,5 +270,19 @@ private fun rememberFlatRowFocus(bubble: BubbleContent, scale: Float, actions: C
             onShowMessageInfo = { actions.onLongPress(messageId) },
             onShowTranslationDetail = { actions.onTranslationDetail(messageId) },
         )
+    }
+}
+
+/** Le lieu d'une bulle ouvert en plein écran : la bulle qui le porte et le lieu, tel que rendu. */
+internal data class OpenedPlace(val messageId: String, val place: me.meeshy.sdk.model.SharedPlace) {
+    companion object {
+        fun of(messageId: String, location: me.meeshy.ui.component.bubble.BubbleLocation): OpenedPlace? {
+            val lat = location.latitude ?: return null
+            val lon = location.longitude ?: return null
+            return OpenedPlace(
+                messageId,
+                me.meeshy.sdk.model.SharedPlace(lat, lon, location.placeName, location.address),
+            )
+        }
     }
 }
