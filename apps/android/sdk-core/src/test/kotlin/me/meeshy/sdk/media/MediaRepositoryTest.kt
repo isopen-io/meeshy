@@ -21,7 +21,7 @@ class MediaRepositoryTest {
 
     private fun repository() = MediaRepository(api, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined))
 
-    private fun item(name: String = "photo.jpg", mime: String = "image/jpeg") =
+    private fun item(name: String = "photo.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
 
 
@@ -136,7 +136,7 @@ class MediaRepositoryTest {
         coEvery { api.upload(capture(captured)) } returns
             ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
 
-        repository().upload(listOf(item("one.jpg"), item("two.png", "image/png")))
+        repository().upload(listOf(item("one.jpg"), item("two.bin", "application/pdf")))
 
         assertThat(captured.captured).hasSize(2)
         val disposition = captured.captured[0].headers?.get("Content-Disposition").orEmpty()
