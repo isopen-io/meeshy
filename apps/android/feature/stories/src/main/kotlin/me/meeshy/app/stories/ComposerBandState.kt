@@ -16,6 +16,7 @@ internal object ComposerBandTools {
         StoryToolMode.MEDIA,
         StoryToolMode.TEXT,
         StoryToolMode.DRAWING,
+        StoryToolMode.AUDIO,
         StoryToolMode.TEXTURE,
     )
 
@@ -23,11 +24,18 @@ internal object ComposerBandTools {
     val served: List<StoryToolMode> = StoryToolMode.served(withPanel)
 
     /** Number of elements each tool carries on the selected slide (0 hides the badge). */
-    fun badges(mediaCount: Int, textCount: Int, strokeCount: Int, hasBackground: Boolean): Map<StoryToolMode, Int> =
+    fun badges(
+        mediaCount: Int,
+        textCount: Int,
+        strokeCount: Int,
+        hasBackground: Boolean,
+        soundCount: Int = 0,
+    ): Map<StoryToolMode, Int> =
         mapOf(
             StoryToolMode.MEDIA to mediaCount,
             StoryToolMode.TEXT to textCount,
             StoryToolMode.DRAWING to strokeCount,
+            StoryToolMode.AUDIO to soundCount,
             StoryToolMode.TEXTURE to if (hasBackground) 1 else 0,
         )
 

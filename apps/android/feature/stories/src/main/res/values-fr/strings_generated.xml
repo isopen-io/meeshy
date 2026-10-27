@@ -20,6 +20,10 @@
     <string name="composer_audience_sub_private">Vous seul — rien n\'est publié</string>
     <string name="composer_audience_sub_public">Tout le monde, y compris hors abonnés</string>
     <string name="composer_audience_title">Audience</string>
+    <string name="composer_audio_delete_action">Supprimer le son</string>
+    <string name="composer_capture_sound_mute">Couper le son</string>
+    <string name="composer_capture_sound_unmute">Réactiver le son</string>
+    <string name="composer_capture_tool_sound">Son</string>
     <string name="composer_object_editor_adjust_blur">Flou</string>
     <string name="composer_object_editor_adjust_brightness">Luminosité</string>
     <string name="composer_object_editor_adjust_contrast">Contraste</string>
@@ -36,6 +40,7 @@
     <string name="composer_publish_as_storyAndReel">Publier la story et le réel</string>
     <string name="composer_socle_audience">Audience</string>
     <string name="composer_socle_publish">Publier</string>
+    <string name="composer_sound_background_a11y">Son de fond</string>
     <string name="my_stories_archive_empty_subtitle">Vos stories expirées rejoindront cette archive.</string>
     <string name="my_stories_archive_empty_title">Aucune archive</string>
     <string name="my_stories_back">Retour</string>
@@ -160,6 +165,7 @@
     <string name="stories_visibility_only">Seulement…</string>
     <string name="stories_visibility_private">Moi seul</string>
     <string name="stories_visibility_public">Public</string>
+    <string name="story_composer_cancel">Annuler</string>
     <string name="story_composer_fab_badge">%d élément(s) actif(s)</string>
     <string name="story_composer_fab_badge_none">Aucun élément</string>
     <string name="story_composer_fab_hint_close">Touchez deux fois pour fermer.</string>
@@ -169,6 +175,7 @@
     <string name="story_composer_grabber_hint_dismiss">Faites glisser vers le bas pour réduire ou fermer.</string>
     <string name="story_composer_grabber_hint_resize">Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou fermer.</string>
     <string name="story_composer_redo">Rétablir</string>
+    <string name="story_composer_soundLibrary">Bibliothèque</string>
     <string name="story_composer_undo">Annuler</string>
     <string name="story_media_accessibility">Accessibilité</string>
     <string name="story_media_alt_a11yHint">Décrit ce média aux personnes qui utilisent VoiceOver.</string>
@@ -189,6 +196,44 @@
     </plurals>
     <string name="story_send_search_hint">Rechercher une conversation...</string>
     <string name="story_send_sent">Envoyé</string>
+    <string name="story_sound_library_clearSearch">Effacer la recherche</string>
+    <string name="story_sound_library_emptyMine">Vos sons apparaîtront ici dès que vous publierez une story avec un audio original.</string>
+    <string name="story_sound_library_emptySearch">Aucun son ne correspond à cette recherche.</string>
+    <string name="story_sound_library_emptyTrending">Aucun son public pour le moment.</string>
+    <string name="story_sound_library_mine">Mes sons</string>
+    <string name="story_sound_library_play">Écouter</string>
+    <plurals name="story_sound_library_playCount">
+        <item quantity="one">%d lecture</item>
+        <item quantity="many">%d lectures</item>
+        <item quantity="other">%d lectures</item>
+    </plurals>
+    <plurals name="story_sound_library_postCount">
+        <item quantity="one">%d publication</item>
+        <item quantity="many">%d publications</item>
+        <item quantity="other">%d publications</item>
+    </plurals>
+    <string name="story_sound_library_preparing">Préparation…</string>
+    <string name="story_sound_library_remove">Retirer de ma bibliothèque</string>
+    <string name="story_sound_library_removeConfirm">Retirer</string>
+    <string name="story_sound_library_removeFailed">Le son n\'a pas pu être retiré. Réessayez.</string>
+    <string name="story_sound_library_removeMessageUnused">Ce son disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une publication.</string>
+    <plurals name="story_sound_library_removeMessageUsed">
+        <item quantity="one">%d publication l\'utilise encore : elle continuera de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication.</item>
+        <item quantity="many">%d publications l\'utilisent encore : elles continueront de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication.</item>
+        <item quantity="other">%d publications l\'utilisent encore : elles continueront de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication.</item>
+    </plurals>
+    <string name="story_sound_library_removeTitle">Retirer ce son de votre bibliothèque ?</string>
+    <string name="story_sound_library_rename">Renommer</string>
+    <string name="story_sound_library_renameConfirm">Enregistrer</string>
+    <string name="story_sound_library_renameHint">Ce titre sera visible par tous ceux qui découvrent ce son. Laissez vide pour revenir au libellé par défaut.</string>
+    <string name="story_sound_library_renamePlaceholder">Titre</string>
+    <string name="story_sound_library_renameTitle">Nommer ce son</string>
+    <string name="story_sound_library_search">Rechercher un son ou un auteur</string>
+    <string name="story_sound_library_stop">Arrêter</string>
+    <string name="story_sound_library_title">Choisir un son</string>
+    <string name="story_sound_library_trending">Tendances</string>
+    <string name="story_sound_library_untitled">Son original</string>
+    <string name="story_sound_library_use">Utiliser</string>
     <string name="story_tool_audio">Son</string>
     <string name="story_tool_drawing">Dessin</string>
     <string name="story_tool_media">Médias</string>
