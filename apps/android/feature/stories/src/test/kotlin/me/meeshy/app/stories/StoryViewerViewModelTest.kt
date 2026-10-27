@@ -1115,6 +1115,26 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a sound borrowed from the library plays from its mediaURL, resolved against the gateway origin`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(
+                        id = "borrowed-s1",
+                        postMediaId = "",
+                        isBackground = true,
+                        mediaURL = "/api/v1/static/s1.m4a",
+                        soundId = "s1",
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("https://gate.meeshy.me/api/v1/static/s1.m4a")
+    }
+
+    @Test
     fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),

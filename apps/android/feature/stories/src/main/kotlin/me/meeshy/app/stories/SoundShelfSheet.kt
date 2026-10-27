@@ -101,6 +101,7 @@ internal fun SoundShelfSheet(
             ShelfContent(
                 state = state,
                 preview = preview,
+                playableUrl = viewModel::playableUrl,
                 onUse = { sound ->
                     preview.stop()
                     onUse(sound)
@@ -183,6 +184,7 @@ private fun ShelfSearch(query: String, onChange: (String) -> Unit) {
 private fun ShelfContent(
     state: SoundShelfState,
     preview: SoundPreviewController,
+    playableUrl: (ApiSound) -> String,
     onUse: (ApiSound) -> Unit,
     onRename: (ApiSound) -> Unit,
     onRemove: (ApiSound) -> Unit,
@@ -202,7 +204,7 @@ private fun ShelfContent(
                         isMine = state.canRename,
                         isPlaying = preview.state.isPlaying(sound.id),
                         isPreparing = preview.state.isPreparing(sound.id),
-                        onTogglePreview = { haptics.light(); preview.toggle(sound) },
+                        onTogglePreview = { haptics.light(); preview.toggle(sound, playableUrl(sound)) },
                         onRename = if (state.canRename) ({ onRename(sound) }) else null,
                         onRemove = if (state.canRemove) ({ onRemove(sound) }) else null,
                         onUse = { haptics.light(); onUse(sound) },

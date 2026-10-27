@@ -813,8 +813,12 @@ class StoryViewerViewModel @Inject constructor(
     private fun StoryItem.resolveAudioTrack(preferBackground: Boolean): AudioTrack? {
         val match = storyEffects?.audioPlayerObjects.orEmpty()
             .firstOrNull { (it.isBackground == true) == preferBackground }
-        val fromObject = match?.postMediaId
-            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
+        // Un son EMPRUNTÉ à la bibliothèque n'a aucun média de post (`postMediaId` vide) : il voyage par son
+        // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent.
+        val fromObject = (
+            match?.postMediaId?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
+                ?: match?.mediaURL?.takeIf { it.isNotBlank() }
+            )
             ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         if (fromObject != null) {
             return AudioTrack(

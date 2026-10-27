@@ -41,11 +41,12 @@ class SoundPreviewController internal constructor(private val context: android.c
 
     private var player: ExoPlayer? = null
 
-    fun toggle(sound: ApiSound) {
+    /** [url] est l'adresse CHARGEABLE du son (`resolveMediaUrl`) : la passerelle sert un chemin relatif. */
+    fun toggle(sound: ApiSound, url: String) {
         val outcome = SoundPreviewLaw.toggle(state, sound.id, instant = false)
         state = outcome.state
         when (val command = outcome.command) {
-            is SoundPreviewCommand.Start -> start(sound, command.id)
+            is SoundPreviewCommand.Start -> start(url, command.id)
             SoundPreviewCommand.Stop -> releasePlayer()
             SoundPreviewCommand.None -> Unit
         }
@@ -63,11 +64,11 @@ class SoundPreviewController internal constructor(private val context: android.c
         releasePlayer()
     }
 
-    private fun start(sound: ApiSound, id: String) {
+    private fun start(url: String, id: String) {
         releasePlayer()
         val cache = MeeshyMediaCache.get(context)
         player = ExoPlayer.Builder(context)
-            .setMediaSourceFactory(cache.mediaSourceFactory(MediaCacheCategory.AUDIO, sound.fileUrl))
+            .setMediaSourceFactory(cache.mediaSourceFactory(MediaCacheCategory.AUDIO, url))
             .build().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -88,7 +89,7 @@ class SoundPreviewController internal constructor(private val context: android.c
                         override fun onPlayerError(error: PlaybackException) = end(id)
                     },
                 )
-                setMediaItem(MediaItem.fromUri(sound.fileUrl))
+                setMediaItem(MediaItem.fromUri(url))
                 playWhenReady = true
                 prepare()
             }
