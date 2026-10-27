@@ -27,12 +27,31 @@ class LocationPrecisionTest {
     }
 
     @Test
-    fun `around arrondit a 3 decimales et garde nom et adresse`() {
-        val out = LocationPrecision.AROUND.coarsen(paris)
+    fun `around arrondit a 3 decimales et ne laisse partir ni nom ni adresse ni categorie exacts`() {
+        val names = PlaceCoarseNames(subLocality = "Gros-Caillou", locality = "Paris", country = "France")
+        val out = LocationPrecision.AROUND.coarsen(paris, names)
         assertThat(out.latitude).isEqualTo(48.857)
         assertThat(out.longitude).isEqualTo(2.352)
-        assertThat(out.name).isEqualTo("Tour Eiffel")
-        assertThat(out.category).isEqualTo("monument")
+        assertThat(out.name).isEqualTo("Gros-Caillou")
+        assertThat(out.address).isEqualTo("Paris, France")
+        assertThat(out.category).isNull()
+    }
+
+    @Test
+    fun `around sans composant geographique ne porte que les coordonnees arrondies`() {
+        val out = LocationPrecision.AROUND.coarsen(paris)
+        assertThat(out).isEqualTo(SharedPlace(48.857, 2.352, null, null, null))
+    }
+
+    @Test
+    fun `seul exact transmet la rue, le nom et la categorie du point choisi`() {
+        val names = PlaceCoarseNames(subLocality = "Gros-Caillou", locality = "Paris", country = "France")
+        LocationPrecision.entries.filter { it != LocationPrecision.EXACT }.forEach { precision ->
+            val out = precision.coarsen(paris, names)
+            assertThat(out.name).isNotEqualTo(paris.name)
+            assertThat(out.address).isNotEqualTo(paris.address)
+            assertThat(out.category).isNull()
+        }
     }
 
     @Test

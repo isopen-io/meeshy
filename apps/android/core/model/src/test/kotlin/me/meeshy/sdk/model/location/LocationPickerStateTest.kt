@@ -78,6 +78,20 @@ class LocationPickerStateTest {
     }
 
     @Test
+    fun `un lieu nomme confirme a environ 100 m ne livre ni son nom ni sa rue ni sa categorie`() {
+        val names = PlaceCoarseNames(subLocality = "Gros-Caillou", locality = "Paris", country = "France")
+        val s = LocationPickerState()
+            .chosen(LocationSearchResult(paris, "Chez Marcel", "12 rue Cler, 75007 Paris", "restaurant"))
+            .geocoded(paris, "12 rue Cler, 75007 Paris", names)
+
+        val sent = s.place(LocationPrecision.AROUND)!!
+
+        assertThat(sent.name).isEqualTo("Gros-Caillou")
+        assertThat(sent.address).isEqualTo("Paris, France")
+        assertThat(sent.category).isNull()
+    }
+
+    @Test
     fun `sans point choisi il n'y a rien a envoyer`() {
         assertThat(LocationPickerState().place(LocationPrecision.EXACT)).isNull()
     }
