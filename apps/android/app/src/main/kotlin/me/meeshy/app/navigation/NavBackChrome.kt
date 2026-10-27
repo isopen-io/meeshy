@@ -11,19 +11,31 @@ import me.meeshy.app.navigation.graph.LinksRoutes
  *
  *  - [ROOT]  : une racine, aucune flèche (liste des conversations, flux, connexion).
  *  - [ARROW] : un écran empilé, flèche « < » en haut à gauche ET glissé depuis le bord.
- *  - [MODAL] : plein écran immersif ou feuille (lecteurs, appel, signalement) : iOS les ferme par une croix, un
- *    bouton de feuille ou un glissé vers le bas, jamais par une flèche, et le glissé du bord y est fermé.
+ *  - [MODAL] : une feuille ou un plein écran : boutons texte (Annuler / OK / Valider) ou croix, jamais de flèche,
+ *    et le glissé du bord y est fermé.
  */
 internal enum class BackChrome { ROOT, ARROW, MODAL }
 
 /**
- * Une route du graphe : son écriture dans les sources ([source], pour le témoin), sa valeur, son rôle, et le fichier
- * qui porte la flèche d'un [BackChrome.ARROW] ([evidence], relatif à `apps/android`).
+ * Comment iOS PRÉSENTE l'écran jumeau — c'est elle qui décide du retour (règle porteur 2026-10-27) :
+ *  - [PUSH]       : `navigationDestination` / `router.push` / `NavigationLink` ⇒ écran empilé, flèche + glissé du bord.
+ *  - [PUSH_CLOSE] : poussé mais barre masquée et croix (`MoodSpotlightView`) ⇒ croix, pas de glissé du bord.
+ *  - [SHEET]      : `.sheet` ⇒ feuille, boutons texte ou croix, glissé vers le bas.
+ *  - [COVER]      : `.fullScreenCover` (ou couche plein écran) ⇒ croix ou bouton de fin.
+ *  - [NONE]       : racine iOS, ou écran sans jumeau iOS.
+ */
+internal enum class IosPresentation { PUSH, PUSH_CLOSE, SHEET, COVER, NONE }
+
+/**
+ * Une route du graphe : son écriture dans les sources ([source], pour le témoin), sa valeur, son rôle, la
+ * présentation de son jumeau iOS, et le fichier qui porte la flèche (ARROW) ou la croix / les boutons (MODAL)
+ * ([evidence], relatif à `apps/android`).
  */
 internal data class RouteChrome(
     val source: String,
     val route: String,
     val chrome: BackChrome,
+    val ios: IosPresentation,
     val evidence: String? = null,
 )
 
@@ -36,9 +48,22 @@ internal object NavBackChrome {
 
     private const val FEATURE = "feature"
 
-    private fun root(source: String, route: String) = RouteChrome(source, route, BackChrome.ROOT)
-    private fun modal(source: String, route: String) = RouteChrome(source, route, BackChrome.MODAL)
-    private fun arrow(source: String, route: String, evidence: String) = RouteChrome(source, route, BackChrome.ARROW, evidence)
+    private fun root(source: String, route: String) = RouteChrome(source, route, BackChrome.ROOT, IosPresentation.NONE)
+
+    /** Écran empilé sur iOS : flèche + glissé du bord. */
+    private fun arrow(source: String, route: String, evidence: String, ios: IosPresentation = IosPresentation.PUSH) =
+        RouteChrome(source, route, BackChrome.ARROW, ios, evidence)
+
+    /** Feuille ou plein écran sur iOS, présenté comme tel sur Android : croix ou boutons, pas de flèche. */
+    private fun modal(source: String, route: String, ios: IosPresentation, evidence: String) =
+        RouteChrome(source, route, BackChrome.MODAL, ios, evidence)
+
+    /**
+     * Feuille sur iOS, encore écran empilé (flèche) sur Android : l'écart que #13369 solde, route par route. Ne
+     * s'ajoute pas — `NavBackChromeTest` refuse qu'un écran nouveau entre ici.
+     */
+    private fun pendingSheet(source: String, route: String, ios: IosPresentation, evidence: String) =
+        RouteChrome(source, route, BackChrome.ARROW, ios, evidence)
 
     private fun settings(file: String) = "$FEATURE/settings/src/main/kotlin/me/meeshy/app/settings/$file"
     private fun auth(file: String) = "$FEATURE/auth/src/main/kotlin/me/meeshy/app/auth/$file"
@@ -55,73 +80,73 @@ internal object NavBackChrome {
     val entries: List<RouteChrome> = listOf(
         // Authentification : la connexion est la racine ; le reste s'y empile.
         root("Routes.LOGIN", Routes.LOGIN),
-        arrow("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, auth("AccountRecoveryScreens.kt")),
-        arrow("Routes.MAGIC_LINK", Routes.MAGIC_LINK, auth("AccountRecoveryScreens.kt")),
+        pendingSheet("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
+        pendingSheet("Routes.MAGIC_LINK", Routes.MAGIC_LINK, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         root("Routes.MAGIC_LINK_VALIDATE", Routes.MAGIC_LINK_VALIDATE),
-        arrow("Routes.REGISTRATION", Routes.REGISTRATION, auth("SignupScreen.kt")),
-        arrow("Routes.GUEST_JOIN", Routes.GUEST_JOIN, auth("ShareLinkEntryScreen.kt")),
-        arrow("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, auth("WorldGuestEntryScreen.kt")),
+        pendingSheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.SHEET, auth("SignupScreen.kt")),
+        pendingSheet("Routes.GUEST_JOIN", Routes.GUEST_JOIN, IosPresentation.COVER, auth("ShareLinkEntryScreen.kt")),
+        pendingSheet("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, IosPresentation.COVER, auth("WorldGuestEntryScreen.kt")),
         // Conversations.
         root("Routes.CONVERSATIONS", Routes.CONVERSATIONS),
-        arrow("Routes.SHARE_LINK_PICKER", Routes.SHARE_LINK_PICKER, conversations("CreateShareLinkScreen.kt")),
-        arrow("Routes.GLOBAL_SEARCH", Routes.GLOBAL_SEARCH, conversations("GlobalSearchScreen.kt")),
-        arrow("Routes.DASHBOARD", Routes.DASHBOARD, conversations("DashboardScreen.kt")),
-        arrow("Routes.CREATE_SHARE_LINK", Routes.CREATE_SHARE_LINK, conversations("CreateShareLinkScreen.kt")),
+        pendingSheet("Routes.SHARE_LINK_PICKER", Routes.SHARE_LINK_PICKER, IosPresentation.SHEET, conversations("CreateShareLinkScreen.kt")),
+        pendingSheet("Routes.GLOBAL_SEARCH", Routes.GLOBAL_SEARCH, IosPresentation.COVER, conversations("GlobalSearchScreen.kt")),
+        pendingSheet("Routes.DASHBOARD", Routes.DASHBOARD, IosPresentation.SHEET, conversations("DashboardScreen.kt")),
+        pendingSheet("Routes.CREATE_SHARE_LINK", Routes.CREATE_SHARE_LINK, IosPresentation.SHEET, conversations("CreateShareLinkScreen.kt")),
         arrow("Routes.MY_SHARE_LINKS", Routes.MY_SHARE_LINKS, conversations("MyShareLinksScreen.kt")),
         arrow("Routes.SHARE_LINK_DETAIL", Routes.SHARE_LINK_DETAIL, conversations("ShareLinkDetailScreen.kt")),
-        arrow("Routes.NEW_CONVERSATION", Routes.NEW_CONVERSATION, conversations("NewConversationScreen.kt")),
+        pendingSheet("Routes.NEW_CONVERSATION", Routes.NEW_CONVERSATION, IosPresentation.SHEET, conversations("NewConversationScreen.kt")),
         arrow("Routes.CHAT", Routes.CHAT, "$FEATURE/chat/src/main/kotlin/me/meeshy/app/chat/ChatConversationHeader.kt"),
         arrow("Routes.STARRED", Routes.STARRED, "$FEATURE/chat/src/main/kotlin/me/meeshy/app/chat/StarredMessagesScreen.kt"),
         // Flux, stories, reels : le flux est une racine ; lecteurs et compositeur sont immersifs.
         root("Routes.FEED", Routes.FEED),
         arrow("Routes.HASHTAG_RESULTS", Routes.HASHTAG_RESULTS, feed("HashtagResultsScreen.kt")),
-        modal("Routes.MOOD_SPOTLIGHT", Routes.MOOD_SPOTLIGHT),
-        arrow("Routes.MY_STORIES", Routes.MY_STORIES, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/MyStoriesScreen.kt"),
+        modal("Routes.MOOD_SPOTLIGHT", Routes.MOOD_SPOTLIGHT, IosPresentation.PUSH_CLOSE, feed("MoodSpotlightScreen.kt")),
+        pendingSheet("Routes.MY_STORIES", Routes.MY_STORIES, IosPresentation.SHEET, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/MyStoriesScreen.kt"),
         arrow("Routes.SAVED_POSTS", Routes.SAVED_POSTS, feed("BookmarksScreen.kt")),
         arrow("Routes.NEARBY_DISCOVERY", Routes.NEARBY_DISCOVERY, feed("NearbyScreen.kt")),
         arrow("Routes.POST_DETAIL", Routes.POST_DETAIL, feed("PostDetailScreen.kt")),
-        modal("Routes.REELS", Routes.REELS),
-        modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER),
-        modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE),
+        modal("Routes.REELS", Routes.REELS, IosPresentation.COVER, "$FEATURE/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt"),
+        modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
+        modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt"),
         // Réglages.
         arrow("Routes.SETTINGS", Routes.SETTINGS, settings("SettingsScreen.kt")),
-        arrow("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, settings("NotificationSettingsScreen.kt")),
-        arrow("Routes.CHANGE_PASSWORD", Routes.CHANGE_PASSWORD, settings("ChangePasswordScreen.kt")),
-        arrow("Routes.TWO_FACTOR", "${Routes.TWO_FACTOR}?step={step}", settings("TwoFactorScreen.kt")),
-        arrow("Routes.ACCOUNT_CONTACT", Routes.ACCOUNT_CONTACT, settings("SecurityScreen.kt")),
-        arrow("Routes.SECURITY", Routes.SECURITY, settings("SecurityScreen.kt")),
-        arrow("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, settings("AccountDeletionScreen.kt")),
-        arrow("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, settings("MediaDownloadScreen.kt")),
-        arrow("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, settings("MediaCacheScreen.kt")),
-        arrow("Routes.DATA_EXPORT", Routes.DATA_EXPORT, settings("DataExportScreen.kt")),
-        arrow("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, settings("CrashReportScreen.kt")),
-        arrow("Routes.ABOUT", Routes.ABOUT, settings("AboutScreen.kt")),
-        arrow("Routes.SUPPORT", Routes.SUPPORT, settings("SupportScreen.kt")),
-        arrow("Routes.LICENSES", Routes.LICENSES, settings("LicensesScreen.kt")),
-        arrow("Routes.LEGAL", Routes.LEGAL, settings("LegalDocumentScreen.kt")),
-        arrow("Routes.PRIVACY", Routes.PRIVACY, settings("PrivacySettingsScreen.kt")),
-        arrow("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, settings("ActiveSessionsScreen.kt")),
-        arrow("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, settings("EncryptedDevicesScreen.kt")),
-        arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt")),
+        pendingSheet("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, IosPresentation.SHEET, settings("NotificationSettingsScreen.kt")),
+        pendingSheet("Routes.CHANGE_PASSWORD", Routes.CHANGE_PASSWORD, IosPresentation.SHEET, settings("ChangePasswordScreen.kt")),
+        pendingSheet("Routes.TWO_FACTOR", "${Routes.TWO_FACTOR}?step={step}", IosPresentation.SHEET, settings("TwoFactorScreen.kt")),
+        pendingSheet("Routes.ACCOUNT_CONTACT", Routes.ACCOUNT_CONTACT, IosPresentation.SHEET, settings("SecurityScreen.kt")),
+        pendingSheet("Routes.SECURITY", Routes.SECURITY, IosPresentation.SHEET, settings("SecurityScreen.kt")),
+        pendingSheet("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, IosPresentation.SHEET, settings("AccountDeletionScreen.kt")),
+        pendingSheet("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, IosPresentation.SHEET, settings("MediaDownloadScreen.kt")),
+        pendingSheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("MediaCacheScreen.kt")),
+        pendingSheet("Routes.DATA_EXPORT", Routes.DATA_EXPORT, IosPresentation.SHEET, settings("DataExportScreen.kt")),
+        pendingSheet("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, IosPresentation.SHEET, settings("CrashReportScreen.kt")),
+        pendingSheet("Routes.ABOUT", Routes.ABOUT, IosPresentation.SHEET, settings("AboutScreen.kt")),
+        pendingSheet("Routes.SUPPORT", Routes.SUPPORT, IosPresentation.SHEET, settings("SupportScreen.kt")),
+        pendingSheet("Routes.LICENSES", Routes.LICENSES, IosPresentation.SHEET, settings("LicensesScreen.kt")),
+        pendingSheet("Routes.LEGAL", Routes.LEGAL, IosPresentation.SHEET, settings("LegalDocumentScreen.kt")),
+        pendingSheet("Routes.PRIVACY", Routes.PRIVACY, IosPresentation.SHEET, settings("PrivacySettingsScreen.kt")),
+        pendingSheet("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, IosPresentation.SHEET, settings("ActiveSessionsScreen.kt")),
+        pendingSheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
+        arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt"), IosPresentation.NONE),
         // Contacts, notifications, profils.
         arrow("Routes.CONTACTS", Routes.CONTACTS, contacts),
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),
-        arrow("Routes.BLOCKED_USERS", Routes.BLOCKED_USERS, contacts),
+        pendingSheet("Routes.BLOCKED_USERS", Routes.BLOCKED_USERS, IosPresentation.SHEET, contacts),
         arrow("FriendRequestsDestinations.ROUTE", FriendRequestsDestinations.ROUTE, contacts),
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),
-        arrow("Routes.PROFILE_USER", Routes.PROFILE_USER, profile("ProfileScreen.kt")),
-        arrow("Routes.USER_POSTS", Routes.USER_POSTS, feed("UserPostsScreen.kt")),
-        modal("Routes.REPORT_USER", Routes.REPORT_USER),
+        pendingSheet("Routes.PROFILE_USER", Routes.PROFILE_USER, IosPresentation.SHEET, profile("ProfileScreen.kt")),
+        pendingSheet("Routes.USER_POSTS", Routes.USER_POSTS, IosPresentation.SHEET, feed("UserPostsScreen.kt")),
+        modal("Routes.REPORT_USER", Routes.REPORT_USER, IosPresentation.SHEET, profile("ReportUserScreen.kt")),
         // Appels : l'historique s'empile, l'appel en cours est plein écran.
         arrow("Routes.CALLS", Routes.CALLS, "$FEATURE/calls/src/main/kotlin/me/meeshy/app/calls/CallHistoryScreen.kt"),
-        modal("Routes.CALL", Routes.CALL),
-        // Communautés : création, détail, membres s'empilent ; réglages et invitation sont des feuilles (Annuler / OK).
+        modal("Routes.CALL", Routes.CALL, IosPresentation.COVER, "$FEATURE/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt"),
+        // Communautés : iOS les POUSSE toutes (`router.push(.communitySettings / .communityInvite)`), réglages et invitation compris.
         arrow("CommunityRoutes.LIST", CommunityRoutes.LIST, community("CommunityListScreen.kt")),
         arrow("CommunityRoutes.CREATE", CommunityRoutes.CREATE, community("CommunityCreateScreen.kt")),
-        modal("CommunityRoutes.SETTINGS", CommunityRoutes.SETTINGS),
+        arrow("CommunityRoutes.SETTINGS", CommunityRoutes.SETTINGS, community("CommunitySettingsScreen.kt")),
         arrow("CommunityRoutes.MEMBERS", CommunityRoutes.MEMBERS, community("CommunityMembersScreen.kt")),
-        modal("CommunityRoutes.INVITE", CommunityRoutes.INVITE),
+        arrow("CommunityRoutes.INVITE", CommunityRoutes.INVITE, community("CommunityInviteScreen.kt")),
         arrow("CommunityRoutes.DETAIL", CommunityRoutes.DETAIL, community("CommunityDetailScreen.kt")),
         // Jeu.
         arrow("GameRoutes.PROGRESSION", GameRoutes.PROGRESSION, gameScaffold),

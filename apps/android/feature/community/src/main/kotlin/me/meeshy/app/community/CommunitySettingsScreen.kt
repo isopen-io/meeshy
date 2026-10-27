@@ -65,6 +65,7 @@ import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
+import me.meeshy.ui.component.chrome.MeeshyBackButton
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -128,7 +129,7 @@ fun CommunitySettingsScreen(
     Box(Modifier.fillMaxSize().background(tokens.backgroundPrimary)) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onCancel) { Text(stringResource(R.string.community_common_cancel), color = tokens.textSecondary) }
+                MeeshyBackButton(onClick = onCancel)
                 Text(
                     stringResource(R.string.community_settings_title),
                     modifier = Modifier.weight(1f),
