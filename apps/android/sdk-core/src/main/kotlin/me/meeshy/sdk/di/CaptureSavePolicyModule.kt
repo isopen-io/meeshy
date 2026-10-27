@@ -14,7 +14,9 @@ import kotlinx.coroutines.SupervisorJob
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.media.CaptureSavePolicyStore
 import me.meeshy.sdk.media.DataStoreCaptureSavePolicyStore
+import me.meeshy.sdk.media.DataStoreOutgoingPhotoLocationStore
 import me.meeshy.sdk.media.MediaStoreCaptureGallery
+import me.meeshy.sdk.media.OutgoingPhotoLocationStore
 import javax.inject.Singleton
 
 @Module
@@ -34,4 +36,14 @@ internal object CaptureSavePolicyModule {
     @Singleton
     fun providesCaptureGallery(@ApplicationContext context: Context): CaptureGallery =
         MediaStoreCaptureGallery(context)
+
+    @Provides
+    @Singleton
+    fun providesOutgoingPhotoLocationStore(@ApplicationContext context: Context): OutgoingPhotoLocationStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_outgoing_photo_location")
+        }
+        return DataStoreOutgoingPhotoLocationStore(dataStore, scope)
+    }
 }

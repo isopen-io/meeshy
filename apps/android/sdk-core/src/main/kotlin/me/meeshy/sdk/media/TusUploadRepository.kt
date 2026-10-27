@@ -55,6 +55,7 @@ import javax.inject.Singleton
 public class TusUploadRepository @Inject constructor(
     private val tusApi: TusApi,
     private val checkpoints: TusUploadCheckpointDao,
+    private val sanitizer: OutgoingMediaSanitizer,
 ) {
     /**
      * Uploads one [item] tagged with [context]. See [TusUploadRepository].
@@ -68,9 +69,13 @@ public class TusUploadRepository @Inject constructor(
         context: TusUploadContext,
         chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
     ): NetworkResult<List<UploadedMedia>> {
-        val fileName = MediaUpload.fileName(item.fileName)
-        val mimeType = MediaUpload.mimeType(item.mimeType)
-        val totalBytes = item.bytes.size.toLong()
+        val outgoing = when (val result = sanitizer.sanitize(item)) {
+            is NetworkResult.Failure -> return result
+            is NetworkResult.Success -> result.data
+        }
+        val fileName = MediaUpload.fileName(outgoing.fileName)
+        val mimeType = MediaUpload.mimeType(outgoing.mimeType)
+        val totalBytes = outgoing.bytes.size.toLong()
         val checkpointKey = TusCheckpointKey.of(context, fileName, mimeType, totalBytes)
 
         val existing = checkpoints.find(checkpointKey)
@@ -109,7 +114,7 @@ public class TusUploadRepository @Inject constructor(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(item.bytes, range),
+                    body = rangeBody(outgoing.bytes, range),
                 )
                 if (chunkResult is NetworkResult.Failure) return chunkResult
                 checkpoints.upsert(
@@ -129,7 +134,7 @@ public class TusUploadRepository @Inject constructor(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(item.bytes, range),
+                    body = rangeBody(outgoing.bytes, range),
                 )
             }
             if (finishResult is NetworkResult.Failure) return finishResult
@@ -139,7 +144,7 @@ public class TusUploadRepository @Inject constructor(
 
         // Unreachable: TusChunkPlan.chunks always returns at least one (final) range, and
         // TusResumePlanner never resumes at an offset that has already reached totalBytes.
-        error("TusChunkPlan produced no ranges for ${item.bytes.size} bytes at resumeOffset=$resumeOffset")
+        error("TusChunkPlan produced no ranges for ${outgoing.bytes.size} bytes at resumeOffset=$resumeOffset")
     }
 
     private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
