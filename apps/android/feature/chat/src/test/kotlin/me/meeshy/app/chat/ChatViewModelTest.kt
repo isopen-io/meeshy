@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
@@ -2579,14 +2580,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_optimistically_sends_the_source_message_into_the_target_and_marks_it_sent() =
+    fun sendForward_optimistically_sends_the_source_message_into_the_recipient_and_marks_it_sent() =
         runTest(dispatcher) {
             val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
             advanceUntilIdle()
             h.vm.openForward("m1")
             advanceUntilIdle()
 
-            h.vm.forwardTo("c2")
+            h.vm.toggleForwardRecipient("c2")
+            h.vm.sendForward()
             advanceUntilIdle()
 
             coVerify(exactly = 1) {
@@ -2600,9 +2602,7 @@ class ChatViewModelTest {
                 )
             }
             verify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
-            val forward = h.vm.state.value.forward!!
-            assertThat(forward.sentConversationIds).containsExactly("c2")
-            assertThat(forward.sendingConversationId).isNull()
+            assertThat(h.vm.state.value.forward!!.deliveries).containsExactly("c2", ShareDelivery.Sent)
         }
 
     private fun refusedConversation(message: ApiMessage) = flowOf(
@@ -2624,7 +2624,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_never_sends_a_message_the_exit_law_refuses() = runTest(dispatcher) {
+    fun sendForward_never_sends_a_message_the_exit_law_refuses() = runTest(dispatcher) {
         val source = ApiMessage(
             id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
             effectFlags = (MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ).toInt(),
@@ -2634,7 +2634,8 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
@@ -2642,14 +2643,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_lets_a_blurred_message_through() = runTest(dispatcher) {
+    fun sendForward_lets_a_blurred_message_through() = runTest(dispatcher) {
         val source = ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "flou", isBlurred = true)
         val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
@@ -2666,7 +2668,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_bounds_a_timed_flame_copy_by_the_source_duration() = runTest(dispatcher) {
+    fun sendForward_bounds_a_timed_flame_copy_by_the_source_duration() = runTest(dispatcher) {
         val source = ApiMessage(
             id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
             effectFlags = MessageEffectFlags.EPHEMERAL.toInt(), ephemeralDuration = 300,
@@ -2677,7 +2679,8 @@ class ChatViewModelTest {
         advanceUntilIdle()
         assertThat(h.vm.state.value.forward!!.refusal).isNull()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         val flame = MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ
@@ -2708,35 +2711,38 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_is_inert_when_the_target_was_already_forwarded_to() = runTest(dispatcher) {
+    fun sendForward_is_inert_when_the_recipient_was_already_served() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_is_inert_when_the_source_message_is_unknown() = runTest(dispatcher) {
+    fun sendForward_is_inert_when_the_source_message_is_unknown() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("ghost")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_refuses_to_forward_an_unsent_bubble() = runTest(dispatcher) {
+    fun sendForward_refuses_to_forward_an_unsent_bubble() = runTest(dispatcher) {
         val unsent = flowOf(
             CacheResult.Fresh(
                 listOf(
@@ -2753,14 +2759,15 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_surfaces_an_error_and_clears_the_sending_flag_on_failure() = runTest(dispatcher) {
+    fun sendForward_marks_the_row_failed_on_failure() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
             h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any())
@@ -2769,12 +2776,11 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
-        assertThat(h.vm.state.value.forward!!.sendingConversationId).isNull()
-        assertThat(h.vm.state.value.forward!!.sentConversationIds).isEmpty()
+        assertThat(h.vm.state.value.forward!!.deliveries["c2"]).isInstanceOf(ShareDelivery.Failed::class.java)
     }
 
     @Test
@@ -2790,7 +2796,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_completing_after_the_sheet_reopened_on_another_message_does_not_corrupt_that_session() =
+    fun sendForward_completing_after_the_sheet_reopened_on_another_message_does_not_corrupt_that_session() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
             val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
@@ -2801,7 +2807,8 @@ class ChatViewModelTest {
 
             h.vm.openForward("m1")
             advanceUntilIdle()
-            h.vm.forwardTo("c2")
+            h.vm.toggleForwardRecipient("c2")
+            h.vm.sendForward()
             advanceUntilIdle()
 
             // Sheet dismissed and reopened on a DIFFERENT message before the send resolves.
@@ -2814,12 +2821,11 @@ class ChatViewModelTest {
 
             val forward = h.vm.state.value.forward!!
             assertThat(forward.sourceMessageId).isEqualTo("m2")
-            assertThat(forward.sentConversationIds).isEmpty()
-            assertThat(forward.sendingConversationId).isNull()
+            assertThat(forward.deliveries).isEmpty()
         }
 
     @Test
-    fun forwardTo_reopening_the_same_message_mid_send_does_not_allow_a_duplicate_send() = runTest(dispatcher) {
+    fun sendForward_reopening_the_same_message_mid_send_does_not_allow_a_duplicate_send() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
@@ -2829,7 +2835,8 @@ class ChatViewModelTest {
 
         h.vm.openForward("m1")
         advanceUntilIdle()
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         // Sheet dismissed and reopened on the SAME message while the send is still in flight.
@@ -2837,7 +2844,8 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         gate.complete(Unit)

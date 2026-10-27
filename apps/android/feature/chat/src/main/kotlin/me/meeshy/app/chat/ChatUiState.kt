@@ -208,11 +208,9 @@ data class ChatUiState(
 }
 
 /**
- * State of the forward-picker sheet. `null` in [ChatUiState.forward] means the
- * sheet is closed. [sendingConversationId] gates the picker to one in-flight
- * forward at a time (parity with iOS, which disables every row while sending);
- * [sentConversationIds] keeps a checkmark on rows already forwarded to so the
- * user can forward one message to several conversations in one sitting.
+ * State of the single share sheet (#13469). `null` in [ChatUiState.forward] means the sheet is
+ * closed. [deliveries] carries each recipient's row state (sending, sent, failed), so one message
+ * reaches several conversations in one sitting without a row ever being served twice.
  */
 data class ForwardUiState(
     val sourceMessageId: String,
@@ -220,8 +218,6 @@ data class ForwardUiState(
     val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
     val targets: List<ForwardTarget> = emptyList(),
-    val sendingConversationId: String? = null,
-    val sentConversationIds: Set<String> = emptySet(),
     /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
     val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
     /** The conversations ticked as recipients, in tap order (#13469): « toucher un récent, puis Envoyer ». */
