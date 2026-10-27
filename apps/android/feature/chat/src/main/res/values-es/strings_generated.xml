@@ -18,6 +18,11 @@
         <item quantity="many">¿Eliminar %d mensajes?</item>
         <item quantity="other">¿Eliminar %d mensajes?</item>
     </plurals>
+    <string name="chat_engagement_a11y_streak">%1$s · Chispas: %2$d · Hoy: %3$d</string>
+    <string name="chat_engagement_a11y_streak_days_one">%d día</string>
+    <string name="chat_engagement_a11y_streak_days_other">%d días</string>
+    <string name="chat_engagement_a11y_total_one">%s chispa ganada en esta conversación</string>
+    <string name="chat_engagement_a11y_total_other">%s chispas ganadas en esta conversación</string>
     <string name="chat_exit_blocked_after_read">Desaparece tras leerse: no se reenvía, no se guarda ni se comparte.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Este elemento ya no forma parte del mensaje.</string>
     <string name="chat_exit_blocked_encrypted_source">Este contenido cifrado se copia desde este dispositivo.</string>
@@ -25,6 +30,7 @@
     <string name="chat_exit_blocked_title">Este mensaje no sale de Meeshy</string>
     <string name="chat_exit_blocked_understood">Entendido</string>
     <string name="chat_exit_blocked_view_once">Es de visualización única: no se reenvía, no se guarda ni se comparte. Se queda en la conversación hasta que se vea.</string>
+    <string name="chat_header_flame_hint">Oculta la llama hasta que se vuelva a desplegar el encabezado</string>
     <string name="chat_selection_cap_reached">Máximo 100 mensajes</string>
     <string name="chat_selection_count">%d seleccionados</string>
     <string name="chat_selection_toggle_message">Mensaje</string>

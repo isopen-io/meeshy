@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "conversation.engagement.a11y.total.one", "androidName": "chat_engagement_a11y_total_one", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.engagement.a11y.total.other", "androidName": "chat_engagement_a11y_total_other", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.engagement.a11y.streak", "androidName": "chat_engagement_a11y_streak", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.engagement.a11y.streak_days.one", "androidName": "chat_engagement_a11y_streak_days_one", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.engagement.a11y.streak_days.other", "androidName": "chat_engagement_a11y_streak_days_other", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.header.flame.hint", "androidName": "chat_header_flame_hint", "status": "adopted"}
+      ]
+    }
+  }
+}

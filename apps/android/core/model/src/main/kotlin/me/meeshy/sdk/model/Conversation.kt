@@ -51,6 +51,12 @@ data class ApiConversation(
     val lastMessageTranslations: Map<String, String>? = null,
     val lastMessageOriginalLanguage: String? = null,
     val unreadCount: Int = 0,
+    /**
+     * Ce que cette conversation a rapporté au LECTEUR (« N (M) 🔥 », #8906) : servi par la passerelle sur
+     * chaque ligne de la liste et du détail. Alimente la Flamme de l'en-tête du fil ; jamais recalculé ici.
+     */
+    @Serializable(with = TolerantEngagementSerializer::class)
+    val viewerEngagement: ConversationEngagementSnapshot? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val defaultWriteRole: String? = null,
@@ -231,6 +237,9 @@ internal object LossyTagListSerializer : KSerializer<List<String>> by LossyListS
 
 internal object LossyRecentMessagesSerializer :
     KSerializer<List<ApiConversationLastMessage>> by LossyListSerializer(ApiConversationLastMessage.serializer())
+
+internal object TolerantEngagementSerializer :
+    KSerializer<ConversationEngagementSnapshot?> by TolerantSerializer(ConversationEngagementSnapshot.serializer())
 
 internal object TolerantMessageCountSerializer :
     KSerializer<ApiMessageCount?> by TolerantSerializer(ApiMessageCount.serializer())
