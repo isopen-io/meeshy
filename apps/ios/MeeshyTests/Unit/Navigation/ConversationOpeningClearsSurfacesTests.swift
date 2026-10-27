@@ -348,7 +348,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
             ("Features/Main/Views/ReelFeedCard.swift", place, 1),
             ("Features/Main/Views/CommentRowView.swift", place, 1),
             ("Features/Main/Views/GlobalSearchView.swift", ".closesForConversationOpening(.search)", 1),
-            ("Features/Main/Views/ProfileView.swift", ").closesForConversationOpening(.profilePhoto)", 1),
+            ("Features/Profile/Views/ProfileView.swift", ").closesForConversationOpening(.profilePhoto)", 1),
             ("Features/Main/Components/ContactCardView.swift", ".closesForConversationOpening(.contactCard)", 1),
         ]
         for (file, declaration, count) in mounts {
@@ -358,7 +358,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
 
     func test_gameScreens_retainInsteadOfClosing() throws {
         for file in ["Features/Game/Photo/GamePhotoFlowView.swift",
-                     "Features/Main/Views/AchievementRevealView.swift"] {
+                     "Features/Profile/Views/AchievementRevealView.swift"] {
             XCTAssertEqual(try occurrences(of: ".retainsAgainstConversationOpening(.game)", in: file), 1, file)
             XCTAssertEqual(try occurrences(of: "closesForConversationOpening", in: file), 0,
                            "\(file) : une partie en cours ne se referme pas")

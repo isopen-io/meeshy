@@ -60,7 +60,7 @@ final class GameNotificationRoutingTests: XCTestCase {
         }
         // #10093 — le profil ne porte plus de carte de jeu (donc plus de « Voir la vitrine ») : sa porte reste la rangée
         // Progression, qui ouvre l'écran sans ancre.
-        XCTAssertTrue(try source("Meeshy/Features/Main/Views/ProfileView.swift").contains("ProfileProgressionEntry { router.push(.progression) }"),
+        XCTAssertTrue(try source("Meeshy/Features/Profile/Views/ProfileView.swift").contains("ProfileProgressionEntry { router.push(.progression) }"),
                       "le profil ouvre Progression par sa rangée")
         for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
             XCTAssertTrue(try source(host).contains("ProgressionView()"), "\(host) monte Progression sans ancre : la pile porte le chemin")

@@ -895,8 +895,8 @@ Transposition Android : presentationDetents medium/large vers ModalBottomSheet p
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ParticipantProfileLoader.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileLoader.swift`
 
 </details>
 

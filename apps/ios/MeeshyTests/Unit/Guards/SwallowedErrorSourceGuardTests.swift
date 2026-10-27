@@ -33,7 +33,7 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
     private static let reelsPath =
         "Meeshy/Features/Main/ViewModels/ReelsViewModel.swift"
     private static let userProfilePath =
-        "Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift"
+        "Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift"
 
     /// `StoryViewModel` est DÉCOUPÉ (`StoryViewModel+*.swift` + `StoryViewModelRules`)
     /// : `AppSourceGuard.storyViewModelSource()` recolle l'unité. Lire le seul

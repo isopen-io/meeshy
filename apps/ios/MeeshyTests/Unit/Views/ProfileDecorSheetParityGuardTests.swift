@@ -12,7 +12,7 @@ import XCTest
 ///   La règle est au SDK (`MeeshyUser.applying`), appliquée par le socket.
 final class ProfileDecorSheetParityGuardTests: XCTestCase {
 
-    private static let sheetPath = "Meeshy/Features/Main/Views/ProfileDecorSheet.swift"
+    private static let sheetPath = "Meeshy/Features/Profile/Views/ProfileDecorSheet.swift"
 
     private func source() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.sheetPath))

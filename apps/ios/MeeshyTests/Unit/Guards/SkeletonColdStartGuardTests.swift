@@ -39,7 +39,7 @@ final class SkeletonColdStartGuardTests: XCTestCase {
         ("Features/Main/Views/ConversationView+Skeleton.swift", "SkeletonMessageBubble"),
         ("Features/Main/Views/FeedView.swift",             "SkeletonFeedList"),
         ("Features/Main/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
-        ("Features/Main/Views/ProfileView.swift",          "SkeletonProfileHeader"),
+        ("Features/Profile/Views/ProfileView.swift",          "SkeletonProfileHeader"),
     ]
 
     // MARK: - La règle

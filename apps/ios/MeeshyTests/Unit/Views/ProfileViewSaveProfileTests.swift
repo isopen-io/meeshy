@@ -170,7 +170,7 @@ final class ProfileViewSaveProfileTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ProfileView.swift")
+            .appendingPathComponent("Meeshy/Features/Profile/Views/ProfileView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

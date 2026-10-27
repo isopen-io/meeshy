@@ -1441,7 +1441,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecor.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecorWearer.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileDecorSheet.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift"
   ],
   "feature_keys": [
    "dst-profile-decor-equip",
@@ -5450,7 +5450,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/ImageCompressor.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/PickedMedia.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "dst-image-pick-edit-compress",

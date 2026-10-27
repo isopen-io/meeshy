@@ -26,7 +26,7 @@ d'accessibilité (`accessibilityLabel`/`accessibilityHint`) — rupture Prisme +
 
 ## Fichiers touchés (code)
 - `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift` (hint blur-reveal)
-- `apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift` (label graphe)
+- `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift` (label graphe)
 - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (hint navigation)
 - `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift` (hint ouverture)
 - `apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift` (2 hints)

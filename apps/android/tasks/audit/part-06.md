@@ -141,7 +141,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Trivial ViewModel. QR code from `setupData` rendered with a QR lib.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift
+## apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift
 
 **Purpose**: Other-user profile sheet — full profile, stats, shared conversations, block/unblock.
 
@@ -189,7 +189,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Static Compose screen; version from `PackageInfo`/`BuildConfig`; links via `Intent.ACTION_VIEW`.
 
-## apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift
+## apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift
 
 **Purpose**: Reusable badge component showing an achievement with a circular progress ring.
 

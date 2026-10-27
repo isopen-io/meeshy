@@ -145,7 +145,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// Les shaders se compilent AVANT la célébration, jamais pendant : la brique du SDK sait
     /// le faire (`GameShaders.precompile`) ; l'app doit l'appeler à l'ouverture de l'écran.
     func test_theShadersArePrecompiledWhenProgressionOpens() throws {
-        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ProgressionView.swift"), encoding: .utf8)
+        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Profile/Views/ProgressionView.swift"), encoding: .utf8)
         XCTAssertTrue(text.contains("GameShaders.precompile()"))
     }
 

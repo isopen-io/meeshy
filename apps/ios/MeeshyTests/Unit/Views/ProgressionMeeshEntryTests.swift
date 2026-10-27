@@ -330,7 +330,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
                 .deletingLastPathComponent()   // Unit
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift"),
+                .appendingPathComponent("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift"),
             encoding: .utf8
         )
         let apresEntree = source.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first ?? ""
@@ -357,7 +357,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
         }
         // Depuis #9564 la première page monte l'en-tête partagé PAR le gabarit de toutes les pages de Progression.
-        let source = try read("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let source = try read("Meeshy/Features/Profile/Views/ProgressionView.swift")
         XCTAssertTrue(source.contains("GamePageScaffold("), "Progression ne passe pas par le gabarit à en-tête partagé.")
         let scaffold = try read("Meeshy/Features/Game/GamePageScaffold.swift")
         XCTAssertTrue(scaffold.contains("CollapsibleHeader("), "Le gabarit ne monte pas l'en-tête partagé.")
@@ -393,7 +393,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
                 .deletingLastPathComponent()   // Unit
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift"),
+                .appendingPathComponent("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift"),
             encoding: .utf8
         )
         XCTAssertFalse(source.contains("Image(\"MeeshyLogo\")"), "L'entrée Meesh monte encore le logo Meeshy.")

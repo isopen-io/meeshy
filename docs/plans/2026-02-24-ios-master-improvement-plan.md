@@ -134,7 +134,7 @@
 - Upload avatar via TUS
 
 **Fichiers concernes**:
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- Modifier: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 - Creer: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
 - Creer: `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 

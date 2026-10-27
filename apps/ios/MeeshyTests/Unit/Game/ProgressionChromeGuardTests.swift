@@ -48,8 +48,8 @@ final class ProgressionChromeGuardTests: XCTestCase {
 
     func test_everyProgressionPage_goesThroughTheSharedScaffold() throws {
         let pages = [
-            "Meeshy/Features/Main/Views/ProgressionView.swift",
-            "Meeshy/Features/Main/Views/ProgressionHub.swift",
+            "Meeshy/Features/Profile/Views/ProgressionView.swift",
+            "Meeshy/Features/Profile/Views/ProgressionHub.swift",
             "Meeshy/Features/Game/ProgressionConceptPage.swift",
             "Meeshy/Features/Game/GameRulesView.swift",
             "Meeshy/Features/Game/GameNotebookView.swift",
@@ -103,9 +103,9 @@ final class ProgressionChromeGuardTests: XCTestCase {
     func test_everyElementFamilyRendered_opensItsOwnDetails() throws {
         let wired: [(file: String, call: String)] = [
             ("Meeshy/Features/Game/GameBadgeShelf.swift", "GameElementDetails.badge(item"),
-            ("Meeshy/Features/Main/Views/ProgressionHub.swift", "GameElementDetails.badge(for: axis"),
-            ("Meeshy/Features/Main/Views/ProgressionHub.swift", "GameElementDetails.elanFamily("),
-            ("Meeshy/Features/Main/Views/ProgressionComponents.swift", "GameElementDetails.challenge(entry)"),
+            ("Meeshy/Features/Profile/Views/ProgressionHub.swift", "GameElementDetails.badge(for: axis"),
+            ("Meeshy/Features/Profile/Views/ProgressionHub.swift", "GameElementDetails.elanFamily("),
+            ("Meeshy/Features/Profile/Views/ProgressionComponents.swift", "GameElementDetails.challenge(entry)"),
             ("Meeshy/Features/Game/GameMissionsView.swift", "GameElementDetails.mission(mission)"),
             ("Meeshy/Features/Game/GameMissionsView.swift", "GameElementDetails.chest(chest"),
             ("Meeshy/Features/Game/GameHeroView.swift", "GameElementDetails.levelRing(game.level)"),
@@ -126,7 +126,7 @@ final class ProgressionChromeGuardTests: XCTestCase {
             XCTAssertTrue(try source(site.file).contains(site.call), "\(site.file) : « \(site.call) » — l'élément ne s'ouvre pas")
         }
         // Un succès garde SA précision (la célébration en grand) : jamais deux modales pour un même élément.
-        let hub = try source("Meeshy/Features/Main/Views/ProgressionHub.swift")
+        let hub = try source("Meeshy/Features/Profile/Views/ProgressionHub.swift")
         XCTAssertFalse(hub.contains("GameElementDetails.achievement("), "un succès n'ouvre pas une seconde modale")
         XCTAssertTrue(hub.contains(".buttonStyle(GameBounceButtonStyle())"), "la ligne d'un succès rebondit")
     }
@@ -192,10 +192,10 @@ final class ProgressionChromeGuardTests: XCTestCase {
 
     /// La frappe a UN site : la fiche des Meeshes. Toucher le solde de l'en-tête ouvre cette fiche (amendement n° 4).
     func test_theHeaderCounter_opensTheMeeshSheet_andMintsNothing() throws {
-        let page = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let page = try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
         XCTAssertTrue(page.contains("onOpenMeesh: { router.push(.progressionConcept(.meesh)) }"), "le solde ouvre la fiche des Meeshes")
         XCTAssertFalse(page.contains("viewModel.mint()"), "la première page ne frappe plus")
-        let entry = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let entry = try source("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift")
         let compteur = entry.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first?
             .components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
         XCTAssertFalse(compteur.contains(".popover("), "le compteur n'ouvre plus de feuille de frappe")
@@ -205,7 +205,7 @@ final class ProgressionChromeGuardTests: XCTestCase {
 
     /// Le groupe ne vit QUE sur la première page : la fiche des Meeshes a son héros.
     func test_theHeaderGroup_livesOnlyOnTheFrontPage() async throws {
-        XCTAssertTrue(try source("Meeshy/Features/Main/Views/ProgressionView.swift").contains("ProgressionHeaderStanding("))
+        XCTAssertTrue(try source("Meeshy/Features/Profile/Views/ProgressionView.swift").contains("ProgressionHeaderStanding("))
         XCTAssertFalse(try source("Meeshy/Features/Game/ProgressionConceptPage.swift").contains("ProgressionMeeshEntry("),
                        "le compteur a quitté l'en-tête de la fiche des Meeshes")
 
@@ -238,7 +238,7 @@ final class ProgressionChromeGuardTests: XCTestCase {
         let branch = front[hidden...].prefix(200)
         XCTAssertTrue(branch.contains("GameHiddenCard("), "sous « Jeu masqué », la carte masquée prend la place de la liste")
         XCTAssertTrue(branch.contains("} else {\n            list"), "la liste n'est montée que hors de « Jeu masqué »")
-        XCTAssertTrue(try source("Meeshy/Features/Main/Views/ProgressionView.swift").contains("if !hidesTheGame {"),
+        XCTAssertTrue(try source("Meeshy/Features/Profile/Views/ProgressionView.swift").contains("if !hidesTheGame {"),
                       "sous « Jeu masqué », l'en-tête ne montre ni blason ni compteur")
     }
 }

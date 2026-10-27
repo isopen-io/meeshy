@@ -31,7 +31,7 @@ final class ProgressionHeroWiringTests: XCTestCase {
     }
 
     private func hub() throws -> String {
-        try source("Meeshy/Features/Main/Views/ProgressionHub.swift")
+        try source("Meeshy/Features/Profile/Views/ProgressionHub.swift")
     }
 
     // MARK: - Le héros est MONTÉ
@@ -82,7 +82,7 @@ final class ProgressionHeroWiringTests: XCTestCase {
     // MARK: - Ce que la vue complète DIT selon l'occasion
 
     func test_uneConsultationNeRejoueNiLHaptiqueDeSuccesNiLaPromesseDYAller() throws {
-        let code = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        let code = try source("Meeshy/Features/Profile/Views/AchievementRevealView.swift")
         XCTAssertTrue(code.contains("occasion.estCelebration { HapticFeedback.success() }"),
                       "Rejouer l'haptique de SUCCÈS à chaque consultation userait le signal qui compte.")
         XCTAssertTrue(code.contains("reveal.close"),

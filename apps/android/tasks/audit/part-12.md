@@ -201,7 +201,7 @@ Dependencies: `TwoFactorViewModel`, `TwoFactorSetup` model.
 
 Android-port note: Step `enum` → sealed class UI state. QR data-URL → decode base64 to `Bitmap` (`Image`). Code field → `OutlinedTextField` with `KeyboardType.NumberPad` + input filter. Localized strings → string resources. Three screens share one VM.
 
-## apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift
+## apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift
 
 Purpose: User statistics dashboard — stat cards (messages, conversations, translations, languages, member days, friend requests), activity timeline chart, achievement badges.
 

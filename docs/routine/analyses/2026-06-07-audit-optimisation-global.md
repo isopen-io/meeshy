@@ -100,7 +100,7 @@ Le pipeline génère des TTS pour TOUTES les langues configurées (`autoTranslat
 
 ### 3.7 iOS — Stale-while-revalidate non utilisé dans `UserProfileViewModel.loadUserStats`
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift:93`
+**Fichier** : `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift:93`
 
 Le `.stale` case dans `loadUserStats` ne déclenche pas de background refresh (contrairement à `loadFullProfile` qui le fait correctement). Pattern incohérent.
 

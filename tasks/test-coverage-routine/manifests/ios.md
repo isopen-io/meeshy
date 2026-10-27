@@ -217,14 +217,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/ViewModels/SyncPillViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift`
 
 ## Features/Main/Views  (12/161 have a test)
 
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/AboutView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AdaptiveRootView.swift`
 - [ ] `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
@@ -334,7 +334,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/PostTranslationSheet.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReplyContextCleaner.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReplyThreadOverlay.swift`
@@ -351,7 +351,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusBarView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`
@@ -370,7 +370,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
 - [ ] `apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoAvailabilityResolver.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift`

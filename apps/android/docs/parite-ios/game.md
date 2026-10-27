@@ -289,14 +289,14 @@ Transposition Android : String(localized:) + xcstrings -> strings.xml + plurals 
 <details><summary>Sources iOS (9)</summary>
 
 - `apps/ios/Meeshy/Features/Game/GameCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionCopy.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionCopy.swift`
 - `apps/ios/Meeshy/Features/Game/ProgressionConceptCopy.swift`
 - `apps/ios/Meeshy/Features/Game/GameDetailCopy.swift`
 - `apps/ios/Meeshy/Features/Game/GameFicheCopy.swift`
 - `apps/ios/Meeshy/Features/Game/GameSparksCopy.swift`
 - `apps/ios/Meeshy/Features/Game/GameMintCostCopy.swift`
 - `apps/ios/Meeshy/Features/Game/PlayerBannerCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AchievementCopy.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/AchievementCopy.swift`
 
 </details>
 
@@ -393,7 +393,7 @@ Transposition Android : adaptiveGlass -> MeeshyGlassSurface (existant) ; content
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift`
 
 </details>
 
@@ -541,7 +541,7 @@ Transposition Android : CollapsibleHeader + NavigationStack push -> LargeTopAppB
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionView.swift`
 - `apps/ios/Meeshy/Features/Game/ProgressionFrontList.swift`
 - `apps/ios/Meeshy/Features/Game/ProgressionHeaderStanding.swift`
 
@@ -565,7 +565,7 @@ Transposition Android : ProgressView.tint -> LinearProgressIndicator personnalis
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionComponents.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionComponents.swift`
 
 </details>
 
@@ -592,7 +592,7 @@ Transposition Android : CacheFirstLoader/CacheCoordinator -> repository Room + F
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/ProgressionViewModel.swift`
 - `apps/ios/Meeshy/Features/Game/ProgressionViewModel+Game.swift`
 
 </details>
@@ -742,7 +742,7 @@ Transposition Android : NumberFormatter.localizedString -> NumberFormat.getInsta
 <details><summary>Sources iOS (2)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/AchievementCatalog.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AchievementCopy.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/AchievementCopy.swift`
 
 </details>
 
@@ -768,8 +768,8 @@ Transposition Android : fullScreenCover -> Dialog plein écran ou destination ; 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AchievementRevealView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AchievementRevealMedal.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/AchievementRevealView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/AchievementRevealMedal.swift`
 
 </details>
 
@@ -1186,9 +1186,9 @@ Transposition Android : fullScreenCover(item:) -> destination plein écran ; ada
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionHub.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProgressionComponents.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionHub.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionCopy.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProgressionComponents.swift`
 
 </details>
 
@@ -1460,7 +1460,7 @@ Transposition Android : HapticFeedback.light -> HapticFeedbackType.TextHandleMov
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileProgressionEntry.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileProgressionEntry.swift`
 
 </details>
 
@@ -2270,7 +2270,7 @@ Transposition Android : SF Symbols servis par le backend -> table de corresponda
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift`
 
 </details>
 

@@ -35,7 +35,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_everyChip_holdsOnOneLine_andShrinksRatherThanWidenThePage() throws {
         let chips: [(file: String, header: String)] = [
             ("Meeshy/Features/Game/GameSurface.swift", "struct GameChip: View {"),
-            ("Meeshy/Features/Main/Views/ProgressionHub.swift", "struct ProgressionWrap: View {"),
+            ("Meeshy/Features/Profile/Views/ProgressionHub.swift", "struct ProgressionWrap: View {"),
             ("Meeshy/Features/Game/GameHeroParts.swift", "private func chip(_ item: GameHero.EarnItem) -> some View {"),
         ]
         for chip in chips {
@@ -76,7 +76,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
                         "viewModel.mint()", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
             XCTAssertFalse(list.contains(gesture), "« \(gesture) » est dans la liste de la première page : les gestes vivent dans les fiches")
         }
-        let page = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let page = try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
                         "GameBadgeShelfView(", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
             XCTAssertFalse(page.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
@@ -99,7 +99,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// La pile porte le chemin complet (#9564) : Progression n'attend plus d'ancre pour pousser une fiche après coup —
     /// une seule transition, aucune image perdue.
     func test_theFirstPage_waitsForNoAnchor_theStackCarriesTheChain() throws {
-        let progression = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let progression = try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
         XCTAssertFalse(progression.contains("Anchor"), "plus d'ancre ramassée : l'entrée pose son chemin complet")
         XCTAssertFalse(progression.contains("Task.sleep"), "plus de seconde poussée retardée")
         XCTAssertFalse(progression.contains("proxy.scrollTo("), "plus rien ne défile jusqu'à une section : la première page n'en a plus")
@@ -160,7 +160,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertFalse(ProgressionCopy.elanTitle(factor: 2).contains("×2.0"), "jamais une précision inexistante")
 
         let hero = try body(of: "struct ProgressionElansHero: View {",
-                            in: try source("Meeshy/Features/Main/Views/ProgressionHub.swift"))
+                            in: try source("Meeshy/Features/Profile/Views/ProgressionHub.swift"))
         XCTAssertFalse(hero.contains("\"Élan"), "aucune chaîne en dur dans la carte des élans")
         XCTAssertTrue(hero.contains("ProgressionCopy.elanTitle(factor:"), "le titre passe par la copie localisée")
     }

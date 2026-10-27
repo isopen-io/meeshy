@@ -2187,7 +2187,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/FullscreenImageView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileImageCopy.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileGameSection.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileOwnAvatar.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnAvatar.swift"
   ],
   "feature_keys": [
    "profile-banner-avatar-fullscreen"
@@ -2750,7 +2750,7 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/navigation/ProfileRoutesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "profile-own-page"
@@ -3665,7 +3665,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetLoader.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileLoading.swift",
    "apps/ios/Meeshy/Features/Profile/LiveProfileLoading.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStoreSocketBridge.swift"
   ],
   "feature_keys": [
@@ -4594,7 +4594,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ConnectionActionView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift"
+   "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift"
   ],
   "feature_keys": [
    "profile-connection-request-actions",
@@ -6826,7 +6826,7 @@
    "apps/android/feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/MeeshyUser+ProfileMutation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+ProfileDecor.swift",
@@ -6896,8 +6896,8 @@
    "apps/android/feature/profile/src/test/kotlin/me/meeshy/app/profile/OwnProfileMoodTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileOwnAvatar.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnAvatar.swift"
   ],
   "feature_keys": [
    "profile-own-page",
@@ -7111,8 +7111,8 @@
    "apps/android/feature/profile/src/test/kotlin/me/meeshy/app/profile/StatsTimelineBuilderTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StatsService.swift"
   ],
   "feature_keys": [
@@ -7841,8 +7841,8 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ConversationMembersSheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileLoader.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileLoader.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationParticipantProfile.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ParticipantModels.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/MemberRole.swift"
@@ -7955,7 +7955,7 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/ImageUploadValidatorTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/ImageCompressor.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserService.swift"
@@ -8544,7 +8544,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/BlockActionCoordinator.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/BlockService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "cf-block-action"
@@ -9105,8 +9105,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift"
   ],
   "feature_keys": [
    "profile-posts-tab-list",
@@ -9678,9 +9678,9 @@
    "apps/android/feature/feed/src/test/kotlin/me/meeshy/app/feed/ProfilePostOpeningTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfilePostOpening.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfilePostOpening.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift"
   ],
   "feature_keys": [
@@ -11332,7 +11332,7 @@
    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/profile/decor/ProfileDecorLayersPolicyTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileDecorSheet.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecor.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Appearance/AvatarRingView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Appearance/BannerDesignView.swift",
