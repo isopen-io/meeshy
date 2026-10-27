@@ -15,7 +15,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `Router`, `ConversationListViewModel` (env), `ThemeManager`, `HapticFeedback`.
 - **Android-port note**: Compose screen with collapsible `TopAppBar` (`enterAlwaysScrollBehavior`) + `LazyColumn`. Cards = clickable `Card` rows routing through a NavController. Quick-create launches a `ModalBottomSheet`.
 
-## apps/ios/Meeshy/Features/Main/Views/LoginView.swift
+## apps/ios/Meeshy/Features/Auth/Views/LoginView.swift
 
 - **Purpose**: Primary authentication screen — supports saved-account picker, manual username/password login, and environment selection (dev/staging/prod/custom).
 - **Public API**: `struct LoginView: View`. Internal `Field` focus enum.
@@ -29,7 +29,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `AuthManager` (env), `ThemeManager`, `MeeshyConfig`, `SavedAccount`, `MeeshyAvatar`, `AnimatedLogoView`.
 - **Android-port note**: Compose screen; `AuthViewModel` exposing `savedAccounts`, `isLoading`, `errorMessage`. Saved accounts persisted in encrypted DataStore/Room. Environment selector → segmented buttons + config singleton. Keep simulator prefill out of release builds (`BuildConfig.DEBUG` + emulator check).
 
-## apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift
+## apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift
 
 - **Purpose**: Passwordless login — sends an email magic link, then shows a waiting screen with a countdown.
 - **Public API**: `struct MagicLinkView: View`. Internal `Step` enum (`.emailInput`, `.waiting`).

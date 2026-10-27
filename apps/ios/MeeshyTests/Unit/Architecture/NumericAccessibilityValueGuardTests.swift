@@ -252,7 +252,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // (2026-10-02) : la liste suit l'hôte.
             "Features/Call/Services/CallManager+Duration.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
-            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Auth/Views/MagicLinkView.swift",
             // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
             // visible rend l'horloge du composeur commun (SDK), la ligne DITE
             // la convertit ici. La liste suit l'hôte, comme au 248i.
@@ -280,7 +280,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Call/Views/CallView+Connected.swift",
             "Features/Call/Views/CallView+Header.swift",
             "Features/Call/Views/FloatingCallPillView.swift",
-            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Auth/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",

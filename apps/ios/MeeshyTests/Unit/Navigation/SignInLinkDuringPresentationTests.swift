@@ -534,8 +534,8 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     /// l'écran de connexion — toutes recouvrent l'hôte des toasts de la racine.
     /// Chacune monte donc le sien : sinon le refus d'un lien ne se voit pas.
     func test_signedOutSurfaces_mountTheToastHost() throws {
-        let welcome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/WelcomeView.swift"))
-        let login = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/LoginView.swift"))
+        let welcome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Auth/Views/WelcomeView.swift"))
+        let login = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Auth/Views/LoginView.swift"))
 
         XCTAssertGreaterThanOrEqual(welcome.components(separatedBy: ".feedbackToastOverlay()").count - 1, 2,
                                     "l'accueil et son inscription montent l'hôte des toasts")

@@ -1,7 +1,7 @@
 # Iteration-172i — MagicLinkView : alignement marque Indigo + structure VoiceOver
 
 **Date** : 2026-07-19
-**Écran** : `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`
+**Écran** : `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`
 **Surface** : Connexion par lien magique (auth) — étape saisie email + étape attente.
 **Type** : Design-system (couleur figée → token de marque) + Accessibilité (VoiceOver).
 

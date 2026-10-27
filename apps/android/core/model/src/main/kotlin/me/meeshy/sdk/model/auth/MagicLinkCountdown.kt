@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.auth
 /**
  * Strict email gate for passwordless magic-link login — faithful port of the
  * `isValidEmail` regex in iOS `MagicLinkView`
- * (`apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`).
+ * (`apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`).
  *
  * This is deliberately stricter than the signup wizard's loose `@`+`.` gate
  * ([SignupFieldValidation.isEmailValidLocally]): the magic-link flow validates a

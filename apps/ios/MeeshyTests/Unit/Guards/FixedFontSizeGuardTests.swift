@@ -280,7 +280,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
         "Features/Call/Views/IncomingCallView.swift",
-        "Features/Main/Views/MagicLinkView.swift",
+        "Features/Auth/Views/MagicLinkView.swift",
         "Features/Main/Views/MyStoriesView.swift",
         "Features/Main/Views/MyStoryActionBar.swift",
         "Features/Main/Views/MyStoryCard.swift",
