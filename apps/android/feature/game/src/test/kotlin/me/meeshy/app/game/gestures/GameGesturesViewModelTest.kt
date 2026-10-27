@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.MissionDifficulty
 import me.meeshy.sdk.model.game.MissionRerollResponse
+import me.meeshy.sdk.model.game.PrestigeResponse
 import me.meeshy.sdk.model.game.SeasonClaimResponse
 import me.meeshy.sdk.model.game.SeasonRewardBlock
 import me.meeshy.sdk.model.game.SeasonRewardKind
@@ -400,5 +401,61 @@ class GameGesturesViewModelTest {
         assertThat(vm.state.value.failures).isEmpty()
         assertThat(vm.state.value.buyingSeal).isFalse()
         coVerify(exactly = 2) { progress.refresh() }
+    }
+
+    private val reborn = PrestigeResponse(status = "passed", prestige = 2, score = 0, level = 1, gloryGained = 500, trophyKey = "prestige-2")
+
+    @Test
+    fun `la renaissance enregistree est celle de la reponse et la progression est relue`() = runTest {
+        coEvery { gestures.passPrestige(any()) } returns GameWriteOutcome.Done(reborn)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        assertThat(vm.state.value.prestigePassed).isEqualTo(2)
+        assertThat(vm.state.value.passingPrestige).isFalse()
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un niveau trop bas refuse la renaissance sans rien annoncer`() = runTest {
+        coEvery { gestures.passPrestige(any()) } returns GameWriteOutcome.Refused("PRESTIGE_LEVEL_TOO_LOW", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        assertThat(vm.state.value.prestigePassed).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Prestige]?.code).isEqualTo("PRESTIGE_LEVEL_TOO_LOW")
+    }
+
+    @Test
+    fun `un double appui sur renaitre ne passe qu une fois et rien n est annonce avant la reponse`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<PrestigeResponse>>()
+        coEvery { gestures.passPrestige(any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+        vm.passPrestige()
+        assertThat(vm.state.value.passingPrestige).isTrue()
+        assertThat(vm.state.value.prestigePassed).isNull()
+        coVerify(exactly = 0) { progress.refresh() }
+        gate.complete(GameWriteOutcome.Done(reborn))
+
+        coVerify(exactly = 1) { gestures.passPrestige(any()) }
+    }
+
+    @Test
+    fun `hors ligne la renaissance ne part pas`() = runTest {
+        network.simulateOffline()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        coVerify(exactly = 0) { gestures.passPrestige(any()) }
+        assertThat(vm.state.value.failures[GameGesture.Prestige]?.offline).isTrue()
     }
 }
