@@ -60,8 +60,18 @@ class ConversationEncryptionViewModel @Inject constructor(
     private val _state = MutableStateFlow(ConversationEncryptionUiState())
     val state: StateFlow<ConversationEncryptionUiState> = _state.asStateFlow()
 
+    /**
+     * Chaque ouverture relit le régime : le ViewModel vit avec l'écran de conversation, et une
+     * conversation devenue chiffrée de bout en bout entre deux ouvertures ne doit jamais rouvrir
+     * sur un « Désactiver » périmé. Le registre est relu AVANT le réseau ; la lecture se fait sans
+     * revenir au chargement quand un régime est déjà connu.
+     */
     fun load(conversationId: String, isDirect: Boolean) {
-        if (_state.value.conversationId == conversationId) return
+        if (_state.value.conversationId == conversationId) {
+            _state.update { it.copy(isDirect = isDirect, sealed = sealedOf(it, conversationId), confirmsDeactivation = false) }
+            read()
+            return
+        }
         _state.value = ConversationEncryptionUiState(
             conversationId = conversationId,
             isDirect = isDirect,
@@ -115,7 +125,7 @@ class ConversationEncryptionViewModel @Inject constructor(
                 current.copy(
                     isLoading = false,
                     status = served ?: current.status,
-                    sealed = ledger.isSealed(id),
+                    sealed = sealedOf(current, id),
                     notice = (result as? NetworkResult.Failure)?.let { noticeOf(it.error, ConversationEncryptionNotice.READ_FAILED) },
                 )
             }
@@ -128,11 +138,11 @@ class ConversationEncryptionViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = call(id)) {
                 is NetworkResult.Success -> _state.update {
-                    it.copy(isSwitching = false, status = result.data, sealed = ledger.isSealed(id), notice = null)
+                    it.copy(isSwitching = false, status = result.data, sealed = sealedOf(it, id), notice = null)
                 }
                 is NetworkResult.Failure -> {
                     val notice = noticeOf(result.error, ConversationEncryptionNotice.FAILED)
-                    _state.update { it.copy(isSwitching = false, sealed = ledger.isSealed(id), notice = notice) }
+                    _state.update { it.copy(isSwitching = false, sealed = sealedOf(it, id), notice = notice) }
                     if (notice == ConversationEncryptionNotice.REGIME_CHANGED || notice == ConversationEncryptionNotice.IRREVERSIBLE) {
                         refreshKeepingNotice(id, notice)
                     }
@@ -144,9 +154,12 @@ class ConversationEncryptionViewModel @Inject constructor(
     private suspend fun refreshKeepingNotice(id: String, notice: ConversationEncryptionNotice) {
         val served = (encryption.status(id) as? NetworkResult.Success)?.data
         _state.update { current ->
-            if (current.conversationId != id) current else current.copy(status = served ?: current.status, sealed = ledger.isSealed(id), notice = notice)
+            if (current.conversationId != id) current else current.copy(status = served ?: current.status, sealed = sealedOf(current, id), notice = notice)
         }
     }
+
+    /** Le scellé ne recule jamais dans la feuille : un compte momentanément inconnu ne rouvre pas le clair (#12949). */
+    private fun sealedOf(current: ConversationEncryptionUiState, id: String): Boolean = current.sealed || ledger.isSealed(id)
 
     private fun noticeOf(error: ApiError, fallback: ConversationEncryptionNotice): ConversationEncryptionNotice = when {
         error.code == ConversationEncryptionRepository.REGIME_CHANGED -> ConversationEncryptionNotice.REGIME_CHANGED

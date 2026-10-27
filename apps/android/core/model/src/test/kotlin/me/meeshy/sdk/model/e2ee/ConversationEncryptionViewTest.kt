@@ -97,4 +97,14 @@ class ConversationEncryptionViewTest {
         assertThat(view(status = status(mode = "e2ee", pair = "c42")).pairEndToEndConversationId).isNull()
         assertThat(view(status = status(mode = null, pair = "")).pairEndToEndConversationId).isNull()
     }
+
+    @Test
+    fun `an end to end mode served without its activation date is still end to end, never a clear conversation`() {
+        val anomaly = status(mode = "e2ee", canToggle = false).copy(isEncrypted = false)
+
+        val shown = view(status = anomaly)
+
+        assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+    }
 }
