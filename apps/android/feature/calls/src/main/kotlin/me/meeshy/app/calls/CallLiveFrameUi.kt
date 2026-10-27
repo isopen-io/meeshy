@@ -290,7 +290,7 @@ internal fun CallLiveFramePicker(
             CallPillButton(
                 icon = MeeshyIcons.Close,
                 kind = CallPillKind.Normal,
-                label = stringResource(R.string.call_action_minimize),
+                label = stringResource(R.string.call_panel_close),
                 onClick = onClose,
                 diameter = 40.dp,
             )
