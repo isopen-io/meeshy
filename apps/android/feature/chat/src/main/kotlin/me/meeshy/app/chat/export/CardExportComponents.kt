@@ -102,12 +102,15 @@ internal fun CardSwatch(palette: CardPalette, modifier: Modifier = Modifier, sha
     }
 }
 
+/** Spécimen typographique, identique dans toutes les langues (comme le « Aa » d'iOS) : pas un libellé à traduire. */
+private const val TYPEFACE_SPECIMEN = "Aa"
+
 /** Le « Aa » d'une typographie, dans la police que la carte lui donne. */
 @Composable
 internal fun CardTypefaceGlyph(id: CardTypefaceId) {
     val face = id.typeface.replyFace
     val family = remember(face) { FontFamily(CardRenderer.typeface(face)) }
-    Text("Aa", fontFamily = family, color = MeeshyTheme.tokens.textPrimary, style = MaterialTheme.typography.titleLarge)
+    Text(TYPEFACE_SPECIMEN, fontFamily = family, color = MeeshyTheme.tokens.textPrimary, style = MaterialTheme.typography.titleLarge)
 }
 
 /** Une vignette de template : sa VRAIE carte, peinte à l'entrée à l'écran — jamais un carré vide. */
