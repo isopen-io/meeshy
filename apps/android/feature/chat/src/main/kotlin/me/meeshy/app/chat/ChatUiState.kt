@@ -100,8 +100,6 @@ data class ChatUiState(
     /** Whether the viewer's conversation role (moderator+) bypasses slow mode.
      * Computed once per conversation load via [SlowModePolicy.isExemptRole]. */
     val slowModeExempt: Boolean = false,
-    /** « Inviter mes amis » — le verdict de `ConversationActionPolicy.invite` (groupe modéré, publique, Global), jamais un rôle relu à la main. */
-    val mayInviteFriends: Boolean = false,
     /** When the viewer last sent a message in this conversation (epoch millis),
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,

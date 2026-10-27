@@ -34,6 +34,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
+import coil.request.CachePolicy
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -80,11 +82,13 @@ public fun MeeshyImageViewer(
      */
     exportable: List<Boolean> = emptyList(),
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
+    /** Un contenu protégé : fenêtre exclue des captures, aucune copie dans le cache disque d'images. */
+    secure: Boolean = false,
 ) {
     if (imageUrls.isEmpty()) return
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        properties = viewerDialogProperties(secure),
     ) {
         val pagerState = rememberPagerState(
             initialPage = initialIndex.coerceIn(0, imageUrls.lastIndex),
@@ -104,7 +108,11 @@ public fun MeeshyImageViewer(
         LaunchedEffect(pagerState.currentPage, imageUrls) {
             val loader = context.imageLoader
             ImageViewerPrefetch.neighbors(currentIndex = pagerState.currentPage, total = imageUrls.size)
-                .forEach { index -> loader.enqueue(ImageRequest.Builder(context).data(imageUrls[index]).build()) }
+                .forEach { index -> loader.enqueue(
+                    ImageRequest.Builder(context).data(imageUrls[index])
+                        .apply { if (secure) diskCachePolicy(CachePolicy.DISABLED) }
+                        .build(),
+                ) }
         }
         LaunchedEffect(pagerState) {
             snapshotFlow { pagerState.settledPage }.drop(1).collect {
@@ -158,6 +166,7 @@ public fun MeeshyImageViewer(
                     onTap = { chrome = chrome.tappingMedia() },
                     onDragProgress = { dragProgress = it },
                     onDismiss = onDismiss,
+                    secure = secure,
                 )
             }
 

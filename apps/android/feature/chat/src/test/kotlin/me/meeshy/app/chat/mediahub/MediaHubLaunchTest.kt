@@ -91,12 +91,21 @@ class MediaHubLaunchTest {
             MediaHubAttachment("v", "/api/v1/attachments/file/v.mp4", null, "v.mp4", "video/mp4", null, null, true, false, null),
         )
         assertThat(mediaHubLaunchFor(video, base, resolve, open))
-            .isEqualTo(MediaHubLaunch.Video("https://gate.meeshy.me/api/v1/attachments/file/v.mp4"))
+            .isEqualTo(MediaHubLaunch.Video("https://gate.meeshy.me/api/v1/attachments/file/v.mp4", shieldsCapture = false))
     }
 
     @Test
     fun `un fichier dont le porteur ne laisse rien sortir est refuse`() {
         assertThat(mediaHubLaunchFor(piece("/api/v1/attachments/file/a.pdf"), base, resolve, MediaHubRowExit.Sealed))
             .isEqualTo(MediaHubLaunch.Refused)
+    }
+
+    @Test
+    fun `une video dont le porteur protege la capture le dit au lecteur`() {
+        val video = MediaHubPayload.Attachment(
+            MediaHubAttachment("v", "/api/v1/attachments/file/v.mp4", null, "v.mp4", "video/mp4", null, null, true, false, null),
+        )
+        assertThat(mediaHubLaunchFor(video, base, resolve, MediaHubRowExit.Sealed))
+            .isEqualTo(MediaHubLaunch.Video("https://gate.meeshy.me/api/v1/attachments/file/v.mp4", shieldsCapture = true))
     }
 }

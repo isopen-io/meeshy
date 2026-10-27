@@ -21,8 +21,11 @@ internal sealed interface MediaHubLaunch {
      */
     data class GatewayFile(val url: String, val mimeType: String?) : MediaHubLaunch
 
-    /** Une vidéo de la passerelle : lue par le lecteur intégré de Meeshy, pas par l'application système. */
-    data class Video(val url: String) : MediaHubLaunch
+    /**
+ * Une vidéo de la passerelle : lue par le lecteur intégré de Meeshy, pas par l'application système. [shieldsCapture] :
+ * le porteur impose la couche sécurisée (#9574) — fenêtre exclue des captures, aucune copie dans le cache disque.
+ */
+    data class Video(val url: String, val shieldsCapture: Boolean) : MediaHubLaunch
 
     /** Le portillon de sortie du porteur refuse : un contenu qui disparaît ne sort pas de Meeshy (#9573). */
     data object Refused : MediaHubLaunch
@@ -51,7 +54,7 @@ internal fun mediaHubLaunchFor(
         val url = if (piece.isEncrypted || hasForeignScheme(piece.url)) null else resolveMedia(piece.url)
         when {
             url == null || !isGatewayMedia(url, apiBaseUrl) -> MediaHubLaunch.Ignored
-            piece.isVideo -> MediaHubLaunch.Video(url)
+            piece.isVideo -> MediaHubLaunch.Video(url, exit.shieldsCapture)
             exit.mayLeave -> MediaHubLaunch.GatewayFile(url, piece.mimeType)
             else -> MediaHubLaunch.Refused
         }
