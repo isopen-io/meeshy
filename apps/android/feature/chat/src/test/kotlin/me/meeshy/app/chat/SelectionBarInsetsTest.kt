@@ -9,7 +9,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.composer.ComposerBottomClearance
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.chat.R
@@ -29,7 +29,7 @@ class SelectionBarInsetsTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun copyBottomAboveRootBottom(clearance: Int): Float {
+    private fun copyBottomAboveRootBottom(): Float {
         val offer = SelectionOffer(forward = true, copy = true, star = true, deleteForMe = true, deleteForEveryone = false)
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
@@ -40,7 +40,6 @@ class SelectionBarInsetsTest {
                         accentColor = MeeshyPalette.Indigo500,
                         onCancel = {}, onDelete = {}, onCopy = {}, onStar = {}, onForward = {},
                         modifier = Modifier.align(Alignment.BottomCenter),
-                        bottomClearance = clearance.dp,
                     )
                 }
             }
@@ -54,7 +53,7 @@ class SelectionBarInsetsTest {
     }
 
     @Test
-    fun `a clearance of 48 dp keeps every action at least 48 dp above the system bar`() {
-        assertThat(copyBottomAboveRootBottom(48)).isAtLeast(48f)
+    fun `by default the bar keeps the door clearance above the bottom edge, like the composer`() {
+        assertThat(copyBottomAboveRootBottom()).isAtLeast(ComposerBottomClearance.DOOR_DIAMETER_DP)
     }
 }
