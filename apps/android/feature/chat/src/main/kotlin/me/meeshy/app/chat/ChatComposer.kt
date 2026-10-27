@@ -192,22 +192,20 @@ internal fun ChatComposer(
         }
         withContext(Dispatchers.IO) { pending.discard() }
     }
-    val chatCameraCapture = rememberChatCameraCapture(
-        onCaptured = { uri, isVideo ->
-            val stage = onStageCapturedUris
-            val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
-            val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
-            val video = if (isVideo) ChatVideoRetouchPending.of(context, uri, System.currentTimeMillis()) else null
-            when {
-                video != null -> videoRetouch = video
-                pending != null -> retouch = pending
-                stage != null -> stage(listOf(uri))
-                else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
-                    onPickFile(file.bytes, file.fileName, file.mimeType)
-                }
+    val handleCapture: suspend (Uri, Boolean) -> Unit = { uri, isVideo ->
+        val stage = onStageCapturedUris
+        val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
+        val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
+        val video = if (isVideo) ChatVideoRetouchPending.of(context, uri, System.currentTimeMillis()) else null
+        when {
+            video != null -> videoRetouch = video
+            pending != null -> retouch = pending
+            stage != null -> stage(listOf(uri))
+            else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
+                onPickFile(file.bytes, file.fileName, file.mimeType)
             }
-        },
-    )
+        }
+    }
     retouch?.let { pending ->
         ChatCaptureRetouchHost(
             pending = pending,
@@ -282,11 +280,10 @@ internal fun ChatComposer(
             val iconTint = composerIconTint(effects.flags)
             ComposerGlassPlate(foldSlot = foldSlot, protectionTint = protectionTint) {
                 if (cameraChooserOpen) {
-                    ComposerCameraChooser(
+                    ComposerViewfinderHost(
                         canSendImages = affordances.canSendImages,
                         canSendVideos = affordances.canSendVideos,
-                        onPickPhoto = chatCameraCapture::launchPhoto,
-                        onPickVideo = chatCameraCapture::launchVideo,
+                        onCaptured = handleCapture,
                         onDismiss = { cameraChooserOpen = false },
                     )
                 }

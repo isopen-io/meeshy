@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +61,7 @@ import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * Le viseur du composeur, de bout en bout : permission, caméra CameraX, machine pure, haptique.
@@ -76,6 +75,7 @@ public fun CaptureViewfinder(
     onDisarm: () -> Unit,
     onDeliver: (CameraResult) -> Unit,
     modifier: Modifier = Modifier,
+    allowsPhoto: Boolean = true,
     allowsVideo: Boolean = true,
 ) {
     val context = LocalContext.current
@@ -84,7 +84,7 @@ public fun CaptureViewfinder(
     val haptics = rememberMeeshyHaptics()
     val permissions = rememberPermissionFlow()
     val reduceMotion = LocalReduceMotion.current
-    var state by remember { mutableStateOf(CaptureSessionState(armedAtMs = SystemClock.elapsedRealtime())) }
+    var state by remember { mutableStateOf(CaptureSessionState(armedAtMs = SystemClock.elapsedRealtime(), allowsPhoto = allowsPhoto, allowsVideo = allowsVideo)) }
     var granted by remember { mutableStateOf<Boolean?>(null) }
     var lensMin by remember { mutableStateOf(1f) }
     var lensMax by remember { mutableStateOf(1f) }
@@ -290,7 +290,7 @@ private fun RefusedChrome(onDisarm: () -> Unit, context: Context) {
             PermissionDeniedCard(PermissionNature.CAMERA, onOpenSettings = { context.openAppSettings() }, onDismiss = onDisarm)
         }
         Box(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(horizontal = 14.dp, vertical = 12.dp)) {
-            CaptureRoundButton(Icons.Filled.Close, stringResource(R.string.capture_disarm), onDisarm)
+            CaptureRoundButton(MeeshyIcons.Close, stringResource(R.string.capture_disarm), onDisarm)
         }
     }
 }

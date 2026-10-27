@@ -201,4 +201,13 @@ class CaptureSessionReducerTest {
         assertThat(failed.state.ledger.hasLostTake).isTrue()
         assertThat(failed.effects).contains(CaptureEffect.Haptic(CaptureHaptic.WARNING))
     }
+
+    @Test
+    fun `a conversation that forbids photos or videos gets neither gesture`() {
+        val noPhoto = run(CaptureSessionState(allowsPhoto = false), CaptureEvent.ShutterTapped(1_000))
+        assertThat(noPhoto.effects.filterIsInstance<CaptureEffect.TakePhoto>()).isEmpty()
+        val noVideo = run(CaptureSessionState(allowsVideo = false), CaptureEvent.HoldBegan)
+        assertThat(noVideo.effects.filterIsInstance<CaptureEffect.StartRecording>()).isEmpty()
+        assertThat(noVideo.state.holding).isFalse()
+    }
 }
