@@ -4,6 +4,7 @@ import me.meeshy.app.conversations.ConversationRowTime
 import me.meeshy.app.conversations.LastMessagePreviewLabels
 import me.meeshy.app.conversations.lastMessagePreview
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 
@@ -49,6 +50,7 @@ internal data class RecentConversationsWidgetPresentation(
             conversations: List<ApiConversation>,
             currentUserId: String?,
             previewLabels: LastMessagePreviewLabels,
+            preferredLanguages: List<String> = emptyList(),
         ): RecentConversationsWidgetPresentation {
             val ordered = conversations.sortedWith(
                 compareByDescending<ApiConversation> { it.resolvedPreferences?.isPinned == true }
@@ -63,6 +65,7 @@ internal data class RecentConversationsWidgetPresentation(
                         currentUserId = currentUserId,
                         showSender = conversation.type.lowercase() !in directConversationTypes,
                         labels = previewLabels,
+                        resolvedContent = conversation.resolvedLastMessagePreview(preferredLanguages),
                     ),
                     isUnread = conversation.unreadCount > 0,
                     isPinned = conversation.resolvedPreferences?.isPinned == true,
