@@ -35,6 +35,15 @@ internal object RetouchGlassPainter {
         blurred.recycle()
     }
 
+    /**
+     * Le temps de repos du geste avant de refrotter les vitres de l'aperçu : un glissé change l'empreinte à chaque
+     * image, et chaque vitre coûte une toile de la taille de l'aperçu — sans ce repos, le S8 en allouerait une par
+     * image pour la jeter aussitôt. Le délai est annulable ; le calcul, une fois lancé, ne l'est pas.
+     */
+    const val SETTLE_MILLIS: Long = 48L
+
+    fun hasGlass(texts: List<StoryTextObject>): Boolean = texts.any { it.text.isNotBlank() && ComposerRetouchBake.isGlass(it) }
+
     /** Les seules vitres des textes Verre de [texts], sur une toile transparente de la taille de [base] ; `null` sans verre. */
     fun panes(base: Bitmap, texts: List<StoryTextObject>): Bitmap? {
         val glass = ComposerRetouchBake.runs(texts.filter { it.text.isNotBlank() }).mapNotNull { it.glass }

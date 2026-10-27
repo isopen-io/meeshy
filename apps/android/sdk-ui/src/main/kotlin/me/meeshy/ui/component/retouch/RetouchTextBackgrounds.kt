@@ -3,7 +3,6 @@ package me.meeshy.ui.component.retouch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
@@ -32,12 +32,19 @@ import me.meeshy.ui.theme.hexColor
 
 /**
  * **LE FOND DU TEXTE** (iOS `StoryTextEditProfile.bakedIntoMedia`, #12754) : les douze fonds du composer, dans
- * son ordre — aucun, Verre, puis les pleins. Une pastille de 48 dp par fond ; le fond choisi est cerclé.
+ * son ordre — aucun, Verre, puis les pleins. Une pastille de 48 dp par fond, bouton radio pour TalkBack ; le fond
+ * choisi est cerclé, et « Aucun » porte le libellé d'iOS (`StoryTextBackgroundPresets.label`).
  */
 @Composable
 internal fun RetouchTextBackgroundRow(current: StoryTextBackground, onChoose: (StoryTextBackground) -> Unit) {
+    val groupLabel = stringResource(R.string.retouch_text_background)
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .selectableGroup()
+            .semantics { contentDescription = groupLabel }
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ComposerRetouchTextBoard.BACKGROUNDS.forEach { option ->
@@ -46,11 +53,8 @@ internal fun RetouchTextBackgroundRow(current: StoryTextBackground, onChoose: (S
             Box(
                 Modifier
                     .size(48.dp)
-                    .clickable(role = Role.Button) { onChoose(option) }
-                    .semantics {
-                        contentDescription = label
-                        selected = chosen
-                    },
+                    .selectable(selected = chosen, role = Role.RadioButton) { onChoose(option) }
+                    .semantics { contentDescription = label },
                 contentAlignment = Alignment.Center,
             ) {
                 Swatch(option, chosen)
@@ -73,7 +77,7 @@ private fun Swatch(option: StoryTextBackground, chosen: Boolean) {
 }
 
 private fun backgroundName(option: StoryTextBackground): Int = when (option) {
-    StoryTextBackground.None -> R.string.retouch_text_background
+    StoryTextBackground.None -> R.string.retouch_effect_none
     is StoryTextBackground.Glass -> R.string.retouch_text_bg_glass
     is StoryTextBackground.Solid -> when (option.hex.uppercase()) {
         "000000" -> R.string.retouch_text_bg_black

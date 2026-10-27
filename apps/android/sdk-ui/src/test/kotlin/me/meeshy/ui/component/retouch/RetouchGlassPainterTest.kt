@@ -65,4 +65,11 @@ class RetouchGlassPainterTest {
         assertThat(Color.alpha(glass.getPixel(192, 40))).isEqualTo(0)
         assertThat(RetouchGlassPainter.panes(split(), listOf(text(StoryTextBackground.Solid("00FF00"))))).isNull()
     }
+
+    @Test
+    fun `l apercu ne prepare de vitre que pour un texte Verre ecrit`() {
+        assertThat(RetouchGlassPainter.hasGlass(listOf(text(StoryTextBackground.Glass(24.0))))).isTrue()
+        assertThat(RetouchGlassPainter.hasGlass(listOf(text(StoryTextBackground.Glass(24.0)).copy(text = "  ")))).isFalse()
+        assertThat(RetouchGlassPainter.hasGlass(listOf(text(StoryTextBackground.Solid("00FF00")), text(StoryTextBackground.None)))).isFalse()
+    }
 }
