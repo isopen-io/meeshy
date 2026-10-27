@@ -109,7 +109,7 @@ internal fun CaptureFlashButton(mode: CaptureFlashMode, onClick: () -> Unit) {
             CaptureFlashMode.OFF -> Canvas(Modifier.size(22.dp)) {
                 drawLine(tint, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), strokeWidth = 2.5f)
             }
-            CaptureFlashMode.AUTO -> Text("A", color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 5.dp))
+            CaptureFlashMode.AUTO -> Text(stringResource(R.string.capture_flash_auto_badge), color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 5.dp))
             CaptureFlashMode.ON -> Unit
         }
     }
