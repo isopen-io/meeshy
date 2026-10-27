@@ -117,6 +117,7 @@ internal fun StoryAudienceSheet(
                     title = stringResource(current.titleRes()),
                     initialSelection = if (current == AudiencePage.MENTION) emptyList() else userIds,
                     single = current == AudiencePage.MENTION,
+                    keepsBlocked = current == AudiencePage.EXCEPT,
                     onCancel = { page = AudiencePage.AUDIENCE },
                     onDone = { ids, people ->
                         if (current == AudiencePage.MENTION) people.forEach(onAddMention) else onUserIdsChange(ids)

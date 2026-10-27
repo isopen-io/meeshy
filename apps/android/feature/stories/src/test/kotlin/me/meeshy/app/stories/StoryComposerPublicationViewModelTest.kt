@@ -217,12 +217,12 @@ class StoryComposerPublicationViewModelTest {
     }
 
     @Test
-    fun `un brouillon restaure perd les personnes bloquees depuis et soi`() = runTest {
+    fun `un brouillon ONLY restaure perd les personnes bloquees depuis et soi`() = runTest {
         blocks.setBlocked("b", true)
         val stored = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut")),
             selectedId = "s1",
-            visibility = "EXCEPT",
+            visibility = "ONLY",
             visibilityUserIds = listOf("a", "b", "me"),
         )
         val vm = viewModel(InMemoryStoryComposerDraftStore(stored))
@@ -239,5 +239,35 @@ class StoryComposerPublicationViewModelTest {
         (1..StoryComposerViewModel.MAX_MENTIONS + 3).forEach { vm.onAddMention(AudienceCandidate(id = "u$it", username = "user$it")) }
 
         assertThat(vm.published().mentions).hasSize(StoryComposerViewModel.MAX_MENTIONS)
+    }
+
+    @Test
+    fun `une exclusion EXCEPT garde la personne bloquee depuis, seul soi en sort`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("salut")
+        vm.onVisibilityChange(StoryVisibility.EXCEPT)
+        vm.onAudienceUserIdsChange(listOf("a", "b", "me"))
+        blocks.setBlocked("b", true)
+
+        val body = vm.published()
+
+        assertThat(body.visibility).isEqualTo("EXCEPT")
+        assertThat(body.visibilityUserIds).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `un brouillon EXCEPT restaure garde ses exclusions bloquees, seul soi en sort`() = runTest {
+        blocks.setBlocked("b", true)
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut")),
+            selectedId = "s1",
+            visibility = "EXCEPT",
+            visibilityUserIds = listOf("a", "b", "me"),
+        )
+        val vm = viewModel(InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.draft.visibilityUserIds).containsExactly("a", "b").inOrder()
     }
 }

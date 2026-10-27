@@ -57,12 +57,13 @@ internal fun StoryAudiencePickerPage(
     title: String,
     initialSelection: List<String>,
     single: Boolean,
+    keepsBlocked: Boolean = false,
     onCancel: () -> Unit,
     onDone: (ids: List<String>, people: List<AudienceCandidate>) -> Unit,
     viewModel: StoryAudiencePickerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(initialSelection) { viewModel.start(initialSelection) }
+    LaunchedEffect(initialSelection, keepsBlocked) { viewModel.start(initialSelection, keepsBlocked) }
     val haptics = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
