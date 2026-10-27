@@ -28,6 +28,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -137,6 +138,15 @@ fun CallScreen(
 
             // Un pair qui escalade l'audio en vidéo s'affiche même si l'appel est né audio.
             val videoStage = state.isVideoCall || remoteVideo != null
+            val touchExploration = rememberCallTouchExploration()
+            val videoScene = callIsVideoStage(state)
+            val sceneTap = remember(chrome, videoScene, touchExploration) {
+                if (CallChromeVisibility.mayToggleByTap(videoScene, touchExploration)) {
+                    { chrome.onSceneTap(videoScene, touchExploration) }
+                } else {
+                    null
+                }
+            }
             if (videoStage) {
                 CallDuoVideoStage(
                     state = state,
@@ -147,6 +157,7 @@ fun CallScreen(
                     peerAvatarUrl = avatarUrl,
                     connected = state.showsConnectedLayout,
                     reduceMotion = reduceMotion,
+                    onSceneTap = sceneTap,
                 )
             }
 
