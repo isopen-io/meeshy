@@ -2583,16 +2583,32 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onElementMenuAction BRING_TO_FRONT restacks the element and closes the menu`() = runTest {
+    fun `onElementMenuAction BRING_FORWARD moves the element one step forward, as iOS, and closes the menu`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
         val back = vm.state.value.selectedTextElement!!.id
-        vm.onAddTextElement() // a second element sits in front of the first
+        vm.onAddTextElement()
+        vm.onAddTextElement()
         vm.onOpenElementMenu(back)
 
         vm.onSceneMenuAction(SceneObjectMenu.Action.BRING_FORWARD)
 
-        assertThat(vm.state.value.selectedSlideTextElements.last().id).isEqualTo(back)
+        assertThat(vm.state.value.selectedSlideTextElements.map { it.id }.indexOf(back)).isEqualTo(1)
+        assertThat(vm.state.value.sceneContextMenu).isNull()
+    }
+
+    @Test
+    fun `onSceneMenuAction SEND_BACKWARD moves a sticker one step back, as iOS`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        vm.onAddSticker("🌙")
+        vm.onAddSticker("⭐")
+        val front = vm.state.value.selectedSlideStickers.last().id
+        vm.onOpenStickerMenu(front)
+
+        vm.onSceneMenuAction(SceneObjectMenu.Action.SEND_BACKWARD)
+
+        assertThat(vm.state.value.selectedSlideStickers.map { it.id }.indexOf(front)).isEqualTo(1)
         assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 

@@ -3,7 +3,11 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -116,7 +120,7 @@ class SceneEditorUiTest {
                     canvasWidthPx = 720f, canvasHeightPx = 1280f,
                     onTap = { tapped = current }, onLongPress = {},
                     onMenuAction = {}, onMenuDismiss = {},
-                    onDrag = { _, _ -> }, onTransform = { _, _ -> },
+                    onDrag = { _, _ -> }, onDragEnd = {}, onTransform = { _, _ -> },
                 )
             }
         }
@@ -126,6 +130,37 @@ class SceneEditorUiTest {
         compose.onNodeWithText("😀").performClick()
 
         assertThat(tapped).isEqualTo("second")
+    }
+
+    @Test
+    fun `TalkBack ouvre le menu d'un sticker et d'un texte par l'action d'appui long`() {
+        val opened = mutableListOf<String>()
+        compose.setContent {
+            MeeshyTheme {
+                StickerLayer(
+                    sticker = StoryStickerElement(id = "s1", emoji = "😀"),
+                    selected = false, menu = null,
+                    canvasWidthPx = 720f, canvasHeightPx = 1280f,
+                    onTap = {}, onLongPress = { opened += "s1" },
+                    onMenuAction = {}, onMenuDismiss = {},
+                    onDrag = { _, _ -> }, onDragEnd = {}, onTransform = { _, _ -> },
+                )
+                TextElementLayer(
+                    element = StoryTextElement(id = "t1", text = "Bonjour"),
+                    selected = false, menu = null,
+                    canvasWidthPx = 720f, canvasHeightPx = 1280f,
+                    onTap = {}, onLongPress = { opened += "t1" },
+                    onMenuAction = {}, onMenuDismiss = {},
+                    onDrag = { _, _ -> }, onDragEnd = {}, onTransform = { _, _ -> },
+                )
+            }
+        }
+
+        compose.onNode(hasContentDescription("😀")).performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))[1]
+            .performSemanticsAction(SemanticsActions.OnLongClick)
+
+        assertThat(opened).containsExactly("s1", "t1").inOrder()
     }
 
     @Test

@@ -86,6 +86,7 @@ internal fun StoryCanvasSurface(
     onStickerTap: (String) -> Unit,
     onStickerLongPress: (String) -> Unit,
     onStickerDrag: (String, Float, Float) -> Unit,
+    onStickerDragEnd: () -> Unit,
     onStickerTransform: (String, Float, Float) -> Unit,
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
@@ -246,6 +247,7 @@ internal fun StoryCanvasSurface(
                             onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
+                    onDragEnd = onStickerDragEnd,
                     onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
                 )
             }

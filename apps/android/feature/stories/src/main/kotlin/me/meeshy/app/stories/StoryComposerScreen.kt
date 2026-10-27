@@ -276,6 +276,7 @@ fun StoryComposerScreen(
                         onStickerTap = viewModel::onSelectSticker,
                         onStickerLongPress = viewModel::onOpenStickerMenu,
                         onStickerDrag = viewModel::onStickerMoved,
+                        onStickerDragEnd = viewModel::onStickerDragEnd,
                         onStickerTransform = viewModel::onStickerTransform,
                         onBackgroundTap = {
                             viewModel.onDeselectTextElement()

@@ -201,8 +201,8 @@ class StoryComposerViewModel @Inject constructor(
                 SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
                 SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
                 SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
-                SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.TO_FRONT)
-                SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.TO_BACK)
+                SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.FORWARD)
+                SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.BACKWARD)
                 SceneObjectMenu.Action.TRIM,
                 SceneObjectMenu.Action.LEAVE_SCENE,
                 SceneObjectMenu.Action.SET_AS_BACKGROUND,
@@ -224,14 +224,14 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Pose la fenêtre d'un objet (0 = permanent), depuis la frise ou l'inspecteur. */
     fun onSceneObjectWindow(id: String, startSeconds: Float, durationSeconds: Float) =
-        reduce("window:$id") { StoryComposerSceneReducer.windowed(it, id, startSeconds, durationSeconds) }
+        reduce { StoryComposerSceneReducer.windowed(it, id, startSeconds, durationSeconds) }
 
     fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
 
     fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
 
     /** Drags element [id] by normalised deltas with magnetic snapping. */
-    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerTextReducer.moved(it, id, dx, dy) }
+    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce(transformGesture(id)) { StoryComposerTextReducer.moved(it, id, dx, dy) }
 
     fun onTextElementDragEnd() = reduce { StoryComposerTextReducer.dragEnded(it) }
 
@@ -259,7 +259,7 @@ class StoryComposerViewModel @Inject constructor(
     fun onTextElementCycleDuration(id: String) = reduce { StoryComposerTextReducer.durationCycled(it, id) }
 
     fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
-        reduce("pinch:$id") { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
+        reduce(transformGesture(id)) { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
     fun onReorderTextElement(id: String, op: StoryZOrder) = reduce { StoryComposerTextReducer.reordered(it, id, op) }
 
@@ -280,10 +280,16 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onRemoveSticker(id: String) = reduce { StoryComposerStickerReducer.removed(it, id) }
 
-    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerStickerReducer.moved(it, id, dx, dy) }
+    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce(transformGesture(id)) { StoryComposerStickerReducer.moved(it, id, dx, dy) }
 
     fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
-        reduce("pinch:$id") { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
+        reduce(transformGesture(id)) { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
+
+    /** Le doigt quitte le sticker : le geste se referme, le suivant sera son propre cran d'annulation. */
+    fun onStickerDragEnd() = reduce { it }
+
+    /** Glisser, pincer et tourner un même objet sont UN geste : une seule entrée d'annulation. */
+    private fun transformGesture(id: String) = "transform:$id"
 
     /** Enters the drawing tool (closes the band, clears selections). */
     fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
