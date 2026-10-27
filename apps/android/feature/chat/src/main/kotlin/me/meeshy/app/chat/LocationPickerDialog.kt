@@ -65,6 +65,7 @@ import me.meeshy.sdk.model.location.LocationPickerState
 import me.meeshy.sdk.model.location.PlaceLabels
 import me.meeshy.sdk.model.location.SlippyMap
 import me.meeshy.ui.component.location.MapCenterPin
+import me.meeshy.ui.component.location.MapAttribution
 import me.meeshy.ui.component.location.TileMapView
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
@@ -137,6 +138,7 @@ internal fun LocationPickerDialog(
                 onZoomChange = { zoom = SlippyMap.clampZoom(it) },
                 onInteractionChange = { moving = it },
                 modifier = Modifier.fillMaxSize(),
+                showAttribution = false,
             )
             MapCenterPin(lifted = moving, color = accent, modifier = Modifier.align(Alignment.Center))
 
@@ -165,7 +167,9 @@ internal fun LocationPickerDialog(
                         },
                     )
                 }
-                Box(Modifier.weight(1f))
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
+                    MapAttribution(preferences.mapStyle)
+                }
                 BottomCard(
                     state = state,
                     precision = preferences.precision,
