@@ -669,6 +669,7 @@ class ConversationMediaGalleryTest {
         assertThat(gallery.imageUrls).containsExactly("u1", "secret").inOrder()
         assertThat(gallery.startIndex).isEqualTo(1)
         assertThat(gallery.exportable).containsExactly(true, false).inOrder()
+        assertThat(gallery.shieldsCapture).isTrue()
     }
 
     @Test
@@ -700,6 +701,7 @@ class ConversationMediaGalleryTest {
         )
 
         assertThat(gallery.exportable).containsExactly(true, false).inOrder()
+        assertThat(gallery.shieldsCapture).isTrue()
     }
 
     @Test
@@ -711,5 +713,6 @@ class ConversationMediaGalleryTest {
         )
 
         assertThat(gallery.exportable).containsExactly(true, true)
+        assertThat(gallery.shieldsCapture).isFalse()
     }
 }
