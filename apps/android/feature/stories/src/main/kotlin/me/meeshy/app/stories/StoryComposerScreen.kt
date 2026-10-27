@@ -2,6 +2,16 @@ package me.meeshy.app.stories
 
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.runtime.key
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.currentStateAsState
+import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
+import me.meeshy.ui.component.audio.AudioTrackSurface
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -124,6 +134,25 @@ fun StoryComposerScreen(
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
 
     var showSoundShelf by remember { mutableStateOf(false) }
+    val screenState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val backgroundSound = state.selectedSlideBackgroundSound
+    val soundPlays = ComposerSoundPlacement.playsWhileComposing(
+        track = backgroundSound,
+        screenResumed = screenState.isAtLeast(Lifecycle.State.RESUMED),
+        shelfOpen = showSoundShelf,
+    )
+    backgroundSound?.mediaURL?.takeIf { it.isNotEmpty() }?.let { url ->
+        key(url) {
+            AudioTrackSurface(
+                mediaUrl = url,
+                isActive = soundPlays,
+                rewindWhenInactive = false,
+                loop = true,
+                volume = backgroundSound.volume,
+                handleAudioFocus = true,
+            )
+        }
+    }
     if (showSoundShelf) {
         SoundShelfSheet(
             onUse = { sound ->
@@ -285,6 +314,21 @@ fun StoryComposerScreen(
                             onDone = viewModel::onDeselectTextElement,
                         )
                     } else {
+                        // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun
+                        // pixel au rendu final) — et seulement quand aucun outil n'occupe la zone basse.
+                        val trace = ComposerSoundPlacement.traceServed(
+                            background = state.selectedSlideBackgroundSound,
+                            toolIsOpen = state.band.activeTool != null,
+                        )
+                        AnimatedVisibility(visible = trace != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                            trace?.let {
+                                SoundTraceRow(
+                                    sound = it,
+                                    onToggleMute = { viewModel.onToggleSoundMute(it.id) },
+                                    onRemove = { viewModel.onRemoveSound(it.id) },
+                                )
+                            }
+                        }
                         // The slide CAPTION only: a text object is written on the scene itself
                         // (ComposerInlineTextField), so this field never silently changes role.
                         OutlinedTextField(
