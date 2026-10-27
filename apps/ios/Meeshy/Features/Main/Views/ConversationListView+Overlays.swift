@@ -662,7 +662,7 @@ extension ConversationRowMenuActions {
     static func startCall(to conversation: Conversation, isVideo: Bool) {
         guard let calleeId = conversation.participantUserId else { return }
         Task {
-            await CallManager.shared.requestPermissionsThenStartCall(
+            await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                 conversationId: conversation.id,
                 userId: calleeId,
                 displayName: conversation.name,

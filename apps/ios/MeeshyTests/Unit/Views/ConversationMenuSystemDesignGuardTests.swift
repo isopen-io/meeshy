@@ -322,7 +322,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "verrouillée) — même chemin que le bouton onSearch de l'aperçu custom (SSOT)."
         )
         XCTAssertTrue(
-            overlaysSource.contains("CallManager.shared.requestPermissionsThenStartCall("),
+            overlaysSource.contains("CallManager.shared.outgoingDial.requestPermissionsThenStartCall("),
             "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
             "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
             "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +

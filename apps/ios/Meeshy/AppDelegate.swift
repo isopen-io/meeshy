@@ -195,7 +195,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
             Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                CallManager.shared.incomingRing.endRingingFromCancellation(callId: cancelCallId)
                 completionHandler(.noData)
             }
             return
@@ -209,7 +209,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
             Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                CallManager.shared.incomingRing.endRingingAnsweredElsewhere(callId: answeredCallId)
                 completionHandler(.noData)
             }
             return

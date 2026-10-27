@@ -47,11 +47,13 @@ enum CallDebugIncomingTrigger {
 
     @MainActor
     static func ring() {
-        CallManagerHost.shared.require().handleIncomingCallNotification(
+        CallManagerHost.shared.require().incomingRing.handleIncomingCallNotification(
             callId: debugCallId(),
             fromUserId: "",
             fromUsername: callerName,
-            isVideo: false
+            isVideo: false,
+            iceServers: nil,
+            conversationId: nil
         )
     }
 }

@@ -134,7 +134,7 @@ extension CallManager: GroupCallHostProviding {
     @discardableResult
     func startGroupCall(conversationId: String, title: String, isVideo: Bool) async -> Bool {
         GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: title)
-        return await requestPermissionsThenStartCall(
+        return await outgoingDial.requestPermissionsThenStartCall(
             conversationId: conversationId,
             userId: conversationId,
             displayName: title,

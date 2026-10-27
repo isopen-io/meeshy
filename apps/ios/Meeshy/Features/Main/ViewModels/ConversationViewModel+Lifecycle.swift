@@ -73,7 +73,7 @@ struct LiveCallJoinContext {
         hasPendingIncomingCall: { CallManager.shared.pendingIncomingCall?.callId == $0 },
         bringCallUIForward: { CallManager.shared.displayMode = .fullScreen },
         rejoinActiveCall: { callId, conversationId, remoteUserId, remoteUsername, isVideo in
-            CallManager.shared.rejoinActiveCall(
+            CallManager.shared.outgoingDial.rejoinActiveCall(
                 callId: callId,
                 conversationId: conversationId,
                 remoteUserId: remoteUserId,

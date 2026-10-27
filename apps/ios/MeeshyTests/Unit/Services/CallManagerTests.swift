@@ -598,7 +598,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found")
             return
         }
-        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak call] error in") else {
             XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
             return
         }
@@ -626,7 +626,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall or endSecondaryVoIPCallWhileBusy not found")
             return
         }
-        guard let busyGuardRange = caller.range(of: "guard callState == .idle else {"),
+        guard let busyGuardRange = caller.range(of: "guard call.callState == .idle else {"),
               caller[busyGuardRange.upperBound...].contains("endSecondaryVoIPCallWhileBusy(") else {
             XCTFail("Expected the busy-path guard in reportIncomingVoIPCall to end the secondary call")
             return
@@ -666,7 +666,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found")
             return
         }
-        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak call] error in") else {
             XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
             return
         }
@@ -687,7 +687,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found")
             return
         }
-        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak call] error in") else {
             XCTFail("Expected the reportNewIncomingCall failure closure in handleIncomingCallNotification")
             return
         }
@@ -716,7 +716,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         }
         XCTAssertTrue(caller.contains("beginOutgoingRing(userId: userId,"), "startCall must ring through beginOutgoingRing")
         XCTAssertTrue(
-            body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
+            body.contains("Task { @MainActor [weak call] in call?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
             "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
             "callController.request closure — an unstructured Task does not inherit its enclosing " +
             "closure's capture list."
@@ -733,7 +733,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            body.contains("Task { @MainActor [weak self] in self?.failCall(\"CallKit error\") }"),
+            body.contains("Task { @MainActor [weak call] in call?.failCall(\"CallKit error\") }"),
             "handleIncomingCallNotification's reportNewIncomingCall failure Task must capture [weak self]."
         )
     }
@@ -2466,7 +2466,7 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
         // hasn't answered yet" from "user just answered while this REST check — up to
         // voipFreshnessTimeoutSeconds — was still in flight". A stale/racy terminal
         // response must never tear down a call the user is actively connecting/on.
-        let occurrences = body.components(separatedBy: "activeCallUUID == uuid, case .ringing = callState").count - 1
+        let occurrences = body.components(separatedBy: "activeCallUUID == uuid, case .ringing = call.callState").count - 1
         XCTAssertEqual(
             occurrences, 2,
             "Bug D follow-up: BOTH the 404 branch and the terminal-status branch must guard " +
@@ -2599,7 +2599,7 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
-        guard let guardRange = body.range(of: "guard let pending = pendingIncomingCall"),
+        guard let guardRange = body.range(of: "let pending = call.pendingIncomingCall"),
               let endCallRange = body.range(of: "endCall()") else {
             XCTFail("Expected guard + endCall in endCurrentAndAnswerPending"); return
         }
@@ -2637,13 +2637,13 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         }
         let beforeHandle = String(body[taskRange.upperBound..<handleRange.lowerBound])
         XCTAssertTrue(
-            beforeHandle.contains("self.answeringPendingCallId == pending.callId"),
+            beforeHandle.contains("call.answeringPendingCallId == pending.callId"),
             "endCurrentAndAnswerPending's Task must guard `self.answeringPendingCallId == " +
             "pending.callId` (NOT `self.pendingIncomingCall?.callId`, which endCall() already " +
             "nils as a side effect) before calling handleIncomingCallNotification."
         )
         XCTAssertFalse(
-            beforeHandle.contains("self.pendingIncomingCall?.callId == pending.callId"),
+            beforeHandle.contains("pendingIncomingCall?.callId == pending.callId"),
             "endCurrentAndAnswerPending's revalidation guard must NOT read pendingIncomingCall — " +
             "endCall() nils it synchronously before the Task runs, making that guard always false."
         )
@@ -3980,7 +3980,7 @@ final class RejectPendingCallTests: XCTestCase {
             XCTFail("rejectPendingCall() not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("guard let pending = pendingIncomingCall"),
+            body.contains("let pending = call.pendingIncomingCall"),
             "rejectPendingCall() must guard `pendingIncomingCall != nil` before emitting — " +
             "calling it when no pending call exists must be a no-op."
         )
@@ -4341,7 +4341,7 @@ final class RetryCallSourceGuardTests: XCTestCase {
         guard let body = functionBody(of: "func retryCall()", in: source) else {
             XCTFail("retryCall() not found"); return
         }
-        XCTAssertTrue(body.contains("guard canRetryCall"),
+        XCTAssertTrue(body.contains("call.canRetryCall"),
             "retryCall must be inert unless canRetryCall — a normal hangup must never re-dial.")
         XCTAssertTrue(body.contains("startCall("),
             "retryCall must re-enter startCall with the captured dial context.")
@@ -4419,11 +4419,11 @@ final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
         }
         XCTAssertTrue(caller.contains("await self.runOutgoingCallSetup("), "startCall must run its setup through runOutgoingCallSetup")
         XCTAssertTrue(
-            body.contains("guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else"),
+            body.contains("guard call.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else"),
             "startCall must check webRTCService.configure's result and abort on failure " +
             "instead of proceeding to activate the audio session on a call that can never connect."
         )
-        XCTAssertTrue(body.contains("self.failCall("),
+        XCTAssertTrue(body.contains("call.failCall("),
             "a configure failure must route through failCall so CallKit/Recents is told the call ended.")
     }
 
@@ -4433,7 +4433,7 @@ final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
             XCTFail("rejoinActiveCall not found"); return
         }
         XCTAssertTrue(
-            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: nil) else"),
+            body.contains("guard call.webRTCService.configure(isVideo: isVideo, iceServers: nil) else"),
             "rejoinActiveCall must check webRTCService.configure's result and abort on failure."
         )
         XCTAssertTrue(body.contains("return false"),
@@ -4446,7 +4446,7 @@ final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found"); return
         }
         XCTAssertTrue(
-            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
+            body.contains("guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
             "reportIncomingVoIPCall must check webRTCService.configure's result and abort on failure."
         )
     }
@@ -4457,7 +4457,7 @@ final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found"); return
         }
         XCTAssertTrue(
-            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
+            body.contains("guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
             "handleIncomingCallNotification must check webRTCService.configure's result and abort on failure."
         )
     }
@@ -4813,7 +4813,7 @@ final class CallManagerBusyFeedbackTests: XCTestCase {
         guard let body = startCallBody(source) else {
             XCTFail("startCall body not found"); return
         }
-        guard let guardRange = body.range(of: "guard callState == .idle else {") else {
+        guard let guardRange = body.range(of: "guard call.callState == .idle else {") else {
             XCTFail("startCall busy guard not found"); return
         }
         let guardBlockEnd = body.range(of: "\n        }", range: guardRange.upperBound..<body.endIndex)?.upperBound ?? body.endIndex
@@ -4893,7 +4893,7 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
             XCTFail("rejoinActiveCall body not found"); return
         }
         XCTAssertTrue(
-            body.contains("guard callState == .idle else {"),
+            body.contains("guard call.callState == .idle else {"),
             "rejoinActiveCall must only proceed from .idle — a device already in a call " +
             "(including one already rejoining) must not be knocked into a new negotiation."
         )

@@ -44,7 +44,7 @@ enum CallStarter {
     ) {
         if let conversationId, !conversationId.isEmpty {
             Task { @MainActor in
-                await CallManager.shared.requestPermissionsThenStartCall(
+                await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                     conversationId: conversationId,
                     userId: userId,
                     displayName: displayName,
@@ -57,7 +57,7 @@ enum CallStarter {
         Task { @MainActor in
             do {
                 if let conversation = try await DirectConversationResolver.existing(with: userId) {
-                    await CallManager.shared.requestPermissionsThenStartCall(
+                    await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                         conversationId: conversation.id,
                         userId: userId,
                         displayName: displayName,

@@ -86,7 +86,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
     private func observeIncomingOffers(_ socket: MessageSocketManager) {
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in self?.call?.handleCallOffer(event) }
+            .sink { [weak self] event in self?.call?.incomingRing.handleCallOffer(event) }
             .store(in: &cancellables)
     }
 
@@ -192,7 +192,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let call = self?.call else { return }
-                call.clearPendingIncomingCall(ifMatching: event.callId)
+                call.incomingRing.clearPendingIncomingCall(ifMatching: event.callId)
                 call.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
             }
             .store(in: &cancellables)
@@ -205,7 +205,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .sink { [weak self] event in
                 guard let call = self?.call else { return }
                 Logger.calls.info("call:missed received: callId=\(event.callId), caller=\(event.callerName ?? "?")")
-                call.clearPendingIncomingCall(ifMatching: event.callId)
+                call.incomingRing.clearPendingIncomingCall(ifMatching: event.callId)
                 if call.currentCallId == event.callId {
                     call.handleRemoteEnd(callId: event.callId, rawReason: "missed")
                 }
@@ -335,7 +335,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let call = self?.call else { return }
-                call.clearPendingIncomingCall(ifMatching: event.callId)
+                call.incomingRing.clearPendingIncomingCall(ifMatching: event.callId)
                 guard call.currentCallId == event.callId,
                       CallResumePolicy.yieldsToAnotherDevice(callState: call.callState) else { return }
                 Logger.calls.info("call:already-answered received — dismissing local ring (callId=\(event.callId))")
@@ -404,7 +404,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let call = self?.call else { return }
-                call.clearPendingIncomingCall(ifMatching: event.callId)
+                call.incomingRing.clearPendingIncomingCall(ifMatching: event.callId)
                 // `currentCallId` survit à la fin de l'appel (écran « terminé »,
                 // « Réessayer ») : un force-leave tardif ne rejoue pas le démontage.
                 guard CallReliabilityPolicy.shouldProcessRemoteEnd(

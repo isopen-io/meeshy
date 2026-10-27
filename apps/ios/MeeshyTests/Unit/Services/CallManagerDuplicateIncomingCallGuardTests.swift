@@ -51,7 +51,7 @@ final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
             return
         }
 
-        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+        guard let busyGuardRange = body.range(of: "guard call.callState == .idle else {") else {
             XCTFail("reportIncomingVoIPCall's busy-path guard not found"); return
         }
 
@@ -103,7 +103,7 @@ final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found"); return
         }
 
-        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+        guard let busyGuardRange = body.range(of: "guard call.callState == .idle else {") else {
             XCTFail("reportIncomingVoIPCall's busy-path guard not found"); return
         }
 

@@ -144,7 +144,7 @@ struct ConversationHeaderCallButton: View {
             // Rejoindre un groupe en cours : les membres présents offrent à
             // l'arrivant, et le premier qui offre devient le pair principal.
             if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: calleeName) }
-            CallManagerHost.shared.require().rejoinActiveCall(
+            CallManagerHost.shared.require().outgoingDial.rejoinActiveCall(
                 callId: activeCall.id,
                 conversationId: conversationId,
                 remoteUserId: userId,
@@ -218,7 +218,7 @@ struct ConversationHeaderCallButton: View {
         let userId = userId
         let calleeName = calleeName
         guard isGroup else {
-            Task { await CallManagerHost.shared.require().requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
+            Task { await CallManagerHost.shared.require().outgoingDial.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
             return
         }
         Task { await CallManagerHost.shared.require().startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }

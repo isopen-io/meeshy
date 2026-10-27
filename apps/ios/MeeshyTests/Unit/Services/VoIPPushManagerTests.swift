@@ -370,7 +370,7 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
         XCTAssertTrue(
-            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update)") &&
+            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)") &&
             !precedingBody.contains("callId: callId"),
             "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
             "(there's nothing to evict)."

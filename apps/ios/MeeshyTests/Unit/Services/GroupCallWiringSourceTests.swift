@@ -30,7 +30,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_handleCallOffer_ringsThePrincipal_notTheInitiator() throws {
         let handler = try body(
             of: "func handleCallOffer(",
-            in: "Meeshy/Features/Main/Services/CallManager+IncomingOffer.swift"
+            in: "Meeshy/Features/Main/Services/CallCollaborators/CallIncomingRing.swift"
         )
 
         XCTAssertTrue(

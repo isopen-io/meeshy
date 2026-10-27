@@ -1,22 +1,31 @@
 import Foundation
-import AVFoundation
 @preconcurrency import CallKit
-import Combine
-import Network
 import UIKit
 import MeeshySDK
 import MeeshyUI
-@preconcurrency import WebRTC
 import os
 
 /// Un appel qui ARRIVE : push VoIP (fraîcheur, annulation, appel fantôme),
-/// nom de l'appelant, et notification d'appel par le socket.
+/// nom de l'appelant, notification d'appel par le socket et son tap d'alerte,
+/// `call:initiated`, et le double appel (§11.15) — un second appel entrant
+/// pendant un appel en cours se refuse, ou remplace l'appel en cours.
+/// Le collaborateur tient l'appel faiblement (#11522) ; CallKit, WebRTC et le
+/// fil sont appelés dans le même ordre qu'avant son extraction.
+@MainActor
+final class CallIncomingRing: CallIncomingRingProviding {
+    nonisolated deinit {}
 
-extension CallManager {
+    private weak var call: CallManager?
+    private var voipFreshnessTask: Task<Void, Never>?
+
+    func attach(to call: CallManager) {
+        self.call = call
+    }
 
     // MARK: - VoIP Push Incoming Call
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
+        guard let call else { return }
         let uuid = UUID()
         let update = CXCallUpdate.incoming(callerUserId: callerUserId, callerName: callerName, isVideo: isVideo)
 
@@ -24,15 +33,15 @@ extension CallManager {
         // Guarded BEFORE any state mutation so a duplicate push never disturbs
         // the active call — otherwise it fell into the busy branch: a phantom
         // "Missed" in Recents and a call-waiting banner over the ring on screen.
-        if currentCallId == callId, callState.isActive {
+        if call.currentCallId == callId, call.callState.isActive {
             Logger.calls.info("VoIP push for callId \(callId) already active — phantom-acking, no duplicate UI")
             reportPhantomVoIPCall(uuid: uuid, update: update, callId: callId)
             return
         }
 
-        resetEndedStateForNewCall()
+        call.resetEndedStateForNewCall()
 
-        guard callState == .idle else {
+        guard call.callState == .idle else {
             endSecondaryVoIPCallWhileBusy(
                 uuid: uuid, update: update,
                 waiting: IncomingCall(callId: callId, fromUserId: callerUserId, fromUsername: callerName, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
@@ -44,27 +53,27 @@ extension CallManager {
         // ruled out. Above the guard they also hit the call ALREADY in progress
         // (a foreground in-app call legitimately runs with callUsesCallKit ==
         // false), corrupting it from a second ring it never answered.
-        lastCallWasOutgoing = false
+        call.lastCallWasOutgoing = false
         // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
         // reportNewIncomingCall from the push handler. Reset the flag (a prior
         // foreground in-app call may have left it false).
-        callUsesCallKit = true
-        ringbackPlayer.shouldSelfActivateSession = false
+        call.callUsesCallKit = true
+        call.ringbackPlayer.shouldSelfActivateSession = false
 
         // Set state BEFORE reporting to CallKit to avoid race
         enterIncomingRinging(callId: callId, callerUserId: callerUserId, callerName: callerName, conversationId: conversationId, isVideo: isVideo)
-        activeCallUUID = uuid
+        call.activeCallUUID = uuid
 
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+        call.callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak call] error in
             guard let error else { return }
             Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
-            Task { @MainActor [weak self] in
+            Task { @MainActor [weak call] in
                 // Audit 2026-07-10 — route through failCall so this teardown
                 // also reports `.failed` to CallKit (via reportCall). Calling
                 // endCallInternal directly left a partially-registered system
                 // Recents entry never explicitly ended, unlike every other
                 // failure path in this file (see failCall's doc comment).
-                self?.failCall("CallKit error")
+                call?.failCall("CallKit error")
                 // The dedup ring already recorded this callId when the push
                 // arrived; since CallKit refused to report it, evict it so a
                 // legitimate APNs retry isn't dropped as a duplicate.
@@ -80,9 +89,9 @@ extension CallManager {
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
         // peer-connection creation failure instead of silently proceeding.
-        guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
+        guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
             Logger.calls.error("[CALL_SETUP] incoming (VoIP) webRTC.configure failed — aborting")
-            failCall("Failed to configure WebRTC")
+            call.failCall("Failed to configure WebRTC")
             return
         }
         startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .voipPush)
@@ -92,6 +101,7 @@ extension CallManager {
     }
 
     private func endSecondaryVoIPCallWhileBusy(uuid: UUID, update: CXCallUpdate, waiting: IncomingCall) {
+        guard let call else { return }
         let callId = waiting.callId
         // Busy: report + immediately end the secondary call, then offer it as a
         // call-waiting banner. Mirror the
@@ -102,7 +112,7 @@ extension CallManager {
         // legitimate APNs retry gets silently dropped as a duplicate,
         // leaving the callee with zero call UI for a call CallKit never
         // actually reported.
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+        call.callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
             guard let error else { return }
             Logger.calls.error("CallKit VoIP report failed (busy path): \(error.localizedDescription)")
             Task { @MainActor in
@@ -112,10 +122,10 @@ extension CallManager {
         // A nil `endedAt` means "unknown" to CallKit (produces an inaccurate/missing
         // timestamp in Recents) — every other reportCall site in this file passes
         // Date(); this synthesized busy-path report ends right now, so do the same.
-        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+        call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
         rejectSupersededPendingCall(replacingWithCallId: callId)
-        pendingIncomingCall = waiting
-        showCallWaitingBanner = true
+        call.pendingIncomingCall = waiting
+        call.showCallWaitingBanner = true
         Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
         HapticFeedback.medium()
     }
@@ -136,6 +146,12 @@ extension CallManager {
         voipFreshnessTask = Task { [weak self] in
             await self?.checkVoIPCallFreshness(uuid: uuid, callId: callId)
         }
+    }
+
+    /// Fin d'appel : la vérification de fraîcheur en vol n'a plus d'appel à juger.
+    func cancelFreshnessCheck() {
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = nil
     }
 
     // MARK: - VoIP Push Freshness Check (Bug D)
@@ -164,9 +180,9 @@ extension CallManager {
 
             if httpResponse.statusCode == 404 {
                 Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) introuvable (404) — push stale, ending phantom call")
-                if activeCallUUID == uuid, case .ringing = callState {
-                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
-                    endCallInternal(reason: .missed)
+                if let call, call.activeCallUUID == uuid, case .ringing = call.callState {
+                    call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    call.endCallInternal(reason: .missed)
                 }
                 return
             }
@@ -189,9 +205,9 @@ extension CallManager {
                 // `.ringing` (connecting/connected) by the time this returns, and a
                 // stale/racy terminal response must never tear down a call the user
                 // is actively on.
-                if activeCallUUID == uuid, case .ringing = callState {
-                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
-                    endCallInternal(reason: .missed)
+                if let call, call.activeCallUUID == uuid, case .ringing = call.callState {
+                    call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    call.endCallInternal(reason: .missed)
                 }
             } else {
                 Logger.calls.info("[VOIP_FRESHNESS] callId \(callId) status=\(status) — push fresh, continuing")
@@ -220,6 +236,7 @@ extension CallManager {
     /// ENTRANT encore en sonnerie au callId EXACT est terminé — un cancel
     /// tardif/rejoué ne touche jamais un appel décroché ni un ring sortant.
     func endRingingFromCancellation(callId: String) {
+        guard let call else { return }
         // Audit gateway-calls (2026-08-15) — mirror every socket-based
         // terminal listener (call:ended/missed/already-answered/forced-leave,
         // see their `clearPendingIncomingCall(ifMatching:)` calls above):
@@ -232,17 +249,17 @@ extension CallManager {
         clearPendingIncomingCall(ifMatching: callId)
         guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
             pushCallId: callId,
-            currentCallId: currentCallId,
-            callState: callState
+            currentCallId: call.currentCallId,
+            callState: call.callState
         ) else {
             Logger.calls.info("call_cancel push ignored (callId=\(callId)) — no matching incoming ring")
             return
         }
         Logger.calls.info("call_cancel push — ending still-ringing call \(callId)")
-        if callUsesCallKit, let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+        if call.callUsesCallKit, let uuid = call.activeCallUUID {
+            call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         }
-        endCallInternal(reason: .remote)
+        call.endCallInternal(reason: .remote)
     }
 
     /// Pendant multi-device de `endRingingFromCancellation` : un AUTRE device
@@ -251,23 +268,24 @@ extension CallManager {
     /// seule la raison CallKit diffère — `.answeredElsewhere` pour que
     /// Recents affiche « répondu sur un autre appareil » et non « manqué ».
     func endRingingAnsweredElsewhere(callId: String) {
+        guard let call else { return }
         // Same rationale as endRingingFromCancellation() above — this is the
         // socketless counterpart of call:already-answered, which also clears
         // the waiting banner FIRST (see its clearPendingIncomingCall call).
         clearPendingIncomingCall(ifMatching: callId)
         guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
             pushCallId: callId,
-            currentCallId: currentCallId,
-            callState: callState
+            currentCallId: call.currentCallId,
+            callState: call.callState
         ) else {
             Logger.calls.info("call_answered_elsewhere push ignored (callId=\(callId)) — no matching incoming ring")
             return
         }
         Logger.calls.info("call_answered_elsewhere push — dismissing ring for \(callId)")
-        if callUsesCallKit, let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+        if call.callUsesCallKit, let uuid = call.activeCallUUID {
+            call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
         }
-        endCallInternal(reason: .remote, reportsAnalytics: false)
+        call.endCallInternal(reason: .remote, reportsAnalytics: false)
     }
 
     // MARK: - Phantom VoIP Call (defense-in-depth)
@@ -287,7 +305,8 @@ extension CallManager {
     /// `reportIncomingVoIPCall`). Nil for the malformed-payload path, which
     /// never touched the dedup ring in the first place.
     func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String? = nil) {
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+        guard let call else { return }
+        call.callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
             guard let error, let callId else { return }
             Logger.calls.error("CallKit phantom-call report failed (callId=\(callId)): \(error.localizedDescription)")
             Task { @MainActor in
@@ -298,28 +317,56 @@ extension CallManager {
         // entry. `.unanswered` is the documented phantom-call idiom on
         // iOS 17+ — the lock-screen flash is suppressed and Recents shows
         // a neutral "Missed" entry instead of a hard failure.
-        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+        call.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
     }
 
     // MARK: - Update Incoming Call Name
 
     func updateIncomingCallName(_ name: String) {
-        guard let uuid = activeCallUUID else { return }
+        guard let call, let uuid = call.activeCallUUID else { return }
         // Audit P3 — skip the CallKit update if the user has already
         // answered/declined. The cache-resolution Task that calls this
         // method can finish AFTER the user has acted; updating the CallKit
         // card at that point either flashes a stale name or no-ops with a
         // log noise.
-        guard case .ringing = callState else { return }
-        remoteUsername = name
+        guard case .ringing = call.callState else { return }
+        call.remoteUsername = name
         let update = CXCallUpdate()
         update.localizedCallerName = name
-        callProvider.reportCall(with: uuid, updated: update)
+        call.callProvider.reportCall(with: uuid, updated: update)
         Logger.calls.info("Updated incoming call name to: \(name)")
     }
 
     // MARK: - Incoming Call (Socket)
 
+    /// Un `call:initiated` reçu par le socket. Site UNIQUE, appelé par
+    /// l'abonnement de `CallManager` ET par `IncomingCallWakeGate`, qui remet
+    /// l'événement qui a réveillé la pile (#7955).
+    func handleCallOffer(_ event: CallOfferData) {
+        let myUserId = AuthManager.shared.currentUser?.id
+        guard event.principalUserId != myUserId else { return }
+        guard call?.currentCallId != event.callId else { return }
+        // `mode` est l'architecture WebRTC ('p2p' | 'sfu'), PAS le type média,
+        // porté par `type` ('audio' | 'video'). Absent (anciens builds
+        // gateway) : repli sur `mode == "video"`.
+        let isVideo = event.type.map { $0 == "video" } ?? (event.mode == "video")
+        // #8433 — une invitation dit QUI m'invite, pas seulement qui a lancé l'appel.
+        let callerName = CallOfferPresentation.callerName(
+            initiator: event.initiator.displayName ?? event.initiator.username,
+            inviter: event.invitedBy.map { $0.displayName ?? $0.username }
+        )
+        let dynamicIceServers = event.iceServers?.map { server in
+            IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+        }
+        handleIncomingCallNotification(
+            callId: event.callId,
+            fromUserId: event.principalUserId,
+            fromUsername: callerName,
+            isVideo: isVideo,
+            iceServers: dynamicIceServers,
+            conversationId: event.conversationId
+        )
+    }
 
     /// Le TAP sur l'alerte d'appel entrant (push sans VoIP : région Chine,
     /// appareil sans jeton VoIP, app sur Mac). Contrairement au socket et au
@@ -331,9 +378,10 @@ extension CallManager {
     /// - une alerte périmée touchée dans le centre de notifications faisait
     ///   sonner ~75 s un appel terminé et rejoindre une salle morte.
     func handleIncomingCallAlertTap(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
+        guard let call else { return }
         guard Self.alertTapStartsRinging(
-            callId: callId, currentCallId: currentCallId, callState: callState,
-            pendingCallId: pendingIncomingCall?.callId
+            callId: callId, currentCallId: call.currentCallId, callState: call.callState,
+            pendingCallId: call.pendingIncomingCall?.callId
         ) else {
             Logger.calls.info("Incoming-call alert tapped for callId \(callId) already ringing/waiting — no duplicate UI")
             return
@@ -342,7 +390,7 @@ extension CallManager {
             callId: callId, fromUserId: fromUserId, fromUsername: fromUsername,
             isVideo: isVideo, iceServers: iceServers, conversationId: conversationId
         )
-        guard currentCallId == callId, case .ringing = callState, let uuid = activeCallUUID else { return }
+        guard call.currentCallId == callId, case .ringing = call.callState, let uuid = call.activeCallUUID else { return }
         Task { [weak self] in await self?.checkVoIPCallFreshness(uuid: uuid, callId: callId) }
     }
 
@@ -357,21 +405,22 @@ extension CallManager {
     }
 
     func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
-        resetEndedStateForNewCall()
-        guard callState == .idle else {
+        guard let call else { return }
+        call.resetEndedStateForNewCall()
+        guard call.callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
-            showCallWaitingBanner = true
+            call.pendingIncomingCall = IncomingCall(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
+            call.showCallWaitingBanner = true
             HapticFeedback.medium()
             return
         }
 
-        analytics.callInitiatedDate = Date()
+        call.analytics.callInitiatedDate = Date()
         enterIncomingRinging(callId: callId, callerUserId: fromUserId, callerName: fromUsername, conversationId: conversationId, isVideo: isVideo)
 
         let uuid = UUID()
-        activeCallUUID = uuid
+        call.activeCallUUID = uuid
         let update = CXCallUpdate.incoming(callerUserId: fromUserId, callerName: fromUsername, isVideo: isVideo)
 
         // CALL-FIX 2026-06-06 (macOS) — CallKit's `reportNewIncomingCall` FAILS on
@@ -390,23 +439,23 @@ extension CallManager {
         // call UI; reportNewIncomingCall fails error 3). NB: a device woken from
         // suspension by a VoIP push comes through `reportIncomingVoIPCall`, NOT here,
         // and that path always keeps CallKit (Apple requirement).
-        callUsesCallKit = Self.platformSupportsCallKit
+        call.callUsesCallKit = CallManager.platformSupportsCallKit
             && UIApplication.shared.applicationState != .active
-        ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
-        if !callUsesCallKit {
+        call.ringbackPlayer.shouldSelfActivateSession = !call.callUsesCallKit
+        if !call.callUsesCallKit {
             Logger.calls.info("[no-callkit] incoming via in-app UI (foreground/macOS) — CallKit banner skipped")
             // CallKit plays the ringtone on iOS via `config.ringtoneSound`; without
             // CallKit we play the incoming ringtone in-app.
-            ringbackPlayer.startRingtone()
+            call.ringbackPlayer.startRingtone()
         } else {
-            callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            call.callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak call] error in
                 if let error {
                     Logger.calls.error("CallKit report incoming failed: \(error.localizedDescription)")
                     // Audit 2026-07-10 — failCall (not endCallInternal directly)
                     // also reports `.failed` back to CallKit, matching every
                     // other failure path in this file (see failCall's doc
                     // comment) instead of leaving Recents with a stranded entry.
-                    Task { @MainActor [weak self] in self?.failCall("CallKit error") }
+                    Task { @MainActor [weak call] in call?.failCall("CallKit error") }
                 }
             }
         }
@@ -414,9 +463,9 @@ extension CallManager {
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
         // peer-connection creation failure instead of silently proceeding.
-        guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
+        guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
             Logger.calls.error("[CALL_SETUP] incoming (notification) webRTC.configure failed — aborting")
-            failCall("Failed to configure WebRTC")
+            call.failCall("Failed to configure WebRTC")
             return
         }
         startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .socket)
@@ -426,17 +475,18 @@ extension CallManager {
     }
 
     private func enterIncomingRinging(callId: String, callerUserId: String, callerName: String, conversationId: String?, isVideo: Bool) {
-        currentCallId = callId
-        remoteUserId = callerUserId
-        remoteUsername = callerName
-        self.conversationId = conversationId
-        isVideoEnabled = isVideo
-        isMuted = false
-        isSpeaker = isVideo
+        guard let call else { return }
+        call.currentCallId = callId
+        call.remoteUserId = callerUserId
+        call.remoteUsername = callerName
+        call.conversationId = conversationId
+        call.isVideoEnabled = isVideo
+        call.isMuted = false
+        call.isSpeaker = isVideo
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
-        displayMode = .fullScreen
-        callState = .ringing(isOutgoing: false)
-        startIncomingRingTimeout()
+        call.displayMode = .fullScreen
+        call.callState = .ringing(isOutgoing: false)
+        call.startIncomingRingTimeout()
     }
 
     /// Ringing-time setup shared by both incoming paths once the peer connection
@@ -444,11 +494,12 @@ extension CallManager {
     /// monitor, background observer, the reliable `call:join`, then local media
     /// in parallel.
     private func startRingingPipeline(callId: String, isVideo: Bool, iceServers: [IceServer]?, source: IncomingCallSource) {
-        armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
-        applyNegotiationRole()
+        guard let call else { return }
+        call.armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
+        call.applyNegotiationRole()
         if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin") }
-        configureAudioSession()
-        startReliabilityMonitor()
+        call.configureAudioSession()
+        call.startReliabilityMonitor()
         // Audit fix (calling-stack audit 2026-08-24) — arm the background
         // observer HERE, at ring time, not only from transitionToConnected().
         // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the
@@ -464,7 +515,7 @@ extension CallManager {
         // while still ringing. Safe to call twice per call (once here, once at
         // connect): startBackgroundMonitoring() starts with
         // stopBackgroundMonitoring() to stay idempotent.
-        appStateObserver.startBackgroundMonitoring()
+        call.appStateObserver.startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
         // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
@@ -473,7 +524,7 @@ extension CallManager {
         // await `localMediaTask` before invoking createAnswer.
         // [Fix 2026-07-02] via joinCallRoomReliably: on a VoIP cold start the
         // socket has never connected — a bare emit vanishes (prod-observed).
-        joinCallRoomReliably(callId: callId)
+        call.joinCallRoomReliably(callId: callId)
         switch source {
         case .voipPush:
             Logger.calls.info("VoIP push — reliable call:join dispatched; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
@@ -481,11 +532,11 @@ extension CallManager {
             Logger.calls.info("Incoming call — reliable call:join dispatched; starting media in parallel: \(callId)")
         }
 
-        localMediaTask?.cancel()
-        localMediaTask = Task { [weak self] in
-            guard let self else { return }
+        call.localMediaTask?.cancel()
+        call.localMediaTask = Task { [weak call] in
+            guard let call else { return }
             if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))") }
-            await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
+            await call.performLocalMediaStart(isVideo: isVideo, callId: callId)
             switch source {
             case .voipPush: Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
             case .socket: Logger.calls.info("Incoming call — local media ready: \(callId)")
@@ -493,6 +544,118 @@ extension CallManager {
         }
     }
 
+    // MARK: - Call Waiting (§11.15)
+
+    func rejectPendingCall() {
+        guard let call, let pending = call.pendingIncomingCall else { return }
+        // Refus du call-waiting : porte aussi reason=rejected et hérite du
+        // différé socket-down via le helper (cf. emitCallReject).
+        call.emitCallReject(callId: pending.callId)
+        call.pendingIncomingCall = nil
+        call.showCallWaitingBanner = false
+        Logger.calls.info("Rejected pending call: \(pending.callId)")
+    }
+
+    /// Audit 2026-07-07 (Finding 2) — `pendingIncomingCall` holds a single
+    /// waiting call, not a queue. A third caller arriving while a second is
+    /// already waiting used to silently overwrite `pendingIncomingCall`,
+    /// leaving the second caller ringing forever with no local signal. Mirror
+    /// `rejectPendingCall()`'s socket signal for the call being displaced so
+    /// its caller sees a clean end instead of a silent local drop.
+    ///
+    /// Audit 2026-08-10 (Vague 87 fix) — this used to call the raw
+    /// `MessageSocketManager.shared.emitCallEnd(callId:)` directly instead of
+    /// the `emitCallReject(callId:)` helper this doc comment already claimed
+    /// to mirror. Two consequences: (1) the gateway's `CallService.endCall`
+    /// resolves a pre-answer `call:end` with no `reason` to `CallStatus
+    /// .missed`, not `.rejected` — the displaced caller got a false "missed
+    /// call" notification/history entry for a call A was simply busy
+    /// juggling, not one A never noticed; (2) `emitCallReject` guards on
+    /// `MessageSocketManager.shared.isConnected` and defers+replays on
+    /// reconnect, while the raw `emitCallEnd` is silently dropped by the SDK
+    /// when the socket is down — plausible here since one call site
+    /// (`reportIncomingVoIPCall`) can run synchronously off a cold-start
+    /// PushKit delivery, before the socket handshake completes.
+    func rejectSupersededPendingCall(replacingWithCallId newCallId: String) {
+        guard let call, let superseded = call.pendingIncomingCall, superseded.callId != newCallId else { return }
+        call.emitCallReject(callId: superseded.callId)
+        Logger.calls.info("Superseded waiting call ended: \(superseded.callId) (replaced by \(newCallId))")
+    }
+
+    /// Audit 2026-07-02 (bug 3) — the caller of the WAITING call hung up (or it
+    /// was answered/force-ended elsewhere) before the user acted on the banner.
+    /// Every terminal socket listener guards on `currentCallId` (the ACTIVE
+    /// call) and early-returns for the waiting call's id — without this check
+    /// the banner lingers until its 15s auto-dismiss and "End & Answer" would
+    /// end the healthy active call to join one already torn down server-side.
+    func clearPendingIncomingCall(ifMatching callId: String) {
+        guard let call else { return }
+        // PENDANT la passation de « Raccrocher et répondre », `pendingIncomingCall` est déjà vide : seul le jeton
+        // nomme l'appel. Le lever AVANT le garde du bandeau — sinon la passation sonnait pour un appel raccroché.
+        if call.answeringPendingCallId == callId {
+            call.answeringPendingCallId = nil
+            Logger.calls.info("Waiting call ended remotely during the handoff — answer cancelled (callId=\(callId))")
+        }
+        guard call.pendingIncomingCall?.callId == callId else { return }
+        call.pendingIncomingCall = nil
+        call.showCallWaitingBanner = false
+        Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
+    }
+
+    func endCurrentAndAnswerPending() {
+        guard let call, let pending = call.pendingIncomingCall else { return }
+        call.showCallWaitingBanner = false
+        call.pendingIncomingCall = nil
+        call.answeringPendingCallId = pending.callId
+
+        call.endCall()
+
+        Task { @MainActor [weak self, weak call] in
+            _ = await cancellableSleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
+            guard let self, let call else { return }
+            // The waiting call may have been ended, answered elsewhere, or
+            // replaced by a newer incoming call while we were asleep — only
+            // answer if it's still the exact call the user acted on. `endCall()`
+            // above unconditionally nils `pendingIncomingCall` as a side effect
+            // (unrelated busy-banner cleanup), so this dedicated token — not
+            // `pendingIncomingCall` — is the source of truth for revalidation.
+            guard call.answeringPendingCallId == pending.callId else { return }
+            call.answeringPendingCallId = nil
+            self.handleIncomingCallNotification(
+                callId: pending.callId,
+                fromUserId: pending.fromUserId,
+                fromUsername: pending.fromUsername,
+                isVideo: pending.kind.isVideo,
+                iceServers: pending.iceServers,
+                conversationId: pending.conversationId
+            )
+            // La passation remet l'appel à sonner ; l'utilisateur a déjà choisi
+            // de répondre — y répondre, sans second appui sur Accepter.
+            guard call.currentCallId == pending.callId,
+                  case .ringing(isOutgoing: false) = call.callState else { return }
+            call.answerCall()
+        }
+    }
+}
+
+/// Déclaré après le type : les gardes de l'unité lisent la PREMIÈRE
+/// occurrence de chaque signature, qui doit être son corps.
+@MainActor
+protocol CallIncomingRingProviding: AnyObject {
+    func attach(to call: CallManager)
+    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)
+    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String?)
+    func updateIncomingCallName(_ name: String)
+    func endRingingFromCancellation(callId: String)
+    func endRingingAnsweredElsewhere(callId: String)
+    func cancelFreshnessCheck()
+    func handleCallOffer(_ event: CallOfferData)
+    func handleIncomingCallAlertTap(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)
+    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)
+    func rejectPendingCall()
+    func rejectSupersededPendingCall(replacingWithCallId newCallId: String)
+    func clearPendingIncomingCall(ifMatching callId: String)
+    func endCurrentAndAnswerPending()
 }
 
 extension CXCallUpdate {

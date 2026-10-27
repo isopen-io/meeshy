@@ -19,7 +19,7 @@ final class CallWaitingHandoffCancellationTests: XCTestCase {
         manager.pendingIncomingCall = nil
         manager.answeringPendingCallId = "call-waiting-1"
 
-        manager.clearPendingIncomingCall(ifMatching: "call-waiting-1")
+        manager.incomingRing.clearPendingIncomingCall(ifMatching: "call-waiting-1")
 
         XCTAssertNil(manager.answeringPendingCallId, "la passation ne répondra pas à un appel déjà raccroché")
     }
@@ -29,7 +29,7 @@ final class CallWaitingHandoffCancellationTests: XCTestCase {
         manager.pendingIncomingCall = nil
         manager.answeringPendingCallId = "call-waiting-1"
 
-        manager.clearPendingIncomingCall(ifMatching: "some-other-call")
+        manager.incomingRing.clearPendingIncomingCall(ifMatching: "some-other-call")
 
         XCTAssertEqual(manager.answeringPendingCallId, "call-waiting-1")
     }
@@ -40,7 +40,7 @@ final class CallWaitingHandoffCancellationTests: XCTestCase {
                                                    kind: .audio, iceServers: nil, conversationId: nil)
         manager.showCallWaitingBanner = true
 
-        manager.clearPendingIncomingCall(ifMatching: "call-waiting-2")
+        manager.incomingRing.clearPendingIncomingCall(ifMatching: "call-waiting-2")
 
         XCTAssertNil(manager.pendingIncomingCall)
         XCTAssertFalse(manager.showCallWaitingBanner)

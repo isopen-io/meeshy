@@ -112,7 +112,7 @@ final class CallStackLazyInstantiationTests: XCTestCase {
     func test_voipPush_reportsIncomingCallSynchronously_throughCallManagerShared() throws {
         let source = AppSourceGuard.stripComments(try appSource("Features/Main/Services/VoIPPushManager.swift"))
         guard let push = source.range(of: "didReceiveIncomingPushWith"),
-              let report = source.range(of: "CallManager.shared.reportIncomingVoIPCall(", range: push.upperBound..<source.endIndex)
+              let report = source.range(of: "CallManager.shared.incomingRing.reportIncomingVoIPCall(", range: push.upperBound..<source.endIndex)
         else {
             return XCTFail("Le push VoIP doit signaler l'appel via CallManager.shared.reportIncomingVoIPCall.")
         }

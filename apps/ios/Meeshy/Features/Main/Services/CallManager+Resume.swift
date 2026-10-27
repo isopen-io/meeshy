@@ -74,26 +74,6 @@ extension CallManager {
             ? CallResumePolicy.minimumReconnectWindow
             : QualityThresholds.connectingFailSeconds
     }
-
-    /// « Appeler » une conversation dont l'appel est EN COURS le rejoint, sans
-    /// `call:force-leave` — qui quitterait la ligne qu'on vient retrouver.
-    func startOrJoinLiveCall(
-        conversationId: String,
-        userId: String,
-        displayName: String,
-        isVideo: Bool,
-        router: CallDialRouter = .live
-    ) async -> Bool {
-        if callState == .idle, let request = await router.liveCall(
-            conversationId: conversationId,
-            peerUserId: userId,
-            displayName: displayName
-        ) {
-            await router.join(request)
-            return true
-        }
-        return startCall(conversationId: conversationId, userId: userId, displayName: displayName, isVideo: isVideo)
-    }
 }
 
 /// #9111 — le pair d'un DUO revient pendant que la liaison se cherche : la

@@ -63,7 +63,7 @@ final class CallLaunchResume {
         let isGroup = GroupCallMeshCoordinator.shared.isGroupConversation(session.conversationId)
             || Set(session.participants.map(\.userId)).subtracting([currentUserId]).count > 1
         if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(session.conversationId, title: nil) }
-        CallManagerHost.shared.require().rejoinActiveCall(
+        CallManagerHost.shared.require().outgoingDial.rejoinActiveCall(
             callId: session.id,
             conversationId: session.conversationId,
             remoteUserId: isGroup ? session.conversationId : (remote?.userId ?? ""),

@@ -172,7 +172,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         for path in surfaces {
             let src = try source(path)
             XCTAssertFalse(
-                src.contains("CallManager.shared.startCall("),
+                src.contains("CallManager.shared.startCall(") || src.contains("outgoingDial.startCall("),
                 "\(path) doit composer via requestPermissionsThenStartCall — " +
                 "`startCall` direct ne demande ni micro ni caméra."
             )
@@ -182,7 +182,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             )
         }
         XCTAssertFalse(
-            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("CallManager.shared.startCall("),
+            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("outgoingDial.startCall("),
             "L'en-tête de conversation ne compose jamais par `startCall` direct."
         )
     }

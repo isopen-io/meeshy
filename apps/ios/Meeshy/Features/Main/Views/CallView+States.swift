@@ -163,7 +163,7 @@ extension CallView {
             if callManager.canRetryCall {
                 // Transient failure — offer a one-tap re-dial (parité web/Android).
                 Button {
-                    callManager.retryCall()
+                    callManager.outgoingDial.retryCall()
                 } label: {
                     Label(
                         String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main),

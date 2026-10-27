@@ -594,7 +594,6 @@ final class CallManager: ObservableObject, Sendable {
     /// L'app a activé la session elle-même pendant cet appel (sonnerie in-app,
     /// filet « micro muet ») : elle devra la rendre, CallKit ou pas.
     var audioSessionSelfActivated = false
-    var voipFreshnessTask: Task<Void, Never>?
     var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -712,21 +711,69 @@ final class CallManager: ObservableObject, Sendable {
     let audioSystemObserver: CallAudioSystemObserverProviding
     /// Capture d'écran, arrière-plan et premier plan (`CallAppStateObserver`).
     let appStateObserver: CallAppStateObserverProviding
+    /// L'appel qui arrive et le double appel (`CallIncomingRing`).
+    let incomingRing: CallIncomingRingProviding
+    /// L'appel qui part, sa nouvelle tentative et sa reprise (`CallOutgoingDial`).
+    let outgoingDial: CallOutgoingDialProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
         sdpSignaler: CallSdpSignalerProviding = CallSdpSignaler(),
         audioSystemObserver: CallAudioSystemObserverProviding = CallAudioSystemObserver(),
-        appStateObserver: CallAppStateObserverProviding = CallAppStateObserver()
+        appStateObserver: CallAppStateObserverProviding = CallAppStateObserver(),
+        incomingRing: CallIncomingRingProviding = CallIncomingRing(),
+        outgoingDial: CallOutgoingDialProviding = CallOutgoingDial()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
         self.audioSystemObserver = audioSystemObserver
         self.appStateObserver = appStateObserver
+        self.incomingRing = incomingRing
+        self.outgoingDial = outgoingDial
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
 
+        callProvider = CXProvider(configuration: Self.makeProviderConfiguration())
+
+        let delegateProxy = CallKitDelegateProxy()
+        delegateProxy.manager = self
+        callProvider.setDelegate(delegateProxy, queue: nil)
+        self.callKitDelegate = delegateProxy
+
+        // Wire the survival controller now that `self` exists. The controller holds
+        // the actuator weakly, so no retain cycle (CallManager owns the controller).
+        self.videoSurvivalController.attach(actuator: self)
+        self.videoSurvivalController.$isVideoSuspended
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] suspended in
+                guard let self else { return }
+                self.isVideoSuspended = suspended
+                // Le gel a DEUX propriétaires : le contrôleur (politique) et
+                // WebRTCService (encodeur). `reset()` n'efface que le premier ;
+                // sans ce dégel branché sur le FRONT DESCENDANT, un reset
+                // pendant un gel (toggleVideo, unhold, thermique critique, fin
+                // d'appel) épingle l'encodeur au plancher pour tout le reste de
+                // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
+                // en amont ne laisse donc passer que les vraies transitions.
+                if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }
+            }
+            .store(in: &cancellables)
+
+        sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
+        appStateObserver.attach(to: self)
+        incomingRing.attach(to: self)
+        outgoingDial.attach(to: self)
+        signalingRouter.start(routingTo: self)
+        startNetworkMonitoring()
+        audioSystemObserver.start(observing: self)
+        Logger.calls.info("CallManager initialized")
+    }
+
+    /// What CallKit is told about Meeshy calls: video, groups, handle type,
+    /// Recents, brand icon and ringtone.
+    private static func makeProviderConfiguration() -> CXProviderConfiguration {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
@@ -764,39 +811,7 @@ final class CallManager: ObservableObject, Sendable {
         // the main app bundle, ≤30s, CAF format.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.3
         config.ringtoneSound = "Ringtone.caf"
-        callProvider = CXProvider(configuration: config)
-
-        let delegateProxy = CallKitDelegateProxy()
-        delegateProxy.manager = self
-        callProvider.setDelegate(delegateProxy, queue: nil)
-        self.callKitDelegate = delegateProxy
-
-        // Wire the survival controller now that `self` exists. The controller holds
-        // the actuator weakly, so no retain cycle (CallManager owns the controller).
-        self.videoSurvivalController.attach(actuator: self)
-        self.videoSurvivalController.$isVideoSuspended
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] suspended in
-                guard let self else { return }
-                self.isVideoSuspended = suspended
-                // Le gel a DEUX propriétaires : le contrôleur (politique) et
-                // WebRTCService (encodeur). `reset()` n'efface que le premier ;
-                // sans ce dégel branché sur le FRONT DESCENDANT, un reset
-                // pendant un gel (toggleVideo, unhold, thermique critique, fin
-                // d'appel) épingle l'encodeur au plancher pour tout le reste de
-                // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
-                // en amont ne laisse donc passer que les vraies transitions.
-                if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }
-            }
-            .store(in: &cancellables)
-
-        sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
-        appStateObserver.attach(to: self)
-        signalingRouter.start(routingTo: self)
-        startNetworkMonitoring()
-        audioSystemObserver.start(observing: self)
-        Logger.calls.info("CallManager initialized")
+        return config
     }
 
     // MARK: - System Picture-in-Picture

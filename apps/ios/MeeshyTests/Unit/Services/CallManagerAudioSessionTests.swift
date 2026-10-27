@@ -1992,7 +1992,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
         }
         let afterFn = String(source[fnRange.upperBound...])
-        guard let fnEnd = afterFn.range(of: "func performLocalMediaStart")?.lowerBound else {
+        guard let fnEnd = afterFn.range(of: "// MARK: - Call Waiting (§11.15)")?.lowerBound else {
             XCTFail("Could not find handleIncomingCallNotification boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
@@ -2288,6 +2288,18 @@ final class CallManagerCameraPermissionTests: XCTestCase {
             "a denied camera should not abort the call, only degrade to audio-only")
     }
 
+    /// Les deux chemins entrants démarrent le média par `startRingingPipeline`,
+    /// qui appelle `performLocalMediaStart` : il classe le refus caméra et poursuit en audio.
+    private static func localMediaStartCatchesCameraDenial(in source: String) -> Bool {
+        guard let pipeline = source.range(of: "private func startRingingPipeline("),
+              let start = source.range(of: "func performLocalMediaStart(") else { return false }
+        let pipelineBody = source[pipeline.upperBound...].prefix(4_000)
+        let startBody = source[start.upperBound...].prefix(2_000)
+        return pipelineBody.contains("performLocalMediaStart(")
+            && startBody.contains("CallVideoFallback.classify(error)")
+            && source.contains("case WebRTCError.cameraPermissionDenied: return .cameraPermissionDenied")
+    }
+
     func test_cameraPermissionDenied_handledIn_voipPushIncoming() throws {
         let source = try callManagerSource()
         // VoIP push path enters via reportIncomingVoIPCall (PKPushRegistry delegate → CallKit)
@@ -2296,7 +2308,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
         }
         let afterVoip = String(source[voipRange.upperBound...])
         XCTAssertTrue(
-            afterVoip.contains("WebRTCError.cameraPermissionDenied"),
+            afterVoip.contains("startRingingPipeline(") && Self.localMediaStartCatchesCameraDenial(in: source),
             "VoIP push incoming call path must catch cameraPermissionDenied — " +
             "a user answering an incoming call without camera permission must still " +
             "connect audio-only, not silently hang or fail")
@@ -2311,7 +2323,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
         }
         let afterSocket = String(source[socketRange.upperBound...])
         XCTAssertTrue(
-            afterSocket.contains("WebRTCError.cameraPermissionDenied"),
+            afterSocket.contains("startRingingPipeline(") && Self.localMediaStartCatchesCameraDenial(in: source),
             "socket incoming call path must catch cameraPermissionDenied — " +
             "receiver with denied camera must still join audio-only without user-visible failure")
     }

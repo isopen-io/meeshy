@@ -277,7 +277,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             update.localizedCallerName = ""
             update.hasVideo = false
             MainActor.assumeIsolated {
-                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update)
+                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)
             }
             logger.error("VoIP push without valid call payload — reporting phantom call (type=\(payloadType ?? "nil"))")
             completion()
@@ -313,7 +313,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             update.localizedCallerName = ""
             update.hasVideo = false
             MainActor.assumeIsolated {
-                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
+                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
             }
             completion()
             return
@@ -362,7 +362,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // so we use MainActor.assumeIsolated to bridge into @MainActor context
         // synchronously — no dispatch_sync, no deadlock.
         MainActor.assumeIsolated {
-            CallManager.shared.reportIncomingVoIPCall(
+            CallManager.shared.incomingRing.reportIncomingVoIPCall(
                 callId: callId,
                 callerUserId: callerUserId,
                 callerName: displayName,
@@ -378,7 +378,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             Task { @MainActor in
                 let cachedName = await Self.resolveCallerNameFromCache(callerUserId: callerUserId)
                 guard let cachedName, !cachedName.isEmpty else { return }
-                CallManager.shared.updateIncomingCallName(cachedName)
+                CallManager.shared.incomingRing.updateIncomingCallName(cachedName)
             }
         }
 

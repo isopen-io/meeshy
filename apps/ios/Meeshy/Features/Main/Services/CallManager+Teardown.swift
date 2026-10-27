@@ -241,8 +241,7 @@ extension CallManager {
         audioActivationFallbackTask?.cancel()
         audioActivationFallbackTask = nil
         CallManager.callKitDidActivateFired = false
-        voipFreshnessTask?.cancel()
-        voipFreshnessTask = nil
+        incomingRing.cancelFreshnessCheck()
         analyticsSnapshotTask?.cancel()
         analyticsSnapshotTask = nil
     }

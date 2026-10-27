@@ -110,7 +110,7 @@ final class IncomingCallWakeGate {
             // Le maillage, né avec la pile, n'a pas vu CET appel : il apprend
             // ici qu'il est de groupe avant que la pile ne le sonne.
             GroupCallMeshCoordinator.shared.handleIncomingCall(offer)
-            manager.handleCallOffer(offer)
+            manager.incomingRing.handleCallOffer(offer)
         }
     ) {
         self.offers = offers
