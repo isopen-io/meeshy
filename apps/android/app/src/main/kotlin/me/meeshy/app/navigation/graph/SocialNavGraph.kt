@@ -9,6 +9,7 @@ import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
@@ -36,7 +37,7 @@ internal fun NavGraphBuilder.socialNavGraph(
         ContactsScreen(
             onBack = dismiss,
             initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
-            onOpenProfile = openProfile,
+            onOpenProfile = rememberProfileOpenerOverSheet(navController),
         )
     }
     composable(Routes.NOTIFICATIONS) {

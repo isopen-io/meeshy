@@ -137,6 +137,26 @@ class NavBackChromeTest {
             .containsExactlyElementsIn(NavBackChrome.entries.filter { it.viaSheetHost }.map { it.source })
     }
 
+    /** Les routes que l'hôte présente en plein écran : `style = SheetStyle.COVER` dans l'appel, avant la lambda. */
+    private fun coverHostedRoutes(): Set<String> {
+        val call = Regex("""sheetComposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)""")
+        return graphDir.listFiles { f -> f.extension == "kt" }.orEmpty().flatMap { file ->
+            val text = file.readText()
+            call.findAll(text).filter { m ->
+                val head = text.substring(m.range.first, text.indexOf("->", m.range.last).takeIf { it > 0 } ?: text.length)
+                "SheetStyle.COVER" in head
+            }.map { it.groupValues[1] }.toList()
+        }.toSet()
+    }
+
+    @Test
+    fun `the sheet host presents full screen exactly the routes iOS presents as a cover`() {
+        val iosCovers = NavBackChrome.entries.filter { it.viaSheetHost && it.ios == IosPresentation.COVER }.map { it.source }
+        assertWithMessage("`.fullScreenCover` iOS ⇔ SheetStyle.COVER (pas de glissé vers le bas sur un plein écran)")
+            .that(coverHostedRoutes()).containsExactlyElementsIn(iosCovers)
+        assertThat(iosCovers).containsAtLeast("Routes.REGISTRATION", "Routes.GLOBAL_SEARCH")
+    }
+
     @Test
     fun `a route iOS presents as a sheet or cover is a modal, never a stacked screen`() {
         val hosted = NavBackChrome.entries.filter { it.viaSheetHost }
