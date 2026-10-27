@@ -50,6 +50,7 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenStory = { navController.navigate(Routes.story(it)) },
             onOpenMood = { navController.navigate(Routes.moodSpotlight(it)) },
             onOpenProfile = { navController.navigate(Routes.profile(it)) },
+            onOpenGame = { navController.navigate(GameRoutes.route(it)) },
         )
     }
     composable(ProfileRoutes.OWN) {
