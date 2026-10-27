@@ -50,4 +50,21 @@ class DeviceFixPolicyTest {
     fun `un age negatif est une horloge inconsistante, jamais servi`() {
         assertThat(DeviceFixPolicy.immediate(listOf(fix(accuracy = 5.0, ageMillis = -1)))).isNull()
     }
+    @Test
+    fun `pendant le partage en direct un releve GPS passe toujours`() {
+        assertThat(DeviceFixPolicy.streamKeeps(fromGps = true, lastGpsAtMillis = 10_000, nowMillis = 11_000)).isTrue()
+        assertThat(DeviceFixPolicy.streamKeeps(fromGps = true, lastGpsAtMillis = null, nowMillis = 11_000)).isTrue()
+    }
+
+    @Test
+    fun `un releve reseau ne s'intercale pas entre deux releves GPS`() {
+        assertThat(DeviceFixPolicy.streamKeeps(fromGps = false, lastGpsAtMillis = 10_000, nowMillis = 15_000)).isFalse()
+    }
+
+    @Test
+    fun `le reseau prend le relais quand le GPS se tait - en interieur`() {
+        assertThat(DeviceFixPolicy.streamKeeps(fromGps = false, lastGpsAtMillis = null, nowMillis = 15_000)).isTrue()
+        val silence = DeviceFixPolicy.STREAM_GPS_SILENCE_MILLIS
+        assertThat(DeviceFixPolicy.streamKeeps(fromGps = false, lastGpsAtMillis = 10_000, nowMillis = 10_000 + silence)).isTrue()
+    }
 }

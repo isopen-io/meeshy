@@ -29,4 +29,16 @@ object DeviceFixPolicy {
         known.filter { it.ageMillis in 0..FALLBACK_MAX_AGE_MILLIS }
             .minWithOrNull(compareBy<KnownFix> { it.ageMillis }.thenBy { it.coordinate.accuracy ?: Double.MAX_VALUE })
             ?.coordinate
+    /** Silence du GPS au-delà duquel le réseau reprend la main pendant le partage en direct. */
+    const val STREAM_GPS_SILENCE_MILLIS: Long = 15_000L
+
+    /**
+     * Pendant le partage en direct, GPS et réseau sont écoutés ensemble pour que l'intérieur ne
+     * reste pas muet ; un relevé réseau (moins précis) ne s'intercale jamais entre deux relevés GPS
+     * — la position partagée ne saute pas de plusieurs dizaines de mètres toutes les cinq secondes,
+     * et le débit émis ne double pas. Il ne passe que si le GPS se tait depuis
+     * [STREAM_GPS_SILENCE_MILLIS] (horloge monotone).
+     */
+    fun streamKeeps(fromGps: Boolean, lastGpsAtMillis: Long?, nowMillis: Long): Boolean =
+        fromGps || lastGpsAtMillis == null || nowMillis - lastGpsAtMillis >= STREAM_GPS_SILENCE_MILLIS
 }
