@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -294,6 +295,10 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
+                        mayInviteFriends = ConversationRowMenuCapabilities.make(
+                            conversation.copy(currentUserRole = conversation.currentUserRole ?: viewerRole),
+                            sessionRepository.currentUser.value,
+                        ).invite,
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value

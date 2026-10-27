@@ -156,6 +156,8 @@
     <string name="global_search_searching">Buscando…</string>
     <string name="global_search_tab_conversations">Conversas</string>
     <string name="global_search_tab_messages">Mensagens</string>
+    <string name="invite_customize">Personalizar as opções</string>
+    <string name="invite_defaultMessage">Junte-se a mim para conversar sem filtros nem barreiras…</string>
     <string name="links_affiliate_action_copy">Copiar o link de indicação</string>
     <string name="links_affiliate_action_create">Criar um link de indicação</string>
     <string name="links_affiliate_action_delete">Excluir o link de indicação</string>

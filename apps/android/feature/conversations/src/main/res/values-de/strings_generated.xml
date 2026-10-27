@@ -155,6 +155,8 @@
     <string name="global_search_searching">Suche…</string>
     <string name="global_search_tab_conversations">Unterhaltungen</string>
     <string name="global_search_tab_messages">Nachrichten</string>
+    <string name="invite_customize">Optionen anpassen</string>
+    <string name="invite_defaultMessage">Komm dazu — reden wir ohne Filter und ohne Barrieren …</string>
     <string name="links_affiliate_action_copy">Empfehlungslink kopieren</string>
     <string name="links_affiliate_action_create">Empfehlungslink erstellen</string>
     <string name="links_affiliate_action_delete">Empfehlungslink löschen</string>

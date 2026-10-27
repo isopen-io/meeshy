@@ -156,6 +156,8 @@
     <string name="global_search_searching">Recherche…</string>
     <string name="global_search_tab_conversations">Conversations</string>
     <string name="global_search_tab_messages">Messages</string>
+    <string name="invite_customize">Personnaliser les options</string>
+    <string name="invite_defaultMessage">Rejoins-moi pour échanger sans filtre ni barrière...</string>
     <string name="links_affiliate_action_copy">Copier le lien de parrainage</string>
     <string name="links_affiliate_action_create">Créer un lien de parrainage</string>
     <string name="links_affiliate_action_delete">Supprimer le lien de parrainage</string>

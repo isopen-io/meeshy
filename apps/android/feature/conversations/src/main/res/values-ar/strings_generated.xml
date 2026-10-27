@@ -159,6 +159,8 @@
     <string name="global_search_searching">جارٍ البحث…</string>
     <string name="global_search_tab_conversations">المحادثات</string>
     <string name="global_search_tab_messages">الرسائل</string>
+    <string name="invite_customize">تخصيص الخيارات</string>
+    <string name="invite_defaultMessage">انضم إليّ لنتحدّث بلا فلاتر ولا حواجز…</string>
     <string name="links_affiliate_action_copy">نسخ رابط الإحالة</string>
     <string name="links_affiliate_action_create">إنشاء رابط إحالة</string>
     <string name="links_affiliate_action_delete">حذف رابط الإحالة</string>
