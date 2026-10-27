@@ -186,7 +186,7 @@ final class ConversationHeaderFlameTests: XCTestCase {
     }
 
     func test_rowMeta_fadesOnlyTheTimeAndPoints_andVoiceOverStillSaysThem() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Lens/Row/LentilleConversationRow.swift")
         XCTAssertTrue(source.contains("LentilleRowMetaFade(alwaysVisible: magnification != nil)"))
         let shown = ConversationEngagementSnapshot(conversationId: "c", totalPoints: 120, todayPoints: 0, streakDays: 0, day: "2026-10-07")
         XCTAssertEqual(LentilleConversationRow.spokenPoints(shown), ConversationEngagementPill.totalAccessibilityText(120))

@@ -103,7 +103,7 @@ final class ConversationRowUnreadAnnouncementTests: XCTestCase {
     func test_neitherRowCarriesAnUnreadAccessibilityValue() throws {
         for path in [
             "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift"
+            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift"
         ] {
             let source = try iosSource(at: path)
             // La forme CITÉE, délibérément : les deux fichiers mentionnent la

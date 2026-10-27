@@ -268,7 +268,7 @@ struct ConversationRowItem: View {
     ///
     /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
     /// `LentilleFeatureFlag.isLentilleListEnabled` ON, `LentilleConversationRow`
-    /// (rang plat, `Lentille/Row/`) ; OFF, `ThemedConversationRow` (rang
+    /// (rang plat, `Lens/Row/`) ; OFF, `ThemedConversationRow` (rang
     /// historique) — INCHANGÉ, bit-à-bit identique à avant ce lot (mêmes
     /// arguments, même `.equatable()`). `SwipeableRow`, les deux chemins de
     /// menu contextuel OS et le portillon `.equatable()` de

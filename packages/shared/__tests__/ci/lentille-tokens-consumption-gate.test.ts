@@ -79,7 +79,7 @@ const IOS_APP_ROOT = join(REPO_ROOT, 'apps/ios/Meeshy');
 // toute façon : un futur refactor qui les ferait s'auto-référencer ne doit
 // jamais compter comme un « consommateur ».
 const IOS_DEFINITION_FILES = [
-  'Features/Main/Lentille/Core/LentilleMetrics.swift',
+  'Features/Lens/Core/LentilleMetrics.swift',
   'Features/Main/Focal/Core/FocalMetrics.swift',
   'Features/River/Core/RiverMetrics.swift',
 ].map((p) => join(IOS_APP_ROOT, p));

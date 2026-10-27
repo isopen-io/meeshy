@@ -5,7 +5,7 @@ import Foundation
 /// `MessageStore` du client) — jamais extrapolés. `isComplete` est un
 /// PASS-THROUGH du paramètre `windowCoversUnread` fourni par l'appelant
 /// (même esprit que `LocalBridgeProvider.UnreadWindow.isComplete`,
-/// `Lentille/Core/LentilleProviders.swift`, LU jamais modifié) : ce fichier
+/// `Lens/Core/LentilleProviders.swift`, LU jamais modifié) : ce fichier
 /// ne DÉCIDE PAS si la fenêtre couvre le non-lu — il transmet honnêtement ce
 /// que l'appelant sait déjà.
 ///

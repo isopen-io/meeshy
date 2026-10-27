@@ -138,7 +138,7 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
 
     func test_lentilleModePill_isMountedOnlyWhenReadingModesAreOn() throws {
         XCTAssertTrue(
-            try code("Features/Main/Lentille/Row/LentilleConversationRow.swift")
+            try code("Features/Lens/Row/LentilleConversationRow.swift")
                 .contains("if LentilleFeatureFlag.isReadingModesEnabled { LentilleModePill("),
             "Modes de lecture coupés ⇒ la rangée magnifiée ne porte pas d'encoche de mode."
         )

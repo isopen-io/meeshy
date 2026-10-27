@@ -37,7 +37,7 @@ export const SECTION_TOGGLE_MIN_HEIGHT = 44;
 
 /**
  * LE STICKER DE SECTION (#5694, écart 6) — miroir
- * `Lentille/Chrome/LentilleSticker.swift:20-99` : `10.5` pt poids `.heavy`
+ * `Lens/Chrome/LentilleSticker.swift:20-99` : `10.5` pt poids `.heavy`
  * (800), letter-spacing `0,1 em`, padding `4/13`, MAJUSCULES, fond
  * secondaire, encre secondaire, COLLANT plein largeur.
  *

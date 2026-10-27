@@ -13,7 +13,7 @@ class ConversationListViewModel: ObservableObject {
         didSet {
             _convIdIndex = nil
             // G-124 — point de composition de `GatewayBridgeProvider`
-            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lentille/Core/
+            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lens/Core/
             // GatewayBridgeProvider.swift`). `didSet` est le SEUL endroit où
             // convergent le chargement REST initial (`setConversations`) et
             // les rechargements déclenchés par le socket

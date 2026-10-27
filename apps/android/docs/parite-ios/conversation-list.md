@@ -117,10 +117,10 @@ Transposition Android : LazyVStack(pinnedViews: .sectionHeaders) -> LazyColumn a
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSticker.swift`
+- `apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift`
+- `apps/ios/Meeshy/Features/Lens/Chrome/LentilleSticker.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+StickyHeaderInset.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRules.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift`
 
@@ -309,7 +309,7 @@ Transposition Android : TimelineView(.periodic) -> LaunchedEffect + delay(60 s) 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -434,7 +434,7 @@ Transposition Android : UserDefaults/ProcessInfo drapeaux -> DataStore + BuildCo
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift`
 
 </details>
 
@@ -600,7 +600,7 @@ Transposition Android : UserDefaults + ProcessInfo -> DataStore Preferences + Bu
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleFeatureFlag.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift`
 - `apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift`
 
 </details>
@@ -625,7 +625,7 @@ Transposition Android : lentillePerspective -> Modifier.graphicsLayer ; scroll o
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+ScrollChrome.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRows.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+ReaderAnonymity.swift`
@@ -654,9 +654,9 @@ Transposition Android : Protocols Swift -> interfaces Kotlin injectées par Hilt
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleBridgeFormatter.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleBridgeFormatter.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift`
 
 </details>
 
@@ -936,7 +936,7 @@ Transposition Android : LentilleBridgeTranslator -> stringResource formatés ; p
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift`
 
 </details>
 
@@ -958,8 +958,8 @@ Transposition Android : GeometryReader/onGeometryChange -> onGloballyPositioned 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElection.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElectionHost.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElection.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElectionHost.swift`
 - `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift`
 
 </details>
@@ -984,10 +984,10 @@ Transposition Android : Menu SwiftUI -> DropdownMenu ancré à la puce ; visualE
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusBreathing.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleWholeChipsLine.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleMagnification.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusBreathing.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleWholeChipsLine.swift`
 
 </details>
 
@@ -1010,7 +1010,7 @@ Transposition Android : ObservableObject partagé -> StateFlow dans un holder in
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift`
 
 </details>
 
@@ -1033,8 +1033,8 @@ Transposition Android : visualEffect + ScrollOffsetRelay -> Modifier.graphicsLay
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift`
 - `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift`
 
 </details>
@@ -1057,9 +1057,9 @@ Transposition Android : Menu SwiftUI -> DropdownMenu/ModalBottomSheet ; UserDefa
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift`
 
 </details>
 
@@ -1257,7 +1257,7 @@ Transposition Android : Equatable + .equatable() -> @Stable/@Immutable + clés L
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -2048,7 +2048,7 @@ Transposition Android : AvatarContextMenuItem -> DropdownMenu ancré à l'avatar
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -2070,7 +2070,7 @@ Transposition Android : redacted(reason: .placeholder) -> MeeshySkeletonBox / Mo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleSkeletonRow.swift`
 
 </details>
 

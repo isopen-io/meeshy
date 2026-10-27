@@ -15,7 +15,7 @@ import { useMyRing } from '@/lib/profile-decor/my-ring';
  * créer un mood ou afficher le smiley animé du mood en cours comme sous iOS ».
  *
  * Géographie reprise TRAIT POUR TRAIT de `LentilleRailSelfEntryView`
- * (`apps/ios/.../Lentille/Chrome/StoriesVivantsRail.swift`) :
+ * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`) :
  * `ZStack(alignment: .bottomTrailing)` porte la pastille d'humeur,
  * `.overlay(alignment: .topLeading)` porte le badge de création, et ce sont
  * DEUX `Button(.plain)` distincts. Le commentaire d'iOS tranche l'ambiguïté

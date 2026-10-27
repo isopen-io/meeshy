@@ -740,7 +740,7 @@ Rendu : En-têtes de section en majuscules (EN DIRECT, AUJOURD'HUI, HIER, CETTE 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift`
 
 </details>
 

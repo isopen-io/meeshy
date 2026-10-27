@@ -137,9 +137,9 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
    courbe d'estompage (retiree le 2026-08-24) mais l'ELECTION d'une rangee — carte teintee, chip
    d'identite agrandi, tampon date — armee au defilement soutenu et aplatie 4,5 s apres ; apps/web
    applique aujourd'hui la courbe retiree et n'a pas l'election (targets/focal-script.md § 4). UNE CAPTURE iOS N'EST UNE CIBLE QUE DRAPEAUX ON : iOS porte trois drapeaux
-   (lentille_list, reading_modes, riviere_mode — Lentille/Core/LentilleFeatureFlag.swift) qu'un
+   (lentille_list, reading_modes, riviere_mode — Lens/Core/LentilleFeatureFlag.swift) qu'un
    seul interrupteur allume, Reglages › Beta (cle UserDefaults meeshy.pref.beta_features_enabled,
-   Lentille/Core/BetaFeaturesPreference.swift). Une installation neuve les a OFF : une capture
+   Lens/Core/BetaFeaturesPreference.swift). Une installation neuve les a OFF : une capture
    sans la preuve « Reglages › Beta : programme ON » montre l'ANCIEN produit (liste en cartes,
    fil en bulles sans puce de mode — la bulle iOS n'a PAS de queue, rayon 18 uniforme dans les deux
    configurations, targets/bulle.md) et ne vaut rien comme cible. Au simulateur : \`xcrun simctl terminate <udid>
@@ -148,7 +148,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
 1. ${IOS}/Meeshy/Features/** et ${SDK}/Sources/**   LA REFERENCE (decision D-1) : disposition,
    hierarchie, etats et gestes de CHAQUE ecran se lisent dans le code SwiftUI — jamais dans la
    planche web de l'ancienne v3. Un ecran apps/web se specifie en CITANT les fichiers Swift qui
-   font foi (Features/Main/Views/*, Features/Main/Lentille/*, Features/Main/Focal/*,
+   font foi (Features/Main/Views/*, Features/Lens/*, Features/Main/Focal/*,
    Features/River/*, Features/Main/Composer/*, Features/Stories/*, Features/Auth/*,
    Features/Contacts/*).
 2. ${V3}/decisions.md   les decisions D-1 a D-14 (et suivantes), OPPOSABLES : D-1 la v4 suit

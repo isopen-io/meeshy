@@ -168,7 +168,7 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
                 "\(ui)/Story/Sticker*.swift",
                 "\(app)/Components/ComposerTextStickerSheet.swift",
                 "\(app)/Views/Bubble/MessageStickerArtwork.swift",
-                "\(app)/Lentille/Chrome/LentilleSticker.swift",
+                "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSticker.swift",
             ]
         ),
         Exemption(

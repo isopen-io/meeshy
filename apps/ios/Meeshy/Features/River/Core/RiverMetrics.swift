@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Cotes de PIXELS de la peau Rivière — miroir Swift de
 /// `packages/shared/design/lentille-tokens.json` → `river` (R-131, LECTURE
-/// SEULE, source de vérité), même patron que `Lentille/Core/LentilleMetrics.swift`
+/// SEULE, source de vérité), même patron que `Lens/Core/LentilleMetrics.swift`
 /// et `Focal/Core/FocalMetrics.swift` : structures nichées par famille,
 /// `RiverMetricsTests` fait la parité valeur par valeur contre le JSON.
 /// « On répare le token, jamais le test. »

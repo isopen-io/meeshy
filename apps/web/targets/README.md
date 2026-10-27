@@ -22,7 +22,7 @@ depuis le MONTAGE des écrans, pas depuis le dossier de la feature. D-7 et D-9
 appelaient cela « écart assumé avec iOS ». Ce n'était pas la cible.
 
 iOS porte trois drapeaux indépendants (`lentille_list`, `reading_modes`,
-`riviere_mode` — `Lentille/Core/LentilleFeatureFlag.swift`) qu'un seul
+`riviere_mode` — `Lens/Core/LentilleFeatureFlag.swift`) qu'un seul
 interrupteur allume, Réglages › Bêta (`meeshy.pref.beta_features_enabled`), et
 qu'une installation neuve a ÉTEINTS. **La v3.1 n'a ni drapeau ni programme
 bêta** : la Lentille EST la liste, le fil S'OUVRE en Focal, l'utilisateur
