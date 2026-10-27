@@ -181,6 +181,9 @@
     <string name="settings_media_capture_rendered_subtitle">تلقائيًا عند تأكيد التعديل. وإلا فإن سهم التعديل يحفظها عند الطلب.</string>
     <string name="settings_media_capture_rendered_title">حفظ النسخة مع التأثيرات والإطار</string>
     <string name="settings_media_download">التنزيل التلقائي</string>
+    <string name="settings_media_outgoing_header">عند الإرسال</string>
+    <string name="settings_media_outgoing_location_subtitle">افتراضيًا، يُزال موقع GPS من كل صورة قبل إرسالها.</string>
+    <string name="settings_media_outgoing_location_title">الاحتفاظ بموقع الصور</string>
     <string name="settings_new_message_notifications">رسائل جديدة</string>
     <string name="settings_notif_cat_calls">المكالمات</string>
     <string name="settings_notif_cat_messages">الرسائل</string>

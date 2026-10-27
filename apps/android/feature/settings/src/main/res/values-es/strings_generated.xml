@@ -181,6 +181,9 @@
     <string name="settings_media_capture_rendered_subtitle">Automáticamente al validar la edición. Si no, la flecha de la edición la guarda cuando quieras.</string>
     <string name="settings_media_capture_rendered_title">Guardar la versión con efectos y marco</string>
     <string name="settings_media_download">Descarga automática</string>
+    <string name="settings_media_outgoing_header">Al enviar</string>
+    <string name="settings_media_outgoing_location_subtitle">Por defecto, la posición GPS se elimina de cada foto antes de enviarla.</string>
+    <string name="settings_media_outgoing_location_title">Conservar la ubicación de las fotos</string>
     <string name="settings_new_message_notifications">Mensajes nuevos</string>
     <string name="settings_notif_cat_calls">Llamadas</string>
     <string name="settings_notif_cat_messages">Mensajes</string>

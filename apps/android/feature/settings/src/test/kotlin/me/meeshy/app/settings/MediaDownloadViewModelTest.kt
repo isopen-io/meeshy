@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.media.InMemoryCaptureSavePolicyStore
+import me.meeshy.sdk.media.InMemoryOutgoingPhotoLocationStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaDownloadPreferences
@@ -60,7 +61,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun state_mirrorsThePersistedPreferences() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(video = AutoDownloadPolicy.ALWAYS))
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
         assertThat(vm.state.value.preferences.video).isEqualTo(AutoDownloadPolicy.ALWAYS)
     }
@@ -68,7 +69,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_persistsTheChangeForThatKind_leavingOthersUntouched() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
@@ -85,7 +86,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_routesEachKindToItsOwnField() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -102,7 +103,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_reselectingTheCurrentPolicy_isANoOpWrite() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(image = AutoDownloadPolicy.NEVER))
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -114,7 +115,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_aRealChange_writesExactlyOnce() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
@@ -125,7 +126,7 @@ class MediaDownloadViewModelTest {
 
     @Test
     fun capturePolicy_defaultsToNoOriginalAndOnDemandRender() = runTest {
-        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore())
+        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         assertThat(vm.state.value.capturePolicy.savesOriginal).isFalse()
@@ -135,7 +136,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setSavesOriginal_persistsWithoutTouchingTheRenderedMode() = runTest {
         val capture = InMemoryCaptureSavePolicyStore(CaptureSavePolicy(renderedMode = CaptureRenderedSaveMode.AUTOMATIC))
-        val vm = MediaDownloadViewModel(RecordingStore(), capture)
+        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setSavesOriginal(true)
@@ -148,7 +149,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setRenderedAutomatic_switchesTheModeBothWays() = runTest {
         val capture = InMemoryCaptureSavePolicyStore()
-        val vm = MediaDownloadViewModel(RecordingStore(), capture)
+        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore())
         advanceUntilIdle()
 
         vm.setRenderedAutomatic(true)
@@ -158,5 +159,18 @@ class MediaDownloadViewModelTest {
         vm.setRenderedAutomatic(false)
         advanceUntilIdle()
         assertThat(capture.policy.value.renderedMode).isEqualTo(CaptureRenderedSaveMode.MANUAL)
+    }
+
+    @Test
+    fun `le lieu des photos n est pas conservé par défaut et le réglage se persiste`() = runTest {
+        val location = InMemoryOutgoingPhotoLocationStore()
+        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), location)
+        assertThat(vm.state.value.keepsPhotoLocation).isFalse()
+
+        vm.setKeepsPhotoLocation(true)
+        advanceUntilIdle()
+
+        assertThat(location.keepsLocation.value).isTrue()
+        assertThat(vm.state.value.keepsPhotoLocation).isTrue()
     }
 }
