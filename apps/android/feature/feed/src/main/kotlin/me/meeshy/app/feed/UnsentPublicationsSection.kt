@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +43,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.publication.UnsentPublication
 import me.meeshy.sdk.publication.UnsentPublicationKind
 import me.meeshy.sdk.publication.UnsentPublicationStatus
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -101,7 +99,7 @@ private fun UnsentPublicationsBanner(items: List<UnsentPublication>, onClick: ()
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (anyFailed) Icons.Outlined.ErrorOutline else Icons.Outlined.CloudUpload,
+            imageVector = if (anyFailed) MeeshyIcons.SyncProblem else MeeshyIcons.Sync,
             contentDescription = null,
             tint = if (anyFailed) MeeshyTheme.tokens.error else MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.size(20.dp),
