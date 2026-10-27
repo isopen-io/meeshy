@@ -18,6 +18,7 @@ class AvatarSourceGuardTest {
     private val exemptions: Map<String, String> = mapOf(
         "FriendsIllustration.kt" to "illustration d'onboarding : personnages fictifs, aucune photo servie",
         "StoryRingIllustration.kt" to "illustration d'onboarding : personnages fictifs, aucune photo servie",
+        "MediaHubRichRows.kt" to "carte de contact : un fichier vCard, aucune photo servie",
         "MeeshyAvatar.kt" to "l'atome lui-même",
     )
 

@@ -3,8 +3,11 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.GamePrivacyRequest
+import me.meeshy.sdk.model.game.DuoInviteRequest
 import me.meeshy.sdk.model.game.GameWriteRequest
 import me.meeshy.sdk.model.game.LeagueConsentRequest
+import me.meeshy.sdk.model.game.LeaguePseudonymRequest
+import me.meeshy.sdk.model.game.ShowcaseOrderRequest
 import me.meeshy.sdk.model.game.ShowcaseVisibilityRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -14,7 +17,8 @@ import retrofit2.http.Path
 
 /**
  * Les routes du jeu — port de `GameService` iOS : le classement de la semaine, la ligue Amis, les réglages, le
- * consentement à la ligue publique et « Jeu masqué », puis les sept ÉCRITURES qui touchent un solde (changer un acte,
+ * consentement à la ligue publique et « Jeu masqué », le rangement de la vitrine, les visibilités, l'alliance et le nom de
+ * joute (écritures sans solde), puis les sept ÉCRITURES qui touchent un solde (changer un acte,
  * ouvrir le coffre, une Veilleuse, rallumer la Flamme, réclamer une halte, le Sceau, la Renaissance). La frappe d'une
  * Meesh est dans [EngagementApi].
  *
@@ -43,6 +47,25 @@ interface GameApi {
 
     @PUT("me/game/visibility")
     suspend fun setVisibility(@Body body: ShowcaseVisibilityRequest): ApiResponse<JsonElement>
+
+    /** Range la vitrine : l'ordre des clés de trophées, 200 au plus. Aucun solde n'est touché. */
+    @PUT("me/game/showcase/order")
+    suspend fun setShowcaseOrder(@Body body: ShowcaseOrderRequest): ApiResponse<JsonElement>
+
+    /** Change le nom de joute. La passerelle le refuse tant que le choix du nom n'est pas ouvert (conformité A-5). */
+    @PUT("me/game/league/pseudonym")
+    suspend fun setLeaguePseudonym(@Body body: LeaguePseudonymRequest): ApiResponse<JsonElement>
+
+    /** Invite un ami accepté à l'alliance de la semaine. */
+    @POST("me/game/duo/invite")
+    suspend fun inviteToDuo(@Body body: DuoInviteRequest): ApiResponse<JsonElement>
+
+    @POST("me/game/duo/{duoId}/accept")
+    suspend fun acceptDuo(@Path("duoId") duoId: String, @Body body: GameWriteRequest): ApiResponse<JsonElement>
+
+    /** Décliner, annuler ou quitter : un seul geste (conformité B-4 : l'alliance se quitte à tout moment). */
+    @POST("me/game/duo/{duoId}/abandon")
+    suspend fun abandonDuo(@Path("duoId") duoId: String, @Body body: GameWriteRequest): ApiResponse<JsonElement>
 
     /** Change UNE mission du jour : 1 Meesh, une fois par jour, même difficulté. */
     @POST("me/game/missions/{missionId}/reroll")

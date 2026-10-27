@@ -156,6 +156,8 @@
     <string name="global_search_searching">Ricerca…</string>
     <string name="global_search_tab_conversations">Conversazioni</string>
     <string name="global_search_tab_messages">Messaggi</string>
+    <string name="invite_customize">Personalizza le opzioni</string>
+    <string name="invite_defaultMessage">Unisciti a me per parlare senza filtri né barriere…</string>
     <string name="links_affiliate_action_copy">Copia il link di referral</string>
     <string name="links_affiliate_action_create">Crea un link di referral</string>
     <string name="links_affiliate_action_delete">Elimina il link di referral</string>
@@ -333,8 +335,23 @@
     <string name="row_menu_manage_members">Gestisci i membri</string>
     <string name="row_menu_view_profile">Vedi profilo</string>
     <string name="shareLink_a11y_copied">Link copiato</string>
+    <string name="shareLink_arrivals_loadFailed">Impossibile caricare gli arrivi.</string>
+    <string name="shareLink_arrivals_loading">Caricamento degli arrivi</string>
+    <string name="shareLink_arrivals_moreFailed">Impossibile caricare il resto.</string>
+    <plurals name="shareLink_arrivals_seeAll">
+        <item quantity="one">Vedi %d arrivo</item>
+        <item quantity="many">Vedi tutti i %d arrivi</item>
+        <item quantity="other">Vedi tutti i %d arrivi</item>
+    </plurals>
+    <plurals name="shareLink_arrivals_total">
+        <item quantity="one">%d arrivo in totale</item>
+        <item quantity="many">%d arrivi in totale</item>
+        <item quantity="other">%d arrivi in totale</item>
+    </plurals>
     <string name="shareLink_detail_allLanguages">Tutte le lingue</string>
     <string name="shareLink_detail_allowedLanguages">Lingue consentite</string>
+    <string name="shareLink_detail_arrivalLanguages">Lingue dei nuovi arrivati</string>
+    <string name="shareLink_detail_arrivals">Arrivi</string>
     <string name="shareLink_detail_askedOnArrival">Richiesto all\'arrivo</string>
     <string name="shareLink_detail_concurrent">Contemporaneamente</string>
     <string name="shareLink_detail_concurrentMax">%d max</string>
@@ -360,7 +377,10 @@
     <string name="shareLink_detail_messageField">Messaggio di invito (mostrato agli ospiti)</string>
     <string name="shareLink_detail_nameField">Nome del link (visibile solo a te)</string>
     <string name="shareLink_detail_never">Mai</string>
+    <string name="shareLink_detail_noAccountBadge">senza account</string>
+    <string name="shareLink_detail_noArrivals">Nessuno è ancora arrivato da questo link.</string>
     <string name="shareLink_detail_optional">Facoltativo</string>
+    <string name="shareLink_detail_recentArrivals">Arrivati di recente</string>
     <string name="shareLink_detail_requireAccount">Account Meeshy obbligatorio</string>
     <string name="shareLink_detail_requireBirthday">Chiedi la data di nascita</string>
     <string name="shareLink_detail_requireEmail">Chiedi un indirizzo e-mail</string>
@@ -369,9 +389,12 @@
     <string name="shareLink_detail_save">Salva</string>
     <string name="shareLink_detail_saveFailed">Impossibile salvare il link. Riprova.</string>
     <string name="shareLink_detail_saved">Link salvato</string>
+    <string name="shareLink_detail_statsUnavailable">Le statistiche di questo link non sono ancora disponibili.</string>
     <string name="shareLink_detail_unlimited">Illimitato</string>
     <string name="shareLink_detail_uses">Utilizzi</string>
     <string name="shareLink_detail_usesUnlimited">%d / illimitato</string>
+    <string name="shareLink_detail_visits">Visite</string>
+    <string name="shareLink_detail_withoutAccount">Senza account</string>
     <string name="share_link_access_account">Account obbligatorio</string>
     <string name="share_link_access_account_subtitle">Solo i membri di Meeshy possono partecipare</string>
     <string name="share_link_access_birthday">Data di nascita obbligatoria</string>

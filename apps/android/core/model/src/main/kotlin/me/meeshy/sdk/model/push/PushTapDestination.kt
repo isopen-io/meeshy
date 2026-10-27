@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.push
 
+import me.meeshy.sdk.model.game.GameTarget
+
 /**
  * Où mène le toucher d'une notification système : la table `type × identifiants → destination`
  * de l'application, miroir de iOS `RootNotificationNavigator.navigateFromNotification` et de
@@ -16,7 +18,7 @@ public sealed interface PushTapDestination {
     public data class Mood(val statusId: String) : PushTapDestination
     public data class Profile(val userId: String) : PushTapDestination
     public data object Notifications : PushTapDestination
-    public data object Progression : PushTapDestination
+    public data class Game(val target: GameTarget) : PushTapDestination
     public data object None : PushTapDestination
 
     public companion object {
@@ -44,12 +46,6 @@ public sealed interface PushTapDestination {
             "voice_clone_ready", "report_resolved",
         )
 
-        private val PROGRESSION_TYPES = setOf(
-            "achievement_unlocked", "streak_milestone", "level_up", "badge_earned",
-            "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-            "game_mission_window",
-        )
-
         private const val PROGRESSION_ROUTE = "progression"
         private val EPHEMERAL_ENTITIES = setOf("STORY", "STATUS", "MOOD")
 
@@ -63,7 +59,8 @@ public sealed interface PushTapDestination {
                 type == null -> conversation ?: None
                 type in CONVERSATION_TYPES -> conversation ?: postId?.let { content(payload, type, it) } ?: None
                 type in RELATION_TYPES -> payload.senderId?.let(::Profile) ?: Notifications
-                type in PROGRESSION_TYPES || routeHint.equals(PROGRESSION_ROUTE, ignoreCase = true) -> Progression
+                type in GameTarget.NOTIFICATION_TYPES -> Game(GameTarget.forNotification(type) ?: GameTarget.Home)
+                routeHint.equals(PROGRESSION_ROUTE, ignoreCase = true) -> Game(GameTarget.Home)
                 type in ACCOUNT_TYPES -> Notifications
                 postId != null -> content(payload, type, postId)
                 else -> conversation ?: None

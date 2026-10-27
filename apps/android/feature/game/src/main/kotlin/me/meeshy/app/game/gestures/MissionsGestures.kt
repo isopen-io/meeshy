@@ -1,6 +1,8 @@
 package me.meeshy.app.game.gestures
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,12 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,6 +49,7 @@ import me.meeshy.app.game.pages.GameErrorLine
 import me.meeshy.app.game.pages.GameNote
 import me.meeshy.app.game.pages.GameProgressBar
 import me.meeshy.app.game.pages.count
+import me.meeshy.app.game.pages.currentLocale
 import me.meeshy.app.game.pages.points
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.ChestBonus
@@ -54,11 +61,16 @@ import me.meeshy.sdk.model.game.GameChest
 import me.meeshy.sdk.model.game.GameChestLines
 import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.GameHapticPattern
+import me.meeshy.sdk.model.game.CalmDuration
 import me.meeshy.sdk.model.game.GameMission
+import me.meeshy.sdk.model.game.GameMissionCardLaws
+import me.meeshy.sdk.model.game.GameMissionClock
 import me.meeshy.sdk.model.game.GameMissionLaws
 import me.meeshy.sdk.model.game.GameMissionTitles
 import me.meeshy.sdk.model.game.GameSpend
 import me.meeshy.sdk.model.game.MissionDifficulty
+import me.meeshy.sdk.model.game.MissionPhase
+import me.meeshy.sdk.model.game.MissionWindow
 import me.meeshy.sdk.model.game.StarFragmentsTotal
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
@@ -68,6 +80,12 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 /**
  * LES MISSIONS DU JOUR ET L'OFFRANDE (iOS `GameMissionsView`) — trois actes, leur avancement, un changement par jour
@@ -84,6 +102,7 @@ internal fun MissionsGestures(
     gestures: GameGesturesUiState,
     onReroll: (String) -> Unit,
     onClaim: () -> Unit,
+    onPhotoMission: ((GameMission) -> Unit)? = null,
 ) {
     val missions = game.missions
     GameCard(title = stringResource(R.string.game_missions_title)) {
@@ -91,11 +110,20 @@ internal fun MissionsGestures(
             GameNote(gameString(GameCopyLaws.missionsLocked(game.level.shown.level)))
             return@GameCard
         }
+        val timezone = gestures.accountTimezone
+        val dayWindow = remember(missions.dayKey, timezone) { MissionWindow.ofDay(missions.dayKey, timezone) }
+        val now by rememberMissionNow(dayWindow)
         if (missions.prismDay) GameNote(stringResource(R.string.game_missions_prism_day))
+        game.boosts.prismHour?.let { hour ->
+            val locale = currentLocale()
+            GameNote(stringResource(R.string.game_missions_prism_hour, clockText(hour.startMinute, locale), clockText(hour.endMinute, locale)))
+        }
         val rerollSpend = GameSpend.preview(held = game.treasury.held.toLong(), cost = GameMissionLaws.REROLL_PRICE.toLong())
         missions.items.forEach { mission ->
             MissionRow(
                 mission = mission,
+                window = dayWindow,
+                personal = false,
                 canReroll = missions.rerollAvailable,
                 pending = gestures.rerollingMissionId == mission.id,
                 busy = gestures.rerollingMissionId != null,
@@ -104,7 +132,21 @@ internal fun MissionsGestures(
                 onReroll = onReroll,
             )
         }
-        if (missions.items.any { !it.isCompleted } && (missions.rerollAvailable || !rerollSpend.affordable)) {
+        missions.personal?.let { personal ->
+            MissionRow(
+                mission = personal.mission,
+                window = remember(personal.startsAt, personal.endsAt) { MissionWindow.of(personal) },
+                personal = true,
+                canReroll = false,
+                pending = false,
+                busy = gestures.rerollingMissionId != null,
+                online = gestures.online,
+                affordable = rerollSpend.affordable,
+                onReroll = onReroll,
+                onPhoto = onPhotoMission,
+            )
+        }
+        if (GameMissionCardLaws.rerollRowShown(missions, timezone, rerollSpend.affordable, now)) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
                 GameNote(stringResource(R.string.game_mission_reroll, meeshes(GameMissionLaws.REROLL_PRICE.toLong())))
                 SpendRow(rerollSpend, { meeshes(it) }, { stringResource(R.string.game_spend_missing_reroll, it) })
@@ -126,36 +168,66 @@ internal fun MissionsGestures(
     }
 }
 
+/**
+ * L'heure de la carte : le minuteur est CALME (heures et minutes, jamais de secondes), donc une mise à jour par minute
+ * tant qu'il reste plus d'une heure, plus serrée ensuite, et à l'heure une fois la plage passée.
+ */
+@Composable
+private fun rememberMissionNow(window: MissionWindow): State<Long> =
+    produceState(System.currentTimeMillis(), window) {
+        while (true) {
+            kotlinx.coroutines.delay(GameMissionCardLaws.refreshDelayMillis(window, value))
+            value = System.currentTimeMillis()
+        }
+    }
+
+/** Une heure du jour, écrite par la locale (chiffres et 12 h / 24 h de l'appareil), jamais à la main. */
+internal fun clockText(minuteOfDay: Int, locale: Locale): String =
+    LocalTime.ofSecondOfDay((minuteOfDay.coerceIn(0, MINUTES_PER_DAY - 1) * SECONDS_PER_MINUTE).toLong())
+        .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MissionRow(
     mission: GameMission,
+    window: MissionWindow,
+    personal: Boolean,
     canReroll: Boolean,
     pending: Boolean,
     busy: Boolean,
     online: Boolean,
     affordable: Boolean,
     onReroll: (String) -> Unit,
+    onPhoto: ((GameMission) -> Unit)? = null,
 ) {
     val tokens = MeeshyTheme.tokens
+    val reduce = LocalReduceMotion.current
     val done = mission.isCompleted
     val title = gameString(GameMissionTitles.title(mission.templateKey, mission.target))
+    val now by rememberMissionNow(window)
+    val phase = window.phase(completed = done, nowMillis = now)
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(tokens.textMuted.copy(alpha = ROW_ALPHA))
             .padding(MeeshySpacing.md)
-            .graphicsLayer { alpha = if (pending) PENDING_ALPHA else 1f },
+            .graphicsLayer { alpha = if (pending) PENDING_ALPHA else 1f }
+            .animateContentSize(animationSpec = if (reduce) snap() else spring(stiffness = ROW_STIFFNESS)),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            if (personal) GameChip(stringResource(R.string.game_mission_personal), tint = MeeshyPalette.Indigo500)
             GameChip(
                 gameString(GameCopyLaws.difficultyName(mission.difficulty)),
                 tint = if (mission.difficulty == MissionDifficulty.Gold) MeeshyPalette.Warning else MeeshyPalette.Indigo500,
             )
             if (mission.prism) GameChip(stringResource(R.string.game_mission_prism))
-            if (done) GameChip(stringResource(R.string.game_mission_done), tint = MeeshyPalette.Success)
+            when {
+                phase == MissionPhase.Finished -> GameChip(stringResource(R.string.game_mission_finished), tint = MeeshyPalette.Success)
+                phase == MissionPhase.Missed -> GameChip(stringResource(R.string.game_mission_missed), tint = MeeshyPalette.Warning)
+                done -> GameChip(stringResource(R.string.game_mission_done), tint = MeeshyPalette.Success)
+            }
         }
         Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
         GameProgressBar(
@@ -171,7 +243,68 @@ private fun MissionRow(
                 fontWeight = FontWeight.Medium,
                 color = tokens.textMuted,
             )
-            if (canReroll && !done) RerollButton(title, enabled = online && !busy && affordable, onClick = { onReroll(mission.id) })
+            if (GameMissionCardLaws.rerollButtonShown(canReroll, done, phase)) {
+                RerollButton(title, enabled = online && !busy && affordable, onClick = { onReroll(mission.id) })
+            }
+            if (personal && done && onPhoto != null) PhotoButton(title, onClick = { onPhoto(mission) })
+        }
+        missionTimerLine(phase, window.takeIf { personal })?.let { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                Icon(MeeshyIcons.Timer, contentDescription = null, tint = tokens.textMuted, modifier = Modifier.size(TIMER_ICON))
+                Text(line, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = tokens.textMuted)
+            }
+        }
+    }
+}
+
+/**
+ * La ligne du minuteur (iOS `GameCopy.missionTimerLine`) : « Il reste 1 h 23 min » pendant la plage, « Commence dans
+ * 12 min » avant, et pour la mission personnelle la plage elle-même (« 14:00 – 16:00 ») une fois passée. `null` quand
+ * rien n'est à dire.
+ */
+@Composable
+private fun missionTimerLine(phase: MissionPhase?, window: MissionWindow?): String? = when (phase) {
+    is MissionPhase.Running -> stringResource(R.string.game_mission_timer_remaining, calmText(GameMissionClock.calmDuration(phase.remainingMillis)))
+    is MissionPhase.Upcoming -> stringResource(R.string.game_mission_timer_starts, calmText(GameMissionClock.calmDuration(phase.startsInMillis)))
+    MissionPhase.Finished, MissionPhase.Missed -> windowRange(window)
+    MissionPhase.Done, null -> null
+}
+
+/** Une durée CALME : des jours et des heures, puis des heures et des minutes, puis des minutes — jamais de secondes. */
+@Composable
+private fun calmText(duration: CalmDuration): String = when (duration) {
+    is CalmDuration.DaysHours -> stringResource(R.string.game2_duration_days_hours, count(duration.days), count(duration.hours))
+    is CalmDuration.Hours -> {
+        val head = stringResource(R.string.game2_duration_hours, count(duration.hours))
+        if (duration.minutes == 0) head else head + " " + stringResource(R.string.game2_duration_minutes, count(duration.minutes))
+    }
+    is CalmDuration.Minutes -> stringResource(R.string.game2_duration_minutes, count(duration.minutes))
+}
+
+/** « 14:00 – 16:00 », écrit par la locale, dans le fuseau de l'appareil (celui de la montre que la personne lit). */
+@Composable
+private fun windowRange(window: MissionWindow?): String? {
+    val start = window?.startMillis ?: return null
+    val end = window.endMillis ?: return null
+    val locale = currentLocale()
+    val format = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale).withZone(ZoneId.systemDefault())
+    return format.format(Instant.ofEpochMilli(start)) + " – " + format.format(Instant.ofEpochMilli(end))
+}
+
+/** La mission personnelle accomplie se photographie : sa carte grave le pseudo gratté. */
+@Composable
+private fun PhotoButton(missionTitle: String, onClick: () -> Unit) {
+    val spoken = stringResource(R.string.game_photo_offer_start) + " — " + missionTitle
+    GameBounceButton(onClick = onClick) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(MeeshyPalette.Indigo500.copy(alpha = CAPSULE_ALPHA))
+                .semantics { contentDescription = spoken },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.Camera, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(TIMER_ICON * 2))
         }
     }
 }
@@ -337,6 +470,10 @@ private fun chestLineText(line: ChestLine): String = when (line) {
 }
 
 private const val ROW_ALPHA = 0.1f
+private const val ROW_STIFFNESS = 400f
+private const val MINUTES_PER_DAY = 1440
+private const val SECONDS_PER_MINUTE = 60
+private val TIMER_ICON = 14.dp
 private const val PENDING_ALPHA = 0.6f
 private const val CAPSULE_ALPHA = 0.12f
 private const val DISABLED_INK = 0.5f

@@ -1,5 +1,7 @@
 package me.meeshy.app.game.pages
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +27,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.temporal.IsoFields
 import java.util.Locale
@@ -33,9 +38,12 @@ import me.meeshy.sdk.model.game.GameAgreement
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.LeagueCup
+import me.meeshy.sdk.model.game.ShowcaseVisibility
+import me.meeshy.sdk.model.game.pages.VisibilityField
 import me.meeshy.sdk.model.game.pages.GameTrophyShelf
 import me.meeshy.sdk.model.game.pages.TrophyPeriod
 import me.meeshy.sdk.model.game.pages.TrophySpec
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameMaterial
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.staggeredAppear
@@ -48,24 +56,28 @@ import me.meeshy.ui.theme.MeeshyTheme
  * objet reçu à un moment précis. Les clés d'une version plus récente de l'app ne se montrent pas : on ne nomme pas ce
  * qu'on ne comprend pas.
  *
- * LECTURE SEULE : ranger (monter, descendre) et régler QUI voit sont des écritures d'une partie suivante ; le réglage
- * courant se dit ici, tel que la passerelle le sert.
+ * Ranger = monter ou descendre d'un cran (deux boutons de 44 dp par coupe, pas un glisser-déposer que ni TalkBack ni le
+ * clavier ne savent faire) ; l'ordre change tout de suite et revient en arrière si la passerelle refuse. Régler QUI voit
+ * est aussi un geste d'ici : la passerelle plafonne et répond avec la valeur effective, que la relecture pose.
  */
 @Composable
-fun ShowcaseScreen(onBack: () -> Unit) {
+fun ShowcaseScreen(onBack: () -> Unit, arrangement: GameArrangementViewModel = hiltViewModel()) {
+    val state by arrangement.state.collectAsStateWithLifecycle()
     GamePageHost(title = stringResource(R.string.game2_showcase_title), onBack = onBack) { game ->
-        ShowcaseContent(game)
+        ShowcaseContent(game, state, arrangement)
     }
 }
 
 @Composable
-private fun ShowcaseContent(game: GameBlock) {
+private fun ShowcaseContent(game: GameBlock, state: GameArrangementUiState, arrangement: GameArrangementViewModel) {
     val trophies = game.trophies
     if (trophies == null) {
         GameCard { GameNote(stringResource(R.string.game2_unavailable)) }
         return
     }
-    val shown = GameTrophyShelf.shown(trophies)
+    val served = GameTrophyShelf.shown(trophies)
+    val shown = state.orderInFlight?.filter { it in served } ?: served
+    val ordering = ArrangementWrite.Order in state.busy
     val awarded = trophies.items.associate { it.key to it.awardedAt }
     val locale = currentLocale()
     val countLabel = stringResource(
@@ -76,35 +88,72 @@ private fun ShowcaseContent(game: GameBlock) {
         if (shown.isEmpty()) {
             GameNote(stringResource(R.string.game2_showcase_empty))
         } else {
+            GameNote(stringResource(R.string.game2_showcase_order_hint))
             shown.chunked(COLUMNS).forEachIndexed { rowIndex, keys ->
                 Row(
                     Modifier.fillMaxWidth().staggeredAppear(minOf(rowIndex, MAX_STAGGER_ROW)),
                     horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
                 ) {
-                    keys.forEach { key -> TrophyCell(key, awarded[key], Modifier.weight(1f)) }
+                    keys.forEachIndexed { column, key ->
+                        val index = rowIndex * COLUMNS + column
+                        TrophyCell(
+                            key = key,
+                            awardedAt = awarded[key],
+                            index = index,
+                            count = shown.size,
+                            canMove = state.online && !state.hidden,
+                            busy = ordering,
+                            onMove = { delta -> arrangement.move(shown, index, delta) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     repeat(COLUMNS - keys.size) { Box(Modifier.weight(1f)) }
                 }
             }
         }
+        GameErrorLine(arrangementFailureMessage(state.failures[ArrangementWrite.Order]))
+        GameOfflineNote(online = state.online)
     }
     GameCard(title = stringResource(R.string.game2_showcase_visibility)) {
-        val level = game.visibility?.showcase
-        if (level != null) {
-            GameNote(stringResource(R.string.game2_visibility_field_showcase) + " : " + stringResource(visibilityRes(level)), tone = MeeshyTheme.tokens.textPrimary)
-        }
+        val level = state.visibilityInFlight[VisibilityField.Showcase] ?: game.visibility?.showcase ?: ShowcaseVisibility.Friends
+        GameVisibilityPicker(
+            legend = stringResource(R.string.game2_visibility_field_showcase),
+            value = level,
+            enabled = state.canWriteVisibility,
+            busy = ArrangementWrite.Visibility in state.busy,
+            onChange = { arrangement.setVisibility(VisibilityField.Showcase, it) },
+        )
         GameNote(stringResource(R.string.game2_showcase_visibility_hint))
+        GameErrorLine(arrangementFailureMessage(state.failures[ArrangementWrite.Visibility]))
+        if (ArrangementWrite.Visibility in state.busy) GameNote(stringResource(R.string.game2_visibility_saving))
+        if (state.hidden) GameNote(stringResource(R.string.game2_settings_hidden_card))
+        GameOfflineNote(online = state.online)
     }
 }
 
 @Composable
-private fun TrophyCell(key: String, awardedAt: String?, modifier: Modifier = Modifier) {
+private fun TrophyCell(
+    key: String,
+    awardedAt: String?,
+    index: Int,
+    count: Int,
+    canMove: Boolean,
+    busy: Boolean,
+    onMove: (delta: Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val spec = GameTrophyShelf.parse(key) ?: return
     val tokens = MeeshyTheme.tokens
     val locale = currentLocale()
+    val reduce = LocalReduceMotion.current
+    val title = trophyTitle(spec, locale)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        TrophyArt(spec, plate = trophyPlate(spec, locale))
+        Crossfade(targetState = key, animationSpec = if (reduce) tween(0) else tween(CROSSFADE_MILLIS), label = "trophySlot") { shownKey ->
+            val shownSpec = GameTrophyShelf.parse(shownKey) ?: spec
+            TrophyArt(shownSpec, plate = trophyPlate(shownSpec, locale))
+        }
         Text(
-            trophyTitle(spec, locale),
+            title,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = tokens.textPrimary,
@@ -119,6 +168,15 @@ private fun TrophyCell(key: String, awardedAt: String?, modifier: Modifier = Mod
                 textAlign = TextAlign.Center,
             )
         }
+        TrophyMoveButtons(
+            name = title,
+            index = index,
+            count = count,
+            enabled = canMove,
+            busy = busy,
+            onUp = { onMove(-1) },
+            onDown = { onMove(1) },
+        )
     }
 }
 
@@ -193,3 +251,4 @@ internal fun TrophyArt(spec: TrophySpec, plate: String, modifier: Modifier = Mod
 private val TROPHY_SIZE = 64.dp
 private const val COLUMNS = 2
 private const val MAX_STAGGER_ROW = 8
+private const val CROSSFADE_MILLIS = 200

@@ -111,6 +111,7 @@ fun SettingsScreen(
     onOpenSaved: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenProgression: () -> Unit = {},
+    onOpenStats: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
@@ -187,6 +188,7 @@ fun SettingsScreen(
                     onOpenStarred = onOpenStarred,
                     onOpenSaved = onOpenSaved,
                     onOpenProgression = onOpenProgression,
+                    onOpenStats = onOpenStats,
                     onOpenShareLinks = onOpenShareLinks,
                 )
                 SettingsGroup(
@@ -408,6 +410,7 @@ private fun ToolsSection(
     onOpenStarred: () -> Unit,
     onOpenSaved: () -> Unit,
     onOpenProgression: () -> Unit,
+    onOpenStats: () -> Unit,
     onOpenShareLinks: () -> Unit,
 ) {
     val tint = MeeshyPalette.Success
@@ -415,6 +418,8 @@ private fun ToolsSection(
         SettingsChevronRow(Icons.Filled.Star, stringResource(R.string.settings_starred_messages), MeeshyPalette.Warning, onOpenStarred)
         SettingsSeparator(tint)
         SettingsChevronRow(Icons.Filled.Bookmark, stringResource(R.string.settings_saved_posts), MeeshyPalette.Indigo400, onOpenSaved)
+        SettingsSeparator(tint)
+        SettingsChevronRow(MeeshyIcons.ChartBar, stringResource(R.string.settings_tools_stats), MeeshyPalette.Indigo300, onOpenStats)
         SettingsSeparator(tint)
         SettingsChevronRow(MeeshyIcons.Trophy, stringResource(R.string.settings_tools_progression), MeeshyPalette.Warning, onOpenProgression)
         SettingsSeparator(tint)

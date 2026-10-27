@@ -288,6 +288,46 @@ const withStore = <T,>(factory: IDBFactory, mode: IDBTransactionMode, work: (sto
     }
   });
 
+/**
+ * **LES ENREGISTREMENTS DE LA BASE DES ENVOIS** (#13416) — la file y tient sa
+ * liste (`all`), le studio ses publications non envoyées : une seule base sur
+ * l'appareil pour tout ce qui attend de partir, jamais un troisième magasin.
+ * `save(key, undefined)` efface. IndexedDB garde les `File` tels quels.
+ */
+export type DeviceRecords = {
+  readonly load: (key: string) => Promise<unknown>;
+  readonly save: (key: string, value: unknown) => Promise<void>;
+};
+
+export function memoryDeviceRecords(): DeviceRecords {
+  const rows = new Map<string, unknown>();
+  return {
+    load: async (key) => rows.get(key),
+    save: async (key, value) => {
+      if (value === undefined) rows.delete(key);
+      else rows.set(key, value);
+    },
+  };
+}
+
+/** Indisponible (navigation privée, quota, aucun IndexedDB) ⇒ chaque accès REJETTE, et l'appelant le dit. */
+export function idbDeviceRecords(factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB): DeviceRecords {
+  if (factory === undefined) {
+    const unavailable = () => Promise.reject(new Error('IndexedDB indisponible'));
+    return { load: unavailable, save: unavailable };
+  }
+  return {
+    load: (key) => withStore(factory, 'readonly', (store) => store.get(key), (request): unknown => request?.result),
+    save: (key, value) =>
+      withStore(
+        factory,
+        'readwrite',
+        (store) => (value === undefined ? store.delete(key) : store.put(value, key)),
+        () => undefined,
+      ),
+  };
+}
+
 const isStoredJob = (value: unknown): value is StoredSendJob => {
   if (typeof value !== 'object' || value === null) return false;
   const row = value as Record<string, unknown>;
@@ -297,18 +337,12 @@ const isStoredJob = (value: unknown): value is StoredSendJob => {
 /** IndexedDB, un seul enregistrement : la liste des envois. Indisponible ⇒ rejet, que la file avale. */
 export function idbSendQueueStorage(factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB): SendQueueStorage {
   if (factory === undefined) return memorySendQueueStorage();
+  const records = idbDeviceRecords(factory);
   return {
-    load: () =>
-      withStore(factory, 'readonly', (store) => store.get(SEND_QUEUE_KEY), (request) => {
-        const value: unknown = request?.result;
-        return Array.isArray(value) ? value.filter(isStoredJob) : [];
-      }),
-    save: (jobs) =>
-      withStore(
-        factory,
-        'readwrite',
-        (store) => (jobs.length === 0 ? store.delete(SEND_QUEUE_KEY) : store.put([...jobs], SEND_QUEUE_KEY)),
-        () => undefined,
-      ),
+    load: async () => {
+      const value = await records.load(SEND_QUEUE_KEY);
+      return Array.isArray(value) ? value.filter(isStoredJob) : [];
+    },
+    save: (jobs) => records.save(SEND_QUEUE_KEY, jobs.length === 0 ? undefined : [...jobs]),
   };
 }

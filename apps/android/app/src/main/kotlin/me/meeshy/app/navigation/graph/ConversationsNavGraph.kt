@@ -28,6 +28,7 @@ import me.meeshy.app.conversations.DashboardScreen
 import me.meeshy.app.conversations.GlobalSearchScreen
 import me.meeshy.app.conversations.MyShareLinksScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.conversations.ShareLinkArrivalsScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.navigation.CallRoute
@@ -131,6 +132,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         CreateShareLinkScreen(
             onBack = dismiss,
             onCreated = dismiss,
+            createOnOpen = true,
         )
     }
     composable(Routes.MY_SHARE_LINKS) {
@@ -150,7 +152,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         ShareLinkDetailScreen(
             onBack = { navController.popBackStack() },
             onDeleted = { navController.popBackStack() },
+            onSeeAllArrivals = { linkId -> navController.navigate(Routes.shareLinkArrivals(linkId)) },
         )
+    }
+    composable(
+        route = Routes.SHARE_LINK_ARRIVALS,
+        arguments = listOf(
+            navArgument(ShareLinkDetailViewModel.LINK_ID_ARG) { type = NavType.StringType },
+        ),
+    ) {
+        ShareLinkArrivalsScreen(onBack = { navController.popBackStack() })
     }
     sheetComposable(Routes.NEW_CONVERSATION, navController) { _, dismiss ->
         NewConversationScreen(

@@ -109,4 +109,13 @@
     <string name="report_user_details_a11y">Détails du signalement</string>
     <string name="report_user_submit_hint">Envoyer le signalement pour</string>
     <string name="report_user_success">Signalement envoyé</string>
+    <string name="user_stats_activity">ACTIVITÉ</string>
+    <string name="user_stats_badges">BADGES</string>
+    <string name="user_stats_conversations">Conversations</string>
+    <string name="user_stats_languages">Langues</string>
+    <string name="user_stats_member">Membre</string>
+    <string name="user_stats_messages">Messages</string>
+    <string name="user_stats_requests">Demandes</string>
+    <string name="user_stats_title">Statistiques</string>
+    <string name="user_stats_translations">Traductions</string>
 </resources>

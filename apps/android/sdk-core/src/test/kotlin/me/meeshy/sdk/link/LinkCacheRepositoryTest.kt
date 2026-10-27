@@ -56,4 +56,23 @@ class LinkCacheRepositoryTest {
         assertThat(first).isInstanceOf(CacheResult.Stale::class.java)
         assertThat((first as CacheResult.Stale).value.visits).isEqualTo(3)
     }
+
+    @Test fun `une page d arrivees se demande avec son curseur`() = runTest {
+        coEvery { api.arrivals("l1", 30, "c1") } returns ApiResponse(
+            success = true,
+            data = me.meeshy.sdk.model.ShareLinkArrivalsPage(listOf(me.meeshy.sdk.model.ShareLinkArrivalEntry(displayName = "Ana")), "c2"),
+        )
+
+        val result = repository().arrivalsPage("l1", cursor = "c1", limit = 30)
+
+        assertThat((result as me.meeshy.sdk.net.NetworkResult.Success).data.cursorOrNull).isEqualTo("c2")
+    }
+
+    @Test fun `la deconnexion efface tout ce que les liens avaient garde`() = runTest {
+        cache().put("link:stats", "l1", ShareLinkArrivalStats(visits = 3), ShareLinkArrivalStats.serializer())
+
+        repository().clear()
+
+        assertThat(cache().get("link:stats", "l1", ShareLinkArrivalStats.serializer())).isNull()
+    }
 }

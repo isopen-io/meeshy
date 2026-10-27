@@ -17,7 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.pluralStringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +34,7 @@ import me.meeshy.sdk.model.game.AtlasStamp
 import me.meeshy.sdk.model.game.GameAtlasBlock
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.ShowcaseVisibility
+import me.meeshy.sdk.model.game.pages.VisibilityField
 import me.meeshy.ui.motion.staggeredAppear
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -44,17 +48,18 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * PRIVÉ PAR DÉFAUT : une langue minoritaire ou liturgique peut révéler une origine ou une conviction. L'écran le dit en
  * toutes lettres et redit qui le voit — tel que la passerelle le sert. Ni l'interlocuteur ni la conversation ne sont
- * gardés : seulement la langue, les deux sens et la date. Changer qui le voit est une écriture d'une partie suivante.
+ * gardés : seulement la langue, les deux sens et la date. Changer qui le voit est un geste d'ici ; « Jeu masqué » le tient fermé.
  */
 @Composable
-fun AtlasScreen(onBack: () -> Unit) {
+fun AtlasScreen(onBack: () -> Unit, arrangement: GameArrangementViewModel = hiltViewModel()) {
+    val state by arrangement.state.collectAsStateWithLifecycle()
     GamePageHost(title = stringResource(R.string.game2_atlas_title), onBack = onBack) { game ->
-        AtlasContent(game)
+        AtlasContent(game, state, arrangement)
     }
 }
 
 @Composable
-private fun AtlasContent(game: GameBlock) {
+private fun AtlasContent(game: GameBlock, state: GameArrangementUiState, arrangement: GameArrangementViewModel) {
     val atlas = game.atlas
     if (atlas == null) {
         GameCard { GameNote(stringResource(R.string.game2_unavailable)) }
@@ -65,9 +70,19 @@ private fun AtlasContent(game: GameBlock) {
     AtlasStamps(atlas, remaining)
     if (atlas.pending.isNotEmpty()) AtlasPendingCard(atlas.pending)
     GameCard(title = stringResource(R.string.game2_atlas_visibility)) {
-        val level = game.visibility?.atlas ?: ShowcaseVisibility.Me
-        GameNote(stringResource(R.string.game2_visibility_field_atlas) + " : " + stringResource(visibilityRes(level)), tone = MeeshyTheme.tokens.textPrimary)
+        val level = state.visibilityInFlight[VisibilityField.Atlas] ?: game.visibility?.atlas ?: ShowcaseVisibility.Me
+        GameVisibilityPicker(
+            legend = stringResource(R.string.game2_visibility_field_atlas),
+            value = level,
+            enabled = state.canWriteVisibility,
+            busy = ArrangementWrite.Visibility in state.busy,
+            onChange = { arrangement.setVisibility(VisibilityField.Atlas, it) },
+        )
         GameNote(stringResource(R.string.game2_atlas_privacy))
+        GameErrorLine(arrangementFailureMessage(state.failures[ArrangementWrite.Visibility]))
+        if (ArrangementWrite.Visibility in state.busy) GameNote(stringResource(R.string.game2_visibility_saving))
+        if (state.hidden) GameNote(stringResource(R.string.game2_settings_hidden_card))
+        GameOfflineNote(online = state.online)
     }
 }
 

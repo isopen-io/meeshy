@@ -1,6 +1,9 @@
 package me.meeshy.sdk.model.push
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.game.pages.GamePage
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import org.junit.Test
 
 class PushTapDestinationTest {
@@ -84,9 +87,33 @@ class PushTapDestinationTest {
     }
 
     @Test
-    fun `un indice de route progression ouvre la progression`() {
-        assertThat(resolve(PushPayload(type = "level_up"), route = "progression")).isEqualTo(PushTapDestination.Progression)
-        assertThat(resolve(PushPayload(type = "game_duo_invited"))).isEqualTo(PushTapDestination.Progression)
+    fun `un indice de route progression ouvre la premiere page du jeu`() {
+        assertThat(resolve(PushPayload(type = "post_like"), route = "progression")).isEqualTo(PushTapDestination.Game(GameTarget.Home))
+    }
+
+    @Test
+    fun `chaque notification du jeu ouvre l ecran que la carte de navigation nomme`() {
+        val expected = mapOf(
+            "game_duo_invited" to GameTarget.Page(GamePage.League),
+            "game_duo_accepted" to GameTarget.Page(GamePage.League),
+            "game_league_result" to GameTarget.Page(GamePage.League),
+            "game_season_step" to GameTarget.Page(GamePage.Season),
+            "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "level_up" to GameTarget.Concept(ProgressionConcept.Level),
+            "streak_milestone" to GameTarget.Concept(ProgressionConcept.Flame),
+            "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),
+            "achievement_unlocked" to GameTarget.Concept(ProgressionConcept.Succes),
+        )
+        expected.forEach { (type, target) ->
+            assertThat(resolve(PushPayload(type = type))).isEqualTo(PushTapDestination.Game(target))
+        }
+        assertThat(GameTarget.NOTIFICATION_TYPES).isEqualTo(expected.keys)
+    }
+
+    @Test
+    fun `le type decide meme quand l indice de route dit autre chose`() {
+        assertThat(resolve(PushPayload(type = "level_up"), route = "progression"))
+            .isEqualTo(PushTapDestination.Game(GameTarget.Concept(ProgressionConcept.Level)))
     }
 
     @Test

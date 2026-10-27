@@ -25,6 +25,8 @@ import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameVisibility
 import me.meeshy.sdk.model.game.LeagueAccess
+import me.meeshy.sdk.model.game.pages.GameVisibilityEdit
+import me.meeshy.sdk.model.game.pages.VisibilityField
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -33,18 +35,21 @@ import me.meeshy.ui.theme.MeeshyTheme
  * serveur), qui voit quoi (tel que servi) et l'opposition à la ligue Amis. Hors ligne, masquer est suspendu : le dire à
  * l'écran plutôt que de promettre un masquage que les autres ne verraient pas ; réafficher marche toujours.
  *
- * Les visibilités se LISENT ici ; les changer est une écriture d'une partie suivante, avec le rangement de la vitrine.
+ * Les quatre visibilités se règlent ici (trois pastilles chacune). « Jeu masqué » les tient fermées : rien ne se rouvre
+ * tant que le jeu est masqué.
  */
 @Composable
 fun GameSettingsScreen(
     onBack: () -> Unit,
     viewModel: GameSettingsViewModel = hiltViewModel(),
+    arrangement: GameArrangementViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val writes by arrangement.state.collectAsStateWithLifecycle()
     GamePageHost(title = stringResource(R.string.game2_settings_title), onBack = onBack) { game ->
         CelebrationsCard(state.prefs.celebrations, viewModel::setCelebrations)
         HiddenCard(state, viewModel::setHidden)
-        game.visibility?.let { VisibilityCard(it) }
+        game.visibility?.let { VisibilityCard(it, writes, arrangement, hidden = state.prefs.hidden) }
         game.league?.let { league -> LeagueCard(inLeague = league.access == LeagueAccess.Open, pseudonym = league.pseudonym) }
         FriendsLeagueCard(state, viewModel::setFriendsLeagueOptOut)
     }
@@ -75,20 +80,26 @@ private fun HiddenCard(state: GameSettingsUiState, onChange: (Boolean) -> Unit) 
 }
 
 @Composable
-private fun VisibilityCard(visibility: GameVisibility) {
+private fun VisibilityCard(visibility: GameVisibility, writes: GameArrangementUiState, arrangement: GameArrangementViewModel, hidden: Boolean) {
     GameCard(title = stringResource(R.string.game2_settings_visibility_title)) {
         GameNote(stringResource(R.string.game2_settings_visibility_body))
         listOf(
-            R.string.game2_visibility_field_rank to visibility.rank,
-            R.string.game2_visibility_field_treasury to visibility.treasury,
-            R.string.game2_visibility_field_showcase to visibility.showcase,
-            R.string.game2_visibility_field_atlas to visibility.atlas,
-        ).forEach { (field, level) ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(field), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
-                Text(stringResource(visibilityRes(level)), style = MaterialTheme.typography.bodyMedium, color = MeeshyPalette.Indigo500, fontWeight = FontWeight.SemiBold)
-            }
+            R.string.game2_visibility_field_rank to VisibilityField.Rank,
+            R.string.game2_visibility_field_treasury to VisibilityField.Treasury,
+            R.string.game2_visibility_field_showcase to VisibilityField.Showcase,
+            R.string.game2_visibility_field_atlas to VisibilityField.Atlas,
+        ).forEach { (legend, field) ->
+            GameVisibilityPicker(
+                legend = stringResource(legend),
+                value = writes.visibilityInFlight[field] ?: GameVisibilityEdit.read(visibility, field),
+                enabled = writes.online && !hidden,
+                busy = ArrangementWrite.Visibility in writes.busy,
+                onChange = { arrangement.setVisibility(field, it) },
+            )
         }
+        GameErrorLine(arrangementFailureMessage(writes.failures[ArrangementWrite.Visibility]))
+        if (ArrangementWrite.Visibility in writes.busy) GameNote(stringResource(R.string.game2_visibility_saving))
+        GameOfflineNote(online = writes.online)
     }
 }
 
