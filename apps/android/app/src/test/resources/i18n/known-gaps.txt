@@ -141,6 +141,8 @@ bare-specifier :feature:game en game2_season_theme
 bare-specifier :feature:game en game2_season_to_next
 bare-specifier :feature:game en game2_settings_league_on
 bare-specifier :feature:game en game2_showcase_awarded
+bare-specifier :feature:game en game2_showcase_move_down
+bare-specifier :feature:game en game2_showcase_move_up
 bare-specifier :feature:game en game2_trophy_flame
 bare-specifier :feature:game en game2_trophy_plate_flame
 bare-specifier :feature:game en game2_trophy_plate_prestige

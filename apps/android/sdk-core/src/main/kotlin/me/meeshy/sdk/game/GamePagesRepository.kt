@@ -16,7 +16,16 @@ import me.meeshy.sdk.cache.KeyedJsonCacheSource
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.game.GameIntegrationParser
 import me.meeshy.sdk.model.game.GamePrivacyRequest
+import me.meeshy.sdk.model.game.DuoInviteRequest
+import me.meeshy.sdk.model.game.DuoInviteResponse
+import me.meeshy.sdk.model.game.DuoStatusResponse
+import me.meeshy.sdk.model.game.GamePathSegments
 import me.meeshy.sdk.model.game.GamePrivacyResponse
+import me.meeshy.sdk.model.game.GameWriteRequest
+import me.meeshy.sdk.model.game.LeaguePseudonymRequest
+import me.meeshy.sdk.model.game.LeaguePseudonymResponse
+import me.meeshy.sdk.model.game.ShowcaseOrderRequest
+import me.meeshy.sdk.model.game.ShowcaseOrderResponse
 import me.meeshy.sdk.model.game.GameSettingsResponse
 import me.meeshy.sdk.model.game.GameWave2Parser
 import me.meeshy.sdk.model.game.LeagueConsentRequest
@@ -103,6 +112,40 @@ class GamePagesRepository(
             api.setVisibility(ShowcaseVisibilityRequest(requestId, showcase = me, rank = me, treasury = me, atlas = me))
         }
     }
+
+    /**
+     * Les écritures de la vague 2 qui ne touchent AUCUN solde : ranger la vitrine, régler une visibilité, le nom de joute et
+     * l'alliance. Chacune porte son [requestId] (né une fois par intention chez l'appelant, rejoué tel quel sur un
+     * réessai) ; la passerelle reste maîtresse et la réponse rendue est la sienne, jamais une valeur devinée ici.
+     */
+    suspend fun setShowcaseOrder(requestId: String, order: List<String>): GameWriteOutcome<ShowcaseOrderResponse> =
+        write(GameWave2Parser::showcaseOrder) { api.setShowcaseOrder(ShowcaseOrderRequest(requestId, order)) }
+
+    /** UNE facette de « qui voit quoi » : les trois autres restent absentes de la requête. */
+    suspend fun setVisibility(request: ShowcaseVisibilityRequest): GameWriteOutcome<ShowcaseVisibilityResponse> =
+        write(GameWave2Parser::showcaseVisibility) { api.setVisibility(request) }
+
+    suspend fun setLeaguePseudonym(requestId: String, pseudonym: String): GameWriteOutcome<LeaguePseudonymResponse> =
+        write(GameWave2Parser::pseudonym) { api.setLeaguePseudonym(LeaguePseudonymRequest(requestId, pseudonym)) }
+
+    suspend fun inviteToDuo(requestId: String, friendId: String): GameWriteOutcome<DuoInviteResponse> {
+        if (!GamePathSegments.isSafe(friendId)) return unsent()
+        return write(GameWave2Parser::duoInvite) { api.inviteToDuo(DuoInviteRequest(requestId, friendId)) }
+    }
+
+    suspend fun acceptDuo(requestId: String, duoId: String): GameWriteOutcome<DuoStatusResponse> {
+        if (!GamePathSegments.isSafe(duoId)) return unsent()
+        return write(GameWave2Parser::duoStatus) { api.acceptDuo(duoId, GameWriteRequest(requestId)) }
+    }
+
+    /** Décliner, annuler ou quitter : un seul geste. */
+    suspend fun abandonDuo(requestId: String, duoId: String): GameWriteOutcome<DuoStatusResponse> {
+        if (!GamePathSegments.isSafe(duoId)) return unsent()
+        return write(GameWave2Parser::duoStatus) { api.abandonDuo(duoId, GameWriteRequest(requestId)) }
+    }
+
+    /** Un identifiant que le client ne sait pas mettre dans un chemin : rien ne part, et ce n'est pas une coupure. */
+    private fun unsent(): GameWriteOutcome<Nothing> = GameWriteOutcome.Refused(code = null, offline = false)
 
     private suspend fun <T : Any> write(parse: (String?) -> T?, send: suspend () -> ApiResponse<JsonElement>): GameWriteOutcome<T> =
         when (val result = apiCall(send)) {
