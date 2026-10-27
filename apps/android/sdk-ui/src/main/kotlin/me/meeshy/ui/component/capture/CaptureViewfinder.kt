@@ -32,7 +32,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -129,7 +131,7 @@ public fun CaptureViewfinder(
             CaptureEffect.StopRecording -> { engine.stopRecording(); engine.setTorch(me.meeshy.sdk.model.composer.capture.CaptureTorchMode.OFF) }
             CaptureEffect.CancelPendingRecording -> engine.cancelRecording()
             is CaptureEffect.TakePhoto -> engine.takePhoto(effect.token, context.captureFile("photo", ".jpg"))
-            is CaptureEffect.DeleteFile -> scope.launch(Dispatchers.IO) { File(effect.path).delete() }
+            is CaptureEffect.DeleteFile -> CaptureFileSweeper.delete(listOf(effect.path))
             is CaptureEffect.Deliver -> scope.launch { deliverVideo(context, effect, onDeliver) }
             is CaptureEffect.SwitchLens -> engine.bind(effect.to)
             is CaptureEffect.FocusAt -> engine.focusAt(effect.point.x * viewSize.width, effect.point.y * viewSize.height)
@@ -155,7 +157,12 @@ public fun CaptureViewfinder(
         step.effects.forEach { run(it, step.state) }
     }
 
-    DisposableEffect(engine) { onDispose { engine.release() } }
+    DisposableEffect(engine) {
+        onDispose {
+            engine.release()
+            CaptureFileSweeper.delete(state.segments.map { it.path })
+        }
+    }
 
     LaunchedEffect(Unit) {
         val camera = permissions.ensure(PermissionNature.CAMERA)
@@ -266,6 +273,19 @@ public fun CaptureViewfinder(
 
 private const val DISMISS_DP = 120f
 
+/**
+ * Les fichiers d'une prise abandonnée se suppriment HORS de la portée du viseur : « Abandonner » ferme l'écran dans
+ * le même geste, et une suppression lancée dans une portée qui meurt avec lui pourrait ne jamais partir.
+ */
+private object CaptureFileSweeper {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun delete(paths: List<String>) {
+        if (paths.isEmpty()) return
+        scope.launch { paths.forEach { runCatching { File(it).delete() } } }
+    }
+}
+
 private fun holdMoved(
     state: CaptureSessionState,
     dx: Float,
@@ -337,6 +357,7 @@ private suspend fun deliverVideo(context: Context, effect: CaptureEffect.Deliver
             merged
         } else {
             merged.delete()
+            effect.segments.drop(1).forEach { File(it.path).delete() }
             File(first.path)
         }
     }

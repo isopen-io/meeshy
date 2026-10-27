@@ -89,7 +89,7 @@ public object CaptureSegmentMerger {
             if (size < 0) break
             val outTrack = mapping[extractor.sampleTrackIndex]
             if (outTrack != null) {
-                info.set(0, size, extractor.sampleTime + offsetUs, extractor.sampleFlags)
+                info.set(0, size, extractor.sampleTime + offsetUs, bufferFlags(extractor.sampleFlags))
                 muxer.writeSampleData(outTrack, buffer, info)
                 lastUs = maxOf(lastUs, extractor.sampleTime)
             }
@@ -97,4 +97,8 @@ public object CaptureSegmentMerger {
         }
         return maxOf(durationUs, lastUs)
     }
+
+    /** Seul le drapeau d'image clé se transpose : les autres bits de l'extracteur ne veulent pas dire la même chose au muxer. */
+    private fun bufferFlags(sampleFlags: Int): Int =
+        if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
 }
