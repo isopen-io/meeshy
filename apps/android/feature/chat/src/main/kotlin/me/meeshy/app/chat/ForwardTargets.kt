@@ -35,6 +35,7 @@ data class ForwardTarget(
  *    reader soft-deleted for themselves) is never offered: it is a tappable row
  *    that would produce a message the gateway refuses (issue found in review,
  *    parity with `StorySendTargets`).
+ *  - A direct conversation with a BLOCKED person ([blockedUserIds]) is never offered.
  *  - A blank (or whitespace-only) query keeps every remaining non-source conversation.
  *  - A non-blank query is trimmed, then matched case-insensitively against the
  *    conversation's resolved [displayTitle] (what the user actually sees — the
@@ -50,11 +51,16 @@ object ForwardTargets {
         sourceConversationId: String,
         query: String,
         currentUserId: String? = null,
+        blockedUserIds: Set<String> = emptySet(),
     ): List<ForwardTarget> {
         val trimmed = query.trim()
         return conversations.asSequence()
             .filter { it.id != sourceConversationId }
             .filter { it.mayCurrentUserWrite(currentUserId) }
+            .filter { conversation ->
+                val peer = conversation.interlocutor(currentUserId)?.userId
+                peer == null || peer !in blockedUserIds
+            }
             .map { conversation ->
                 ForwardTarget(
                     conversationId = conversation.id,

@@ -415,12 +415,17 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onDismissRequest = actions.closeForward,
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
         ) {
-            ForwardPickerSheet(
+            ShareSheet(
                 forward = forward,
                 accentColor = accentColor,
-                onQueryChange = actions.onForwardQueryChange,
-                onForwardTo = actions.forwardTo,
-                onDismiss = actions.closeForward,
+                actions = ShareSheetActions(
+                    onQueryChange = actions.onForwardQueryChange,
+                    onToggle = actions.toggleForwardRecipient,
+                    onCaptionChange = actions.onForwardCaptionChange,
+                    onDurationChange = actions.onForwardDurationChange,
+                    onSend = actions.sendForward,
+                    onDismiss = actions.closeForward,
+                ),
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
