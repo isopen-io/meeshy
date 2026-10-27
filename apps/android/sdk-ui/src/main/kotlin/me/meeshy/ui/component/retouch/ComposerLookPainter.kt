@@ -1,6 +1,9 @@
 package me.meeshy.ui.component.retouch
 
 import android.graphics.Bitmap
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlinx.coroutines.Dispatchers
 import me.meeshy.sdk.call.frames.CallFramePortrait
 import me.meeshy.sdk.call.frames.CallFrameRenderer
 import me.meeshy.sdk.call.montage.CallMontagePainter
@@ -16,7 +19,15 @@ import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
 import me.meeshy.sdk.model.composer.look.ComposerPhotoLook
 import me.meeshy.sdk.model.imageedit.NormalizedCrop
 import me.meeshy.ui.component.imageedit.ColorMatrixFallback
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.roundToInt
+
+/**
+ * Où la retouche peint — aperçu, miniatures, export, détection du visage : hors du fil principal. Un test
+ * de Compose la ramène sur l'horloge de la composition, sans quoi l'ordre où les peintures reviennent
+ * dépend de la vitesse de la machine et non plus de ce que l'écran fait.
+ */
+internal val LocalRetouchPaintContext: ProvidableCompositionLocal<CoroutineContext> = staticCompositionLocalOf { Dispatchers.Default }
 
 /** L'auteur tel que les cadres l'écrivent, et ce qu'ils datent : la séance de la prise, jamais l'instant du rendu. */
 public data class ComposerLookAuthor(val id: String, val name: String, val handle: String?, val caption: CallMontageCaption, val date: String)

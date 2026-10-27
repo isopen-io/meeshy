@@ -2,6 +2,7 @@ package me.meeshy.ui.component.retouch
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -24,6 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** La retouche unique : la rangée haute, le rail, la bande, et ce que « Terminé » remet (#12614). */
 @RunWith(RobolectricTestRunner::class)
@@ -39,11 +41,19 @@ class ComposerRetouchScreenTest {
 
     private val author = ComposerLookAuthor("self", "Ana", null, CallMontageCaption(CallMontageCaption.BRAND_TITLE, "24 Oct 2026", "10:42"), "24 Oct 2026")
 
+    /**
+     * Les peintures (aperçu, miniatures, export, visage) tournent sur l'horloge de la composition : hors du fil
+     * principal, elles revenaient à un instant qui dépendait de la vitesse du runner, et une CI chargée voyait
+     * la bande et le rail dans un ordre qu'aucun geste ne produisait (« Terminé » jamais revenu, le Crapaud
+     * centré mais pas choisi).
+     */
     private fun show() {
         val photo = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.RED) }
         compose.setContent {
-            MeeshyTheme {
-                ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+            CompositionLocalProvider(LocalRetouchPaintContext provides EmptyCoroutineContext) {
+                MeeshyTheme {
+                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+                }
             }
         }
         compose.waitForIdle()

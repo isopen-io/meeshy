@@ -47,7 +47,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
@@ -82,6 +81,7 @@ internal fun ComposerLookStrip(
     val chosen = ComposerLookStripRule.chosenIndex(items, look)
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val paintContext = LocalRetouchPaintContext.current
     val pitchPx = with(LocalDensity.current) { ComposerLookStripRule.PITCH.dp.toPx() }
     var follow by remember(family) { mutableStateOf(ComposerLookStripFollow().begin(chosen)) }
     val currentChosen by rememberUpdatedState(chosen)
@@ -137,7 +137,7 @@ internal fun ComposerLookStrip(
                         val key = item.toString()
                         if (thumbnails[key] != null) return@LaunchedEffect
                         val combined = ComposerLookStripRule.look(item, look)
-                        withContext(Dispatchers.Default) {
+                        withContext(paintContext) {
                             ComposerLookPainter.paint(thumbSource, combined, author, ComposerLookCanvas.THUMBNAIL_LONG_SIDE, face = face)
                         }?.let { thumbnails[key] = it }
                     }
