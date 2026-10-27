@@ -63,10 +63,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.addChannel.title",
           "androidName": "community_add_channel_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -219,10 +217,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.action.channel",
           "androidName": "community_detail_action_channel",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -249,28 +245,20 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.channel.fallbackName",
           "androidName": "community_detail_channel_fallback_name",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.channels.empty.action",
           "androidName": "community_detail_channels_empty_action",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.channels.empty.subtitle",
           "androidName": "community_detail_channels_empty_subtitle",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.channels.empty.title",
           "androidName": "community_detail_channels_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -315,76 +303,52 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.posts.empty.subtitle",
           "androidName": "community_detail_posts_empty_subtitle",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.posts.empty.title",
           "androidName": "community_detail_posts_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.stats.channels",
           "androidName": "community_detail_stats_channels",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.stats.members",
           "androidName": "community_detail_stats_members",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.tab.channels",
           "androidName": "community_detail_tab_channels",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.tab.feed",
           "androidName": "community_detail_tab_feed",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.button",
           "androidName": "community_invite_button",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.empty.subtitle",
           "androidName": "community_invite_empty_subtitle",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.empty.title",
           "androidName": "community_invite_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.recentlyInvited",
           "androidName": "community_invite_recently_invited",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.search.placeholder",
           "androidName": "community_invite_search_placeholder",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.invite.title",
           "androidName": "community_invite_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -427,34 +391,24 @@
           "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.empty.action",
           "androidName": "community_members_empty_action",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.empty.subtitle",
           "androidName": "community_members_empty_subtitle",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.empty.title",
           "androidName": "community_members_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.remove",
           "androidName": "community_members_remove",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.section.admin",
           "androidName": "community_members_section_admin",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -475,16 +429,12 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.title",
           "androidName": "community_members_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.members.unknownUser",
           "androidName": "community_members_unknown_user",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
