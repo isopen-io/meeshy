@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +19,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.chrome.SwipeRowLaw
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -55,7 +58,7 @@ internal fun SwipeActionCell(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.graphicsLayer {
+            modifier = Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true).graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             },
@@ -71,7 +74,10 @@ internal fun SwipeActionCell(
                 color = MeeshyPalette.White,
                 fontSize = MeeshyFontSize.caption,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Visible,
             )
         }
     }
