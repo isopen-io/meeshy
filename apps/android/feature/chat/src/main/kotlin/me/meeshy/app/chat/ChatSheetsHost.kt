@@ -30,6 +30,8 @@ import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
+import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -180,9 +182,32 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     if (sheets.info) {
         // Chaque entrée referme la fiche puis ouvre sa feuille : une seule feuille à la fois.
         fun openFrom(open: () -> Unit): () -> Unit = { sheets.info = false; open() }
+        val encryptionRegime = if (state.isEndToEnd) {
+            ConversationEncryptionRegime.END_TO_END
+        } else {
+            ConversationEncryptionRegime.of(state.encryptionMode)
+        }
         val entries = buildList {
             if (state.isGroup) {
                 add(ConversationInfoEntry(MeeshyIcons.Group, stringResource(R.string.conversation_members_open), openFrom { sheets.members = true }))
+            }
+            add(
+                ConversationInfoEntry(
+                    icon = encryptionRegime.icon(),
+                    label = stringResource(R.string.encryption_detail_title),
+                    subtitle = stringResource(encryptionRegime.summaryRes()),
+                    onClick = openFrom { sheets.encryption = true },
+                ),
+            )
+            if (ConversationSecurityRow.showsSafetyNumber(!state.isGroup, encryptionRegime)) {
+                add(
+                    ConversationInfoEntry(
+                        icon = MeeshyIcons.LockFilled,
+                        label = stringResource(R.string.encryption_legacy_title),
+                        subtitle = stringResource(R.string.encryption_legacy_subtitle),
+                        onClick = openFrom { sheets.securityVerification = true },
+                    ),
+                )
             }
             add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
             add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
@@ -209,6 +234,22 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
             entries = entries,
             onDismiss = { sheets.info = false },
+        )
+    }
+
+    if (sheets.encryption) {
+        ConversationEncryptionSheet(
+            conversationId = state.conversationId,
+            isDirect = !state.isGroup,
+            accentColor = accentColor,
+            onDismiss = { sheets.encryption = false },
+        )
+    }
+
+    if (sheets.securityVerification) {
+        SecurityVerificationSheet(
+            conversationName = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            onDismiss = { sheets.securityVerification = false },
         )
     }
 

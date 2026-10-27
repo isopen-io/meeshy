@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Turning on end-to-end encryption isn’t available from this phone yet: it can’t read or write end-to-end encrypted messages, so you would lose the ability to write here.</string>
+    <string name="encryption_irreversible_refused">End-to-end encryption can’t be turned off. To chat without it, start a new conversation.</string>
+    <string name="encryption_action_failed">The change couldn’t be made. Try again.</string>
+    <string name="encryption_offline">You’re offline: reconnect to read or change the encryption.</string>
+    <string name="encryption_toggle_forbidden">Your role doesn’t allow turning encryption on or off here. The server decides.</string>
+    <string name="encryption_read_failed">Couldn’t read the encryption status. Try again.</string>
+    <string name="encryption_retry">Retry</string>
+    <string name="security_verify_description">Messages with %1$s are end-to-end encrypted.</string>
+</resources>
