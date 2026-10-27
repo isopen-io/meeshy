@@ -93,7 +93,7 @@ class PushNotificationPipelineTest {
 
         assertThat(posted).isTrue()
         val notification = child()
-        assertThat(notification.channelId).isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES)
+        assertThat(notification.channelId).isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES_V2)
         assertThat(notification.extras.getCharSequence(NotificationCompat.EXTRA_TITLE).toString()).isEqualTo("Alice")
         assertThat(notification.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString()).isEqualTo("Salut")
     }
@@ -165,7 +165,7 @@ class PushNotificationPipelineTest {
     fun `un type social part sur le canal social`() = runTest {
         pipeline().renderNow(push("type" to "post_like", "notificationId" to "n9", "postId" to "p1", "title" to "Like"))
 
-        assertThat(child().channelId).isEqualTo(NotificationChannelIds.CHANNEL_SOCIAL)
+        assertThat(child().channelId).isEqualTo(NotificationChannelIds.CHANNEL_SOCIAL_V2)
     }
 
     @Test

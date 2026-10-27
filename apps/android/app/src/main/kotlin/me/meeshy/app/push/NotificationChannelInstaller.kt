@@ -1,5 +1,6 @@
 package me.meeshy.app.push
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -31,33 +32,33 @@ class NotificationChannelInstaller @Inject constructor(
     fun install() {
         val manager = context.getSystemService<NotificationManager>() ?: return
 
+        listOf(
+            NotificationChannelIds.CHANNEL_MESSAGES to NotificationManager.IMPORTANCE_HIGH,
+            NotificationChannelIds.CHANNEL_MESSAGES_V2 to NotificationManager.IMPORTANCE_HIGH,
+        ).forEach { (id, importance) ->
+            manager.createNotificationChannel(
+                alerting(id, R.string.push_channel_messages_name, R.string.push_channel_messages_description, importance),
+            )
+        }
         manager.createNotificationChannel(
-            NotificationChannel(
-                NotificationChannelIds.CHANNEL_MESSAGES,
-                "Messages",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = "New messages and mentions"
-            },
-        )
-        manager.createNotificationChannel(
-            NotificationChannel(
-                NotificationChannelIds.CHANNEL_SOCIAL,
-                context.getString(R.string.push_channel_social_name),
+            alerting(
+                NotificationChannelIds.CHANNEL_SOCIAL_V2,
+                R.string.push_channel_social_name,
+                R.string.push_channel_social_description,
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = context.getString(R.string.push_channel_social_description)
-            },
+            ),
         )
         manager.createNotificationChannel(
-            NotificationChannel(
-                NotificationChannelIds.CHANNEL_SYSTEM,
-                context.getString(R.string.push_channel_system_name),
+            alerting(
+                NotificationChannelIds.CHANNEL_SYSTEM_V2,
+                R.string.push_channel_system_name,
+                R.string.push_channel_system_description,
                 NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = context.getString(R.string.push_channel_system_description)
-            },
+            ),
         )
+        // Sans vibration à leur création, immuables : remplacés par les canaux v2 (personne ne les cible).
+        manager.deleteNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL)
+        manager.deleteNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM)
         manager.createNotificationChannel(
             NotificationChannel(
                 NotificationChannelIds.CHANNEL_SILENT,
@@ -74,4 +75,12 @@ class NotificationChannelInstaller @Inject constructor(
         // install doesn't carry a dead, possibly user-muted duplicate around forever.
         manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_MESSAGES)
     }
+
+    /** Un canal qui sonne : nom et description dans la langue de l'appareil, vibration, contenu masqué sur l'écran verrouillé. */
+    private fun alerting(id: String, name: Int, description: Int, importance: Int): NotificationChannel =
+        NotificationChannel(id, context.getString(name), importance).apply {
+            this.description = context.getString(description)
+            enableVibration(true)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
 }

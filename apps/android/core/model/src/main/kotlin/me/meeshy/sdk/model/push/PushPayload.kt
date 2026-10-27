@@ -33,6 +33,11 @@ public data class PushPayload(
     val isVideo: Boolean? = null,
     /** `direct` / `group` / ... : distingue message direct et de groupe pour la table du Focus. */
     val conversationType: String? = null,
+    /** Titre de la conversation (groupe) : la gateway le sert déjà dans la langue du lecteur. */
+    val conversationTitle: String? = null,
+    val senderUsername: String? = null,
+    val senderDisplayName: String? = null,
+    val senderAvatar: String? = null,
 ) {
     /**
      * Le média peut-il voyager jusqu'à la bannière ? Une protection déclarée
@@ -86,6 +91,10 @@ public data class PushPayload(
                 createdAt = text("createdAt"),
                 isVideo = bool("isVideo"),
                 conversationType = text("conversationType"),
+                conversationTitle = text("conversationTitle"),
+                senderUsername = text("senderUsername"),
+                senderDisplayName = text("senderDisplayName"),
+                senderAvatar = text("senderAvatar"),
             )
         }
     }
