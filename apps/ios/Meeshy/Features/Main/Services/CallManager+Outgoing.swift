@@ -145,59 +145,7 @@ extension CallManager {
         // de 45s prend le relais comme avant.
         startOutgoingRingTimeout()
 
-        // Outgoing is always foreground (the user just tapped Call), so the only
-        // no-CallKit cases here are the platform ones (Mac, simulator).
-        // (Suppressing CallKit for outgoing on a real iPhone would drop the
-        // system call UI / Recents the user expects there.)
-        callUsesCallKit = Self.platformSupportsCallKit
-        ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
-        let uuid = UUID()
-        activeCallUUID = uuid
-        if !callUsesCallKit {
-            // No CallKit (iOS-app-on-Mac): CXStartCallAction half-succeeds and the
-            // later CXEndCallAction can't clear it → CallKit shows a stuck "call in
-            // progress" after hangup. Drive the call entirely in-app; the
-            // call:initiate flow below runs independently. Start the ringback
-            // directly (provider:didActivate never fires without CallKit).
-            Logger.calls.info("[no-callkit] outgoing call — in-app ringback")
-            startRingbackIfNeeded()
-        } else {
-            // CXHandle.value persists in the iOS Phone app Recents list — use the
-            // userId for stable identity rather than a (possibly localized) name.
-            let handle = CXHandle(type: .generic, value: userId)
-            let startAction = CXStartCallAction(call: uuid, handle: handle)
-            startAction.isVideo = isVideo
-            startAction.contactIdentifier = displayName
-            let transaction = CXTransaction(action: startAction)
-            let provider = callProvider
-            callController.request(transaction) { [weak self] error in
-                if let error {
-                    Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
-                    Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed("CallKit error")) }
-                } else {
-                    let update = CXCallUpdate()
-                    update.remoteHandle = CXHandle(type: .generic, value: userId)
-                    update.localizedCallerName = displayName
-                    update.hasVideo = isVideo
-                    provider.reportCall(with: uuid, updated: update)
-
-                    // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
-                    // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
-                    // after `CXStartCallAction.fulfill()`) on outgoing calls that
-                    // never report progress, which surfaced in production as
-                    // "calls drop after 2-4 seconds" before the SDP answer round-
-                    // trip completes. Reporting `startedConnectingAt` here as
-                    // soon as the transaction is accepted signals to CallKit
-                    // that the call is making progress, so it waits for our
-                    // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
-                    // of killing the call out from under us. The later call from
-                    // `handleRemoteAnswer` (P1-12) still fires once the real
-                    // answer lands — CallKit accepts that as a refresh of the
-                    // connecting timestamp and uses it to drive the system UI.
-                    provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
-                }
-            }
-        }
+        let uuid = beginOutgoingRing(userId: userId, displayName: displayName, isVideo: isVideo)
 
         // Await call:initiate ACK to obtain the real callId + per-user ICE
         // servers. WebRTC MUST be configured with these BEFORE local media or
@@ -213,71 +161,145 @@ extension CallManager {
         setupCallTask?.cancel()
         setupCallTask = Task { [weak self, uuid] in
             guard let self else { return }
-            do {
-                // Pré-flight zombie cleanup : émettre `call:force-leave`
-                // AVANT `call:initiate` pour purger toute trace persistante
-                // d'un appel précédent où l'utilisateur courant aurait été
-                // participant sans avoir `leftAt` peuplé (crash, kill app,
-                // simulator teardown, audit du gateway pas exécuté à temps).
-                // Sans ça, `call:initiate` retourne `CALL_ALREADY_ACTIVE` —
-                // le gateway considère qu'il y a déjà un appel actif avec
-                // au moins un participant non-leftAt. Le force-leave est
-                // idempotent (no-op si pas de zombie côté DB).
-                // Petit délai (250ms) pour laisser le gateway commiter le
-                // cleanup MongoDB avant qu'on émette call:initiate.
-                MessageSocketManager.shared.emitCallForceLeave(conversationId: conversationId)
-                _ = await cancellableSleep(for: .milliseconds(250))
-                guard self.activeCallUUID == uuid else {
-                    Logger.calls.info("[CALL_SETUP] force-leave wait — uuid changed, discarding")
-                    return
-                }
-
-                let ack = try await MessageSocketManager.shared.emitCallInitiate(
-                    conversationId: conversationId,
-                    isVideo: isVideo
-                )
-                guard self.activeCallUUID == uuid else {
-                    Logger.calls.info("[CALL_SETUP] ACK arrived after end — discarding (uuid changed)")
-                    // Raccroché AVANT l'accusé : le raccroché n'avait pas d'identifiant à clore, et le
-                    // serveur tient maintenant un appel que personne ne terminera — l'appelé sonnait
-                    // jusqu'au délai du serveur pour un appelant parti.
-                    self.emitCallEndReliably(callId: ack.callId)
-                    return
-                }
-                let dynamicServers = ack.iceServers.map { server in
-                    IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
-                }
-                self.currentCallId = ack.callId
-                Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
-                // Audit fix (calling-stack audit 2026-08-15): abort setup on
-                // a genuine peer-connection creation failure instead of
-                // silently proceeding — see WebRTCService.configure's doc.
-                guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else {
-                    Logger.calls.error("[CALL_SETUP] outgoing webRTC.configure failed — aborting")
-                    self.failCall("Failed to initiate call")
-                    return
-                }
-                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
-                self.applyNegotiationRole()
-                Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
-                self.configureAudioSession()
-                self.startReliabilityMonitor()
-                Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-                await self.performLocalMediaStart(isVideo: isVideo, callId: ack.callId)
-                guard self.currentCallId == ack.callId else { return }
-                Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
-                self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
-                Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
-            } catch {
-                Logger.calls.error("call:initiate ACK failed: \(error.localizedDescription)")
-                if self.activeCallUUID == uuid {
-                    self.failCall("Failed to initiate call")
-                }
-            }
+            await self.runOutgoingCallSetup(
+                uuid: uuid, conversationId: conversationId, userId: userId,
+                displayName: displayName, isVideo: isVideo
+            )
         }
 
         HapticFeedback.medium()
         return true
+    }
+
+    /// Who rings the outgoing call (CallKit, or the app where there is none).
+    private func beginOutgoingRing(userId: String, displayName: String, isVideo: Bool) -> UUID {
+        // Outgoing is always foreground (the user just tapped Call), so the only
+        // no-CallKit cases here are the platform ones (Mac, simulator).
+        // (Suppressing CallKit for outgoing on a real iPhone would drop the
+        // system call UI / Recents the user expects there.)
+        callUsesCallKit = Self.platformSupportsCallKit
+        ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
+        let uuid = UUID()
+        activeCallUUID = uuid
+        if !callUsesCallKit {
+            // No CallKit (iOS-app-on-Mac): CXStartCallAction half-succeeds and the
+            // later CXEndCallAction can't clear it → CallKit shows a stuck "call in
+            // progress" after hangup. Drive the call entirely in-app; the
+            // call:initiate flow runs independently. Start the ringback
+            // directly (provider:didActivate never fires without CallKit).
+            Logger.calls.info("[no-callkit] outgoing call — in-app ringback")
+            startRingbackIfNeeded()
+        } else {
+            requestCallKitStart(uuid: uuid, userId: userId, displayName: displayName, isVideo: isVideo)
+        }
+        return uuid
+    }
+
+    /// CallKit's half of an outgoing call: the start transaction, then the
+    /// progress reports that keep CallKit from ending the call on its own.
+    private func requestCallKitStart(uuid: UUID, userId: String, displayName: String, isVideo: Bool) {
+        // CXHandle.value persists in the iOS Phone app Recents list — use the
+        // userId for stable identity rather than a (possibly localized) name.
+        let handle = CXHandle(type: .generic, value: userId)
+        let startAction = CXStartCallAction(call: uuid, handle: handle)
+        startAction.isVideo = isVideo
+        startAction.contactIdentifier = displayName
+        let transaction = CXTransaction(action: startAction)
+        let provider = callProvider
+        callController.request(transaction) { [weak self] error in
+            if let error {
+                Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
+                Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed("CallKit error")) }
+            } else {
+                let update = CXCallUpdate()
+                update.remoteHandle = CXHandle(type: .generic, value: userId)
+                update.localizedCallerName = displayName
+                update.hasVideo = isVideo
+                provider.reportCall(with: uuid, updated: update)
+
+                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
+                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
+                // after `CXStartCallAction.fulfill()`) on outgoing calls that
+                // never report progress, which surfaced in production as
+                // "calls drop after 2-4 seconds" before the SDP answer round-
+                // trip completes. Reporting `startedConnectingAt` here as
+                // soon as the transaction is accepted signals to CallKit
+                // that the call is making progress, so it waits for our
+                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
+                // of killing the call out from under us. The later call from
+                // `handleRemoteAnswer` (P1-12) still fires once the real
+                // answer lands — CallKit accepts that as a refresh of the
+                // connecting timestamp and uses it to drive the system UI.
+                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+            }
+        }
+    }
+
+    /// `call:initiate`, then the peer connection, re-checked against `uuid`.
+    private func runOutgoingCallSetup(
+        uuid: UUID, conversationId: String, userId: String, displayName: String, isVideo: Bool
+    ) async {
+        do {
+            // Pré-flight zombie cleanup : émettre `call:force-leave`
+            // AVANT `call:initiate` pour purger toute trace persistante
+            // d'un appel précédent où l'utilisateur courant aurait été
+            // participant sans avoir `leftAt` peuplé (crash, kill app,
+            // simulator teardown, audit du gateway pas exécuté à temps).
+            // Sans ça, `call:initiate` retourne `CALL_ALREADY_ACTIVE` —
+            // le gateway considère qu'il y a déjà un appel actif avec
+            // au moins un participant non-leftAt. Le force-leave est
+            // idempotent (no-op si pas de zombie côté DB).
+            // Petit délai (250ms) pour laisser le gateway commiter le
+            // cleanup MongoDB avant qu'on émette call:initiate.
+            MessageSocketManager.shared.emitCallForceLeave(conversationId: conversationId)
+            _ = await cancellableSleep(for: .milliseconds(250))
+            guard self.activeCallUUID == uuid else {
+                Logger.calls.info("[CALL_SETUP] force-leave wait — uuid changed, discarding")
+                return
+            }
+
+            let ack = try await MessageSocketManager.shared.emitCallInitiate(
+                conversationId: conversationId,
+                isVideo: isVideo
+            )
+            guard self.activeCallUUID == uuid else {
+                Logger.calls.info("[CALL_SETUP] ACK arrived after end — discarding (uuid changed)")
+                // Raccroché AVANT l'accusé : le raccroché n'avait pas d'identifiant à clore, et le
+                // serveur tient maintenant un appel que personne ne terminera — l'appelé sonnait
+                // jusqu'au délai du serveur pour un appelant parti.
+                self.emitCallEndReliably(callId: ack.callId)
+                return
+            }
+            let dynamicServers = ack.iceServers.map { server in
+                IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+            }
+            self.currentCallId = ack.callId
+            Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
+            // Audit fix (calling-stack audit 2026-08-15): abort setup on
+            // a genuine peer-connection creation failure instead of
+            // silently proceeding — see WebRTCService.configure's doc.
+            guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else {
+                Logger.calls.error("[CALL_SETUP] outgoing webRTC.configure failed — aborting")
+                self.failCall("Failed to initiate call")
+                return
+            }
+            self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
+            self.applyNegotiationRole()
+            Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
+            self.configureAudioSession()
+            self.startReliabilityMonitor()
+            Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
+            await self.performLocalMediaStart(isVideo: isVideo, callId: ack.callId)
+            guard self.currentCallId == ack.callId else { return }
+            Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
+            self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
+            Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
+        } catch {
+            Logger.calls.error("call:initiate ACK failed: \(error.localizedDescription)")
+            if self.activeCallUUID == uuid {
+                self.failCall("Failed to initiate call")
+            }
+        }
     }
 
     // MARK: - Retry a transiently-failed call (« Réessayer »)

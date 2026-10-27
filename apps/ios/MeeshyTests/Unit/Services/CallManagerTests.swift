@@ -521,13 +521,16 @@ final class CallManagerEarlyJoinTests: XCTestCase {
 
     func test_handleIncomingCallNotification_emitsCallJoinBeforeStartLocalMedia() throws {
         let source = try sourceText()
-        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
-            XCTFail("handleIncomingCallNotification not found")
+        guard let caller = body(of: "func handleIncomingCallNotification", in: source),
+              let body = body(of: "private func startRingingPipeline(", in: source) else {
+            XCTFail("handleIncomingCallNotification or startRingingPipeline not found")
             return
         }
-        // [Fix 2026-07-02] the join is now dispatched via joinCallRoomReliably
-        // (connect-if-needed + ACK + retry) — same ordering contract: it must
-        // be kicked off BEFORE the media warmup.
+        XCTAssertTrue(caller.contains("startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source:"),
+                      "handleIncomingCallNotification must run the shared ringing pipeline")
+        // [Fix 2026-07-02] the join is dispatched via joinCallRoomReliably
+        // (connect-if-needed + ACK + retry) — it must be kicked off BEFORE the
+        // media warmup.
         guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
             XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in handleIncomingCallNotification")
@@ -544,10 +547,16 @@ final class CallManagerEarlyJoinTests: XCTestCase {
 
     func test_reportIncomingVoIPCall_emitsCallJoinBeforeStartLocalMedia() throws {
         let source = try sourceText()
-        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
-            XCTFail("reportIncomingVoIPCall not found")
+        guard let caller = body(of: "func reportIncomingVoIPCall", in: source),
+              let body = body(of: "private func startRingingPipeline(", in: source) else {
+            XCTFail("reportIncomingVoIPCall or startRingingPipeline not found")
             return
         }
+        XCTAssertTrue(caller.contains("startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source:"),
+                      "reportIncomingVoIPCall must run the shared ringing pipeline")
+        // [Fix 2026-07-02] the join is dispatched via joinCallRoomReliably
+        // (connect-if-needed + ACK + retry) — it must be kicked off BEFORE the
+        // media warmup.
         guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
             XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in reportIncomingVoIPCall")
@@ -571,8 +580,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         // Both incoming paths must assign to localMediaTask
         let incomingBody = body(of: "func handleIncomingCallNotification", in: source) ?? ""
         let voipBody = body(of: "func reportIncomingVoIPCall", in: source) ?? ""
-        XCTAssertTrue(incomingBody.contains("localMediaTask = Task"), "handleIncomingCallNotification must store the local media Task in localMediaTask.")
-        XCTAssertTrue(voipBody.contains("localMediaTask = Task"), "reportIncomingVoIPCall must store the local media Task in localMediaTask.")
+        let pipelineBody = body(of: "private func startRingingPipeline(", in: source) ?? ""
+        XCTAssertTrue(incomingBody.contains("source: .socket)"), "handleIncomingCallNotification must run the shared ringing pipeline.")
+        XCTAssertTrue(voipBody.contains("source: .voipPush)"), "reportIncomingVoIPCall must run the shared ringing pipeline.")
+        XCTAssertTrue(pipelineBody.contains("localMediaTask = Task"), "the ringing pipeline must store the local media Task in localMediaTask.")
     }
 
     /// The dedup ring in `VoIPPushManager` already recorded this callId as
@@ -610,17 +621,18 @@ final class CallManagerEarlyJoinTests: XCTestCase {
     /// instead of re-ringing the callee.
     func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure_busyPath() throws {
         let source = try sourceText()
-        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
-            XCTFail("reportIncomingVoIPCall not found")
+        guard let caller = body(of: "func reportIncomingVoIPCall", in: source),
+              let body = body(of: "private func endSecondaryVoIPCallWhileBusy(", in: source) else {
+            XCTFail("reportIncomingVoIPCall or endSecondaryVoIPCallWhileBusy not found")
             return
         }
-        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
-            XCTFail("Expected the busy-path guard in reportIncomingVoIPCall")
+        guard let busyGuardRange = caller.range(of: "guard callState == .idle else {"),
+              caller[busyGuardRange.upperBound...].contains("endSecondaryVoIPCallWhileBusy(") else {
+            XCTFail("Expected the busy-path guard in reportIncomingVoIPCall to end the secondary call")
             return
         }
         guard let reportRange = body.range(
-            of: "reportNewIncomingCall(with: uuid, update: update) { error in",
-            range: busyGuardRange.upperBound..<body.endIndex
+            of: "reportNewIncomingCall(with: uuid, update: update) { error in"
         ) else {
             XCTFail("Expected the busy-path reportNewIncomingCall closure in reportIncomingVoIPCall")
             return
@@ -697,10 +709,12 @@ final class CallManagerEarlyJoinTests: XCTestCase {
     /// Cycle Traps" section calls out for `DispatchQueue`/`Task` closures.
     func test_startCall_callKitFailureTask_capturesSelfWeakly() throws {
         let source = try sourceText()
-        guard let body = body(of: "func startCall(conversationId: String", in: source) else {
-            XCTFail("startCall not found")
+        guard let caller = body(of: "func startCall(conversationId: String", in: source),
+              let body = body(of: "private func requestCallKitStart(", in: source) else {
+            XCTFail("startCall or requestCallKitStart not found")
             return
         }
+        XCTAssertTrue(caller.contains("beginOutgoingRing(userId: userId,"), "startCall must ring through beginOutgoingRing")
         XCTAssertTrue(
             body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
             "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
@@ -2733,11 +2747,11 @@ final class CallWaitingSupersedeTests: XCTestCase {
 
     func test_reportIncomingVoIPCall_busyPath_rejectsSupersededBeforeOverwriting() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "func reportIncomingVoIPCall", in: source) else {
-            XCTFail("reportIncomingVoIPCall not found"); return
+        guard let body = functionBody(of: "private func endSecondaryVoIPCallWhileBusy(", in: source) else {
+            XCTFail("endSecondaryVoIPCallWhileBusy not found"); return
         }
         guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
-              let overwriteRange = body.range(of: "pendingIncomingCall = IncomingCall(callId: callId, fromUserId: callerUserId") else {
+              let overwriteRange = body.range(of: "pendingIncomingCall = waiting") else {
             XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
         }
         XCTAssertLessThan(
@@ -2826,9 +2840,8 @@ final class LocalMediaStartHelperTests: XCTestCase {
         let source = try callManagerSource()
 
         let methods = [
-            "func startCall(",
-            "func reportIncomingVoIPCall(",
-            "func handleIncomingCallNotification(",
+            "private func runOutgoingCallSetup(",
+            "private func startRingingPipeline(",
         ]
         for method in methods {
             guard let body = functionBody(of: method, in: source) else {
@@ -4380,9 +4393,11 @@ final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
 
     func test_startCall_abortsOnConfigureFailure() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
-            XCTFail("startCall not found"); return
+        guard let caller = functionBody(of: "func startCall(conversationId:", in: source),
+              let body = functionBody(of: "private func runOutgoingCallSetup(", in: source) else {
+            XCTFail("startCall or runOutgoingCallSetup not found"); return
         }
+        XCTAssertTrue(caller.contains("await self.runOutgoingCallSetup("), "startCall must run its setup through runOutgoingCallSetup")
         XCTAssertTrue(
             body.contains("guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else"),
             "startCall must check webRTCService.configure's result and abort on failure " +
@@ -4623,10 +4638,17 @@ final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
                 XCTFail("\(signature) not found in CallManager.swift"); continue
             }
             XCTAssertTrue(
-                body.contains("armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)"),
-                "\(signature) must call armTurnCredentialsAfterConfigure after webRTCService.configure."
+                body.contains("startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source:"),
+                "\(signature) must run the shared ringing pipeline after webRTCService.configure."
             )
         }
+        guard let pipeline = functionBody(source, signature: "private func startRingingPipeline(") else {
+            return XCTFail("startRingingPipeline not found in CallManager.swift")
+        }
+        XCTAssertTrue(
+            pipeline.contains("armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)"),
+            "the ringing pipeline must call armTurnCredentialsAfterConfigure first."
+        )
     }
 }
 

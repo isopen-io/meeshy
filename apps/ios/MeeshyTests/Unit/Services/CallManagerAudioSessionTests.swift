@@ -2025,8 +2025,10 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("Could not find reportIncomingVoIPCall boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
+        let pipeline = source.range(of: "private func startRingingPipeline(").map { String(source[$0.lowerBound...]) } ?? ""
         XCTAssertTrue(
-            fnBody.contains("startBackgroundMonitoring()"),
+            fnBody.contains("startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .voipPush)")
+                && pipeline.contains("startBackgroundMonitoring()"),
             "reportIncomingVoIPCall must call startBackgroundMonitoring() while the call is still " +
             "ringing, exactly like handleIncomingCallNotification does — otherwise a VoIP-push call " +
             "that backgrounds mid-ring has no observer armed to recover camera suspension or notify " +

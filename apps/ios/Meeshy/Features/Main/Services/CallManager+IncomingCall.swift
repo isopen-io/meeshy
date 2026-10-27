@@ -18,27 +18,12 @@ extension CallManager {
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
         let uuid = UUID()
-        let update = CXCallUpdate()
-        // Use the callerUserId as the CXHandle.value so Recents stays stable
-        // across language/avatar changes; localizedCallerName is what the lock
-        // screen displays.
-        update.remoteHandle = CXHandle(type: .generic, value: callerUserId.isEmpty ? callerName : callerUserId)
-        update.localizedCallerName = callerName
-        update.hasVideo = isVideo
-        update.supportsGrouping = false
-        update.supportsHolding = false
+        let update = CXCallUpdate.incoming(callerUserId: callerUserId, callerName: callerName, isVideo: isVideo)
 
-        // Audit finding — the socket path (`call:offer`) and this VoIP-push
-        // path can both deliver the SAME callId (e.g. the socket wins the
-        // race while foreground, then the push for the identical call lands
-        // moments later). Guarded BEFORE any state mutation below (resetEnded/
-        // callUsesCallKit/etc.) so a duplicate push never disturbs the call
-        // already active. Without this guard the push fell into the busy
-        // branch below for a call the user is CURRENTLY being rung for:
-        // a phantom second CXCallUpdate/UUID retired as "Missed" in Recents,
-        // plus a call-waiting banner offering Answer/Reject over the very
-        // ring already on screen. Mirrors the guard the socket path already
-        // has in handleIncomingCallNotification / call:offer handling.
+        // The socket (`call:offer`) and this push can deliver the SAME callId.
+        // Guarded BEFORE any state mutation so a duplicate push never disturbs
+        // the active call — otherwise it fell into the busy branch: a phantom
+        // "Missed" in Recents and a call-waiting banner over the ring on screen.
         if currentCallId == callId, callState.isActive {
             Logger.calls.info("VoIP push for callId \(callId) already active — phantom-acking, no duplicate UI")
             reportPhantomVoIPCall(uuid: uuid, update: update, callId: callId)
@@ -48,30 +33,10 @@ extension CallManager {
         resetEndedStateForNewCall()
 
         guard callState == .idle else {
-            // Busy: report + immediately end the secondary call. Mirror the
-            // idle-path failure handling below — if CallKit refuses this
-            // report (two call groups already used, restricted mode, a
-            // transient CallKit error), the dedup ring already recorded this
-            // callId when the push arrived, and it must be evicted or a
-            // legitimate APNs retry gets silently dropped as a duplicate,
-            // leaving the callee with zero call UI for a call CallKit never
-            // actually reported.
-            callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
-                guard let error else { return }
-                Logger.calls.error("CallKit VoIP report failed (busy path): \(error.localizedDescription)")
-                Task { @MainActor in
-                    VoIPPushManager.shared.clearDedup(callId: callId)
-                }
-            }
-            // A nil `endedAt` means "unknown" to CallKit (produces an inaccurate/missing
-            // timestamp in Recents) — every other reportCall site in this file passes
-            // Date(); this synthesized busy-path report ends right now, so do the same.
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
-            rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: callerUserId, fromUsername: callerName, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
-            showCallWaitingBanner = true
-            Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
-            HapticFeedback.medium()
+            endSecondaryVoIPCallWhileBusy(
+                uuid: uuid, update: update,
+                waiting: IncomingCall(callId: callId, fromUserId: callerUserId, fromUsername: callerName, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
+            )
             return
         }
 
@@ -87,17 +52,7 @@ extension CallManager {
         ringbackPlayer.shouldSelfActivateSession = false
 
         // Set state BEFORE reporting to CallKit to avoid race
-        currentCallId = callId
-        remoteUserId = callerUserId
-        remoteUsername = callerName
-        self.conversationId = conversationId
-        isVideoEnabled = isVideo
-        isMuted = false
-        isSpeaker = isVideo
-        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
-        displayMode = .fullScreen
-        callState = .ringing(isOutgoing: false)
-        startIncomingRingTimeout()
+        enterIncomingRinging(callId: callId, callerUserId: callerUserId, callerName: callerName, conversationId: conversationId, isVideo: isVideo)
         activeCallUUID = uuid
 
         callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
@@ -117,23 +72,7 @@ extension CallManager {
             }
         }
 
-        // Bug D — Push VoIP décalé : APNs peut livrer la push plusieurs minutes
-        // après l'émission (queueing iOS, app suspendue, latence réseau). Si
-        // l'appelant a déjà raccroché entre-temps, on présenterait une fausse
-        // UI d'appel entrant qui ne sonnera jamais réellement (sans ce check).
-        //
-        // Apple exige `reportNewIncomingCall` SYNCHRONE sous 5s du push (sous
-        // peine de révocation du token APNs), donc on report d'abord puis on
-        // vérifie en background. Si le gateway répond avec un statut terminal
-        // (ended/missed/rejected/failed) ou 404, on end immédiatement l'appel
-        // CallKit avec `.unanswered` — la lock-screen flash brièvement puis
-        // disparaît, l'entrée Recents reste neutre.
-        let capturedUuid = uuid
-        let capturedCallId = callId
-        voipFreshnessTask?.cancel()
-        voipFreshnessTask = Task { [weak self] in
-            await self?.checkVoIPCallFreshness(uuid: capturedUuid, callId: capturedCallId)
-        }
+        armVoIPFreshnessCheck(uuid: uuid, callId: callId)
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing.
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
@@ -146,41 +85,57 @@ extension CallManager {
             failCall("Failed to configure WebRTC")
             return
         }
-        armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
-        applyNegotiationRole()
-        Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
-        configureAudioSession()
-        startReliabilityMonitor()
-        // Audit fix (calling-stack audit 2026-08-24) — arm the background
-        // observer HERE too, at ring time, mirroring handleIncomingCallNotification
-        // (same fix, other incoming-call entry point). Without it, a VoIP-push
-        // call that backgrounds before being answered has no observer to run
-        // the applyCameraSuspension(false, cause: "foreground") safety net or
-        // notify the peer of the background/foreground transition while still
-        // ringing. Safe to call twice per call: startBackgroundMonitoring()
-        // starts with stopBackgroundMonitoring() to stay idempotent.
-        startBackgroundMonitoring()
-
-        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
-        // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
-        // waiting for our camera/mic warmup. Media init runs in parallel; the
-        // answer creation paths (answerCall*, handleSignalOffer .connecting)
-        // await `localMediaTask` before invoking createAnswer.
-        // [Fix 2026-07-02] via joinCallRoomReliably: on a VoIP cold start the
-        // socket has never connected — a bare emit vanishes (prod-observed).
-        joinCallRoomReliably(callId: callId)
-        Logger.calls.info("VoIP push — reliable call:join dispatched; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
-
-        localMediaTask?.cancel()
-        localMediaTask = Task { [weak self] in
-            guard let self else { return }
-            Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-            await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
-            Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
-        }
+        startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .voipPush)
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
+    }
+
+    private func endSecondaryVoIPCallWhileBusy(uuid: UUID, update: CXCallUpdate, waiting: IncomingCall) {
+        let callId = waiting.callId
+        // Busy: report + immediately end the secondary call, then offer it as a
+        // call-waiting banner. Mirror the
+        // idle-path failure handling below — if CallKit refuses this
+        // report (two call groups already used, restricted mode, a
+        // transient CallKit error), the dedup ring already recorded this
+        // callId when the push arrived, and it must be evicted or a
+        // legitimate APNs retry gets silently dropped as a duplicate,
+        // leaving the callee with zero call UI for a call CallKit never
+        // actually reported.
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+            guard let error else { return }
+            Logger.calls.error("CallKit VoIP report failed (busy path): \(error.localizedDescription)")
+            Task { @MainActor in
+                VoIPPushManager.shared.clearDedup(callId: callId)
+            }
+        }
+        // A nil `endedAt` means "unknown" to CallKit (produces an inaccurate/missing
+        // timestamp in Recents) — every other reportCall site in this file passes
+        // Date(); this synthesized busy-path report ends right now, so do the same.
+        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+        rejectSupersededPendingCall(replacingWithCallId: callId)
+        pendingIncomingCall = waiting
+        showCallWaitingBanner = true
+        Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
+        HapticFeedback.medium()
+    }
+
+    private func armVoIPFreshnessCheck(uuid: UUID, callId: String) {
+        // Bug D — Push VoIP décalé : APNs peut livrer la push plusieurs minutes
+        // après l'émission (queueing iOS, app suspendue, latence réseau). Si
+        // l'appelant a déjà raccroché entre-temps, on présenterait une fausse
+        // UI d'appel entrant qui ne sonnera jamais réellement (sans ce check).
+        //
+        // Apple exige `reportNewIncomingCall` SYNCHRONE sous 5s du push (sous
+        // peine de révocation du token APNs), donc on report d'abord puis on
+        // vérifie en background. Si le gateway répond avec un statut terminal
+        // (ended/missed/rejected/failed) ou 404, on end immédiatement l'appel
+        // CallKit avec `.unanswered` — la lock-screen flash brièvement puis
+        // disparaît, l'entrée Recents reste neutre.
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = Task { [weak self] in
+            await self?.checkVoIPCallFreshness(uuid: uuid, callId: callId)
+        }
     }
 
     // MARK: - VoIP Push Freshness Check (Bug D)
@@ -413,26 +368,11 @@ extension CallManager {
         }
 
         analytics.callInitiatedDate = Date()
-        currentCallId = callId
-        remoteUserId = fromUserId
-        remoteUsername = fromUsername
-        self.conversationId = conversationId
-        isVideoEnabled = isVideo
-        isMuted = false
-        isSpeaker = isVideo
-        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
-        displayMode = .fullScreen
-        callState = .ringing(isOutgoing: false)
-        startIncomingRingTimeout()
+        enterIncomingRinging(callId: callId, callerUserId: fromUserId, callerName: fromUsername, conversationId: conversationId, isVideo: isVideo)
 
         let uuid = UUID()
         activeCallUUID = uuid
-        let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: fromUserId.isEmpty ? fromUsername : fromUserId)
-        update.localizedCallerName = fromUsername
-        update.hasVideo = isVideo
-        update.supportsGrouping = false
-        update.supportsHolding = false
+        let update = CXCallUpdate.incoming(callerUserId: fromUserId, callerName: fromUsername, isVideo: isVideo)
 
         // CALL-FIX 2026-06-06 (macOS) — CallKit's `reportNewIncomingCall` FAILS on
         // iOS-app-on-Mac (no system call UI → CXErrorCodeIncomingCallError 3), which
@@ -479,8 +419,34 @@ extension CallManager {
             failCall("Failed to configure WebRTC")
             return
         }
+        startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .socket)
+
+        Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
+        HapticFeedback.medium()
+    }
+
+    private func enterIncomingRinging(callId: String, callerUserId: String, callerName: String, conversationId: String?, isVideo: Bool) {
+        currentCallId = callId
+        remoteUserId = callerUserId
+        remoteUsername = callerName
+        self.conversationId = conversationId
+        isVideoEnabled = isVideo
+        isMuted = false
+        isSpeaker = isVideo
+        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
+        displayMode = .fullScreen
+        callState = .ringing(isOutgoing: false)
+        startIncomingRingTimeout()
+    }
+
+    /// Ringing-time setup shared by both incoming paths once the peer connection
+    /// is configured: TURN, negotiation role, audio session, reliability
+    /// monitor, background observer, the reliable `call:join`, then local media
+    /// in parallel.
+    private func startRingingPipeline(callId: String, isVideo: Bool, iceServers: [IceServer]?, source: IncomingCallSource) {
         armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         applyNegotiationRole()
+        if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin") }
         configureAudioSession()
         startReliabilityMonitor()
         // Audit fix (calling-stack audit 2026-08-24) — arm the background
@@ -492,30 +458,62 @@ extension CallManager {
         // to cover — a call ringing in-app (CallKit skipped because the app
         // was foreground) that backgrounds before being answered. Without a
         // live observer, iOS can suspend the app mid-ring with no lock-screen
-        // call card, silently dropping the inbound call. Safe to call twice
-        // per call (once here, once at connect): startBackgroundMonitoring()
-        // starts with stopBackgroundMonitoring() to stay idempotent.
+        // call card, silently dropping the inbound call. On the VoIP-push path
+        // it runs the applyCameraSuspension(false, cause: "foreground") safety
+        // net and notifies the peer of the background/foreground transition
+        // while still ringing. Safe to call twice per call (once here, once at
+        // connect): startBackgroundMonitoring() starts with
+        // stopBackgroundMonitoring() to stay idempotent.
         startBackgroundMonitoring()
 
-        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
-        // PARTICIPANT_JOINED while we initialize media in parallel. See
-        // `localMediaTask` property doc for rationale and downstream contract.
-        // [Fix 2026-07-02] via joinCallRoomReliably — ACK-aware, survives a
-        // not-yet-connected socket (notification received during app launch).
+        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
+        // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
+        // waiting for our camera/mic warmup. Media init runs in parallel; the
+        // answer creation paths (answerCall*, handleSignalOffer .connecting)
+        // await `localMediaTask` before invoking createAnswer.
+        // [Fix 2026-07-02] via joinCallRoomReliably: on a VoIP cold start the
+        // socket has never connected — a bare emit vanishes (prod-observed).
         joinCallRoomReliably(callId: callId)
-        Logger.calls.info("Incoming call — reliable call:join dispatched; starting media in parallel: \(callId)")
+        switch source {
+        case .voipPush:
+            Logger.calls.info("VoIP push — reliable call:join dispatched; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
+        case .socket:
+            Logger.calls.info("Incoming call — reliable call:join dispatched; starting media in parallel: \(callId)")
+        }
 
         localMediaTask?.cancel()
         localMediaTask = Task { [weak self] in
             guard let self else { return }
+            if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))") }
             await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
-            Logger.calls.info("Incoming call — local media ready: \(callId)")
+            switch source {
+            case .voipPush: Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
+            case .socket: Logger.calls.info("Incoming call — local media ready: \(callId)")
+            }
         }
-
-        Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
-        HapticFeedback.medium()
     }
 
+}
+
+extension CXCallUpdate {
+    /// What CallKit shows for an incoming call. The caller's userId is the
+    /// `CXHandle.value` so Recents stays stable across language/avatar
+    /// changes; `localizedCallerName` is what the lock screen displays.
+    static func incoming(callerUserId: String, callerName: String, isVideo: Bool) -> CXCallUpdate {
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: callerUserId.isEmpty ? callerName : callerUserId)
+        update.localizedCallerName = callerName
+        update.hasVideo = isVideo
+        update.supportsGrouping = false
+        update.supportsHolding = false
+        return update
+    }
+}
+
+/// Where an incoming call came from: a VoIP push (always CallKit) or the
+/// socket notification (in-app UI when foreground).
+enum IncomingCallSource {
+    case voipPush, socket
 }
 
 private extension Logger {
