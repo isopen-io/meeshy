@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">Das Protokoll umfasst die letzten drei Monate.</string>
     <string name="call_journal_search_placeholder">Anruf suchen</string>
     <string name="call_live_frame_accept">Übernehmen</string>
-    <string name="call_live_frame_answer_accepted">%s hat deinen Rahmen übernommen</string>
     <string name="call_live_frame_answer_accepted_anonymous">Dein Gegenüber hat deinen Rahmen übernommen</string>
-    <string name="call_live_frame_answer_declined">%s behält die eigene Ansicht</string>
     <string name="call_live_frame_answer_declined_anonymous">Dein Gegenüber behält die eigene Ansicht</string>
     <string name="call_live_frame_caption">Rahmen</string>
     <string name="call_live_frame_decline">Nein, danke</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">Kein Rahmen</string>
     <string name="call_live_frame_not_proposed">Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden</string>
     <string name="call_live_frame_proposal">%1$s schlägt dir den Rahmen „%2$s“ vor</string>
-    <string name="call_live_frame_proposal_anonymous">Dein Gegenüber schlägt dir den Rahmen „%s“ vor</string>
-    <string name="call_live_frame_surface">Rahmen %s um beide Videos</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">Warten auf die Zustimmung aller…</string>
     <string name="call_zoom_hint">Nach oben oder unten wischen, um zu zoomen. Auf dem Bildschirm dein Bild auseinanderziehen; zweimal tippen für 1×</string>
     <string name="call_zoom_label">Zoom meiner Kamera</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

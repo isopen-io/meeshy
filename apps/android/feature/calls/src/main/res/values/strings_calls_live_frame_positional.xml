@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_answer_accepted">%1$s applied your frame</string>
+    <string name="call_live_frame_answer_declined">%1$s keeps their own view</string>
+    <string name="call_live_frame_proposal_anonymous">The other person suggests the “%1$s” frame</string>
+    <string name="call_live_frame_surface">%1$s frame around both videos</string>
+    <string name="call_zoom_lens">Zoom %1$s</string>
+</resources>

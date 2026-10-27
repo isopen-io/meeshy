@@ -12,20 +12,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "call.liveFrame.answer.accepted",
-          "androidName": "call_live_frame_answer_accepted",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "call.liveFrame.answer.accepted.anonymous",
           "androidName": "call_live_frame_answer_accepted_anonymous",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.liveFrame.answer.declined",
-          "androidName": "call_live_frame_answer_declined",
           "status": "adopted"
         },
         {
@@ -74,18 +62,6 @@
           "catalog": "app",
           "iosKey": "call.liveFrame.proposal",
           "androidName": "call_live_frame_proposal",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.liveFrame.proposal.anonymous",
-          "androidName": "call_live_frame_proposal_anonymous",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.liveFrame.surface",
-          "androidName": "call_live_frame_surface",
           "status": "adopted"
         },
         {
@@ -177,6 +153,26 @@
           "iosKey": "call.frames.mood.signature",
           "androidName": "call_frames_mood_signature",
           "status": "adopted"
+        },
+        {
+          "androidName": "call_live_frame_answer_accepted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_answer_declined",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_proposal_anonymous",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_surface",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_zoom_lens",
+          "status": "android-only"
         }
       ]
     }
