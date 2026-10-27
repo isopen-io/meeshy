@@ -20,6 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -118,6 +121,10 @@ internal fun TextElementLayer(
                     } while (event.changes.any { it.pressed })
                     currentDragEnd()
                 }
+            }
+            .semantics {
+                onClick { currentTap(); true }
+                onLongClick { currentLongPress(); true }
             }
             .background(
                 color = if (selected) Color.Black.copy(alpha = 0.35f) else Color.Transparent,

@@ -101,6 +101,70 @@ class StoryComposerUndoRedoTest {
     }
 
     @Test
+    fun `a pinch that also pans a sticker is a single undo step`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        val id = vm.state.value.selectedSlideStickers.single().id
+        val placed = vm.state.value.selectedSlideStickers.single()
+
+        repeat(3) {
+            vm.onStickerMoved(id, 0.02f, 0.02f)
+            vm.onStickerTransform(id, 1.1f, 5f)
+        }
+        vm.onStickerDragEnd()
+        vm.onUndo()
+
+        assertThat(vm.state.value.selectedSlideStickers.single()).isEqualTo(placed)
+    }
+
+    @Test
+    fun `two separate drags of the same sticker are two undo steps`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        val id = vm.state.value.selectedSlideStickers.single().id
+        vm.onStickerMoved(id, 0.05f, 0.05f)
+        vm.onStickerDragEnd()
+        val afterFirst = vm.state.value.selectedSlideStickers.single()
+
+        vm.onStickerMoved(id, 0.05f, 0.05f)
+        vm.onStickerDragEnd()
+        vm.onUndo()
+
+        assertThat(vm.state.value.selectedSlideStickers.single()).isEqualTo(afterFirst)
+    }
+
+    @Test
+    fun `a pinch that also pans a text is a single undo step`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val placed = vm.state.value.selectedTextElement!!
+        val id = placed.id
+
+        repeat(3) {
+            vm.onTextElementMoved(id, 0.02f, 0.02f)
+            vm.onTextElementTransform(id, 1.1f, 5f)
+        }
+        vm.onTextElementDragEnd()
+        vm.onUndo()
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(placed)
+    }
+
+    @Test
+    fun `two window commits of the same object from the frise are two undo steps`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        val id = vm.state.value.selectedSlideStickers.single().id
+        vm.onSceneObjectWindow(id, 1f, 3f)
+        val afterFirst = vm.state.value.selectedSlideStickers.single()
+
+        vm.onSceneObjectWindow(id, 2f, 3f)
+        vm.onUndo()
+
+        assertThat(vm.state.value.selectedSlideStickers.single()).isEqualTo(afterFirst)
+    }
+
+    @Test
     fun `selecting another slide is not an undo step`() = runTest {
         val vm = viewModel()
         vm.onAddSlide()
