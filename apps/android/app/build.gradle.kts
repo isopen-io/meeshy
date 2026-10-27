@@ -30,7 +30,30 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // Preuve locale uniquement : -Pmeeshy.release.debugSigning=true signe la release avec la clé de debug
+            // (aucune clé de publication n'est dans le dépôt) ; -Pmeeshy.release.idSuffix=.rc l'installe à côté d'une debug.
+            if (providers.gradleProperty("meeshy.release.debugSigning").isPresent) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+            providers.gradleProperty("meeshy.release.idSuffix").orNull?.let { applicationIdSuffix = it }
+        }
+    }
+
+    // Un appareil n'installe qu'un jeu de bibliothèques natives (WebRTC pèse ~4 x 10 Mo) : un APK par ABI,
+    // plus l'APK universel pour le sideload. Un App Bundle (bundleRelease) ignore ce bloc et laisse Play découper.
+    splits {
+        abi {
+            // Le type debug garde son APK unique (installDebug, tests) : le découpage ne s'applique qu'aux tâches release.
+            isEnable = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = true
         }
     }
 
