@@ -1545,3 +1545,9 @@ bare-specifier :feature:conversations en links_affiliate_token_signups
 bare-specifier :feature:conversations en links_tracking_detail_last_click
 bare-specifier :feature:conversations en links_tracking_row_clicks
 bare-specifier :feature:conversations en links_tracking_row_uniques
+# Résumé vivant (#13322) : les compteurs du catalogue iOS (focal.summary.*) arrivent en %d nu.
+bare-specifier :feature:chat en summary_episode_messages_one
+bare-specifier :feature:chat en summary_episode_messages_other
+bare-specifier :feature:chat en summary_header_messages_count
+bare-specifier :feature:chat en summary_header_partial_window
+bare-specifier :feature:chat en summary_header_people_count
