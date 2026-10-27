@@ -15,6 +15,7 @@ import me.meeshy.sdk.auth.EmailGateRequest
 import me.meeshy.sdk.auth.EmailVerificationGateController
 import me.meeshy.sdk.model.auth.CredentialRefusal
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
+import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 
@@ -97,6 +98,9 @@ class EmailVerificationGateViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = authRepository.confirmEmail(EmailVerificationRequest.code(code = current.code, email = request.email))) {
                 is NetworkResult.Success -> {
+                    (result.data as? LoginOutcome.Authenticated)?.session?.let {
+                        authRepository.closeProvenServerSession(it.token, it.sessionToken)
+                    }
                     authRepository.restoreSession()
                     _state.update { it.copy(isSubmitting = false) }
                     gate.settle(true)
