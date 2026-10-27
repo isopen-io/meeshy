@@ -4,7 +4,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 
 ---
 
-## apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift
+## apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift
 
 - **Purpose**: Hub screen synthesizing every "link" type the platform offers (share, tracking, community, affiliate). Deep link `meeshy.me/links`.
 - **Public API**: `struct LinksHubView: View`.

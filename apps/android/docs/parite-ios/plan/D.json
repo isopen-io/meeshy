@@ -6264,7 +6264,7 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift"
   ],
   "feature_keys": [
    "gcom-share-link-create"
@@ -7701,7 +7701,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/InviteCardSurface.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/LanguageShareBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/InviteGroupFacts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift"
   ],
   "feature_keys": [
    "gcom-join-invite-landing",
@@ -10865,8 +10865,8 @@
    "apps/android/feature/contacts/src/main/kotlin/me/meeshy/app/contacts/ContactsListViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/AffiliateService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/AffiliateEndpoint.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/AffiliateModels.swift"
@@ -10979,8 +10979,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CommunityLinkService.swift"
   ],
   "feature_keys": [

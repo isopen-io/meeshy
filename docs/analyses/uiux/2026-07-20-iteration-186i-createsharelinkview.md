@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver rotor "Headings", decorative-glyph hygiene)
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift` (1 file, 0 logic, 0 network, 0 new i18n key, 0 new test)
+**File touched:** `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift` (1 file, 0 logic, 0 network, 0 new i18n key, 0 new test)
 
 ## Component
 
@@ -79,7 +79,7 @@ gate = CI `iOS Tests` (iOS build is not runnable on the Linux worker).
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver) — share-link creation form
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift` (1 file, 0 logic, 0 test, 0 catalog edit)
+**File touched:** `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift` (1 file, 0 logic, 0 test, 0 catalog edit)
 
 ## Component
 

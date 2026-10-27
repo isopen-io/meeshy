@@ -157,7 +157,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_shareLinkIdentity_accountChipCarriesThePhoto() throws {
-        let sheet = try appSource("Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift")
+        let sheet = try appSource("Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift")
         XCTAssertTrue(sheet.contains("avatarURL: accountAvatarURL"))
         let layers = try appSource("Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift")
         XCTAssertTrue(layers.contains("accountAvatarURL: AuthManager.shared.currentUser?.avatar"))

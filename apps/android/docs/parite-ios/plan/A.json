@@ -9318,8 +9318,8 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/TrackingLinkService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift"
   ],
   "feature_keys": [
    "analytics-trackinglink-sdk"
@@ -9364,7 +9364,7 @@
    "apps/android/feature/conversations/src/test/kotlin/me/meeshy/app/conversations/TrackingLinkCreateViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift"
   ],
   "feature_keys": [
@@ -9604,7 +9604,7 @@
    "apps/android/feature/conversations/src/test/kotlin/me/meeshy/app/conversations/TrackingLinksViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift"
   ],
   "feature_keys": [
@@ -9885,7 +9885,7 @@
    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/qr/QrCodeBitmapTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift"
   ],

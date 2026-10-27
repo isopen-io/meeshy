@@ -802,9 +802,9 @@ Transposition Android : onAppear près de la fin -> LazyColumn avec détection d
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsListView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsSection.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ShareLinkArrivalsListViewModel.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsListView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsSection.swift`
+- `apps/ios/Meeshy/Features/Links/ViewModels/ShareLinkArrivalsListViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkArrivalStats.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkArrivalsPage.swift`
 
@@ -1153,11 +1153,11 @@ Transposition Android : Formulaire SwiftUI -> écran Compose avec états de brou
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkEditForm.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkConfigurationCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ShareLinkDetailViewModel.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkEditForm.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkConfigurationCard.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailCopy.swift`
+- `apps/ios/Meeshy/Features/Links/ViewModels/ShareLinkDetailViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkSettings.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkDateFormat.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift`
@@ -1318,7 +1318,7 @@ Transposition Android : UIActivityItemProvider paresseux -> Intent ACTION_SEND a
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareableLink.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareableLink.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Media/ShareFilePlaceholder.swift`
 
 </details>
@@ -1370,7 +1370,7 @@ Transposition Android : Sheet SwiftUI -> ModalBottomSheet ou écran Compose plei
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkInvitationTerms.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkEntryPolicy.swift`
 
@@ -1397,7 +1397,7 @@ Transposition Android : refreshable SwiftUI -> pullToRefresh Material 3.
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkModels.swift`
 
 </details>

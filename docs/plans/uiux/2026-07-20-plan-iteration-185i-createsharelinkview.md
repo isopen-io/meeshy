@@ -2,7 +2,7 @@
 
 **Branche** : `claude/laughing-thompson-b6yoql`
 **Base** : `main` HEAD `230f47c` (resync frais)
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 
 ## Objectif
 

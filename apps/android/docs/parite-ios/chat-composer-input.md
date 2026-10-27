@@ -1210,7 +1210,7 @@ Transposition Android : CollapsibleHeader => LargeTopAppBar a collapse; deep lin
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift`
 
 </details>
 

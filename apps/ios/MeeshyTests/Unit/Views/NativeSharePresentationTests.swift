@@ -44,9 +44,9 @@ final class NativeSharePresentationTests: XCTestCase {
     private static let conversationInfoSheet = "Meeshy/Features/Main/Components/ConversationInfoSheet.swift"
     private static let inviteFriendsSheet = "Meeshy/Features/Main/Components/InviteFriendsSheet.swift"
     private static let conversationListView = "Meeshy/Features/Main/Views/ConversationListView.swift"
-    private static let shareLinkDetailView = "Meeshy/Features/Main/Views/ShareLinkDetailView.swift"
-    private static let affiliateView = "Meeshy/Features/Main/Views/AffiliateView.swift"
-    private static let trackingLinkDetailView = "Meeshy/Features/Main/Views/TrackingLinkDetailView.swift"
+    private static let shareLinkDetailView = "Meeshy/Features/Links/Views/ShareLinkDetailView.swift"
+    private static let affiliateView = "Meeshy/Features/Links/Views/AffiliateView.swift"
+    private static let trackingLinkDetailView = "Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"
 
     /// Every file this doctrine has been applied to. Growing the list is how an
     /// iteration records that a surface is converged and locked.

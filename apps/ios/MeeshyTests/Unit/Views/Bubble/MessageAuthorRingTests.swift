@@ -130,7 +130,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Main/Components/MessageDetail/MessageReactionsDetailView.swift": (1, "réactions — la liste des réacteurs ne porte pas le contour (#10957)"),
         "Main/Views/AudioFullscreenPage.swift": (1, "plein écran audio — l'auteur transmis (`ProfileSheetUser`) ne porte pas le contour (#10957)"),
         "Main/Views/GlobalSearchView.swift": (1, "résultat de MESSAGE — l'avatar de la conversation, dont la recherche ne sert ni le type ni le pair (#10957)"),
-        "Main/Views/ShareLinkArrivalsSection.swift": (1, "arrivées par lien — l'entrée servie ne porte pas le contour (#10957)"),
+        "Links/Views/ShareLinkArrivalsSection.swift": (1, "arrivées par lien — l'entrée servie ne porte pas le contour (#10957)"),
         "Main/Views/VisitorContentView.swift": (1, "visiteur — le partageur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": (1, "invitation — le créateur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/Notifications/NotificationRowView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),

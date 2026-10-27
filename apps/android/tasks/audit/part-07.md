@@ -502,7 +502,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   state from a `CommentViewModel` mirroring `CommentStore` (`topLevelComments`, `replies`,
   `expandedThreads`). DiffUtil-equivalent is automatic with Compose keys. Self-sizing is free.
 
-## apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift
 
 - Purpose: Detail screen for one community invite link (copy / share / copy identifier, stats, info).
 - Public API surface: `struct CommunityLinkDetailView: View` — `link: CommunityLink`.
@@ -510,7 +510,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   `UIActivityViewController`; member count, active status, info rows.
 - Android port note: Compose screen; `ClipboardManager`; share `Intent.ACTION_SEND`.
 
-## apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift
 
 - Purpose: List of communities the user administers, with their invite links + stats overview.
 - Public API surface: `struct CommunityLinksView: View`; `@MainActor class CommunityLinksViewModel:
