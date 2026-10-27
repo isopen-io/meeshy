@@ -28,6 +28,8 @@ object SceneObjectMenu {
         val hasTrimmableSource: Boolean = false,
         val canBecomeBackground: Boolean = false,
         val sceneHasBackground: Boolean = false,
+        /** La scène peut porter un objet de plus de cette famille : sinon dupliquer ne ferait rien. */
+        val canDuplicate: Boolean = true,
     )
 
     fun offered(subject: Subject): List<Action> = with(subject) {
@@ -35,7 +37,7 @@ object SceneObjectMenu {
         buildList {
             if (!isLocked && hasEditor) add(Action.EDIT)
             if (!isLocked && hasTrimmableSource) add(Action.TRIM)
-            if (!isLocked) add(Action.DUPLICATE)
+            if (!isLocked && canDuplicate) add(Action.DUPLICATE)
             if (stacks) addAll(listOf(Action.BRING_FORWARD, Action.SEND_BACKWARD))
             if (!isLocked && canLeaveScene) add(Action.LEAVE_SCENE)
             if (!isLocked && !isBackground && canBecomeBackground) {

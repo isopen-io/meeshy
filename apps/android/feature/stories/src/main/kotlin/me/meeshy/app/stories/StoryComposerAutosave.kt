@@ -292,6 +292,8 @@ private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnaps
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        startSeconds = timing.startSeconds,
+        durationSeconds = timing.durationSeconds,
     )
 
 /**
@@ -309,4 +311,5 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        timing = me.meeshy.sdk.model.scene.StoryElementTiming(startSeconds, durationSeconds),
     ).normalised()

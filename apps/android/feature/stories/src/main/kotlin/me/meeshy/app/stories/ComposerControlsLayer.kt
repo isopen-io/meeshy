@@ -73,6 +73,7 @@ internal fun ComposerToolPanel(
     onOpenSoundShelf: () -> Unit = {},
     onToggleSoundMute: (String) -> Unit = {},
     onRemoveSound: (String) -> Unit = {},
+    timeline: @Composable () -> Unit = {},
 ) {
     var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
     val activeTool = band.activeTool
@@ -138,6 +139,7 @@ internal fun ComposerToolPanel(
                             )
                             DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
                         }
+                        StoryToolMode.TIMELINE -> timeline()
                         else -> Unit
                     }
                 }

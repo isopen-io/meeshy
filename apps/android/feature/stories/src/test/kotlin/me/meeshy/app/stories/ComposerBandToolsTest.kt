@@ -9,8 +9,8 @@ class ComposerBandToolsTest {
     fun `only tools with a panel are served, in canonical order`() {
         assertThat(ComposerBandTools.served).containsExactly(
             StoryToolMode.MEDIA, StoryToolMode.TEXT, StoryToolMode.DRAWING, StoryToolMode.AUDIO, StoryToolMode.TEXTURE,
+            StoryToolMode.TIMELINE,
         ).inOrder()
-        assertThat(ComposerBandTools.served).doesNotContain(StoryToolMode.TIMELINE)
     }
 
     @Test

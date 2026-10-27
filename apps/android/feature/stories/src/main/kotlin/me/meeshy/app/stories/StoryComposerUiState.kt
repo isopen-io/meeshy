@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryPublishTitle
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -75,6 +76,8 @@ data class StoryComposerUiState(
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
     val elementMenuId: String? = null,
+    val stickerMenuId: String? = null,
+    val playheadSeconds: Float = 0f,
     val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
@@ -200,17 +203,10 @@ data class StoryComposerUiState(
         get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
 
     /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null
+    val isEditingTextElement: Boolean get() = selectedTextElement != null && !isTimelineOpen
 
-    /**
-     * The unified long-press context menu for the element [elementMenuId] on the selected
-     * slide, or `null` when no menu is open (or the id no longer resolves, e.g. after the
-     * element was removed) — the pure [StoryElementMenu.resolve] decides which of edit /
-     * duplicate / reorder / delete may fire, so the screen renders a greyed row it can
-     * never mis-dispatch and stays glue.
-     */
-    val elementContextMenu: StoryElementContextMenu?
-        get() = elementMenuId?.let { StoryElementMenu.resolve(deck, it) }
+    /** La frise est le panneau ouvert : sélectionner un texte y règle sa fenêtre, sans clavier. */
+    val isTimelineOpen: Boolean get() = band.activeTool == StoryToolMode.TIMELINE
 
     /**
      * The effective on-screen duration (seconds) of the **selected** slide — the

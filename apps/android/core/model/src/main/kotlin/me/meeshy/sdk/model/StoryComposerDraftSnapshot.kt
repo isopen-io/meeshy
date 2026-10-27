@@ -104,6 +104,8 @@ data class StoryDraftStickerElementSnapshot(
     val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
     val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
     val rotationDeg: Float = 0f,
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
 ) {
     /** True once the sticker carries publishable content — a non-blank [emoji]. */
     val isPublishable: Boolean get() = emoji.isNotBlank()

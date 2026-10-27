@@ -11,25 +11,9 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.VerticalAlignTop
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +28,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -69,17 +52,17 @@ import me.meeshy.sdk.model.scene.StoryTextDirection
 internal fun TextElementLayer(
     element: StoryTextElement,
     selected: Boolean,
-    menu: StoryElementContextMenu?,
+    menu: SceneObjectContextMenu?,
+    inlineEditEnabled: Boolean = true,
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
-    onMenuAction: (StoryElementAction) -> Unit,
+    onMenuAction: (me.meeshy.sdk.model.composer.SceneObjectMenu.Action) -> Unit,
     onMenuDismiss: () -> Unit,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
-    onRemove: () -> Unit,
     onMeasured: (IntSize) -> Unit = {},
     onTextChange: (String) -> Unit = {},
 ) {
@@ -138,7 +121,7 @@ internal fun TextElementLayer(
         val canvasFontSizePx = element.previewFontPx(canvasWidthPx)
         val canvasFontSize = with(density) { canvasFontSizePx.toSp() }
         // Edited in place while selected (and no context menu is up) — iOS inline editor.
-        val editing = selected && menu == null
+        val editing = selected && menu == null && inlineEditEnabled
         val placeholder = stringResource(R.string.stories_composer_text_placeholder)
         val displayText = element.text.ifBlank { placeholder }
         // Base writing direction is derived from the caption (iOS-parity render-time
@@ -221,60 +204,8 @@ internal fun TextElementLayer(
                 )
             }
         }
-        if (selected) {
-            Surface(
-                onClick = onRemove,
-                shape = RoundedCornerShape(50),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(20.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.stories_composer_remove_text),
-                    tint = Color.White,
-                    modifier = Modifier.padding(2.dp),
-                )
-            }
-        }
-        // Unified long-press context menu, anchored to the element it targets. Each row's
-        // availability comes from the pure StoryElementMenu.resolve, so a greyed row can
-        // never dispatch an inert reducer; picking one routes through onMenuAction, which
-        // also closes the menu.
-        DropdownMenu(expanded = menu != null, onDismissRequest = onMenuDismiss) {
-            menu?.items?.forEach { item ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(item.action.labelRes())) },
-                    enabled = item.enabled,
-                    leadingIcon = { Icon(item.action.menuIcon(), contentDescription = null) },
-                    onClick = { onMenuAction(item.action) },
-                )
-            }
-        }
+        SceneObjectMenuPopup(menu = menu, onAction = onMenuAction, onDismiss = onMenuDismiss)
     }
-}
-
-/** The localised label for a context-menu [StoryElementAction] row. */
-internal fun StoryElementAction.labelRes(): Int = when (this) {
-    StoryElementAction.EDIT -> R.string.stories_composer_edit_element
-    StoryElementAction.DUPLICATE -> R.string.stories_composer_duplicate_element
-    StoryElementAction.SEND_TO_BACK -> R.string.stories_composer_zorder_to_back
-    StoryElementAction.MOVE_BACKWARD -> R.string.stories_composer_zorder_backward
-    StoryElementAction.MOVE_FORWARD -> R.string.stories_composer_zorder_forward
-    StoryElementAction.BRING_TO_FRONT -> R.string.stories_composer_zorder_to_front
-    StoryElementAction.DELETE -> R.string.stories_composer_remove_text
-}
-
-/** The leading icon for a context-menu [StoryElementAction] row. */
-internal fun StoryElementAction.menuIcon(): ImageVector = when (this) {
-    StoryElementAction.EDIT -> Icons.Filled.Edit
-    StoryElementAction.DUPLICATE -> Icons.Filled.ContentCopy
-    StoryElementAction.SEND_TO_BACK -> Icons.Filled.VerticalAlignBottom
-    StoryElementAction.MOVE_BACKWARD -> Icons.Filled.ArrowDownward
-    StoryElementAction.MOVE_FORWARD -> Icons.Filled.ArrowUpward
-    StoryElementAction.BRING_TO_FRONT -> Icons.Filled.VerticalAlignTop
-    StoryElementAction.DELETE -> Icons.Filled.Delete
 }
 
 internal fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {

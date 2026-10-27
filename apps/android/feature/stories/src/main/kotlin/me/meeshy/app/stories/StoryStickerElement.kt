@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StorySticker
+import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
  * Pure, immutable model of one on-canvas emoji sticker of a story slide — parity
@@ -25,6 +26,7 @@ data class StoryStickerElement(
     val y: Float = StoryTextElement.CENTER,
     val scale: Float = StoryTextElement.DEFAULT_SCALE,
     val rotationDeg: Float = StoryTextElement.DEFAULT_ROTATION,
+    val timing: StoryElementTiming = StoryElementTiming(),
 ) {
     /** True once the sticker carries content worth publishing (a non-blank emoji). */
     val isPublishable: Boolean get() = emoji.isNotBlank()
@@ -75,5 +77,7 @@ data class StoryStickerElement(
         y = y.toDouble(),
         scale = scale.toDouble(),
         rotation = rotationDeg.toDouble(),
+        startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
+        duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
     )
 }

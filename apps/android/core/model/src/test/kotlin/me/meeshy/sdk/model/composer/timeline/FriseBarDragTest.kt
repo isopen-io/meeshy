@@ -81,4 +81,16 @@ class FriseBarDragTest {
         assertThat(times).containsAtLeast(0f, 10f, 4f, 6f, 8f)
         assertThat(times).containsNoneOf(2f, 5f)
     }
+
+    @Test
+    fun `une fenetre qui court jusqu'au bout de la slide se range permanente`() {
+        val stored = FriseBarDrag.stored(ClipWindowResolver.Window(2f, 8f), slideDuration = 10f)
+        assertThat(stored).isEqualTo(FriseBarDrag.Stored(2f, 0f))
+    }
+
+    @Test
+    fun `une fenetre qui finit avant la slide se range avec sa duree`() {
+        val stored = FriseBarDrag.stored(ClipWindowResolver.Window(2f, 3f), slideDuration = 10f)
+        assertThat(stored).isEqualTo(FriseBarDrag.Stored(2f, 3f))
+    }
 }

@@ -44,6 +44,20 @@ object FriseBarDrag {
         }
     }
 
+    /** Une fenêtre telle qu'elle se range sur l'objet : `duration == 0` = permanent (jusqu'à la fin de la slide). */
+    data class Stored(val startSeconds: Float, val durationSeconds: Float)
+
+    /**
+     * Range une fenêtre de la frise : une fenêtre qui court jusqu'au bout de la slide reste
+     * PERMANENTE (la durée `0` se préserve, allonger la slide ne raccourcit pas l'objet) ; sinon
+     * début + durée.
+     */
+    fun stored(window: ClipWindowResolver.Window, slideDuration: Float): Stored =
+        if (window.end >= slideDuration - PERMANENT_EPSILON) Stored(window.start, 0f)
+        else Stored(window.start, window.duration)
+
+    private const val PERMANENT_EPSILON = 0.05f
+
     /** Les points d'accroche d'un glissé : tout ce qui est voisin, jamais la barre elle-même. */
     fun candidates(
         tracks: List<Plan2DTrack>,

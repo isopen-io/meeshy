@@ -1642,3 +1642,8 @@ bare-specifier :feature:chat en export_card_gallery_count
 bare-specifier :feature:stories en story_sound_library_playCount
 bare-specifier :feature:stories en story_sound_library_postCount
 bare-specifier :feature:stories en story_sound_library_removeMessageUsed
+# Éditeur de scène (#13424) : les jetons de l'inspecteur arrivent en %s nu du catalogue iOS, un seul argument chacun.
+bare-specifier :feature:stories en composer_chip_align
+bare-specifier :feature:stories en composer_chip_rotation
+bare-specifier :feature:stories en composer_chip_size
+bare-specifier :feature:stories en composer_chip_style

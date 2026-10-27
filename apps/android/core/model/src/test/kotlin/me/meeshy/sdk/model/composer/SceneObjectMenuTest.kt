@@ -96,6 +96,12 @@ class SceneObjectMenuTest {
     }
 
     @Test
+    fun `dupliquer disparait quand la scene est pleine pour cette famille`() {
+        val full = SceneObjectMenu.offered(SceneObjectMenu.Subject(canDuplicate = false))
+        assertThat(full).containsExactly(Action.DELETE)
+    }
+
+    @Test
     fun `seule la suppression est destructrice`() {
         assertThat(Action.entries.filter { it.isDestructive }).containsExactly(Action.DELETE)
     }

@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
@@ -2526,8 +2527,8 @@ class StoryComposerViewModelTest {
 
         vm.onOpenElementMenu(id)
 
-        val menu = vm.state.value.elementContextMenu!!
-        assertThat(menu.elementId).isEqualTo(id)
+        val menu = vm.state.value.sceneContextMenu!!
+        assertThat(menu.ref.id).isEqualTo(id)
         assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
         assertThat(vm.state.value.selectedStickerId).isNull()
     }
@@ -2539,7 +2540,7 @@ class StoryComposerViewModelTest {
 
         vm.onOpenElementMenu("ghost")
 
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test
@@ -2551,7 +2552,7 @@ class StoryComposerViewModelTest {
 
         vm.onDismissElementMenu()
 
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
         assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
     }
 
@@ -2562,10 +2563,10 @@ class StoryComposerViewModelTest {
         val id = vm.state.value.selectedTextElement!!.id
         vm.onOpenElementMenu(id)
 
-        vm.onElementMenuAction(StoryElementAction.DUPLICATE)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.DUPLICATE)
 
         assertThat(vm.state.value.selectedSlideTextElements).hasSize(2)
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test
@@ -2575,10 +2576,10 @@ class StoryComposerViewModelTest {
         val id = vm.state.value.selectedTextElement!!.id
         vm.onOpenElementMenu(id)
 
-        vm.onElementMenuAction(StoryElementAction.DELETE)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.DELETE)
 
         assertThat(vm.state.value.selectedSlideTextElements).isEmpty()
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test
@@ -2589,10 +2590,10 @@ class StoryComposerViewModelTest {
         vm.onAddTextElement() // a second element sits in front of the first
         vm.onOpenElementMenu(back)
 
-        vm.onElementMenuAction(StoryElementAction.BRING_TO_FRONT)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.BRING_FORWARD)
 
         assertThat(vm.state.value.selectedSlideTextElements.last().id).isEqualTo(back)
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test
@@ -2604,10 +2605,10 @@ class StoryComposerViewModelTest {
         // A single-element slide: SEND_TO_BACK is a disabled row (already at the back).
         val before = vm.state.value.deck
 
-        vm.onElementMenuAction(StoryElementAction.SEND_TO_BACK)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.SEND_BACKWARD)
 
         assertThat(vm.state.value.deck).isSameInstanceAs(before)
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test
@@ -2616,10 +2617,10 @@ class StoryComposerViewModelTest {
         vm.onAddTextElement()
         val before = vm.state.value.deck
 
-        vm.onElementMenuAction(StoryElementAction.DELETE)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.DELETE)
 
         assertThat(vm.state.value.deck).isSameInstanceAs(before)
-        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.sceneContextMenu).isNull()
     }
 
     @Test

@@ -67,6 +67,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
+import me.meeshy.sdk.model.composer.StoryToolMode
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -254,7 +255,8 @@ fun StoryComposerScreen(
                         colorMatrix = state.selectedSlideFilterMatrix,
                         textElements = state.selectedSlideTextElements,
                         selectedElement = state.selectedTextElement,
-                        elementMenu = state.elementContextMenu,
+                        sceneMenu = state.sceneContextMenu,
+                        inlineEditEnabled = !state.isTimelineOpen,
                         stickers = state.selectedSlideStickers,
                         selectedStickerId = state.selectedStickerId,
                         strokes = state.selectedSlideStrokes,
@@ -265,17 +267,16 @@ fun StoryComposerScreen(
                         onTransform = viewModel::onCanvasTransform,
                         onElementTap = viewModel::onSelectTextElement,
                         onElementLongPress = viewModel::onOpenElementMenu,
-                        onElementMenuAction = viewModel::onElementMenuAction,
-                        onElementMenuDismiss = viewModel::onDismissElementMenu,
+                        onSceneMenuAction = viewModel::onSceneMenuAction,
+                        onSceneMenuDismiss = viewModel::onDismissElementMenu,
                         onElementDrag = viewModel::onTextElementMoved,
                         onElementDragEnd = viewModel::onTextElementDragEnd,
                         onElementTransform = viewModel::onTextElementTransform,
-                        onElementRemove = viewModel::onRemoveTextElement,
                         onElementTextChange = viewModel::onTextChange,
                         onStickerTap = viewModel::onSelectSticker,
+                        onStickerLongPress = viewModel::onOpenStickerMenu,
                         onStickerDrag = viewModel::onStickerMoved,
                         onStickerTransform = viewModel::onStickerTransform,
-                        onStickerRemove = viewModel::onRemoveSticker,
                         onBackgroundTap = {
                             viewModel.onDeselectTextElement()
                             viewModel.onDeselectSticker()
@@ -285,7 +286,15 @@ fun StoryComposerScreen(
                     )
                 },
                 footer = {
-                    val editedText = state.selectedTextElement
+                    val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
+                    state.sceneInspector?.let { inspector ->
+                        if (!state.isDrawingActive) {
+                            SceneInspectorRow(
+                                inspector = inspector,
+                                onOpenTiming = { viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE) },
+                            )
+                        }
+                    }
                     if (state.isDrawingActive) {
                         StoryDrawingToolbar(
                             activeColorHex = state.drawColorHex,
@@ -407,6 +416,21 @@ fun StoryComposerScreen(
                             onOpenSoundShelf = { showSoundShelf = true },
                             onToggleSoundMute = viewModel::onToggleSoundMute,
                             onRemoveSound = viewModel::onRemoveSound,
+                            timeline = {
+                                SceneFrise(
+                                    tracks = state.sceneTracks,
+                                    editableIds = state.sceneEditableTrackIds,
+                                    selectedId = state.selectedSceneObject?.id,
+                                    slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),
+                                    playheadSeconds = state.playheadSeconds,
+                                    onSelectTrack = { id, at ->
+                                        viewModel.onFriseTrackSelected(id)
+                                        viewModel.onPlayheadMoved(at)
+                                    },
+                                    onScrub = viewModel::onPlayheadMoved,
+                                    onWindow = viewModel::onSceneObjectWindow,
+                                )
+                            },
                         )
                     }
                 },
