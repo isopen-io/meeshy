@@ -58,18 +58,20 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.USER_POSTS,
+        navController = navController,
         arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-    ) {
+    ) { _, dismiss ->
         UserPostsScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.REPORT_USER,
+        navController = navController,
         arguments = listOf(
             navArgument(ReportUserViewModel.USER_ID_ARG) { type = NavType.StringType },
             navArgument(ReportUserViewModel.USERNAME_ARG) {
@@ -78,7 +80,7 @@ internal fun NavGraphBuilder.socialNavGraph(
                 defaultValue = null
             },
         ),
-    ) {
-        ReportUserScreen(onDone = { navController.popBackStack() })
+    ) { _, dismiss ->
+        ReportUserScreen(onDone = dismiss)
     }
 }

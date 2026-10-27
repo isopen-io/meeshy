@@ -156,7 +156,7 @@ class NavBackChromeTest {
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
             "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.STORY_COMPOSER_ROUTE",
-            "Routes.REPORT_USER", "Routes.CALL",
+            "Routes.PROFILE_USER", "Routes.CALL",
         )
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.INVITE)).isTrue()
@@ -172,7 +172,6 @@ class NavBackChromeTest {
         /** #13369 — feuilles sur iOS, encore écrans empilés sur Android. Ne fait que rétrécir. */
         val PENDING_SHEET = setOf(
             "Routes.FORGOT_PASSWORD", "Routes.MAGIC_LINK", "Routes.REGISTRATION", "Routes.GUEST_JOIN", "Routes.WORLD_ENTRY",
-            "Routes.PROFILE_USER", "Routes.USER_POSTS",
         )
     }
 }
