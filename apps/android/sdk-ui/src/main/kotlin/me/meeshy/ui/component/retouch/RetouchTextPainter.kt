@@ -2,12 +2,17 @@ package me.meeshy.ui.component.retouch
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import kotlin.math.max
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.composer.look.ComposerRetouchBake
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import me.meeshy.ui.theme.hexColor
@@ -33,9 +38,14 @@ public object RetouchTextPainter {
 
     /** Pose [overlay] sur [base], étirée à sa taille ; [base] elle-même sans calque. */
     public fun composited(base: Bitmap, texts: List<StoryTextObject>): Bitmap {
-        val layer = overlay(texts, base.width, base.height) ?: return base
+        val written = texts.filter { it.text.isNotBlank() }
+        if (written.isEmpty()) return base
         val out = base.copy(Bitmap.Config.ARGB_8888, true) ?: return base
-        Canvas(out).drawBitmap(layer, 0f, 0f, null)
+        val canvas = Canvas(out)
+        ComposerRetouchBake.runs(written).forEach { run ->
+            run.glass?.let { RetouchGlassPainter.frost(out, canvas, it) }
+            paint(canvas, run.ink, base.width.toFloat(), base.height.toFloat())
+        }
         return out
     }
 
@@ -63,15 +73,53 @@ public object RetouchTextPainter {
 
     private fun paintOne(canvas: Canvas, text: StoryTextObject, width: Float, height: Float) {
         val layout = layout(text, width)
-        val lines = (0 until layout.lineCount)
-        val inkWidth = lines.maxOfOrNull { layout.getLineWidth(it) } ?: 0f
+        val inkWidth = inkWidth(layout)
         canvas.save()
-        canvas.translate((text.x * width).toFloat(), (text.y * height).toFloat())
-        canvas.rotate(text.rotation.toFloat())
-        canvas.scale(text.scale.toFloat(), text.scale.toFloat())
+        canvas.concat(placement(text, width, height))
+        (StoryTextBackground.resolve(text.backgroundStyle, text.textBg) as? StoryTextBackground.Solid)?.let { solid ->
+            val box = box(text, layout, width)
+            canvas.drawRoundRect(box, cornerRadius(text, box, width), cornerRadius(text, box, width), fill(solid.hex))
+        }
         canvas.translate(-layout.width / 2f + (layout.width - inkWidth) / 2f * alignShift(text.textAlign), -layout.height / 2f)
         layout.draw(canvas)
         canvas.restore()
+    }
+
+    /** Du repère du texte (centre de l'encre, sans échelle) à celui de la toile. */
+    internal fun placement(text: StoryTextObject, width: Float, height: Float): Matrix = Matrix().apply {
+        postScale(text.scale.toFloat(), text.scale.toFloat())
+        postRotate(text.rotation.toFloat())
+        postTranslate((text.x * width).toFloat(), (text.y * height).toFloat())
+    }
+
+    /**
+     * La boîte du fond, dans le repère du texte : l'encre plus la marge d'iOS (`frameMetrics`) — 8 pt au moins
+     * de chaque côté, la largeur d'un « o » à l'horizontale.
+     */
+    internal fun box(text: StoryTextObject, layout: StaticLayout, width: Float): RectF {
+        val unit = width / DESIGN_WIDTH
+        val hPad = max(8f * unit, layout.paint.measureText("o"))
+        val vPad = 8f * unit
+        val halfWidth = inkWidth(layout) / 2f + hPad
+        val halfHeight = layout.height / 2f + vPad
+        return RectF(-halfWidth, -halfHeight, halfWidth, halfHeight)
+    }
+
+    internal fun cornerRadius(text: StoryTextObject, box: RectF, width: Float): Float {
+        val unit = width / DESIGN_WIDTH
+        return when (text.frameShape) {
+            "pill" -> box.height() / 2f
+            "rectangle" -> max(2f * unit, box.height() * 0.04f)
+            else -> max(4f * unit, box.height() * 0.15f)
+        }
+    }
+
+    internal fun layoutOf(text: StoryTextObject, width: Float): StaticLayout = layout(text, width)
+
+    private fun inkWidth(layout: StaticLayout): Float = (0 until layout.lineCount).maxOfOrNull { layout.getLineWidth(it) } ?: 0f
+
+    private fun fill(hex: String): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = hexColor(hex, Color.Black.copy(alpha = 0.5f)).toArgb()
     }
 
     private fun textPaint(text: StoryTextObject, width: Float): TextPaint {
