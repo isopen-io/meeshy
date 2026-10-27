@@ -157,7 +157,7 @@ final class ReelInstantSwitchTests: XCTestCase {
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-            .appendingPathComponent("Meeshy/Features/Main")
+            .appendingPathComponent("Meeshy/Features")
         let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
         let reelFiles = enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" && $0.lastPathComponent.hasPrefix("Reel") }
@@ -169,8 +169,8 @@ final class ReelInstantSwitchTests: XCTestCase {
                            "\(file.lastPathComponent) élit une langue LUE sur les défauts de composition : ReaderPrism.resolve(for:)")
         }
 
-        let wired = ["Views/ReelsPlayerView.swift", "Views/ReelsPlayerView+Scene.swift", "Views/ReelFeedCard.swift",
-                     "Views/ReelPrewarm.swift", "ViewModels/ReelsViewModel.swift", "Navigation/ReelNotificationOpener.swift"]
+        let wired = ["Main/Views/ReelsPlayerView.swift", "Main/Views/ReelsPlayerView+Scene.swift", "Main/Views/ReelFeedCard.swift",
+                     "Main/Views/ReelPrewarm.swift", "Main/ViewModels/ReelsViewModel.swift", "Navigation/ReelNotificationOpener.swift"]
         for path in wired {
             let source = try String(contentsOf: appRoot.appendingPathComponent(path), encoding: .utf8)
             XCTAssertTrue(source.contains("ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),

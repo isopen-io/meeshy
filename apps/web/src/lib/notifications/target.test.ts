@@ -5,7 +5,7 @@ import { notificationTarget, pushTapTarget, resolveTarget } from './target';
 
 /**
  * OÙ MÈNE UNE NOTIFICATION (#6288) — miroir de `NotificationContentRouter`
- * (`apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift`).
+ * (`apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`).
  *
  * La règle d'iOS tient en une phrase, et c'est elle que ces témoins gardent :
  * **le TYPE n'est pas un discriminant d'entité.** `story_thread_reply` est émis

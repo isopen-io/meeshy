@@ -3357,7 +3357,7 @@
    "apps/ios/Meeshy/Features/Main/Views/RootNotificationNavigator.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView+NotificationNavContext.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootNotificationSource.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift"
+   "apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift"
   ],
   "feature_keys": [
    "ntf-push-tap-routing",

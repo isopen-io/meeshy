@@ -326,7 +326,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         // 3a7502ceda : la feuille « nouvelle conversation » est montée par
         // `NewConversationSheetHost` (commande de scène), qui la déclare une fois ;
         // chaque racine monte ce porteur.
-        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Navigation/SceneCommandHosts.swift"), 1,
+        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Navigation/SceneCommandHosts.swift"), 1,
                        "SceneCommandHosts.swift : nouvelle conversation")
         for layers in ["Features/Main/Views/RootLayers/RootViewLayers.swift",
                        "Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
@@ -372,7 +372,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_pushOfAConversation_goesThroughTheRouterSite() throws {
-        let router = try appSource("Features/Main/Navigation/Router.swift")
+        let router = try appSource("Features/Navigation/Router.swift")
         let push = try XCTUnwrap(router.components(separatedBy: "func push(_ route: Route) {").dropFirst().first)
         let body = push.components(separatedBy: "private func place(_ route: Route) {")[0]
         XCTAssertTrue(body.contains("guard case .conversation(let conversation) = route else"))
@@ -403,7 +403,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let iPad = try appSource("Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
         let covers = try XCTUnwrap(iPad.components(separatedBy: "struct iPadCoversAndChromeLayer").dropFirst().first)
         XCTAssertTrue(covers.contains(scope), "iPadCoversAndChromeLayer est la dernière couche de iPadRootView")
-        XCTAssertTrue(try appSource("Features/Main/Navigation/PresentedSurfaceModifier.swift")
+        XCTAssertTrue(try appSource("Features/Navigation/PresentedSurfaceModifier.swift")
             .contains("registry.declare(kind, scope: scope"))
     }
 

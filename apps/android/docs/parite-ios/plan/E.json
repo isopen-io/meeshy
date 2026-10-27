@@ -2860,7 +2860,7 @@
    "apps/ios/Meeshy/Features/Main/Services/MoodSpotlight/MoodReplySender.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryReplyAdmission.swift",
    "apps/ios/Meeshy/Features/Main/Views/StoryViewerRequestOrigin.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift"
+   "apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift"
   ],
   "feature_keys": [
    "srp-mood-private-reply",

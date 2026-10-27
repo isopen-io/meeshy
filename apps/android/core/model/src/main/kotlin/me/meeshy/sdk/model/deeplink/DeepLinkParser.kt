@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.deeplink
 /**
  * The single table of Meeshy link shapes, for the web (`https://meeshy.me/...`)
  * and the `meeshy://` scheme. Kotlin mirror of iOS `DeepLinkParser`
- * (apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift).
+ * (apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift).
  *
  * Total and framework-free: any input yields exactly one [DeepLinkDestination],
  * an unreadable or foreign one being [DeepLinkDestination.External]. Only the

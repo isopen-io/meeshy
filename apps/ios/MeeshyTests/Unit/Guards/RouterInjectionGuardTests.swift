@@ -19,7 +19,7 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/GuestConversationContainer.swift",
         "Meeshy/Features/Main/Views/StoryTrayActions.swift",
         "Meeshy/Features/Main/Views/StoryViewerContainer.swift",
-        "Meeshy/Features/Main/Navigation/SceneCommandHosts.swift",
+        "Meeshy/Features/Navigation/SceneCommandHosts.swift",
         "Meeshy/Features/Main/Views/AdaptiveRootView.swift",
         "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift"
     ]
@@ -85,7 +85,7 @@ final class RouterInjectionGuardTests: XCTestCase {
     }
 
     func test_sceneNavigation_publishesRouterCommands() throws {
-        let source = try code("Meeshy/Features/Main/Navigation/SceneCommandFocus.swift")
+        let source = try code("Meeshy/Features/Navigation/SceneCommandFocus.swift")
         XCTAssertTrue(source.contains("\\.routerCommands, router.commands"))
     }
 
