@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.composer.sound.ApiSound
 import me.meeshy.sdk.model.composer.sound.SoundRemoval
 import me.meeshy.sdk.model.composer.sound.SoundShelfTab
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import org.junit.After
 import org.junit.Before
@@ -53,6 +54,14 @@ class SoundShelfViewModelTest {
     }
 
     private fun vm(lib: FakeLibrary) = SoundShelfViewModel(lib).also { it.queryDebounceMs = 0L }
+
+    @Test
+    fun `a library sound previews from the gateway origin, never from its bare relative path`() {
+        val vm = SoundShelfViewModel(FakeLibrary(), MeeshyConfig(apiBaseUrl = "https://gate.staging.meeshy.me/api/v1/"))
+
+        assertThat(vm.playableUrl(ApiSound(id = "s", fileUrl = "/api/v1/static/s.m4a")))
+            .isEqualTo("https://gate.staging.meeshy.me/api/v1/static/s.m4a")
+    }
 
     @Test
     fun `opening loads my sounds first and only once`() = runTest {

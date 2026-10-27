@@ -33,7 +33,10 @@ import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
@@ -68,6 +71,7 @@ class StoryComposerViewModel @Inject constructor(
     private val mediaBlobStore: MediaBlobStore,
     private val draftConfirmation: StoryDraftConfirmation,
     private val blocks: BlockCache = BlockCache(),
+    private val config: MeeshyConfig = MeeshyConfig(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
@@ -408,6 +412,10 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Emprunte un son de l'étagère : il se pose en FOND de la slide sélectionnée (jamais deux fonds). */
     fun onBorrowSound(sound: me.meeshy.sdk.model.composer.sound.ApiSound) = applyDeck { it.borrowSoundOnSelected(sound) }
+
+    /** L'adresse chargeable d'une piste posée : un son emprunté porte le chemin RELATIF que sert la passerelle. */
+    fun playableSoundUrl(track: StoryAudioPlayerObject): String? =
+        track.mediaURL?.takeIf { it.isNotEmpty() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
 
     /** Retire une piste de la slide sélectionnée — le son reste sur l'étagère, c'est un retrait de la scène. */
     fun onRemoveSound(id: String) = applyDeck { it.removeSelectedSound(id) }

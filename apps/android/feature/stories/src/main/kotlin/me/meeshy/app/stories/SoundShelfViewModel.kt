@@ -15,7 +15,9 @@ import me.meeshy.sdk.audio.SoundLibrary
 import me.meeshy.sdk.model.composer.sound.ApiSound
 import me.meeshy.sdk.model.composer.sound.SoundShelfLaw
 import me.meeshy.sdk.model.composer.sound.SoundShelfTab
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.util.resolveMediaUrl
 import javax.inject.Inject
 
 @Immutable
@@ -44,6 +46,7 @@ data class SoundShelfState(
 @HiltViewModel
 class SoundShelfViewModel @Inject constructor(
     private val library: SoundLibrary,
+    private val config: MeeshyConfig = MeeshyConfig(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SoundShelfState())
@@ -55,6 +58,9 @@ class SoundShelfViewModel @Inject constructor(
     private var loadedOnce = false
     private var loadJob: Job? = null
     private var queryJob: Job? = null
+
+    /** L'adresse chargeable d'un son : la passerelle sert `/api/v1/static/…`, relatif à son origine. */
+    fun playableUrl(sound: ApiSound): String = resolveMediaUrl(sound.fileUrl, config.apiBaseUrl)
 
     fun loadIfNeeded() {
         if (loadedOnce) return

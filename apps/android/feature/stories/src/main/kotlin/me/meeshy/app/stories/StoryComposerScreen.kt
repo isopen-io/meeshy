@@ -141,7 +141,7 @@ fun StoryComposerScreen(
         screenResumed = screenState.isAtLeast(Lifecycle.State.RESUMED),
         shelfOpen = showSoundShelf,
     )
-    backgroundSound?.mediaURL?.takeIf { it.isNotEmpty() }?.let { url ->
+    backgroundSound?.let(viewModel::playableSoundUrl)?.let { url ->
         key(url) {
             AudioTrackSurface(
                 mediaUrl = url,
