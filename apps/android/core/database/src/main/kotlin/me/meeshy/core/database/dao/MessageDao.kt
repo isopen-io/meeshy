@@ -20,6 +20,10 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     public suspend fun find(id: String): MessageEntity?
 
+    /** Les lignes du fil dont la charge nomme [postId] : candidates à une citation retirée (#13296). */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
+    public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 

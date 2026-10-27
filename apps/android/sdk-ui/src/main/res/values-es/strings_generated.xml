@@ -2,6 +2,9 @@
 <resources>
     <string name="audio_fullscreen_dial">Posición en el mensaje de voz</string>
     <string name="avatar_a11y_mood">estado de ánimo %s</string>
+    <string name="bubble_story_citation_answer">respuesta a su historia</string>
+    <string name="bubble_story_citation_open_hint">Abre la historia citada</string>
+    <string name="bubble_story_citation_unavailable">Historia no disponible</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Borrar búsqueda</string>
     <string name="common_close">Cerrar</string>

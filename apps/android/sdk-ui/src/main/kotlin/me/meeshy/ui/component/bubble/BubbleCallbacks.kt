@@ -29,6 +29,8 @@ public data class BubbleCallbacks(
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
     val onReplyPreviewClick: (() -> Unit)? = null,
+    /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
+    val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
     /** Tap sur le smiley d'ajout du dernier message reçu : le sélecteur d'emoji. */

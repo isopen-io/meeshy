@@ -1455,6 +1455,44 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a quoted story carries its id and publication date, and its card opens it`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(postReplyTo = ApiPostReplyTarget(id = "p1", createdAt = "2026-10-20T10:00:00Z", previewText = "plage")),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.postId).isEqualTo("p1")
+        assertThat(story.publishedAtIso).isEqualTo("2026-10-20T10:00:00Z")
+        assertThat(story.opensTarget).isTrue()
+    }
+
+    @Test
+    fun `a withdrawn story keeps only its id and opens nothing`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(postReplyTo = ApiPostReplyTarget(id = "p1", unavailable = true)),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.isUnavailable).isTrue()
+        assertThat(story.opensTarget).isFalse()
+        assertThat(story.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a bare story id still opens its story`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(storyReplyToId = "p9"),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.postId).isEqualTo("p9")
+        assertThat(story.opensTarget).isTrue()
+    }
+
+    @Test
     fun `a story reply with no engagement has no metrics`() {
         val content = BubbleContentBuilder.build(
             message().copy(

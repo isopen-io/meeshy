@@ -49,6 +49,8 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
+    onOpenCitedPost: (postId: String) -> Unit = {},
     /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
     locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
@@ -104,6 +106,7 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            onOpenCitedPost = onOpenCitedPost,
             callEntry = callEntry,
             locationSettingsSheet = locationSettingsSheet,
         ),

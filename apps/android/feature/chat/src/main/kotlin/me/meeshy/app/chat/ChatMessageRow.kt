@@ -64,6 +64,8 @@ internal class ChatMessageRowActions(
     val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
+    /** Tap sur la carte d'une story citée (#13296) : le post s'ouvre. */
+    val onStoryCitationOpen: (postId: String) -> Unit = {},
     /** Un toucher sur une rangée en mode sélection (#13294) : la coche ou la décoche. */
     val onToggleSelection: (messageId: String) -> Unit = {},
 )
@@ -124,6 +126,8 @@ internal fun ChatMessageRow(
             onAudioClick = { audio -> audioPlayer?.toggle(audio) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
+            onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
+                ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onRetry = { actions.onRetry(messageId) },
             onAddReaction = { actions.onAddReaction(messageId) },

@@ -32,6 +32,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
+    val onOpenCitedPost: (postId: String) -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
     /**

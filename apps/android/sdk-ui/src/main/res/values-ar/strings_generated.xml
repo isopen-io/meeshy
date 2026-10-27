@@ -2,6 +2,9 @@
 <resources>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
     <string name="avatar_a11y_mood">المزاج %s</string>
+    <string name="bubble_story_citation_answer">رد على القصة</string>
+    <string name="bubble_story_citation_open_hint">يفتح القصة المقتبسة</string>
+    <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>

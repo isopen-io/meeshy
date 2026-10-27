@@ -252,7 +252,7 @@ internal fun ChatListHost(
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
-    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage) {
+    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -273,6 +273,7 @@ internal fun ChatListHost(
             onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
+            onStoryCitationOpen = { postId -> host.navigation.onOpenCitedPost(postId) },
             onToggleSelection = { messageId ->
                 when (actions.toggleSelection(messageId)) {
                     is MessageSelection.Toggle.Changed -> haptics.light()

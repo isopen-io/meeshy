@@ -205,6 +205,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             // pill — don't offer to rejoin the call this device is in.
             hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
             locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
+            onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
         )
     }
     composable(Routes.STARRED) {

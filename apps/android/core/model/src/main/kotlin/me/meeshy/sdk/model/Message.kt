@@ -99,6 +99,12 @@ data class ApiPostReplyTarget(
     val thumbnailUrl: String? = null,
     val previewText: String = "",
     val moodEmoji: String? = null,
+    /**
+     * Le post cité a été retiré (`message:cited-post-withdrawn`, #7969) : la citation ne garde que son
+     * identifiant et se dit « Story indisponible ». Marqueur LOCAL, jamais servi — miroir de
+     * `ReplyReference.storyUnavailable` (iOS).
+     */
+    val unavailable: Boolean = false,
 )
 
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */

@@ -126,6 +126,16 @@ internal fun BubbleStandardLayout(
             if (content.isForwarded && !content.isDeleted) {
                 BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
             }
+            // iOS `detachedStoryCitation` : la story répondue est CITÉE au-dessus de la bulle, hors de
+            // son fond — jamais aplatie sur une ligne (une humeur garde sa ligne, dans la bulle).
+            content.storyReply?.takeUnless { it.isMood }?.let { story ->
+                StoryCitationCard(
+                    story = story,
+                    accentColor = options.accentColor,
+                    onOpen = callbacks.onStoryCitationClick,
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                )
+            }
             BubbleReactionsAnchor(content = content, accent = options.accentColor, callbacks = callbacks) {
                 if (isVisualMediaOnly(content)) {
                     VisualMediaBody(content = content, callbacks = callbacks)
@@ -133,13 +143,6 @@ internal fun BubbleStandardLayout(
                     // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
                     // `detachedStoryCitation`) ; l'emoji flotte dessous.
                     Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
-                        if (content.storyReply != null) {
-                            StoryReplyPreview(
-                                story = content.storyReply,
-                                accentColor = MeeshyTheme.tokens.textPrimary,
-                                modifier = Modifier.padding(bottom = MeeshySpacing.xs),
-                            )
-                        }
                         FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
                     }
                 } else {
@@ -229,7 +232,7 @@ private fun BubbleBody(
                     modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
                 ) {
                     BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick)
-                    if (content.storyReply != null) {
+                    if (content.storyReply?.isMood == true) {
                         StoryReplyPreview(
                             story = content.storyReply,
                             accentColor = onColor,

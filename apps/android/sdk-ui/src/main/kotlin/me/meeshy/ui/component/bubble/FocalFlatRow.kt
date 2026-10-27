@@ -373,8 +373,12 @@ private fun FlatContentSections(
         ),
     ) {
         FlatQuote(content, accentColor, callbacks.onReplyPreviewClick)
-        if (content.storyReply != null) {
-            StoryReplyPreview(story = content.storyReply, accentColor = accentColor)
+        content.storyReply?.let { story ->
+            if (story.isMood) {
+                StoryReplyPreview(story = story, accentColor = accentColor)
+            } else {
+                StoryCitationCard(story = story, accentColor = accentColor, onOpen = callbacks.onStoryCitationClick)
+            }
         }
         if (content.hasRenderedAttachments) {
             Column(

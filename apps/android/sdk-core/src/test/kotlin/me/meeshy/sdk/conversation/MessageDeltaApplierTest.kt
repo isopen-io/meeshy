@@ -7,6 +7,8 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
 import me.meeshy.sdk.model.ConversationRoomAck
+import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.MessageCitedPostWithdrawnEvent
 import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
 import me.meeshy.sdk.model.MessageHiddenForMeEvent
@@ -201,5 +203,19 @@ class MessageDeltaApplierTest {
         val handled = applier(harness).apply(ConversationRoomAck("c1", "me", joined = true), viewerId = "me")
 
         assertThat(handled).isFalse()
+    }
+
+    @Test
+    fun `a withdrawn post turns every citation of it into an unavailable story, in place`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1").copy(postReplyTo = ApiPostReplyTarget(id = "p1", previewText = "ma story")))
+        harness.seedSynced(message("m2").copy(postReplyTo = ApiPostReplyTarget(id = "p2", previewText = "autre")))
+        harness.seedSynced(message("m3"))
+
+        val handled = applier(harness).apply(MessageCitedPostWithdrawnEvent("c1", "p1"), viewerId = "me")
+
+        assertThat(handled).isTrue()
+        assertThat(harness.cachedMessage("m1").postReplyTo).isEqualTo(ApiPostReplyTarget(id = "p1", unavailable = true))
+        assertThat(harness.cachedMessage("m2").postReplyTo?.previewText).isEqualTo("autre")
+        assertThat(harness.cachedMessage("m3").postReplyTo).isNull()
     }
 }

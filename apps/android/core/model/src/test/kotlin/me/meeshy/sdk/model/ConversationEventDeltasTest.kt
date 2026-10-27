@@ -189,4 +189,29 @@ class ConversationEventDeltasTest {
         assertThat(event.concerns("c3")).isFalse()
         assertThat(event.messageIdsIn("c1")).containsExactly("m1")
     }
+
+    @Test
+    fun `a withdrawn post empties the citation of the messages that quote it`() {
+        val quoting = message().copy(
+            postReplyTo = ApiPostReplyTarget(id = "p1", previewText = "ma story", thumbnailUrl = "https://cdn/s.jpg", reactionCount = 3),
+        )
+        val result = ConversationEventDeltas.citedPostWithdrawn(quoting, "p1")
+        assertThat(result.postReplyTo).isEqualTo(ApiPostReplyTarget(id = "p1", unavailable = true))
+    }
+
+    @Test
+    fun `a message that cites the post by id only is withdrawn too`() {
+        val result = ConversationEventDeltas.citedPostWithdrawn(message().copy(storyReplyToId = "p1"), "p1")
+        assertThat(result.postReplyTo?.unavailable).isTrue()
+    }
+
+    @Test
+    fun `another post or no citation, and a second withdrawal, change nothing`() {
+        val other = message().copy(postReplyTo = ApiPostReplyTarget(id = "p2", previewText = "autre"))
+        assertThat(ConversationEventDeltas.citedPostWithdrawn(other, "p1")).isSameInstanceAs(other)
+        val plain = message()
+        assertThat(ConversationEventDeltas.citedPostWithdrawn(plain, "p1")).isSameInstanceAs(plain)
+        val done = message().copy(postReplyTo = ApiPostReplyTarget(id = "p1", unavailable = true))
+        assertThat(ConversationEventDeltas.citedPostWithdrawn(done, "p1")).isSameInstanceAs(done)
+    }
 }
