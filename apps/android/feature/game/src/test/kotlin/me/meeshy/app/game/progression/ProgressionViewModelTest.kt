@@ -27,7 +27,9 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProgressionViewModelTest {
 
-    @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    private val testDispatcher = UnconfinedTestDispatcher()
+
+    @Before fun setUp() = Dispatchers.setMain(testDispatcher)
 
     @After fun tearDown() = Dispatchers.resetMain()
 
@@ -40,7 +42,7 @@ class ProgressionViewModelTest {
             source
         }
         coEvery { repository.refresh() } coAnswers { refresh() }
-        return ProgressionViewModel(repository)
+        return ProgressionViewModel(repository, defaultDispatcher = testDispatcher)
     }
 
     private suspend fun ProgressionViewModel.settled(condition: (ProgressionUiState) -> Boolean) = state.first(condition)
