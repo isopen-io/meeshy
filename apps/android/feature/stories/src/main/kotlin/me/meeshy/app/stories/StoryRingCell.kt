@@ -139,7 +139,7 @@ internal fun StoryRingCell(
 }
 
 @Composable
-private fun StoryRingMenu(
+internal fun StoryRingMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onViewStories: () -> Unit,

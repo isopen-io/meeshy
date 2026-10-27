@@ -10,7 +10,7 @@ enum class StoryTraySelfAction { ViewMyStory, ManageStories, AddStory }
 object StoryTraySelfMenu {
     fun actions(self: StoryRing?): List<StoryTraySelfAction> = listOfNotNull(
         StoryTraySelfAction.ViewMyStory.takeIf { self != null && self.storyCount > 0 },
-        StoryTraySelfAction.ManageStories.takeIf { self != null && self.storyCount > 0 },
+        StoryTraySelfAction.ManageStories,
         StoryTraySelfAction.AddStory,
     )
 }
