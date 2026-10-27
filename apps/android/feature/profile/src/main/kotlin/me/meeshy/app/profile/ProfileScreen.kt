@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -92,7 +92,7 @@ internal fun ProfileTopBar(onBack: () -> Unit, actions: @Composable RowScope.() 
         title = { Text(stringResource(R.string.profile_title)) },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.profile_back))
+                Icon(MeeshyIcons.Back, contentDescription = stringResource(R.string.profile_back))
             }
         },
         actions = actions,

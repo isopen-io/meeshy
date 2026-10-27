@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.fullscreen
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
@@ -87,7 +87,7 @@ public object FullscreenChromeDimens {
 public val FullscreenChromeSymbol.icon: ImageVector
     get() = when (this) {
         FullscreenChromeSymbol.Close -> Icons.Filled.Close
-        FullscreenChromeSymbol.Back -> Icons.AutoMirrored.Filled.ArrowBack
+        FullscreenChromeSymbol.Back -> MeeshyIcons.Back
         FullscreenChromeSymbol.More -> Icons.Filled.MoreHoriz
         FullscreenChromeSymbol.React -> Icons.Filled.EmojiEmotions
         FullscreenChromeSymbol.ReactBadge -> Icons.Filled.Add

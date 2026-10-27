@@ -2,7 +2,6 @@ package me.meeshy.ui.icons
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.automirrored.filled.ArrowBack as AfArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward as AfArrowForward
 import androidx.compose.material.icons.automirrored.filled.Article as AfArticle
 import androidx.compose.material.icons.automirrored.filled.Backspace as AfBackspace
@@ -273,7 +272,7 @@ public object MeeshyIcons {
     public val AlignLeft: ImageVector get() = Icons.AutoMirrored.Filled.AfFormatAlignLeft
     public val ArrowUpRight: ImageVector get() = Icons.AutoMirrored.Filled.AfCallMade
     public val Article: ImageVector get() = Icons.AutoMirrored.Filled.AfArticle
-    public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowBack
+    public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val Backspace: ImageVector get() = Icons.AutoMirrored.Filled.AfBackspace
     public val ChartLine: ImageVector get() = Icons.AutoMirrored.Filled.AfShowChart
     public val Chat: ImageVector get() = Icons.AutoMirrored.Filled.AfChat

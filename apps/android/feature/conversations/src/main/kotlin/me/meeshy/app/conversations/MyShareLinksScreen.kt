@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -30,7 +31,6 @@ import me.meeshy.ui.component.chrome.CollapsibleHeader
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPageProgress
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Schedule
