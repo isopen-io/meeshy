@@ -402,6 +402,15 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
+    /** Emprunte un son de l'étagère : il se pose en FOND de la slide sélectionnée (jamais deux fonds). */
+    fun onBorrowSound(sound: me.meeshy.sdk.model.composer.sound.ApiSound) = applyDeck { it.borrowSoundOnSelected(sound) }
+
+    /** Retire une piste de la slide sélectionnée — le son reste sur l'étagère, c'est un retrait de la scène. */
+    fun onRemoveSound(id: String) = applyDeck { it.removeSelectedSound(id) }
+
+    /** Le muet LOCAL d'une piste : elle reste posée, son volume tombe à 0 (mémento pour la rétablir). */
+    fun onToggleSoundMute(id: String) = applyDeck { it.toggleSelectedSoundMute(id) }
+
     /** Sets (or clears) the selected slide's photo filter. */
     fun onSelectFilter(filter: StoryFilter?) = reduce { StoryComposerBackgroundReducer.filterSelected(it, filter) }
 
@@ -648,6 +657,7 @@ class StoryComposerViewModel @Inject constructor(
                 mediaAlt = current.draft.mediaAlt,
                 mediaCaption = current.draft.mediaCaption,
                 allowSoundExtraction = current.draft.allowSoundExtraction,
+                audio = slide.audio,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),

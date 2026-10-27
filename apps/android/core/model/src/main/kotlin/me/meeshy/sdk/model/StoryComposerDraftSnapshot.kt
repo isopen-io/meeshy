@@ -145,6 +145,8 @@ data class StoryDraftSlideSnapshot(
     val backgroundLoop: Boolean = true,
     val elements: List<StoryDraftTextElementSnapshot> = emptyList(),
     val stickers: List<StoryDraftStickerElementSnapshot> = emptyList(),
+    /** Les sons de la slide — l'objet de piste lui-même est déjà sérialisable, `soundId` et crédit compris. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -160,7 +162,7 @@ data class StoryDraftSlideSnapshot(
      */
     val hasContent: Boolean
         get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable }
+            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty()
 }
 
 /**

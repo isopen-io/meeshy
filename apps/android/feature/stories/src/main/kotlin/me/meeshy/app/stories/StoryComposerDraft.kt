@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
@@ -46,6 +47,8 @@ data class StoryComposerDraft(
     val mediaCaption: Map<String, String> = emptyMap(),
     /** `null` = l'auteur n'a rien décidé ; la passerelle applique son défaut. */
     val allowSoundExtraction: Boolean? = null,
+    /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -89,7 +92,7 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing) &&
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty()) &&
             isWithinLimit && isWithinMediaLimit &&
             ComposerAudienceSelection.isPublishable(visibility, visibilityUserIds)
 
@@ -155,7 +158,8 @@ data class StoryComposerDraft(
         val stickerObjects = publishableStickers.map { it.toSticker() }
         val mediaObjects = listOfNotNull(backgroundMedia?.toMediaObject())
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
-            filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty()
+            filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
+            audio.isEmpty()
         if (hasNothing) return null
         return StoryEffects(
             background = background?.serialized(),
@@ -166,6 +170,7 @@ data class StoryComposerDraft(
             filter = filter?.wireValue(),
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,
+            audioPlayerObjects = audio.takeIf { it.isNotEmpty() },
         )
     }
 

@@ -1,0 +1,82 @@
+package me.meeshy.sdk.model.composer.sound
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryAudioPlayerObject
+import org.junit.Test
+
+class ComposerSoundPlacementTest {
+    private fun sound(id: String, title: String = "T$id") = ApiSound(
+        id = id, title = title, fileUrl = "https://cdn/$id.m4a", durationMs = 6000,
+        uploader = ApiSoundUploader("u", "ana"),
+    )
+
+    private fun recording(id: String, background: Boolean? = true) =
+        StoryAudioPlayerObject(id = id, postMediaId = "pm", isBackground = background)
+
+    @Test
+    fun `borrowing carries the shelf identity so the author keeps their credit`() {
+        val placed = ComposerSoundPlacement.borrow(emptyList(), sound("s1")) as SoundPlacement.Placed
+        val track = placed.audios.single()
+        assertThat(track.soundId).isEqualTo("s1")
+        assertThat(track.mediaURL).isEqualTo("https://cdn/s1.m4a")
+        assertThat(track.soundAuthorUsername).isEqualTo("ana")
+        assertThat(track.isBackground).isTrue()
+        assertThat(track.postMediaId).isEmpty()
+        assertThat(track.duration).isEqualTo(6f)
+    }
+
+    @Test
+    fun `a new background replaces the borrowed one in place and never stacks two backgrounds`() {
+        val first = (ComposerSoundPlacement.borrow(emptyList(), sound("s1")) as SoundPlacement.Placed).audios
+        val second = (ComposerSoundPlacement.borrow(first, sound("s2")) as SoundPlacement.Placed).audios
+        assertThat(second.map { it.soundId }).containsExactly("s2")
+    }
+
+    @Test
+    fun `a captured background is kept as a foreground track rather than lost`() {
+        val placed = ComposerSoundPlacement.borrow(listOf(recording("rec")), sound("s1")) as SoundPlacement.Placed
+        assertThat(placed.audios.map { it.id }).containsExactly("rec", "borrowed-s1").inOrder()
+        assertThat(placed.audios.first { it.id == "rec" }.isBackground).isFalse()
+        assertThat(ComposerSoundPlacement.background(placed.audios)!!.soundId).isEqualTo("s1")
+    }
+
+    @Test
+    fun `borrowing the sound already in the background changes nothing`() {
+        val first = (ComposerSoundPlacement.borrow(emptyList(), sound("s1")) as SoundPlacement.Placed).audios
+        assertThat(ComposerSoundPlacement.borrow(first, sound("s1"))).isEqualTo(SoundPlacement.Placed(first))
+    }
+
+    @Test
+    fun `the scene refuses a sixth audio track with a named reason`() {
+        val full = (1..5).map { recording("r$it", background = false) }
+        assertThat(ComposerSoundPlacement.borrow(full, sound("s1"))).isEqualTo(SoundPlacement.Refused)
+    }
+
+    @Test
+    fun `removing and muting target a track by id and leave the others`() {
+        val audios = listOf(recording("a"), recording("b", background = false))
+        assertThat(ComposerSoundPlacement.remove(audios, "a").map { it.id }).containsExactly("b")
+        assertThat(ComposerSoundPlacement.remove(audios, "zz")).isEqualTo(audios)
+        val muted = ComposerSoundPlacement.toggleMute(audios, "b")
+        assertThat(muted.first { it.id == "b" }.isMuted).isTrue()
+        assertThat(muted.first { it.id == "a" }.isMuted).isFalse()
+        assertThat(ComposerSoundPlacement.toggleMute(muted, "b").first { it.id == "b" }.isMuted).isFalse()
+    }
+
+    @Test
+    fun `the trace shows the background only while no tool owns the low zone`() {
+        val bg = recording("a")
+        assertThat(ComposerSoundPlacement.traceServed(bg, toolIsOpen = false)).isEqualTo(bg)
+        assertThat(ComposerSoundPlacement.traceServed(bg, toolIsOpen = true)).isNull()
+        assertThat(ComposerSoundPlacement.traceServed(null, toolIsOpen = false)).isNull()
+    }
+
+    @Test
+    fun `the resolved background is the first flagged track, a legacy one without object is not removable`() {
+        val audios = listOf(recording("a", background = false), recording("b"))
+        assertThat(ComposerSoundPlacement.background(audios)!!.id).isEqualTo("b")
+        assertThat(ComposerSoundPlacement.supersededId(null, audios)).isNull()
+        assertThat(ComposerSoundPlacement.supersededId(recording("ghost"), audios)).isNull()
+        assertThat(ComposerSoundPlacement.supersededId(audios[1], audios)).isEqualTo("b")
+    }
+}
