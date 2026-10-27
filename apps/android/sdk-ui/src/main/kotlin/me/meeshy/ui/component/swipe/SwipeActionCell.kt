@@ -4,10 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +36,11 @@ public data class SwipeAction(
     val onClick: () -> Unit,
 )
 
-/** Cellule d'action tapable : echelle 0,4 -> 1 et opacite au fil de la revelation. */
+/**
+ * Cellule d'action tapable : echelle 0,4 -> 1 et opacite au fil de la revelation. Comme iOS (`actionCell`,
+ * VStack espace 4, libelle sans limite de lignes), un libelle trop long passe a la ligne, centre, dans sa
+ * cellule : il ne deborde jamais sur la voisine.
+ */
 @Composable
 internal fun SwipeActionCell(
     action: SwipeAction,
@@ -58,7 +63,8 @@ internal fun SwipeActionCell(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true).graphicsLayer {
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 4.dp).graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             },
@@ -75,9 +81,8 @@ internal fun SwipeActionCell(
                 fontSize = MeeshyFontSize.caption,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Visible,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
