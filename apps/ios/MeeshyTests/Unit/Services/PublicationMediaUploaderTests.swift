@@ -149,7 +149,8 @@ final class PublicationMediaUploaderTests: XCTestCase {
         }
 
         /// Des octets d'image lisibles par ImageIO : le repli JPEG les décode
-        /// réellement, sans dépendre d'un encodeur HEVC absent du simulateur.
+        /// réellement (JPEG : le préparateur le rend tel quel en variante), sans
+        /// dépendre d'un encodeur HEVC absent du simulateur.
         static func imageBytes() throws -> Data {
             let context = try XCTUnwrap(CGContext(
                 data: nil, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 0,
@@ -159,7 +160,7 @@ final class PublicationMediaUploaderTests: XCTestCase {
             context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
             let image = try XCTUnwrap(context.makeImage())
             let data = NSMutableData()
-            let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
+            let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
             CGImageDestinationAddImage(destination, image, nil)
             XCTAssertTrue(CGImageDestinationFinalize(destination))
             return data as Data
