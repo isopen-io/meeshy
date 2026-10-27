@@ -437,66 +437,19 @@ final class CallManager: ObservableObject, Sendable {
     /// by any newer incoming call.
     var callJoinTask: Task<Void, Never>?
 
-    /// [Fix 2026-07-02] CallKit answer action held until the call actually
-    /// connects. CallKit starts the callee's elapsed timer the moment the
-    /// answer action is fulfilled — fulfilling at tap time made the counter
-    /// run while WebRTC was still connecting (user-reported "0:00 before the
-    /// connection exists"). Held here, fulfilled in `transitionToConnected`,
-    /// failed on pre-connection teardown, force-fulfilled by a safety net
-    /// (`QualityThresholds.pendingAnswerActionSafetyNetSeconds`) so CallKit
-    /// can never time the action out.
-    private var pendingAnswerAction: CXAnswerCallAction?
-    private var pendingAnswerSafetyTask: Task<Void, Never>?
-
-    /// Called on the MainActor from `provider(_:perform: CXAnswerCallAction)`,
-    /// which hops there via `Task { @MainActor ... }` — never synchronously,
-    /// since `CXProvider.setDelegate(_:queue: nil)` delivers on CallKit's own
-    /// private serial queue, not main (see the `[Fix 2026-07-03]` comment at
-    /// that call site for why assuming synchronous main-queue delivery was
-    /// itself the bug).
-    func holdPendingAnswerAction(_ action: CXAnswerCallAction) {
-        // CallKit's contract requires every CX*Action to eventually be
-        // completed — settle any still-pending action instead of silently
-        // dropping its reference, or an uncompleted action can get the app
-        // killed by the system.
-        if pendingAnswerAction != nil {
-            settlePendingAnswerAction(fulfilled: false, reason: "superseded by a new CXAnswerCallAction")
-        }
-        pendingAnswerAction = action
-        pendingAnswerSafetyTask?.cancel()
-        pendingAnswerSafetyTask = Task { @MainActor [weak self] in
-            guard await cancellableSleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds)), !Task.isCancelled else { return }
-            self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net \(Int(QualityThresholds.pendingAnswerActionSafetyNetSeconds))s — still not connected")
-        }
-    }
+    /// [Fix 2026-07-02] The CallKit answer action, held until the call really
+    /// connects (`CallKitAnswerActionHold`). Called on the MainActor from
+    /// `provider(_:perform: CXAnswerCallAction)`, which hops there via
+    /// `Task { @MainActor ... }` — `CXProvider.setDelegate(_:queue: nil)`
+    /// delivers on CallKit's own private serial queue, not main.
+    func holdPendingAnswerAction(_ action: CXAnswerCallAction) { answerActionHold.hold(action) }
 
     func settlePendingAnswerAction(fulfilled: Bool, reason: String) {
-        pendingAnswerSafetyTask?.cancel()
-        pendingAnswerSafetyTask = nil
-        guard let action = pendingAnswerAction else { return }
-        pendingAnswerAction = nil
-        if fulfilled {
-            action.fulfill()
-        } else {
-            action.fail()
-        }
-        Logger.calls.info("[CALLKIT] answer action \(fulfilled ? "fulfilled" : "failed") (\(reason))")
+        answerActionHold.settle(fulfilled: fulfilled, reason: reason)
     }
 
-    /// Called from `CallKitDelegateProxy.provider(_:timedOutPerforming:)` when
-    /// CallKit's OWN internal deadline elapses on a held `CXAnswerCallAction`
-    /// before we settle it. CallKit has already given up on the action by the
-    /// time this fires — `.fulfill()`/`.fail()` must never be called on it
-    /// again. Clear the held reference (and its safety-net task) so a later
-    /// `transitionToConnected` doesn't try to fulfill an action CallKit no
-    /// longer tracks.
-    func discardTimedOutAnswerAction(_ action: CXAnswerCallAction) {
-        guard pendingAnswerAction === action else { return }
-        pendingAnswerSafetyTask?.cancel()
-        pendingAnswerSafetyTask = nil
-        pendingAnswerAction = nil
-        Logger.calls.error("[CALLKIT] discarded answer action after CallKit-side timeout")
-    }
+    /// From `CallKitDelegateProxy.provider(_:timedOutPerforming:)`.
+    func discardTimedOutAnswerAction(_ action: CXAnswerCallAction) { answerActionHold.discardTimedOut(action) }
 
     /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
@@ -765,6 +718,8 @@ final class CallManager: ObservableObject, Sendable {
     /// over between calls — otherwise a peer with a higher counter from a prior
     /// call would wrongly drop the new call's first offer).
     var negotiationId = 0
+
+    let answerActionHold: CallKitAnswerActionHoldProviding = CallKitAnswerActionHold()
 
     private init() {
         // Survival controller is created with no actuator yet; `attach(self)` wires

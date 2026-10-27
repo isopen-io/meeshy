@@ -122,50 +122,7 @@ extension CallManager {
             await previousAnswer?.value
             await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return }
-            // Audit finding (Vague 158): re-enabling video while CallKit holds the
-            // call (cellular pre-emption) or the OS has suspended capture must NOT
-            // actually acquire the camera / announce "camera active" to the peer —
-            // mirrors the guard `applySurvivalVideoSend` already applies for the
-            // automatic survival-recovery path. Without this, a hold→toggle-off→
-            // toggle-on sequence (a normal double-tap while the CallKit hold banner
-            // is up) called `upgradeToVideo()` unconditionally, starting capture and
-            // renegotiating with the peer while the call is still on hold — exactly
-            // the false "camera active" signal `applyCameraSuspension`'s doc-comment
-            // and `applySurvivalVideoSend`'s guard both exist to prevent.
-            // `isVideoEnabled` (already set to the new intent above) stays the
-            // source of truth: `handleHold`'s unhold branch resumes video
-            // automatically once the suspension lifts, so intent is never lost —
-            // only the actuation is deferred.
-            if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
-                FeedbackToastManager.shared.showError(
-                    String(localized: "call.video.hold.blocked",
-                           defaultValue: "Vidéo indisponible pendant la mise en attente de l'appel",
-                           bundle: .main)
-                )
-                return
-            }
-            // Caméra jamais demandée : sans ce pré-flight, le prompt système
-            // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
-            // voyait la vidéo « s'activer » puis retomber. On tranche avant.
-            // Un refus est déjà annoncé par le `catch cameraPermissionDenied`
-            // en aval, d'où `announcesRefusal: false` (pas deux toasts).
-            if target, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
-                guard !Task.isCancelled else { return }
-                self.isVideoEnabled = false
-                // Same reset as the success path below and toggleVideo's own
-                // catch branches: isVideoEnabled = false alone only clears
-                // survival state on the controller's NEXT quality tick, and
-                // handle() no-ops entirely while a suspend/resume transition
-                // is already in flight — user intent (video refused) must win
-                // immediately, not after that transition settles.
-                self.videoSurvivalController.reset()
-                FeedbackToastManager.shared.showError(
-                    String(localized: "call.video.permission.denied",
-                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                           bundle: .main)
-                ) { MediaPermissionCoordinator.openSettings() }
-                return
-            }
+            guard await self.videoToggleMayActuate(target: target) else { return }
             do {
                 let needsRenegotiation: Bool
                 if target {
@@ -181,70 +138,132 @@ extension CallManager {
                 // controller never fights a manual toggle (and re-evaluates fresh).
                 self.videoSurvivalController.reset()
 
-                // Inform CallKit of the updated media type so the call appears
-                // as audio or video in the lock screen, Recents, and Car Play.
-                if let uuid = self.activeCallUUID, self.callUsesCallKit {
-                    let update = CXCallUpdate()
-                    update.hasVideo = target
-                    self.callProvider.reportCall(with: uuid, updated: update)
-                }
-
-                // P0-3 — tell the peer so it shows our avatar placeholder instead
-                // of a frozen last frame. Gateway broadcasts to the other peer only.
-                if let callId = self.currentCallId {
-                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: target)
-                }
-
-                // Renegotiate so the peer actually starts/stops receiving our
-                // video stream (a track.enabled flip alone never reaches it).
-                // Guard post-await: if the call ended while createOffer() was
-                // building the SDP, currentCallId is nil — don't emit a stale
-                // offer for a dead call (mirrors applySurvivalVideoSend).
-                if needsRenegotiation,
-                   let callId = self.currentCallId,
-                   let userId = self.remoteUserId,
-                   let offer = await self.webRTCService.createOffer(),
-                   self.currentCallId == callId {
-                    self.emitCallOffer(callId: callId, toUserId: userId, isVideo: target, sdp: offer)
-                    Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
-                }
+                await self.announceVideoToggle(target: target, needsRenegotiation: needsRenegotiation)
                 HapticFeedback.light()
             } catch WebRTCError.cameraPermissionDenied {
                 guard !Task.isCancelled else { return }
-                Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
-                self.isVideoEnabled = false
-                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                // Audit finding (Vague 169) — mirrors handleHold's unhold catches
-                // (Vague 167/168) and this same function's success path above:
-                // isVideoEnabled = false alone only clears survival state on the
-                // controller's NEXT quality tick, and handle() no-ops entirely
-                // while a suspend/resume transition is already in flight.
-                self.videoSurvivalController.reset()
-                // Show a tappable error so the user can open Settings to grant
-                // camera access without ending the audio-only call. The toast's
-                // tap action is the primary affordance; the message text says "tap"
-                // so screen-reader users also know the toast is actionable.
-                FeedbackToastManager.shared.showError(
-                    String(localized: "call.video.permission.denied",
-                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                           bundle: .main)
-                ) {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
-                }
+                self.videoToggleFailedOnCameraPermission()
             } catch {
                 guard !Task.isCancelled else { return }
-                Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
-                self.isVideoEnabled = false
-                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                // Same reset as the cameraPermissionDenied catch just above —
-                // any OTHER upgradeToVideo()/downgradeFromVideo() failure disables
-                // video for the rest of the call just as surely, and owes the
-                // survival controller the same immediate clear.
-                self.videoSurvivalController.reset()
-                FeedbackToastManager.shared.showError(String(localized: "call.video.enable.error", defaultValue: "Impossible d'activer la vidéo", bundle: .main))
+                self.videoToggleFailed(error)
             }
         }
+    }
+
+    /// Re-enabling video is refused while CallKit holds the call or the OS
+    /// suspended capture, and after a camera permission refusal.
+    private func videoToggleMayActuate(target: Bool) async -> Bool {
+        // Audit finding (Vague 158): re-enabling video while CallKit holds the
+        // call (cellular pre-emption) or the OS has suspended capture must NOT
+        // actually acquire the camera / announce "camera active" to the peer —
+        // mirrors the guard `applySurvivalVideoSend` already applies for the
+        // automatic survival-recovery path. Without this, a hold→toggle-off→
+        // toggle-on sequence (a normal double-tap while the CallKit hold banner
+        // is up) called `upgradeToVideo()` unconditionally, starting capture and
+        // renegotiating with the peer while the call is still on hold — exactly
+        // the false "camera active" signal `applyCameraSuspension`'s doc-comment
+        // and `applySurvivalVideoSend`'s guard both exist to prevent.
+        // `isVideoEnabled` (already set to the new intent above) stays the
+        // source of truth: `handleHold`'s unhold branch resumes video
+        // automatically once the suspension lifts, so intent is never lost —
+        // only the actuation is deferred.
+        if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.hold.blocked",
+                       defaultValue: "Vidéo indisponible pendant la mise en attente de l'appel",
+                       bundle: .main)
+            )
+            return false
+        }
+        // Caméra jamais demandée : sans ce pré-flight, le prompt système
+        // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
+        // voyait la vidéo « s'activer » puis retomber. On tranche avant.
+        // Un refus est déjà annoncé par le `catch cameraPermissionDenied`
+        // en aval, d'où `announcesRefusal: false` (pas deux toasts).
+        if target, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
+            guard !Task.isCancelled else { return false }
+            self.isVideoEnabled = false
+            // Same reset as the success path below and toggleVideo's own
+            // catch branches: isVideoEnabled = false alone only clears
+            // survival state on the controller's NEXT quality tick, and
+            // handle() no-ops entirely while a suspend/resume transition
+            // is already in flight — user intent (video refused) must win
+            // immediately, not after that transition settles.
+            self.videoSurvivalController.reset()
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.permission.denied",
+                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                       bundle: .main)
+            ) { MediaPermissionCoordinator.openSettings() }
+            return false
+        }
+        return true
+    }
+
+    private func announceVideoToggle(target: Bool, needsRenegotiation: Bool) async {
+        // Inform CallKit of the updated media type so the call appears
+        // as audio or video in the lock screen, Recents, and Car Play.
+        if let uuid = self.activeCallUUID, self.callUsesCallKit {
+            let update = CXCallUpdate()
+            update.hasVideo = target
+            self.callProvider.reportCall(with: uuid, updated: update)
+        }
+
+        // P0-3 — tell the peer so it shows our avatar placeholder instead
+        // of a frozen last frame. Gateway broadcasts to the other peer only.
+        if let callId = self.currentCallId {
+            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: target)
+        }
+
+        // Renegotiate so the peer actually starts/stops receiving our
+        // video stream (a track.enabled flip alone never reaches it).
+        // Guard post-await: if the call ended while createOffer() was
+        // building the SDP, currentCallId is nil — don't emit a stale
+        // offer for a dead call (mirrors applySurvivalVideoSend).
+        if needsRenegotiation,
+           let callId = self.currentCallId,
+           let userId = self.remoteUserId,
+           let offer = await self.webRTCService.createOffer(),
+           self.currentCallId == callId {
+            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: target, sdp: offer)
+            Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
+        }
+    }
+
+    private func videoToggleFailedOnCameraPermission() {
+        Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
+        self.isVideoEnabled = false
+        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+        // Audit finding (Vague 169) — mirrors handleHold's unhold catches
+        // (Vague 167/168) and this same function's success path above:
+        // isVideoEnabled = false alone only clears survival state on the
+        // controller's NEXT quality tick, and handle() no-ops entirely
+        // while a suspend/resume transition is already in flight.
+        self.videoSurvivalController.reset()
+        // Show a tappable error so the user can open Settings to grant
+        // camera access without ending the audio-only call. The toast's
+        // tap action is the primary affordance; the message text says "tap"
+        // so screen-reader users also know the toast is actionable.
+        FeedbackToastManager.shared.showError(
+            String(localized: "call.video.permission.denied",
+                   defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                   bundle: .main)
+        ) {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func videoToggleFailed(_ error: Error) {
+        Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
+        self.isVideoEnabled = false
+        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+        // Same reset as the cameraPermissionDenied catch just above —
+        // any OTHER upgradeToVideo()/downgradeFromVideo() failure disables
+        // video for the rest of the call just as surely, and owes the
+        // survival controller the same immediate clear.
+        self.videoSurvivalController.reset()
+        FeedbackToastManager.shared.showError(String(localized: "call.video.enable.error", defaultValue: "Impossible d'activer la vidéo", bundle: .main))
     }
 
     func switchCamera() {

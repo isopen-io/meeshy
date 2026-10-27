@@ -48,7 +48,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             XCTFail("Camera permission pre-flight check not found in toggleVideo — file structure changed"); return
         }
         guard let endRange = source.range(
-            of: "let needsRenegotiation: Bool",
+            of: "return true",
             range: startRange.upperBound..<source.endIndex
         ) else {
             XCTFail("Could not bound the permission pre-flight block"); return

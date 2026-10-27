@@ -7336,11 +7336,15 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
         ) else {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
-        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()") else {
-            XCTFail("upgradeToVideo() call not found in toggleVideo"); return
+        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()"),
+              let actuationGate = body.range(of: "guard await self.videoToggleMayActuate(target: target) else { return }"),
+              let gateDeclaration = body.range(of: "private func videoToggleMayActuate(target: Bool) async -> Bool {") else {
+            XCTFail("upgradeToVideo() or its actuation gate not found in toggleVideo"); return
         }
+        XCTAssertLessThan(actuationGate.lowerBound, upgradeRange.lowerBound,
+                          "toggleVideo must await its actuation gate before upgradeToVideo()")
         XCTAssertLessThan(
-            guardRange.lowerBound, upgradeRange.lowerBound,
+            gateDeclaration.lowerBound, guardRange.lowerBound,
             "the hold/capture-interruption guard must run before upgradeToVideo() acquires the " +
             "camera — otherwise a re-enable tap during a CallKit hold starts capture and " +
             "renegotiates with the peer while the call is still on hold."
@@ -7355,7 +7359,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
         let searchStart = guardRange.upperBound
-        guard let closeRange = body.range(of: "\n            }", range: searchStart..<body.endIndex) else {
+        guard let closeRange = body.range(of: "\n        }", range: searchStart..<body.endIndex) else {
             XCTFail("guard block close brace not found"); return
         }
         let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])

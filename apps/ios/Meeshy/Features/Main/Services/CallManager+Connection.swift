@@ -156,42 +156,7 @@ extension CallManager {
         let wasReconnecting: Bool
         if case .reconnecting = callState { wasReconnecting = true } else { wasReconnecting = false }
 
-        // §2.3/§6.4 — audio activation is gated on the PLATFORM, not on the
-        // fragile `!rtc.isAudioEnabled` heuristic.
-        //   - iPhone/iPad (`callUsesCallKit == true`): CallKit owns activation via
-        //     `provider:didActivate:`. We must NEVER self-activate here — calling
-        //     `setActive(true)` before `didActivate` makes iOS fail the audio
-        //     device module silently ("no sound on 1st call"). Log only.
-        //   - Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate`
-        //     never fires, so this `[AUDIO_FALLBACK]` IS the activation path.
-        if !callUsesCallKit {
-            Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
-            audioSessionQueue.sync {
-                let rtc = RTCAudioSession.sharedInstance()
-                rtc.lockForConfiguration()
-                do {
-                    let configuration = RTCAudioSessionConfiguration.webRTC()
-                    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                    // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
-                    // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
-                    configuration.mode = AVAudioSession.Mode.default.rawValue
-                    configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
-                    try rtc.setConfiguration(configuration, active: true)
-                    rtc.isAudioEnabled = true
-                    Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
-                } catch {
-                    Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
-                }
-                rtc.unlockForConfiguration()
-            }
-        } else if !RTCAudioSession.sharedInstance().isAudioEnabled {
-            Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
-            // §RC-2 — if `didActivate` never arrives, the call would stay
-            // connected-but-muted forever. Arm the one-shot fallback; it
-            // re-checks the full stuck condition after a short delay and
-            // no-ops when CallKit did its job in the meantime.
-            scheduleStuckMutedFallback()
-        }
+        activateAudioOnConnect()
 
         // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
         // "connected" cue. transitionToConnected is idempotent (guarded above) so
@@ -222,19 +187,7 @@ extension CallManager {
         // On reconnect use a lighter haptic — the user is mid-call, not initiating.
         playHaptic(wasReconnecting ? .light : .heavy)
         startScreenCaptureMonitoring()
-        // Preserve the call start time and running duration on a genuine
-        // mid-call reconnect (ICE restart) — but a nil callStartDate means this
-        // is the FIRST real connection even if the FSM transited through
-        // `.reconnecting` (pre-establishment ICE restart): without the reset,
-        // durationTask died on the nil date and the timer froze at 00:00.
-        if CallReliabilityPolicy.shouldResetCallClock(
-            wasReconnecting: wasReconnecting,
-            hasExistingStartDate: callStartDate != nil
-        ) {
-            callStartDate = Date()
-            analytics.connectedDate = callStartDate
-            callDuration = 0
-        }
+        resetCallClockIfNeeded(wasReconnecting: wasReconnecting)
         // Snapshots analytics périodiques — idempotent (les reconnexions
         // repassent ici sans re-armer) ; annulé dans endCallInternal.
         if let callId = currentCallId {
@@ -252,6 +205,92 @@ extension CallManager {
             let userId = AuthManager.shared.currentUser?.id ?? ""
             MessageSocketManager.shared.emitCallReconnected(callId: callId, participantId: userId)
         }
+        startDurationClock()
+
+        startHeartbeat()
+        webRTCService.startQualityMonitor()
+        startThermalMonitoring()
+        startBackgroundMonitoring()
+
+        reportOutgoingCallConnected(wasReconnecting: wasReconnecting)
+    }
+
+    func activateAudioOnConnect() {
+        // §2.3/§6.4 — audio activation is gated on the PLATFORM, not on the
+        // fragile `!rtc.isAudioEnabled` heuristic.
+        //   - iPhone/iPad (`callUsesCallKit == true`): CallKit owns activation via
+        //     `provider:didActivate:`. We must NEVER self-activate here — calling
+        //     `setActive(true)` before `didActivate` makes iOS fail the audio
+        //     device module silently ("no sound on 1st call"). Log only.
+        //   - Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate`
+        //     never fires, so this `[AUDIO_FALLBACK]` IS the activation path.
+        if !callUsesCallKit {
+            activateAudioSessionWithoutCallKit()
+        } else if !RTCAudioSession.sharedInstance().isAudioEnabled {
+            Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
+            // §RC-2 — if `didActivate` never arrives, the call would stay
+            // connected-but-muted forever. Arm the one-shot fallback; it
+            // re-checks the full stuck condition after a short delay and
+            // no-ops when CallKit did its job in the meantime.
+            scheduleStuckMutedFallback()
+        }
+    }
+
+    func resetCallClockIfNeeded(wasReconnecting: Bool) {
+        // Preserve the call start time and running duration on a genuine
+        // mid-call reconnect (ICE restart) — but a nil callStartDate means this
+        // is the FIRST real connection even if the FSM transited through
+        // `.reconnecting` (pre-establishment ICE restart): without the reset,
+        // durationTask died on the nil date and the timer froze at 00:00.
+        if CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: wasReconnecting,
+            hasExistingStartDate: callStartDate != nil
+        ) {
+            callStartDate = Date()
+            analytics.connectedDate = callStartDate
+            callDuration = 0
+        }
+    }
+
+    func reportOutgoingCallConnected(wasReconnecting: Bool) {
+        // Audit P1-12 — `reportOutgoingCall(_:connectedAt:)` is the caller-
+        // side timer trigger. On the callee side, CallKit starts its own
+        // timer when CXAnswerCallAction is fulfilled — calling
+        // reportOutgoingCall here would silently no-op and leave the
+        // Recents entry with zero duration.
+        // Guard on !wasReconnecting: calling this again after an ICE restart
+        // resets CallKit's own timer in Recents/History, making the displayed
+        // call duration shorter than the actual elapsed time.
+        if !wasReconnecting, lastCallWasOutgoing, let uuid = activeCallUUID {
+            callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
+        }
+    }
+
+    /// Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate` never
+    /// fires, so this `[AUDIO_FALLBACK]` IS the activation path.
+    func activateAudioSessionWithoutCallKit() {
+        Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
+        audioSessionQueue.sync {
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            do {
+                let configuration = RTCAudioSessionConfiguration.webRTC()
+                configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
+                configuration.mode = AVAudioSession.Mode.default.rawValue
+                configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+                try rtc.setConfiguration(configuration, active: true)
+                rtc.isAudioEnabled = true
+                Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
+            } catch {
+                Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+            }
+            rtc.unlockForConfiguration()
+        }
+    }
+
+    func startDurationClock() {
         durationTask?.cancel()
         durationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -263,23 +302,6 @@ extension CallManager {
                 guard let start = self.callStartDate else { continue }
                 self.callDuration = Date().timeIntervalSince(start)
             }
-        }
-
-        startHeartbeat()
-        webRTCService.startQualityMonitor()
-        startThermalMonitoring()
-        startBackgroundMonitoring()
-
-        // Audit P1-12 — `reportOutgoingCall(_:connectedAt:)` is the caller-
-        // side timer trigger. On the callee side, CallKit starts its own
-        // timer when CXAnswerCallAction is fulfilled — calling
-        // reportOutgoingCall here would silently no-op and leave the
-        // Recents entry with zero duration.
-        // Guard on !wasReconnecting: calling this again after an ICE restart
-        // resets CallKit's own timer in Recents/History, making the displayed
-        // call duration shorter than the actual elapsed time.
-        if !wasReconnecting, lastCallWasOutgoing, let uuid = activeCallUUID {
-            callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
 
