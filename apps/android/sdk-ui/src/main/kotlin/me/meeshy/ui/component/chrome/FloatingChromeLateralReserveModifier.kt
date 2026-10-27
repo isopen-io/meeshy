@@ -1,20 +1,26 @@
 package me.meeshy.ui.component.chrome
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
+
+/** La place d'une rangée dans la fenêtre, en dp, côtés LOGIQUES. */
+@Immutable
+private data class RowSpan(val top: Float, val bottom: Float, val startGap: Float, val endGap: Float)
 
 /**
  * Écarte une rangée des disques flottants parqués à sa hauteur (#12497, #13299) : du côté d'un disque dont la
@@ -22,30 +28,43 @@ import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
  * heure, vignette et interrupteur restent visibles et touchables, les disques restent en place.
  *
  * À poser en tête de chaîne sur la rangée (ou l'en-tête de section) : la mesure se fait sur la rangée entière.
- * L'état n'est écrit que lorsque la marge change, jamais à chaque image du défilement.
+ * La marge est un état DÉRIVÉ lu à la MISE EN PAGE : le défilement ne recompose aucune rangée, et une rangée
+ * n'est remesurée que lorsque SA marge change (rangée qui entre ou sort de la bande, disque déplacé).
  */
 @Composable
 public fun Modifier.floatingChromeLateralReserve(): Modifier {
-    val bands = LocalFloatingChromeReserve.current.bands
-    val currentBands by rememberUpdatedState(bands)
-    val density = LocalDensity.current.density
+    val reserve = LocalFloatingChromeReserve.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    var span by remember { mutableStateOf<Pair<Float, Float>?>(null) }
-    val insets = span
-        ?.let { (top, bottom) -> FloatingChromeLateralReserve.insets(bands, top, bottom) }
-        ?: FloatingChromeLateralReserve.Insets.None
+    val density = LocalDensity.current.density
+    val span = remember { mutableStateOf<RowSpan?>(null) }
+    val insets = remember(reserve) {
+        derivedStateOf {
+            span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap) }
+                ?: FloatingChromeLateralReserve.Insets.None
+        }
+    }
     return this
         .onGloballyPositioned { coordinates ->
-            val top = coordinates.positionInWindow().y / density
-            val next = top to top + coordinates.size.height / density
-            val before = span
-            val touchedBefore = before?.let { FloatingChromeLateralReserve.insets(currentBands, it.first, it.second) }
-            if (before == null || touchedBefore != FloatingChromeLateralReserve.insets(currentBands, next.first, next.second)) {
-                span = next
+            val rootWidth = coordinates.findRootCoordinates().size.width.toFloat()
+            val origin = coordinates.positionInWindow()
+            val left = origin.x / density
+            val right = (rootWidth - origin.x - coordinates.size.width) / density
+            val top = origin.y / density
+            val next = RowSpan(
+                top = top,
+                bottom = top + coordinates.size.height / density,
+                startGap = if (rtl) right else left,
+                endGap = if (rtl) left else right,
+            )
+            if (span.value != next) span.value = next
+        }
+        .layout { measurable, constraints ->
+            val current = insets.value
+            val start = current.leading.dp.roundToPx()
+            val end = current.trailing.dp.roundToPx()
+            val placeable = measurable.measure(constraints.offset(horizontal = -(start + end)))
+            layout(constraints.constrainWidth(placeable.width + start + end), placeable.height) {
+                placeable.placeRelative(start, 0)
             }
         }
-        .padding(
-            start = (if (rtl) insets.trailing else insets.leading).dp,
-            end = (if (rtl) insets.leading else insets.trailing).dp,
-        )
 }

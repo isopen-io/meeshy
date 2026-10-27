@@ -7,7 +7,8 @@ package me.meeshy.sdk.model.chrome
  * disque cède, de CE côté, la largeur du disque (du bord de l'écran au-delà du disque, plus un peu d'air) ; les disques
  * restent visibles et touchables, le contenu s'écarte.
  *
- * Toutes les mesures sont en dp, dans le repère de la fenêtre.
+ * Toutes les mesures sont en dp, dans le repère de la fenêtre ; les côtés sont LOGIQUES (début / fin), comme le
+ * placement des disques (`Modifier.offset`, miroité en RTL).
  */
 public object FloatingChromeLateralReserve {
 
@@ -37,10 +38,23 @@ public object FloatingChromeLateralReserve {
         }
     }
 
-    public fun insets(bands: List<Band>, rowTop: Float, rowBottom: Float): Insets {
+    /**
+     * La marge que cède une rangée de hauteur [rowTop]…[rowBottom]. [startGap] / [endGap] : ce qui sépare déjà la
+     * rangée du bord de l'écran de chaque côté (une rangée posée dans une carte en retrait ne cède que le complément).
+     */
+    public fun insets(
+        bands: List<Band>,
+        rowTop: Float,
+        rowBottom: Float,
+        startGap: Float = 0f,
+        endGap: Float = 0f,
+    ): Insets {
         val touching = bands.filter { it.top < rowBottom && it.bottom > rowTop }
-        fun reach(side: FloatingButtonSide): Float =
-            touching.filter { it.side == side }.maxOfOrNull { it.reach } ?: 0f
-        return Insets(leading = reach(FloatingButtonSide.LEADING), trailing = reach(FloatingButtonSide.TRAILING))
+        fun reach(side: FloatingButtonSide, gap: Float): Float =
+            ((touching.filter { it.side == side }.maxOfOrNull { it.reach } ?: 0f) - gap.coerceAtLeast(0f)).coerceAtLeast(0f)
+        return Insets(
+            leading = reach(FloatingButtonSide.LEADING, startGap),
+            trailing = reach(FloatingButtonSide.TRAILING, endGap),
+        )
     }
 }

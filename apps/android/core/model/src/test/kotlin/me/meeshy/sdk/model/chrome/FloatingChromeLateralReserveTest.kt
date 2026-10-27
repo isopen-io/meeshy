@@ -52,4 +52,13 @@ class FloatingChromeLateralReserveTest {
     fun `une largeur non mesuree ne reserve rien`() {
         assertThat(FloatingChromeLateralReserve.bands(layout(PointDp(26f, 300f), PointDp(334f, 360f)), 0f)).isEmpty()
     }
+
+    @Test
+    fun `une rangee deja en retrait du bord ne cede que le complement, jamais une marge negative`() {
+        val left = bands.single { it.side == FloatingButtonSide.LEADING }
+        val inset = FloatingChromeLateralReserve.insets(bands, rowTop = 340f, rowBottom = 390f, startGap = 16f)
+        assertThat(inset.leading).isWithin(0.001f).of(left.reach - 16f)
+        val farInside = FloatingChromeLateralReserve.insets(bands, rowTop = 340f, rowBottom = 390f, startGap = 200f)
+        assertThat(farInside.leading).isEqualTo(0f)
+    }
 }
