@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,18 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlashAuto
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.FlipCameraAndroid
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Undo
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -69,6 +59,7 @@ import me.meeshy.sdk.model.composer.capture.CaptureLockSeal
 import me.meeshy.sdk.model.composer.capture.CaptureZoomBarMorph
 import me.meeshy.sdk.model.composer.capture.CaptureTopRow
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyControlSize
 
@@ -93,11 +84,6 @@ internal fun CaptureRoundButton(icon: ImageVector, label: String, onClick: () ->
 
 @Composable
 internal fun CaptureFlashButton(mode: CaptureFlashMode, onClick: () -> Unit) {
-    val icon = when (mode) {
-        CaptureFlashMode.ON -> Icons.Filled.FlashOn
-        CaptureFlashMode.AUTO -> Icons.Filled.FlashAuto
-        CaptureFlashMode.OFF -> Icons.Filled.FlashOff
-    }
     val label = stringResource(
         when (mode) {
             CaptureFlashMode.ON -> R.string.capture_flash_on
@@ -105,7 +91,25 @@ internal fun CaptureFlashButton(mode: CaptureFlashMode, onClick: () -> Unit) {
             CaptureFlashMode.OFF -> R.string.capture_flash_off
         },
     )
-    CaptureRoundButton(icon, label, onClick, tint = if (mode == CaptureFlashMode.OFF) ChromeWhite else Color(0xFFFFD60A))
+    val tint = if (mode == CaptureFlashMode.OFF) ChromeWhite.copy(alpha = 0.75f) else Color(0xFFFFD60A)
+    Box(
+        modifier = Modifier
+            .size(MeeshyControlSize.minTouchTarget)
+            .clip(CircleShape)
+            .background(Glass)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(MeeshyIcons.Bolt, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        when (mode) {
+            CaptureFlashMode.OFF -> Canvas(Modifier.size(22.dp)) {
+                drawLine(tint, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), strokeWidth = 2.5f)
+            }
+            CaptureFlashMode.AUTO -> Text("A", color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 5.dp))
+            CaptureFlashMode.ON -> Unit
+        }
+    }
 }
 
 @Composable
@@ -115,12 +119,12 @@ internal fun CaptureTopItem(
     actions: CaptureViewfinderActions,
 ) {
     when (item) {
-        CaptureTopRow.Item.CLOSE -> CaptureRoundButton(Icons.Filled.Close, stringResource(R.string.capture_disarm), actions.onClose)
+        CaptureTopRow.Item.CLOSE -> CaptureRoundButton(MeeshyIcons.Close, stringResource(R.string.capture_disarm), actions.onClose)
         CaptureTopRow.Item.FLASH -> CaptureFlashButton(flash, actions.onFlash)
-        CaptureTopRow.Item.FLIP -> CaptureRoundButton(Icons.Filled.FlipCameraAndroid, stringResource(R.string.capture_flip), actions.onFlip)
-        CaptureTopRow.Item.DROP_SEGMENT -> CaptureRoundButton(Icons.Filled.Undo, stringResource(R.string.capture_drop_segment), actions.onDropSegment)
+        CaptureTopRow.Item.FLIP -> CaptureRoundButton(MeeshyIcons.FlipCamera, stringResource(R.string.capture_flip), actions.onFlip)
+        CaptureTopRow.Item.DROP_SEGMENT -> CaptureRoundButton(MeeshyIcons.Undo, stringResource(R.string.capture_drop_segment), actions.onDropSegment)
         CaptureTopRow.Item.VALIDATE ->
-            CaptureRoundButton(Icons.Filled.Check, stringResource(R.string.capture_validate), actions.onValidate, tint = MeeshyPalette.Success)
+            CaptureRoundButton(MeeshyIcons.Check, stringResource(R.string.capture_validate), actions.onValidate, tint = MeeshyPalette.Success)
         CaptureTopRow.Item.CHRONO, CaptureTopRow.Item.SIZE, CaptureTopRow.Item.SAVE, CaptureTopRow.Item.DONE -> Unit
     }
 }
@@ -181,7 +185,7 @@ internal fun CaptureFlashIntensitySlider(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(Icons.Filled.WbSunny, contentDescription = null, tint = Color(0xFFFFD60A), modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.BrightnessFilled, contentDescription = null, tint = Color(0xFFFFD60A), modifier = Modifier.size(16.dp))
         Box(
             modifier = Modifier
                 .width(MeeshyControlSize.minTouchTarget)
@@ -239,9 +243,9 @@ internal fun CaptureLockTrack(progress: Float, sealed: Boolean, reduceMotion: Bo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.45f + 0.55f * progress), modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.ChevronForward, null, tint = Color.White.copy(alpha = 0.45f + 0.55f * progress), modifier = Modifier.size(16.dp))
         Icon(
-            if (sealed || progress >= 1f) Icons.Filled.Lock else Icons.Filled.LockOpen,
+            if (sealed || progress >= 1f) MeeshyIcons.LockFilled else MeeshyIcons.LockOpenFilled,
             contentDescription = null,
             tint = if (sealed) MeeshyPalette.Success else Color.White,
             modifier = Modifier.size(20.dp).scale(scale),
@@ -328,7 +332,7 @@ private fun ZoomMorphPill() {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Filled.FlipCameraAndroid,
+            MeeshyIcons.FlipCamera,
             contentDescription = stringResource(R.string.capture_flip),
             tint = Color.White,
             modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = turns },
