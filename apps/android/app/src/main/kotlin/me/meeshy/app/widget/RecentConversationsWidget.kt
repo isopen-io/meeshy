@@ -35,6 +35,7 @@ import me.meeshy.app.widget.kit.WidgetAvatarBitmap
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.WidgetReaderPrismStore
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
 
@@ -61,7 +62,12 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = widgetPreviewLabels(context)
-        val presentation = RecentConversationsWidgetPresentation.from(conversations, currentUserId, labels)
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = conversations,
+            currentUserId = currentUserId,
+            previewLabels = labels,
+            preferredLanguages = WidgetReaderPrismStore(context).load(),
+        )
 
         provideContent {
             RecentConversationsWidgetContent(presentation)
