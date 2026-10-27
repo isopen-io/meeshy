@@ -23,12 +23,13 @@ class LivingSummaryProjectionTest {
         blurred: Boolean = false,
         expiresAtIso: String? = null,
         sealed: Boolean = false,
+        originalText: String? = null,
     ) = BubbleContent(
         messageId = id,
         text = text,
         isOutgoing = sender == "me",
-        isTranslated = false,
-        originalText = null,
+        isTranslated = originalText != null,
+        originalText = originalText,
         senderName = sender.replaceFirstChar { it.uppercase() },
         showSenderName = false,
         senderId = sender,
@@ -51,6 +52,12 @@ class LivingSummaryProjectionTest {
             .containsExactly(AwaitingKind.MENTION, AwaitingKind.UNANSWERED_QUESTION)
         assertThat(summary.faceRamp.single().displayName).isEqualTo("Bob")
         assertThat(summary.faceRamp.single().evidenceMessageIds).contains("m1")
+    }
+
+    @Test
+    fun `a mention is read in what the author wrote, not in the translation shown`() {
+        val summary = assemble(bubble("m1", text = "Meeshy, are you coming?", originalText = "@meeshy tu viens ?"))
+        assertThat(summary.digest.awaitingYou.map { it.kind }).contains(AwaitingKind.MENTION)
     }
 
     @Test

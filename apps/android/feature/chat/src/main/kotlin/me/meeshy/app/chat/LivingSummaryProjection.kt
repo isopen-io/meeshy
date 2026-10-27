@@ -20,6 +20,8 @@ data class SummaryViewer(val id: String, val username: String?)
  *
  * Un message PROTÉGÉ — vue unique, éphémère, flouté, supprimé ou scellé de bout en bout — est
  * transmis avec `isProtected = true` : il reste COMPTÉ, son texte n'entre jamais dans un calcul.
+ * Le texte qui entre est l'ORIGINAL (comme `message.content` iOS) : une mention `@pseudo` se lit
+ * dans ce que l'auteur a écrit, pas dans une traduction qui peut la déformer.
  */
 internal object LivingSummaryProjection {
 
@@ -77,7 +79,7 @@ internal object LivingSummaryProjection {
             createdAt = createdAt,
             replyToId = bubble.replyToId,
             isSystem = bubble.isSystem,
-            content = bubble.text,
+            content = bubble.originalText ?: bubble.text,
             originalLanguage = null,
             attachmentKinds = attachmentKinds(bubble),
             linkCount = 0,

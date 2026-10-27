@@ -135,29 +135,33 @@ internal fun SummaryProtectionsSection(entries: List<SummaryProtectionEntry>) {
     val tint = surfaceTint()
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SectionTitle(stringResource(R.string.summary_protected_title))
-        entries.forEach { entry ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(MeeshyRadius.md))
-                    .background(tint)
-                    .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-                    .semantics(mergeDescendants = true) {},
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-            ) {
-                Text(
-                    text = entry.senderDisplayName,
-                    modifier = Modifier.weight(1f),
-                    fontSize = MeeshyFontSize.subhead,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary.copy(alpha = 0.9f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                entry.badges.forEach { ProtectionBadge(it) }
-            }
-        }
+        entries.forEach { entry -> key(entry.id) { ProtectionRow(entry, tint) } }
+    }
+}
+
+/** Une ligne par message protégé : seule celle dont le décompte change se recompose. */
+@Composable
+private fun ProtectionRow(entry: SummaryProtectionEntry, tint: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(tint)
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = entry.senderDisplayName,
+            modifier = Modifier.weight(1f),
+            fontSize = MeeshyFontSize.subhead,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary.copy(alpha = 0.9f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        entry.badges.forEach { ProtectionBadge(it) }
     }
 }
 

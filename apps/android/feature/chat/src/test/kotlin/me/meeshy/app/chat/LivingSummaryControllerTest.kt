@@ -5,15 +5,19 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.ConversationAnalysisRepository
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.AnonymousSessionContext
+import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationSummaryAnalysis
 import me.meeshy.sdk.model.MeeshyUser
@@ -37,6 +41,8 @@ class LivingSummaryControllerTest {
         scope: TestScope,
         guest: AnonymousSessionContext? = null,
         encryptionMode: String? = null,
+        cachedEncryptionMode: String? = encryptionMode,
+        guestLoad: CompletableDeferred<AnonymousSessionContext?> = CompletableDeferred(guest),
         result: NetworkResult<ConversationAnalysis> =
             NetworkResult.Success(ConversationAnalysis("c1", ConversationSummaryAnalysis(text = " Un résumé "))),
     ) {
@@ -48,8 +54,11 @@ class LivingSummaryControllerTest {
             val session: SessionRepository = mockk()
             every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "u1", username = "meeshy"))
             val store: AnonymousSessionStore = mockk()
-            coEvery { store.load() } returns guest
-            controller = LivingSummaryController(repository, session, store)
+            coEvery { store.load() } coAnswers { guestLoad.await() }
+            val conversations: ConversationRepository = mockk()
+            every { conversations.conversationStream("c1") } returns
+                flowOf(ApiConversation(id = "c1", encryptionMode = cachedEncryptionMode))
+            controller = LivingSummaryController(repository, session, store, conversations)
             controller.attach(FakeHost(scope.backgroundScope, encryptionMode))
             scope.runCurrent()
         }
@@ -99,5 +108,26 @@ class LivingSummaryControllerTest {
         rig.controller.refreshAgent()
         runCurrent()
         assertThat(rig.controller.agent.value).isEqualTo(LivingSummaryAgentState())
+    }
+
+    @Test
+    fun `a summary opened before the identity is known waits for it, and a guest still never asks`() = runTest {
+        val pending = CompletableDeferred<AnonymousSessionContext?>()
+        val rig = Rig(this, guestLoad = pending)
+        rig.controller.refreshAgent()
+        runCurrent()
+        pending.complete(guestSession())
+        runCurrent()
+        coVerify(exactly = 0) { rig.repository.fetchAnalysis(any()) }
+        assertThat(rig.controller.agent.value.text).isNull()
+    }
+
+    @Test
+    fun `an end to end regime known only from the cache keeps the summary local`() = runTest {
+        val rig = Rig(this, encryptionMode = null, cachedEncryptionMode = "e2ee")
+        rig.controller.refreshAgent()
+        runCurrent()
+        coVerify(exactly = 0) { rig.repository.fetchAnalysis(any()) }
+        assertThat(rig.controller.agent.value.text).isNull()
     }
 }

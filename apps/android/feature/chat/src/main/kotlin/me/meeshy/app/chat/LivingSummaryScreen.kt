@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -93,13 +94,16 @@ internal fun LivingSummaryOverlay(
 
     val facts = remember(state.messages) { LivingSummaryProjection.protectionFacts(state.messages) }
     val ticking = facts.any { it.isEphemeral }
-    val now by produceState(Instant.now(), ticking) {
+    val clock = produceState(Instant.now(), ticking) {
         while (ticking) {
             delay(1_000)
             value = Instant.now()
         }
     }
-    val protections = remember(facts, now) { SummaryProtections.entries(facts, now) }
+    // La seconde qui passe n'est lue que par la section des protections : l'écran ne recompose
+    // que lorsque la section apparaît ou disparaît.
+    val protections = remember(facts) { derivedStateOf { SummaryProtections.entries(facts, clock.value) } }
+    val hasProtections by remember(protections) { derivedStateOf { protections.value.isNotEmpty() } }
 
     val actions = host.actions
     val replyOffers = rememberUpdatedState(state)
@@ -115,7 +119,9 @@ internal fun LivingSummaryOverlay(
             actions.startReply(messageId)
         }
     }
-    val menu = remember(offered, run) { SummaryEntryMenu(offered, run) }
+    val latestOffered = rememberUpdatedState(offered)
+    val latestRun = rememberUpdatedState(run)
+    val menu = remember { SummaryEntryMenu({ latestOffered.value(it) }, { action, id -> latestRun.value(action, id) }) }
 
     Box(
         modifier = modifier
@@ -136,8 +142,8 @@ internal fun LivingSummaryOverlay(
             } else {
                 var index = 0
                 Reveal(index++) { SummaryHeader(digest.digest) }
-                if (protections.isNotEmpty()) {
-                    Reveal(index++) { SummaryProtectionsSection(protections) }
+                if (hasProtections) {
+                    Reveal(index++) { SummaryProtectionsSection(protections.value) }
                 }
                 if (digest.faceRamp.isNotEmpty()) {
                     Reveal(index++) {
