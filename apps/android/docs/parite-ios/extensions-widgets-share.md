@@ -118,9 +118,9 @@ Transposition Android : ActivityKit (Live Activity + Dynamic Island) -> notifica
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityBackend.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityHost.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityCommandBinding.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityBackend.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityHost.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityCommandBinding.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityCommandIntent.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityStyle.swift`
 
@@ -227,8 +227,8 @@ Transposition Android : Live Activity de lecture + Now Playing -> MediaSession +
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/VoicePlaybackActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/VoicePlaybackLiveActivity.swift`
 
@@ -255,8 +255,8 @@ Transposition Android : Live Activity d'enregistrement -> service de premier pla
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/VoiceRecordingActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/VoiceRecordingLiveActivity.swift`
 
@@ -696,8 +696,8 @@ Transposition Android : Live Activity d'envoi -> ForegroundInfo du OutboxFlushWo
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/OutboxActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/OutboxLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/OutboxActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/OutboxLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/OutboxActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/OutboxLiveActivity.swift`
 
@@ -883,9 +883,9 @@ Transposition Android : Live Activity d'appel + CallKit/PushKit -> notification 
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallLiveActivityCoordinator.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityAvatarPublisher.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallActivityAvatarPublisher.swift`
 - `apps/ios/MeeshyWidgets/CallActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/CallLiveActivity.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityAvatarStore.swift`
