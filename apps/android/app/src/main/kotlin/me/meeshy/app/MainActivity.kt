@@ -33,6 +33,7 @@ import me.meeshy.app.navigation.ProvideRootSplash
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
+import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
@@ -226,10 +227,15 @@ private fun LocalizedContent(
  * Thin platform glue: pull the notification extras [MeeshyFcmService] set on the
  * launch/full-screen intent into the pure [LaunchExtras] the [LaunchRouter] decodes.
  */
-private fun Intent.launchExtras(): LaunchExtras = LaunchExtras(
-    callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
-    conversationId = getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID),
-    callerName = getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME),
-    isVideo = getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false),
-    autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
-)
+private fun Intent.launchExtras(): LaunchExtras {
+    val (tap, routeHint) = PushTapExtras.read(this)
+    return LaunchExtras(
+        callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
+        conversationId = getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID),
+        callerName = getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME),
+        isVideo = getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false),
+        autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
+        tap = tap,
+        routeHint = routeHint,
+    )
+}
