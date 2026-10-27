@@ -21,6 +21,7 @@ import me.meeshy.ui.component.retouch.ComposerRetouchResult
 import me.meeshy.ui.component.retouch.ComposerRetouchScreen
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchResult
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchScreen
+import me.meeshy.ui.component.retouch.RetouchExif
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 
@@ -40,7 +41,7 @@ internal object FeedRetouchDelivery {
     fun item(pending: FeedRetouchPending, result: ComposerRetouchResult): MediaUploadItem = when (result) {
         ComposerRetouchResult.Original -> pending.item
         is ComposerRetouchResult.Rendered -> MediaUploadItem(
-            bytes = ByteArrayOutputStream().also { result.bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }.toByteArray(),
+            bytes = RetouchExif.jpeg(result.bitmap, like = pending.item.bytes),
             fileName = pending.item.fileName.substringBeforeLast('.').ifEmpty { "photo" } + "_retouche.jpg",
             mimeType = JPEG_MIME,
         )
