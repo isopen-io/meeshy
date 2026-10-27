@@ -166,4 +166,26 @@ class ProfileStatsCacheRepositoryTest {
         assertThat(repo.cachedStats("me")).isEqualTo(richStats)
         assertThat(repo.cachedTimeline()).containsExactlyElementsIn(timeline).inOrder()
     }
+
+    @Test
+    fun `l activite d un compte ne se peint jamais sous un autre`() = runTest {
+        val repo = repository()
+        val other = listOf(TimelinePoint(date = "2026-07-09", messages = 9))
+
+        repo.persistTimeline("alice", timeline)
+        repo.persistTimeline("bob", other)
+
+        assertThat(repo.cachedTimeline("alice")).containsExactlyElementsIn(timeline).inOrder()
+        assertThat(repo.cachedTimeline("bob")).containsExactlyElementsIn(other).inOrder()
+        assertThat(repo.cachedTimeline("carol")).isNull()
+    }
+
+    @Test
+    fun `une fenetre vide d un compte se relit synchronisee, pas a froid`() = runTest {
+        val repo = repository()
+
+        repo.persistTimeline("alice", emptyList())
+
+        assertThat(repo.cachedTimeline("alice")).isEqualTo(emptyList<TimelinePoint>())
+    }
 }

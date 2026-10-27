@@ -357,8 +357,29 @@
     <string name="row_menu_manage_members">إدارة الأعضاء</string>
     <string name="row_menu_view_profile">عرض الملف الشخصي</string>
     <string name="shareLink_a11y_copied">تم نسخ الرابط</string>
+    <string name="shareLink_arrivals_loadFailed">تعذّر تحميل الانضمامات.</string>
+    <string name="shareLink_arrivals_loading">جارٍ تحميل الانضمامات</string>
+    <string name="shareLink_arrivals_moreFailed">تعذّر تحميل البقية.</string>
+    <plurals name="shareLink_arrivals_seeAll">
+        <item quantity="zero">لا توجد انضمامات</item>
+        <item quantity="one">عرض انضمام واحد</item>
+        <item quantity="two">عرض الانضمامين</item>
+        <item quantity="few">عرض الانضمامات الـ%d</item>
+        <item quantity="many">عرض الانضمامات الـ%d</item>
+        <item quantity="other">عرض الانضمامات الـ%d</item>
+    </plurals>
+    <plurals name="shareLink_arrivals_total">
+        <item quantity="zero">لا انضمامات</item>
+        <item quantity="one">انضمام واحد إجمالًا</item>
+        <item quantity="two">انضمامان إجمالًا</item>
+        <item quantity="few">%d انضمامات إجمالًا</item>
+        <item quantity="many">%d انضمامًا إجمالًا</item>
+        <item quantity="other">%d انضمام إجمالًا</item>
+    </plurals>
     <string name="shareLink_detail_allLanguages">جميع اللغات</string>
     <string name="shareLink_detail_allowedLanguages">اللغات المسموح بها</string>
+    <string name="shareLink_detail_arrivalLanguages">لغات المنضمّين</string>
+    <string name="shareLink_detail_arrivals">المنضمّون</string>
     <string name="shareLink_detail_askedOnArrival">يُطلب عند الانضمام</string>
     <string name="shareLink_detail_concurrent">في الوقت نفسه</string>
     <string name="shareLink_detail_concurrentMax">%d كحد أقصى</string>
@@ -384,7 +405,10 @@
     <string name="shareLink_detail_messageField">رسالة الدعوة (تظهر للضيوف)</string>
     <string name="shareLink_detail_nameField">اسم الرابط (مرئي لك وحدك)</string>
     <string name="shareLink_detail_never">أبدًا</string>
+    <string name="shareLink_detail_noAccountBadge">دون حساب</string>
+    <string name="shareLink_detail_noArrivals">لم ينضم أحد عبر هذا الرابط بعد.</string>
     <string name="shareLink_detail_optional">اختياري</string>
+    <string name="shareLink_detail_recentArrivals">انضموا مؤخرًا</string>
     <string name="shareLink_detail_requireAccount">حساب Meeshy إلزامي</string>
     <string name="shareLink_detail_requireBirthday">طلب تاريخ الميلاد</string>
     <string name="shareLink_detail_requireEmail">طلب بريد إلكتروني</string>
@@ -393,9 +417,12 @@
     <string name="shareLink_detail_save">حفظ</string>
     <string name="shareLink_detail_saveFailed">تعذّر حفظ الرابط. أعد المحاولة.</string>
     <string name="shareLink_detail_saved">تم حفظ الرابط</string>
+    <string name="shareLink_detail_statsUnavailable">إحصاءات هذا الرابط غير متاحة بعد.</string>
     <string name="shareLink_detail_unlimited">غير محدود</string>
     <string name="shareLink_detail_uses">الاستخدامات</string>
     <string name="shareLink_detail_usesUnlimited">%d / غير محدود</string>
+    <string name="shareLink_detail_visits">الزيارات</string>
+    <string name="shareLink_detail_withoutAccount">دون حساب</string>
     <string name="share_link_access_account">الحساب مطلوب</string>
     <string name="share_link_access_account_subtitle">لا يمكن الانضمام إلا لأعضاء Meeshy</string>
     <string name="share_link_access_birthday">تاريخ الميلاد مطلوب</string>

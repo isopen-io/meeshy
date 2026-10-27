@@ -109,4 +109,13 @@
     <string name="report_user_details_a11y">تفاصيل البلاغ</string>
     <string name="report_user_submit_hint">إرسال بلاغ عن</string>
     <string name="report_user_success">تم إرسال البلاغ</string>
+    <string name="user_stats_activity">النشاط</string>
+    <string name="user_stats_badges">الشارات</string>
+    <string name="user_stats_conversations">المحادثات</string>
+    <string name="user_stats_languages">اللغات</string>
+    <string name="user_stats_member">عضو</string>
+    <string name="user_stats_messages">الرسائل</string>
+    <string name="user_stats_requests">الطلبات</string>
+    <string name="user_stats_title">الإحصاءات</string>
+    <string name="user_stats_translations">الترجمات</string>
 </resources>

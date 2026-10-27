@@ -21,6 +21,9 @@ import me.meeshy.sdk.model.profile.ProfileSelfRule
 object ProfileRoutes {
     const val OWN: String = "profile/me"
 
+    /** Mes statistiques (iOS `UserStatsView`) : lecture seule, ouverte depuis ma page et les Réglages. */
+    const val STATS: String = "profile/stats"
+
     /** La route du profil de [userId] vue par la session ([selfId], [selfUsername]) ; `null` pour un id vide. */
     fun profileFor(userId: String, selfId: String?, selfUsername: String? = null): String? {
         val handle = userId.trim()

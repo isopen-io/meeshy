@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.translations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.languages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.member",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.requests",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.activity",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "user.stats.badges",
+          "status": "adopted"
+        },
+        {
+          "androidName": "user_stats_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "user_stats_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "user_stats_member_days",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

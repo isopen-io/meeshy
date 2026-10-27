@@ -109,4 +109,13 @@
     <string name="report_user_details_a11y">Details der Meldung</string>
     <string name="report_user_submit_hint">Meldung senden für</string>
     <string name="report_user_success">Meldung gesendet</string>
+    <string name="user_stats_activity">AKTIVITÄT</string>
+    <string name="user_stats_badges">BADGES</string>
+    <string name="user_stats_conversations">Unterhaltungen</string>
+    <string name="user_stats_languages">Sprachen</string>
+    <string name="user_stats_member">Mitglied</string>
+    <string name="user_stats_messages">Nachrichten</string>
+    <string name="user_stats_requests">Anfragen</string>
+    <string name="user_stats_title">Statistiken</string>
+    <string name="user_stats_translations">Übersetzungen</string>
 </resources>

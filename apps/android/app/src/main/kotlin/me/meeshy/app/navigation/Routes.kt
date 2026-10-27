@@ -62,6 +62,8 @@ object Routes {
     const val MY_SHARE_LINKS = "share-links"
     const val SHARE_LINK_DETAIL = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}"
     fun shareLinkDetail(linkId: String): String = "share-links/$linkId"
+    const val SHARE_LINK_ARRIVALS = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}/arrivals"
+    fun shareLinkArrivals(linkId: String): String = "share-links/$linkId/arrivals"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}={${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
