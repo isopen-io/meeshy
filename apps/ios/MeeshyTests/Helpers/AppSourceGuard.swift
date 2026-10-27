@@ -357,10 +357,10 @@ enum AppSourceGuard {
     /// `CallView+*.swift` (en-tête, états, appel établi, vignette perso,
     /// sous-titres, pilule…), et les vues feuilles de la pilule et des
     /// sous-titres sorties au #8394/#8396, qui ne portent pas le préfixe.
-    static let callViewPath = "Meeshy/Features/Main/Views/CallView.swift"
+    static let callViewPath = "Meeshy/Features/Call/Views/CallView.swift"
     static let callViewCompanions = [
-        "Meeshy/Features/Main/Views/CallDeviceControls.swift",
-        "Meeshy/Features/Main/Views/CallCaptionsViews.swift",
+        "Meeshy/Features/Call/Views/CallDeviceControls.swift",
+        "Meeshy/Features/Call/Views/CallCaptionsViews.swift",
     ]
 
     static func callViewSource() throws -> String {

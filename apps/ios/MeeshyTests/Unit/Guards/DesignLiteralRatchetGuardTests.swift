@@ -181,8 +181,8 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
         Exemption(
             reason: "cadres d'appel : dégradés et ornements choisis",
             globs: [
-                "\(app)/Services/CallFrames/*",
-                "\(app)/Models/CallFrames/*",
+                "apps/ios/Meeshy/Features/Call/Services/CallFrames/*",
+                "apps/ios/Meeshy/Features/Call/Models/CallFrames/*",
             ]
         ),
         Exemption(
@@ -459,7 +459,7 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
         XCTAssertTrue(Self.isExempt("\(ui)/Story/Canvas/Layers/BackgroundLayer.swift"))
         XCTAssertTrue(Self.isExempt("\(ui)/Story/StickerPickerView.swift"))
         XCTAssertTrue(Self.isExempt("\(ui)/Story/TextEditToolOptionsPanel.swift"))
-        XCTAssertTrue(Self.isExempt("\(app)/Services/CallFrames/AnyFrame.swift"))
+        XCTAssertTrue(Self.isExempt("apps/ios/Meeshy/Features/Call/Services/CallFrames/AnyFrame.swift"))
         XCTAssertTrue(Self.isExempt("\(ui)/Theme/MeeshyColors.swift"))
         XCTAssertFalse(Self.isExempt("\(app)/Views/ConversationView.swift"))
         XCTAssertFalse(Self.isExempt("\(ui)/Story/StoryViewerOverlay.swift"))

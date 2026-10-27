@@ -61,7 +61,7 @@ final class TopChromeBandGuardTests: XCTestCase {
         haystack.components(separatedBy: needle).count - 1
     }
 
-    private let pillPath = "Meeshy/Features/Main/Views/FloatingCallPillView.swift"
+    private let pillPath = "Meeshy/Features/Call/Views/FloatingCallPillView.swift"
     private let miniBarPath = "Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift"
     private let tintPath = "Meeshy/Features/Main/Components/TopChromeTint.swift"
     private let layerPath = "Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift"

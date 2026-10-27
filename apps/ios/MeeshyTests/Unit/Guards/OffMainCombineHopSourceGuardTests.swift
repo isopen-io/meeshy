@@ -119,7 +119,7 @@ final class OffMainCombineHopSourceGuardTests: XCTestCase {
     /// type `@MainActor`, la fermeture trapperait à son entrée avant de lire
     /// `Thread.isMainThread`.
     func test_incomingCallWakeGate_offMainGuardLivesInANonisolatedClosure() throws {
-        let url = Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/Features/Main/Services/CallManagerHost.swift")
+        let url = Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/Features/Call/Services/CallManagerHost.swift")
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(source.contains("offers().sink(receiveValue: Self.delivery(to: self))"))
         XCTAssertTrue(source.contains("nonisolated private static func delivery("))

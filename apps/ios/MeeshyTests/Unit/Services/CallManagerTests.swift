@@ -380,7 +380,7 @@ final class CallManagerOfferingTransitionTests: XCTestCase {
         // is hard to test without mocking the entire WebRTC stack. We verify
         // that listenForParticipantJoined function body sets self.callState = .offering
         // (NOT .connecting) when participant-joined is received.
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         guard let funcRange = source.range(of: "func listenForParticipantJoined") else {
             XCTFail("listenForParticipantJoined function not found")
@@ -401,7 +401,7 @@ final class CallManagerOfferingTransitionTests: XCTestCase {
     func test_handleRemoteAnswer_transitions_offering_to_connecting() throws {
         // Source-level guard: after setRemoteDescription(answer) returns, the FSM
         // must transition .offering → .connecting (NOT remain in .offering or jump elsewhere).
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         // Look for the answer subscription block OR a handleRemoteAnswer function
         let hasInSubscription = source.contains("setRemoteDescription") &&
@@ -422,7 +422,7 @@ final class CallManagerOfferingTransitionTests: XCTestCase {
 final class CallManagerRTPGateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_webRTCServiceDidConnect_transitionsDirectly_perPCStateAuthority() throws {
@@ -511,7 +511,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
     /// `createAnswer`.
 
     private func sourceText() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func body(of funcSignature: String, in source: String) -> String? {
@@ -1302,7 +1302,7 @@ final class CallCoverPresentationTests: XCTestCase {
 final class VideoSurvivalControllerIntegrationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// `isVideoSuspended` must mirror the controller's `@Published` so SwiftUI
@@ -1564,7 +1564,7 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
 final class CallManagerThermalVideoDowngradeTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func thermalBody(_ source: String) throws -> String {
@@ -1790,7 +1790,7 @@ final class CallQualitySummaryTests: XCTestCase {
 final class CallManagerStaleCallIdGuardTests: XCTestCase {
 
     private func source() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     // MARK: Fix 9 — thermalStateDidChange renegotiation path
@@ -1920,7 +1920,7 @@ final class CallManagerStaleCallIdGuardTests: XCTestCase {
 final class ICERestartTaskSerializationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// CallManager must own an `iceRestartTask` property to track the in-flight
@@ -2026,7 +2026,7 @@ final class ICERestartTaskSerializationTests: XCTestCase {
 final class CallManagerIsCallActiveFlagSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_isCallActiveFlag_isNotUnsafeNonisolated() throws {
@@ -2054,7 +2054,7 @@ final class CallManagerIsCallActiveFlagSourceGuardTests: XCTestCase {
 final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// [Fix 2026-07-02] The answer action is HELD (`holdPendingAnswerAction`)
@@ -2134,7 +2134,7 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
 final class CallKitActionCallUUIDGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Corps ENTIER du handler, accolades équilibrées.
@@ -2243,7 +2243,7 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
 final class HandleHoldTaskTrackingTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_holdVideoTask_propertyExists() throws {
@@ -2387,7 +2387,7 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
 final class VoIPFreshnessSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func freshnessBody(in source: String) -> String? {
@@ -2533,7 +2533,7 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
 final class EndCurrentAndAnswerPendingTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -2715,7 +2715,7 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
 final class CallWaitingSupersedeTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -2792,7 +2792,7 @@ final class CallWaitingSupersedeTests: XCTestCase {
 final class LocalMediaStartHelperTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -2895,7 +2895,7 @@ final class LocalMediaStartHelperTests: XCTestCase {
 final class AudioInterruptionReactivationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func interruptionHandlerBody(in source: String) -> String? {
@@ -2991,7 +2991,7 @@ final class AudioInterruptionReactivationTests: XCTestCase {
 final class AudioRouteChangeStateReconciliationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func routeChangeHandlerBody(in source: String) -> String? {
@@ -3085,7 +3085,7 @@ final class AudioRouteChangeStateReconciliationTests: XCTestCase {
 final class NegotiationEpochResetTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -3136,7 +3136,7 @@ final class NegotiationEpochResetTests: XCTestCase {
     /// when accepting a signal, so stale duplicates from a churned socket are
     /// rejected by `isStaleNegotiation`.
     func test_acceptIncomingNegotiation_advancesHighWaterMark() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallSdpSignaler.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallSdpSignaler.swift")
         guard let body = functionBody(of: "func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false)", in: source) else {
             XCTFail("acceptIncomingNegotiation not found"); return
         }
@@ -3160,7 +3160,7 @@ final class NegotiationEpochResetTests: XCTestCase {
 final class EndCallInternalTeardownOrderTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func endCallInternalBody(in source: String) -> String? {
@@ -3304,7 +3304,7 @@ final class DTLSSRTPEnforcementTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -3364,7 +3364,7 @@ final class DTLSSRTPEnforcementTests: XCTestCase {
 final class SettleTokenRaceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func endCallInternalBody(in source: String) -> String? {
@@ -3428,7 +3428,7 @@ final class SettleTokenRaceGuardTests: XCTestCase {
 final class CallManagerAlreadyAnsweredTests: XCTestCase {
 
     func test_callManager_sourceCode_handlesAlreadyAnsweredEvent() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         XCTAssertTrue(
             source.contains("already-answered") || source.contains("alreadyAnswered") || source.contains("ALREADY_ANSWERED"),
@@ -3439,7 +3439,7 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
     }
 
     func test_callManager_sourceCode_alreadyAnswered_endsCallOrDismissesRing() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         // Anchor on the SUBSCRIBER (`socket.callAlreadyAnswered`), not on the
         // first textual occurrence of "already-answered" — doc comments
@@ -3543,7 +3543,7 @@ final class CallStateReconnectingTests: XCTestCase {
 final class CallManagerDTMFTests: XCTestCase {
 
     func test_sendDTMF_validatesInput_inSourceCode() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
             XCTFail("sendDTMF not found in CallManager.swift"); return
@@ -3559,7 +3559,7 @@ final class CallManagerDTMFTests: XCTestCase {
     }
 
     func test_sendDTMF_rejectsEmptyString_inSourceCode() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
             XCTFail("sendDTMF not found in CallManager.swift"); return
@@ -3580,7 +3580,7 @@ final class CallManagerDTMFTests: XCTestCase {
 final class CallManagerForcedLeaveTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_forcedLeave_subscriberPresent_inSetupSocketListeners() throws {
@@ -3787,7 +3787,7 @@ final class CallManagerFormatDurationTests: XCTestCase {
 final class CallManagerProximityMonitoringTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_updateProximityMonitoring_isCalledFromCallStateDidSet() throws {
@@ -3919,7 +3919,7 @@ final class CallManagerProximityMonitoringTests: XCTestCase {
 final class CallManagerRouteChangeDefaultTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func routeChangeBody(in source: String) -> String? {
@@ -3968,7 +3968,7 @@ final class CallManagerRouteChangeDefaultTests: XCTestCase {
 final class RejectPendingCallTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -4104,7 +4104,7 @@ final class RejectPendingCallTests: XCTestCase {
 final class EndCallLockScreenDeclineTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -4192,7 +4192,7 @@ final class EndCallLockScreenDeclineTests: XCTestCase {
 final class RejectDeferredReconciliationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -4321,7 +4321,7 @@ final class RejectDeferredReconciliationTests: XCTestCase {
 final class RetryCallSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -4407,7 +4407,7 @@ final class RetryCallSourceGuardTests: XCTestCase {
 final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -4522,7 +4522,7 @@ final class CallManagerConnectionQualityLabelTests: XCTestCase {
 final class CallManagerTURNRefreshGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func refreshBody(_ source: String) -> String? {
@@ -4614,7 +4614,7 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
 final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(_ source: String, signature: String) -> String? {
@@ -4694,7 +4694,7 @@ final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
 final class CallManagerTURNRefreshWatchdogTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(_ source: String, signature: String) -> String? {
@@ -4788,7 +4788,7 @@ final class CallManagerTURNRefreshWatchdogTests: XCTestCase {
 final class CallManagerBusyFeedbackTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func startCallBody(_ source: String) -> String? {
@@ -4853,7 +4853,7 @@ final class CallManagerBusyFeedbackTests: XCTestCase {
 final class CallManagerRejoinActiveCallTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Le corps de `rejoinActiveCall`, DÉPOUILLÉ DE SES COMMENTAIRES.
@@ -5022,7 +5022,7 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
 final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func reconnectHandlerBody(_ source: String) -> String? {
@@ -5120,7 +5120,7 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
 final class CallManagerAnalyticsTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func endCallInternalBody(in source: String) -> String? {
@@ -5412,7 +5412,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
 final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// toggleVideo must call `callProvider.reportCall(with:updated:)` with `hasVideo`
@@ -5594,11 +5594,11 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
 final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func tuningSource() -> String {
-        (try? AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/CallAudioSessionTuning.swift")) ?? ""
+        (try? AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/CallAudioSessionTuning.swift")) ?? ""
     }
 
     private func configureAudioSessionBody(in source: String) -> String? {
@@ -5673,7 +5673,7 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
 final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -5747,7 +5747,7 @@ final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
 final class CallWaitingAndFailureTeardownTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -5795,7 +5795,7 @@ final class CallWaitingAndFailureTeardownTests: XCTestCase {
     // MARK: Bug 2 — TURN credentials must survive the call-waiting hand-off
 
     func test_pendingIncomingCall_carriesIceServers() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/IncomingCall.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/IncomingCall.swift")
         XCTAssertTrue(
             source.contains("let iceServers: [IceServer]?"),
             "pendingIncomingCall must store the iceServers that arrived with the waiting call — " +
@@ -5880,7 +5880,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
     }
 
     func test_callManager_declaresIsSignalingDegraded() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         XCTAssertTrue(
             source.contains("@Published var isSignalingDegraded"),
             "CallManager must expose the degraded-signaling flag for CallView — a socket drop " +
@@ -5889,7 +5889,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
     }
 
     func test_callManager_observesConnectionState_readOnly() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         XCTAssertTrue(
             source.contains("socket.$connectionState"),
             "setupSocketListeners must observe the socket connectionState publisher to drive the indicator"
@@ -5901,7 +5901,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
     }
 
     func test_endCallInternal_resetsIsSignalingDegraded() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         XCTAssertTrue(
             source.contains("isSignalingDegraded = false"),
             "endCallInternal must reset the indicator so it never leaks into the next call"
@@ -5931,7 +5931,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
 final class CallErrorNonFatalWhitelistTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_callErrorSink_appliesThePureDisposition_beforeAnyTeardown() throws {
@@ -5979,7 +5979,7 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
 final class LocalTeardownServerReconciliationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func functionBody(of signature: String, in source: String) -> String? {
@@ -6089,7 +6089,7 @@ final class AckFailureReconciliationTests: XCTestCase {
         // GC instead of resolving missed. An unacked end must be remembered
         // and replayed on the next connect exactly like a socket-down end
         // (the gateway end handler is idempotent).
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let fnRange = source.range(of: "func emitCallEndReliably(") else {
             XCTFail("emitCallEndReliably not found"); return
         }
@@ -6156,7 +6156,7 @@ final class CallCancellationPolicyTests: XCTestCase {
             appDelegate.contains("call_cancel") && appDelegate.contains("endRingingFromCancellation"),
             "AppDelegate.didReceiveRemoteNotification must route type=call_cancel to CallManager.endRingingFromCancellation"
         )
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
             XCTFail("CallManager.endRingingFromCancellation not found"); return
         }
@@ -6178,7 +6178,7 @@ final class CallCancellationPolicyTests: XCTestCase {
     // same, or a cancel for the WAITING call (not the primary ring) leaves
     // the banner offering "Answer/Reject" for an already-cancelled call.
     func test_endRingingFromCancellation_clearsPendingIncomingCallBanner() throws {
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
             XCTFail("CallManager.endRingingFromCancellation not found"); return
         }
@@ -6223,7 +6223,7 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
             appDelegate.contains("call_answered_elsewhere") && appDelegate.contains("endRingingAnsweredElsewhere"),
             "AppDelegate.didReceiveRemoteNotification must route type=call_answered_elsewhere to CallManager.endRingingAnsweredElsewhere"
         )
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
             XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
         }
@@ -6242,7 +6242,7 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
     // endRingingFromCancellation's equivalent test — the socket path
     // (call:already-answered) clears the waiting banner first.
     func test_endRingingAnsweredElsewhere_clearsPendingIncomingCallBanner() throws {
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
             XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
         }
@@ -6315,7 +6315,7 @@ final class CallSetupMetricsTests: XCTestCase {
     /// ancrages existent (answerCall côté appelé, participant-joined côté
     /// appelant), avec reset per-call.
     func test_wiring_payloadCarriesNegotiationTime_andAnchorsAreSet() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         XCTAssertTrue(
             source.contains("\"negotiationTimeMs\""),
             "call:analytics payload must carry negotiationTimeMs"
@@ -6391,7 +6391,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
     /// Câblage : snapshots périodiques armés à connected, annulés au teardown,
     /// label « in_progress » ; l'émission finale ne mute plus les accumulateurs.
     func test_wiring_periodicSnapshots_andPureFinalEmit() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         XCTAssertTrue(
             source.contains("analyticsSnapshotTask") && source.contains("\"in_progress\""),
@@ -6409,7 +6409,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
             body.contains("qualitySeconds[previousLevel, default: 0] +="),
             "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
         )
-        let recorder = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+AnalyticsRecorder.swift")
+        let recorder = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+AnalyticsRecorder.swift")
         XCTAssertTrue(
             recorder.contains("    func payload(now: Date, context: CallAnalyticsContext)"),
             "The analytics payload is built by a NON-mutating CallAnalyticsRecorder.payload — the compiler then forbids folding the open window into the accumulators"
@@ -6424,7 +6424,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
 final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// The system PiP window renders the raw remote track directly onto an
@@ -6468,7 +6468,7 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
 final class CallManagerBubblePositionTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_bubbleEdge_defaultsToTrailing() {
@@ -6556,7 +6556,7 @@ final class CallManagerBubblePositionTests: XCTestCase {
 final class CallManagerRenegotiationSerializationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -7271,7 +7271,7 @@ final class CallManagerTranscriptionMappingTests: XCTestCase {
 final class FailCallActiveGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func failCallBody(in source: String) -> String? {
@@ -7342,7 +7342,7 @@ final class FailCallActiveGuardTests: XCTestCase {
 final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func toggleVideoBody(in source: String) throws -> String {
@@ -7438,7 +7438,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
 final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func switchCameraBody(in source: String) throws -> String {

@@ -116,7 +116,7 @@ final class CallAddressPrivacyTests: XCTestCase {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let dossier = racine.appendingPathComponent("Meeshy/Features/Main/Services/WebRTC")
+        let dossier = racine.appendingPathComponent("Meeshy/Features/Call/Services/WebRTC")
         for nom in ["P2PWebRTCClient.swift", "WebRTCGroupPeerLink.swift"] {
             let code = try String(contentsOf: dossier.appendingPathComponent(nom), encoding: .utf8)
             XCTAssertFalse(code.contains("RTCConfiguration()"), "\(nom) : une connexion construite à la main échappe au réglage")

@@ -37,7 +37,7 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
     // MARK: - Câblage
 
     func test_attemptReconnection_consultsTheAwaitedOffer() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Reconnection.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+Reconnection.swift")
         XCTAssertTrue(
             source.contains("reconnectingAllowed(from: callState, awaitingRemoteOffer: isAwaitingRemoteOffer)"),
             "attemptReconnection doit refuser l'ICE restart tant que l'offre de l'appelant n'est pas arrivée"
@@ -45,7 +45,7 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
     }
 
     func test_connectingWatchdog_restartsItsClock_whileTheOfferIsAwaited() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallReliabilityMonitor.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallReliabilityMonitor.swift")
         XCTAssertTrue(source.contains("awaitingRemoteOffer: call.isAwaitingRemoteOffer"),
                       "le chien de garde .connecting doit passer l'attente d'offre à sa politique")
         var watchdog = CallReliabilityWatchdog()
@@ -58,7 +58,7 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
     }
 
     func test_aLateOffer_disarmsTheOfferTimeout() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift")
         guard let range = source.range(of: "case .connecting:"),
               let end = source.range(of: "case .connected, .reconnecting:", range: range.upperBound..<source.endIndex) else {
             XCTFail("branche .connecting de handleSignalOffer introuvable"); return
@@ -72,7 +72,7 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
     /// revérifier : si l'appel se terminait et qu'un nouvel appel entrant mettait son offre en attente pendant
     /// cet accusé, c'est l'offre du NOUVEL appel qui disparaissait (échec au bout du délai d'offre).
     func test_answeringABufferedOffer_onlyClearsTheOfferOfItsOwnCall() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Answer.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+Answer.swift")
         XCTAssertTrue(
             source.contains("if self.currentCallId == callId { self.pendingRemoteOffer = nil }"),
             "l'offre en attente ne s'efface que si elle appartient encore à l'appel répondu"
@@ -101,7 +101,7 @@ final class CallAnsweredElsewhereTests: XCTestCase {
     }
 
     func test_yielding_tellsTheServerNothing_andReportsNoAnalytics() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallSignalingRouter.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift")
         guard let start = source.range(of: "private func observeAnsweredElsewhere("),
               let end = source.range(of: "private func observeRemoteMedia(", range: start.upperBound..<source.endIndex) else {
             return XCTFail("observeAnsweredElsewhere introuvable")
@@ -116,7 +116,7 @@ final class CallAnsweredElsewhereTests: XCTestCase {
     }
 
     func test_analyticsAreSkipped_onlyWhenAsked() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Teardown.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+Teardown.swift")
         XCTAssertTrue(source.contains("func endCallInternal(reason: CallEndReason, reportsAnalytics: Bool = true)"))
         XCTAssertTrue(source.contains("emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)"))
         XCTAssertTrue(source.contains("if reports {\n            emitCallAnalyticsSnapshot("))

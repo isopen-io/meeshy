@@ -104,13 +104,13 @@ final class CallStackLazyInstantiationTests: XCTestCase {
     /// `syncWithHost` → `teardown`) : y relire `CallManager.shared` réentre dans
     /// sa construction et trappe ; y lire `webRTCService` construirait la pile WebRTC.
     func test_groupMesh_neverReadsCallManagerShared_whileTheStackIsBorn() throws {
-        let source = AppSourceGuard.stripComments(try appSource("Features/Main/Services/GroupCallMeshCoordinator.swift"))
+        let source = AppSourceGuard.stripComments(try appSource("Features/Call/Services/GroupCallMeshCoordinator.swift"))
         XCTAssertFalse(source.contains("CallManager.shared"), "Le plafond du principal passe par l'hôte, sans réveiller ni reconstruire la pile.")
         XCTAssertFalse(source.contains(".webRTCService."), "Le plafond s'applique au client WebRTC DÉJÀ construit (`builtWebRTCService`).")
     }
 
     func test_voipPush_reportsIncomingCallSynchronously_throughCallManagerShared() throws {
-        let source = AppSourceGuard.stripComments(try appSource("Features/Main/Services/VoIPPushManager.swift"))
+        let source = AppSourceGuard.stripComments(try appSource("Features/Call/Services/VoIPPushManager.swift"))
         guard let push = source.range(of: "didReceiveIncomingPushWith"),
               let report = source.range(of: "CallManager.shared.incomingRing.reportIncomingVoIPCall(", range: push.upperBound..<source.endIndex)
         else {
@@ -179,7 +179,7 @@ final class CallStackLazyInstantiationTests: XCTestCase {
     // MARK: - La pile, une fois réveillée, reste légère hors d'un appel vidéo
 
     func test_heavyCallPieces_areBuiltOnFirstUse_notWithTheirOwner() throws {
-        let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift"))
+        let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift"))
         XCTAssertTrue(manager.contains("lazy var pip: PiPCallProviding = PiPCallController.shared"))
         XCTAssertFalse(manager.contains("private let webRTCService: WebRTCService"))
         guard let initRange = manager.range(of: "private init("),
@@ -189,7 +189,7 @@ final class CallStackLazyInstantiationTests: XCTestCase {
         XCTAssertFalse(initBody.contains("WebRTCService()"), "Le client WebRTC naît au premier appel, pas avec CallManager.")
         XCTAssertFalse(initBody.contains("self.webRTCService"), "Toucher `webRTCService` dans l'init le construirait.")
 
-        let client = AppSourceGuard.stripComments(try appSource("Features/Main/Services/WebRTC/P2PWebRTCClient.swift"))
+        let client = AppSourceGuard.stripComments(try appSource("Features/Call/Services/WebRTC/P2PWebRTCClient.swift"))
         XCTAssertTrue(
             client.contains("private(set) lazy var videoFilterPipeline = VideoFilterPipeline()"),
             "Vision + CIContext(mtlDevice:) naissent au premier appel vidéo filtré."

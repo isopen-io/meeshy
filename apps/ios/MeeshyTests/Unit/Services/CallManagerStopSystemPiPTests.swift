@@ -19,7 +19,7 @@ final class CallManagerStopSystemPiPTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager+SystemPiP.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallManager+SystemPiP.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

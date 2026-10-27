@@ -114,7 +114,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -731,7 +731,7 @@ final class CallParticipantVisualTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallParticipantVisual.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallParticipantVisual.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

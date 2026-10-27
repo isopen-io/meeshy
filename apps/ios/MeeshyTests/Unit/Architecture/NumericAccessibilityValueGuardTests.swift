@@ -250,7 +250,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",
             // La durée d'appel a quitté `CallManager.swift` avec son découpage
             // (2026-10-02) : la liste suit l'hôte.
-            "Features/Main/Services/CallManager+Duration.swift",
+            "Features/Call/Services/CallManager+Duration.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
@@ -277,9 +277,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     func test_timerHostsSpeakTheirDurationInWords() {
         let hosts = [
             // #8276 — la minuterie de l'écran d'appel a suivi le découpage.
-            "Features/Main/Views/CallView+Connected.swift",
-            "Features/Main/Views/CallView+Header.swift",
-            "Features/Main/Views/FloatingCallPillView.swift",
+            "Features/Call/Views/CallView+Connected.swift",
+            "Features/Call/Views/CallView+Header.swift",
+            "Features/Call/Views/FloatingCallPillView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Composer/ComposerSceneCameraBar.swift",

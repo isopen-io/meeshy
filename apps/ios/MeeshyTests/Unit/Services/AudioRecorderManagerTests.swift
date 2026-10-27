@@ -127,7 +127,7 @@ final class AudioRecorderManagerTests: XCTestCase {
     /// d'enregistrement capturait l'appel (arrivé par le socket, au premier plan,
     /// sans interruption système) et disputait le micro à WebRTC.
     func test_callStart_stopsTheRecordersToo() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let start = try XCTUnwrap(source.range(of: "if active && !oldValue.isActive {"))
         let block = String(source[start.upperBound...].prefix(900))
         XCTAssertTrue(block.contains("RecorderCallGuard.shared.stopAllForCall()"))

@@ -22,7 +22,7 @@ import XCTest
 final class CallManagerNetworkReconnectionSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// `.connecting` is the answer-received/ICE-negotiating window — the FSM's

@@ -182,14 +182,14 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
         "Features/Main/Views/BubbleSwipeContainer.swift",
-        "Features/Main/Views/CallEffectsOverlay.swift",
+        "Features/Call/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
         // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
         // #8394 : la pilule remplace la barre ; le glyphe de ses boutons est
         // dimensionné par le diamètre de leur cercle (`CallDeviceControls`).
-        "Features/Main/Views/CallDeviceControls.swift",
-        "Features/Main/Views/CallView+Controls.swift",
-        "Features/Main/Views/CallView+Header.swift",
+        "Features/Call/Views/CallDeviceControls.swift",
+        "Features/Call/Views/CallView+Controls.swift",
+        "Features/Call/Views/CallView+Header.swift",
         // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
         // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
         "Features/Main/Views/ChangePasswordView.swift",
@@ -279,7 +279,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
-        "Features/Main/Views/IncomingCallView.swift",
+        "Features/Call/Views/IncomingCallView.swift",
         "Features/Main/Views/MagicLinkView.swift",
         "Features/Main/Views/MyStoriesView.swift",
         "Features/Main/Views/MyStoryActionBar.swift",

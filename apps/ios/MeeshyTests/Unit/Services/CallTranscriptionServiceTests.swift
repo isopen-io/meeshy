@@ -571,7 +571,7 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -786,7 +786,7 @@ final class CallTranscriptionServiceDeadCodeTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

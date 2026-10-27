@@ -26,8 +26,8 @@ final class CallAudioSessionTuningTests: XCTestCase {
     }
 
     func test_bothSites_applyTheSameOpusHints() throws {
-        let unit = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
-        let tuning = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/CallAudioSessionTuning.swift")
+        let unit = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
+        let tuning = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/CallAudioSessionTuning.swift")
         XCTAssertTrue(tuning.contains("setPreferredSampleRate(48_000)"))
         XCTAssertTrue(tuning.contains("setPreferredIOBufferDuration(0.02)"))
         XCTAssertTrue(unit.contains("CallAudioSessionTuning.applyCallPreferences(to: session.session)"))

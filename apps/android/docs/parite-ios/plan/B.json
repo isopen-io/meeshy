@@ -3904,7 +3904,7 @@
    "apps/ios/Meeshy/Localizable.xcstrings",
    "apps/ios/MeeshyWidgets/Localizable.xcstrings",
    "apps/ios/MeeshyShareExtension/InfoPlist.xcstrings",
-   "apps/ios/Meeshy/Features/Main/Views/CallView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView.swift",
    "apps/ios/Meeshy/Features/Notifications"
   ],
   "feature_keys": [
@@ -5375,8 +5375,8 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
    "apps/ios/Meeshy/Features/Onboarding/OnboardingFriendsCard.swift"
   ],
   "feature_keys": [

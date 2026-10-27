@@ -263,7 +263,7 @@ final class CallMicrophoneModeTests: XCTestCase {
     func test_outputMenu_offersTheSystemMicrophoneModes() throws {
         let code = try AppSourceGuard.stripComments(String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallDeviceControls.swift"), encoding: .utf8))
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallDeviceControls.swift"), encoding: .utf8))
         XCTAssertTrue(code.contains("CallMicrophoneMode.presentSystemModes()"), "le panneau d'appel ouvre les modes micro du système")
         XCTAssertTrue(code.contains("microphoneMode.menuTitle"), "le libellé reflète le mode actif")
     }

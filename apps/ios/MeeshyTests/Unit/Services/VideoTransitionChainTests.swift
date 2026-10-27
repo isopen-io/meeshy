@@ -90,7 +90,7 @@ final class VideoTransitionChainTests: XCTestCase {
 
     func test_callManager_snapshotsEverySlot_inOnePlace() throws {
         let source = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Services/CallManager.swift",
+            "Meeshy/Features/Call/Services/CallManager.swift",
             alsoIncluding: ["Meeshy/Features/Main/Services/VideoTransitionChain.swift"]
         )
         guard let start = source.range(of: "func videoTransitionsInFlight() -> VideoTransitionChain {"),

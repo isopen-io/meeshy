@@ -642,7 +642,7 @@ final class VideoSurvivalPolicySourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/VideoSurvivalController.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/VideoSurvivalController.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

@@ -94,7 +94,7 @@ final class PiPCallControllerSourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/PiPCallController.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/PiPCallController.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 

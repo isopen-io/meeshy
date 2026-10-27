@@ -35,7 +35,7 @@ import XCTest
 final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounded from the `ensureCamera` pre-flight check up to the `do {` that

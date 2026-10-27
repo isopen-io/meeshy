@@ -697,7 +697,7 @@ Rendu : Grande vignette à la une avec les autres en bande ; bannière sur son p
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/GroupCallSpotlight.swift`
+- `apps/ios/Meeshy/Features/Call/Models/GroupCallSpotlight.swift`
 
 </details>
 
