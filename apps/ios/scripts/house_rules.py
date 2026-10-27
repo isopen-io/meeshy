@@ -46,7 +46,7 @@ RULES = (
         "logger-subsystem",
         r"\bLogger\(subsystem:",
         (
-            "packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift",
+            "packages/MeeshySDK/Sources/MeeshyCore/Logging/MeeshyLog.swift",
             "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift",
         ),
     ),

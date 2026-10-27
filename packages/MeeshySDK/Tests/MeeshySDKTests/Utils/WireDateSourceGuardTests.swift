@@ -24,7 +24,7 @@ final class WireDateSourceGuardTests: XCTestCase {
 
     /// Chemin relatif au paquet → raison. Une exemption se justifie ou n'existe pas.
     private static let exemptions: [String: String] = [
-        "Sources/MeeshySDK/Utils/WireDate.swift": "la source unique des dates du fil",
+        "Sources/MeeshyCore/Utils/WireDate.swift": "la source unique des dates du fil",
         "Sources/MeeshySDK/Utils/MeeshyCoders.swift": "la source unique des codeurs JSON configurés",
     ]
 

@@ -156,7 +156,7 @@ class AvailableFloor(unittest.TestCase):
 
 class Exclusions(unittest.TestCase):
     def test_designated_files_are_exempt(self):
-        logger = "packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift"
+        logger = "packages/MeeshySDK/Sources/MeeshyCore/Logging/MeeshyLog.swift"
         reporter = "apps/ios/Meeshy/Features/Main/Services/SocialEventsV2Reporter.swift"
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n', logger), 0)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n", reporter), 0)
