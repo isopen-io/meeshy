@@ -181,8 +181,10 @@ struct StoryViewerView: View {
     // Group slide (group ↔ group)
     @State var groupSlide: CGFloat = 0 // internal for cross-file extension access
 
-    // Content cross-fade (story ↔ story within group)
-    @State var contentOpacity: Double = 1 // internal for cross-file extension access
+    /// The incoming story's entrance — opacity, scale, slide, parallax and
+    /// reveal — armed off-animation, then brought to rest inside it
+    /// (`StoryOpeningEntrance`, shared by the cross-fade and the interlude).
+    @State var entrance = StoryOpeningEntrance.rest(after: nil)
 
     // Outgoing layer for true cross-dissolve (old stays visible while new fades in)
     // `Indirect` tient la vue sous 8 192 octets ; valeur de l'état car `@State`, macro depuis iOS 27, ne se compose plus avec `@Indirect`.
@@ -193,15 +195,6 @@ struct StoryViewerView: View {
     // Transition lock — prevents overlapping animations
     @State var isTransitioning = false // internal for cross-file extension access
 
-    // Text parallax offset (slides up during cross-dissolve for depth)
-    @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
-    /// Glissement HORIZONTAL de l'ouverture `.slide`, en fraction de la largeur
-    /// du canvas — même unité que `StoryRenderer.slideTransitionTravelFraction`.
-    @State var openingSlideFraction: CGFloat = 0 // internal for cross-file extension access
-
-    // Opening effect animation states
-    @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
-    @State var isRevealActive: Bool = false       // internal for cross-file extension access
     @State var closingScale: CGFloat = 1.0        // internal for cross-file extension access
 
     // Horizontal swipe (group ↔ group)
@@ -635,11 +628,11 @@ struct StoryViewerView: View {
             currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
-            contentOpacity: contentOpacity,
-            textSlideOffset: textSlideOffset,
-            openingScale: openingScale,
-            openingSlideFraction: openingSlideFraction,
-            isRevealActive: isRevealActive,
+            contentOpacity: entrance.contentOpacity,
+            textSlideOffset: entrance.textSlideOffset,
+            openingScale: entrance.openingScale,
+            openingSlideFraction: entrance.openingSlideFraction,
+            isRevealActive: entrance.isRevealActive,
             reactionFlight: $reactionFlight,
             heartFrame: $heartFrame,
             heartBouncePulse: $heartBouncePulse,

@@ -149,26 +149,10 @@ extension StoryViewerView {
         // gauche), il n'y a rien à faire apparaître — on n'arme rien du tout,
         // sinon le slide qu'on est en train de quitter jouerait son entrée juste
         // avant d'être remplacé.
-        if revealing {
-            let entrance = StoryOpeningEntrance.armed(for: opening)
-            contentOpacity = entrance.contentOpacity
-            openingScale = entrance.openingScale
-            openingSlideFraction = entrance.openingSlideFraction
-            textSlideOffset = entrance.textSlideOffset
-            isRevealActive = entrance.isRevealActive
-        }
+        if revealing { entrance = StoryOpeningEntrance.armed(for: opening) }
         withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
             groupIntro.isShown = false
-            if revealing {
-                contentOpacity = 1
-                openingScale = 1.0
-                openingSlideFraction = 0
-                textSlideOffset = 0
-                // `.reveal` est la seule grammaire dont l'état de repos est
-                // « actif » : le cercle doit finir PLEIN écran. Pour les autres,
-                // `false` est déjà l'état neutre côté `RevealCircleShape`.
-                isRevealActive = (opening == .reveal)
-            }
+            if revealing { entrance = .rest(after: opening) }
         }
         // `isIntroVisible: false` explicite : le flip ci-dessus est enveloppé
         // dans `withAnimation`, on ne dépend donc pas de l'instant où la

@@ -65,4 +65,25 @@ nonisolated struct StoryOpeningEntrance: Equatable {
                                         textSlideOffset: 14, isRevealActive: false)
         }
     }
+
+    /// Where every entrance lands, inside the animated transaction. `.reveal`
+    /// is the only grammar whose rest is « active »: its circle ends full
+    /// screen; for the others `false` is already neutral for `RevealCircleShape`.
+    static func rest(after opening: StoryTransitionEffect?) -> StoryOpeningEntrance {
+        StoryOpeningEntrance(contentOpacity: 1, openingScale: 1.0, openingSlideFraction: 0,
+                             textSlideOffset: 0, isRevealActive: opening == .reveal)
+    }
+
+    /// The cross-fade's curve. The three NAMED effects share the SDK duration
+    /// (`slideTransitionDuration`), the one the composer preview and the export
+    /// respect; a plain fade keeps 0.35 s.
+    static func animation(for opening: StoryTransitionEffect?) -> (duration: Double, animation: Animation) {
+        let duration = StoryRenderer.slideTransitionDuration
+        switch opening {
+        case .zoom: return (duration, .spring(response: duration, dampingFraction: 0.75))
+        case .slide: return (duration, .spring(response: duration, dampingFraction: 0.82))
+        case .reveal: return (duration, .easeOut(duration: duration))
+        case .fade, .none: return (0.35, .easeOut(duration: 0.35))
+        }
+    }
 }

@@ -71,7 +71,7 @@ extension StoryViewerView {
         outgoingStory = currentStory
         outgoingOpacity = 1
         closingScale = 1.0
-        contentOpacity = 0
+        entrance = .armed(for: nil)
 
         let closingEffect = currentStory?.storyEffects?.closing
 
@@ -88,47 +88,15 @@ extension StoryViewerView {
 
         // Table d'armement PARTAGÉE avec le retrait de l'interlude inter-groupes
         // (`dismissGroupIntro(revealing:)`) : une seule grammaire d'apparition,
-        // deux chemins d'entrée. `contentOpacity` n'est PAS réappliqué ici — il
-        // a été mis à 0 avant `update()` plus haut, précisément pour que le swap
-        // de story soit invisible ; le réécrire après coup n'ajouterait rien et
-        // brouillerait cette intention.
-        let entrance = StoryOpeningEntrance.armed(for: incomingEffect)
-        openingScale = entrance.openingScale
-        openingSlideFraction = entrance.openingSlideFraction
-        textSlideOffset = entrance.textSlideOffset
-        isRevealActive = entrance.isRevealActive
-
-        let animDuration: Double
-        let animation: Animation
-        switch incomingEffect {
-        // Les trois effets NOMMÉS partagent la durée du SDK
-        // (`slideTransitionDuration`). L'app en avait trois différentes —
-        // 0,4 / 0,38 / 0,4 — désalignées de la seule valeur que l'aperçu du
-        // composer et l'export respectent.
-        case .zoom:
-            animDuration = StoryRenderer.slideTransitionDuration
-            animation = .spring(response: StoryRenderer.slideTransitionDuration,
-                                dampingFraction: 0.75)
-        case .slide:
-            animDuration = StoryRenderer.slideTransitionDuration
-            animation = .spring(response: StoryRenderer.slideTransitionDuration,
-                                dampingFraction: 0.82)
-        case .reveal:
-            animDuration = StoryRenderer.slideTransitionDuration
-            animation = .easeOut(duration: StoryRenderer.slideTransitionDuration)
-        default:
-            animDuration = 0.35
-            animation = .easeOut(duration: 0.35)
-        }
+        // deux chemins d'entrée. La story entrante était déjà invisible avant
+        // `update()` : le swap reste invisible.
+        entrance = .armed(for: incomingEffect)
+        let (animDuration, animation) = StoryOpeningEntrance.animation(for: incomingEffect)
 
         // 3. Animate immediately — thumbHash provides instant visual while full image loads
         withAnimation(animation) {
             outgoingOpacity = 0
-            contentOpacity = 1
-            openingScale = 1.0
-            textSlideOffset = 0
-            openingSlideFraction = 0
-            if incomingEffect == .reveal { isRevealActive = true }
+            entrance = .rest(after: incomingEffect)
             if closingEffect == .zoom { closingScale = StoryRenderer.zoomTransitionScale }
         }
 
