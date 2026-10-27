@@ -9,6 +9,8 @@ import me.meeshy.sdk.model.reading.mode.ConversationReadingMode.SUMMARY
 import me.meeshy.sdk.model.reading.mode.LensUnavailableReason
 import me.meeshy.sdk.model.reading.mode.OrchestratorDecision
 import me.meeshy.sdk.model.reading.mode.OrchestratorDecisionReason
+import me.meeshy.sdk.model.reading.mode.ReadingModeConversationType
+import me.meeshy.sdk.model.reading.mode.ReadingModeOrchestrator
 import me.meeshy.sdk.model.reading.mode.ReadingModePreferenceScope
 import org.junit.Test
 
@@ -65,10 +67,28 @@ class ReadingModeSessionTest {
     }
 
     @Test
-    fun `too many unread messages still open in Script while Summary is not rendered`() {
+    fun `too many unread messages open in the Living Summary, which is rendered`() {
         val state = open(MemoryStore(), unread = 40).state.value
+        assertThat(state.decision).isEqualTo(OrchestratorDecision(SUMMARY, OrchestratorDecisionReason.UNREAD_OVER_CAP))
+        assertThat(state.rows.single { it.mode == SUMMARY }.isAvailable).isTrue()
+        assertThat(state.nextInCycle).isEqualTo(FOCAL)
+    }
+
+    @Test
+    fun `a long absence with enough unread opens in the Living Summary, a guest never does`() {
+        val store = MemoryStore()
+        assertThat(open(store, unread = 12).state.value.decision.mode).isEqualTo(SUMMARY)
+        val guest = open(MemoryStore(), unread = 40, scope = ReadingModePreferenceScope.Anonymous("p-1")).state.value
+        assertThat(guest.decision).isEqualTo(OrchestratorDecision(SCRIPT, OrchestratorDecisionReason.CLAMPED_UNAVAILABLE))
+    }
+
+    @Test
+    fun `landing on a message opens the thread, never the Summary`() {
+        val state = ReadingModeSession(
+            "c1", me, 40, ReadingModeOrchestrator.resolveCapabilities(false, true, true, ReadingModeConversationType.GROUP, 3),
+            true, MemoryStore(), { now }, landsOnMessage = true,
+        ).state.value
         assertThat(state.decision).isEqualTo(OrchestratorDecision(SCRIPT, OrchestratorDecisionReason.UNREAD_OVER_CAP))
-        assertThat(state.rows.single { it.mode == SUMMARY }.unavailableReason).isEqualTo(LensUnavailableReason.NotYetRendered)
     }
 
     @Test
@@ -94,12 +114,12 @@ class ReadingModeSessionTest {
     }
 
     @Test
-    fun `the menu greys the views Android does not render yet and keeps River's real reason`() {
+    fun `the menu lists Summary as available and keeps River's real reason`() {
         val rows = open(MemoryStore()).state.value.rows
         assertThat(rows.map { it.mode }).containsExactly(FOCAL, SCRIPT, BUBBLES, SUMMARY, ConversationReadingMode.RIVER).inOrder()
         assertThat(rows.single { it.mode == BUBBLES }.isAvailable).isTrue()
         assertThat(rows.single { it.mode == FOCAL }.isAvailable).isTrue()
-        assertThat(rows.single { it.mode == SUMMARY }.unavailableReason).isEqualTo(LensUnavailableReason.NotYetRendered)
+        assertThat(rows.single { it.mode == SUMMARY }.isAvailable).isTrue()
         assertThat(rows.single { it.mode == ConversationReadingMode.RIVER }.unavailableReason).isEqualTo(LensUnavailableReason.RiverNever)
     }
 

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.agent.title",
+          "androidName": "summary_agent_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.day.today",
+          "androidName": "summary_day_today",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.day.yesterday",
+          "androidName": "summary_day_yesterday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.day.day_before_yesterday",
+          "androidName": "summary_day_day_before_yesterday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.episode.messages_one",
+          "androidName": "summary_episode_messages_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.episode.messages_other",
+          "androidName": "summary_episode_messages_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.episodes.entry.a11y_hint",
+          "androidName": "summary_episode_a11y_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.episodes.title",
+          "androidName": "summary_episodes_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.header.messages_count",
+          "androidName": "summary_header_messages_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.header.partial_window",
+          "androidName": "summary_header_partial_window",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.header.people_count",
+          "androidName": "summary_header_people_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.header.title",
+          "androidName": "summary_header_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.protected.title",
+          "androidName": "summary_protected_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.ramp.entry.a11y_label",
+          "androidName": "summary_ramp_entry_a11y_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.ramp.title",
+          "androidName": "summary_ramp_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.resume_thread",
+          "androidName": "summary_resume_thread",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.resume_thread.a11y_label",
+          "androidName": "summary_resume_thread_a11y_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.skeleton.a11y_label",
+          "androidName": "summary_skeleton_a11y_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.go_to_message",
+          "androidName": "summary_action_go_to_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "protection.viewOnce",
+          "androidName": "summary_protection_view_once",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "exit.preview.ephemeral",
+          "androidName": "summary_protection_ephemeral",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "protection.hidden",
+          "androidName": "summary_protection_hidden",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

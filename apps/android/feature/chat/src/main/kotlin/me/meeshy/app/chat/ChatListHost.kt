@@ -1,6 +1,9 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
@@ -389,10 +392,24 @@ internal fun ChatListHost(
             }
             }
         }
+        // Le Résumé vivant : une surcouche qui FOND (0,18 s) sur le fil, qui reste composé dessous —
+        // revenir au Script retrouve la position de défilement, aucune liste n'est reconstruite.
+        val summaryMode = host.readingMode?.state?.mode == ConversationReadingMode.SUMMARY
+        val modeFadeMs = if (reduceMotion) 0 else MODE_FADE_MS
+        AnimatedVisibility(
+            visible = summaryMode,
+            enter = fadeIn(tween(modeFadeMs)),
+            exit = fadeOut(tween(modeFadeMs)),
+        ) {
+            LivingSummaryOverlay(host = host, topInset = topInset, bottomInset = bottomInset)
+        }
     }
 }
 
 private const val DEFAULT_PLACE_ACCENT = "6366F1"
+
+/** Le fondu entre le fil et le Résumé : celui des bulles qui arrivent (iOS `.transition(.opacity)`). */
+private const val MODE_FADE_MS = 180
 
 /** La place réservée au bas du fil pour l'indicateur de frappe qui flotte au-dessus de la barre. */
 private val TYPING_RESERVE = 28.dp

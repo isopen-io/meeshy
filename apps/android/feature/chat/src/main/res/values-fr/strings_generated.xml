@@ -107,4 +107,26 @@
     <string name="starred_remove">Retirer des favoris</string>
     <string name="starred_remove_all">Tout retirer</string>
     <string name="starred_row_hint">Ouvre la conversation</string>
+    <string name="summary_action_go_to_message">Aller au message</string>
+    <string name="summary_agent_title">Vue d\'ensemble de l\'agent</string>
+    <string name="summary_day_day_before_yesterday">Avant-hier</string>
+    <string name="summary_day_today">Aujourd\'hui</string>
+    <string name="summary_day_yesterday">Hier</string>
+    <string name="summary_episode_a11y_hint">Ouvre les messages de cet épisode</string>
+    <string name="summary_episode_messages_one">%d message</string>
+    <string name="summary_episode_messages_other">%d messages</string>
+    <string name="summary_episodes_title">Ce qui s\'est passé</string>
+    <string name="summary_header_messages_count">%d messages</string>
+    <string name="summary_header_partial_window">Sur les %d derniers messages</string>
+    <string name="summary_header_people_count">%d personnes</string>
+    <string name="summary_header_title">Résumé Vivant</string>
+    <string name="summary_protected_title">Ce qui va disparaître</string>
+    <string name="summary_protection_ephemeral">Message éphémère</string>
+    <string name="summary_protection_hidden">Message masqué</string>
+    <string name="summary_protection_view_once">Vue unique</string>
+    <string name="summary_ramp_entry_a11y_label">%1$s, %2$d messages t\'attendent</string>
+    <string name="summary_ramp_title">Ils t\'attendent</string>
+    <string name="summary_resume_thread">Reprendre le fil</string>
+    <string name="summary_resume_thread_a11y_label">Reprendre le fil, retourner à la conversation</string>
+    <string name="summary_skeleton_a11y_label">Chargement du résumé</string>
 </resources>

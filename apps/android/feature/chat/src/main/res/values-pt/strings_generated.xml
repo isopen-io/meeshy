@@ -107,4 +107,26 @@
     <string name="starred_remove">Remover dos favoritos</string>
     <string name="starred_remove_all">Remover tudo</string>
     <string name="starred_row_hint">Abre a conversa</string>
+    <string name="summary_action_go_to_message">Ir para a mensagem</string>
+    <string name="summary_agent_title">Visão geral do agente</string>
+    <string name="summary_day_day_before_yesterday">Anteontem</string>
+    <string name="summary_day_today">Hoje</string>
+    <string name="summary_day_yesterday">Ontem</string>
+    <string name="summary_episode_a11y_hint">Abre as mensagens deste episódio</string>
+    <string name="summary_episode_messages_one">%d mensagem</string>
+    <string name="summary_episode_messages_other">%d mensagens</string>
+    <string name="summary_episodes_title">O que aconteceu</string>
+    <string name="summary_header_messages_count">%d mensagens</string>
+    <string name="summary_header_partial_window">Com base nas últimas %d mensagens</string>
+    <string name="summary_header_people_count">%d pessoas</string>
+    <string name="summary_header_title">Resumo Vivo</string>
+    <string name="summary_protected_title">O que vai desaparecer</string>
+    <string name="summary_protection_ephemeral">Mensagem efêmera</string>
+    <string name="summary_protection_hidden">Mensagem oculta</string>
+    <string name="summary_protection_view_once">Visualização única</string>
+    <string name="summary_ramp_entry_a11y_label">%1$s, %2$d mensagens esperam por você</string>
+    <string name="summary_ramp_title">Esperando por você</string>
+    <string name="summary_resume_thread">Voltar ao fio</string>
+    <string name="summary_resume_thread_a11y_label">Voltar ao fio, retornar à conversa</string>
+    <string name="summary_skeleton_a11y_label">Carregando o resumo</string>
 </resources>

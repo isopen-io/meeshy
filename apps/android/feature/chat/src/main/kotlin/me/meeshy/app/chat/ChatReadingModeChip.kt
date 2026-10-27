@@ -58,7 +58,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * (haptique légère), APPUI LONG = menu listant les cinq modes, la ligne courante cochée, une
  * ligne indisponible grisée avec sa raison (jamais retirée), puis « Automatique ».
  *
- * Écart Android assumé : tant qu'il n'y a qu'une vue rendue, le cycle est vide (no-op iOS) ;
+ * Écart Android assumé (iOS a aussi remplacé la feuille par ce menu, P2 Magnificence) : tant qu'il n'y a qu'une vue rendue, le cycle est vide (no-op iOS) ;
  * le tap ouvre alors le menu plutôt que de ne rien faire.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -140,14 +140,22 @@ internal fun ChatReadingModeChip(
                 ReadingModeMenuRow(
                     row = row,
                     accentColor = accentColor,
-                    onClick = { menuOpen = false; onSelect(row.mode) },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        menuOpen = false
+                        onSelect(row.mode)
+                    },
                 )
             }
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.reading_mode_menu_auto)) },
                 leadingIcon = { Icon(MeeshyIcons.MagicWand, contentDescription = null, tint = accentColor) },
-                onClick = { menuOpen = false; onAuto() },
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    menuOpen = false
+                    onAuto()
+                },
             )
         }
     }

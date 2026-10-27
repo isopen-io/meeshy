@@ -656,6 +656,9 @@ class ChatViewModel @Inject constructor(
     /** A row in the pinned-messages sheet was tapped: scroll to that message and close the sheet. */
     fun onPinnedMessageTap(messageId: String) = replyJump.onPinnedMessageTap(messageId)
 
+    /** The Living Summary asks to land on [messageId] in the thread; inert when it is not loaded. */
+    fun scrollToMessage(messageId: String) = replyJump.scrollToMessage(messageId)
+
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() = replyJump.onScrollHandled()
 

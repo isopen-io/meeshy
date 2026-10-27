@@ -103,7 +103,20 @@ internal class ChatReadingModeBinding(
     val state: ReadingModeUiState,
     val select: (me.meeshy.sdk.model.reading.mode.ConversationReadingMode) -> Unit,
     val resetToAuto: () -> Unit,
+    /** Le Résumé vivant : l'enrichissement de l'agent, l'identité du lecteur, sa relance. */
+    val summary: LivingSummaryBinding = LivingSummaryBinding.NONE,
 )
+
+/** Ce que le Résumé vivant lit du contrôleur, sans connaître le contrôleur. */
+internal class LivingSummaryBinding(
+    val agent: StateFlow<LivingSummaryAgentState>,
+    val viewer: StateFlow<SummaryViewer?>,
+    val refreshAgent: () -> Unit,
+) {
+    companion object {
+        val NONE = LivingSummaryBinding(NO_SUMMARY_AGENT, NO_SUMMARY_VIEWER) {}
+    }
+}
 
 @Composable
 internal fun rememberChatHostContext(
@@ -129,6 +142,7 @@ internal fun rememberChatHostContext(
 internal class ChatHostActions(
     val refreshActiveCall: () -> Unit,
     val onScrollHandled: () -> Unit,
+    val scrollToMessage: (String) -> Unit = {},
     val loadOlder: () -> Unit,
     val refresh: () -> Unit,
     val openSearch: () -> Unit,
@@ -214,6 +228,7 @@ internal class ChatHostActions(
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     refreshActiveCall = this::refreshActiveCall,
     onScrollHandled = this::onScrollHandled,
+    scrollToMessage = this::scrollToMessage,
     loadOlder = this::loadOlder,
     refresh = this::refresh,
     openSearch = this::openSearch,

@@ -107,4 +107,26 @@
     <string name="starred_remove">إزالة من المفضّلة</string>
     <string name="starred_remove_all">إزالة الكل</string>
     <string name="starred_row_hint">يفتح المحادثة</string>
+    <string name="summary_action_go_to_message">الانتقال إلى الرسالة</string>
+    <string name="summary_agent_title">نظرة عامة من المساعد</string>
+    <string name="summary_day_day_before_yesterday">أول أمس</string>
+    <string name="summary_day_today">اليوم</string>
+    <string name="summary_day_yesterday">أمس</string>
+    <string name="summary_episode_a11y_hint">يفتح رسائل هذه الحلقة</string>
+    <string name="summary_episode_messages_one">%d رسالة</string>
+    <string name="summary_episode_messages_other">%d رسائل</string>
+    <string name="summary_episodes_title">ما الذي حدث</string>
+    <string name="summary_header_messages_count">%d رسائل</string>
+    <string name="summary_header_partial_window">استنادًا إلى آخر %d رسالة</string>
+    <string name="summary_header_people_count">%d أشخاص</string>
+    <string name="summary_header_title">الملخص الحي</string>
+    <string name="summary_protected_title">ما سيختفي</string>
+    <string name="summary_protection_ephemeral">رسالة مؤقتة</string>
+    <string name="summary_protection_hidden">رسالة مخفية</string>
+    <string name="summary_protection_view_once">عرض لمرة واحدة</string>
+    <string name="summary_ramp_entry_a11y_label">%1$s، %2$d رسائل بانتظارك</string>
+    <string name="summary_ramp_title">بانتظارك</string>
+    <string name="summary_resume_thread">العودة إلى المحادثة</string>
+    <string name="summary_resume_thread_a11y_label">العودة إلى سير المحادثة</string>
+    <string name="summary_skeleton_a11y_label">جارٍ تحميل الملخص</string>
 </resources>

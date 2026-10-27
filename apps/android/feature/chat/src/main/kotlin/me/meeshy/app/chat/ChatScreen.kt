@@ -74,11 +74,16 @@ fun ChatScreen(
     val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
+    val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
+    val summaryBinding = remember(summaryController) {
+        summaryController?.let { LivingSummaryBinding(it.agent, it.viewer, it::refreshAgent) } ?: LivingSummaryBinding.NONE
+    }
     val readingMode = readingModeState?.let { modeState ->
         ChatReadingModeBinding(
             state = modeState,
             select = { readingModeController?.select(it) },
             resetToAuto = { readingModeController?.resetToAuto() },
+            summary = summaryBinding,
         )
     }
     val host = rememberChatHostContext(

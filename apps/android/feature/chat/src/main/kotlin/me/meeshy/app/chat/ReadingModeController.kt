@@ -30,13 +30,17 @@ import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 
 /**
- * Les vues du fil qu'Android sait DÉJÀ dessiner : Bulles, Script (la rangée plate d'iOS) et Focal
- * (Script + la scène au défilement). La loi ouvre donc en Script par défaut, comme iOS ; Résumé et
- * Rivière, pas encore portés, retombent sur Script ([ReadingModeOpening.deliver]) et restent grisés
- * dans le menu du chip.
+ * Les vues du fil qu'Android sait dessiner : Bulles, Script (la rangée plate d'iOS), Focal (Script +
+ * la scène au défilement) et Résumé (le Résumé vivant, en surcouche). Seule la Rivière, pas encore
+ * portée (#13322, loi de couloirs absente de `:core:model`), retombe sur Script
+ * ([ReadingModeOpening.deliver]) et reste grisée dans le menu du chip.
  */
-internal val DELIVERED_READING_MODES: Set<ConversationReadingMode> =
-    setOf(ConversationReadingMode.BUBBLES, ConversationReadingMode.SCRIPT, ConversationReadingMode.FOCAL)
+internal val DELIVERED_READING_MODES: Set<ConversationReadingMode> = setOf(
+    ConversationReadingMode.BUBBLES,
+    ConversationReadingMode.SCRIPT,
+    ConversationReadingMode.FOCAL,
+    ConversationReadingMode.SUMMARY,
+)
 
 /**
  * Stockage local, scopé par lecteur, du mode de lecture — miroir de
