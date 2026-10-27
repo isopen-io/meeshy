@@ -124,4 +124,13 @@ class LinkFormsTest {
         assertThat(stats.totalMembers).isEqualTo(4)
         assertThat(stats.activeCommunities).isEqualTo(1)
     }
+
+    @Test
+    fun `un jeton restaure revient a sa place sans doublon`() {
+        val state = AffiliateTokensState(listOf(token("1"), token("3")))
+
+        assertThat(state.restored(token("2"), 1).tokens.map { it.id }).containsExactly("1", "2", "3").inOrder()
+        assertThat(state.restored(token("2"), 9).tokens.map { it.id }).containsExactly("1", "3", "2").inOrder()
+        assertThat(state.restored(token("1"), 0)).isEqualTo(state)
+    }
 }

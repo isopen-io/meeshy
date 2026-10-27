@@ -38,4 +38,14 @@ data class AffiliateTokensState(
         copy(tokens = listOf(token) + tokens.filterNot { it.id == token.id })
 
     fun removed(id: String): AffiliateTokensState = copy(tokens = tokens.filterNot { it.id == id })
+
+    /**
+     * Le retour arrière d'UNE suppression refusée : le jeton revient à sa place d'avant, sans toucher
+     * à ce que d'autres suppressions ont retiré entre-temps (un instantané global les ressusciterait).
+     */
+    fun restored(token: AffiliateToken, index: Int): AffiliateTokensState {
+        if (tokens.any { it.id == token.id }) return this
+        val at = index.coerceIn(0, tokens.size)
+        return copy(tokens = tokens.take(at) + token + tokens.drop(at))
+    }
 }

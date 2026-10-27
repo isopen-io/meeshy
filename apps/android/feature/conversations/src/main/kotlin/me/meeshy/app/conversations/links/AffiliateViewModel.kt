@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.link.AffiliateReferralRepository
 import me.meeshy.sdk.link.AffiliateRepository
@@ -105,15 +106,17 @@ class AffiliateViewModel @Inject constructor(
     }
 
     fun delete(id: String) {
-        val snapshot = _state.value.tokens
-        val next = snapshot.removed(id)
-        _state.update { it.copy(tokens = next) }
-        cache.putAffiliateTokens(next.tokens)
+        val before = _state.value.tokens.tokens
+        val index = before.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val removed = before[index]
+        val next = _state.updateAndGet { it.copy(tokens = it.tokens.removed(id)) }
+        cache.putAffiliateTokens(next.tokens.tokens)
         viewModelScope.launch {
             _events.send(LinkEvent.Removed)
             if (writing.deleteToken(id) is NetworkResult.Failure) {
-                _state.update { it.copy(tokens = snapshot) }
-                cache.putAffiliateTokens(snapshot.tokens)
+                val restored = _state.updateAndGet { it.copy(tokens = it.tokens.restored(removed, index)) }
+                cache.putAffiliateTokens(restored.tokens.tokens)
                 _events.send(LinkEvent.RemoveFailed)
             }
         }

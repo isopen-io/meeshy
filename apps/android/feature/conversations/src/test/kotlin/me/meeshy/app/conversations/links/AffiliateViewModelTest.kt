@@ -49,11 +49,15 @@ class AffiliateViewModelTest {
     private class WriteApi(
         var create: ApiResponse<AffiliateToken> = ApiResponse(success = false),
         var delete: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+        val refusedIds: Set<String> = emptySet(),
     ) : AffiliateReferralApi {
         val created = mutableListOf<CreateAffiliateTokenRequest>()
         val deleted = mutableListOf<String>()
         override suspend fun createToken(body: CreateAffiliateTokenRequest): ApiResponse<AffiliateToken> { created += body; return create }
-        override suspend fun deleteToken(id: String): ApiResponse<Unit> { deleted += id; return delete }
+        override suspend fun deleteToken(id: String): ApiResponse<Unit> {
+            deleted += id
+            return if (id in refusedIds) ApiResponse(success = false) else delete
+        }
         override suspend fun register(body: AffiliateRegisterRequest): ApiResponse<JsonElement> = error("unused")
         override suspend fun click(token: String): ApiResponse<JsonElement> = error("unused")
         override suspend fun trackVisit(body: AffiliateTrackVisitRequest): ApiResponse<AffiliateTrackVisitResult> = error("unused")
@@ -162,5 +166,21 @@ class AffiliateViewModelTest {
 
         assertThat(vm.state.value.tokens.tokens.map { it.id }).containsExactly("1", "2").inOrder()
         assertThat(cache.affiliateTokens()?.map { it.id }).containsExactly("1", "2").inOrder()
+    }
+
+    @Test
+    fun `un refus ne ressuscite que son jeton, jamais celui qu'une autre suppression a retire`() = runTest {
+        val cache = LinksCache()
+        val write = WriteApi(refusedIds = setOf("1"))
+        val vm = viewModel(ReadApi(ApiResponse(success = true, data = listOf(token("1"), token("2"), token("3")))), write, cache)
+        advanceUntilIdle()
+
+        vm.delete("1")
+        vm.delete("2")
+        assertThat(vm.state.value.tokens.tokens.map { it.id }).containsExactly("3")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tokens.tokens.map { it.id }).containsExactly("1", "3").inOrder()
+        assertThat(cache.affiliateTokens()?.map { it.id }).containsExactly("1", "3").inOrder()
     }
 }

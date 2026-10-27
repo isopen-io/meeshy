@@ -10,14 +10,19 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Le QR d'un lien, partagé comme image (iOS `generateQRAndShare` : correction « H », échelle 10).
  * Noir sur blanc : le fichier part hors de Meeshy, il doit se lire sur n'importe quel fond.
+ * L'encodage et la compression PNG (1024 px) tournent hors du fil principal : le toucher ne gèle aucune image.
  */
 internal object QrLinkShare {
 
-    fun render(content: String, size: Int = QR_SIZE): Bitmap? = runCatching {
+    suspend fun render(content: String, size: Int = QR_SIZE): Bitmap? = withContext(Dispatchers.Default) { encode(content, size) }
+
+    private fun encode(content: String, size: Int): Bitmap? = runCatching {
         val hints = mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 2)
         val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
         val pixels = IntArray(matrix.width * matrix.height) { i ->
@@ -27,10 +32,13 @@ internal object QrLinkShare {
     }.getOrNull()
 
     /** Écrit le PNG dans `cache/shared-media/` (chemin déjà servi par le `FileProvider`) et ouvre la feuille de partage. */
-    fun share(context: Context, bitmap: Bitmap, fileName: String, chooserTitle: String): Boolean = runCatching {
-        val directory = File(context.cacheDir, SHARED_DIRECTORY).apply { mkdirs() }
-        val file = File(directory, "$fileName.png")
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    suspend fun share(context: Context, bitmap: Bitmap, fileName: String, chooserTitle: String): Boolean = runCatching {
+        val file = withContext(Dispatchers.IO) {
+            val directory = File(context.cacheDir, SHARED_DIRECTORY).apply { mkdirs() }
+            File(directory, "$fileName.png").also { target ->
+                target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND)
             .setType("image/png")

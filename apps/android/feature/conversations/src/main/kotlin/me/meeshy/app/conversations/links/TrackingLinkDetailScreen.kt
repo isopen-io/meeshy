@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.links.displayName
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -47,6 +49,7 @@ fun TrackingLinkDetailScreen(
     val actions = rememberLinkActions()
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var qrBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -92,7 +95,7 @@ fun TrackingLinkDetailScreen(
                 accent = accent,
                 onCopy = { actions.copy(link.shortUrl); copied = true },
                 onShare = { actions.share(link.shortUrl) },
-                onQr = { qrBitmap = QrLinkShare.render(link.shortUrl) },
+                onQr = { scope.launch { qrBitmap = QrLinkShare.render(link.shortUrl) } },
                 onDelete = { confirmDelete = true },
             )
         }
@@ -129,7 +132,11 @@ fun TrackingLinkDetailScreen(
     qrBitmap?.let { bitmap ->
         QrDialog(
             bitmap = bitmap,
-            onShare = { QrLinkShare.share(context, bitmap, "meeshy-qr-${link?.token.orEmpty()}", context.getString(R.string.links_tracking_detail_qr)) },
+            onShare = {
+                scope.launch {
+                    QrLinkShare.share(context, bitmap, "meeshy-qr-${link?.token.orEmpty()}", context.getString(R.string.links_tracking_detail_qr))
+                }
+            },
             onDismiss = { qrBitmap = null },
         )
     }
