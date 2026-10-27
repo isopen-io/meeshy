@@ -56,6 +56,9 @@ internal class ChatSheetVisibility {
 
     /** L'écran « Médias, liens et documents », ouvert depuis la fiche Conversation. */
     var media by mutableStateOf(false)
+
+    /** « Fond et accent » : le choix personnel du fond de la conversation. */
+    var appearance by mutableStateOf(false)
 }
 
 /**

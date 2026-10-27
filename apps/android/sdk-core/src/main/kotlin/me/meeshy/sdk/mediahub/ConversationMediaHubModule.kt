@@ -13,4 +13,8 @@ abstract class ConversationMediaHubModule {
     @Binds
     @IntoSet
     abstract fun bindMediaHubIndexAccountCache(impl: ConversationMediaHubIndex): PerAccountCache
+
+    @Binds
+    @IntoSet
+    abstract fun bindBackgroundPhotosAccountCache(impl: ConversationBackgroundPhotos): PerAccountCache
 }

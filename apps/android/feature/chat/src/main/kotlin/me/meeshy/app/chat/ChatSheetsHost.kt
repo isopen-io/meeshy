@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.MessageDeletability
@@ -155,6 +156,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
             add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
+            add(ConversationInfoEntry(MeeshyIcons.Palette, stringResource(R.string.conversation_appearance_entry_title), openFrom { sheets.appearance = true }))
             add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
             // Moderator+ viewers of a group get the admin surfaces: the share-link creator
             // and the conversation-settings sheet (write-role / announcement / slow-mode).
@@ -206,6 +208,14 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             accentColor = accentColor,
             clientMessages = clientMessages,
             onDismiss = { sheets.stats = false },
+        )
+    }
+
+    if (sheets.appearance) {
+        ConversationAppearanceSheet(
+            conversationId = state.conversationId,
+            computedAccentHex = state.accentColorHex,
+            onDismiss = { sheets.appearance = false },
         )
     }
 

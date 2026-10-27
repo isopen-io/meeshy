@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.app.chat.appearance.rememberConversationAppearance
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
@@ -62,7 +63,8 @@ fun ChatScreen(
         onPauseOrDispose { }
     }
 
-    val accentColor = state.accentColorHex
+    val appearance = rememberConversationAppearance(state.conversationId, state.accentColorHex)
+    val accentColor = appearance.accentHex
         ?.let { hexColor(it) }
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
@@ -106,7 +108,7 @@ fun ChatScreen(
         pendingPlace = pendingPlace,
     )
 
-    ChatBackgroundHost {
+    ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
         var headerHeightPx by remember { mutableIntStateOf(0) }

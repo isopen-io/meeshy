@@ -41,6 +41,8 @@ data class ConversationPreferencesUpdate(
     val customName: String? = null,
     val reaction: String? = null,
     val tags: List<String>? = null,
+    /** Le fond et l'accent personnels (`ConversationAppearance.toWire`) ; absent = laissé tel quel côté serveur. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**

@@ -77,6 +77,18 @@ private class FakeMessageApi(
     // exercises and asserts against, so their SECOND `refresh()` call (once
     // Room holds a high-water mark from the first) still reaches the
     // response the test actually set up.
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
         me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
@@ -133,6 +145,18 @@ private class EtagAwareMessageApi(
     // holds a high-water mark from the first — fall back to the SAME
     // full-window/[listConditional] path every existing test using this fake
     // already exercises.
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
         me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
@@ -192,6 +216,18 @@ private class GapAwareMessageApi(
         listConditionalCalls += 1
         return retrofit2.Response.success(ApiResponse(success = true, data = served))
     }
+
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?): me.meeshy.sdk.model.MessagesApiResponse {
         listAfterCalls += AfterCall(after, limit)
@@ -665,7 +701,19 @@ class MessageRepositoryTest {
     @Test
     fun `a malformed after response falls back to the full window in the same call`() = runTest {
         val api = object : MessageApi by GapAwareMessageApi(served = emptyList()) {
-            override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+            override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
                 me.meeshy.sdk.model.MessagesApiResponse(success = true, data = emptyList(), cursorPagination = null)
             override suspend fun listConditional(conversationId: String, ifNoneMatch: String?) =
                 retrofit2.Response.success(

@@ -44,6 +44,8 @@ data class ConversationPreferencesWirePayload(
     val readingMode: String = "auto",
     val deletedForUserAt: String? = null,
     val clearHistoryBefore: String? = null,
+    /** Le fond et l'accent personnels du lecteur ; absent d'une passerelle plus ancienne. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**
@@ -112,6 +114,7 @@ fun ApiConversationPreferences?.applyRemote(
             mentionsOnly = payload.mentionsOnly,
             reaction = payload.reaction,
             tags = payload.tags,
+            appearance = payload.appearance ?: local.appearance,
             version = event.version,
         )
     }

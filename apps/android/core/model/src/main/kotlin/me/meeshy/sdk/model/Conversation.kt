@@ -249,6 +249,8 @@ data class ApiConversationPreferences(
     val tags: List<String> = emptyList(),
     /** Position de la conversation dans sa catégorie ; `null` = aucun ordre manuel. */
     val orderInCategory: Int? = null,
+    /** Le fond et l'accent PERSONNELS (`ConversationAppearance`), blob lu en tolérant — `null` = Signature. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
     /**
      * Optimistic-vs-socket arbiter for `user:preferences-updated`
      * ([applyRemote]) — the port of iOS `ConversationUserState.version` and of

@@ -159,6 +159,14 @@
           "iosKey": "context.invite_friends",
           "androidName": "context_invite_friends",
           "status": "adopted"
+        },
+        {
+          "androidName": "media_hub_encrypted_notice",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_hub_encrypted_tile",
+          "status": "android-only"
         }
       ]
     }

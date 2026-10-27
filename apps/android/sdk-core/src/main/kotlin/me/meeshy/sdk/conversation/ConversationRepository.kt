@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.model.isDirect
@@ -617,6 +618,15 @@ class ConversationRepository @Inject constructor(
     }
 
     /**
+     * Optimistic personal background + accent (parité iOS `ConversationAppearanceViewModel.commit`) : le fond change aussitôt
+     * (la ligne Room émet, le fil ouvert se repeint), le snapshot part par la voie des préférences, sans doublon si rien ne change.
+     */
+    suspend fun setAppearanceOptimistic(id: String, appearance: ConversationAppearance): Boolean {
+        val wire = appearance.toWire()
+        return updatePreferencesOptimistic(id) { it.copy(appearance = wire) }
+    }
+
+    /**
      * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
      * row — the read side of the per-USER preferences the user changed on ANOTHER
      * device (issue #4127).
@@ -691,6 +701,7 @@ class ConversationRepository @Inject constructor(
                         customName = snapshot.customName,
                         reaction = snapshot.reaction,
                         tags = snapshot.tags,
+                        appearance = snapshot.appearance,
                     ),
                 ),
             ),

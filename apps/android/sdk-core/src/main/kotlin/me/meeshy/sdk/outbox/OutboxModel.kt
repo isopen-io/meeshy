@@ -311,6 +311,8 @@ public data class ConversationPrefsPayload(
      * array the `explicitNulls = false` encoder never drops.
      */
     val tags: List<String>? = null,
+    /** The reader's personal background + accent (`ConversationAppearance.toWire`); `null` leaves it untouched server-side. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**

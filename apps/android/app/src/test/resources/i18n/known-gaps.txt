@@ -37,6 +37,7 @@ bare-specifier :sdk-ui en presence_lastSeen_days
 bare-specifier :sdk-ui en presence_lastSeen_hours
 bare-specifier :sdk-ui en presence_lastSeen_minutes
 bare-specifier :sdk-ui en story_sticker_a11y
+bare-specifier :feature:chat en conversation_appearance_photo_label
 bare-specifier :feature:chat en media_hub_empty
 bare-specifier :feature:chat en media_hub_empty_search
 bare-specifier :feature:chat en media_hub_search_label
