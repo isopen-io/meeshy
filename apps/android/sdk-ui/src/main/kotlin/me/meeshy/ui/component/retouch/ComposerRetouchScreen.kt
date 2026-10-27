@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
@@ -86,6 +87,11 @@ public fun ComposerRetouchScreen(
     val previewCrop = if (cropping) null else state.crop
 
     val glass by produceState<Bitmap?>(null, preview, text.fingerprint) {
+        if (!RetouchGlassPainter.hasGlass(text.texts)) {
+            value = null
+            return@produceState
+        }
+        delay(RetouchGlassPainter.SETTLE_MILLIS)
         value = withContext(paintContext) { RetouchGlassPainter.panes(preview, text.texts) }
     }
     val previewLook = if (cropping) state.look.withoutFrame else state.look
