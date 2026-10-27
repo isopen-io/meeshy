@@ -40,18 +40,9 @@ extension CallManager {
             videoUIActive: videoUIActive,
             isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
         ).rawValue
-        // PERF-010: use HFP only (not A2DP) — A2DP is output-only and
-        // conflicts with the bidirectional voice path (forces the OS to flap
-        // between Bluetooth profiles, causing periodic ~200ms audio glitches). HFP
-        // already covers BT headsets via the SCO bidirectional voice link.
-        // .preferNoInterruptionsFromSystemAlerts = 0x100 (iOS 14.5+) is API_UNAVAILABLE(macos);
-        // the macOS AVAudioSession shim for "Designed for iPad" builds omits it entirely.
-        // Use raw value to avoid SDK symbol resolution by the compiler; skip on Mac.
-        var categoryOptions: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .duckOthers]
-        if !ProcessInfo.processInfo.isiOSAppOnMac {
-            categoryOptions.insert(AVAudioSession.CategoryOptions(rawValue: 0x100))
-        }
-        configuration.categoryOptions = categoryOptions
+        configuration.categoryOptions = CallAudioSessionTuning.categoryOptions(
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
+        )
         let activation = CallAudioSessionPolicy.activation(usesCallKit: callUsesCallKit)
         if activation == true { audioSessionSelfActivated = true }
 
@@ -79,29 +70,7 @@ extension CallManager {
                 } else {
                     try session.setConfiguration(configuration)
                 }
-                // Prevent Siri, low-battery, and other system alerts from ducking
-                // or interrupting the call (iOS 14.5+). This is an AVAudioSession
-                // *instance* preference, NOT a CategoryOptions flag — best-effort
-                // (it throws on iOS-app-on-Mac, where it is unsupported).
-                applyBestEffortAudioSetting("prefersNoInterruptionsFromSystemAlerts") {
-                    try session.session.setPrefersNoInterruptionsFromSystemAlerts(true)
-                }
-                // Align AVFoundation's I/O with Opus's native codec parameters.
-                // 48 kHz avoids a sample-rate conversion stage inside the driver;
-                // 20 ms buffer matches Opus's default frame duration and reduces
-                // packetization jitter. Both are best-effort hints — the OS may
-                // silently ignore them when the hardware doesn't support the value.
-                applyBestEffortAudioSetting("preferredSampleRate") {
-                    try session.session.setPreferredSampleRate(48_000)
-                }
-                applyBestEffortAudioSetting("preferredIOBufferDuration") {
-                    try session.session.setPreferredIOBufferDuration(0.02)
-                }
-                // #8735 — sans ce choix, iOS tait tout retour haptique pendant
-                // que l'appel enregistre le micro : chaque bouton restait muet.
-                applyBestEffortAudioSetting("allowHapticsAndSystemSoundsDuringRecording") {
-                    try session.session.setAllowHapticsAndSystemSoundsDuringRecording(true)
-                }
+                CallAudioSessionTuning.applyCallPreferences(to: session.session)
                 Logger.calls.info("RTCAudioSession pre-configured — videoUI: \(videoUIActive), activation=\(activation.map(String.init) ?? "callkit")")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé

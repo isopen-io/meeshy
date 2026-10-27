@@ -5539,6 +5539,10 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
         return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
+    private func tuningSource() -> String {
+        (try? AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/CallAudioSessionTuning.swift")) ?? ""
+    }
+
     private func configureAudioSessionBody(in source: String) -> String? {
         guard let funcRange = source.range(of: "func configureAudioSession()") else {
             return nil
@@ -5556,7 +5560,8 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
             XCTFail("configureAudioSession not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("setPreferredSampleRate(48_000)"),
+            body.contains("CallAudioSessionTuning.applyCallPreferences(to: session.session)")
+                && tuningSource().contains("setPreferredSampleRate(48_000)"),
             "configureAudioSession must request 48 kHz from AVAudioSession to avoid a " +
             "resampling stage between AVFoundation and Opus's native 48 kHz sample rate."
         )
@@ -5568,7 +5573,8 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
             XCTFail("configureAudioSession not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("setPreferredIOBufferDuration(0.02)"),
+            body.contains("CallAudioSessionTuning.applyCallPreferences(to: session.session)")
+                && tuningSource().contains("setPreferredIOBufferDuration(0.02)"),
             "configureAudioSession must request a 20 ms I/O buffer duration to match " +
             "Opus's default frame size and reduce packetization jitter."
         )
@@ -5585,12 +5591,14 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
         )?.lowerBound ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<end])
         XCTAssertTrue(
-            body.contains("setPreferredSampleRate(48_000)"),
+            body.contains("CallAudioSessionTuning.applyOpusIOHints(to: audioSession)")
+                && tuningSource().contains("setPreferredSampleRate(48_000)"),
             "CXProvider.didActivate must re-apply the 48 kHz preferred sample rate after " +
             "CallKit activates the audio session (CallKit's own activation may reset it)."
         )
         XCTAssertTrue(
-            body.contains("setPreferredIOBufferDuration(0.02)"),
+            body.contains("CallAudioSessionTuning.applyOpusIOHints(to: audioSession)")
+                && tuningSource().contains("setPreferredIOBufferDuration(0.02)"),
             "CXProvider.didActivate must re-apply the 20 ms preferred I/O buffer duration " +
             "after CallKit activates the audio session."
         )

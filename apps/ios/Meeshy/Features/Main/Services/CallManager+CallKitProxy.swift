@@ -220,12 +220,7 @@ class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
             // Re-apply Opus-aligned I/O preferences now that CallKit owns
             // the session — setConfiguration earlier set them, but CallKit's
             // own activation may reset hardware-level parameters. Best-effort.
-            applyBestEffortAudioSetting("preferredSampleRate") {
-                try audioSession.setPreferredSampleRate(48_000)
-            }
-            applyBestEffortAudioSetting("preferredIOBufferDuration") {
-                try audioSession.setPreferredIOBufferDuration(0.02)
-            }
+            CallAudioSessionTuning.applyOpusIOHints(to: audioSession)
             rtc.unlockForConfiguration()
         }
 

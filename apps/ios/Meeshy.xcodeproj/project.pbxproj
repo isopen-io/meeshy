@@ -72,6 +72,7 @@
 		0330DD903BF7BE551D169D86 /* ProjectManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C563121575E792D398A46C0 /* ProjectManifest.swift */; };
 		0335BB1D30C208CDF3B1786D /* BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 756FB30B02F898EF3B26230B /* BubbleContentBuilder.swift */; };
 		035169FD9F70A8C9421C722B /* StoryTrayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ABD6534D0471B6959BAC4A3 /* StoryTrayView.swift */; };
+		037CA3ABD68385143C51E9C5 /* CallAudioSessionTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012FD84DC475664EA9C8A97 /* CallAudioSessionTuning.swift */; };
 		038306B86BC99530AFB1D73A /* ComposerEditToolsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 566C3AAC2BDC715437F7B2D3 /* ComposerEditToolsTests.swift */; };
 		0398D62098B6C7EC5FBAC04D /* MockConversationSendCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E04C0CF7F1FFD3570404C43 /* MockConversationSendCoordinator.swift */; };
 		03A9B7C4E90C493770618130 /* NotificationQuickActionPerformerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B9408131D3A521896E3E82 /* NotificationQuickActionPerformerTests.swift */; };
@@ -1603,6 +1604,7 @@
 		6554E8544C37FC1EA3082232 /* QuickActionDoorsOnBothRootsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD0BB76256A5B72892B0D62 /* QuickActionDoorsOnBothRootsTests.swift */; };
 		655DF9D9AEFB87D67D969B4B /* ConversationMediaHubRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC54E0BA3963EA73AC836CC8 /* ConversationMediaHubRulesTests.swift */; };
 		65600F6BBF2F388AA269E13B /* EndToEndRegimeLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1DEFC524E343F98E722241 /* EndToEndRegimeLedger.swift */; };
+		6568F29A604B1C2183EB8AE2 /* CallAudioSessionTuningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275DFEB35829949AA356CDC0 /* CallAudioSessionTuningTests.swift */; };
 		657C5FB2A2522966940179C2 /* StoryInteractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E974B54CC33C354DF829D8 /* StoryInteractionService.swift */; };
 		65911205782B16C4D3A3D566 /* StoryExportShareViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 938E084D177C997EE698CDCA /* StoryExportShareViewModel.swift */; };
 		659B4AE75862C8B73D698A9B /* PostFeedHeartSeedingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68C4E1AF68F5A4DB741DAE2 /* PostFeedHeartSeedingTests.swift */; };
@@ -4814,6 +4816,7 @@
 		2721529D88EA123AD1FDD05B /* CommunityAddChannelViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityAddChannelViewModelTests.swift; sourceTree = "<group>"; };
 		272F5AD3FB01148178C24972 /* AddParticipantSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddParticipantSheet.swift; sourceTree = "<group>"; };
 		273A98A5E6B1D8B02F9B67F7 /* ViewOnceRetouchModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewOnceRetouchModifier.swift; sourceTree = "<group>"; };
+		275DFEB35829949AA356CDC0 /* CallAudioSessionTuningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioSessionTuningTests.swift; sourceTree = "<group>"; };
 		275E71C83B3B309FE3E4AAB4 /* ConversationEngagementStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEngagementStoreTests.swift; sourceTree = "<group>"; };
 		2776408B327871423A238A63 /* FeedViewModelPendingPublicationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModelPendingPublicationTests.swift; sourceTree = "<group>"; };
 		278CF1A699662579A96CC344 /* morbide_crypte_front.webp */ = {isa = PBXFileReference; path = morbide_crypte_front.webp; sourceTree = "<group>"; };
@@ -6776,6 +6779,7 @@
 		9FE79E1AA648B62D58F9ED04 /* ShareExtensionHostBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionHostBridge.swift; sourceTree = "<group>"; };
 		9FEEF591A5FA911A6A81D2C7 /* ParticipantProfileLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantProfileLoader.swift; sourceTree = "<group>"; };
 		A006A20522E88DD495657C03 /* MeeshyComposerHost+Retract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Retract.swift"; sourceTree = "<group>"; };
+		A012FD84DC475664EA9C8A97 /* CallAudioSessionTuning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioSessionTuning.swift; sourceTree = "<group>"; };
 		A0151093AA1A691DDE78500B /* CommunityCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityCreateView.swift; sourceTree = "<group>"; };
 		A0283942B8289430D7F5A0CE /* ProgressionFactIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionFactIdentity.swift; sourceTree = "<group>"; };
 		A032A2F5F8B4053F3490F2DD /* ThreadViewCacheSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadViewCacheSeedTests.swift; sourceTree = "<group>"; };
@@ -10096,6 +10100,7 @@
 				42B12F8EA4C69910BF01A0AF /* BackgroundTransitionCoordinatorTests.swift */,
 				3DADA84F1BA2880C8E50A6D6 /* BlockActionCoordinatorTests.swift */,
 				FCE66FCAE755E9784586D2C8 /* CallAudioRouteTests.swift */,
+				275DFEB35829949AA356CDC0 /* CallAudioSessionTuningTests.swift */,
 				7DE63DCCB25516DFAE66DEAA /* CallAwaitingOfferPolicyTests.swift */,
 				A3356778F6F2BF56D621BF30 /* CallBackgroundBlurTests.swift */,
 				52432CCBB9E092679AF97BB3 /* CallBackRequestTests.swift */,
@@ -10663,6 +10668,7 @@
 			isa = PBXGroup;
 			children = (
 				5FE84C991235243510ED09D6 /* AVSampleBufferDisplayLayer+Meeshy.swift */,
+				A012FD84DC475664EA9C8A97 /* CallAudioSessionTuning.swift */,
 				CF9233D1AC8B0977AA289870 /* CallBubbleSizeTier.swift */,
 				D29C205696BFB2AF228B73F3 /* CallCameraMirror.swift */,
 				232612A73D2BC7F6A1FBC0D8 /* CallConnectedCatchUpPolicy.swift */,
@@ -14060,6 +14066,7 @@
 				C1EBDF5A25A59F356E6D0323 /* CallActivityLaw.swift in Sources */,
 				5B69F605F502179259583DBA /* CallAudioRouteService.swift in Sources */,
 				95F9F364B410876AD8108ECA /* CallAudioRouteViewModel.swift in Sources */,
+				037CA3ABD68385143C51E9C5 /* CallAudioSessionTuning.swift in Sources */,
 				87360CF4E72F66E90493B9ED /* CallBackDialer.swift in Sources */,
 				A6931D2CB943CA4196B4C04B /* CallBackRequest.swift in Sources */,
 				99ECD70E88A840FB35AFB723 /* CallBackgroundBlur.swift in Sources */,
@@ -16194,6 +16201,7 @@
 				C894C77F7E7C049CCD84DE15 /* CallActivityAvatarPublisherTests.swift in Sources */,
 				4B0D4828354269FFF53A6B93 /* CallActivityLawTests.swift in Sources */,
 				F84844245D1C75431BEA0C58 /* CallAudioRouteTests.swift in Sources */,
+				6568F29A604B1C2183EB8AE2 /* CallAudioSessionTuningTests.swift in Sources */,
 				DA063DB4B99C98F468D458EC /* CallAwaitingOfferPolicyTests.swift in Sources */,
 				CD49443F1695EB5C7747288A /* CallBackRequestTests.swift in Sources */,
 				F84C560FA88B971C8FD3D962 /* CallBackgroundBlurTests.swift in Sources */,
