@@ -152,4 +152,8 @@ data class OnboardingStepUpdate(val step: String, val outcome: String) {
 
 /** Le corps d'un `PATCH /me/onboarding` qui clôt le parcours. */
 @Serializable
-data class OnboardingFinishUpdate(val finish: Boolean = true)
+data class OnboardingFinishUpdate(val finish: Boolean) {
+    companion object {
+        val closing = OnboardingFinishUpdate(finish = true)
+    }
+}

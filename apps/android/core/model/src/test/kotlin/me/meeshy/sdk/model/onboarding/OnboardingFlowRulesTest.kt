@@ -230,7 +230,7 @@ class OnboardingStateParserTest {
     fun `update bodies carry the contract keys`() {
         val body = Json.encodeToString(OnboardingStepUpdate.serializer(), OnboardingStepUpdate.of(OnboardingStepId.AGE, OnboardingStepOutcome.SKIPPED))
         assertThat(body).isEqualTo("""{"step":"age","outcome":"skipped"}""")
-        val finish = Json { encodeDefaults = true }.encodeToString(OnboardingFinishUpdate.serializer(), OnboardingFinishUpdate())
+        val finish = Json.encodeToString(OnboardingFinishUpdate.serializer(), OnboardingFinishUpdate.closing)
         assertThat(finish).isEqualTo("""{"finish":true}""")
     }
 }
