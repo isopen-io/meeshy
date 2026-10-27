@@ -5,7 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import java.text.NumberFormat
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -63,8 +65,19 @@ object GameCopy {
         is GameTextArg.Count -> GameNumberFormat.formatCount(argument.value, locale)
         is GameTextArg.Compact -> GameNumberFormat.tightCount(argument.value, locale)
         is GameTextArg.Verbatim -> argument.value
+        is GameTextArg.Day -> day(argument.isoDay, locale)
+        is GameTextArg.Decimal -> decimal(argument.value, locale)
         is GameTextArg.Nested -> resolve(resources, argument.text, locale)
     }
+
+    /** Un jour civil `AAAA-MM-JJ`, écrit par la locale ; une clé illisible se dit telle quelle, jamais une exception. */
+    fun day(isoDay: String, locale: Locale): String = runCatching {
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).format(LocalDate.parse(isoDay))
+    }.getOrDefault(isoDay)
+
+    /** Deux décimales au plus, dans la locale (« 1,25 »). */
+    fun decimal(value: Double, locale: Locale): String =
+        NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = 0; maximumFractionDigits = 2 }.format(value)
 
     /** « 14:00 – 16:00 », écrit par la locale (12 h ou 24 h de l'appareil), jamais à la main. */
     fun windowRange(startMillis: Long, endMillis: Long, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {

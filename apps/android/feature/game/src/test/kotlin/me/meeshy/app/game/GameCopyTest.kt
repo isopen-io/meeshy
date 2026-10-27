@@ -123,4 +123,20 @@ class GameCopyTest {
             }
         }
     }
+
+    @Test
+    fun `un jour et un decimal s ecrivent par la locale`() {
+        assertThat(GameCopy.day("2026-11-01", Locale.FRANCE)).contains("2026")
+        assertThat(GameCopy.day("pas-un-jour", Locale.FRANCE)).isEqualTo("pas-un-jour")
+        assertThat(GameCopy.decimal(1.25, Locale.FRANCE)).isEqualTo("1,25")
+        assertThat(GameCopy.decimal(2.0, Locale.US)).isEqualTo("2")
+    }
+
+    @Test
+    fun `une serie se dit au pluriel de la locale et la carte du Voyage date son ouverture`() {
+        val record = GameText.of(GameTextKey.StreakRecord, GameTextArg.Count(12))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), record)).contains("12")
+        val upcoming = GameText.of(GameTextKey.DoorSeasonUpcoming, GameTextArg.Day("2026-11-01"))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), upcoming)).contains("2026")
+    }
 }

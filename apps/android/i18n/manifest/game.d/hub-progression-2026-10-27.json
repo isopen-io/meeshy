@@ -1,0 +1,870 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.to_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.next_price",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.to_meesh",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.freezes_of",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.week_of",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.to_unlock",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.visible",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.mint_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.prism_day",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.chest.ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.chest.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.chest.claimed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.all_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.families.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.chip.families.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.value.no_elan",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.value.factor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.ratio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.banner.level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.banner.top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.league.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.league.open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.friends.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.rank_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.season.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.season.upcoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.season.steps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.prestige.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.prestige.ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.showcase.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.showcase.count.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.showcase.count.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.remaining",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.quartz",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.ambre",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.jade",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.saphir",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.rubis",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.amethyste",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.diamant",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.name.prisme",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.everyone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.no_streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.status.at_risk",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.cap.short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.debt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.streak.record",
+          "androidName": "game_streak_record",
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.title",
+          "status": "adopted",
+          "androidName": "game_progression_title"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.empty",
+          "status": "adopted",
+          "androidName": "game_progression_empty"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.offline",
+          "status": "adopted",
+          "androidName": "game_progression_offline"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.offline.empty",
+          "status": "adopted",
+          "androidName": "game_progression_offline_empty"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.load_error",
+          "status": "adopted",
+          "androidName": "game_progression_load_error"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.card.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.card.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.earn",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.level.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.points.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.meesh.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.glory.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.flame.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.missions.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.league.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.season.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.prestige.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.elans.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.badges.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.defis.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.succes.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.showcase.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.tip.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.tip.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.atlas.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "game_progression_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.loading",
+          "androidName": "game_progression_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.light.to_heritage",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

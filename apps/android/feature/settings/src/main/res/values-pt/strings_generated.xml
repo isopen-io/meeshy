@@ -246,6 +246,8 @@
     <string name="settings_theme_light">Claro</string>
     <string name="settings_theme_system">Sistema</string>
     <string name="settings_title">Configurações</string>
+    <string name="settings_tools_progression">Progresso</string>
+    <string name="settings_tools_progression_hint">Seus emblemas, seu nível e sua sequência de dias ativos</string>
     <string name="settings_transcription_auto">Transcrição automática</string>
     <string name="settings_transcription_engine">Motor de transcrição</string>
     <string name="settings_transcription_engine_a11y">Motor de transcrição</string>

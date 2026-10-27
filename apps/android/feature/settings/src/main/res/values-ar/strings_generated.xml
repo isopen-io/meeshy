@@ -246,6 +246,8 @@
     <string name="settings_theme_light">فاتح</string>
     <string name="settings_theme_system">النظام</string>
     <string name="settings_title">الإعدادات</string>
+    <string name="settings_tools_progression">التقدّم</string>
+    <string name="settings_tools_progression_hint">شاراتك ومستواك وسلسلة أيامك النشطة</string>
     <string name="settings_transcription_auto">النسخ النصي التلقائي</string>
     <string name="settings_transcription_engine">محرك النسخ النصي</string>
     <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>

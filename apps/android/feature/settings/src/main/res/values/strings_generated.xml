@@ -246,6 +246,8 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_title">Settings</string>
+    <string name="settings_tools_progression">Progress</string>
+    <string name="settings_tools_progression_hint">Your badges, your level and your active-day streak</string>
     <string name="settings_transcription_auto">Automatic transcription</string>
     <string name="settings_transcription_engine">Transcription engine</string>
     <string name="settings_transcription_engine_a11y">Transcription engine</string>

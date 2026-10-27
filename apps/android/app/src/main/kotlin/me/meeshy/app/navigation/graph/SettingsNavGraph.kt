@@ -51,6 +51,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
             onOpenStarred = { navController.navigate(Routes.STARRED) },
             onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
             onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
+            onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
             onOpenSecurity = { navController.navigate(Routes.SECURITY) },
             onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
             onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },

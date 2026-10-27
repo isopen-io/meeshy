@@ -89,6 +89,7 @@ import me.meeshy.ui.component.settings.SettingsRow
 import me.meeshy.ui.component.settings.SettingsSectionHeader
 import me.meeshy.ui.component.settings.SettingsSeparator
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -109,6 +110,7 @@ fun SettingsScreen(
     onOpenStarred: () -> Unit = {},
     onOpenSaved: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
+    onOpenProgression: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
@@ -183,6 +185,7 @@ fun SettingsScreen(
                 ToolsSection(
                     onOpenStarred = onOpenStarred,
                     onOpenSaved = onOpenSaved,
+                    onOpenProgression = onOpenProgression,
                     onOpenShareLinks = onOpenShareLinks,
                 )
                 SettingsGroup(
@@ -403,6 +406,7 @@ private fun DataSection(
 private fun ToolsSection(
     onOpenStarred: () -> Unit,
     onOpenSaved: () -> Unit,
+    onOpenProgression: () -> Unit,
     onOpenShareLinks: () -> Unit,
 ) {
     val tint = MeeshyPalette.Success
@@ -410,6 +414,8 @@ private fun ToolsSection(
         SettingsChevronRow(Icons.Filled.Star, stringResource(R.string.settings_starred_messages), MeeshyPalette.Warning, onOpenStarred)
         SettingsSeparator(tint)
         SettingsChevronRow(Icons.Filled.Bookmark, stringResource(R.string.settings_saved_posts), MeeshyPalette.Indigo400, onOpenSaved)
+        SettingsSeparator(tint)
+        SettingsChevronRow(MeeshyIcons.Trophy, stringResource(R.string.settings_tools_progression), MeeshyPalette.Warning, onOpenProgression)
         SettingsSeparator(tint)
         SettingsChevronRow(Icons.Filled.Link, stringResource(R.string.settings_share_links), tint, onOpenShareLinks)
     }
