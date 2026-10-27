@@ -6,7 +6,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift
 
 **Purpose**: Form to create a public share/invite link for a group/community conversation, controlling guest access requirements, anonymous-user permissions, and usage/expiration limits.
 
@@ -29,7 +29,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift
 
 **Purpose**: Form to create a marketing tracking link (short URL with UTM params + optional custom token).
 

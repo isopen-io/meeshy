@@ -399,8 +399,8 @@ Transposition Android : adaptiveGlass sur le bouton (+) vers surface semi-transp
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/AffiliateService.swift`
 
 </details>
@@ -481,8 +481,8 @@ Transposition Android : ShareLink vers Intent.createChooser(ACTION_SEND) ; UIPas
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CommunityLinkService.swift`
 
 </details>
@@ -922,7 +922,7 @@ Transposition Android : Stepper vers boutons +/- ou Slider discret ; Picker menu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 
 </details>
 

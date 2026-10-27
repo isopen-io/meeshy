@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-20
 **Piste** : iOS (suffixe `i`)
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift`
 **Type** : Accessibilité (VoiceOver — action secondaire sur rangée navigable)
 
 ## Contexte

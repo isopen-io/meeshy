@@ -158,7 +158,7 @@ Dependencies: `MeeshyMessage`/`APIMessage`, `APIClient`, `MessageService`, `Send
 
 Android-port note: Standard detail screen with a small `ViewModel`. No SWR cache here (refetch-on-send) — could add cache. Reply list → `LazyColumn`.
 
-## apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift
 
 Purpose: Detail/analytics screen for a single UTM tracking link — stats, geo/device/browser breakdowns, click timeline, UTM config, QR generation, copy/share/delete.
 
@@ -172,7 +172,7 @@ Dependencies: `TrackingLink`/`TrackingLinkClick`, `TrackingLinkService`, CoreIma
 
 Android-port note: QR via ZXing. Charts/bars → custom composables or a chart lib. Share/copy → `Intent`/`ClipboardManager`. Country flag math ports directly. ViewModel → Hilt VM.
 
-## apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift
 
 Purpose: List of UTM tracking links + aggregate stats overview; create-link entry point.
 

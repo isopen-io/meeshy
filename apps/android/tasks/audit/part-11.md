@@ -89,7 +89,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose `LazyColumn` of `PreferenceCategory`-style sections. `UserPreferencesManager` → a `SettingsRepository` backed by DataStore + a backend sync. Collapsible header → `TopAppBar` with `enterAlwaysScrollBehavior` / `LargeTopAppBar`. The accessibility labels/hints are thorough — replicate via `contentDescription` + `semantics`.
 
-## apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift
 
 **Purpose**: Detail screen for one share link — header card, action bar (copy/share/toggle/delete), stats, info.
 
@@ -104,7 +104,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose detail screen. Clipboard → `ClipboardManager`. Share → `Intent.ACTION_SEND` chooser. Confirmation dialog → `AlertDialog`. The 2s copy-feedback → coroutine `delay`.
 
-## apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift
 
 **Purpose**: List of the user's share links with a stats overview and create entry.
 

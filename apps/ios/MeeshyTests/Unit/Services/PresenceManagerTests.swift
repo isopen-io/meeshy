@@ -124,7 +124,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/FriendRequestListView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ContactCardView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
-        "Main/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Links/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/VisitorContentView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",

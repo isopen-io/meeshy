@@ -34,7 +34,7 @@ Le bug est documenté dans `ScrollOffsetRelay.swift:5-16` (body complet ré-éva
 - [ ] `MeeshyUI/Profile/UserProfileSheet.swift:69/206`
 - [ ] `Features/Main/Views/ProfileView.swift:43/227`
 - [ ] `Features/Settings/Views/SettingsView.swift:43/185`
-- [ ] `Features/Main/Views/LinksHubView.swift:21/49`
+- [ ] `Features/Links/Views/LinksHubView.swift:21/49`
 - [ ] `Features/Main/Views/PostDetailView.swift:671`
 - [ ] `Features/Contacts/ContactsHubView.swift:20` (+ `ContactsShared.swift:131`)
 → Gain : suppression de la ré-évaluation full-screen par frame de scroll sur 8 écrans.

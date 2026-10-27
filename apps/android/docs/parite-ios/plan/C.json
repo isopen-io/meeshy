@@ -7649,7 +7649,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ShareLinksReloadLaw.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift"
   ],
   "feature_keys": [
    "ext-sharelinks-list",
@@ -9140,7 +9140,7 @@
    "apps/android/feature/conversations/src/main/res/values-fr/links_hub_strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift"
   ],
   "feature_keys": [
    "cmp-links-hub"
@@ -10195,7 +10195,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ShareLinkArrivalStats.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsListView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsListView.swift"
   ],
   "feature_keys": [
    "ext-sharelinks-arrivals"
@@ -10672,7 +10672,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/share/LazyShareFileProvider.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareableLink.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareableLink.swift"
   ],
   "feature_keys": [
    "ext-share-external-post-link",

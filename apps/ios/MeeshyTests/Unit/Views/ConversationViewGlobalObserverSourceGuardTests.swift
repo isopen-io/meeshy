@@ -134,7 +134,7 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
     func test_forwardingHosts_readTheListThroughTheEnvironmentValue() throws {
         let hosts = [
             "Views/StoryViewerView.swift", "Views/MyStoriesView.swift", "Views/BookmarksView.swift",
-            "Views/LinksHubView.swift", "Views/ShareLinksView.swift", "Views/GlobalSearchView.swift",
+            "../Links/Views/LinksHubView.swift", "../Links/Views/ShareLinksView.swift", "Views/GlobalSearchView.swift",
             "Views/RootViewComponents.swift",
             "../Composer/StoryEditComposer.swift", "../Composer/StoryRepublishComposer.swift",
         ]

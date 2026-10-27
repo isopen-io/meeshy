@@ -29,7 +29,7 @@ final class SettingsDestinationsGlassHeaderGuardTests: XCTestCase {
         "SupportView", "AboutView", "PrivacyPolicyView", "TermsOfServiceView", "LicensesView"
     ]
 
-    private static let domains = ["Settings", "Main"]
+    private static let domains = ["Settings", "Links", "Main"]
 
     private func source(_ page: String) throws -> String {
         let features = URL(fileURLWithPath: #filePath)

@@ -221,7 +221,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Equivalent to a `WindowSizeClass`-based root composable (Material3 `calculateWindowSizeClass`) selecting compact vs expanded layouts.
 
-## apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift
+## apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift
 
 **Purpose**: Sheet to create a referral/affiliate link (name + optional max-uses).
 
@@ -233,7 +233,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Modal bottom sheet / dialog with a form; callback → result via `StateFlow`/nav result.
 
-## apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift
+## apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift
 
 **Purpose**: Affiliate dashboard — stats overview (links/signups/clicks), list of referral tokens with copy/share/delete. Includes `AffiliateViewModel` in-file.
 

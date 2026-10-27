@@ -178,7 +178,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Settings/Views/ActiveSessionsView.swift",
-        "Features/Main/Views/AffiliateView.swift",
+        "Features/Links/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
         "Features/Main/Views/BubbleSwipeContainer.swift",
@@ -193,13 +193,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
         // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
         "Features/Settings/Views/ChangePasswordView.swift",
-        "Features/Main/Views/CommunityLinkDetailView.swift",
+        "Features/Links/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
         // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
         // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
         // garde un (la croix de l'en-tête) et reste dans la liste.
         "Features/Main/Views/CommentSheetBanners.swift",
-        "Features/Main/Views/CommunityLinksView.swift",
+        "Features/Links/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
         "Features/Main/Views/ConversationHelperViews.swift",
@@ -301,7 +301,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // posé sur le glyphe de l'atome à la MÊME taille figée. `ReelsPlayerView.swift`
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
-        "Features/Main/Views/ShareLinksView.swift",
+        "Features/Links/Views/ShareLinksView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
         "Features/Main/Views/StoryTrayView.swift",
@@ -328,7 +328,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
         "Features/Settings/Views/SupportView.swift",
-        "Features/Main/Views/TrackingLinksView.swift",
+        "Features/Links/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
         "Features/Settings/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",

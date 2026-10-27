@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-01
 **Piste** : iOS (suffixe `i`)
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift` (écran « Parrainage » — stats + liste des liens d'affiliation, copie/partage/suppression)
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift` (écran « Parrainage » — stats + liste des liens d'affiliation, copie/partage/suppression)
 **Type** : Dynamic Type (a11y) + VoiceOver (labels manquants sur boutons d'action)
 **Base** : `main` HEAD (`ae1d5434`)
 

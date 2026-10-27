@@ -1,7 +1,7 @@
 # iOS UI/UX — Iteration 226i
 
 **Date** : 2026-07-27
-**Surfaces** : `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+**Surfaces** : `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 · `apps/ios/MeeshyTests/Unit/LocalizationConsistencyTests.swift` (cliquet)
 **Axes** : Localisation (i18n) — traduction complète + **pluralisation**
 **Base** : `main` HEAD `68a1a33f` (225i mergée, PR #2377)
@@ -13,7 +13,7 @@ la mesure confirme le classement inchangé :
 
 | fichier | clés non traduites |
 |---|---|
-| **`Features/Main/Views/CreateShareLinkView.swift`** | **55** |
+| **`Features/Links/Views/CreateShareLinkView.swift`** | **55** |
 | `Features/Settings/Views/NotificationSettingsView.swift` | 52 |
 | `Features/Main/Components/MessageDetailSheet.swift` | 47 |
 | `Features/Main/Components/ConversationInfoSheet.swift` | 43 |

@@ -129,7 +129,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Card.swift",
         "apps/ios/Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
-        "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
+        "apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift",
         // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
         // (chaque clé traduite dans les six locales requises ET `defaultValue`
         // inline égal à la valeur du catalogue). Les épingler ne change pas une
@@ -172,7 +172,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
         "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
-        "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",  // 24
+        "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         "apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
@@ -270,7 +270,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
         "apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",  // 5
@@ -436,7 +436,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
         "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
+        "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 10
         "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
@@ -487,8 +487,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // partagé par la carte « Configuration » et le formulaire : le cliquet
         // suit les CLÉS jusqu'à leur nouveau fichier (leçon 578). La page
         // d'invitation (#7795) vit dans MeeshyUI, catalogue du SDK.
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 0
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift",  // 59
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift",  // 0
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailCopy.swift",  // 59
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 7
         // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
@@ -537,7 +537,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
         "apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift",  // 14
-        "apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift",  // 14
+        "apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift",  // 14
         "apps/ios/Meeshy/AppDelegate.swift",  // 13
         "apps/ios/Meeshy/Features/Contacts/CallDetailSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
@@ -545,9 +545,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
-        "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",  // 12
+        "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
-        "apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift",  // 11
+        "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10

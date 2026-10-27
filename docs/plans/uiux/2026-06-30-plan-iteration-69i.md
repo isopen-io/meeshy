@@ -13,8 +13,8 @@ Bornée, **purement additive**, zéro changement visuel.
 ## Changements (1 ligne/fichier — `.accessibilityLabel(String(localized: "a11y.back", bundle: .main))`)
 1. [x] `apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift`
 2. [x] `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
-3. [x] `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift`
-4. [x] `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
+3. [x] `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift`
+4. [x] `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
 5. [x] `apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift`
 6. [x] `apps/ios/Meeshy/Features/Main/Views/ThreadView.swift`
 7. [x] `apps/ios/Meeshy/Features/Main/Views/LoginView.swift` (retour « désélectionner compte »)
