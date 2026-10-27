@@ -80,8 +80,9 @@ object StoryComposerAutosave {
         repostOfId: String?,
         nowIso: String,
         previous: StoryComposerDraftSnapshot?,
+        visibilityUserIds: List<String> = emptyList(),
     ): StoryDraftPersist {
-        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso)
+        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds)
         if (!snapshot.isWorthRestoring) {
             val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
             return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
@@ -130,6 +131,7 @@ fun StorySlideDeck.toDraftSnapshot(
     visibility: StoryVisibility,
     repostOfId: String?,
     nowIso: String,
+    visibilityUserIds: List<String> = emptyList(),
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
     slides = slides.map {
         StoryDraftSlideSnapshot(
@@ -149,6 +151,7 @@ fun StorySlideDeck.toDraftSnapshot(
     selectedId = selectedId,
     visibility = visibility.wire,
     repostOfId = repostOfId?.takeIf { it.isNotBlank() },
+    visibilityUserIds = visibilityUserIds,
     updatedAt = nowIso,
 )
 

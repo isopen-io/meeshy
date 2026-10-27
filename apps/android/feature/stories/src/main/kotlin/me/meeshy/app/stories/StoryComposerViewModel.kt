@@ -111,6 +111,7 @@ class StoryComposerViewModel @Inject constructor(
                     deck = deck,
                     draft = it.draft
                         .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
+                        .withVisibilityUserIds(reconciled.snapshot.visibilityUserIds)
                         .withRepostOf(reconciled.snapshot.repostOfId),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
@@ -146,6 +147,7 @@ class StoryComposerViewModel @Inject constructor(
                 repostOfId = current.draft.repostOfId,
                 nowIso = Instant.now().toString(),
                 previous = draftStore.load(),
+                visibilityUserIds = current.draft.visibilityUserIds,
             )
             when (action) {
                 is StoryDraftPersist.Save -> draftStore.save(action.snapshot)

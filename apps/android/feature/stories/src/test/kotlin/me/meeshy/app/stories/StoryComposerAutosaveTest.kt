@@ -1028,4 +1028,45 @@ class StoryComposerAutosaveTest {
 
         assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
     }
+
+    @Test
+    fun `the named audience list survives the draft round trip and counts as a change`() {
+        val first = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+            visibilityUserIds = listOf("a", "b"),
+        ) as StoryDraftPersist.Save
+        assertThat(first.snapshot.visibilityUserIds).containsExactly("a", "b").inOrder()
+
+        val unchanged = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = first.snapshot,
+            visibilityUserIds = listOf("a", "b"),
+        )
+        assertThat(unchanged).isEqualTo(StoryDraftPersist.None)
+
+        val changed = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = first.snapshot,
+            visibilityUserIds = listOf("a"),
+        )
+        assertThat(changed).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    @Test
+    fun `a legacy blob without the list decodes to an empty audience`() {
+        val legacy = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<StoryComposerDraftSnapshot>(
+            """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1","visibility":"FRIENDS"}""",
+        )
+        assertThat(legacy.visibilityUserIds).isEmpty()
+    }
 }

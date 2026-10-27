@@ -187,6 +187,8 @@ data class StoryComposerDraftSnapshot(
     val selectedId: String = "",
     val visibility: String = DEFAULT_VISIBILITY,
     val repostOfId: String? = null,
+    /** La liste « visible par » / « sauf » du brouillon ; vide pour tout autre mode et pour un blob d'avant. */
+    val visibilityUserIds: List<String> = emptyList(),
     val updatedAt: String? = null,
 ) {
     /**
@@ -214,7 +216,8 @@ data class StoryComposerDraftSnapshot(
         slides == other.slides &&
             selectedId == other.selectedId &&
             visibility == other.visibility &&
-            repostOfId == other.repostOfId
+            repostOfId == other.repostOfId &&
+            visibilityUserIds == other.visibilityUserIds
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */
