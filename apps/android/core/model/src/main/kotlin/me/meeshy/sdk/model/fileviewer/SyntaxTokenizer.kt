@@ -40,7 +40,7 @@ object SyntaxTokenizer {
         "not", "and", "or", "None", "True", "False", "async", "await", "function", "const", "let", "var", "new",
         "this", "typeof", "null", "undefined", "true", "false", "export", "default", "switch", "case", "end", "do",
         "then", "fi", "esac", "done", "echo", "local", "module", "require", "puts", "unless", "elsif", "begin",
-        "rescue", "ensure", "self", "nil", "my", "sub", "use", "package", "fn", "echo", "print",
+        "rescue", "ensure", "self", "nil", "my", "sub", "use", "package", "fn",
     )
     private val sql = setOf(
         "select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create", "table", "drop",
