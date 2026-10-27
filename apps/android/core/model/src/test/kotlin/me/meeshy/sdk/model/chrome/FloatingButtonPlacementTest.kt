@@ -28,7 +28,7 @@ class FloatingButtonPlacementTest {
     @Test
     fun `the height range is the real safe zone minus the vertical margin`() {
         val geometry = phone()
-        assertThat(geometry.minY).isEqualTo(24f + 8f + 26f)
+        assertThat(geometry.minY).isEqualTo(24f + CollapsibleHeaderMetrics.EXPANDED_HEIGHT + 8f + 26f)
         assertThat(geometry.maxY).isEqualTo(800f - 48f - 8f - 26f)
     }
 
@@ -37,8 +37,18 @@ class FloatingButtonPlacementTest {
         val geometry = phone()
         val top = geometry.center(FloatingButtonPlacement.of(FloatingButtonSide.LEADING, 0f))
         val bottom = geometry.center(FloatingButtonPlacement.of(FloatingButtonSide.TRAILING, 1f))
-        assertThat(top).isEqualTo(PointDp(46f, 58f))
+        assertThat(top).isEqualTo(PointDp(46f, 24f + CollapsibleHeaderMetrics.EXPANDED_HEIGHT + 8f + 26f))
         assertThat(bottom).isEqualTo(PointDp(354f, 718f))
+    }
+
+    @Test
+    fun `a disc never parks over the header band - the new conversation button and the back chevron stay reachable`() {
+        val geometry = phone()
+        val headerBottom = 24f + CollapsibleHeaderMetrics.EXPANDED_HEIGHT
+        val top = geometry.center(FloatingButtonPlacement.of(FloatingButtonSide.TRAILING, 0f))
+        assertThat(top.y - 26f).isAtLeast(headerBottom)
+        assertThat(geometry.minY - 26f).isAtLeast(headerBottom)
+        assertThat(geometry.placementAt(PointDp(354f, 10f)).screenFraction * 800f - 26f).isAtLeast(headerBottom)
     }
 
     @Test
@@ -83,7 +93,7 @@ class FloatingButtonPlacementTest {
     fun `a v2 value is a fraction of the allowed range`() {
         val geometry = phone()
         val center = geometry.centerForStorage("v2,R,0.5", FloatingButtonGeometry.DEFAULT_MENU_STORAGE)
-        assertThat(center).isEqualTo(PointDp(354f, (58f + 718f) / 2f))
+        assertThat(center).isEqualTo(PointDp(354f, (geometry.minY + 718f) / 2f))
     }
 
     @Test

@@ -3,7 +3,7 @@ package me.meeshy.ui.component
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -30,6 +30,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
@@ -75,7 +79,7 @@ public fun CollapsibleSection(
                 .floatingChromeLateralReserve()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(MeeshyRadius.md))
-                .clickable { expanded = !expanded }
+                .foldsOnShortTap { expanded = !expanded }
                 .padding(vertical = MeeshySpacing.sm, horizontal = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -139,3 +143,15 @@ public fun CollapsibleSection(
         }
     }
 }
+
+/**
+ * Replie ou déplie sur un TOUCHER bref seulement : un appui long sur l'en-tête ne replie pas la section
+ * (critère de #12497 — recette S8 : « Personal tests » se repliait sous le doigt qui cherchait un menu). Le
+ * geste long est consommé sans effet ; TalkBack garde l'action « activer » par la sémantique.
+ */
+private fun Modifier.foldsOnShortTap(onFold: () -> Unit): Modifier = this
+    .semantics(mergeDescendants = true) {
+        role = Role.Button
+        onClick { onFold(); true }
+    }
+    .pointerInput(onFold) { detectTapGestures(onLongPress = {}, onTap = { onFold() }) }
