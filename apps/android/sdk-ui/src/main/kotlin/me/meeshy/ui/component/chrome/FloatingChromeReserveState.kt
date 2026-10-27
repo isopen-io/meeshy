@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
 
 /**
  * La marge de fin de contenu que les disques flottants réservent ([me.meeshy.sdk.model.chrome.FloatingChromeReserve]).
@@ -21,8 +22,16 @@ public class FloatingChromeReserveState {
     public var bottom: Dp by mutableStateOf(0.dp)
         internal set
 
+    /** Les bandes latérales des disques (dp, repère de la fenêtre), lues par [floatingChromeLateralReserve]. */
+    public var bands: List<FloatingChromeLateralReserve.Band> by mutableStateOf(emptyList())
+        internal set
+
     internal fun publish(value: Dp) {
         if (bottom != value) bottom = value
+    }
+
+    internal fun publishBands(value: List<FloatingChromeLateralReserve.Band>) {
+        if (bands != value) bands = value
     }
 }
 
