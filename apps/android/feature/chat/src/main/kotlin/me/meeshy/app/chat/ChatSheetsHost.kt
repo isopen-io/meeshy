@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -157,7 +158,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     exportMessageId?.let { id ->
-        state.messages.firstOrNull { it.messageId == id }?.let { target ->
+        val target = state.messages.firstOrNull { it.messageId == id }
+        if (target == null) {
+            // Le message a quitté le fil : l'atelier ne se rouvrira pas sur lui plus tard.
+            LaunchedEffect(id) { exportMessageId = null }
+        } else {
             CardExportSheet(bubble = target, conversationTitle = state.conversationTitle, onDismiss = { exportMessageId = null })
         }
     }

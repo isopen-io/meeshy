@@ -34,6 +34,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -66,7 +67,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.permission.PermissionFlow
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -87,13 +92,17 @@ internal fun CardExportSheet(
 ) {
     val state = rememberCardExportState(bubble, viewModel.viewer, conversationTitle)
     val subject = state.subject
-    if (subject == null) {
+    // Le message VIVANT fait foi : supprimé, rendu éphémère ou protégé pendant que l'atelier est
+    // ouvert, il ne s'image plus — l'atelier se ferme au lieu de peindre l'instantané d'ouverture.
+    if (subject == null || CardSubjects.refusal(bubble, System.currentTimeMillis()) != null) {
         LaunchedEffect(Unit) { onDismiss() }
         return
     }
     state.anonymousLabel = stringResource(R.string.export_card_anonymous)
     LaunchedEffect(state.renderKey) { state.renderPreview() }
     val thumbnails = remember { CardThumbnailStore() }
+    DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
+    val permissions = rememberPermissionFlow()
     val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject) {
         state.thumbSource(thumbnails, subject)
     }
@@ -111,8 +120,9 @@ internal fun CardExportSheet(
             Stage(state, Modifier.weight(1f), haptic)
             Notice(state)
             CardExportTray(trayState(state, subject, thumbs), trayActions(state, haptic))
-            ActionRow(state, subject, onDismiss, haptic)
+            ActionRow(state, subject, permissions, onDismiss, haptic)
         }
+        PermissionFlowHost(permissions)
     }
     if (state.galleryOpen) {
         CardExportGallery(
@@ -196,7 +206,13 @@ private fun Notice(state: CardExportState) {
 }
 
 @Composable
-private fun ActionRow(state: CardExportState, subject: CardSubject, onDismiss: () -> Unit, haptic: HapticFeedback) {
+private fun ActionRow(
+    state: CardExportState,
+    subject: CardSubject,
+    permissions: PermissionFlow,
+    onDismiss: () -> Unit,
+    haptic: HapticFeedback,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val savedMessage = stringResource(R.string.export_announce_gallery)
@@ -220,8 +236,14 @@ private fun ActionRow(state: CardExportState, subject: CardSubject, onDismiss: (
     Row(Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.md), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         Button(
             onClick = {
-                if (!CardOutput.canSaveToGallery) finish(CardOutcome.DENIED)
-                else run({ CardOutput.saveToGallery(context, it) }, CardOutcome.GALLERY)
+                state.busy = true
+                scope.launch {
+                    if (permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false)) {
+                        run({ CardOutput.saveToGallery(context, it) }, CardOutcome.GALLERY)
+                    } else {
+                        finish(CardOutcome.DENIED)
+                    }
+                }
             },
             enabled = enabled, modifier = Modifier.weight(1f).height(50.dp), shape = CircleShape,
         ) {
