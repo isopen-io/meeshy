@@ -91,7 +91,7 @@
 
 **Fichiers concernes**:
 - Creer: `apps/ios/Meeshy/Features/Main/Views/RegisterView.swift`
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/LoginView.swift` (lien vers register)
+- Modifier: `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift` (lien vers register)
 - Modifier: `apps/ios/Meeshy/MeeshyApp.swift` (flow auth)
 
 ### 2.2 Magic Link Authentication
@@ -105,7 +105,7 @@
 - Verification token et login automatique
 
 **Fichiers concernes**:
-- Creer: `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`
+- Creer: `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`
 - Modifier: `apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift`
 - Modifier: SDK `AuthService.swift` (si methods manquantes)
 
@@ -120,7 +120,7 @@
 
 **Fichiers concernes**:
 - Creer: `apps/ios/Meeshy/Features/Main/Views/PasswordResetView.swift`
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+- Modifier: `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 
 ### 2.4 Profil utilisateur complet
 **Priorite**: Haute

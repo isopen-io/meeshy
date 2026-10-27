@@ -179,7 +179,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
         // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
         "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
-        "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",  // 20
         "apps/ios/Meeshy/Features/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
         "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",  // 16
@@ -187,7 +187,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // remplacé par `WelcomeView`. Épinglé dès la bascule, pour la même
         // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
         // aucune raison de sortir du cliquet.
-        "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
+        "apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift",
         "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
         // #10383 — la page du plein écran audio a quitté le fichier épinglé :
@@ -515,7 +515,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Cohésion de `PostDetailViewModel` : les actions sur le post ont quitté l hôte avec leurs clés (leçon 578).
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
         "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
+        "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15

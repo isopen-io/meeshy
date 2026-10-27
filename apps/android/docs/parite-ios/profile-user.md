@@ -648,7 +648,7 @@ Transposition Android : Keychain → Android Keystore + `EncryptedSharedPreferen
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift`
 - `apps/ios/Meeshy/Core/AccountDataRetention.swift`
 
 </details>

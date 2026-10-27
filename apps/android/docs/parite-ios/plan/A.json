@@ -6282,7 +6282,7 @@
    "apps/ios/Meeshy/Core/DependencyContainer.swift",
    "apps/ios/Meeshy/Core/MessageStoreRouter.swift",
    "apps/ios/Meeshy/Core/AccountDataRetention.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift"
   ],
   "feature_keys": [
    "pco-cache-account-isolation",

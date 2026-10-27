@@ -316,8 +316,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift`
 - [ ] `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`
+- [ ] `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
+- [ ] `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/MessageContextOverlay.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/MessageFrameTracker.swift`

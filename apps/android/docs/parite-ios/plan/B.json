@@ -51,7 +51,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthActionButton.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/PasswordStrengthIndicator.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthInfoHint.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift"
   ],
   "feature_keys": [
    "auth-input-atoms"
@@ -937,8 +937,8 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/LoginScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthTextField.swift"
   ],
   "feature_keys": [
@@ -1363,7 +1363,7 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/LoginTwoFactorStepTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift"
   ],
@@ -4519,7 +4519,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/auth/WelcomeStoreTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift",
    "apps/ios/Meeshy/App/RootPresentationRules.swift",
    "apps/ios/Meeshy/App/AppRootGate.swift"
   ],
@@ -5033,7 +5033,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+EmailAccess.swift",
    "apps/ios/Meeshy/App/SessionTransitionPlan.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
    "apps/ios/Meeshy/Core/AccountDataRetention.swift"
   ],
   "feature_keys": [
@@ -5738,7 +5738,7 @@
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryView.swift",
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryViewModel.swift",
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift"
   ],
   "feature_keys": [
    "auth-world-guest-entry"
@@ -6623,7 +6623,7 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/MagicLinkViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/LinkDeviceBinding.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/EmailVerificationWatch.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift"
@@ -7152,8 +7152,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/AccountSwitcherViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift",
    "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
