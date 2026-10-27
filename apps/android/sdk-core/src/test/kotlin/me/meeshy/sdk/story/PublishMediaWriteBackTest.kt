@@ -321,4 +321,22 @@ class PublishMediaWriteBackTest {
         assertThat(PublishMediaWriteBack.coherenceOf(CreateStoryRequest(content = "x")))
             .isEqualTo(PublishCoherence.Coherent)
     }
+
+    @Test
+    fun `the alt text and caption follow their media from the placeholder to the real id`() {
+        val payload = MeeshyApi.json.encodeToString(
+            CreateStoryRequest(
+                content = "hi",
+                mediaIds = listOf("upload-cmid", "b"),
+                mediaAlt = mapOf("upload-cmid" to "un chat", "b" to "un chien"),
+                mediaCaption = mapOf("upload-cmid" to "Mon chat"),
+            ),
+        )
+
+        val rewritten = PublishMediaWriteBack.graft(payload, placeholder = "upload-cmid", realId = "real-99")!!
+        val decoded = MeeshyApi.json.decodeFromString<CreateStoryRequest>(rewritten)
+
+        assertThat(decoded.mediaAlt).containsExactly("real-99", "un chat", "b", "un chien")
+        assertThat(decoded.mediaCaption).containsExactly("real-99", "Mon chat")
+    }
 }

@@ -74,6 +74,8 @@ public object PublishMediaWriteBack {
         val grafted = request.copy(
             storyEffects = adopted,
             mediaIds = swapped.withDesignatedBy(adopted).takeIf { it.isNotEmpty() },
+            mediaAlt = request.mediaAlt?.rekeyed(placeholder, realId),
+            mediaCaption = request.mediaCaption?.rekeyed(placeholder, realId),
         )
         if (grafted == request) return null
         return MeeshyApi.json.encodeToString(grafted)
@@ -105,6 +107,10 @@ public object PublishMediaWriteBack {
         val orphans = CanvasMediaAdoption.orphanIds(effects, request.mediaIds.orEmpty())
         return if (orphans.isEmpty()) PublishCoherence.Coherent else PublishCoherence.Orphans(orphans)
     }
+
+    /** Les descriptions suivent leur média : la clé du placeholder devient l'identifiant réel. */
+    private fun Map<String, String>.rekeyed(placeholder: String, realId: String): Map<String, String> =
+        entries.associate { (key, value) -> (if (key == placeholder) realId else key) to value }
 
     private fun List<String>.withDesignatedBy(effects: StoryEffects?): List<String> =
         this + CanvasMediaAdoption.publicationMediaIds(emptyList(), effects).filter { it !in this }
