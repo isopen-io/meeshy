@@ -66,6 +66,9 @@ import me.meeshy.ui.theme.MeeshyControlSize
 private val Glass = Color.Black.copy(alpha = 0.38f)
 private val ChromeWhite = Color.White
 
+/** Le jaune « allumé » du viseur (flash actif, zoom choisi, curseur) : le jeton d'alerte de la palette Meeshy. */
+private val CaptureLit = MeeshyPalette.Warning
+
 /** Un bouton rond de la rangée haute : cible de 44 dp, voile sombre qui reste lisible sur n'importe quel flux. */
 @Composable
 internal fun CaptureRoundButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = ChromeWhite) {
@@ -91,7 +94,7 @@ internal fun CaptureFlashButton(mode: CaptureFlashMode, onClick: () -> Unit) {
             CaptureFlashMode.OFF -> R.string.capture_flash_off
         },
     )
-    val tint = if (mode == CaptureFlashMode.OFF) ChromeWhite.copy(alpha = 0.75f) else Color(0xFFFFD60A)
+    val tint = if (mode == CaptureFlashMode.OFF) ChromeWhite.copy(alpha = 0.75f) else CaptureLit
     Box(
         modifier = Modifier
             .size(MeeshyControlSize.minTouchTarget)
@@ -185,7 +188,7 @@ internal fun CaptureFlashIntensitySlider(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(MeeshyIcons.BrightnessFilled, contentDescription = null, tint = Color(0xFFFFD60A), modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.BrightnessFilled, contentDescription = null, tint = CaptureLit, modifier = Modifier.size(16.dp))
         Box(
             modifier = Modifier
                 .width(MeeshyControlSize.minTouchTarget)
@@ -217,7 +220,7 @@ internal fun CaptureFlashIntensitySlider(
                     .height(trackHeight - course * position - thumb / 2)
                     .align(Alignment.BottomCenter)
                     .clip(CircleShape)
-                    .background(Color(0xFFFFD60A)),
+                    .background(CaptureLit),
             )
             Box(Modifier.offset(y = course * position).size(thumb).clip(CircleShape).background(Color.White))
         }
@@ -300,7 +303,7 @@ private fun ZoomPresets(factor: Float, presets: List<Float>, onSelect: (Float) -
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.capture_zoom_reset, formatZoom(preset))) { onSelect(preset) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (on) formatZoom(factor) else formatZoom(preset), color = if (on) Color(0xFFFFD60A) else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (on) formatZoom(factor) else formatZoom(preset), color = if (on) CaptureLit else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -314,7 +317,7 @@ private fun ZoomChip(factor: Float, onStep: (Boolean) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("−", color = Color.White, fontSize = 18.sp, modifier = Modifier.clickable { onStep(false) })
-        Text(formatZoom(factor), color = Color(0xFFFFD60A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(formatZoom(factor), color = CaptureLit, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Text("+", color = Color.White, fontSize = 18.sp, modifier = Modifier.clickable { onStep(true) })
     }
 }
