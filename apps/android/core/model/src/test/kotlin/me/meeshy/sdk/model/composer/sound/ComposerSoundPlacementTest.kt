@@ -64,6 +64,19 @@ class ComposerSoundPlacementTest {
     }
 
     @Test
+    fun `the background is heard while composing only with the screen in front, unmuted, and the shelf closed`() {
+        val track = StoryAudioPlayerObject(id = "a", mediaURL = "https://cdn/a.m4a", isBackground = true)
+        assertThat(ComposerSoundPlacement.playsWhileComposing(track, screenResumed = true, shelfOpen = false)).isTrue()
+        assertThat(ComposerSoundPlacement.playsWhileComposing(track, screenResumed = false, shelfOpen = false)).isFalse()
+        assertThat(ComposerSoundPlacement.playsWhileComposing(track, screenResumed = true, shelfOpen = true)).isFalse()
+        assertThat(ComposerSoundPlacement.playsWhileComposing(toggleMuted(track), true, false)).isFalse()
+        assertThat(ComposerSoundPlacement.playsWhileComposing(track.copy(mediaURL = null), true, false)).isFalse()
+        assertThat(ComposerSoundPlacement.playsWhileComposing(null, true, false)).isFalse()
+    }
+
+    private fun toggleMuted(track: StoryAudioPlayerObject) = ComposerSoundPlacement.toggleMute(listOf(track), track.id).single()
+
+    @Test
     fun `the trace shows the background only while no tool owns the low zone`() {
         val bg = recording("a")
         assertThat(ComposerSoundPlacement.traceServed(bg, toolIsOpen = false)).isEqualTo(bg)

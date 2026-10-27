@@ -79,6 +79,14 @@ object ComposerSoundPlacement {
      * La trace du fond sur la scène : un outil ouvert occupe la zone basse SEUL (même règle que
      * `ComposerObjectChips.isServed`), donc la trace s'efface — le MODE du rail, jamais la présence d'un panneau.
      */
+    /**
+     * Le fond s'entend-il PENDANT la composition ? Seulement écran au premier plan, piste non coupée, et jamais pendant
+     * l'aperçu de l'étagère : une seule lecture à la fois. Une piste sans URL serveur (enregistrement local) n'a rien
+     * à faire jouer ici.
+     */
+    fun playsWhileComposing(track: StoryAudioPlayerObject?, screenResumed: Boolean, shelfOpen: Boolean): Boolean =
+        track != null && !track.mediaURL.isNullOrEmpty() && !track.isMuted && screenResumed && !shelfOpen
+
     fun traceServed(background: StoryAudioPlayerObject?, toolIsOpen: Boolean): StoryAudioPlayerObject? =
         if (toolIsOpen) null else background
 }

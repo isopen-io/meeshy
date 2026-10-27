@@ -61,6 +61,12 @@ fun AudioTrackSurface(
     reportSink: PlaybackReportSink = PlaybackReportSink.Inert,
     reportAction: String = AttachmentStatusBody.ACTION_LISTENED,
     reportLanguage: String? = null,
+    /**
+     * `true` : la piste prend le FOCUS AUDIO — une autre lecture (vocal de conversation, musique d'une autre
+     * application) se met en pause tant qu'elle joue, et un appel la coupe. Le composeur le demande ; la lecture d'une
+     * story garde son propre arbitrage.
+     */
+    handleAudioFocus: Boolean = false,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -88,6 +94,15 @@ fun AudioTrackSurface(
                     }
                     .build(),
             )
+            if (handleAudioFocus) {
+                setAudioAttributes(
+                    androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build(),
+                    true,
+                )
+            }
             repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             this.volume = volume
             playWhenReady = false
