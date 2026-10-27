@@ -357,6 +357,7 @@ class ChatViewModel @Inject constructor(
                         next.copy(
                             search = next.search.reconciled(next.messages.toSearchable()),
                             isOffline = isOffline,
+                            showReadReceipts = showReadReceipts,
                         )
                     }
                 }

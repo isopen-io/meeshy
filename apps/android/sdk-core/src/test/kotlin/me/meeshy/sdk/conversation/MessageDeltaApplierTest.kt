@@ -1,6 +1,7 @@
 package me.meeshy.sdk.conversation
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.core.database.entity.EditRevisionEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiTextTranslation
@@ -57,6 +58,23 @@ class MessageDeltaApplierTest {
         applier(harness).apply(MessageRemoved("m1", "c1", expired = true), viewerId = "me")
 
         assertThat(harness.database.messageDao().find("m1")).isNull()
+    }
+
+    @Test
+    fun `a deletion and an expiry take the message's past versions with them`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1"))
+        harness.seedSynced(message("m2"))
+        val revisions = harness.database.editRevisionDao()
+        revisions.upsert(EditRevisionEntity("m1", 1, "ancien texte", 1L))
+        revisions.upsert(EditRevisionEntity("m2", 1, "autre ancien texte", 1L))
+        revisions.upsert(EditRevisionEntity("m3", 1, "intact", 1L))
+
+        applier(harness).apply(MessageRemoved("m1", "c1", "2026-10-24T10:00:00Z"), viewerId = "me")
+        applier(harness).apply(MessageRemoved("m2", "c1", expired = true), viewerId = "me")
+
+        assertThat(revisions.forMessage("m1")).isEmpty()
+        assertThat(revisions.forMessage("m2")).isEmpty()
+        assertThat(revisions.forMessage("m3")).hasSize(1)
     }
 
     @Test

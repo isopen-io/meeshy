@@ -113,6 +113,8 @@ data class ChatUiState(
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
      * `ConversationScrollControlsView.isOffline`. */
     val isOffline: Boolean = false,
+    /** Réciprocité des accusés (`privacy.showReadReceipts`) : qui cache les siens n'ouvre pas « Vu par ». */
+    val showReadReceipts: Boolean = true,
     /** The composer's live source-language state — the "smart context zone" pill.
      * Follows on-device detection as the viewer types, freezes at the 10-word lock,
      * and honours a manual pick from the language picker ([ComposerLanguageState]). */

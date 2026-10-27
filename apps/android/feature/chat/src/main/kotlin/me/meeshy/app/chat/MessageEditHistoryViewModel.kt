@@ -25,10 +25,17 @@ class MessageEditHistoryViewModel @Inject constructor(
     private var job: Job? = null
 
     fun bind(messageId: String) {
-        if (boundMessageId == messageId) return
+        val sameMessage = boundMessageId == messageId
+        if (sameMessage && job?.isActive == true) return
         boundMessageId = messageId
         job?.cancel()
-        _revisions.value = null
+        if (!sameMessage) _revisions.value = null
         job = viewModelScope.launch { ledger.observe(messageId).collect { _revisions.value = it } }
+    }
+
+    /** La fiche refermée cesse de lire la table ; la rouvrir sert d'abord la dernière lecture puis relit la base. */
+    fun unbind() {
+        job?.cancel()
+        job = null
     }
 }

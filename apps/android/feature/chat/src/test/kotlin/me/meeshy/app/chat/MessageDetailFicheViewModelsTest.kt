@@ -98,4 +98,32 @@ class MessageDetailFicheViewModelsTest {
         advanceUntilIdle()
         assertThat(vm.revisions.value).containsExactly(EditRevision(1, "old", 10L))
     }
+
+    @Test
+    fun `a closed sheet stops listening and reopening serves the last read before revalidating`() = runTest(dispatcher) {
+        val flow = MutableStateFlow(ReadStatusState(data = data(1, 2)))
+        val repository = mockk<ReadStatusRepository> { every { observe("m1", "c1") } returns flow }
+        val vm = MessageViewsViewModel(repository)
+        vm.bind("m1", "c1")
+        advanceUntilIdle()
+        vm.select(MessageViewsFilter.Delivered)
+
+        vm.unbind()
+        flow.value = ReadStatusState(data = data(2, 3))
+        advanceUntilIdle()
+        assertThat(flow.subscriptionCount.value).isEqualTo(0)
+        assertThat(vm.state.value.status.data?.readCount).isEqualTo(1)
+
+        vm.bind("m1", "c1")
+        assertThat(vm.state.value.chosen).isEqualTo(MessageViewsFilter.Delivered)
+        advanceUntilIdle()
+        assertThat(vm.state.value.status.data?.readCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `whoever hides their read receipts is not offered who read`() {
+        assertThat(hostedDetailEntries(showReadReceipts = true)).contains(MessageAction.Views)
+        assertThat(hostedDetailEntries(showReadReceipts = false))
+            .containsExactly(MessageAction.History, MessageAction.Sentiment)
+    }
 }

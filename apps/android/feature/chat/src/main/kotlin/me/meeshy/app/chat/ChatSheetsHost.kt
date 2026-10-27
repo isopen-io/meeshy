@@ -126,7 +126,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onOpenFile = { actions.onFileAttachmentOpen(actionTarget.messageId, null) },
             onShareFile = { actions.onFileAttachmentShare(actionTarget.messageId, null) },
             onDismiss = actions.dismissMessageActions,
-            hostedEntries = HOSTED_DETAIL_ENTRIES,
+            hostedEntries = hostedDetailEntries(state.showReadReceipts),
             onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
@@ -371,3 +371,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
     setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment)
+
+/**
+ * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
+ * ne voit pas qui a lu — l'entrée « Vu par » disparaît du menu.
+ */
+internal fun hostedDetailEntries(showReadReceipts: Boolean): Set<MessageAction> =
+    if (showReadReceipts) HOSTED_DETAIL_ENTRIES else HOSTED_DETAIL_ENTRIES - MessageAction.Views

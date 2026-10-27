@@ -102,6 +102,7 @@ internal class MessageMutationWriter(
                 deletedAt = Instant.ofEpochMilli(clock.nowMillis()).toString(),
             )
         } ?: return false
+        revisions?.forget(listOf(messageId))
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.DELETE_MESSAGE,

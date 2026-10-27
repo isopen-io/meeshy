@@ -39,17 +39,27 @@ class MessageViewsViewModel @Inject constructor(
     private var boundMessageId: String? = null
     private var job: Job? = null
 
-    /** Idempotent pour un message déjà lié ; changer de message repart d'un état neuf. */
+    /** Idempotent pour un message déjà écouté ; changer de message repart d'un état neuf. */
     fun bind(messageId: String, conversationId: String) {
-        if (boundMessageId == messageId) return
+        val sameMessage = boundMessageId == messageId
+        if (sameMessage && job?.isActive == true) return
         boundMessageId = messageId
         job?.cancel()
-        _state.value = MessageViewsUiState()
+        if (!sameMessage) _state.value = MessageViewsUiState()
         job = viewModelScope.launch {
             repository.observe(messageId, conversationId).collect { status ->
                 _state.update { it.copy(status = status) }
             }
         }
+    }
+
+    /**
+     * La fiche refermée cesse d'écouter : sans cela, la vue du fil garderait la lecture Room et
+     * l'abonnement `read-status:updated` vivants jusqu'à la sortie de la conversation.
+     */
+    fun unbind() {
+        job?.cancel()
+        job = null
     }
 
     fun select(filter: MessageViewsFilter) = _state.update { it.copy(chosen = filter) }

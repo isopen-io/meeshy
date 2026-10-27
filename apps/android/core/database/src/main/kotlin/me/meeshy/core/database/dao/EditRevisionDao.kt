@@ -21,6 +21,15 @@ public interface EditRevisionDao {
     @Query("DELETE FROM message_edit_revisions WHERE messageId = :messageId")
     public suspend fun deleteForMessage(messageId: String)
 
+    @Query("DELETE FROM message_edit_revisions WHERE messageId = :messageId AND revision <= :floor")
+    public suspend fun deleteUpTo(messageId: String, floor: Int)
+
+    @Query(
+        "DELETE FROM message_edit_revisions WHERE messageId NOT IN (" +
+            "SELECT messageId FROM message_edit_revisions GROUP BY messageId ORDER BY MAX(editedAt) DESC LIMIT :keep)",
+    )
+    public suspend fun keepMostRecentMessages(keep: Int)
+
     @Query("DELETE FROM message_edit_revisions WHERE editedAt < :cutoff")
     public suspend fun purgeOlderThan(cutoff: Long): Int
 }

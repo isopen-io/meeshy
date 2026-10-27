@@ -99,8 +99,9 @@ internal fun MessageViewsSheet(
     viewModel: MessageViewsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    androidx.compose.runtime.LaunchedEffect(bubble.messageId, conversationId) {
+    androidx.compose.runtime.DisposableEffect(bubble.messageId, conversationId) {
         viewModel.bind(bubble.messageId, conversationId)
+        onDispose { viewModel.unbind() }
     }
     val haptics = rememberMeeshyHaptics()
     val data = state.status.data

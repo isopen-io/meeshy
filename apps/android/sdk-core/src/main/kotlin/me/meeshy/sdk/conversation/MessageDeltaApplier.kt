@@ -80,6 +80,7 @@ class MessageDeltaApplier internal constructor(
 
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */
     private suspend fun remove(event: MessageRemoved) {
+        database.editRevisionDao().deleteForMessage(event.messageId)
         if (event.expired) {
             purge(listOf(event.messageId))
         } else {
@@ -100,6 +101,7 @@ class MessageDeltaApplier internal constructor(
         database.withTransaction {
             val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
             if (rowIds.isNotEmpty()) database.messageDao().deleteByIds(rowIds)
+            messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
         }
     }
 

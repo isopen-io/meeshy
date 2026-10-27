@@ -75,7 +75,10 @@ internal fun MessageHistorySheet(
     viewModel: MessageEditHistoryViewModel = hiltViewModel(),
 ) {
     val revisions by viewModel.revisions.collectAsStateWithLifecycle()
-    LaunchedEffect(bubble.messageId) { viewModel.bind(bubble.messageId) }
+    androidx.compose.runtime.DisposableEffect(bubble.messageId) {
+        viewModel.bind(bubble.messageId)
+        onDispose { viewModel.unbind() }
+    }
     val history = remember(revisions, bubble.text) {
         EditHistoryProjection.project(bubble.text, null, revisions.orEmpty())
     }
