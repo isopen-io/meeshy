@@ -170,6 +170,7 @@
     <string name="story_composer_grabber_hint_resize">Arrastra hacia arriba para ampliar, hacia abajo para reducir o cerrar.</string>
     <string name="story_composer_redo">Rehacer</string>
     <string name="story_composer_undo">Deshacer</string>
+    <string name="story_media_accessibility">Accesibilidad</string>
     <string name="story_media_alt_a11yHint">Describe este contenido a las personas que usan VoiceOver.</string>
     <string name="story_media_alt_label">Texto alternativo</string>
     <string name="story_media_alt_placeholder">Describe este contenido multimedia para VoiceOver</string>
