@@ -192,7 +192,7 @@ targets:
       # notification n'a pas d'hôte de test : le seul endroit d'où une règle
       # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
       # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
-      # l’écran de partage unique (`Meeshy/Features/Main/Share/`) pour l’extension de partage, en sens
+      # l’écran de partage unique (`Meeshy/Features/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
       # #12655 — le miroir des conversations verrouillées par PIN : l'app
@@ -416,7 +416,7 @@ targets:
 
   # Share Extension — "Share to Meeshy" depuis d'autres apps. Depuis l'écran de
   # partage UNIQUE (#10947), elle monte LA MÊME vue que l'app (`ShareSheetView`
-  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Main/Share/`), avec
+  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Share/`), avec
   # ses propres coutures (`ExtensionShareDirectory`, `ExtensionShareDispatcher`)
   # et le catalogue de mots de l'APP (`Bundle.meeshyShare`). Elle lie donc
   # MeeshySDK et MeeshyUI. Recâblé 2026-06-24 (présent sur disque mais absent de
@@ -442,23 +442,23 @@ targets:
       # `ShareRecipientDirectory.swift` (LiveShareRecipientDirectory), ni
       # `ShareSheetHost+App.swift` : ceux-là parlent aux singletons de l'app.
       # Garde : `ShareExtensionScreenGuardTests`.
-      - path: Meeshy/Features/Main/Share/ShareContentZone.swift
-      - path: Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift
-      - path: Meeshy/Features/Main/Share/ShareDurationRow.swift
+      - path: Meeshy/Features/Share/ShareContentZone.swift
+      - path: Meeshy/Features/Share/ShareDirectorySnapshot.swift
+      - path: Meeshy/Features/Share/ShareDurationRow.swift
       # #12985 — le reflet de la mémoire du bout en bout que l'app dépose.
-      - path: Meeshy/Features/Main/Share/EndToEndShareMemory.swift
-      - path: Meeshy/Features/Main/Share/ShareIncomingStrip.swift
-      - path: Meeshy/Features/Main/Share/ShareRecipient.swift
-      - path: Meeshy/Features/Main/Share/ShareRecipientRow.swift
-      - path: Meeshy/Features/Main/Share/ShareRelayHandoff.swift
-      - path: Meeshy/Features/Main/Share/ShareSendBar.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetCopy.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetView.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetView+Actions.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetViewModel.swift
-      - path: Meeshy/Features/Main/Share/ShareSourcing.swift
-      - path: Meeshy/Features/Main/Share/ShareStringsBundle.swift
-      - path: Meeshy/Features/Main/Share/ShareSubject.swift
+      - path: Meeshy/Features/Share/EndToEndShareMemory.swift
+      - path: Meeshy/Features/Share/ShareIncomingStrip.swift
+      - path: Meeshy/Features/Share/ShareRecipient.swift
+      - path: Meeshy/Features/Share/ShareRecipientRow.swift
+      - path: Meeshy/Features/Share/ShareRelayHandoff.swift
+      - path: Meeshy/Features/Share/ShareSendBar.swift
+      - path: Meeshy/Features/Share/ShareSheetCopy.swift
+      - path: Meeshy/Features/Share/ShareSheetView.swift
+      - path: Meeshy/Features/Share/ShareSheetView+Actions.swift
+      - path: Meeshy/Features/Share/ShareSheetViewModel.swift
+      - path: Meeshy/Features/Share/ShareSourcing.swift
+      - path: Meeshy/Features/Share/ShareStringsBundle.swift
+      - path: Meeshy/Features/Share/ShareSubject.swift
       # Les noms courts des modèles du SDK (`Message`, `MessageAttachment`).
       - path: Meeshy/Features/Main/Models/MessageAliases.swift
     settings:

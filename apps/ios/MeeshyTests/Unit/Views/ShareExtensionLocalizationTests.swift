@@ -5,7 +5,7 @@ import MeeshySDK
 /// **The share extension speaks the APP's vocabulary** (#10947).
 ///
 /// Since the single share screen, the extension mounts the same SwiftUI view as
-/// the app (`Meeshy/Features/Main/Share/`), and every word of it resolves against
+/// the app (`Meeshy/Features/Share/`), and every word of it resolves against
 /// the app catalog through `Bundle.meeshyShare` — the `.appex` climbs two levels to
 /// the app that contains it. The extension's own `Localizable.xcstrings` is gone:
 /// a second copy of the keys could only drift.
@@ -70,12 +70,12 @@ final class ShareExtensionLocalizationTests: XCTestCase {
 
     func test_theShareScreenWords_resolveAgainstTheContainingApp() throws {
         let source = try String(
-            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Share/ShareStringsBundle.swift"),
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Share/ShareStringsBundle.swift"),
             encoding: .utf8
         )
         XCTAssertTrue(source.contains("pathExtension == \"appex\""), "Bundle.meeshyShare must climb out of the .appex.")
         let copy = try String(
-            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Share/ShareSheetCopy.swift"),
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Share/ShareSheetCopy.swift"),
             encoding: .utf8
         )
         XCTAssertFalse(copy.contains("bundle: .main"), "In the extension, .main is the .appex: its catalog has none of these keys.")

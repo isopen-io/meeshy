@@ -58,7 +58,7 @@ final class NavigationContainerMigrationTests: XCTestCase {
     /// Depuis #10947, l'extension de partage héberge l'écran de partage unique :
     /// c'est lui qui porte le conteneur de navigation.
     func test_shareExtensionContactPicker_usesNavigationStack() throws {
-        try assertMigrated("Meeshy/Features/Main/Share/ShareSheetView.swift")
+        try assertMigrated("Meeshy/Features/Share/ShareSheetView.swift")
     }
 
     // MARK: - Migrated in 220i — RE-VISÉ au lot 4.8

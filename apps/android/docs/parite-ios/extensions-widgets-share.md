@@ -201,7 +201,7 @@ Transposition Android : Code pur multiplateforme : réimplémenter en Kotlin pur
 
 - `packages/MeeshySDK/Sources/MeeshySDK/Share/SharePlan.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Share/SharePlan+Message.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareDurationRow.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDurationRow.swift`
 
 </details>
 
@@ -392,7 +392,7 @@ Transposition Android : ShareLink SwiftUI -> Intent.createChooser(ACTION_SEND) ;
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetView+Actions.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetView+Actions.swift`
 
 </details>
 
@@ -419,9 +419,9 @@ Transposition Android : LazyVStack + animations spring SwiftUI -> LazyColumn ave
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareIncomingStrip.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSubject.swift`
+- `apps/ios/Meeshy/Features/Share/ShareContentZone.swift`
+- `apps/ios/Meeshy/Features/Share/ShareIncomingStrip.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSubject.swift`
 
 </details>
 
@@ -445,7 +445,7 @@ Transposition Android : Cliché App Group + INSendMessageIntent -> Sharing Short
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDirectorySnapshot.swift`
 - `apps/ios/MeeshyShareExtension/ShareConversationStore.swift`
 
 </details>
@@ -1004,7 +1004,7 @@ Transposition Android : OfflineQueue GRDB -> OutboxRepository Room + OutboxFlush
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDispatcher.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareFanoutOriginResolver.swift`
 
 </details>
@@ -1065,11 +1065,11 @@ Transposition Android : Sous-vues Equatable SwiftUI -> composables stables (reme
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipient.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipientDirectory.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipientRow.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSourcing.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetViewModel.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipient.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipientDirectory.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSourcing.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetViewModel.swift`
 
 </details>
 
@@ -1095,7 +1095,7 @@ Transposition Android : safeAreaInset(.bottom) + ultraThinMaterial -> Scaffold b
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSendBar.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSendBar.swift`
 
 </details>
 
@@ -1122,11 +1122,11 @@ Transposition Android : NavigationStack plein écran iOS -> écran Compose Mater
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetView.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareStringsBundle.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetHost+App.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetView.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetViewModel.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift`
+- `apps/ios/Meeshy/Features/Share/ShareStringsBundle.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetHost+App.swift`
 
 </details>
 
@@ -1344,7 +1344,7 @@ Transposition Android : extensionContext.open + App Group -> même activité/pro
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareRelayHandoff.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRelayHandoff.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareRelayConsumer.swift`
 
 </details>

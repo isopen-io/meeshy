@@ -1706,7 +1706,7 @@
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListPreviewLoader.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/Conversation/QuotedReferenceFactory.swift",
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift",
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift"
   ],
   "feature_keys": [
@@ -6842,7 +6842,7 @@
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Diagnostics/CryptoSignposts.swift",
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift"
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift"
   ],
   "feature_keys": [
    "crypto-e2ee-decryption-pipeline",
