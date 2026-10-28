@@ -364,17 +364,16 @@ describe('POST /users/register-device-token', () => {
       where: {
         isActive: true,
         id: { not: 'fresh-record-id' },
-        OR: [
-          { userId: USER_ID, deviceId: 'iphone-hardware-abc', type: 'apns' },
-          { token: 'apns-second-token-1234567890', userId: { not: USER_ID } },
-        ],
+        userId: USER_ID,
+        deviceId: 'iphone-hardware-abc',
+        type: 'apns',
       },
       data: { isActive: false },
     });
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
-  it('deactivates rows of another user carrying the same token when no deviceId is sent', async () => {
+  it('detaches the token from its previous owner BEFORE attaching it to the new one', async () => {
     const { fastify, pr, reply } = setup();
     const route = getRoute(fastify, 'POST', 'register-device-token');
     pr.pushToken.upsert.mockResolvedValue(
@@ -389,13 +388,14 @@ describe('POST /users/register-device-token', () => {
     expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
       where: {
         isActive: true,
-        id: { not: 'fresh-record-id' },
-        OR: [
-          { token: 'apns-reassigned-token-1234567890', userId: { not: USER_ID } },
-        ],
+        token: 'apns-reassigned-token-1234567890',
+        userId: { not: USER_ID },
       },
       data: { isActive: false },
     });
+    const detachOrder = pr.pushToken.updateMany.mock.invocationCallOrder[0];
+    const attachOrder = pr.pushToken.upsert.mock.invocationCallOrder[0];
+    expect(detachOrder).toBeLessThan(attachOrder);
   });
 
   it('stamps registeredAt on create AND on re-registration, so a live device stays recent', async () => {
