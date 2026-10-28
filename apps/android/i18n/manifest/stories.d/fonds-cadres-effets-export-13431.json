@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.title",
+          "androidName": "stories_scene_frame_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.fit",
+          "androidName": "stories_scene_frame_fit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.fill",
+          "androidName": "stories_scene_frame_fill",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.backdrop.blur",
+          "androidName": "stories_scene_frame_backdrop_blur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.backdrop.black",
+          "androidName": "stories_scene_frame_backdrop_black",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.backdrop.white",
+          "androidName": "stories_scene_frame_backdrop_white",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.backdrop.indigo",
+          "androidName": "stories_scene_frame_backdrop_indigo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frame.backdrop.sand",
+          "androidName": "stories_scene_frame_backdrop_sand",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effects",
+          "androidName": "stories_scene_effects",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effect.opening",
+          "androidName": "stories_scene_effect_opening",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effect.visual",
+          "androidName": "stories_scene_effect_visual",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effect.openingRow",
+          "androidName": "stories_scene_effect_opening_row",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effect.closingRow",
+          "androidName": "stories_scene_effect_closing_row",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.effect.close",
+          "androidName": "stories_scene_effect_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.export.saved",
+          "androidName": "stories_scene_export_saved",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.export.failed",
+          "androidName": "stories_scene_export_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.export.inProgress",
+          "androidName": "stories_scene_export_in_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.overflow.saveToPhotos",
+          "androidName": "stories_scene_overflow_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.overflow.share",
+          "androidName": "stories_scene_overflow_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.moreOptions",
+          "androidName": "stories_scene_overflow_menu",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.animated.toggle",
+          "androidName": "stories_scene_animated",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.background.menu.title",
+          "androidName": "stories_scene_background_menu_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.background.menu.edit",
+          "androidName": "stories_scene_background_menu_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.background.menu.bringForward",
+          "androidName": "stories_scene_background_menu_bring_forward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.background.menu.delete",
+          "androidName": "stories_scene_background_menu_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.scene.background.menu.retakePhoto",
+          "androidName": "stories_scene_background_menu_retake_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.opening.zoom",
+          "androidName": "stories_scene_opening_zoom",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.opening.slide",
+          "androidName": "stories_scene_opening_slide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.opening.reveal",
+          "androidName": "stories_scene_opening_reveal",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.openingNone",
+          "androidName": "stories_scene_opening_none",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
