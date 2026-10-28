@@ -114,6 +114,7 @@ internal class MessageEnrichmentWriter(
         val source = message.content
         if (source.isBlank()) return false
 
+        val ticket = updater.ticket()
         val translated = when (
             val result = apiCall {
                 translationApi.translate(
@@ -131,7 +132,7 @@ internal class MessageEnrichmentWriter(
         if (translated.isBlank()) return false
 
         var stored = false
-        updater.update(messageId, requireSynced = false) { current ->
+        updater.update(ticket, messageId, requireSynced = false) { current ->
             val merged = MessageTranslationMerge.mergeTranslation(current, target, translated)
             if (merged != null) {
                 stored = true
