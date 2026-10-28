@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 /** The account boundary every queued write and every send crosses (#13555). Deterministic: one test scheduler. */
 class AccountFenceTest {
@@ -109,7 +110,7 @@ class AccountFenceTest {
     }
 
     @Test
-    fun `a write nested in another write commits instead of waiting on itself`() = runTest {
+    fun `a write nested in another write commits instead of waiting on itself`() = runTest(timeout = DEADLOCK_TIMEOUT) {
         val fence = AccountFence(Owner("A"))
         val ticket = fence.ticket()
 
@@ -119,7 +120,7 @@ class AccountFenceTest {
     }
 
     @Test
-    fun `two writes of the same account land side by side, neither queues behind the other`() = runTest {
+    fun `two writes of the same account land side by side, neither queues behind the other`() = runTest(timeout = DEADLOCK_TIMEOUT) {
         val fence = AccountFence(Owner("A"))
         val slow = CompletableDeferred<Unit>()
         val order = mutableListOf<String>()
@@ -189,5 +190,10 @@ class AccountFenceTest {
         assertThat(outcome).isNull()
         assertThat(chunksAfterSwitch).isEqualTo(0)
         assertThat(fence.guard(fence.ticket()) { "delivered" }).isEqualTo("delivered")
+    }
+
+    private companion object {
+        /** A write that waits on itself or on its neighbour never ends: fail in seconds, not after the default minute. */
+        val DEADLOCK_TIMEOUT = 5.seconds
     }
 }
