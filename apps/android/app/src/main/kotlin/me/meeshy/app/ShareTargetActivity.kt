@@ -46,7 +46,7 @@ class ShareTargetActivity : ComponentActivity() {
         // jamais un `file://` (lu avec NOS droits) ni un de nos propres fournisseurs — pour l'envoi comme pour le studio.
         val sharedAttachmentUri: Uri? = intent?.let {
             runCatching { IntentCompat.getParcelableExtra(it, Intent.EXTRA_STREAM, Uri::class.java) }.getOrNull()
-        }?.takeIf(inboundIntake::admitsSource)
+        }?.takeIf { inboundIntake.admitsSource(it, grantedBySender = grantsRead(intent)) }
         val sharedAttachmentMimeType = intent?.type
         setContent {
             MeeshyTheme {
@@ -68,11 +68,18 @@ class ShareTargetActivity : ComponentActivity() {
      * composeur s'ouvre dessus. Un geste explicite de l'auteur ; rien n'est publié ici, et une pièce refusée ferme le partage.
      */
     private fun openInStudio(uri: Uri?, mimeType: String?) {
-        if (uri == null) return
+        if (uri == null || openingStudio) return
+        openingStudio = true
         lifecycleScope.launch {
-            val token = inboundIntake.stash(listOf(uri), mimeType)
+            val token = inboundIntake.stash(listOf(uri), mimeType, grantedBySender = grantsRead(intent))
             if (token != null) startActivity(ComposerSeedLaunch.intent(this@ShareTargetActivity, token))
             finish()
         }
     }
+
+    /** Un second toucher pendant la copie ne lance pas une seconde copie. */
+    private var openingStudio = false
+
+    /** L'expéditeur a-t-il accordé la lecture de l'URI ? Sans cela, Meeshy la lirait avec ses propres permissions. */
+    private fun grantsRead(intent: Intent?): Boolean = intent != null && (intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
 }

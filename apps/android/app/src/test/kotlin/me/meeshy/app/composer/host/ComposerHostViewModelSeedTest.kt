@@ -9,9 +9,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.app.composer.inbound.ComposerSeedStore
-import me.meeshy.app.composer.inbound.InboundMedia
+import me.meeshy.app.composer.inbound.InboundSource
 import me.meeshy.sdk.model.composer.ComposerFormat
-import me.meeshy.sdk.model.composer.InboundMediaKind
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -19,6 +18,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.security.SecureRandom
 
@@ -32,7 +32,7 @@ class ComposerHostViewModelSeedTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val store by lazy { ComposerSeedStore(File(folder.root, "inbound").also { it.mkdirs() }, System::currentTimeMillis, SecureRandom()) }
-    private val jpeg = InboundMedia(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()) + ByteArray(40), InboundMediaKind.IMAGE, "image/jpeg", "jpg")
+    private val jpeg = InboundSource({ ByteArrayInputStream(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()) + ByteArray(40)) }, "image/jpeg")
 
     private fun viewModel(vararg args: Pair<String, String>) = ComposerHostViewModel(SavedStateHandle(args.toMap()), store)
 
