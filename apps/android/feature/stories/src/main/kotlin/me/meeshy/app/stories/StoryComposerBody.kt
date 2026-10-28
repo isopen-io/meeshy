@@ -62,6 +62,7 @@ internal fun StoryComposerBody(
                 deck = state.deck,
                 backgrounds = backgrounds,
                 accentHex = viewModel.authorAccentHex,
+                canvasWidthPx = state.canvasWidthPx,
                 onSelect = viewModel::onSelectSlide,
                 onAdd = rememberGuardedAddition(state.deck.canAddSlide, action = viewModel::onAddSlide),
                 onDuplicate = rememberGuardedAddition(state.deck.canAddSlide, action = viewModel::onDuplicateSelectedSlide),
