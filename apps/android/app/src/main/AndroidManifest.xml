@@ -160,6 +160,20 @@
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
             </intent-filter>
+            <!-- App Link : un reel (/reel/{id}) et une story (/story/{id}, /stories/{id}) partages. Connecte, ils
+                 ouvrent les reels / le detail du post ; sans session, l'ecran visiteur montre leur contenu public
+                 (VisitorLinkGate). Des chemins EXACTS en prefixe de segment, jamais /auth/ ni /reset-password. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/story/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/story/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/stories/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/stories/" />
+            </intent-filter>
             <!-- App Link : le hub « Mes liens » (iOS LinksHubView, https://meeshy.me/links) ouvre
                  LinksRoutes.HUB (LinksRoutes.HUB_DEEP_LINKS). meeshy://links passe par le filtre
                  scheme-only plus haut. -->

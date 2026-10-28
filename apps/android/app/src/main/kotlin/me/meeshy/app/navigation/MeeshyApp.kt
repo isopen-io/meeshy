@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.map
 import androidx.navigation.NavHostController
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
+import me.meeshy.app.auth.guest.GuestSessionEndViewModel
+import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
@@ -89,6 +91,13 @@ fun MeeshyApp(
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
     val authState by authViewModel.state.collectAsStateWithLifecycle()
+    // La passerelle a terminé la session d'un invité de lien : l'appareil est déjà purgé, la racine retombe sur la
+    // connexion (état aligné ci-dessous) et l'écran de fin dit pourquoi, à la place du fil.
+    val guestEndViewModel: GuestSessionEndViewModel = hiltViewModel()
+    val guestEnded by guestEndViewModel.ended.collectAsStateWithLifecycle()
+    LaunchedEffect(guestEnded) {
+        if (guestEnded != null) authViewModel.onExternalSessionOpened()
+    }
     // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
     // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
     // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
@@ -259,6 +268,19 @@ fun MeeshyApp(
         )
 
         ArrivalCelebrationHost()
+
+        guestEnded?.let { ended ->
+            GuestSessionEndedScreen(
+                end = ended.end,
+                onNewLink = { identifier ->
+                    guestEndViewModel.dismiss()
+                    navController.navigate(Routes.guestJoin(identifier)) { launchSingleTop = true }
+                },
+                onHome = guestEndViewModel::dismiss,
+            )
+        }
+
+        VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 

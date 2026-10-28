@@ -91,7 +91,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         arguments = listOf(
             navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
         ),
-        deepLinks = Routes.POST_SHARE_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
+        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
     ) {
         PostDetailScreen(
             onBack = { navController.popBackStack() },
@@ -108,6 +108,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         arguments = listOf(
             navArgument("seed") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
+        deepLinks = Routes.REEL_SHARE_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
     ) { entry ->
         ReelsScreen(
             seed = entry.arguments?.getString("seed"),
