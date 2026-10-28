@@ -47,10 +47,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.fileviewer.SavedDocument
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -78,7 +82,8 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
             saveState = SaveState.IDLE
         }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(request.mimeType)) { target ->
+    val savedMime = remember(request.mimeType) { SavedDocument.mimeType(request.mimeType) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(savedMime)) { target ->
         if (target == null) return@rememberLauncherForActivityResult
         saveState = SaveState.SAVING
         scope.launch {
@@ -107,7 +112,10 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
                         }
                         SaveState.SAVED -> BarButton(MeeshyIcons.Check, saveLabel, accent) {}
                         SaveState.FAILED -> BarButton(MeeshyIcons.Close, saveLabel, MeeshyTheme.tokens.error) {}
-                        SaveState.IDLE -> BarButton(MeeshyIcons.Download, saveLabel, accent) { picker.launch(request.fileName.ifBlank { title }) }
+                        SaveState.IDLE -> BarButton(MeeshyIcons.Download, saveLabel, accent) {
+                            val launched = runCatching { picker.launch(SavedDocument.fileName(request.fileName, fallback = title)) }.isSuccess
+                            if (!launched) { saveState = SaveState.FAILED; haptics.error() }
+                        }
                     }
                     BarButton(MeeshyIcons.Share, shareLabel, accent) { share(context, request) }
                 },
@@ -150,7 +158,10 @@ private fun PdfBody(request: FileViewerRequest, accent: Color) {
     val context = LocalContext.current
     var load by remember(request.localUri) { mutableStateOf<PdfLoad>(PdfLoad.Loading) }
     LaunchedEffect(request.localUri) {
-        load = PdfPages.open(context, request.localUri.toUri())?.let { PdfLoad.Ready(it) } ?: PdfLoad.Failed
+        // Ouvert hors annulation : un document ouvert pendant que la feuille se ferme est refermé, jamais perdu ouvert.
+        val opened = withContext(NonCancellable) { PdfPages.open(context, request.localUri.toUri()) }
+        if (!isActive) { opened?.close(); return@LaunchedEffect }
+        load = opened?.let { PdfLoad.Ready(it) } ?: PdfLoad.Failed
     }
     DisposableEffect(request.localUri) {
         onDispose { (load as? PdfLoad.Ready)?.pages?.close() }
