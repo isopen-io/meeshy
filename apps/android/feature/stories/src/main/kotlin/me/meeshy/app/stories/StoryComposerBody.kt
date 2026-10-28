@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -38,15 +39,22 @@ internal fun StoryComposerBody(
                 modifier = Modifier.align(Alignment.End),
             )
         }
-        if (!state.band.isChromeHidden) SlideStrip(
-            deck = state.deck,
-            onSelect = viewModel::onSelectSlide,
-            onAdd = viewModel::onAddSlide,
-            onDuplicate = viewModel::onDuplicateSelectedSlide,
-            onRemove = viewModel::onRemoveSlide,
-            onMove = viewModel::onMoveSlide,
-            showsAdd = showsAddSlide,
-        )
+        if (!state.band.isChromeHidden) {
+            val backgrounds = remember(state.deck.slides, state.attachments, state.pendingUploads) {
+                state.deck.slides.associate { it.id to state.thumbnailBackgroundOf(it) }
+            }
+            ComposerSlideRail(
+                deck = state.deck,
+                backgrounds = backgrounds,
+                accentHex = viewModel.authorAccentHex,
+                onSelect = viewModel::onSelectSlide,
+                onAdd = rememberGuardedAddition(state.deck.canAddSlide, viewModel::onAddSlide),
+                onDuplicate = rememberGuardedAddition(state.deck.canAddSlide, viewModel::onDuplicateSelectedSlide),
+                onRemove = viewModel::onRemoveSlide,
+                onMove = viewModel::onMoveSlide,
+                showsAdd = showsAddSlide,
+            )
+        }
         ComposerStage(
             carded = StoryCanvasFraming.shouldCard(
                 panelOpen = state.band.isPanelOpen &&

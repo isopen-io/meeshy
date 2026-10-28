@@ -28,6 +28,11 @@
     <string name="stories_composer_add_slide">إضافة شريحة</string>
     <string name="stories_composer_duplicate_slide">تكرار الشريحة</string>
     <string name="stories_composer_remove_slide">إزالة الشريحة</string>
+    <string name="stories_composer_remove_slide_title">إزالة هذه الشريحة؟</string>
+    <string name="stories_composer_remove_slide_message">سيُفقد كل ما تحتويه.</string>
+    <string name="stories_composer_remove_slide_confirm">إزالة</string>
+    <string name="stories_composer_slide_move_earlier">نقل إلى الأمام</string>
+    <string name="stories_composer_slide_move_later">نقل إلى الخلف</string>
     <string name="stories_composer_text_placeholder">اكتب شيئًا…</string>
     <string name="stories_composer_remove_text">إزالة النص</string>
     <string name="stories_composer_bg_none">بلا خلفية</string>

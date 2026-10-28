@@ -61,6 +61,10 @@
     <string name="composer_publish_as_story">Story veröffentlichen</string>
     <string name="composer_publish_as_storyAndReel">Story und Reel veröffentlichen</string>
     <string name="composer_rail_object_exit">Objekt verlassen</string>
+    <string name="composer_slide_rail">Szenen der Veröffentlichung</string>
+    <string name="composer_slide_rail_capReached">Höchstens zehn Szenen — lösche eine, um eine neue zu erstellen</string>
+    <string name="composer_slide_rail_delete">Szene %1$d löschen</string>
+    <string name="composer_slide_rail_position">Szene %1$d von %2$d</string>
     <string name="composer_socle_audience">Publikum</string>
     <string name="composer_socle_publish">Veröffentlichen</string>
     <string name="composer_sound_background_a11y">Hintergrundton</string>
