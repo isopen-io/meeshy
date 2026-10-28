@@ -148,6 +148,9 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                             geometry: geometry,
                             isDark: isDark,
                             height: rulerHeight,
+                            visibleWindow: RulerView.visibleWindow(
+                                scrollX: max(0, scrollX - Self.laneLabelWidth - Self.horizontalPadding),
+                                viewportWidth: viewportWidth),
                             onTapTime: onScrub,
                             onScrubBegan: onScrubBegan,
                             onScrubEnded: onScrubEnded
