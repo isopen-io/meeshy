@@ -9,29 +9,36 @@ import java.nio.ByteBuffer
  * décalage ne bouge donc — les `stco`/`co64` restent justes, `moov` reste devant `mdat` si c'était le cas (lecture
  * progressive), les pistes, leurs horloges et la matrice de rotation du `tkhd` ne changent pas d'un octet.
  *
- * Liste BLANCHE à chaque niveau parcouru (`moov`, `trak`, `mdia`, `minf`, `edts`, `mvex`) : tout le reste tombe —
+ * Liste BLANCHE à chaque niveau parcouru (`moov`, `trak`, `mdia`, `minf`, `edts`, `mvex`, et dans un film FRAGMENTÉ
+ * `moof`, `traf`, `mfra`, où la norme admet aussi `udta` et `meta`) : tout le reste tombe — `emsg` compris —
  * `udta` (`©xyz` qu'écrit `MediaMuxer.setLocation`, `loci` 3GPP, XMP), `meta` (`keys`/`ilst` d'Apple dont
  * `com.apple.quicktime.location.ISO6709`), `uuid` (XMP), aperçus `pnot`/`PICT`. Les remplissages (`free`, `skip`, `wide`)
- * sont vidés : un logiciel de montage y laisse d'anciens `moov`. Une piste qui n'est ni image, ni son, ni sous-titre, ni
- * code temporel (métadonnées minutées : `mebx` de l'iPhone, `camm`, `gpmd`, qui portent un lieu PAR IMAGE) disparaît et
- * ses échantillons sont mis à zéro dans `mdat`. Des octets illisibles APRÈS le film complet (traîne de fabricant) sont
- * coupés. Tout le reste d'illisible — `moov` compressé (`cmov`), tailles incohérentes, piste minutée fragmentée — rend
- * `null` : l'appelant refuse l'envoi plutôt que de laisser partir l'original.
+ * sont vidés : un logiciel de montage y laisse d'anciens `moov`. Une piste qui n'est ni image, ni son, ni code temporel
+ * (métadonnées minutées : `mebx` de l'iPhone, `camm`, `gpmd`, qui portent un lieu PAR IMAGE ; mais aussi sous-titres et
+ * chapitres, du texte libre où une caméra de drone écrit sa télémétrie) disparaît et ses échantillons sont mis à zéro dans
+ * `mdat`. Des octets illisibles APRÈS le film complet (traîne de fabricant) sont coupés. Tout le reste d'illisible —
+ * `moov` compressé (`cmov`), tailles incohérentes, piste minutée fragmentée, référence de données vers un fichier extérieur
+ * (`dref` non autonome : une URL libre) — rend `null` : l'appelant refuse l'envoi plutôt que de laisser partir l'original.
  */
 internal object IsoMediaMetadataScrubber {
     private const val HEADER = 8
     private const val FREE = "free"
     private val PADDING = setOf("free", "skip", "wide")
-    private val TOP_LEVEL_KEPT = setOf("ftyp", "moov", "mdat", "moof", "mfra", "sidx", "ssix", "styp", "pdin", "emsg", "prft") + PADDING
+    private val TOP_LEVEL_KEPT = setOf("ftyp", "moov", "mdat", "moof", "mfra", "sidx", "ssix", "styp", "pdin", "prft") + PADDING
     private val KEPT = mapOf(
         "moov" to setOf("mvhd", "trak", "mvex", "iods"),
+        "moof" to setOf("mfhd", "traf", "pssh"),
+        "traf" to setOf("tfhd", "tfdt", "trun", "sbgp", "sgpd", "subs", "saiz", "saio", "senc"),
+        "mfra" to setOf("tfra", "mfro"),
         "trak" to setOf("tkhd", "edts", "mdia", "tref", "tapt", "trgr", "load", "txas"),
         "mdia" to setOf("mdhd", "hdlr", "minf", "elng"),
         "minf" to setOf("vmhd", "smhd", "hmhd", "nmhd", "sthd", "gmhd", "hdlr", "dinf", "stbl"),
         "edts" to setOf("elst"),
+        "dinf" to setOf("dref"),
         "mvex" to setOf("mehd", "trex", "trep", "leva"),
     )
-    private val MEDIA_HANDLERS = setOf("vide", "soun", "text", "sbtl", "subt", "clcp", "tmcd", "auxv", "pict")
+    private val MEDIA_HANDLERS = setOf("vide", "soun", "tmcd", "auxv", "pict")
+    private const val SELF_CONTAINED = 1
 
     private class Box(val type: String, val offset: Int, val header: Int, val end: Int) {
         val payload: Int get() = offset + header
@@ -92,6 +99,7 @@ internal object IsoMediaMetadataScrubber {
             }
             when (box.type) {
                 "moov" -> { edits += container(src, box); seenMoov = true }
+                "moof", "mfra" -> edits += container(src, box)
                 "mdat" -> mediaEnd = box.end
                 in PADDING -> edits += Edit.Zero(box.payload, box.end)
                 !in TOP_LEVEL_KEPT -> edits += Edit.Neutralize(box)
@@ -114,9 +122,22 @@ internal object IsoMediaMetadataScrubber {
                 child.type == "trak" && handlerOf(src, child) !in MEDIA_HANDLERS ->
                     if (fragmented) throw Unreadable() else listOf(Edit.Neutralize(child)) + samplesOf(src, child)
                 child.type in KEPT -> container(src, child)
+                child.type == "dref" -> selfContained(src, child)
                 else -> emptyList()
             }
         }
+    }
+
+    /**
+     * Une référence de données ne porte qu'un drapeau « dans ce fichier » : une entrée qui nomme un fichier extérieur — donc
+     * une chaîne libre, où un lieu tiendrait — n'est pas réécrite, elle fait refuser l'envoi.
+     */
+    private fun selfContained(src: ByteArray, dref: Box): List<Edit> {
+        val entries = children(src, Box(dref.type, dref.offset + 4, dref.header + 4, dref.end))
+        val local = entries.all { entry ->
+            entry.end - entry.payload == 4 && (ByteBuffer.wrap(src).getInt(entry.payload) and SELF_CONTAINED) != 0
+        }
+        return if (local) emptyList() else throw Unreadable()
     }
 
     private fun children(src: ByteArray, parent: Box): List<Box> {

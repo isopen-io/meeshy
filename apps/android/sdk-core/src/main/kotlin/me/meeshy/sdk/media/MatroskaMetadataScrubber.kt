@@ -4,20 +4,27 @@ package me.meeshy.sdk.media
  * **Le retrait des métadonnées d'une vidéo ou d'un son WebM / Matroska, SANS réencodage ni déplacement d'octet** (#13543).
  *
  * Même principe que [IsoMediaMetadataScrubber] : un élément retiré devient un élément `Void` (0xEC) de MÊME taille, contenu
- * mis à zéro — aucune position (SeekHead, Cues) ne bouge. Tombent : `Tags` (où un enregistreur pose `LOCATION`),
- * `Attachments` (fichiers joints, vignettes) et le `Title` de `Info`. Les `Void` existants sont vidés. Un `Cluster` de taille
- * inconnue (enregistrement en direct) se parcourt jusqu'au prochain élément de premier niveau. Tout ce qui ne se lit pas
- * rend `null` : l'appelant refuse l'envoi.
+ * mis à zéro — aucune position (SeekHead, Cues) ne bouge. Liste BLANCHE au niveau du segment : `SeekHead`, `Info`, `Tracks`,
+ * `Cues`, `Cluster`, `Void`, `CRC-32` restent ; `Tags` (où un enregistreur pose `LOCATION`), `Attachments`, `Chapters` (texte
+ * libre) deviennent `Void` ; un élément de premier niveau INCONNU fait refuser le fichier. Dans `Info` ne restent que
+ * l'échelle de temps, la durée et l'identifiant du segment (titre, nom de fichier, date, applications : `Void`) ; dans
+ * chaque piste, `Name`, `Language` et `CodecName` deviennent `Void`. Un `Cluster` de taille inconnue (enregistrement en direct) se
+ * parcourt jusqu'au prochain élément de premier niveau. Tout ce qui ne se lit pas rend `null` : l'appelant refuse l'envoi.
  */
 internal object MatroskaMetadataScrubber {
     private const val EBML = 0x1A45DFA3L
     private const val SEGMENT = 0x18538067L
     private const val CLUSTER = 0x1F43B675L
     private const val INFO = 0x1549A966L
-    private const val TITLE = 0x7BA9L
+    private const val TRACKS = 0x1654AE6BL
+    private const val TRACK_ENTRY = 0xAEL
     private const val VOID = 0xECL
-    private val DROPPED = setOf(0x1254C367L, 0x1941A469L)
-    private val LEVEL_ONE = setOf(0x114D9B74L, INFO, 0x1654AE6BL, 0x1C53BB6BL, 0x1043A770L, CLUSTER, VOID, 0xBFL) + DROPPED
+    private const val CRC32 = 0xBFL
+    private val SEGMENT_KEPT = setOf(0x114D9B74L, 0x1C53BB6BL, CLUSTER, VOID, CRC32)
+    private val DROPPED = setOf(0x1254C367L, 0x1941A469L, 0x1043A770L)
+    private val LEVEL_ONE = SEGMENT_KEPT + DROPPED + setOf(INFO, TRACKS)
+    private val INFO_KEPT = setOf(0x2AD7B1L, 0x4489L, 0x73A4L, CRC32)
+    private val TRACK_TEXT = setOf(0x536EL, 0x22B59CL, 0x22B59DL, 0x258688L)
 
     private class Element(val id: Long, val offset: Int, val dataStart: Int, val end: Int, val unknownSize: Boolean)
 
@@ -60,13 +67,24 @@ internal object MatroskaMetadataScrubber {
         while (at < segment.end) {
             val element = read(src, at, segment.end)
             val end = if (element.unknownSize) unknownClusterEnd(src, element, segment.end) else element.end
-            when {
-                element.id in DROPPED || element.id == VOID -> voids += element
-                element.id == INFO -> voids += children(src, element).filter { it.id == TITLE || it.id == VOID }
+            when (element.id) {
+                in DROPPED, VOID -> voids += element
+                INFO -> voids += children(src, element).filter { it.id !in INFO_KEPT }
+                TRACKS -> voids += tracks(src, element)
+                !in SEGMENT_KEPT -> throw Unreadable()
             }
             at = end
         }
         return voids
+    }
+
+    private fun tracks(src: ByteArray, tracks: Element): List<Element> = children(src, tracks).flatMap { entry ->
+        when (entry.id) {
+            TRACK_ENTRY -> children(src, entry).filter { it.id in TRACK_TEXT || it.id == VOID }
+            VOID -> listOf(entry)
+            CRC32 -> emptyList()
+            else -> throw Unreadable()
+        }
     }
 
     private fun children(src: ByteArray, parent: Element): List<Element> {

@@ -17,6 +17,10 @@ import me.meeshy.sdk.outbox.SendResult
  * - the blob is **gone** (process death between enqueue and drain, or a double
  *   delivery) → [SendResult.PermanentFailure]: there is nothing to upload and a
  *   retry can never recover it, so the row is exhausted rather than spun forever.
+ * - the bytes are **refused before leaving** because their location cannot be removed
+ *   ([OutgoingMediaSanitizer.REFUSED_CODE], [OutgoingMediaSanitizer.MEDIA_REFUSED_CODE]) →
+ *   [SendResult.PermanentFailure]: the same bytes are refused on every retry, so the row is
+ *   failed at once instead of being replayed until the attempts run out (#13543).
  * - the upload **fails transiently** (offline, 5xx) → [SendResult.TransientFailure]:
  *   the lane stops and WorkManager retries with the bytes still durably held.
  * - the upload **succeeds but yields no usable media** → [SendResult.PermanentFailure]:
@@ -38,7 +42,8 @@ object MediaUploadSender {
     ): SendResult {
         if (item == null) return SendResult.PermanentFailure(REASON_BLOB_GONE)
         return when (val result = upload(item)) {
-            is NetworkResult.Failure -> SendResult.TransientFailure
+            is NetworkResult.Failure ->
+                if (result.error.code in LOCATION_REFUSALS) SendResult.PermanentFailure(REASON_LOCATION_NOT_REMOVABLE) else SendResult.TransientFailure
             is NetworkResult.Success -> {
                 val producedId = result.data.firstOrNull()?.id
                 if (producedId.isNullOrBlank()) {
@@ -52,4 +57,6 @@ object MediaUploadSender {
 
     const val REASON_BLOB_GONE: String = "Upload bytes are no longer available"
     const val REASON_NO_MEDIA: String = "Upload returned no usable media"
+    const val REASON_LOCATION_NOT_REMOVABLE: String = "The location of this file could not be removed, so it was not sent"
+    private val LOCATION_REFUSALS = setOf(OutgoingMediaSanitizer.REFUSED_CODE, OutgoingMediaSanitizer.MEDIA_REFUSED_CODE)
 }
