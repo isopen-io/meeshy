@@ -134,6 +134,17 @@ class IncomingCallLaunchProofTest {
         assertThat(routeOf(retargeted).orEmpty()).doesNotContain("call?")
     }
 
+    // Rouvrir Meeshy depuis les RÉCENTS relance l'activité avec l'intent RACINE de la tâche — celui du bouton
+    // « Répondre » quand c'est lui qui l'a ouverte. Sa preuve est authentique, mais le geste qu'elle atteste est passé :
+    // rejoué, il redécrochait un appel de groupe encore en cours que l'utilisateur avait quitté.
+    @Test
+    fun `a call launch replayed from the recent apps is never believed, even with a genuine proof`() {
+        val answer = postedNotification().answerIntent().savedIntent()
+            .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+        assertThat(routeOf(answer).orEmpty()).doesNotContain("call?")
+    }
+
     @Test
     fun `the proof key is a per-install secret that survives a process restart`() {
         val answer = postedNotification().answerIntent().savedIntent()

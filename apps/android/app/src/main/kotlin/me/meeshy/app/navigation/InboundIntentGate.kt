@@ -25,6 +25,12 @@ import me.meeshy.app.push.MeeshyFcmService
  * à ouvrir, comme un lien `meeshy://` le permet déjà.
  */
 internal object InboundIntentGate {
+    /**
+     * Les récents relancent l'intent RACINE de la tâche : celui du bouton « Répondre » quand il l'a ouverte. Sa preuve est
+     * authentique mais le geste qu'elle atteste est passé — un appel ne se décroche ni ne se présente depuis l'historique.
+     */
+    private fun Intent.isReplayedFromRecents(): Boolean = (flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+
     private const val IMPLICIT_ROUTE_SCHEME = "android-app"
     private const val NAV_CONTROLLER_EXTRA_PREFIX = "android-support-nav:controller:"
     private val CALL_EXTRAS = listOf(
@@ -44,6 +50,6 @@ internal object InboundIntentGate {
             emptyList()
         }
         navigationKeys.forEach(intent::removeExtra)
-        if (!isGenuineCallLaunch(intent)) CALL_EXTRAS.forEach(intent::removeExtra)
+        if (intent.isReplayedFromRecents() || !isGenuineCallLaunch(intent)) CALL_EXTRAS.forEach(intent::removeExtra)
     }
 }

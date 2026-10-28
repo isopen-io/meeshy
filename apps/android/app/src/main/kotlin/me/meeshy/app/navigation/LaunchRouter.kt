@@ -160,11 +160,14 @@ object LaunchRouter {
         route != null && EMAIL_LINK_ROUTE_PREFIXES.any { route.startsWith(it) }
 
     /**
-     * La route de lancement lue dans `onCreate`. Une activité RESTAURÉE (mort du processus) reçoit du système l'intent
-     * ORIGINAL, adresse intacte : vider `intent.data` n'avait vidé que la copie locale. Une route à jeton d'e-mail relue
-     * là rejouerait un lien déjà présenté ; elle est donc ignorée — la pile restaurée montre déjà son écran.
+     * La route de lancement lue dans `onCreate`. Une activité RESTAURÉE (mort du processus) ou RECRÉÉE (thème, langue,
+     * densité) reçoit l'intent ORIGINAL, adresse et extras intacts : vider `intent.data` n'avait vidé que la copie locale.
+     * Une route à jeton d'e-mail relue là rejouerait un lien déjà présenté, et une route d'appel redécrocherait (#13504)
+     * un appel de groupe que l'utilisateur a quitté et qui dure encore ; les deux sont ignorées — la pile restaurée
+     * montre déjà son écran.
      */
-    fun onCreateRoute(route: String?, restored: Boolean): String? = route.takeUnless { restored && opensWithoutSession(it) }
+    fun onCreateRoute(route: String?, restored: Boolean): String? =
+        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it)) }
 
     private val EMAIL_LINK_ROUTE_PREFIXES =listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
 
