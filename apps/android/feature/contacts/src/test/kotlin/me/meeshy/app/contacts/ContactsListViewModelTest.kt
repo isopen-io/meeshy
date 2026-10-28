@@ -345,6 +345,24 @@ class ContactsListViewModelTest {
     }
 
     @Test
+    fun `a cross-screen unfriend keeps the pruned roster under the account it happened in (#13560)`() = runTest {
+        val ticketOfA = me.meeshy.sdk.session.AccountTicket(ownerId = "me", generation = 1)
+        coEvery { listRepository.ticket() } returns ticketOfA
+        val cache = FriendshipCache()
+        viewModel(
+            received = listOf(
+                accepted("r1", sender = user("alice")),
+                accepted("r2", sender = user("bob")),
+            ),
+            cache = cache,
+        )
+
+        cache.didRemoveFriend("bob")
+
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }, ticketOfA) }
+    }
+
+    @Test
     fun `a cross-screen unfriend writes the pruned roster through to the cache without a refetch`() = runTest {
         val cache = FriendshipCache()
         val vm = viewModel(

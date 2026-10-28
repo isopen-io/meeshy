@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.network.NetworkMonitor
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
@@ -52,6 +53,27 @@ class UserStatsViewModelTest {
     }
 
     @Test
+    fun `served answers are kept under the account ticket taken BEFORE the requests left (#13560)`() = runTest(dispatcher) {
+        val rig = Rig()
+        val ticketOfA = AccountTicket(ownerId = "alice", generation = 1)
+        var signedIn = ticketOfA
+        coEvery { rig.cache.ticket() } answers { signedIn }
+        coEvery { rig.cache.cachedStats("alice") } returns null
+        coEvery { rig.cache.cachedTimeline("alice") } returns null
+        coEvery { rig.users.getMyStats() } coAnswers {
+            signedIn = AccountTicket(ownerId = "bob", generation = 2)
+            NetworkResult.Success(served)
+        }
+        coEvery { rig.users.getUserStatsTimeline() } returns NetworkResult.Success(week)
+
+        rig.viewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { rig.cache.persistStats("alice", served, ticketOfA) }
+        coVerify(exactly = 1) { rig.cache.persistTimeline("alice", week, ticketOfA) }
+    }
+
+    @Test
     fun `a cold start with a served answer paints it and keeps it per account`() = runTest(dispatcher) {
         val rig = Rig()
         coEvery { rig.cache.cachedStats("alice") } returns null
@@ -69,8 +91,8 @@ class UserStatsViewModelTest {
         assertThat(state.failure).isNull()
         assertThat(state.stats!!.tiles.first { it.value == 1_500 }.metric).isEqualTo(StatMetric.MESSAGES)
         assertThat(state.timeline!!.bars).hasSize(2)
-        coVerify(exactly = 1) { rig.cache.persistStats("alice", served) }
-        coVerify(exactly = 1) { rig.cache.persistTimeline("alice", week) }
+        coVerify(exactly = 1) { rig.cache.persistStats("alice", served, any()) }
+        coVerify(exactly = 1) { rig.cache.persistTimeline("alice", week, any()) }
     }
 
     @Test
@@ -103,7 +125,7 @@ class UserStatsViewModelTest {
 
         assertThat(vm.state.value.failure).isEqualTo(UserStatsFailure.Offline)
         assertThat(vm.state.value.stats!!.tiles.first().value).isEqualTo(900)
-        coVerify(exactly = 0) { rig.cache.persistStats(any(), any()) }
+        coVerify(exactly = 0) { rig.cache.persistStats(any(), any(), any()) }
     }
 
     @Test

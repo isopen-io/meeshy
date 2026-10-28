@@ -57,7 +57,7 @@ class FriendListRepositoryTest {
     fun `persist then cachedSnapshot returns the friends in the persisted order`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("online", isOnline = true), user("offline", isOnline = false)))
+        repo.persist(listOf(user("online", isOnline = true), user("offline", isOnline = false)), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("online", "offline").inOrder()
     }
@@ -73,7 +73,7 @@ class FriendListRepositoryTest {
             user("a", isOnline = true, lastActiveAt = "2020-01-01T00:00:00Z"),
         )
 
-        repo.persist(assembled)
+        repo.persist(assembled, null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("b", "a").inOrder()
     }
@@ -89,7 +89,7 @@ class FriendListRepositoryTest {
             lastActiveAt = "2026-06-01T12:00:00Z",
         )
 
-        repo.persist(listOf(rich))
+        repo.persist(listOf(rich), null)
 
         assertThat(repo.cachedSnapshot()).containsExactly(rich)
     }
@@ -98,8 +98,8 @@ class FriendListRepositoryTest {
     fun `persist drops friends absent from the latest list`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("alice"), user("bob")))
-        repo.persist(listOf(user("bob")))
+        repo.persist(listOf(user("alice"), user("bob")), null)
+        repo.persist(listOf(user("bob")), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("bob")
     }
@@ -108,8 +108,8 @@ class FriendListRepositoryTest {
     fun `persisting an empty list is a synced-empty cache, not a cold one`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("alice")))
-        repo.persist(emptyList())
+        repo.persist(listOf(user("alice")), null)
+        repo.persist(emptyList(), null)
 
         // synced-but-empty: a real empty roster, distinct from the cold `null`.
         assertThat(repo.cachedSnapshot()).isEqualTo(emptyList<FriendRequestUser>())
@@ -119,8 +119,8 @@ class FriendListRepositoryTest {
     fun `cachedSnapshot reflects only the newest persisted roster after several writes`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("a"), user("b"), user("c")))
-        repo.persist(listOf(user("c"), user("a")))
+        repo.persist(listOf(user("a"), user("b"), user("c")), null)
+        repo.persist(listOf(user("c"), user("a")), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("c", "a").inOrder()
     }
@@ -128,7 +128,7 @@ class FriendListRepositoryTest {
     @Test
     fun `friend rows are observable through the dao ordered by sortIndex`() = runTest {
         val repo = repository()
-        repo.persist(listOf(user("first"), user("second")))
+        repo.persist(listOf(user("first"), user("second")), null)
 
         val rows = db.friendDao().observeAll().first()
 
@@ -139,7 +139,7 @@ class FriendListRepositoryTest {
     @Test
     fun `insertAtHead puts the new friend first and keeps the rest in order`() = runTest {
         val repo = repository()
-        repo.persist(listOf(user("a"), user("b")))
+        repo.persist(listOf(user("a"), user("b")), null)
 
         repo.insertAtHead(user("new"))
 
@@ -149,7 +149,7 @@ class FriendListRepositoryTest {
     @Test
     fun `insertAtHead moves an already present friend to the head without duplicating`() = runTest {
         val repo = repository()
-        repo.persist(listOf(user("a"), user("b")))
+        repo.persist(listOf(user("a"), user("b")), null)
 
         repo.insertAtHead(user("b"))
 
@@ -168,7 +168,7 @@ class FriendListRepositoryTest {
     @Test
     fun `remove drops the friend and preserves the order of the others`() = runTest {
         val repo = repository()
-        repo.persist(listOf(user("a"), user("b"), user("c")))
+        repo.persist(listOf(user("a"), user("b"), user("c")), null)
 
         repo.remove("b")
 

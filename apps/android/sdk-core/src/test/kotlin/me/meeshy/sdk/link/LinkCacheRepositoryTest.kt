@@ -47,7 +47,7 @@ class LinkCacheRepositoryTest {
     }
 
     @Test fun `sur cache non vide aucune attente, meme hors ligne`() = runTest {
-        cache().put("link:stats", "l1", ShareLinkArrivalStats(visits = 3), ShareLinkArrivalStats.serializer())
+        cache().put("link:stats", "l1", ShareLinkArrivalStats(visits = 3), ShareLinkArrivalStats.serializer(), null)
         clock.now += 60 * 60_000
         coEvery { api.linkStats("l1") } throws IOException("hors ligne")
 
@@ -69,7 +69,7 @@ class LinkCacheRepositoryTest {
     }
 
     @Test fun `la deconnexion efface tout ce que les liens avaient garde`() = runTest {
-        cache().put("link:stats", "l1", ShareLinkArrivalStats(visits = 3), ShareLinkArrivalStats.serializer())
+        cache().put("link:stats", "l1", ShareLinkArrivalStats(visits = 3), ShareLinkArrivalStats.serializer(), null)
 
         repository().clear()
 
