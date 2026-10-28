@@ -33,6 +33,9 @@ data class ComposerHostState(
     val holder: ComposerCarry.Side? = null,
     val carry: ComposerCarry? = null,
     private val carrySeq: Int = 0,
+    /** L'audience que la dernière bascule a POSÉE sur un côté : intacte au retour, elle ne revient pas écraser l'autre. */
+    private val audienceSeed: Pair<ComposerCarry.Side, StoryVisibility>? = null,
+    private val audienceSeedBefore: Pair<ComposerCarry.Side, StoryVisibility>? = null,
 ) {
     val reelGate: Boolean get() = ReelComposition.qualifiesAsReel(media)
 
@@ -92,6 +95,10 @@ data class ComposerHostState(
         val target = ComposerCarry.Side.of(format) ?: return chosenNow
         val source = ComposerCarry.Side.of(selectedFormat) ?: holder
         if (source == null || source == target) return chosenNow
+        val unapplied = carry?.takeIf { it.target == source }
+        if (unapplied != null) {
+            return chosenNow.copy(carry = null, synced = unapplied.ledgerBefore, audienceSeed = audienceSeedBefore)
+        }
         return chosenNow.carrying(source, target)
     }
 
@@ -106,11 +113,17 @@ data class ComposerHostState(
         )
         val sourceAudience = if (toScene) postVisibility else storyVisibility
         val targetAudience = if (toScene) storyVisibility else postVisibility
-        val audience = sourceAudience.takeIf {
-            it != targetAudience && (toScene || ComposerAudienceCarry.postWire(it) != null)
-        }
-        val next = ComposerCarry(target, plan, audience, token = carrySeq + 1)
-        return copy(synced = plan.synced, carrySeq = carrySeq + 1, carry = next.takeIf { !plan.isEmpty || plan.leftBehind > 0 || audience != null })
+        val arrival = ComposerAudienceCarry.arrival(sourceAudience, toScene)
+            .takeUnless { audienceSeed == (source to sourceAudience) }
+        val audience = arrival?.takeIf { it != targetAudience }
+        val next = ComposerCarry(target, plan, audience, token = carrySeq + 1, ledgerBefore = synced)
+        return copy(
+            synced = plan.synced,
+            carrySeq = carrySeq + 1,
+            carry = next.takeIf { !plan.isEmpty || plan.leftBehind > 0 || audience != null },
+            audienceSeed = arrival?.let { target to it } ?: audienceSeed,
+            audienceSeedBefore = audienceSeed,
+        )
     }
 
     /** The target surface applied [token]'s carry: it is never applied twice. */

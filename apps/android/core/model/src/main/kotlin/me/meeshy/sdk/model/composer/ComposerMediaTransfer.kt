@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.composer
 
+import me.meeshy.sdk.model.ClientIdFormat
 import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.UploadedMedia
 
@@ -25,7 +26,8 @@ data class MediaTransferPlan(
  * Le document est UN : à la bascule, les médias de la surface quittée deviennent ceux de la surface d'arrivée
  * (port de `documentMediaObjectIdBySource` de l'hôte iOS). La source fait foi sur ce qu'elle porte ; un média
  * porté puis retiré à la source est retiré de l'arrivée (le [ledger] s'en souvient) ; un média propre à
- * l'arrivée (jamais porté) n'est JAMAIS touché. Au-delà de la capacité, le surplus reste derrière, dit.
+ * l'arrivée (jamais porté) n'est JAMAIS touché. Au-delà de la capacité, le surplus reste derrière, dit ; un
+ * média encore en file hors ligne (`cmid_…`, sans id serveur) ne voyage jamais : il reste derrière, compté.
  */
 object ComposerMediaTransfer {
     fun plan(
@@ -35,7 +37,8 @@ object ComposerMediaTransfer {
         room: Int,
         sourceLeftBehind: Int = 0,
     ): MediaTransferPlan {
-        val distinct = source.distinctBy { it.media.id }
+        val (offline, distinct) = source.distinctBy { it.media.id }
+            .partition { it.media.id.startsWith(ClientIdFormat.CMID_PREFIX) }
         val sourceIds = distinct.map { it.media.id }.toSet()
         val remove = (ledger - sourceIds).intersect(targetIds.toSet())
         val kept = targetIds.filterNot { it in remove }.toSet()
@@ -51,13 +54,17 @@ object ComposerMediaTransfer {
             add = add,
             remove = remove,
             alts = alts,
-            leftBehind = missing.size - add.size + sourceLeftBehind,
+            leftBehind = missing.size - add.size + offline.size + sourceLeftBehind,
             synced = synced,
         )
     }
 }
 
-/** L'audience suit la bascule quand la surface d'arrivée sait l'exprimer ; sinon la sienne reste, jamais élargie. */
+/**
+ * L'audience suit la bascule : la story sait dire toutes celles d'un post ; un post ne sait dire ni COMMUNITY, ni
+ * ONLY, ni EXCEPT, et une audience qu'il ne sait pas dire n'est JAMAIS élargie en silence — elle se resserre sur
+ * PRIVATE (l'auteur seul), que le sélecteur du post montre. iOS garde la même audience aux deux surfaces.
+ */
 object ComposerAudienceCarry {
     private val POST_WIRE = mapOf(
         StoryVisibility.PUBLIC to "PUBLIC",
@@ -69,4 +76,8 @@ object ComposerAudienceCarry {
     fun postWire(visibility: StoryVisibility): String? = POST_WIRE[visibility]
 
     fun fromPostWire(wire: String): StoryVisibility? = POST_WIRE.entries.firstOrNull { it.value == wire }?.key
+
+    /** L'audience que reçoit la surface d'arrivée : la même, ou la plus étroite qu'un post sait dire. */
+    fun arrival(source: StoryVisibility, toScene: Boolean): StoryVisibility =
+        if (toScene || postWire(source) != null) source else StoryVisibility.PRIVATE
 }
