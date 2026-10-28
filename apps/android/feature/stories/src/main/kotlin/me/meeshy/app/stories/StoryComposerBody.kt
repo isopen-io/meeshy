@@ -26,6 +26,7 @@ internal fun StoryComposerBody(
     modifier: Modifier = Modifier,
     onOpenAudience: (() -> Unit)? = null,
     showsAddSlide: Boolean = true,
+    showsToolBand: Boolean = true,
 ) {
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -58,7 +59,7 @@ internal fun StoryComposerBody(
             panel = panel,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
-        if (!state.isDrawingActive) {
+        if (showsToolBand && !state.isDrawingActive) {
             ComposerToolBand(
                 band = state.band,
                 badges = ComposerBandTools.badges(

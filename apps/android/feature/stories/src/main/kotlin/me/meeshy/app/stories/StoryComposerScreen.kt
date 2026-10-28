@@ -219,6 +219,7 @@ fun StoryComposerScreen(
             onClose = onClose,
             titleContent = titleContent,
             onOpenAudience = { showAudience = true },
+            onOpenStickers = { showStickerPicker = true },
             panel = panel,
         )
         return
