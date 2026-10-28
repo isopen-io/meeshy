@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.CanvasMediaAdoption
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.wireValue
@@ -49,6 +50,7 @@ data class StoryComposerDraft(
     val allowSoundExtraction: Boolean? = null,
     /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
+    val frame: SceneFrame = SceneFrame(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -159,7 +161,7 @@ data class StoryComposerDraft(
         val mediaObjects = listOfNotNull(backgroundMedia?.toMediaObject())
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
-            audio.isEmpty()
+            audio.isEmpty() && frame.isNeutral
         if (hasNothing) return null
         return StoryEffects(
             background = background?.serialized(),
@@ -171,6 +173,9 @@ data class StoryComposerDraft(
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,
             audioPlayerObjects = audio.takeIf { it.isNotEmpty() },
+            backgroundTransform = frame.backgroundTransform(),
+            opening = frame.opening,
+            closing = frame.closing,
         )
     }
 

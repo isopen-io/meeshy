@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -135,7 +136,8 @@ object StoryComposerAutosave {
             deck.slides.all {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
-                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty()
+                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty() &&
+                    it.frame.isNeutral
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -164,6 +166,10 @@ fun StorySlideDeck.toDraftSnapshot(
             elements = it.elements.map { element -> element.toDraftSnapshot() },
             stickers = it.stickers.map { sticker -> sticker.toDraftSnapshot() },
             audio = it.audio,
+            fitMode = it.frame.fitMode,
+            backdrop = it.frame.backdrop,
+            opening = it.frame.opening?.let(SceneFrame::wire),
+            closing = it.frame.closing?.let(SceneFrame::wire),
         )
     },
     selectedId = selectedId,
@@ -204,6 +210,12 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 backgroundMediaId = it.backgroundMediaId,
                 backgroundLoop = it.backgroundLoop,
                 audio = it.audio,
+                frame = SceneFrame(
+                    fitMode = it.fitMode,
+                    backdrop = it.backdrop,
+                    opening = SceneFrame.parseTransition(it.opening),
+                    closing = SceneFrame.parseTransition(it.closing),
+                ),
             )
         },
         selectedId = selectedId,

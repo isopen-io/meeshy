@@ -729,6 +729,7 @@ class StoryComposerViewModel @Inject constructor(
                 mediaCaption = current.draft.mediaCaption,
                 allowSoundExtraction = current.draft.allowSoundExtraction,
                 audio = slide.audio,
+                frame = slide.frame,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
