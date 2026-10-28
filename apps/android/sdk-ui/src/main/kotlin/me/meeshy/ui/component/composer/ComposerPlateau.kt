@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -14,12 +15,16 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -34,10 +39,13 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.ComposerRailGeometry
 import me.meeshy.sdk.model.composer.PullDownDismiss
+import me.meeshy.sdk.model.composer.PullOutcome
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.PlateauTint
 
@@ -49,14 +57,17 @@ import me.meeshy.ui.theme.PlateauTint
 public val LocalOnComposerPlateau: ProvidableCompositionLocal<Boolean> = compositionLocalOf { false }
 
 /**
- * The PLATEAU of the one composer (iOS `ComposerPlateau` + the rails of `MeeshyComposerHost`): a permanent dark tint,
- * a top corridor (close, format), a LEADING rail for what the author PLACES on the scene, a TRAILING rail for what
- * structures the PUBLICATION, and a bottom socle. Rails live in the corridors on either side of the [content] card —
- * never on it (a control over the scene would make the preview lie, and steal the touches of the band it covers).
+ * The PLATEAU of the one composer (iOS `ComposerPlateau` + the chrome of `MeeshyComposerHost`): a permanent dark tint,
+ * a top corridor (close, format), a LEADING column for what the author PLACES on the scene, a TRAILING column for what
+ * acts on the objects' dimensions (controllers, history, a new slide), the CANONICAL line under the card for what
+ * belongs to the publication or the slide, and the SOCLE (audience, publish). Every zone lives in the corridors around
+ * the [content] card — never on it (a control over the scene would make the preview lie, and steal the touches of the
+ * band it covers). A surface without a scene simply leaves the columns empty.
  *
- * A pull down that the content does not absorb, or a drag on the top corridor, calls [onDismiss] like the cross does:
- * the drafts autosave, so leaving never loses the words.
+ * A pull down that the content does not absorb, or a drag on the top corridor, calls [onDismiss] like the cross does —
+ * the drafts autosave, so leaving never loses the words; with the keyboard up the same pull lowers it first.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 public fun ComposerPlateau(
     onDismiss: () -> Unit,
@@ -65,12 +76,27 @@ public fun ComposerPlateau(
     tint: PlateauTint = PlateauTint.DEFAULT,
     leadingRail: (@Composable ColumnScope.() -> Unit)? = null,
     trailingRail: (@Composable ColumnScope.() -> Unit)? = null,
-    socle: (@Composable () -> Unit)? = null,
+    canonicalRow: (@Composable RowScope.() -> Unit)? = null,
+    socle: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val density = LocalDensity.current.density
     val dismiss = rememberUpdatedState(onDismiss)
-    val pull = remember { PullDismissTracker(density) { dismiss.value() } }
+    val keyboardOpen = rememberUpdatedState(WindowInsets.isImeVisible)
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    val pull = remember {
+        PullDismissTracker(density, keyboardOpen = { keyboardOpen.value }) { outcome ->
+            when (outcome) {
+                PullOutcome.DISMISS -> dismiss.value()
+                PullOutcome.HIDE_KEYBOARD -> {
+                    focus.clearFocus()
+                    keyboard?.hide()
+                }
+                PullOutcome.NONE -> Unit
+            }
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -105,8 +131,26 @@ public fun ComposerPlateau(
             )
             Rail(trailingRail, Alignment.Top)
         }
-        socle?.let {
-            Box(Modifier.fillMaxWidth().padding(horizontal = ComposerPlateauDimens.EDGE, vertical = ComposerPlateauDimens.GUTTER)) { it() }
+        canonicalRow?.let { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = ComposerPlateauDimens.EDGE, vertical = ComposerPlateauDimens.GUTTER),
+                horizontalArrangement = Arrangement.spacedBy(ComposerPlateauDimens.ENTRY_SPACING),
+                verticalAlignment = Alignment.CenterVertically,
+                content = row,
+            )
+        }
+        socle?.let { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ComposerPlateauDimens.EDGE, vertical = ComposerPlateauDimens.GUTTER),
+                horizontalArrangement = Arrangement.spacedBy(ComposerPlateauDimens.ENTRY_SPACING),
+                verticalAlignment = Alignment.CenterVertically,
+                content = row,
+            )
         }
     }
 }
@@ -132,7 +176,11 @@ internal object ComposerPlateauDimens {
 }
 
 /** Feeds [PullDownDismiss] from the leftover scroll of the content and from the corridor drag; allocation-free per frame. */
-private class PullDismissTracker(private val density: Float, private val onDismiss: () -> Unit) {
+private class PullDismissTracker(
+    private val density: Float,
+    private val keyboardOpen: () -> Boolean,
+    private val onOutcome: (PullOutcome) -> Unit,
+) {
     private var pull = PullDownDismiss()
 
     val connection = object : NestedScrollConnection {
@@ -152,8 +200,8 @@ private class PullDismissTracker(private val density: Float, private val onDismi
     }
 
     fun onRelease(velocityPx: Float) {
-        val dismiss = pull.shouldDismiss || pull.shouldDismissOnFling(velocityPx / density)
+        val outcome = pull.outcome(velocityPx / density, keyboardOpen())
         pull = pull.released()
-        if (dismiss) onDismiss()
+        onOutcome(outcome)
     }
 }
