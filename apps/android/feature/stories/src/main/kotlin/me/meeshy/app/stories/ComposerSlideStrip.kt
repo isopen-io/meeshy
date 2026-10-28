@@ -52,6 +52,7 @@ internal fun SlideStrip(
     onDuplicate: () -> Unit,
     onRemove: (String) -> Unit,
     onMove: (String, Int) -> Unit,
+    showsAdd: Boolean = true,
 ) {
     val spacingPx = with(LocalDensity.current) { 8.dp.toPx() }
     var chipWidthPx by remember { mutableFloatStateOf(0f) }
@@ -110,7 +111,7 @@ internal fun SlideStrip(
                 )
             }
         }
-        item {
+        if (showsAdd) item {
             AssistChip(
                 onClick = onAdd,
                 enabled = deck.canAddSlide,

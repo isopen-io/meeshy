@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -195,85 +196,43 @@ fun StoryComposerScreen(
         )
     }
 
+    val panel: @Composable () -> Unit = {
+        StoryComposerPanel(
+            state = state,
+            viewModel = viewModel,
+            onAddSticker = { showStickerPicker = true },
+            onPickMedia = {
+                when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                    StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                    StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                    StoryMediaPickMode.None -> Unit
+                }
+            },
+            onOpenSoundShelf = { showSoundShelf = true },
+        )
+    }
+    if (LocalOnComposerPlateau.current) {
+        StoryComposerPlateau(
+            state = state,
+            viewModel = viewModel,
+            sceneExport = sceneExport,
+            onClose = onClose,
+            titleContent = titleContent,
+            onOpenAudience = { showAudience = true },
+            panel = panel,
+        )
+        return
+    }
     Scaffold(
-        topBar = {
-            StoryComposerTopBar(
-                state = state,
-                viewModel = viewModel,
-                sceneExport = sceneExport,
-                onClose = onClose,
-                titleContent = titleContent,
-            )
-        },
+        topBar = { StoryComposerTopBar(state, viewModel, sceneExport, onClose, titleContent) },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AudiencePill(
-                visibility = state.draft.visibility,
-                count = state.draft.visibilityUserIds.size,
-                onClick = { showAudience = true },
-                modifier = Modifier.align(Alignment.End),
-            )
-
-            if (!state.band.isChromeHidden) SlideStrip(
-                deck = state.deck,
-                onSelect = viewModel::onSelectSlide,
-                onAdd = viewModel::onAddSlide,
-                onDuplicate = viewModel::onDuplicateSelectedSlide,
-                onRemove = viewModel::onRemoveSlide,
-                onMove = viewModel::onMoveSlide,
-            )
-            ComposerStage(
-                carded = StoryCanvasFraming.shouldCard(
-                    panelOpen = state.band.isPanelOpen &&
-                        ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement),
-                    keyboardVisible = keyboardVisible,
-                    drawingActive = state.isDrawingActive,
-                ),
-                scene = { sceneModifier -> StoryComposerScene(state, viewModel, sceneExport, sceneModifier) },
-                footer = { StoryComposerFooter(state, viewModel) },
-                panel = {
-                    StoryComposerPanel(
-                        state = state,
-                        viewModel = viewModel,
-                        onAddSticker = { showStickerPicker = true },
-                        onPickMedia = {
-                            when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
-                                StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-                                StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-                                StoryMediaPickMode.None -> Unit
-                            }
-                        },
-                        onOpenSoundShelf = { showSoundShelf = true },
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-
-            if (!state.isDrawingActive) {
-                ComposerToolBand(
-                    band = state.band,
-                    badges = ComposerBandTools.badges(
-                        mediaCount = state.draft.mediaIds.size,
-                        textCount = state.selectedSlideTextElements.size,
-                        strokeCount = state.selectedSlideStrokes.size,
-                        hasBackground = state.selectedSlideBackground != null,
-                        soundCount = state.selectedSlideAudio.size,
-                    ),
-                    onToolTap = viewModel::onBandToolTap,
-                    onToolSwipeUp = viewModel::onBandToolSwipeUp,
-                    onHideChrome = viewModel::onBandSwipeDown,
-                    onShowChrome = viewModel::onBandShowChrome,
-                )
-            }
-        }
+        StoryComposerBody(
+            state = state,
+            viewModel = viewModel,
+            sceneExport = sceneExport,
+            panel = panel,
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding().padding(16.dp),
+            onOpenAudience = { showAudience = true },
+        )
     }
 }
