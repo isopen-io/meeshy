@@ -50,7 +50,7 @@ class HttpClientContributorOrderTest {
             builtInContributors(MeeshyConfig(enableLogging = true), InMemoryTokenStore(), {}, SessionRefresher(InMemoryTokenStore()) { null }),
         ).map { it.id }
         assertThat(ids).containsExactly(
-            "url-guard", "endpoint-policy", "retry", "proactive-refresh", "auth", "client-capabilities",
+            "session-boundary", "url-guard", "endpoint-policy", "retry", "proactive-refresh", "auth", "client-capabilities",
             "device-locale", "auth-expiry", "refresh-authenticator", "slow-request", "logging",
         ).inOrder()
     }

@@ -35,6 +35,8 @@ private class FunctionContributor(
 
 /** Les priorités du socle ; un lot ultérieur choisit une valeur ENTRE elles. */
 object HttpPriority {
+    /** Outermost: a response that outlives the session which asked for it is dropped (#13558). */
+    const val SESSION_BOUNDARY = 50
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
 
@@ -78,6 +80,9 @@ internal fun builtInContributors(
     transition: SessionTransitionFlags = SessionTransitionFlags(),
     visitorKey: VisitorReaderKeyProviding? = null,
 ): List<HttpClientContributor> = listOfNotNull(
+    HttpClientContributor.of("session-boundary", HttpPriority.SESSION_BOUNDARY) {
+        it.addInterceptor(SessionBoundaryInterceptor(transition))
+    },
     HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
     HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
         it.addInterceptor(EndpointPolicyInterceptor())
