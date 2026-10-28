@@ -51,6 +51,8 @@ public sealed interface TusResumeDecision {
  * before this checkpoint existed.
  */
 public object TusResumePlanner {
+    // [plan] is the offline, checkpoint-only rule; the uploader now verifies the session with the gateway
+    // and decides through [reconcile] (#13429).
     public fun plan(
         existingLocation: String?,
         existingUploadedBytes: Long,
