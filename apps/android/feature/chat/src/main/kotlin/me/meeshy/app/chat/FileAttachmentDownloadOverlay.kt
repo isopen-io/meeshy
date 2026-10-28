@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import me.meeshy.app.chat.fileviewer.FileViewerRequest
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -41,30 +42,30 @@ import me.meeshy.ui.theme.MeeshyTheme
  * FILE attachment ([MessageAction.OpenFile]/[MessageAction.ShareFile]). `null` = no
  * download in flight, renders nothing.
  *
- * On [FileAttachmentDownloadState.Completed] this fires the `ACTION_VIEW`/`ACTION_SEND`
- * intent itself (it owns the [LocalContext]) and dismisses — the ViewModel only ever
- * sees "downloaded", never "opened".
+ * On [FileAttachmentDownloadState.Completed] an "Ouvrir" hands the file to the in-app viewers
+ * ([onOpenInApp]) and a "Partager" fires the `ACTION_SEND` chooser itself (it owns the
+ * [LocalContext]); both dismiss — the ViewModel only ever sees "downloaded", never "opened".
  */
 @Composable
 internal fun FileAttachmentDownloadOverlay(
     download: FileAttachmentDownloadUiState?,
     onDismiss: () -> Unit,
     onRetry: (FileAttachmentDownloadUiState) -> Unit,
+    onOpenInApp: (FileViewerRequest) -> Unit,
 ) {
     val context = LocalContext.current
     val openFailedMessage = stringResource(R.string.chat_file_open_failed)
 
     LaunchedEffect(download?.state, download?.attachmentId) {
         val completed = (download?.state as? FileAttachmentDownloadState.Completed) ?: return@LaunchedEffect
-        val uri = completed.localUri.toUri()
-        val intent = if (download.openWhenDone) {
-            FileAttachmentIntentResolver.viewIntent(uri, completed.mimeType, download.fileName)
+        if (download.openWhenDone) {
+            // « Ouvrir » reste dans Meeshy : fiche de contact, code, PDF ou document (parité des visionneuses iOS).
+            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri))
         } else {
-            FileAttachmentIntentResolver.shareIntent(uri, completed.mimeType, download.fileName)
-        }
-        val launched = runCatching { context.startActivity(intent) }.isSuccess
-        if (!launched) {
-            Toast.makeText(context, openFailedMessage, Toast.LENGTH_SHORT).show()
+            val intent = FileAttachmentIntentResolver.shareIntent(completed.localUri.toUri(), completed.mimeType, download.fileName)
+            if (runCatching { context.startActivity(intent) }.isFailure) {
+                Toast.makeText(context, openFailedMessage, Toast.LENGTH_SHORT).show()
+            }
         }
         onDismiss()
     }
@@ -153,6 +154,7 @@ private fun fileAttachmentDownloadLabel(download: FileAttachmentDownloadUiState)
     is FileAttachmentDownloadState.Failed -> when (s.reason) {
         FileAttachmentDownloadFailure.Expired -> stringResource(R.string.chat_file_download_expired)
         FileAttachmentDownloadFailure.NotAvailable -> stringResource(R.string.chat_file_download_not_available)
+        FileAttachmentDownloadFailure.Protected -> stringResource(R.string.chat_exit_blocked_title)
         FileAttachmentDownloadFailure.NetworkError -> stringResource(R.string.chat_file_download_failed_network)
         FileAttachmentDownloadFailure.ServerError -> stringResource(R.string.chat_file_download_failed_server)
     }

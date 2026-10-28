@@ -8,6 +8,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.mediahub.MediaHubRowExit
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -67,17 +68,15 @@ internal class ChatFileDownloadController(
         val fileUrl = attachment?.fileUrl
         val fileName = attachment?.originalName ?: attachment?.fileName ?: messageId
         if (attachment == null || fileUrl.isNullOrBlank()) {
-            state.update {
-                it.copy(
-                    fileDownload = FileAttachmentDownloadUiState(
-                        messageId = messageId,
-                        attachmentId = attachment?.id.orEmpty(),
-                        fileName = fileName,
-                        state = FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NotAvailable),
-                        openWhenDone = openWhenDone,
-                    ),
-                )
-            }
+            fail(messageId, attachment?.id.orEmpty(), fileName, FileAttachmentDownloadFailure.NotAvailable, openWhenDone)
+            return
+        }
+        // Un contenu qui disparaît ne sort pas de Meeshy (#9573) : ni ouvert, ni enregistré, ni partagé. Le porteur
+        // inconnu du fil (pièce amenée par le hub) a déjà passé le portillon du hub.
+        val carrier = messages.value.firstOrNull { it.message.id == messageId }?.message
+        if (carrier != null && !MediaHubRowExit.of(carrier, state.value.isEndToEnd).mayLeave) {
+            downloadJob?.cancel()
+            fail(messageId, attachment.id, fileName, FileAttachmentDownloadFailure.Protected, openWhenDone)
             return
         }
         downloadJob?.cancel()
@@ -122,6 +121,26 @@ internal class ChatFileDownloadController(
                     else current.copy(fileDownload = active.copy(state = downloadState))
                 }
             }
+        }
+    }
+
+    private fun fail(
+        messageId: String,
+        attachmentId: String,
+        fileName: String,
+        reason: FileAttachmentDownloadFailure,
+        openWhenDone: Boolean,
+    ) {
+        state.update {
+            it.copy(
+                fileDownload = FileAttachmentDownloadUiState(
+                    messageId = messageId,
+                    attachmentId = attachmentId,
+                    fileName = fileName,
+                    state = FileAttachmentDownloadState.Failed(reason),
+                    openWhenDone = openWhenDone,
+                ),
+            )
         }
     }
 

@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.detail.close",
+          "androidName": "viewer_contact_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.copy-hint",
+          "androidName": "viewer_contact_copy_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.copy",
+          "androidName": "viewer_contact_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.toast.copied",
+          "androidName": "viewer_contact_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.action.add-to-contacts",
+          "androidName": "viewer_contact_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.unreadable",
+          "androidName": "viewer_contact_unreadable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.address",
+          "androidName": "viewer_field_address",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.birthday",
+          "androidName": "viewer_field_birthday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.email",
+          "androidName": "viewer_field_email",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.note",
+          "androidName": "viewer_field_note",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.organization",
+          "androidName": "viewer_field_organization",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.phone",
+          "androidName": "viewer_field_phone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.title",
+          "androidName": "viewer_field_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.url",
+          "androidName": "viewer_field_url",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.fax",
+          "androidName": "viewer_label_fax",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.home",
+          "androidName": "viewer_label_home",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.main",
+          "androidName": "viewer_label_main",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.mobile",
+          "androidName": "viewer_label_mobile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.other",
+          "androidName": "viewer_label_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.pager",
+          "androidName": "viewer_label_pager",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.work",
+          "androidName": "viewer_label_work",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.share",
+          "androidName": "viewer_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.copy",
+          "androidName": "viewer_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y_copied",
+          "androidName": "viewer_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.download",
+          "androidName": "viewer_doc_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.previewUnavailable",
+          "androidName": "viewer_doc_preview_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.defaultName",
+          "androidName": "viewer_doc_default_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.pages",
+          "androidName": "viewer_doc_pages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.code.loading",
+          "androidName": "viewer_code_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.code.loadError",
+          "androidName": "viewer_load_error",
+          "status": "adopted"
+        },
+        {
+          "androidName": "viewer_code_truncated",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
