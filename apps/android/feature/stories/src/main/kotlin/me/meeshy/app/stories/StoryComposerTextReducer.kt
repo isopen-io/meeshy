@@ -17,6 +17,8 @@ internal object StoryComposerTextReducer {
     /** Offset given to a duplicated element so the copy is visibly clear of its source. */
     const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
 
+    private fun exceedsLimit(text: String): Boolean = text.codePointCount(0, text.length) > StoryLimits.TEXT_LENGTH
+
     /**
      * Routes the text field: while a text element is selected the keystrokes rewrite that
      * element; otherwise they rewrite the selected slide's caption.
@@ -24,10 +26,14 @@ internal object StoryComposerTextReducer {
     fun typed(state: StoryComposerUiState, text: String): StoryComposerUiState {
         val editingId = state.selectedTextElement?.id
         if (editingId != null) {
-            val clamped = StoryLimits.clampText(text)
+            val previous = state.selectedTextElement?.text.orEmpty()
+            val tooLong = exceedsLimit(text)
+            // Un texte restauré déjà trop long est GARDÉ tel quel : le couper à la première frappe détruirait ce que
+            // l'auteur a écrit. La saisie qui FRANCHIT le plafond est coupée, avec son message.
+            val kept = if (tooLong && !exceedsLimit(previous)) StoryLimits.clampText(text) else text
             return state.copy(
-                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = clamped) },
-                errorMessage = if (clamped.length < text.length) StoryComposerViewModel.TEXT_LENGTH_LIMIT else null,
+                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = kept) },
+                errorMessage = if (tooLong) StoryComposerViewModel.TEXT_LENGTH_LIMIT else null,
             )
         }
         return state.copy(

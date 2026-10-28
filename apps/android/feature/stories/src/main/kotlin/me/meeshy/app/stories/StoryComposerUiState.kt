@@ -112,16 +112,14 @@ data class StoryComposerUiState(
      */
     val canPublish: Boolean
         get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio) &&
-            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            deck.isWithinMediaLimit() &&
-            deck.isWithinTextElementLimit() &&
-            deck.isWithinStickerLimit() &&
-            deck.isWithinSceneCaps() &&
-            deck.isWithinElementTextLimit() &&
-            deck.isWithinTotalDuration() &&
+            publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
             !isUploadingMedia
+
+    /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
+    internal val publishBlock: StoryPublishBlock?
+        get() = deck.publishBlock(StoryComposerDraft.MAX_CHARS, isRepost = !draft.repostOfId.isNullOrBlank())
 
     /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides, jamais déclarés à côté. */
     val hashtags: List<String>

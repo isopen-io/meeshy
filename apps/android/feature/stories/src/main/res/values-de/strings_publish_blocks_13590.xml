@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_block_caption">Die Beschriftung ist zu lang — kürze sie, um zu veröffentlichen</string>
+    <string name="composer_publish_block_text">Ein Text fasst höchstens 1000 Zeichen — kürze ihn, um zu veröffentlichen</string>
+    <string name="composer_publish_block_texts">Mehr als 50 Texte auf einer Szene — lösche einige, um zu veröffentlichen</string>
+    <string name="composer_publish_block_stickers">Mehr als 50 Sticker auf einer Szene — lösche einige, um zu veröffentlichen</string>
+    <string name="composer_publish_block_media">Mehr als 50 Medien auf einer Szene — entferne einige, um zu veröffentlichen</string>
+    <string name="composer_publish_block_sounds">Mehr als 50 Sounds auf einer Szene — entferne einige, um zu veröffentlichen</string>
+    <string name="composer_publish_block_duration">Die Story dauert länger als 2 Stunden — kürze eine Slide, um zu veröffentlichen</string>
+</resources>
