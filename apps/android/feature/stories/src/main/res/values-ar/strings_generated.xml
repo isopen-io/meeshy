@@ -36,6 +36,8 @@
     <string name="composer_chip_style_handwriting">خط اليد</string>
     <string name="composer_chip_style_neon">نيون</string>
     <string name="composer_chip_style_typewriter">آلة كاتبة</string>
+    <string name="composer_column_media_alt_text">وصف</string>
+    <string name="composer_column_media_filter">فلاتر</string>
     <string name="composer_column_text_frame">إطار النص</string>
     <string name="composer_column_text_language">لغة النص</string>
     <string name="composer_column_text_plan">الخط الزمني</string>
@@ -245,6 +247,7 @@
     <string name="story_canvas_action_leaveScene">إخراج من المشهد</string>
     <string name="story_canvas_action_sendBackward">إرسال للخلف</string>
     <string name="story_composer_cancel">إلغاء</string>
+    <string name="story_composer_edit_slide_background">تعديل الخلفية</string>
     <string name="story_composer_fab_badge">%d عنصر نشط</string>
     <string name="story_composer_fab_badge_none">لا توجد عناصر</string>
     <string name="story_composer_fab_hint_close">انقر مرتين للإغلاق.</string>

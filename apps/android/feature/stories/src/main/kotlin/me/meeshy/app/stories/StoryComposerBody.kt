@@ -68,6 +68,7 @@ internal fun StoryComposerBody(
                 onRemove = viewModel::onRemoveSlide,
                 onMove = viewModel::onMoveSlide,
                 showsAdd = showsAddSlide,
+                onEditBackground = viewModel::onEditSlideBackground,
             )
         }
         ComposerStage(

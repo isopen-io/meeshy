@@ -61,6 +61,7 @@ import me.meeshy.sdk.model.composer.ComposerSceneAddition
 import me.meeshy.sdk.model.composer.ComposerSlideDeletion
 import me.meeshy.sdk.model.composer.ComposerSlideDrag
 import me.meeshy.ui.component.composer.SlideRailGeometry
+import me.meeshy.sdk.model.composer.SlideThumbEditAffordance
 import me.meeshy.ui.component.composer.SlideRailTile
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -91,6 +92,7 @@ internal fun ComposerSlideRail(
     modifier: Modifier = Modifier,
     showsAdd: Boolean = true,
     scenePresent: Boolean = true,
+    onEditBackground: ((String) -> Unit)? = null,
 ) {
     if (!ComposerHeaderTiles.showsRail(deck.size, scenePresent)) return
     val density = LocalDensity.current
@@ -134,6 +136,7 @@ internal fun ComposerSlideRail(
                 onDelete = requestRemoval,
                 onMove = onMove,
                 onDuplicate = { id -> onSelect(id); onDuplicate() },
+                onEditBackground = onEditBackground,
                 menuOpen = menuFor == slide.id,
                 onMenuDismiss = { menuFor = null },
                 onDragStart = { dragFrom = index; dragPx = 0f; lastTarget = index; haptics.medium() },
@@ -214,6 +217,7 @@ private fun SlideTile(
     onDelete: (String) -> Unit,
     onMove: (String, Int) -> Unit,
     onDuplicate: (String) -> Unit,
+    onEditBackground: ((String) -> Unit)?,
     menuOpen: Boolean,
     onMenuDismiss: () -> Unit,
     onDragStart: () -> Unit,
@@ -231,9 +235,12 @@ private fun SlideTile(
     val moveAfter = stringResource(R.string.stories_composer_slide_move_later)
     val duplicateLabel = stringResource(R.string.stories_composer_duplicate_slide)
     val removeLabel = stringResource(R.string.stories_composer_remove_slide)
+    val editBackgroundLabel = stringResource(R.string.story_composer_edit_slide_background)
+    val canEditBackground = SlideThumbEditAffordance.editableBackgroundId(slide.backgroundMediaId, onEditBackground != null) != null
     val actions = buildList {
         if (index > 0) add(CustomAccessibilityAction(moveBefore) { onMove(slide.id, index - 1); true })
         if (index < count - 1) add(CustomAccessibilityAction(moveAfter) { onMove(slide.id, index + 1); true })
+        if (canEditBackground) add(CustomAccessibilityAction(editBackgroundLabel) { onEditBackground?.invoke(slide.id); true })
         add(CustomAccessibilityAction(duplicateLabel) { onDuplicate(slide.id); true })
         if (count > 1) add(CustomAccessibilityAction(removeLabel) { onDelete(slide.id); true })
     }
@@ -265,6 +272,11 @@ private fun SlideTile(
     ) {
         SlideThumbnail(spec = spec, backgroundModel = backgroundModel, modifier = Modifier.fillMaxSize())
         DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
+            if (canEditBackground) DropdownMenuItem(
+                text = { Text(editBackgroundLabel) },
+                leadingIcon = { Icon(MeeshyIcons.Tune, contentDescription = null) },
+                onClick = { onMenuDismiss(); onEditBackground?.invoke(slide.id) },
+            )
             DropdownMenuItem(
                 text = { Text(duplicateLabel) },
                 leadingIcon = { Icon(MeeshyIcons.Copy, contentDescription = null) },

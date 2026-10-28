@@ -17,7 +17,7 @@ class StoryComposerTrailingTest {
 
     @Test
     fun `nothing touched and no tool open is the scene`() {
-        assertThat(StoryComposerUiState().trailingFocus).isEqualTo(Focus.Scene)
+        assertThat(StoryComposerUiState().trailingFocus).isEqualTo(Focus.Scene())
     }
 
     @Test

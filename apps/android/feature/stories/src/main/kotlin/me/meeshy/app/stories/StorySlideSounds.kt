@@ -24,6 +24,12 @@ fun StorySlideDeck.removeSelectedSound(id: String): StorySlideDeck =
 fun StorySlideDeck.toggleSelectedSoundMute(id: String): StorySlideDeck =
     withSelectedAudio(ComposerSoundPlacement.toggleMute(selectedSlide.audio, id))
 
+/** Réécrit une piste de la slide sélectionnée (inerte, même instance, si elle n'y est pas). */
+fun StorySlideDeck.updateSelectedSound(
+    id: String,
+    transform: (me.meeshy.sdk.model.StoryAudioPlayerObject) -> me.meeshy.sdk.model.StoryAudioPlayerObject,
+): StorySlideDeck = withSelectedAudio(selectedSlide.audio.map { if (it.id == id) transform(it) else it })
+
 private fun StorySlideDeck.withSelectedAudio(audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>): StorySlideDeck {
     if (selectedSlide.audio == audio) return this
     val index = selectedIndex

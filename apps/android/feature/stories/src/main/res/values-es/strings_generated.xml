@@ -36,6 +36,8 @@
     <string name="composer_chip_style_handwriting">MANUSCRITA</string>
     <string name="composer_chip_style_neon">NEÓN</string>
     <string name="composer_chip_style_typewriter">MÁQUINA</string>
+    <string name="composer_column_media_alt_text">Describir</string>
+    <string name="composer_column_media_filter">Filtros</string>
     <string name="composer_column_text_frame">Marco de texto</string>
     <string name="composer_column_text_language">Idioma del texto</string>
     <string name="composer_column_text_plan">TIMELINE</string>
@@ -239,6 +241,7 @@
     <string name="story_canvas_action_leaveScene">Sacar de la escena</string>
     <string name="story_canvas_action_sendBackward">Enviar atrás</string>
     <string name="story_composer_cancel">Cancelar</string>
+    <string name="story_composer_edit_slide_background">Editar el fondo</string>
     <string name="story_composer_fab_badge">%d elemento(s) activo(s)</string>
     <string name="story_composer_fab_badge_none">Ningún elemento</string>
     <string name="story_composer_fab_hint_close">Toca dos veces para cerrar.</string>

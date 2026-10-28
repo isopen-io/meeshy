@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Entry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Focus
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Foot
 import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
+import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import org.junit.Test
 
 class ComposerTrailingColumnTest {
@@ -24,7 +25,7 @@ class ComposerTrailingColumnTest {
     fun `a selection without a tool is the object focus, nothing at all is the scene`() {
         val selection = objectFocus(emptyList())
         assertThat(ComposerTrailingColumn.focus(null, selection)).isEqualTo(selection)
-        assertThat(ComposerTrailingColumn.focus(null, null)).isEqualTo(Focus.Scene)
+        assertThat(ComposerTrailingColumn.focus(null, null)).isEqualTo(Focus.Scene())
     }
 
     @Test
@@ -56,13 +57,13 @@ class ComposerTrailingColumnTest {
 
     @Test
     fun `the scene itself serves no option`() {
-        assertThat(ComposerTrailingColumn.options(Focus.Scene)).isEmpty()
+        assertThat(ComposerTrailingColumn.options(Focus.Scene())).isEmpty()
     }
 
     @Test
     fun `time shows only on a free, animated scene and history is always there`() {
-        assertThat(ComposerTrailingColumn.foot(Focus.Scene, timeServed = true)).containsExactly(Foot.TIME, Foot.UNDO, Foot.REDO).inOrder()
-        assertThat(ComposerTrailingColumn.foot(Focus.Scene, timeServed = false)).containsExactly(Foot.UNDO, Foot.REDO).inOrder()
+        assertThat(ComposerTrailingColumn.foot(Focus.Scene(), timeServed = true)).containsExactly(Foot.TIME, Foot.UNDO, Foot.REDO).inOrder()
+        assertThat(ComposerTrailingColumn.foot(Focus.Scene(), timeServed = false)).containsExactly(Foot.UNDO, Foot.REDO).inOrder()
         assertThat(ComposerTrailingColumn.foot(Focus.Tool(controls), timeServed = true)).containsExactly(Foot.UNDO, Foot.REDO).inOrder()
         assertThat(ComposerTrailingColumn.foot(objectFocus(emptyList()), timeServed = true)).containsExactly(Foot.UNDO, Foot.REDO).inOrder()
     }
@@ -71,6 +72,32 @@ class ComposerTrailingColumnTest {
     fun `only an in-place edit makes the foot follow the options`() {
         assertThat(ComposerTrailingColumn.footFollowsOptions(objectFocus(emptyList()))).isTrue()
         assertThat(ComposerTrailingColumn.footFollowsOptions(Focus.Tool(controls))).isFalse()
-        assertThat(ComposerTrailingColumn.footFollowsOptions(Focus.Scene)).isFalse()
+        assertThat(ComposerTrailingColumn.footFollowsOptions(Focus.Scene())).isFalse()
+    }
+
+    @Test
+    fun `the scene with a media background serves its effects from the top, the open one marked, and no exit`() {
+        val served = listOf(ComposerSceneEffect.OPENING, ComposerSceneEffect.VISUAL)
+        val focus = ComposerTrailingColumn.focus(null, null, effects = served, openEffect = ComposerSceneEffect.VISUAL)
+        assertThat(ComposerTrailingColumn.options(focus)).containsExactly(
+            Entry.SceneEffect(ComposerSceneEffect.OPENING, isOpen = false),
+            Entry.SceneEffect(ComposerSceneEffect.VISUAL, isOpen = true),
+        ).inOrder()
+    }
+
+    @Test
+    fun `an effect the scene does not serve cannot be the open one`() {
+        val focus = ComposerTrailingColumn.focus(
+            null, null, effects = listOf(ComposerSceneEffect.OPENING), openEffect = ComposerSceneEffect.VISUAL,
+        )
+        assertThat((focus as Focus.Scene).open).isNull()
+    }
+
+    @Test
+    fun `a selection or a tool hides the scene effects`() {
+        val served = listOf(ComposerSceneEffect.OPENING)
+        assertThat(ComposerTrailingColumn.focus(controls, null, effects = served)).isEqualTo(Focus.Tool(controls))
+        val selection = objectFocus(emptyList())
+        assertThat(ComposerTrailingColumn.focus(null, selection, effects = served)).isEqualTo(selection)
     }
 }

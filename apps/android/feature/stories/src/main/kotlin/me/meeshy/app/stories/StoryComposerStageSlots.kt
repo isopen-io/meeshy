@@ -167,31 +167,42 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                         sound = it,
                         onToggleMute = { viewModel.onToggleSoundMute(it.id) },
                         onRemove = { viewModel.onRemoveSound(it.id) },
+                        selected = state.selectedSoundId == it.id,
+                        onSelect = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, it.id) } },
                     )
                 }
             }
-            // The slide CAPTION only: a text object is written on the scene itself
-            // (ComposerInlineTextField), so this field never silently changes role.
-            val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
-            OutlinedTextField(
-                value = caption.value,
-                onValueChange = caption.onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.stories_composer_text_caption)) },
-                placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
-                isError = !state.draft.isWithinLimit,
-                supportingText = {
-                    Text(
-                        text = when (val error = state.errorMessage) {
-                            null -> stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining)
-                            StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
-                            else -> error
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End,
-                    )
-                },
-            )
+            val selectedMedia = state.selectedMedia
+            val selectedSound = state.selectedSound
+            if (onPlateau && selectedMedia != null) {
+                MediaSectionContent(state, selectedMedia, viewModel)
+            } else if (onPlateau && selectedSound != null) {
+                SoundSectionContent(state, selectedSound, viewModel)
+            } else {
+                SceneEffectsDock(state, viewModel)
+                // The slide CAPTION only: a text object is written on the scene itself
+                // (ComposerInlineTextField), so this field never silently changes role.
+                val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
+                OutlinedTextField(
+                    value = caption.value,
+                    onValueChange = caption.onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.stories_composer_text_caption)) },
+                    placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
+                    isError = !state.draft.isWithinLimit,
+                    supportingText = {
+                        Text(
+                            text = when (val error = state.errorMessage) {
+                                null -> stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining)
+                                StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+                                else -> error
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
+                )
+            }
         }
 
         if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
@@ -202,6 +213,8 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
                 backgroundLoop = state.selectedSlideBackgroundLoop,
                 onRemove = viewModel::onRemoveMedia,
+                selectedMediaId = state.selectedMedia,
+                onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                 onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
                 onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
             )
@@ -251,14 +264,6 @@ internal fun StoryComposerPanel(
                 onFilterIntensityChange = viewModel::onFilterIntensityChange,
                 onSlideDurationChange = viewModel::onSlideDurationChange,
                 onSelectBackground = viewModel::onSlideBackgroundChange,
-                sceneBackground = state.selectedSlideSceneBackground,
-                sceneFrame = state.deck.selectedSlide.frame,
-                objectSelected = state.selectedTextElement != null || state.selectedStickerId != null,
-                sceneIsAnimated = state.sceneIsAnimated,
-                onFitMode = { mode -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.fitModeSet(it, mode) } },
-                onBackdrop = { fond -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.backdropChosen(it, fond) } },
-                onSceneEffect = { choice -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.effectChosen(it, choice) } },
-                onToggleAnimated = { viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled) },
                 audio = state.selectedSlideAudio,
                 canAddSound = state.canBorrowSound,
                 soundCapRefusal = state.soundCapRefusal,

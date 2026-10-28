@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.composer
 
+import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
+
 /** Un contrôleur d'outil réduit à ce que la colonne sait peindre (iOS `ComposerToolControl`) : son identité et s'il est déplié. */
 data class ComposerToolControl(val id: String, val isExpanded: Boolean)
 
@@ -13,8 +15,11 @@ object ComposerTrailingColumn {
 
     /** Sur quoi l'auteur agit — un outil ouvert l'emporte sur une sélection : il capture le doigt sur toute la scène. */
     sealed interface Focus {
-        /** Rien de touché, aucun outil. */
-        data object Scene : Focus
+        /** Rien de touché, aucun outil : les EFFETS de la scène quand elle a un fond média, celui dont le carrousel est ouvert marqué. */
+        data class Scene(
+            val effects: List<ComposerSceneEffect> = emptyList(),
+            val open: ComposerSceneEffect? = null,
+        ) : Focus
 
         data class Tool(val controls: List<ComposerToolControl>) : Focus
 
@@ -30,6 +35,9 @@ object ComposerTrailingColumn {
         data class ToolControl(val control: ComposerToolControl) : Entry
         data class EditorSection(val section: ComposerObjectEditorSection, val isOpen: Boolean) : Entry
         data class ObjectAction(val action: SceneObjectMenu.Action) : Entry
+
+        /** Une famille d'effets de la scène : la toucher ouvre son carrousel au pied du plateau. */
+        data class SceneEffect(val effect: ComposerSceneEffect, val isOpen: Boolean) : Entry
 
         /** Le (x) d'un outil : il le termine et rend les portes. */
         data object ExitTool : Entry
@@ -47,15 +55,17 @@ object ComposerTrailingColumn {
     fun focus(
         toolControls: List<ComposerToolControl>?,
         selection: Focus.Object?,
+        effects: List<ComposerSceneEffect> = emptyList(),
+        openEffect: ComposerSceneEffect? = null,
     ): Focus = when {
         toolControls != null -> Focus.Tool(toolControls)
         selection != null -> selection
-        else -> Focus.Scene
+        else -> Focus.Scene(effects, openEffect?.takeIf { it in effects })
     }
 
     /** Les options de HAUT en bas, le (x) en dernier. */
     fun options(focus: Focus): List<Entry> = when (focus) {
-        Focus.Scene -> emptyList()
+        is Focus.Scene -> focus.effects.map { Entry.SceneEffect(it, isOpen = it == focus.open) }
         is Focus.Tool -> focus.controls.map(Entry::ToolControl) + Entry.ExitTool
         is Focus.Object -> {
             val edit = focus.actions.filter { it == SceneObjectMenu.Action.EDIT }
@@ -73,7 +83,7 @@ object ComposerTrailingColumn {
     /** L'historique reste partout ; « Temps » seulement sans outil ni objet ouvert, et quand la scène est animée. */
     fun foot(focus: Focus, timeServed: Boolean): List<Foot> = when (focus) {
         is Focus.Tool, is Focus.Object -> listOf(Foot.UNDO, Foot.REDO)
-        Focus.Scene -> (if (timeServed) listOf(Foot.TIME) else emptyList()) + listOf(Foot.UNDO, Foot.REDO)
+        is Focus.Scene -> (if (timeServed) listOf(Foot.TIME) else emptyList()) + listOf(Foot.UNDO, Foot.REDO)
     }
 
     /** Le pied suit les sous-outils, sans ressort, pendant une édition en place ; le dessin garde l'historique au pouce. */

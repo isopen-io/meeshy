@@ -23,7 +23,9 @@ import me.meeshy.sdk.model.composer.ComposerRailGeometry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Entry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Foot
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn
+import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.StoryToolMode
+import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.sdk.model.composer.TextEditTool
 import me.meeshy.ui.component.composer.ComposerRailButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -131,11 +133,18 @@ private fun TrailingEntry(entry: Entry, state: StoryComposerUiState, viewModel: 
                 onClick = { viewModel.onObjectController(controllers.ref, entry.action) },
             )
         }
+        is Entry.SceneEffect -> ComposerRailButton(
+            icon = if (entry.effect == ComposerSceneEffect.OPENING) MeeshyIcons.Sparkles else MeeshyIcons.PhotoFilter,
+            label = stringResource(entry.effect.labelRes()),
+            onClick = { viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, entry.effect) } },
+            active = entry.isOpen,
+        )
         Entry.ExitTool -> ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.composer_column_exit_tool), viewModel::onExitDrawingMode)
-        Entry.ExitObject -> ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.composer_rail_object_exit), {
-            viewModel.onDeselectTextElement()
-            viewModel.onDeselectSticker()
-        })
+        Entry.ExitObject -> ComposerRailButton(
+            MeeshyIcons.Close,
+            stringResource(R.string.composer_rail_object_exit),
+            { viewModel.onSceneReduce(StoryComposerSelectionReducer::cleared) },
+        )
     }
 }
 
@@ -161,7 +170,17 @@ private fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
         TextEditTool.LANGUAGE -> MeeshyIcons.Globe
     }
     ComposerObjectEditorSection.Timing -> MeeshyIcons.ScheduleFilled
-    is ComposerObjectEditorSection.Media, ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
+    is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.FILTER -> MeeshyIcons.PhotoFilter
+        MediaEditTool.ALT_TEXT -> MeeshyIcons.TextFields
+        else -> MeeshyIcons.Layers
+    }
+    ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
+}
+
+private fun ComposerSceneEffect.labelRes(): Int = when (this) {
+    ComposerSceneEffect.OPENING -> R.string.stories_scene_effect_opening
+    ComposerSceneEffect.VISUAL -> R.string.stories_scene_effect_visual
 }
 
 private fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
@@ -177,5 +196,9 @@ private fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
     }
     ComposerObjectEditorSection.Timing -> R.string.composer_column_text_timing
     ComposerObjectEditorSection.Plan -> R.string.composer_column_text_plan
-    is ComposerObjectEditorSection.Media -> R.string.composer_column_text_timing
+    is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.FILTER -> R.string.composer_column_media_filter
+        MediaEditTool.ALT_TEXT -> R.string.composer_column_media_alt_text
+        else -> R.string.composer_column_text_plan
+    }
 }

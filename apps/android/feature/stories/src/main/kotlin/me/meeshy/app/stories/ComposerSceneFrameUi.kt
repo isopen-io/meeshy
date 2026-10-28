@@ -26,9 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryTransitionEffect
-import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
-import me.meeshy.sdk.model.composer.scene.ComposerSceneEffects
 import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
@@ -149,59 +144,28 @@ internal fun backdropLabel(fond: StoryBackdrop): String = stringResource(
 )
 
 /**
- * **Les effets d'une scène à fond média** (miroir de `ComposerSceneEffectCarousel` iOS, #8712) : une icône par famille
- * servie — ouverture, visuel —, et sous l'effet ouvert son carrousel avec sa sortie EXPLICITE (un geste qu'il faut
- * deviner n'est pas un chemin). [visual] est le contenu du carrousel visuel (la grille de filtres) : cette vue ne le connaît pas.
+ * **Le carrousel des effets de scène** (miroir de `ComposerSceneEffectCarousel` iOS, #8712) : l'effet ouvert dans la
+ * colonne droite montre ici son carrousel, au pied du plateau, avec sa sortie EXPLICITE (un geste qu'il faut deviner
+ * n'est pas un chemin). [visual] est le contenu du carrousel visuel (la grille de filtres) : cette vue ne le connaît pas.
  */
 @Composable
-internal fun ComposerSceneEffectsPanel(
-    background: ComposerSceneBackground,
+internal fun ComposerSceneEffectCarousel(
+    open: ComposerSceneEffect?,
     frame: SceneFrame,
-    objectSelected: Boolean,
+    onClose: () -> Unit,
     onChoose: (SceneEffectChoice) -> Unit,
     visual: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var requested by rememberSaveable { androidx.compose.runtime.mutableStateOf<ComposerSceneEffect?>(null) }
-    val served = ComposerSceneEffects.served(background)
-    val open = ComposerSceneEffects.carousel(requested, served, objectSelected = objectSelected, toolIsOpen = false)
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            served.forEach { effect ->
-                EffectToggle(effect, isOpen = effect == open) { requested = ComposerSceneEffects.toggled(effect, requested) }
-            }
-        }
-        val lastOpen = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(open) }
-        if (open != null) lastOpen.value = open
-        AnimatedVisibility(
-            visible = open != null,
-            enter = slideInVertically { it / 2 } + fadeIn(),
-            exit = slideOutVertically { it / 2 } + fadeOut(),
-        ) {
-            lastOpen.value?.let { shown ->
-                EffectCarousel(shown, frame, onClose = { requested = null }, onChoose = onChoose, visual = visual)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EffectToggle(effect: ComposerSceneEffect, isOpen: Boolean, onToggle: () -> Unit) {
-    val label = effectLabel(effect)
-    Box(
-        modifier = Modifier
-            .size(ChoiceTarget)
-            .clip(CircleShape)
-            .background(if (isOpen) MaterialTheme.colorScheme.primary else MeeshyTheme.tokens.controlFill)
-            .selectable(selected = isOpen, role = Role.Button, onClick = onToggle)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
+    val lastOpen = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(open) }
+    if (open != null) lastOpen.value = open
+    AnimatedVisibility(
+        visible = open != null,
+        modifier = modifier,
+        enter = slideInVertically { it / 2 } + fadeIn(),
+        exit = slideOutVertically { it / 2 } + fadeOut(),
     ) {
-        Icon(
-            if (effect == ComposerSceneEffect.OPENING) MeeshyIcons.Sparkles else MeeshyIcons.PhotoFilter,
-            contentDescription = null,
-            tint = if (isOpen) MaterialTheme.colorScheme.onPrimary else MeeshyTheme.tokens.textPrimary,
-        )
+        lastOpen.value?.let { shown -> EffectCarousel(shown, frame, onClose = onClose, onChoose = onChoose, visual = visual) }
     }
 }
 
