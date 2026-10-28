@@ -20,4 +20,7 @@ object StoryTextMetrics {
      */
     fun designPx(value: Double, scale: Double, canvasWidthPx: Float): Float =
         (value * scale).toFloat().times(canvasWidthPx / DESIGN_CANVAS_WIDTH).coerceAtLeast(0f)
+
+    /** La taille d'un design-pixel à l'écran : la largeur de la scène sur 1080, fois l'échelle de l'objet quand c'est lui qui la porte. */
+    fun pxPerDesign(scale: Double, canvasWidthPx: Float): Float = designPx(1.0, scale, canvasWidthPx)
 }
