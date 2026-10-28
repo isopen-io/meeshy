@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
 
 /**
@@ -134,3 +135,16 @@ data class StatusComposerDraft(
         )
     }
 }
+
+/** The mood draft in its durable form (#13430). A republication carries its source: it is never kept. */
+internal fun StatusComposerDraft.toSnapshot(nowMillis: Long): StatusComposerDraftSnapshot = StatusComposerDraftSnapshot(
+    emoji = selectedEmoji,
+    text = text,
+    visibility = visibility.wire,
+    updatedAtMillis = nowMillis,
+)
+
+internal fun StatusComposerDraftSnapshot.toComposerDraft(): StatusComposerDraft = StatusComposerDraft(
+    selectedEmoji = emoji,
+    visibility = StatusVisibility.entries.firstOrNull { it.wire == visibility } ?: StatusVisibility.PUBLIC,
+).withText(text)
