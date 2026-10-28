@@ -119,6 +119,8 @@ internal class ChatHostContext(
     val selection: MessageSelection = MessageSelection.Inactive,
     /** La Flamme de l'en-tête (#13297) : l'instantané servi et l'annonce d'un envoi du lecteur. */
     val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
+    /** Les pièces-fichiers reçues pendant la session : la rangée dit « prêt » (#13492). */
+    val downloadedFileIds: Set<String> = emptySet(),
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -164,13 +166,14 @@ internal fun rememberChatHostContext(
     pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
     selection: MessageSelection = MessageSelection.Inactive,
     engagement: ChatEngagementBinding = ChatEngagementBinding.None,
+    downloadedFileIds: Set<String> = emptySet(),
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -191,6 +194,8 @@ internal class ChatHostActions(
     val openReactionDetails: (String) -> Unit,
     val openImageViewer: (String, Int) -> Unit,
     val onFileAttachmentOpen: (String, String?) -> Unit,
+    val onFileAttachmentTap: (String, String?) -> Unit,
+    val onPieceSave: (String, String) -> Unit,
     val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     val onHubFileOpen: (String, ApiMessageAttachment) -> Unit,
     val onFileAttachmentShare: (String, String?) -> Unit,
@@ -295,6 +300,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     openReactionDetails = this::openReactionDetails,
     openImageViewer = this::openImageViewer,
     onFileAttachmentOpen = this::onFileAttachmentOpen,
+    onFileAttachmentTap = this::onFileAttachmentTap,
+    onPieceSave = this::onPieceSave,
     pieceOverlayFor = this::pieceOverlayFor,
     onHubFileOpen = this::onHubFileOpen,
     onFileAttachmentShare = this::onFileAttachmentShare,

@@ -64,6 +64,10 @@ internal fun MessagePieceOverlay(
     onReply: () -> Unit,
     onWholeMessage: () -> Unit,
     onDismiss: () -> Unit,
+    onSave: (attachmentId: String) -> Unit = {},
+    onForward: (attachmentId: String) -> Unit = {},
+    onCopy: (attachmentId: String) -> Unit = {},
+    onDelete: (attachmentId: String) -> Unit = {},
 ) {
     val haptics = rememberMeeshyHaptics()
     val pager = rememberPagerState(initialPage = model.startIndex) { model.pages.size }
@@ -105,6 +109,10 @@ internal fun MessagePieceOverlay(
                         haptics.light()
                         when (action) {
                             MessagePieceTarget.Action.REPLY -> { onReply(); onDismiss() }
+                            MessagePieceTarget.Action.SAVE -> { onSave(model.pages[index].attachmentId); onDismiss() }
+                            MessagePieceTarget.Action.FORWARD -> { onForward(model.pages[index].attachmentId); onDismiss() }
+                            MessagePieceTarget.Action.COPY -> { onCopy(model.pages[index].attachmentId); onDismiss() }
+                            MessagePieceTarget.Action.DELETE -> { onDelete(model.pages[index].attachmentId); onDismiss() }
                             MessagePieceTarget.Action.WHOLE_MESSAGE -> { onDismiss(); onWholeMessage() }
                         }
                     }
@@ -154,8 +162,13 @@ private fun PositionChip(text: String) {
 private fun PieceActionRow(action: MessagePieceTarget.Action, accent: Color, onClick: () -> Unit) {
     val label = when (action) {
         MessagePieceTarget.Action.REPLY -> stringResource(R.string.chat_action_reply)
+        MessagePieceTarget.Action.FORWARD -> stringResource(R.string.chat_action_forward)
+        MessagePieceTarget.Action.SAVE -> stringResource(R.string.piece_action_save)
+        MessagePieceTarget.Action.COPY -> stringResource(R.string.chat_action_copy)
+        MessagePieceTarget.Action.DELETE -> stringResource(R.string.piece_action_delete)
         MessagePieceTarget.Action.WHOLE_MESSAGE -> stringResource(R.string.piece_whole_message)
     }
+    val tint = if (action == MessagePieceTarget.Action.DELETE) MeeshyTheme.tokens.error else accent
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -165,10 +178,16 @@ private fun PieceActionRow(action: MessagePieceTarget.Action, accent: Color, onC
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        Icon(
-            if (action == MessagePieceTarget.Action.REPLY) MeeshyIcons.Reply else MeeshyIcons.Article,
-            null, tint = accent, modifier = Modifier.size(20.dp),
-        )
-        Text(label, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.body)
+        Icon(pieceActionIcon(action), null, tint = tint, modifier = Modifier.size(20.dp))
+        Text(label, color = if (action == MessagePieceTarget.Action.DELETE) tint else MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.body)
     }
+}
+
+private fun pieceActionIcon(action: MessagePieceTarget.Action) = when (action) {
+    MessagePieceTarget.Action.REPLY -> MeeshyIcons.Reply
+    MessagePieceTarget.Action.FORWARD -> MeeshyIcons.ForwardMessage
+    MessagePieceTarget.Action.SAVE -> MeeshyIcons.Download
+    MessagePieceTarget.Action.COPY -> MeeshyIcons.Copy
+    MessagePieceTarget.Action.DELETE -> MeeshyIcons.Delete
+    MessagePieceTarget.Action.WHOLE_MESSAGE -> MeeshyIcons.Article
 }

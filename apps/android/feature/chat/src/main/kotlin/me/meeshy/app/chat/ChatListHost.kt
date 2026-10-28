@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,6 +44,7 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.app.chat.piece.MessagePieceOverlay
+import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.app.chat.river.RiverPaneState
 import me.meeshy.app.chat.river.RiverScreen
@@ -273,7 +275,7 @@ internal fun ChatListHost(
                 if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
             },
             onFileClick = { messageId, attachmentId ->
-                actions.onFileAttachmentOpen(messageId, attachmentId)
+                actions.onFileAttachmentTap(messageId, attachmentId)
             },
             onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
@@ -327,6 +329,7 @@ internal fun ChatListHost(
             accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
             onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
+            onSave = { attachmentId -> actions.onPieceSave(overlay.messageId, attachmentId) },
             onDismiss = { pieceOverlay = null },
         )
     }
@@ -338,6 +341,8 @@ internal fun ChatListHost(
             onDismiss = { openedPlace = null },
         )
     }
+    val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
+    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
             state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
@@ -458,6 +463,7 @@ internal fun ChatListHost(
         ) {
             RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset)
         }
+    }
     }
 }
 

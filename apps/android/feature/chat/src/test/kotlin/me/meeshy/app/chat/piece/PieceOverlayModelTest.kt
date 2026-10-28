@@ -3,6 +3,7 @@ package me.meeshy.app.chat.piece
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.piece.MessagePieceTarget
 import org.junit.Test
 
 class PieceOverlayModelTest {
@@ -58,8 +59,25 @@ class PieceOverlayModelTest {
     @Test
     fun `les actions offertes suivent le droit d'ecrire`() {
         val writer = PieceOverlayModel.of(message(photo("a"), photo("b")), "a", canReply = true, resolveUrl = resolve)!!
-        assertThat(writer.actionsFor(0).map { it.name }).containsExactly("REPLY", "WHOLE_MESSAGE").inOrder()
+        assertThat(writer.actionsFor(0).map { it.name }).containsExactly("REPLY", "SAVE", "WHOLE_MESSAGE").inOrder()
         val readOnly = PieceOverlayModel.of(message(photo("a")), "a", canReply = false, resolveUrl = resolve)!!
-        assertThat(readOnly.actionsFor(0).map { it.name }).containsExactly("WHOLE_MESSAGE")
+        assertThat(readOnly.actionsFor(0).map { it.name }).containsExactly("SAVE", "WHOLE_MESSAGE").inOrder()
+    }
+
+    @Test
+    fun `seules les actions dont l'effet est branche sont offertes, les autres restent absentes`() {
+        val none = PieceOverlayModel.of(message(photo("a")), "a", canReply = true, resolveUrl = resolve)!!
+        assertThat(none.actionsFor(0)).containsNoneOf(
+            MessagePieceTarget.Action.FORWARD, MessagePieceTarget.Action.COPY, MessagePieceTarget.Action.DELETE,
+        )
+        assertThat(none.offersReaction(0)).isFalse()
+
+        val wired = PieceOverlayModel.of(
+            message(photo("a")), "a", canReply = true, resolveUrl = resolve,
+            capabilities = PieceCapabilities(canForward = true, canCopy = true, canDelete = true, canReact = true),
+        )!!
+        assertThat(wired.actionsFor(0).map { it.name })
+            .containsExactly("REPLY", "FORWARD", "SAVE", "COPY", "DELETE", "WHOLE_MESSAGE").inOrder()
+        assertThat(wired.offersReaction(0)).isTrue()
     }
 }

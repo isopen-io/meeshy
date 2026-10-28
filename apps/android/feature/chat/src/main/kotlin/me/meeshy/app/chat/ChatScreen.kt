@@ -101,6 +101,7 @@ fun ChatScreen(
             summary = summaryBinding,
         )
     }
+    val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -123,6 +124,7 @@ fun ChatScreen(
         pendingPlace = pendingPlace,
         selection = selection,
         engagement = engagement,
+        downloadedFileIds = downloadedFileIds,
     )
 
     ChatBackgroundHost(appearance) {
