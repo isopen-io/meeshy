@@ -3,7 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 
-/** Le fond média qu'une slide publie : le média désigné (ou le premier, quand il porte un filtre propre), son cadrage et son filtre. */
+/** Le fond média qu'une slide publie : le média désigné et son cadrage (le filtre de la scène voyage sur les effets). */
 internal object StoryPublishBackground {
 
     /**
@@ -17,9 +17,8 @@ internal object StoryPublishBackground {
      */
     fun resolve(slide: StorySlide, state: StoryComposerUiState): StoryBackgroundMedia? {
         val attachments = state.attachments
-        val media = publishedBackground(slide, attachments) ?: return null
+        val media = slide.backgroundMediaId?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
         return StoryBackgroundMedia(
-            filter = slide.mediaFilters[media.id],
             mediaId = media.id,
             url = media.url,
             mimeType = media.mimeType,
@@ -27,16 +26,6 @@ internal object StoryPublishBackground {
             loop = slide.backgroundLoop,
             framing = resolveBackgroundFraming(slide, media, state),
         )
-    }
-
-    /**
-     * Le média qui porte le fond publié : celui désigné, ou — quand le média que le plateau montre (le premier) porte
-     * un filtre propre et qu'aucun fond n'est désigné — ce premier média, dont le filtre n'a que cet objet pour voyager.
-     */
-    private fun publishedBackground(slide: StorySlide, attachments: List<UploadedMedia>): UploadedMedia? {
-        slide.backgroundMediaId?.let { bgId -> return attachments.firstOrNull { it.id == bgId } }
-        val shown = slide.mediaIds.firstNotNullOfOrNull { id -> attachments.firstOrNull { it.id == id } } ?: return null
-        return shown.takeIf { it.id in slide.mediaFilters }
     }
 
     /**

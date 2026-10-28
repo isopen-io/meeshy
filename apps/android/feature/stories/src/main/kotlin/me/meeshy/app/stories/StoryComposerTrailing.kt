@@ -41,12 +41,15 @@ internal val StoryComposerUiState.openStickerSection: ComposerObjectEditorSectio
     get() = openObjectSection?.takeIf { it in ServedStickerSections } ?: ServedStickerSections.first()
 
 private val StoryComposerUiState.servedSections: List<ComposerObjectEditorSection>
-    get() = when {
-        isEditingTextElement -> ServedTextSections
-        selectedSticker != null -> ServedStickerSections
-        selectedMedia != null -> ServedMediaSections
-        selectedSound != null -> servedSoundSections
-        else -> emptyList()
+    get() {
+        val media = selectedMedia
+        return when {
+            isEditingTextElement -> ServedTextSections
+            selectedSticker != null -> ServedStickerSections
+            media != null -> mediaSectionsFor(media)
+            selectedSound != null -> servedSoundSections
+            else -> emptyList()
+        }
     }
 
 /**

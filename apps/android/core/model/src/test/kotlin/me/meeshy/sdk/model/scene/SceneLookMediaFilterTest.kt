@@ -36,12 +36,9 @@ class SceneLookMediaFilterTest {
     }
 
     @Test
-    fun `le fond qui porte son propre filtre le compose apres celui de la scene`() {
+    fun `le fond ignore un filtre d objet, comme le lecteur iOS qui ne peint que celui de la slide`() {
         val effects = StoryEffects(filter = "warm", filterIntensity = 1.0, mediaObjects = listOf(media("bw", background = true)))
-        val expected = SceneLookMatrix.compose(
-            StoryFilterMatrix.effectiveMatrix(StoryFilter.WARM, 1f),
-            StoryFilterMatrix.effectiveMatrix(StoryFilter.BW, 1f),
-        )
-        assertThat(SceneLookRecipe.forEffects(effects).filterMatrix).isEqualTo(expected)
+        assertThat(SceneLookRecipe.forEffects(effects).filterMatrix)
+            .isEqualTo(StoryFilterMatrix.effectiveMatrix(StoryFilter.WARM, 1f))
     }
 }

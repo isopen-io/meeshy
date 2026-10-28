@@ -474,10 +474,6 @@ class StoryComposerViewModel @Inject constructor(
     /** Sets (or clears) the selected slide's photo filter. */
     fun onSelectFilter(filter: StoryFilter?) = reduce { StoryComposerBackgroundReducer.filterSelected(it, filter) }
 
-    /** Le filtre du média touché : il le colore lui seul (jamais la scène) ; `null` le retire. */
-    fun onSelectMediaFilter(mediaId: String, filter: StoryFilter?) =
-        reduce { StoryComposerBackgroundReducer.mediaFilterSelected(it, mediaId, filter) }
-
     fun onFilterIntensityChange(intensity: Float) =
         reduce("intensity") { StoryComposerBackgroundReducer.filterIntensityChanged(it, intensity) }
 
