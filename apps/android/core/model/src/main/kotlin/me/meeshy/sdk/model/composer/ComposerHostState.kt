@@ -1,6 +1,5 @@
 package me.meeshy.sdk.model.composer
 
-import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.ReelOffer
@@ -33,8 +32,6 @@ data class ComposerHostState(
     val synced: Set<String> = emptySet(),
     val holder: ComposerCarry.Side? = null,
     val carry: ComposerCarry? = null,
-    /** The layout of the scenes the author armed (iOS `ComposerPublishChoice.layout`); `null` until chosen. */
-    val layout: MosaicLayoutMode? = null,
     private val carrySeq: Int = 0,
     /** L'audience que la dernière bascule a POSÉE sur un côté : intacte au retour, elle ne revient pas écraser l'autre. */
     private val audienceSeed: Pair<ComposerCarry.Side, StoryVisibility>? = null,
@@ -66,13 +63,6 @@ data class ComposerHostState(
     /** The menu: the door's formats with the reel kept open, so a reel not yet qualified is greyed with its reason. */
     val verdicts: List<FormatVerdict>
         get() = ComposerFormatAvailability.verdicts(profile(reel = true).offeredFormats, offeredFormats, carriesMoreThanText)
-
-    /** The layouts the menu offers for what is composed now — empty (no section) unless a post holds several scenes. */
-    val layoutChoices: List<MosaicLayoutMode>
-        get() = ComposerMosaicChoice.offered(postMedia.size, selectedFormat)
-
-    /** Only an offered layout can be armed; anything else leaves the state untouched. */
-    fun chooseLayout(mode: MosaicLayoutMode): ComposerHostState = if (mode in layoutChoices) copy(layout = mode) else this
 
     /** A single entry is an affordance without choice: no chevron. */
     val hasFormatMenu: Boolean get() = verdicts.size > 1

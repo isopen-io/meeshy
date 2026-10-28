@@ -79,21 +79,21 @@ class PostStoryEffectsWireSerializerTest {
     }
 
     @Test
-    fun `a layout travels in the v3 document next to the background, as iOS writes canvasV3 layout`() {
-        val document = wire(StoryEffects(background = "302B63", layout = MosaicLayoutMode.HERO))["storyEffects"]!!.jsonObject
+    fun `a layout never makes a canvas document of its own, a post's photos stay its media`() {
+        // iOS paints ANY canvasV3 in place of the post's media (FeedPostCard: « la scène le remplace entièrement »), so a
+        // scene-less `{v:3, layout}` would hide every photo from iOS readers; iOS writes `layout` only inside a document
+        // of two scenes or more (`ComposerStoryCanvas.publishedSlide`), which Android's post composer does not compose.
+        val document = wire(StoryEffects(layout = MosaicLayoutMode.WAVE))["storyEffects"]!!.jsonObject
 
-        assertThat(document["v"]!!.jsonPrimitive.int).isEqualTo(3)
-        assertThat(document["layout"]!!.jsonPrimitive.content).isEqualTo("hero")
-        assertThat(document["scenes"]!!.jsonArray).hasSize(1)
+        assertThat(document.keys).doesNotContain("v")
+        assertThat(document.keys).doesNotContain("scenes")
     }
 
     @Test
-    fun `a layout alone is a v3 document with no scene, which the gateway schema allows`() {
-        val document = wire(StoryEffects(layout = MosaicLayoutMode.WAVE))["storyEffects"]!!.jsonObject
+    fun `a layout beside a background does not ride the one-scene document either`() {
+        val document = wire(StoryEffects(background = "302B63", layout = MosaicLayoutMode.HERO))["storyEffects"]!!.jsonObject
 
-        assertThat(document["v"]!!.jsonPrimitive.int).isEqualTo(3)
-        assertThat(document["layout"]!!.jsonPrimitive.content).isEqualTo("wave")
-        assertThat(document.keys).doesNotContain("scenes")
+        assertThat(document.keys).doesNotContain("v")
     }
 
     @Test
