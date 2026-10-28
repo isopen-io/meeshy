@@ -152,6 +152,10 @@ class SocialSendersTest {
 
     private fun refusal(status: Int) = HttpException(Response.error<Unit>(status, "{}".toResponseBody()))
 
+    private fun gatewayRefusal(status: Int, code: String) = HttpException(
+        Response.error<Unit>(status, """{"success":false,"error":"refused","code":"$code"}""".toResponseBody()),
+    )
+
     @Test
     fun `a like the server says it already applied is a success, never a failure that rolls the like back`() = runTest {
         val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1")
@@ -219,11 +223,11 @@ class SocialSendersTest {
 
     @Test
     fun `a definitive refusal of a like, unlike, bookmark or unbookmark fails at once instead of being retried to exhaustion`() = runTest {
-        listOf(400, 403, 404, 422).forEach { status ->
-            coEvery { postApi.like("p1") } throws refusal(status)
-            coEvery { postApi.unlike("p1") } throws refusal(status)
-            coEvery { postApi.bookmark("p1") } throws refusal(status)
-            coEvery { postApi.removeBookmark("p1") } throws refusal(status)
+        listOf(400 to "VALIDATION_ERROR", 403 to "FORBIDDEN", 404 to "POST_NOT_FOUND", 422 to "UNPROCESSABLE").forEach { (status, code) ->
+            coEvery { postApi.like("p1") } throws gatewayRefusal(status, code)
+            coEvery { postApi.unlike("p1") } throws gatewayRefusal(status, code)
+            coEvery { postApi.bookmark("p1") } throws gatewayRefusal(status, code)
+            coEvery { postApi.removeBookmark("p1") } throws gatewayRefusal(status, code)
 
             listOf(
                 LikePostHandler(postApi, postRepository) to OutboxKind.LIKE_POST,
@@ -254,12 +258,24 @@ class SocialSendersTest {
         val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1", cmid = "c-7")
         val handler = LikePostHandler(postApi, postRepository)
 
-        coEvery { postApi.like("p1") } throws refusal(404)
+        coEvery { postApi.like("p1") } throws gatewayRefusal(404, "POST_NOT_FOUND")
         handler.send(row)
         verify(exactly = 0) { postRepository.settleGesture(any()) }
 
         coEvery { postApi.like("p1") } returns accepted(Unit)
         handler.send(row)
         verify(exactly = 1) { postRepository.settleGesture("c-7") }
+    }
+    @Test
+    fun `a refusal that never reached the gateway, like the proxy's 404 while the gateway restarts, stays transient`() = runTest {
+        val handler = LikePostHandler(postApi, postRepository)
+        val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1")
+
+        listOf(400, 403, 404, 422).forEach { status ->
+            coEvery { postApi.like("p1") } throws HttpException(Response.error<Unit>(status, "404 page not found".toResponseBody()))
+            assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+            coEvery { postApi.like("p1") } throws refusal(status)
+            assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        }
     }
 }

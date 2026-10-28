@@ -62,15 +62,18 @@ public class PublishStoryHandler @Inject constructor(
  *   (`REACTION_LIMIT_REACHED` : cinq réactions déjà posées, donc le post est déjà aimé côté serveur). 410
  *   `MUTATION_RESULT_GONE` n'est servi par aucune des quatre routes (`replayCost: 'converges'`), il est accepté par
  *   prudence.
- * - 400 / 403 / 404 / 422 : refus DÉFINITIF (post supprimé, privé ou bloqué : `POST_NOT_FOUND` ; emoji invalide ; accès
- *   refusé). Le réessayer ne changera rien : échec immédiat, le geste est défait tout de suite.
+ * - 400 / 403 / 404 / 422 PORTÉS PAR L'ENVELOPPE DE LA PASSERELLE (son `code` : `POST_NOT_FOUND` pour un post supprimé,
+ *   privé ou bloqué, `VALIDATION_ERROR`, accès refusé) : refus DÉFINITIF, échec immédiat, le geste est défait tout de suite.
+ *   Le même statut sans enveloppe (code synthétique `HTTP_<n>`) ne vient pas de la passerelle : le 404 de Traefik pendant
+ *   qu'elle redémarre en est un, et défaire le geste pour lui perdrait un j'aime que le serveur aurait accepté.
  * - tout le reste (401 le temps d'un renouvellement de session, 408, 429, 5xx, réseau) : transitoire, réessayé.
  */
 internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
-    val status = (this as? NetworkResult.Failure)?.error?.httpStatus
-    return when (status) {
-        in ALREADY_APPLIED_STATUSES -> SendResult.Success
-        in DEFINITIVE_REFUSALS -> SendResult.PermanentFailure("Refused: HTTP $status")
+    val error = (this as? NetworkResult.Failure)?.error
+    val status = error?.httpStatus
+    return when {
+        status in ALREADY_APPLIED_STATUSES -> SendResult.Success
+        status in DEFINITIVE_REFUSALS && error?.code != "HTTP_$status" -> SendResult.PermanentFailure("Refused: HTTP $status ${error?.code}")
         else -> toSendResult()
     }
 }
