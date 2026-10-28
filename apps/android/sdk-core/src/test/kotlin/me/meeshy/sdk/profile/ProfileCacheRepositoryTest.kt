@@ -28,7 +28,7 @@ class ProfileCacheRepositoryTest {
 
     @Test
     fun `ouvrir par pseudo puis par id retombe sur la meme fiche`() = runTest {
-        repository.store(bob, lookupKey = "@bob")
+        repository.store(bob, lookupKey = "@bob", ticket = null)
         assertThat(repository.cachedProfile("bob")).isEqualTo(bob)
         assertThat(repository.cachedProfile("BOB")).isEqualTo(bob)
         assertThat(repository.cachedProfile(id)).isEqualTo(bob)
@@ -42,23 +42,23 @@ class ProfileCacheRepositoryTest {
 
     @Test
     fun `ecrire deux fois la meme fiche laisse une ligne par cle`() = runTest {
-        repository.store(bob, id)
-        repository.store(bob, id)
+        repository.store(bob, id, ticket = null)
+        repository.store(bob, id, ticket = null)
         assertThat(db.keyedJsonCacheDao().findAll(ProfileCacheRepository.NAMESPACE)).hasSize(2)
     }
 
     @Test
     fun `purge retire la fiche sous toutes ses cles`() = runTest {
-        repository.store(bob, "bob")
+        repository.store(bob, "bob", ticket = null)
         repository.purge(bob, "bob")
         assertThat(db.keyedJsonCacheDao().findAll(ProfileCacheRepository.NAMESPACE)).isEmpty()
     }
 
     @Test
     fun `user updated repeint les lignes du compte et ignore les autres`() = runTest {
-        repository.store(bob, "bob")
+        repository.store(bob, "bob", ticket = null)
         val other = MeeshyUser(id = "64b7f0a1c2d3e4f5a6b7c8da", username = "eve")
-        repository.store(other, "eve")
+        repository.store(other, "eve", ticket = null)
         repository.repaint(
             UserUpdatedEvent(userId = id, displayName = "Bobby", username = "Bob", hasNameGroup = true),
         )
@@ -69,7 +69,7 @@ class ProfileCacheRepositoryTest {
 
     @Test
     fun `la deconnexion vide profile_card`() = runTest {
-        repository.store(bob, "bob")
+        repository.store(bob, "bob", ticket = null)
         db.clearAllTables()
         assertThat(repository.cachedProfile("bob")).isNull()
         assertThat(repository.cachedProfile(id)).isNull()

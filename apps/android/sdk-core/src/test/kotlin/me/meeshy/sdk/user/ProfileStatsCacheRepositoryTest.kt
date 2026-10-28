@@ -66,7 +66,7 @@ class ProfileStatsCacheRepositoryTest {
     fun `persistStats then cachedStats round-trips the full payload`() = runTest {
         val repo = repository()
 
-        repo.persistStats("me", richStats)
+        repo.persistStats("me", richStats, null)
 
         assertThat(repo.cachedStats("me")).isEqualTo(richStats)
     }
@@ -75,7 +75,7 @@ class ProfileStatsCacheRepositoryTest {
     fun `cachedStats is keyed per user - one user's stats never leak into another's`() = runTest {
         val repo = repository()
 
-        repo.persistStats("alice", richStats)
+        repo.persistStats("alice", richStats, null)
 
         assertThat(repo.cachedStats("alice")).isEqualTo(richStats)
         assertThat(repo.cachedStats("bob")).isNull()
@@ -85,9 +85,9 @@ class ProfileStatsCacheRepositoryTest {
     fun `persistStats overwrites the previous stats for the same user - newest wins`() = runTest {
         val repo = repository()
 
-        repo.persistStats("me", richStats)
+        repo.persistStats("me", richStats, null)
         val updated = richStats.copy(totalMessages = 99)
-        repo.persistStats("me", updated)
+        repo.persistStats("me", updated, null)
 
         assertThat(repo.cachedStats("me")).isEqualTo(updated)
     }
@@ -117,7 +117,7 @@ class ProfileStatsCacheRepositoryTest {
     fun `persistTimeline then cachedTimeline round-trips the points in order`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline("me", timeline)
+        repo.persistTimeline("me", timeline, null)
 
         assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(timeline).inOrder()
     }
@@ -126,7 +126,7 @@ class ProfileStatsCacheRepositoryTest {
     fun `an empty persisted timeline reads back as synced-empty, not cold`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline("me", emptyList())
+        repo.persistTimeline("me", emptyList(), null)
 
         // synced-but-empty: a real "no activity" window, distinct from the cold `null`.
         assertThat(repo.cachedTimeline("me")).isEqualTo(emptyList<TimelinePoint>())
@@ -136,9 +136,9 @@ class ProfileStatsCacheRepositoryTest {
     fun `persistTimeline overwrites the previous window - newest wins`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline("me", timeline)
+        repo.persistTimeline("me", timeline, null)
         val newer = listOf(TimelinePoint(date = "2026-07-04", messages = 5))
-        repo.persistTimeline("me", newer)
+        repo.persistTimeline("me", newer, null)
 
         assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(newer).inOrder()
     }
@@ -161,8 +161,8 @@ class ProfileStatsCacheRepositoryTest {
     fun `stats and timeline share the table without colliding`() = runTest {
         val repo = repository()
 
-        repo.persistStats("me", richStats)
-        repo.persistTimeline("me", timeline)
+        repo.persistStats("me", richStats, null)
+        repo.persistTimeline("me", timeline, null)
 
         assertThat(repo.cachedStats("me")).isEqualTo(richStats)
         assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(timeline).inOrder()
@@ -173,8 +173,8 @@ class ProfileStatsCacheRepositoryTest {
         val repo = repository()
         val other = listOf(TimelinePoint(date = "2026-07-09", messages = 9))
 
-        repo.persistTimeline("alice", timeline)
-        repo.persistTimeline("bob", other)
+        repo.persistTimeline("alice", timeline, null)
+        repo.persistTimeline("bob", other, null)
 
         assertThat(repo.cachedTimeline("alice")).containsExactlyElementsIn(timeline).inOrder()
         assertThat(repo.cachedTimeline("bob")).containsExactlyElementsIn(other).inOrder()
@@ -185,7 +185,7 @@ class ProfileStatsCacheRepositoryTest {
     fun `une fenetre vide d un compte se relit synchronisee, pas a froid`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline("alice", emptyList())
+        repo.persistTimeline("alice", emptyList(), null)
 
         assertThat(repo.cachedTimeline("alice")).isEqualTo(emptyList<TimelinePoint>())
     }
@@ -193,8 +193,8 @@ class ProfileStatsCacheRepositoryTest {
     @Test
     fun `le changement de compte ne laisse ni statistiques ni activite au compte suivant`() = runTest {
         val repo = repository()
-        repo.persistStats("alice", richStats)
-        repo.persistTimeline("alice", timeline)
+        repo.persistStats("alice", richStats, null)
+        repo.persistTimeline("alice", timeline, null)
 
         repo.clear()
 
@@ -214,7 +214,7 @@ class ProfileStatsCacheRepositoryTest {
             ),
         )
 
-        repo.persistTimeline("bob", timeline)
+        repo.persistTimeline("bob", timeline, null)
 
         assertThat(dao.observe(ProfileStatsCacheRepository.LEGACY_SHARED_TIMELINE_KEY).first()).isNull()
     }

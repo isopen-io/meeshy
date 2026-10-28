@@ -55,7 +55,7 @@ class CommunityCacheRepositoryTest {
     }
 
     @Test fun `un cache frais est servi sans reseau`() = runTest {
-        cache().put("community:list", "page0", listOf(community("a")), ListSerializer(ApiCommunity.serializer()))
+        cache().put("community:list", "page0", listOf(community("a")), ListSerializer(ApiCommunity.serializer()), null)
 
         val first = repository().list().first()
 
@@ -64,7 +64,7 @@ class CommunityCacheRepositoryTest {
     }
 
     @Test fun `un cache perime est servi Stale puis revalide`() = runTest {
-        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()))
+        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()), null)
         clock.now += 10 * 60_000
         coEvery { api.list(any(), any(), any()) } returns listResponse("new")
 
@@ -76,7 +76,7 @@ class CommunityCacheRepositoryTest {
     }
 
     @Test fun `un cache expire est Syncing avec ses donnees`() = runTest {
-        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()))
+        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()), null)
         clock.now += 3 * 24 * 60 * 60_000L
         coEvery { api.list(any(), any(), any()) } throws IOException("hors ligne")
 
@@ -86,7 +86,7 @@ class CommunityCacheRepositoryTest {
     }
 
     @Test fun `un echec reseau conserve le cache`() = runTest {
-        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()))
+        cache().put("community:list", "page0", listOf(community("old")), ListSerializer(ApiCommunity.serializer()), null)
         clock.now += 10 * 60_000
         coEvery { api.list(any(), any(), any()) } throws IOException("hors ligne")
 
@@ -114,8 +114,8 @@ class CommunityCacheRepositoryTest {
 
     @Test fun `forget n'efface que la communaute visee`() = runTest {
         val c = cache()
-        c.put("community:detail", "c1", community("c1"), ApiCommunity.serializer())
-        c.put("community:detail", "c2", community("c2"), ApiCommunity.serializer())
+        c.put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        c.put("community:detail", "c2", community("c2"), ApiCommunity.serializer(), null)
 
         repository().forget("c1")
 

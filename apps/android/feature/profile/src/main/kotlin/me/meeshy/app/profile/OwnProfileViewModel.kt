@@ -288,10 +288,11 @@ class OwnProfileViewModel @Inject constructor(
                 statsCache.cachedStats(id)?.let { cached ->
                     _state.update { it.copy(stats = UserStatsBuilder.build(cached)) }
                 }
+                val ticket = statsCache.ticket()
                 val result = userRepository.getUserStats(id)
                 if (result is NetworkResult.Success) {
                     _state.update { it.copy(stats = UserStatsBuilder.build(result.data)) }
-                    statsCache.persistStats(id, result.data)
+                    statsCache.persistStats(id, result.data, ticket)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -318,10 +319,11 @@ class OwnProfileViewModel @Inject constructor(
                         _state.update { it.copy(timeline = presentation) }
                     }
                 }
+                val ticket = statsCache.ticket()
                 val result = userRepository.getUserStatsTimeline()
                 if (result is NetworkResult.Success) {
                     _state.update { it.copy(timeline = StatsTimelineBuilder.build(result.data)) }
-                    statsCache.persistTimeline(id, result.data)
+                    statsCache.persistTimeline(id, result.data, ticket)
                 }
             } catch (e: CancellationException) {
                 throw e

@@ -50,8 +50,8 @@ class ProfileSheetLoaderTest {
 
     @Test
     fun `le cache est emis avant le reseau puis la synchro part meme frais`() = runTest {
-        profiles.store(bob, id)
-        statsCache.persistStats(id, UserStats(totalMessages = 1))
+        profiles.store(bob, id, null)
+        statsCache.persistStats(id, UserStats(totalMessages = 1), null)
         val remote = FakeRemote(ok(), failure(null))
         val states = loader(remote).states(id, "bob")
         assertThat(states.first().profile).isEqualTo(bob)
@@ -100,7 +100,7 @@ class ProfileSheetLoaderTest {
 
     @Test
     fun `panne sur fiche peinte ne remplace jamais le contenu`() = runTest {
-        profiles.store(bob, id)
+        profiles.store(bob, id, null)
         val last = loader(FakeRemote(failure(null, "NETWORK"), failure(null))).states(id, "bob").last()
         assertThat(last.profile).isEqualTo(bob)
         assertThat(last.profileLoadFailed).isFalse()
@@ -108,8 +108,8 @@ class ProfileSheetLoaderTest {
 
     @Test
     fun `403 bloque par la cible et purge profil et statistiques`() = runTest {
-        profiles.store(bob, id)
-        statsCache.persistStats(id, stats)
+        profiles.store(bob, id, null)
+        statsCache.persistStats(id, stats, null)
         val last = loader(FakeRemote(failure(403), failure(null))).states(id, "bob").last()
         assertThat(last.isBlockedByTarget).isTrue()
         assertThat(last.profile).isNull()
@@ -120,7 +120,7 @@ class ProfileSheetLoaderTest {
 
     @Test
     fun `404 sur fiche peinte bloque et 404 a vide est une panne`() = runTest {
-        profiles.store(bob, id)
+        profiles.store(bob, id, null)
         val painted = loader(FakeRemote(failure(404), failure(null))).states(id, "bob").last()
         assertThat(painted.isBlockedByTarget).isTrue()
         val empty = loader(FakeRemote(failure(404), failure(null))).states("64b7f0a1c2d3e4f5a6b7c8da", "x").last()

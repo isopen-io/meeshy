@@ -63,7 +63,7 @@ class FriendListRepository @Inject constructor(
      * are dropped) and stamps `sync_meta` — even for an empty roster, so a real
      * empty list reads back as synced-empty rather than cold.
      */
-    suspend fun persist(friends: List<FriendRequestUser>, ticket: AccountTicket? = null) {
+    suspend fun persist(friends: List<FriendRequestUser>, ticket: AccountTicket?) {
         val now = SystemCacheClock.nowMillis()
         val rows = friends.mapIndexed { index, friend ->
             FriendEntity(
@@ -93,15 +93,17 @@ class FriendListRepository @Inject constructor(
      * stays cold: nothing was ever synced, so the next load fetches the real roster.
      */
     suspend fun insertAtHead(friend: FriendRequestUser) {
+        val ticket = ticket()
         val current = cachedSnapshot() ?: return
-        persist(listOf(friend) + current.filterNot { it.id == friend.id })
+        persist(listOf(friend) + current.filterNot { it.id == friend.id }, ticket)
     }
 
     /** Drops [userId] from the persisted roster (rollback of an optimistic accept). */
     suspend fun remove(userId: String) {
+        val ticket = ticket()
         val current = cachedSnapshot() ?: return
         if (current.none { it.id == userId }) return
-        persist(current.filterNot { it.id == userId })
+        persist(current.filterNot { it.id == userId }, ticket)
     }
 
     /** Expires the roster's freshness (the rows stay for the cold-start paint). */

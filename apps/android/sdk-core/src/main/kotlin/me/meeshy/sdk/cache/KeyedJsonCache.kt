@@ -22,7 +22,8 @@ data class KeyedJsonDocument<T>(val value: T, val fetchedAt: Long)
  *
  * #13560 — the account boundary: a writer takes [ticket] when its request LEAVES and hands it to [put]; the row then
  * lands only while that account is still the one signed in (a response of A arriving after A's purge writes nothing
- * into B's cache). A `put` without a ticket (or without a [fence]) is unfenced, as before.
+ * into B's cache). [put] has no default ticket: a writer states which account it writes for, `null` (unfenced) being an
+ * explicit choice of a test or a tool, never a forgotten argument.
  */
 class KeyedJsonCache(
     private val dao: KeyedJsonCacheDao,
@@ -37,7 +38,7 @@ class KeyedJsonCache(
         key: String,
         value: T,
         serializer: KSerializer<T>,
-        ticket: AccountTicket? = null,
+        ticket: AccountTicket?,
     ) {
         fence.commitOrWrite(ticket) {
             dao.upsert(KeyedJsonCacheEntity(namespace, key, keyedJson.encodeToString(serializer, value), clock.nowMillis()))

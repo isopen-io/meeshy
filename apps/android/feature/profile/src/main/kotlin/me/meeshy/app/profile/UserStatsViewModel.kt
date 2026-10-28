@@ -78,6 +78,7 @@ class UserStatsViewModel @Inject constructor(
             return
         }
         _state.update { it.copy(isRefreshing = true) }
+        val ticket = statsCache.ticket()
         val (statsResult, timelineResult) = kotlinx.coroutines.coroutineScope {
             val stats = async { guarded { userRepository.getMyStats() } }
             val timeline = async { guarded { userRepository.getUserStatsTimeline() } }
@@ -99,8 +100,8 @@ class UserStatsViewModel @Inject constructor(
                 },
             )
         }
-        freshStats?.let { guarded { statsCache.persistStats(id, it) } }
-        freshTimeline?.let { guarded { statsCache.persistTimeline(id, it) } }
+        freshStats?.let { guarded { statsCache.persistStats(id, it, ticket) } }
+        freshTimeline?.let { guarded { statsCache.persistTimeline(id, it, ticket) } }
     }
 
     /** Une panne de cache ou de réseau ne casse jamais l'écran : elle vaut « rien de neuf ». */

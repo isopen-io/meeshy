@@ -220,7 +220,7 @@ class ContactsListViewModel @Inject constructor(
     private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
         PresenceOverlay.apply(friends, presenceStore.entries.value)
 
-    private fun onFriendshipCacheChanged() {
+    private suspend fun onFriendshipCacheChanged() {
         val cacheIds = friendshipCache.currentFriendIds
         if (cacheIds == lastReconciledFriendIds) return
         lastReconciledFriendIds = cacheIds
@@ -229,7 +229,8 @@ class ContactsListViewModel @Inject constructor(
         val result = ContactList.reconcile(current, cacheIds)
         if (result.friends != current) {
             _state.update { it.copy(friends = result.friends) }
-            viewModelScope.launch { friendListRepository.persist(result.friends) }
+            val ticket = friendListRepository.ticket()
+            viewModelScope.launch { friendListRepository.persist(result.friends, ticket) }
         }
         if (result.needsRefetch) refetch()
     }

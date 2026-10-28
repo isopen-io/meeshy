@@ -31,7 +31,7 @@ class ProfileCacheRepository(private val cache: KeyedJsonCache) {
         cache.get(NAMESPACE, normalize(key), MeeshyUser.serializer())?.value
 
     /** Range [user] sous son id, son pseudo et la clé [lookupKey] avec laquelle on l'a demandé. */
-    suspend fun store(user: MeeshyUser, lookupKey: String, ticket: AccountTicket? = null) {
+    suspend fun store(user: MeeshyUser, lookupKey: String, ticket: AccountTicket?) {
         keysOf(user, lookupKey).forEach { cache.put(NAMESPACE, it, user, MeeshyUser.serializer(), ticket) }
     }
 

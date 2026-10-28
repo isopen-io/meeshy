@@ -59,7 +59,7 @@ class ProfileStatsCacheRepository @Inject constructor(
     }
 
     /** Write the network stats for [userId] through to Room for the next cold paint. */
-    suspend fun persistStats(userId: String, stats: UserStats, ticket: AccountTicket? = null) {
+    suspend fun persistStats(userId: String, stats: UserStats, ticket: AccountTicket?) {
         fence.commitOrWrite(ticket) {
             dao.upsert(
                 ProfileStatsCacheEntity(
@@ -86,7 +86,7 @@ class ProfileStatsCacheRepository @Inject constructor(
         return runCatching { MeeshyApi.json.decodeFromString<List<TimelinePoint>>(payload) }.getOrNull()
     }
 
-    suspend fun persistTimeline(userId: String, points: List<TimelinePoint>, ticket: AccountTicket? = null) {
+    suspend fun persistTimeline(userId: String, points: List<TimelinePoint>, ticket: AccountTicket?) {
         fence.commitOrWrite(ticket) {
             dao.deleteByKey(LEGACY_SHARED_TIMELINE_KEY)
             dao.upsert(
