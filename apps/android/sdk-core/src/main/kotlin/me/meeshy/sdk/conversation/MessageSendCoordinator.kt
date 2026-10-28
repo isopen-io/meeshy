@@ -71,7 +71,7 @@ internal class MessageSendCoordinator(
         attachments: List<ApiMessageAttachment> = emptyList(),
         location: SharedPlace? = null,
     ): String {
-        val ticket = outboxRepository.ticket()
+        val ticket = outboxRepository.currentTicket()
         val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))

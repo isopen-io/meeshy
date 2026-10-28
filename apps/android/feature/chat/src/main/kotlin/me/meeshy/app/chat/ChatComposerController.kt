@@ -21,6 +21,7 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.mention.MentionComposer
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.applyRemote
@@ -379,7 +380,10 @@ internal class ChatComposerController(
         _pendingPlace.value = null
         persistDraft("", replyToId = null)
         recordTypedEmojis(text)
-        scope.launch {
+        // #13558 : l'envoi appartient au compte du GESTE — la lecture des fichiers de travail et leur mise en file qui
+        // finissent après un changement de compte ne partent jamais sous le suivant.
+        val gesture = mediaUploadQueue.ticket()
+        scope.launch(gesture.asCoroutineContext()) {
             try {
                 val sentLanguage = ComposeLanguageDetector.originalLanguageAtSend(
                     text = text,

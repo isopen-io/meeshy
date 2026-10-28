@@ -30,6 +30,7 @@ import me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore
 import me.meeshy.sdk.session.AccountClosedException
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.DefaultSessionTeardown
+import me.meeshy.sdk.session.withAccountTicket
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import org.junit.After
 import org.junit.Before
@@ -203,6 +204,50 @@ class OutboxAccountRaceTest {
         val sends = MessageSendCoordinator(db, db.messageDao(), outbox, closesOnFirstRead)
 
         val outcome = runCatching { sends.sendOptimistic("c1", "rendez-vous à 8 h", "fr", MeeshyUser(id = "A", username = "a")) }
+
+        assertThat(outcome.exceptionOrNull()).isInstanceOf(AccountClosedException::class.java)
+        assertThat(outbox.observeAll().first()).isEmpty()
+        assertThat(db.messageDao().listForConversation("c1")).isEmpty()
+    }
+
+    /**
+     * #13558 constat 4 : le geste ouvre le compte. La copie, la retouche ou la compression qui précèdent la mise en file
+     * se terminent APRÈS que A est parti et que B s'est connecté : le média de A ne part pas sous B.
+     */
+    @Test
+    fun `a media picked by A whose preparation ends after B signed in is dropped, never queued as B`(): Unit = runBlocking {
+        val gesture = queue.ticket()
+        val prepared = CompletableDeferred<Unit>()
+        val enqueue = async(Dispatchers.IO) {
+            runCatching {
+                withAccountTicket(gesture) {
+                    prepared.await()
+                    queue.enqueue(MediaUploadItem(ByteArray(2_000) { 5 }, "photo.jpg", "image/jpeg"))
+                }
+            }
+        }
+
+        signOutThenSignInAsB()
+        prepared.complete(Unit)
+        val outcome = withTimeout(10_000) { enqueue.await() }
+
+        assertThat(outcome.exceptionOrNull()).isInstanceOf(AccountClosedException::class.java)
+        assertThat(outbox.observeAll().first()).isEmpty()
+        assertThat(db.mediaBlobDao().cmids()).isEmpty()
+        assertThat(directory.listFiles()!!).isEmpty()
+    }
+
+    @Test
+    fun `a message whose gesture was taken under A is not queued as B however late its write`(): Unit = runBlocking {
+        val sends = MessageSendCoordinator(db, db.messageDao(), outbox, object : CacheClock {
+            override fun nowMillis() = 1_700_000_000_000L
+        })
+        val gesture = outbox.ticket()
+        signOutThenSignInAsB()
+
+        val outcome = runCatching {
+            withAccountTicket(gesture) { sends.sendOptimistic("c1", "à demain", "fr", MeeshyUser(id = "A", username = "a")) }
+        }
 
         assertThat(outcome.exceptionOrNull()).isInstanceOf(AccountClosedException::class.java)
         assertThat(outbox.observeAll().first()).isEmpty()

@@ -19,6 +19,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -176,7 +177,9 @@ class ShareTargetViewModel @Inject constructor(
         val user = sessionRepository.currentUser.value ?: return
 
         _state.update { it.copy(sendingConversationId = conversationId, errorMessage = null) }
-        viewModelScope.launch {
+        // #13558 : le partage appartient au compte qui a touché « Envoyer ».
+        val gesture = mediaUploadQueue.ticket()
+        viewModelScope.launch(gesture.asCoroutineContext()) {
             try {
                 if (attachment != null) {
                     val uploadCmid = mediaUploadQueue.enqueue(attachment, conversationId = conversationId)
