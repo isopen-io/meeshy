@@ -113,6 +113,7 @@ class MessageRepository internal constructor(
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
         location: SharedPlace? = null,
+        forwardedAttachmentIds: List<String>? = null,
     ): String = sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
@@ -122,6 +123,7 @@ class MessageRepository internal constructor(
         storyReplyToId = storyReplyToId,
         forwardedFromId = forwardedFromId,
         forwardedFromConversationId = forwardedFromConversationId,
+        forwardedAttachmentIds = forwardedAttachmentIds,
         effects = effects,
         messageType = messageType,
         attachmentUploadCmids = attachmentUploadCmids,

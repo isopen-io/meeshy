@@ -70,6 +70,7 @@ internal class MessageSendCoordinator(
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
         location: SharedPlace? = null,
+        forwardedAttachmentIds: List<String>? = null,
     ): String {
         val ticket = outboxRepository.currentTicket()
         val cid = OutboxIds.cid()
@@ -79,6 +80,7 @@ internal class MessageSendCoordinator(
         // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
         // list keeps a text-only send exactly as before (null attachmentIds).
         val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
+        val chosenPieces = forwardedAttachmentIds?.filter { it.isNotBlank() }?.distinct()?.takeIf { it.isNotEmpty() }
         val optimistic = ApiMessage(
             id = cid,
             conversationId = conversationId,
@@ -100,6 +102,7 @@ internal class MessageSendCoordinator(
             location = location,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            metadata = ForwardedPieces.stamp(chosenPieces),
             effectFlags = wire.effectFlags,
             isBlurred = wire.isBlurred,
             isViewOnce = wire.isViewOnce,
@@ -115,6 +118,7 @@ internal class MessageSendCoordinator(
             attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            forwardedAttachmentIds = chosenPieces,
             effectFlags = wire.effectFlags,
             isBlurred = wire.isBlurred,
             isViewOnce = wire.isViewOnce,
@@ -203,6 +207,7 @@ internal class MessageSendCoordinator(
                         clientMessageId = cmid,
                         forwardedFromId = message.forwardedFromId,
                         forwardedFromConversationId = message.forwardedFromConversationId,
+                        forwardedAttachmentIds = ForwardedPieces.read(message),
                         effectFlags = message.effectFlags,
                         isBlurred = message.isBlurred,
                         isViewOnce = message.isViewOnce,

@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.share
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MessageEffectFlags
 import org.junit.Test
 
@@ -90,5 +91,58 @@ class ShareOutgoingBuilderTest {
         assertThat(entry.messages.map { it.id }).containsExactly("b")
         assertThat(ShareSubject.Piece(message("a"), "att", "src").widenedToWholeMessage)
             .isEqualTo(ShareSubject.Messages(listOf(message("a")), "src", false))
+    }
+    private fun photo(id: String, blurred: Boolean? = null, viewOnce: Boolean? = null, encrypted: Boolean? = null) =
+        ApiMessageAttachment(id = id, mimeType = "image/jpeg", isBlurred = blurred, isViewOnce = viewOnce, isEncrypted = encrypted)
+
+    private fun piece(attachmentId: String, vararg pieces: ApiMessageAttachment, text: String = "le texte du message", encrypted: Boolean = false, caption: String = "") =
+        ShareOutgoingBuilder.build(
+            ShareSubject.Piece(message().copy(content = text, attachments = pieces.toList()), attachmentId, "src", encrypted),
+            emptySet(), caption, null,
+        )
+
+    @Test
+    fun `a piece leaves as a forward of its message limited to it and without the text of the message`() {
+        val posts = ready(piece("b", photo("a"), photo("b")))
+
+        val copy = posts.single()
+        assertThat(copy.forwardedFromId).isEqualTo("m1")
+        assertThat(copy.forwardedFromConversationId).isEqualTo("src")
+        assertThat(copy.forwardedAttachmentIds).containsExactly("b")
+        assertThat(copy.content).isEmpty()
+    }
+
+    @Test
+    fun `the caption of a piece leaves as a separate message after it`() {
+        val posts = ready(piece("a", photo("a"), caption = " regarde "))
+
+        assertThat(posts).hasSize(2)
+        assertThat(posts[1].content).isEqualTo("regarde")
+        assertThat(posts[1].forwardedFromId).isNull()
+        assertThat(posts[1].forwardedAttachmentIds).isNull()
+    }
+
+    @Test
+    fun `a sealed piece never leaves, whatever its message or conversation says`() {
+        val sealed = ShareOutgoingResult.Refused(ShareFailure.SEALED_SOURCE)
+
+        assertThat(piece("a", photo("a", encrypted = true))).isEqualTo(sealed)
+        assertThat(piece("a", photo("a"), encrypted = true)).isEqualTo(sealed)
+        assertThat(piece("a", photo("a"), photo("b", encrypted = true))).isEqualTo(sealed)
+    }
+
+    @Test
+    fun `a piece unknown to its message or hidden by the exit law is never sent`() {
+        val nothing = ShareOutgoingResult.Refused(ShareFailure.NOTHING_TO_SEND)
+
+        assertThat(piece("ghost", photo("a"))).isEqualTo(nothing)
+        assertThat(piece("a", photo("a", viewOnce = true))).isEqualTo(nothing)
+    }
+
+    @Test
+    fun `a blurred piece hands its blur down to the copy`() {
+        val copy = ready(piece("a", photo("a", blurred = true))).single()
+
+        assertThat(copy.effectFlags and MessageEffectFlags.BLURRED).isNotEqualTo(0L)
     }
 }
