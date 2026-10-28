@@ -40,6 +40,8 @@
     <string name="stories_composer_fade_out">اختفاء تدريجي للنص</string>
     <string name="stories_composer_timing_start">وقت بدء النص</string>
     <string name="stories_composer_timing_duration">مدة ظهور النص</string>
+    <string name="stories_composer_timing_unset">غير محدد</string>
+    <string name="stories_composer_timing_value">%1$s ث</string>
     <string name="stories_composer_draw_undo">التراجع عن الخط</string>
     <string name="stories_composer_draw_done">إنهاء الرسم</string>
     <string name="stories_composer_remove_sticker">إزالة الملصق</string>

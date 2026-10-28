@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
@@ -183,14 +184,37 @@ internal fun TextStyleToolbar(
 /** La section Temps d'un objet (texte ou sticker, iOS `ComposerObjectEditorRail`) : son départ, puis sa durée. */
 @Composable
 internal fun TimingCycleButtons(timing: StoryElementTiming, onCycleStart: () -> Unit, onCycleDuration: () -> Unit) {
-    CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, timing.hasStart, onCycleStart)
-    CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, timing.isTimed, onCycleDuration)
+    CycleButton(
+        Icons.Filled.Schedule, R.string.stories_composer_timing_start, timing.hasStart, onCycleStart,
+        stateDescription = timingSecondsText(timing.startSeconds, timing.hasStart),
+    )
+    CycleButton(
+        Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, timing.isTimed, onCycleDuration,
+        stateDescription = timingSecondsText(timing.durationSeconds, timing.isTimed),
+    )
+}
+
+/** Ce que TalkBack annonce d'un départ ou d'une durée : la valeur en secondes, ou « non défini ». */
+@Composable
+internal fun timingSecondsText(seconds: Float, isSet: Boolean): String {
+    if (!isSet) return stringResource(R.string.stories_composer_timing_unset)
+    val shown = java.text.NumberFormat.getInstance().apply { maximumFractionDigits = 1 }.format(seconds)
+    return stringResource(R.string.stories_composer_timing_value, shown)
 }
 
 /** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
 @Composable
-internal fun CycleButton(icon: ImageVector, labelRes: Int, active: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+internal fun CycleButton(
+    icon: ImageVector,
+    labelRes: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+    stateDescription: String? = null,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = if (stateDescription != null) Modifier.semantics { this.stateDescription = stateDescription } else Modifier,
+    ) {
         Icon(
             icon,
             contentDescription = stringResource(labelRes),
