@@ -51,7 +51,7 @@ class OutboxRepository @Inject constructor(
         val decision = if (fence == null) {
             write(mutation.toEntity(now(), ticket?.ownerId ?: ownerSource.currentOwnerId()))
         } else {
-            val owner = ticket ?: fence.ticket()
+            val owner = ticket ?: fence.currentTicket()
             fence.commit(owner) { write(mutation.toEntity(now(), owner.ownerId)) } ?: throw AccountClosedException()
         }
         return when (decision) {
@@ -342,6 +342,9 @@ class OutboxRepository @Inject constructor(
      * suspends, and handed back to [enqueue]; `null` when this repository is not fenced.
      */
     fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** The ticket of the work running here — the one installed at the gesture ([me.meeshy.sdk.session.withAccountTicket]) when there is one (#13558). */
+    suspend fun currentTicket(): AccountTicket? = fence?.currentTicket()
 
     private suspend fun write(incoming: OutboxEntity): CoalesceDecision = database.withTransaction {
         val pending = outboxDao.deliverableForLane(incoming.lane)

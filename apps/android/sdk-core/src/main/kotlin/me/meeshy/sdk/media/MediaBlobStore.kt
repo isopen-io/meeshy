@@ -58,7 +58,9 @@ class MediaBlobStore internal constructor(
      * written while that account is still signed in (#13555) — otherwise the file just written leaves the disk and
      * [AccountClosedException] is thrown: a blob never outlives, nor changes, its account.
      */
-    suspend fun put(cmid: String, item: MediaUploadItem, ticket: AccountTicket? = ticket()) {
+    suspend fun put(cmid: String, item: MediaUploadItem): Unit = put(cmid, item, currentTicket())
+
+    suspend fun put(cmid: String, item: MediaUploadItem, ticket: AccountTicket?) {
         try {
             withContext(io) { files.write(cmid, item.source, ticket?.ownerId) }
         } catch (failure: Exception) {
@@ -97,6 +99,9 @@ class MediaBlobStore internal constructor(
 
     /** The account a write begun now belongs to (#13555) — `null` when this store is not fenced. */
     fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** The ticket of the work running here, taken at the gesture when one was installed (#13558). */
+    suspend fun currentTicket(): AccountTicket? = fence?.currentTicket()
 
     /** The boot sweep (#13555): sealed files no row names, and half-written ones, left by a process that died before [before]. */
     suspend fun sweepOrphans(before: Long) {
