@@ -822,7 +822,7 @@ class FeedViewModelTest {
             SocketPostTranslationUpdatedData(postId = "1", language = "es", translation = entry),
         )
 
-        verify { repository.applyTranslationUpdate("1", "es", entry) }
+        coVerify { repository.applyTranslationUpdate("1", "es", entry) }
     }
 
     @Test
@@ -834,7 +834,7 @@ class FeedViewModelTest {
             SocketMediaCaptionTranslationUpdatedData(mediaId = "m1", postId = "1", language = "es", translation = entry),
         )
 
-        verify { repository.applyMediaCaptionTranslationUpdate("1", "m1", null, "es", entry) }
+        coVerify { repository.applyMediaCaptionTranslationUpdate("1", "m1", null, "es", entry) }
     }
 
     @Test
@@ -844,7 +844,7 @@ class FeedViewModelTest {
 
         postUpdated.emit(SocketPostUpdatedData(post = edited))
 
-        verify { repository.applyPostUpdate(edited) }
+        coVerify { repository.applyPostUpdate(edited) }
     }
 
     @Test

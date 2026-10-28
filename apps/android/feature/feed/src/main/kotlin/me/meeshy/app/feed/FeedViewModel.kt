@@ -38,6 +38,9 @@ import me.meeshy.sdk.model.analytics.ImpressionSource
 import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
+import me.meeshy.sdk.post.writePostTranslationsTo
+import me.meeshy.sdk.post.writePostUpdatesTo
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.session.SessionRepository
@@ -281,9 +284,7 @@ class FeedViewModel @Inject constructor(
             // resolution chain (preferences + active override) decides whether to surface
             // it, so no override is forced here (parity with iOS applyPostTranslation and
             // the story-viewer realtime merge).
-            socialSocket.postTranslationUpdated.collect { payload ->
-                postRepository.applyTranslationUpdate(payload.postId, payload.language, payload.translation)
-            }
+            socialSocket.writePostTranslationsTo(postRepository)
         }
         viewModelScope.launch {
             // Prisme, push side (#6280): the gateway translated a PostMedia.caption
@@ -292,15 +293,7 @@ class FeedViewModel @Inject constructor(
             // preferred language the instant it lands — the media-caption sibling of
             // post:translation-updated above (parity with iOS
             // FeedViewModel.applyMediaCaptionTranslation).
-            socialSocket.mediaCaptionTranslationUpdated.collect { payload ->
-                postRepository.applyMediaCaptionTranslationUpdate(
-                    postId = payload.postId,
-                    mediaId = payload.mediaId,
-                    commentId = payload.commentId,
-                    language = payload.language,
-                    entry = payload.translation,
-                )
-            }
+            socialSocket.writeMediaCaptionTranslationsTo(postRepository)
         }
         viewModelScope.launch {
             // post:updated — the author edited the post (caption, media, mood, ...) and the
@@ -308,9 +301,7 @@ class FeedViewModel @Inject constructor(
             // shows in place, preserving the viewer's own like/bookmark/view/reaction state
             // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
             // sink, and the content-edit sibling of post:translation-updated above.
-            socialSocket.postUpdated.collect { payload ->
-                postRepository.applyPostUpdate(payload.post)
-            }
+            socialSocket.writePostUpdatesTo(postRepository)
         }
     }
 

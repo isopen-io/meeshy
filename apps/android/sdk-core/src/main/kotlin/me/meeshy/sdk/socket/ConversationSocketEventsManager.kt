@@ -6,7 +6,6 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
@@ -82,7 +81,7 @@ class ConversationSocketEventsManager internal constructor(
     private val _events = SocketInboundRoute.subject<ConversationSocketEvent>()
 
     /** Tous les événements de la famille, dans l'ordre d'arrivée, sans replay. */
-    val events: SharedFlow<ConversationSocketEvent> = _events.asSharedFlow()
+    val events: SharedFlow<ConversationSocketEvent> = _events.exposed()
 
     /** Installe les routes UNE fois par session : le transport les garde d'une reconnexion à l'autre. */
     override fun attach() {
@@ -177,7 +176,7 @@ class ConversationSocketEventsManager internal constructor(
     ): SocketInboundRoute = SocketInboundRoute.decoding(event, json, serializer) { payload -> publish(map(payload)) }
 
     private fun publish(event: ConversationSocketEvent) {
-        if (!_events.tryEmit(event)) Timber.e("Conversation events: evenement refuse par le sujet")
+        if (!_events.emitArrived(event)) Timber.e("Conversation events: evenement refuse par le sujet")
     }
 
     private fun arrived(raw: JSONObject): MessageArrived? {
