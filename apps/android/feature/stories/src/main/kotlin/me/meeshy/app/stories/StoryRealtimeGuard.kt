@@ -3,6 +3,8 @@ package me.meeshy.app.stories
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
+import me.meeshy.sdk.socket.collectArrived
 
 private const val TAG = "StoryRealtime"
 
@@ -15,6 +17,22 @@ private const val TAG = "StoryRealtime"
  */
 internal suspend fun <T> Flow<T>.collectEachSafely(action: suspend (T) -> Unit) {
     collect { value ->
+        try {
+            action(value)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "élément temps réel écarté", e)
+        }
+    }
+}
+
+/**
+ * [collectEachSafely] d'un flux de socket SOUS le compte auquel chaque trame est arrivée (#13576) : le cache Room que
+ * [action] écrit ne reçoit pas la story de A parce que B s'est connecté pendant que la trame attendait.
+ */
+internal suspend fun <T> SharedFlow<T>.collectEachArrivedSafely(action: suspend (T) -> Unit) {
+    collectArrived { value ->
         try {
             action(value)
         } catch (e: CancellationException) {

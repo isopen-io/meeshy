@@ -22,6 +22,7 @@ import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
+import me.meeshy.sdk.socket.collectArrived
 import timber.log.Timber
 
 /**
@@ -69,9 +70,9 @@ class IncomingMessageIngestBinding internal constructor(
     override fun attach() {
         job?.cancel()
         job = scope.launch {
-            socket.messageReceived.collect { message ->
+            socket.messageReceived.collectArrived { message ->
                 try {
-                    buffer.offer(message)
+                    buffer.offer(message, fence?.currentTicket())
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {

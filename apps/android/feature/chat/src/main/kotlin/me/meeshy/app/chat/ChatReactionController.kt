@@ -17,6 +17,7 @@ import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.collectArrived
 
 /**
  * Everything the conversation screen does with reactions: the optimistic add/remove
@@ -60,12 +61,12 @@ internal class ChatReactionController(
             }
         }
         scope.launch {
-            messageSocketManager.reactionAdded.collect { event ->
+            messageSocketManager.reactionAdded.collectArrived { event ->
                 applyPeerReactionEvent(event, delta = 1)
             }
         }
         scope.launch {
-            messageSocketManager.reactionRemoved.collect { event ->
+            messageSocketManager.reactionRemoved.collectArrived { event ->
                 applyPeerReactionEvent(event, delta = -1)
             }
         }

@@ -62,6 +62,7 @@ import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -383,7 +384,7 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             launch {
-                messageSocketManager.messageReceived.collect { event ->
+                messageSocketManager.messageReceived.collectArrived { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
                         markConversationRead()
@@ -391,7 +392,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.transcriptionReady.collect { event ->
+                messageSocketManager.transcriptionReady.collectArrived { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.applyTranscription(
                             event.messageId,
@@ -405,7 +406,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.audioTranslationReady.collect { event ->
+                messageSocketManager.audioTranslationReady.collectArrived { event ->
                     if (event.conversationId == conversationId) {
                         val audio = event.translatedAudio
                         messageRepository.applyAudioTranslation(
@@ -425,9 +426,9 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.readStatusUpdated.collect { event ->
-                    if (event.conversationId != conversationId) return@collect
-                    val ownId = sessionRepository.currentUser.value?.id ?: return@collect
+                messageSocketManager.readStatusUpdated.collectArrived { event ->
+                    if (event.conversationId != conversationId) return@collectArrived
+                    val ownId = sessionRepository.currentUser.value?.id ?: return@collectArrived
                     messageRepository.applyReadReceipt(
                         conversationId = conversationId,
                         ownSenderId = ownId,
