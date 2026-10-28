@@ -9,9 +9,12 @@ import me.meeshy.sdk.model.media.TusChunkRange
 import me.meeshy.sdk.model.media.TusResumeDecision
 import me.meeshy.sdk.model.media.TusResumePlanner
 import me.meeshy.sdk.model.media.TusServerProbe
+import me.meeshy.sdk.model.media.TusSessionOrigin
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.TusUploadMetadata
 import me.meeshy.sdk.model.toUploadedMedia
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.createSession
@@ -58,6 +61,7 @@ public class TusUploadRepository @Inject constructor(
     private val tusApi: TusApi,
     private val checkpoints: TusUploadCheckpointDao,
     private val sanitizer: OutgoingMediaSanitizer,
+    private val config: MeeshyConfig,
 ) {
     /**
      * Uploads one [item] tagged with [context]. See [TusUploadRepository].
@@ -103,6 +107,7 @@ public class TusUploadRepository @Inject constructor(
                     is NetworkResult.Failure -> return locationResult
                     is NetworkResult.Success -> locationResult.data
                 }
+                if (!isOurs(location)) return NetworkResult.Failure(foreignSessionError())
                 resumeOffset = 0L
             }
         }
@@ -161,6 +166,10 @@ public class TusUploadRepository @Inject constructor(
         val existing = checkpoints.find(checkpointKey)
         val location = existing?.location
         if (location.isNullOrBlank()) return NetworkResult.Success(TusResumeDecision.Fresh)
+        if (!isOurs(location)) {
+            checkpoints.delete(checkpointKey)
+            return NetworkResult.Success(TusResumeDecision.Fresh)
+        }
         val probe = when (val result = tusApi.probeSession(location, TusUploadMetadata.TUS_RESUMABLE_VERSION)) {
             is NetworkResult.Failure -> return result
             is NetworkResult.Success -> result.data
@@ -168,6 +177,11 @@ public class TusUploadRepository @Inject constructor(
         if (probe == TusServerProbe.Gone) checkpoints.delete(checkpointKey)
         return NetworkResult.Success(TusResumePlanner.reconcile(location, probe, totalBytes))
     }
+
+    /** The bearer rides on every call to a session address: only the API's own origin may receive it (#13429). */
+    private fun isOurs(location: String): Boolean = TusSessionOrigin.isSameOrigin(location, config.apiBaseUrl)
+
+    private fun foreignSessionError() = ApiError(message = "Upload session outside the API origin", code = FOREIGN_SESSION_CODE)
 
     private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
         bytes.copyOfRange(range.offset.toInt(), (range.offset + range.length).toInt()).toRequestBody(OCTET_STREAM_MEDIA_TYPE)
@@ -204,6 +218,8 @@ public class TusUploadRepository @Inject constructor(
          * parameter from any caller/module.
          */
         public const val DEFAULT_CHUNK_SIZE_BYTES: Long = 10L * 1024 * 1024
+
+        private const val FOREIGN_SESSION_CODE = "TUS_FOREIGN_SESSION"
 
         private val OCTET_STREAM_MEDIA_TYPE = "application/offset+octet-stream".toMediaTypeOrNull()
     }
