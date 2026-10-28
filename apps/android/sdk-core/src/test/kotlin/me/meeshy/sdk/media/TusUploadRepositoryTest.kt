@@ -293,6 +293,24 @@ class TusUploadRepositoryTest {
     }
 
     @Test
+    fun `a file-backed item is announced at its file size and sent slice by slice from the file`() = runTest {
+        val bodies = mutableListOf<okhttp3.RequestBody>()
+        val length = slot<Long>()
+        coEvery { api.createUpload(capture(length), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), capture(bodies)) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), capture(bodies)) } returns finishResponse(null)
+        val content = ByteArray(25) { (it * 3 + 1).toByte() }
+        val file = java.io.File.createTempFile("tus", ".bin").also { it.deleteOnExit(); it.writeBytes(content) }
+
+        repository().upload(MediaUploadItem.onDisk(file, "doc.bin", "application/octet-stream"), TusUploadContext.POST, chunkSizeBytes = 10L)
+
+        val sent = bodies.map { okio.Buffer().also { b -> it.writeTo(b) }.readByteArray() }
+        assertThat(length.captured).isEqualTo(25L)
+        assertThat(sent.map { it.size }).containsExactly(10, 10, 5).inOrder()
+        assertThat(sent.reduce { a, b -> a + b }).isEqualTo(content)
+    }
+
+    @Test
     fun `an intermediate chunk failure stops the upload and never sends the final chunk`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
         coEvery { api.uploadChunk(any(), any(), any(), any()) } returns

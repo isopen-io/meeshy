@@ -49,7 +49,7 @@ class PublicationOutboxTest {
             .allowMainThreadQueries()
             .build()
         outbox = OutboxRepository(db, db.outboxDao(), OutboxOwnerSource { "me" })
-        blobs = MediaBlobStore(db.mediaBlobDao())
+        blobs = MediaBlobStore(db.mediaBlobDao(), me.meeshy.sdk.media.MediaBlobFiles(kotlin.io.path.createTempDirectory("blobs").toFile()) { me.meeshy.core.crypto.primitives.StreamingSeal.ephemeral() })
         uploads = MediaUploadQueue(blobs, outbox)
         drafts = InMemoryPostComposerDraftStore()
         publications = PublicationOutbox(outbox, uploads, drafts, MediaUploadProgressLedger(), OutboxOwnerSource { "me" })

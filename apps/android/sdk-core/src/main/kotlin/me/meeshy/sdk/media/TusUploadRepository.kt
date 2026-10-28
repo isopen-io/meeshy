@@ -5,7 +5,6 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusCheckpointKey
 import me.meeshy.sdk.model.media.TusChunkPlan
-import me.meeshy.sdk.model.media.TusChunkRange
 import me.meeshy.sdk.model.media.TusResumeDecision
 import me.meeshy.sdk.model.media.TusResumePlanner
 import me.meeshy.sdk.model.media.TusServerProbe
@@ -22,7 +21,6 @@ import me.meeshy.sdk.net.api.patchChunk
 import me.meeshy.sdk.net.api.probeSession
 import me.meeshy.sdk.net.apiCall
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,12 +42,10 @@ import javax.inject.Singleton
  * (the gateway is asked what it holds — [TusResumePlanner.reconcile])
  * resumes at the last confirmed offset instead of re-uploading from byte zero,
  * skipping [TusApi.createUpload] entirely. The row is deleted once the final
- * chunk succeeds. This does **not** yet survive an app kill mid-upload — the
- * source bytes ([MediaUploadItem.bytes]) are still fully resident in memory for
- * the call's lifetime, so a killed process loses them regardless of the Room
- * checkpoint; genuine app-kill survival additionally needs a lazily-read file
- * source and a boot-time recovery scan, both tracked separately in
- * `feature-parity.md` §Q ("Crash-safe boot recovery for in-flight queue items").
+ * chunk succeeds. Each slice is STREAMED from the item's source
+ * ([MediaUploadItem.rangeBody], #13551): a file-backed item never sits in memory,
+ * whatever its size, and a durably queued one is re-read from its sealed file
+ * ([MediaBlobStore]) on every retry.
  * A body no larger than one chunk (the common case — compressed images) still
  * makes exactly one PATCH, unchanged from before — it never writes an
  * intermediate checkpoint (there is no partial progress to persist) but a
@@ -76,13 +72,13 @@ public class TusUploadRepository @Inject constructor(
         chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
         onProgress: (sent: Long, total: Long) -> Unit = { _, _ -> },
     ): NetworkResult<List<UploadedMedia>> {
-        val outgoing = when (val result = sanitizer.sanitize(item)) {
+        val outgoing = when (val result = sanitizer.sanitizeSource(item)) {
             is NetworkResult.Failure -> return result
             is NetworkResult.Success -> result.data
         }
         val fileName = MediaUpload.fileName(outgoing.fileName)
         val mimeType = MediaUpload.mimeType(outgoing.mimeType)
-        val totalBytes = outgoing.bytes.size.toLong()
+        val totalBytes = outgoing.sizeBytes
         val checkpointKey = TusCheckpointKey.of(context, fileName, mimeType, totalBytes)
 
         val decision = when (val verdict = resolveSession(checkpointKey, totalBytes)) {
@@ -121,7 +117,7 @@ public class TusUploadRepository @Inject constructor(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(outgoing.bytes, range),
+                    body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
                 )
                 if (chunkResult is NetworkResult.Failure) return chunkResult
                 checkpoints.upsert(
@@ -142,7 +138,7 @@ public class TusUploadRepository @Inject constructor(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(outgoing.bytes, range),
+                    body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
                 )
             }
             if (finishResult is NetworkResult.Failure) return finishResult
@@ -153,7 +149,7 @@ public class TusUploadRepository @Inject constructor(
 
         // Unreachable: TusChunkPlan.chunks always returns at least one (final) range, and
         // TusResumePlanner never resumes at an offset that has already reached totalBytes.
-        error("TusChunkPlan produced no ranges for ${outgoing.bytes.size} bytes at resumeOffset=$resumeOffset")
+        error("TusChunkPlan produced no ranges for $totalBytes bytes at resumeOffset=$resumeOffset")
     }
 
     /**
@@ -182,9 +178,6 @@ public class TusUploadRepository @Inject constructor(
     private fun isOurs(location: String): Boolean = TusSessionOrigin.isSameOrigin(location, config.apiBaseUrl)
 
     private fun foreignSessionError() = ApiError(message = "Upload session outside the API origin", code = FOREIGN_SESSION_CODE)
-
-    private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
-        bytes.copyOfRange(range.offset.toInt(), (range.offset + range.length).toInt()).toRequestBody(OCTET_STREAM_MEDIA_TYPE)
 
     /**
      * Uploads every item in [items], sequentially and in order, all tagged with the
