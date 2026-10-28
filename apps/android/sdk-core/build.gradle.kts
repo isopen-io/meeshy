@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.muxer)
     implementation(libs.androidx.media3.effect)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
