@@ -170,6 +170,7 @@ class ContactsListViewModel @Inject constructor(
 
     private suspend fun revalidate() {
         val currentUserId = sessionRepository.currentUserId.orEmpty()
+        val ticket = friendListRepository.ticket()
         val served = coroutineScope {
             val blocks = async { blockRepository?.listBlocked() }
             val graphCall = async { friendRepository.friendshipGraph(currentUserId) }
@@ -185,7 +186,7 @@ class ContactsListViewModel @Inject constructor(
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
                 val friends = ContactList.fromAcceptedRequests(received + sent, currentUserId)
                 _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }
-                friendListRepository.persist(friends)
+                friendListRepository.persist(friends, ticket)
             }
             is NetworkResult.Failure -> _state.update {
                 it.copy(

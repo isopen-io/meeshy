@@ -19,7 +19,7 @@ class ProfileCacheRepositoryTest {
         ApplicationProvider.getApplicationContext(),
         MeeshyDatabase::class.java,
     ).allowMainThreadQueries().build()
-    private val repository = ProfileCacheRepository(db.keyedJsonCacheDao())
+    private val repository = ProfileCacheRepository(me.meeshy.sdk.cache.KeyedJsonCache(db.keyedJsonCacheDao()))
     private val id = "64b7f0a1c2d3e4f5a6b7c8d9"
     private val bob = MeeshyUser(id = id, username = "Bob", displayName = "Bob")
 

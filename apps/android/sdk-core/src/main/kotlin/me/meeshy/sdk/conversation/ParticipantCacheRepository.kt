@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.repainted
 import me.meeshy.sdk.model.repaintedElements
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 
 /** One network page of a conversation's roster: (conversationId, cursor, limit). */
 typealias ParticipantPageFetcher = suspend (String, String?, Int) -> NetworkResult<MemberRosterPage>
@@ -71,6 +72,7 @@ class ParticipantCacheRepository(
     suspend fun nextPage(conversationId: String): NetworkResult<MemberRoster> {
         val cached = cache.get(NAMESPACE, conversationId, MemberRoster.serializer())?.value
         val cursor = cached?.nextCursor
+        val ticket = cache.ticket()
         if (cached == null || !cached.hasMore || cursor == null) {
             return NetworkResult.Success(cached ?: MemberRoster.EMPTY)
         }
@@ -79,7 +81,7 @@ class ParticipantCacheRepository(
             is NetworkResult.Success -> writeLock.withLock {
                 val latest = cache.get(NAMESPACE, conversationId, MemberRoster.serializer())?.value ?: cached
                 val merged = latest.withNextPage(result.data)
-                cache.update(NAMESPACE, conversationId, MemberRoster.serializer()) { merged }
+                cache.update(NAMESPACE, conversationId, MemberRoster.serializer(), ticket) { merged }
                 NetworkResult.Success(merged)
             }
         }
@@ -105,17 +107,19 @@ class ParticipantCacheRepository(
     suspend fun invalidate(conversationId: String) = cache.clear(NAMESPACE, conversationId)
 
     private suspend fun mutate(conversationId: String, transform: (MemberRoster) -> MemberRoster) =
-        writeLock.withLock { cache.update(NAMESPACE, conversationId, MemberRoster.serializer(), transform) }
+        writeLock.withLock { cache.update(NAMESPACE, conversationId, MemberRoster.serializer(), transform = transform) }
 
-    private suspend fun replaceFromNetwork(conversationId: String): NetworkResult<MemberRoster> =
-        when (val result = fetchPage(conversationId, null, pageSize)) {
+    private suspend fun replaceFromNetwork(conversationId: String): NetworkResult<MemberRoster> {
+        val ticket = cache.ticket()
+        return when (val result = fetchPage(conversationId, null, pageSize)) {
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> writeLock.withLock {
                 val roster = MemberRoster.EMPTY.withFirstPage(result.data)
-                cache.put(NAMESPACE, conversationId, roster, MemberRoster.serializer())
+                cache.put(NAMESPACE, conversationId, roster, MemberRoster.serializer(), ticket)
                 NetworkResult.Success(roster)
             }
         }
+    }
 
     private inline fun runCatchingNonCancel(block: () -> Unit) {
         try {

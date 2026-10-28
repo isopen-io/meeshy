@@ -31,7 +31,7 @@ class ProfileSheetLoaderTest {
         ApplicationProvider.getApplicationContext(),
         MeeshyDatabase::class.java,
     ).allowMainThreadQueries().build()
-    private val profiles = ProfileCacheRepository(db.keyedJsonCacheDao())
+    private val profiles = ProfileCacheRepository(me.meeshy.sdk.cache.KeyedJsonCache(db.keyedJsonCacheDao()))
     private val statsCache = ProfileStatsCacheRepository(db.profileStatsCacheDao())
     private val id = "64b7f0a1c2d3e4f5a6b7c8d9"
     private val bob = MeeshyUser(id = id, username = "bob", displayName = "Bob")

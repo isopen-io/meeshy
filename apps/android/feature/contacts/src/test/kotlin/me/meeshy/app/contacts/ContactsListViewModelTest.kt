@@ -340,7 +340,7 @@ class ContactsListViewModelTest {
         )
 
         coVerify {
-            listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("online", "offline") })
+            listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("online", "offline") }, any())
         }
     }
 
@@ -358,7 +358,7 @@ class ContactsListViewModelTest {
         cache.didRemoveFriend("bob")
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
-        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }) }
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }, any()) }
         coVerify(exactly = 1) { repository.friendshipGraph(any()) }
     }
 
