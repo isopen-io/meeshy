@@ -4,7 +4,6 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.RemoteInput
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,15 +23,19 @@ class PushActionReceiver : BroadcastReceiver() {
     @Inject
     lateinit var handler: PushNotificationActionHandler
 
+    @Inject
+    lateinit var proof: LaunchIntentProof
+
     override fun onReceive(context: Context, intent: Intent) {
-        val conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID)?.takeIf { it.isNotBlank() } ?: return
-        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
-        val accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
-        val reply = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_REPLY)?.toString()
+        val request = PushActionRequest.from(intent, proof) ?: return
+        val conversationId = request.conversationId
+        val notificationId = request.notificationId
+        val accountId = request.accountId
+        val reply = request.reply
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
-                val outcome = when (intent.action) {
+                val outcome = when (request.action) {
                     ACTION_REPLY -> handler.reply(conversationId, reply.orEmpty(), accountId)
                     ACTION_MARK_READ -> handler.markRead(conversationId, accountId)
                     else -> return@launch
