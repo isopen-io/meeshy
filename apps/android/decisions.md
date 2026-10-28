@@ -573,3 +573,19 @@ lot qui découpe la bulle (fichier chaud).
 **Expiration.** `GatewayPins.EXPIRES_AT_EPOCH_MILLIS` : passé ce jour, le pin-set est ignoré, la validation système reste, un avertissement est journalisé une fois par processus. Pas de brique silencieuse : l'application ne cesse pas de fonctionner parce qu'une rotation a été oubliée, mais l'oubli est visible.
 
 **Procédure de rotation.** (1) Générer la future clé hors ligne ; calculer `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`. (2) Publier une version qui l'ajoute à `BACKUP` (ancienne `CURRENT` conservée) et repousser la date d'expiration. (3) Attendre l'adoption de cette version (version minimale). (4) Faire émettre le certificat sur la nouvelle clé. (5) Version suivante : la nouvelle clé en `CURRENT`, nouvelle clé de secours en `BACKUP`. Jamais de bascule sèche (rétrocompatibilité de la production).
+
+---
+
+## ADR-027 — La fin de session vide aussi le cache VIDÉO Media3, réels publics compris
+**Date:** 2026-10-28 · **Status:** accepted · **Issue:** #13571
+
+**Context.** `AccountMediaWipe` ne vidait que l'audio ; les tronçons vidéo des pièces jointes privées
+(`/api/v1/attachments/file/…`) lus avec le jeton de A restaient sur disque pour B.
+
+**Decision.** Audio et vidéo sont vidés ensemble. Le cache vidéo ne distingue pas un réel public d'une pièce
+jointe privée (clé = URL) : on ne garde rien plutôt que de deviner.
+
+**Rejected.** Ne garder que les vidéos publiques : exigerait de classer chaque URL, et une erreur de classement
+fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de réels publics) est borné et sans risque.
+
+**Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
