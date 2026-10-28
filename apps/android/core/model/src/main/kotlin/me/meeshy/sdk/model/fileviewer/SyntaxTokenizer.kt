@@ -69,6 +69,23 @@ object SyntaxTokenizer {
         else -> Grammar(kotlinLike, listOf("//"), "/*" to "*/")
     }
 
+    /** Au-delà, une ligne n'est plus lisible et sa mise en page bloquerait le fil principal : on montre son début. */
+    const val MAX_DISPLAY_CHARS: Int = 2_000
+
+    /** La ligne telle qu'elle s'AFFICHE : au plus [maxChars] caractères, suivis d'une ellipse quand elle est coupée. */
+    fun clampLine(tokens: List<CodeToken>, maxChars: Int = MAX_DISPLAY_CHARS): List<CodeToken> {
+        if (tokens.sumOf { it.text.length } <= maxChars) return tokens
+        val kept = ArrayList<CodeToken>()
+        var remaining = maxChars
+        for (token in tokens) {
+            if (remaining <= 0) break
+            kept += if (token.text.length <= remaining) token else token.copy(text = token.text.take(remaining))
+            remaining -= token.text.length
+        }
+        kept += CodeToken("\u2026", CodeToken.Kind.PLAIN)
+        return kept
+    }
+
     fun tokenize(code: String, language: CodeLanguage): List<List<CodeToken>> {
         val grammar = grammarOf(language)
         val lines = ArrayList<List<CodeToken>>()
