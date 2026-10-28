@@ -38,6 +38,17 @@ class MediaIntakeTest {
     }
 
     @Test
+    fun `a provider stream that throws something other than an io error is unreadable and leaves nothing on disk`() {
+        val cache = folder.newFolder()
+        val hostile = object : InputStream() {
+            override fun read(): Int = throw UnsupportedOperationException("fournisseur hostile")
+        }
+
+        assertThat(MediaIntake.copy(hostile, cache, "a.pdf", "application/pdf")).isNull()
+        assertThat(MediaIntake.directory(cache).listFiles().orEmpty()).isEmpty()
+    }
+
+    @Test
     fun `a stream over the bound stops during the copy and leaves nothing on disk`() {
         val cache = folder.newFolder()
 
