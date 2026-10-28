@@ -19,6 +19,7 @@ import me.meeshy.sdk.net.api.LinkDetailApi
 import me.meeshy.sdk.net.apiCall
 import javax.inject.Inject
 import javax.inject.Singleton
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * Lecture cache-first d'un lien de partage : sa carte, ses messages, ses arrivées (première page) et
@@ -32,7 +33,8 @@ class LinkCacheRepository(
     private val clock: CacheClock,
 ) : PerAccountCache {
     @Inject
-    constructor(api: LinkDetailApi, dao: KeyedJsonCacheDao) : this(api, KeyedJsonCache(dao), SystemCacheClock)
+    constructor(api: LinkDetailApi, dao: KeyedJsonCacheDao, fence: AccountFence) :
+        this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
 
     fun card(identifier: String): Flow<CacheResult<JsonElement>> =
         source(CARD, identifier, JsonElement.serializer()) { apiCall { api.card(identifier) } }

@@ -12,6 +12,9 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,7 +39,11 @@ class FriendListRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val friendDao: FriendDao,
     private val syncMetaDao: SyncMetaDao,
+    private val fence: AccountFence? = null,
 ) {
+
+    /** Le compte auquel appartient une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
     /**
      * The last-persisted friend roster for instant cold-start paint, or `null`
@@ -56,7 +63,7 @@ class FriendListRepository @Inject constructor(
      * are dropped) and stamps `sync_meta` — even for an empty roster, so a real
      * empty list reads back as synced-empty rather than cold.
      */
-    suspend fun persist(friends: List<FriendRequestUser>) {
+    suspend fun persist(friends: List<FriendRequestUser>, ticket: AccountTicket? = null) {
         val now = SystemCacheClock.nowMillis()
         val rows = friends.mapIndexed { index, friend ->
             FriendEntity(
@@ -66,14 +73,16 @@ class FriendListRepository @Inject constructor(
                 cachedAt = now,
             )
         }
-        database.withTransaction {
-            if (rows.isEmpty()) {
-                friendDao.clear()
-            } else {
-                friendDao.upsertAll(rows)
-                friendDao.deleteNotIn(rows.map { it.userId })
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                if (rows.isEmpty()) {
+                    friendDao.clear()
+                } else {
+                    friendDao.upsertAll(rows)
+                    friendDao.deleteNotIn(rows.map { it.userId })
+                }
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
             }
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
     }
 

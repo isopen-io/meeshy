@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 import javax.inject.Singleton
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * Lecture cache-first (stale-while-revalidate) des communautés : la liste (page 0), la fiche, les
@@ -30,8 +31,8 @@ class CommunityCacheRepository(
     private val clock: CacheClock,
 ) {
     @Inject
-    constructor(repository: CommunityRepository, dao: KeyedJsonCacheDao) :
-        this(repository, KeyedJsonCache(dao), SystemCacheClock)
+    constructor(repository: CommunityRepository, dao: KeyedJsonCacheDao, fence: AccountFence) :
+        this(repository, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
 
     fun list(onError: (Throwable) -> Unit = {}): Flow<CacheResult<List<ApiCommunity>>> =
         listSource().results(CachePolicy.Communities, clock, onError)

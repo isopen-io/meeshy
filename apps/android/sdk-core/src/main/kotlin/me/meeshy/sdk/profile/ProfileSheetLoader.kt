@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.profile.ProfileLoadState
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 
@@ -55,11 +56,12 @@ class ProfileSheetLoader @Inject constructor(
             emit(state)
         }
         if (retry) apply(ProfileLoadEvent.Retry)
+        val ticket = profiles.ticket()
         val cachedProfile = quiet { profiles.cachedProfile(key) }
         val cachedStats = (known ?: cachedProfile?.id)?.let { id -> quiet { stats.cachedStats(id) } }
         apply(ProfileLoadEvent.CacheRead(cachedProfile, cachedStats))
         when (val result = remote.profile(key)) {
-            is NetworkResult.Success -> synchronize(result.data, key) { apply(it) }
+            is NetworkResult.Success -> synchronize(result.data, key, ticket) { apply(it) }
             is NetworkResult.Failure -> {
                 val failure = result.error.toFailure()
                 apply(ProfileLoadEvent.ProfileFailed(failure))
@@ -69,10 +71,15 @@ class ProfileSheetLoader @Inject constructor(
         }
     }
 
-    private suspend fun synchronize(document: PublicProfile, key: String, apply: suspend (ProfileLoadEvent) -> Unit) {
+    private suspend fun synchronize(
+        document: PublicProfile,
+        key: String,
+        ticket: AccountTicket?,
+        apply: suspend (ProfileLoadEvent) -> Unit,
+    ) {
         val fresh = document.user
         apply(ProfileLoadEvent.ProfileSynced(fresh))
-        quiet { profiles.store(fresh, key) }
+        quiet { profiles.store(fresh, key, ticket) }
         quiet { effects.profileLoaded(fresh) }
         val synced = document.stats ?: (remote.stats(fresh.id) as? NetworkResult.Success)?.data
         if (synced == null) {
@@ -80,7 +87,7 @@ class ProfileSheetLoader @Inject constructor(
             return
         }
         apply(ProfileLoadEvent.StatsSynced(synced))
-        quiet { stats.persistStats(fresh.id, synced) }
+        quiet { stats.persistStats(fresh.id, synced, ticket) }
     }
 
     private suspend fun purge(known: String?, cached: MeeshyUser?, key: String) {
