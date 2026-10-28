@@ -239,4 +239,39 @@ class ChatFileDownloadControllerTest {
         assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.NotAvailable)
         verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
     }
+
+    @Test
+    fun `retrying a failed save saves again, never hands the piece to a share sheet nor opens it`() = runTest {
+        val r = rig(listOf(message(attachment("v1", "video/mp4", name = "clip.mp4"))))
+        every { r.downloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NetworkError),
+        )
+        r.controller.save("m1", attachmentId = "v1")
+        advanceUntilIdle()
+
+        r.controller.retry()
+
+        assertThat(r.download?.saveOnly).isTrue()
+        assertThat(r.download?.openWhenDone).isFalse()
+        assertThat(r.download?.attachmentId).isEqualTo("v1")
+    }
+
+    @Test
+    fun `retrying a failed open opens again, and a failed share shares again`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"))))
+        every { r.downloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.ServerError),
+        )
+        r.controller.open("m1", attachmentId = "a1")
+        advanceUntilIdle()
+        r.controller.retry()
+        assertThat(r.download?.openWhenDone).isTrue()
+        assertThat(r.download?.saveOnly).isFalse()
+
+        r.controller.share("m1", attachmentId = "a1")
+        advanceUntilIdle()
+        r.controller.retry()
+        assertThat(r.download?.openWhenDone).isFalse()
+        assertThat(r.download?.saveOnly).isFalse()
+    }
 }

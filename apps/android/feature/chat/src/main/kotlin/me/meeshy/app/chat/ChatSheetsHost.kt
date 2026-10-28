@@ -177,11 +177,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         download = state.fileDownload,
         onOpenInApp = { fileViewer = it },
         onDismiss = actions.dismissFileDownload,
-        onRetry = { download ->
-            val attachmentId = download.attachmentId.takeIf { it.isNotBlank() }
-            if (download.openWhenDone) actions.onFileAttachmentOpen(download.messageId, attachmentId)
-            else actions.onFileAttachmentShare(download.messageId, attachmentId)
-        },
+        onRetry = { actions.retryFileDownload() },
     )
 
     if (sheets.info) {

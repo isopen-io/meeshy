@@ -82,6 +82,16 @@ internal class ChatFileDownloadController(
         start(messageId, attachmentId, openWhenDone = false)
     }
 
+    /**
+     * « Réessayer » le transfert en échec : il reprend ce qu'on avait demandé — ouvrir, partager ou ENREGISTRER (#13494).
+     * Un « Enregistrer » qui échoue ne se retente jamais en partage : la pièce ne part pas vers une autre application.
+     */
+    fun retry() {
+        val failed = state.value.fileDownload ?: return
+        val attachmentId = failed.attachmentId.takeIf { it.isNotBlank() }
+        start(failed.messageId, attachmentId, openWhenDone = failed.openWhenDone && !failed.saveOnly, saveOnly = failed.saveOnly)
+    }
+
     fun dismiss() {
         downloadJob?.cancel()
         downloadJob = null
