@@ -61,4 +61,20 @@ class PostPublishMediaWriteBackScenesTest {
         val layout = MeeshyApi.json.decodeFromString<CreatePostRequest>(grafted).storyEffects!!.canvas!!.layout
         assertThat(layout).isEqualTo(me.meeshy.sdk.model.MosaicLayoutMode.SINE)
     }
+
+    @Test
+    fun `a single queued photo on a colour takes its real id in its one scene and keeps the colour`() {
+        val single = CreatePostRequest(
+            content = "une vue",
+            mediaIds = listOf(first),
+            storyEffects = PostPhotoScenes.storyEffects("POST", listOf(pending(first)), "fr", null, "302B63"),
+        )
+
+        val grafted = PostPublishMediaWriteBack.graft(payload(single), first, "64b000000000000000000001")!!
+
+        val request = MeeshyApi.json.decodeFromString<CreatePostRequest>(grafted)
+        assertThat(scenesOf(request)).containsExactly("64b000000000000000000001")
+        assertThat(grafted).contains("302B63")
+        assertThat(grafted).doesNotContain(first)
+    }
 }

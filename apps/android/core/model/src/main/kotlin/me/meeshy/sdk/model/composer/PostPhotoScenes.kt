@@ -39,23 +39,34 @@ object PostPhotoScenes {
         }
 
     /**
-     * Le document de [media] — `null` quand [sceneCount] est nul. [language] est la langue de composition (`locale` de
-     * l'objet, `declaredContentLanguage` d'iOS) ; [armedLayout] n'est écrit que là où le contrôle était offert.
+     * Le document de [media] — `null` quand [sceneCount] est nul, sauf pour une photo seule posée sur un fond de couleur.
+     * [language] est la langue de composition (`locale` de l'objet, `declaredContentLanguage` d'iOS) ; [armedLayout] n'est
+     * écrit que là où le contrôle était offert ; [background] se pose sous la PREMIÈRE photo, comme iOS garde la couleur
+     * sur la slide où elle a été choisie (`applyBackground` n'écrit que la slide courante, et `addSlide` en ouvre une vierge).
+     *
+     * Une photo seule sur une couleur part en document d'UNE scène, comme iOS (`publishedSlide` rend alors les effets de
+     * la slide) : la couleur seule masquerait la photo, la photo seule perdrait la couleur.
      *
      * Un média encore en file (son id est un `cmid`) désigne cet id provisoire et ne porte pas d'adresse : l'outbox
      * (`PostPublishMediaWriteBack`) le remplace par le vrai à l'arrivée du téléversement, scène comprise.
      */
-    fun effects(media: List<UploadedMedia>, language: String?, armedLayout: MosaicLayoutMode?): StoryEffects? {
+    fun effects(
+        media: List<UploadedMedia>,
+        language: String?,
+        armedLayout: MosaicLayoutMode?,
+        background: String? = null,
+    ): StoryEffects? {
         val count = sceneCount(media.map { it.mimeType }, ComposerFormat.POST)
-        if (count == 0) return null
-        val slides = media.mapIndexed { index, item -> slide(index, item, language) }
+        val colouredPhoto = background != null && media.size == 1 && isPhoto(media.single().mimeType)
+        if (count == 0 && !colouredPhoto) return null
+        val slides = media.mapIndexed { index, item -> slide(index, item, language, background.takeIf { index == 0 }) }
         val layout = ComposerMosaicChoice.published(armedLayout, count, ComposerFormat.POST)
         return StoryEffects(canvas = CanvasV3Migration.migrate(slides, layout))
     }
 
     /**
-     * Le `storyEffects` d'une publication de post : le document de scènes des photos ([effects]) pour un Post de plusieurs
-     * photos ; sinon le fond de couleur choisi — mais jamais sous des médias : iOS et le web peignent tout document de scène à
+     * Le `storyEffects` d'une publication de post : le document de scènes des photos ([effects]) pour un Post de photos ;
+     * sinon le fond de couleur choisi — mais jamais seul sous des médias : iOS et le web peignent tout document de scène à
      * la place des médias du post, donc un fond seul les masquerait. Rien pour un post ordinaire.
      */
     fun storyEffects(
@@ -65,10 +76,11 @@ object PostPhotoScenes {
         armedLayout: MosaicLayoutMode?,
         background: String?,
     ): StoryEffects? =
-        (if (type == PostType.POST.name) effects(media, language, armedLayout) else null)
+        (if (type == PostType.POST.name) effects(media, language, armedLayout, background) else null)
             ?: background?.takeIf { media.isEmpty() }?.let { StoryEffects(background = it) }
 
-    private fun slide(index: Int, media: UploadedMedia, language: String?): StoryEffects = StoryEffects(
+    private fun slide(index: Int, media: UploadedMedia, language: String?, background: String?): StoryEffects = StoryEffects(
+        background = background,
         backgroundTransform = StoryBackgroundTransform(videoFitMode = StoryFitMode.posedFitMode(null)),
         mediaObjects = listOf(
             StoryMediaObject(

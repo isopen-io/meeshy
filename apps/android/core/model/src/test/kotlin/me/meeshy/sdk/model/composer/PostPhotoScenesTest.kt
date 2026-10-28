@@ -112,11 +112,43 @@ class PostPhotoScenesTest {
     }
 
     @Test
-    fun `a colour scene never rides over photos, and stays when there are none`() {
-        assertThat(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", null, "302B63")).isNull()
+    fun `a colour scene alone never rides over photos, and stays when there are none`() {
         assertThat(PostPhotoScenes.storyEffects("POST", emptyList(), "fr", null, "302B63"))
             .isEqualTo(StoryEffects(background = "302B63"))
-        assertThat(PostPhotoScenes.storyEffects("POST", two, "fr", null, "302B63")!!.canvas).isNotNull()
+        assertThat(PostPhotoScenes.storyEffects("POST", two + photo("v1", mime = "video/mp4"), "fr", null, "302B63")).isNull()
+        assertThat(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", null, null)).isNull()
+    }
+
+    private fun backgroundOf(scene: JsonElement): JsonElement? =
+        scene.jsonObject["objects"]!!.jsonArray.map { it.jsonObject }
+            .single { it["plane"] == JsonPrimitive("bg") }["payload"]!!.jsonObject["background"]
+
+    @Test
+    fun `the colour chosen under several photos stays under the first one, as iOS keeps it on the slide it was laid on`() {
+        val scenes = wire(PostPhotoScenes.storyEffects("POST", two, "fr", null, "302B63")).jsonObject["scenes"]!!.jsonArray
+
+        assertThat(scenes.map(::backgroundOf)).containsExactly(JsonPrimitive("302B63"), null).inOrder()
+    }
+
+    @Test
+    fun `a single photo on a colour leaves as a one scene document carrying both, never the colour alone`() {
+        val document = wire(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", MosaicLayoutMode.HERO, "302B63"))
+            .jsonObject
+
+        assertThat(document.keys).containsExactly("v", "scenes").inOrder()
+        val scene = document["scenes"]!!.jsonArray.single()
+        assertThat(backgroundOf(scene)).isEqualTo(JsonPrimitive("302B63"))
+        assertThat(scene.toString()).contains("\"postMediaId\":\"a1\"")
+    }
+
+    @Test
+    fun `read back after the outbox, a single photo on a colour keeps its one scene document`() {
+        val text = json.encodeToString(Body(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", null, "302B63")))
+
+        val back = json.decodeFromString<Body>(text).storyEffects!!
+
+        assertThat(back.canvas!!.scenes).hasSize(1)
+        assertThat(json.encodeToString(Body(back))).isEqualTo(text)
     }
 
     @Test

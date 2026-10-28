@@ -23,7 +23,8 @@ import kotlinx.serialization.json.intOrNull
  * ([StoryEffects.canvas], #13612 — une scène par photo, `layout` dedans seulement là). Jamais une disposition SEULE : iOS
  * peint TOUT document v3 à la place des médias du post, donc un `{v:3, layout}` sans scène masquerait les photos. Tout le
  * reste garde le fil v1 d'avant. La LECTURE est celle de [StoryEffectsWireSerializer] (v3 rabattu sur les familles v1),
- * plus, quand il porte au moins deux scènes, le document lui-même ([StoryEffects.canvas]) : l'outbox rejoue la charge
+ * plus, quand il porte au moins deux scènes ou une scène qui désigne une pièce du post (une photo seule sur une
+ * couleur), le document lui-même ([StoryEffects.canvas]) : l'outbox rejoue la charge
  * qu'elle a écrite, et la réécrire à l'identique est ce qui garde chaque scène de la 2 à la N.
  */
 object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
@@ -53,8 +54,14 @@ object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
     private fun scenesDocument(element: JsonElement): CanvasV3? {
         val document = element as? JsonObject ?: return null
         val mark = (document["v"] as? JsonPrimitive)?.intOrNull ?: return null
-        if (mark < 3 || ((document["scenes"] as? JsonArray)?.size ?: 0) < 2) return null
-        return runCatching { tolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }.getOrNull()
+        if (mark < 3) return null
+        val canvas = runCatching { tolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }.getOrNull() ?: return null
+        return canvas.takeIf { it.scenes.size >= 2 || it.scenes.any { scene -> scene.objects.any(::designatesPostMedia) } }
+    }
+
+    private fun designatesPostMedia(item: ObjectV3): Boolean {
+        val id = item.payload["postMediaId"] as? JsonPrimitive ?: return false
+        return item.kind == "media" && id.isString && id.content.isNotBlank()
     }
 
     /**
