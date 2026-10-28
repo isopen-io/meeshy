@@ -13,8 +13,11 @@ public enum class ComposerBackgroundMenuAction(public val isDestructive: Boolean
     ;
 
     public companion object {
-        /** Sans photo possible (un réel), « reprendre une photo » serait un geste sans effet. */
-        public fun served(offersPhoto: Boolean): List<ComposerBackgroundMenuAction> =
-            entries.filter { offersPhoto || it != RETAKE_PHOTO }
+        /**
+         * Sans photo possible (un réel), « reprendre une photo » serait un geste sans effet ; sans éditeur monté sur
+         * cette surface, « modifier » non plus (loi 4 : un contrôle existe s'il a un effet).
+         */
+        public fun served(offersPhoto: Boolean, offersEdit: Boolean = true): List<ComposerBackgroundMenuAction> =
+            entries.filter { (offersPhoto || it != RETAKE_PHOTO) && (offersEdit || it != EDIT) }
     }
 }

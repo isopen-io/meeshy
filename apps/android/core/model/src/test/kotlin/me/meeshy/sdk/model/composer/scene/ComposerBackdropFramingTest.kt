@@ -11,19 +11,19 @@ class ComposerBackdropFramingTest {
 
     @Test
     fun `l absence de cadrage se rend REMPLIE et le cycle alterne entre deux etats`() {
-        assertThat(StoryBackgroundFraming.rendersFilled(null)).isTrue()
-        assertThat(StoryBackgroundFraming.rendersFilled("fill")).isTrue()
-        assertThat(StoryBackgroundFraming.rendersFilled("inconnu")).isTrue()
-        assertThat(StoryBackgroundFraming.rendersFilled("fit")).isFalse()
-        assertThat(StoryBackgroundFraming.nextFitMode(null)).isEqualTo("fit")
-        assertThat(StoryBackgroundFraming.nextFitMode("fit")).isEqualTo("fill")
-        assertThat(StoryBackgroundFraming.nextFitMode("fill")).isEqualTo("fit")
+        assertThat(StoryFitMode.rendersFilled(null)).isTrue()
+        assertThat(StoryFitMode.rendersFilled("fill")).isTrue()
+        assertThat(StoryFitMode.rendersFilled("inconnu")).isTrue()
+        assertThat(StoryFitMode.rendersFilled("fit")).isFalse()
+        assertThat(StoryFitMode.nextFitMode(null)).isEqualTo("fit")
+        assertThat(StoryFitMode.nextFitMode("fit")).isEqualTo("fill")
+        assertThat(StoryFitMode.nextFitMode("fill")).isEqualTo("fit")
     }
 
     @Test
     fun `un media neuf est pose AJUSTE sauf choix deja fait sur la scene`() {
-        assertThat(StoryBackgroundFraming.posedFitMode(null)).isEqualTo("fit")
-        assertThat(StoryBackgroundFraming.posedFitMode("fill")).isEqualTo("fill")
+        assertThat(StoryFitMode.posedFitMode(null)).isEqualTo("fit")
+        assertThat(StoryFitMode.posedFitMode("fill")).isEqualTo("fill")
     }
 
     @Test
