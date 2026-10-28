@@ -50,7 +50,7 @@ class ExhaustionHandlersTest {
 
     @Test
     fun `an exhausted media upload drops its stored bytes`() = runTest {
-        val handler = UploadMediaHandler(mediaBlobStore, mockk<MediaRepository>(), mockk<TusUploadRepository>(), senderJson)
+        val handler = UploadMediaHandler(mediaBlobStore, mockk<MediaRepository>(), mockk<TusUploadRepository>(), senderJson, me.meeshy.sdk.media.MediaUploadProgressLedger())
 
         handler.onExhausted(outboxRow(OutboxKind.UPLOAD_MEDIA, cmid = "cmid-7"))
 
