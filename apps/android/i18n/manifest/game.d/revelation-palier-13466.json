@@ -1,0 +1,582 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "achievement.call.join.count",
+          "androidName": "achievement_call_join_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.call.join.count.one",
+          "androidName": "achievement_call_join_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.call.start.count",
+          "androidName": "achievement_call_start_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.call.start.count.one",
+          "androidName": "achievement_call_start_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.call.start.size",
+          "androidName": "achievement_call_start_size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.create.count",
+          "androidName": "achievement_community_create_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.create.count.one",
+          "androidName": "achievement_community_create_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.create.size",
+          "androidName": "achievement_community_create_size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.join.count",
+          "androidName": "achievement_community_join_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.join.count.one",
+          "androidName": "achievement_community_join_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.community.join.size",
+          "androidName": "achievement_community_join_size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.create.count",
+          "androidName": "achievement_conversation_create_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.create.count.one",
+          "androidName": "achievement_conversation_create_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.join.count",
+          "androidName": "achievement_conversation_join_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.join.count.one",
+          "androidName": "achievement_conversation_join_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.join.size",
+          "androidName": "achievement_conversation_join_size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.leave.count",
+          "androidName": "achievement_conversation_leave_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.conversation.leave.count.one",
+          "androidName": "achievement_conversation_leave_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.image.send.count",
+          "androidName": "achievement_image_send_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.image.send.count.one",
+          "androidName": "achievement_image_send_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.link.click.count",
+          "androidName": "achievement_link_click_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.link.click.count.one",
+          "androidName": "achievement_link_click_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.meesh.mint.count",
+          "androidName": "achievement_meesh_mint_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.meesh.mint.count.one",
+          "androidName": "achievement_meesh_mint_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.delete.count",
+          "androidName": "achievement_message_delete_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.delete.count.one",
+          "androidName": "achievement_message_delete_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.edit.count",
+          "androidName": "achievement_message_edit_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.edit.count.one",
+          "androidName": "achievement_message_edit_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.react.count",
+          "androidName": "achievement_message_react_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.react.count.one",
+          "androidName": "achievement_message_react_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.send.count",
+          "androidName": "achievement_message_send_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.message.send.count.one",
+          "androidName": "achievement_message_send_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.referral.complete.count",
+          "androidName": "achievement_referral_complete_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.referral.complete.count.one",
+          "androidName": "achievement_referral_complete_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.ambassade",
+          "androidName": "achievement_section_ambassade",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.appels",
+          "androidName": "achievement_section_appels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.cercles",
+          "androidName": "achievement_section_cercles",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.constance",
+          "androidName": "achievement_section_constance",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.decouverte",
+          "androidName": "achievement_section_decouverte",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.monnaie",
+          "androidName": "achievement_section_monnaie",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.parole",
+          "androidName": "achievement_section_parole",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.retouche",
+          "androidName": "achievement_section_retouche",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.streak.hold.count",
+          "androidName": "achievement_streak_hold_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.streak.hold.count.one",
+          "androidName": "achievement_streak_hold_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.video.send.count",
+          "androidName": "achievement_video_send_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.video.send.count.one",
+          "androidName": "achievement_video_send_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.voice.send.count",
+          "androidName": "achievement_voice_send_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.voice.send.count.one",
+          "androidName": "achievement_voice_send_count_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.all_content_types.condition",
+          "androidName": "progression_achievement_all_content_types_condition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.all_content_types.title",
+          "androidName": "progression_achievement_all_content_types_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.editor.condition",
+          "androidName": "progression_achievement_editor_condition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.editor.title",
+          "androidName": "progression_achievement_editor_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.first_content.condition",
+          "androidName": "progression_achievement_first_content_condition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.first_content.title",
+          "androidName": "progression_achievement_first_content_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.first_voice.condition",
+          "androidName": "progression_achievement_first_voice_condition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.first_voice.title",
+          "androidName": "progression_achievement_first_voice_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.three_conversation_kinds.condition",
+          "androidName": "progression_achievement_three_conversation_kinds_condition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.three_conversation_kinds.title",
+          "androidName": "progression_achievement_three_conversation_kinds_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.comment.audio",
+          "androidName": "progression_axis_comment_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.comment.text",
+          "androidName": "progression_axis_comment_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.audio_message",
+          "androidName": "progression_axis_content_audio_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.post",
+          "androidName": "progression_axis_content_post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.reel",
+          "androidName": "progression_axis_content_reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.story",
+          "androidName": "progression_axis_content_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.text_message",
+          "androidName": "progression_axis_content_text_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.community",
+          "androidName": "progression_axis_conversation_community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.group_created",
+          "androidName": "progression_axis_conversation_group_created",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.private",
+          "androidName": "progression_axis_conversation_private",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.public",
+          "androidName": "progression_axis_conversation_public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.friendship",
+          "androidName": "progression_axis_social_friendship",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.invite_joined",
+          "androidName": "progression_axis_social_invite_joined",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.share",
+          "androidName": "progression_axis_social_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.tracked_link",
+          "androidName": "progression_axis_social_tracked_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.attachment",
+          "androidName": "progression_axis_tool_attachment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.direct_publish",
+          "androidName": "progression_axis_tool_direct_publish",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.in_app_edit",
+          "androidName": "progression_axis_tool_in_app_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.reaction",
+          "androidName": "progression_axis_tool_reaction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.sticker",
+          "androidName": "progression_axis_tool_sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.level",
+          "androidName": "progression_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.obtained",
+          "androidName": "progression_obtained",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.streak.days",
+          "androidName": "progression_streak_days",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.achievement",
+          "androidName": "reveal_badge_achievement",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.badge",
+          "androidName": "reveal_badge_badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.level",
+          "androidName": "reveal_badge_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.locked",
+          "androidName": "reveal_badge_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.streak",
+          "androidName": "reveal_badge_streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.tier",
+          "androidName": "reveal_badge_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badge.unlocked",
+          "androidName": "reveal_badge_unlocked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.badgeAxis.subtitle",
+          "androidName": "reveal_badge_axis_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.close",
+          "androidName": "reveal_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.composed.subtitle",
+          "androidName": "reveal_composed_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.continue",
+          "androidName": "reveal_continue",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.level.subtitle",
+          "androidName": "reveal_level_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.ok",
+          "androidName": "reveal_ok",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.streak.subtitle",
+          "androidName": "reveal_streak_subtitle",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

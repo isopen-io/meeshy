@@ -82,6 +82,7 @@ fun NotificationsScreen(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    revealTap: EngagementRevealTapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -111,10 +112,11 @@ fun NotificationsScreen(
         if (message != null && state.notifications.isNotEmpty()) snackbar.showSnackbar(message)
     }
 
-    val onOpen = remember(viewModel, haptics) {
+    val onOpen = remember(viewModel, revealTap, haptics) {
         { notification: ApiNotification ->
             haptics.light()
             viewModel.markAsRead(notification.id)
+            revealTap.onOpened(notification)
             NotificationDestinationResolver.resolve(notification).dispatch(
                 onOpenConversation = { openConversation(it) },
                 onOpenPost = { openPost(it) },
