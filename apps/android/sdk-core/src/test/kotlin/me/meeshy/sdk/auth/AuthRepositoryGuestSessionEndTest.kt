@@ -40,7 +40,7 @@ class AuthRepositoryGuestSessionEndTest {
         val api = mockk<AuthApi>(relaxed = true)
         val store = InMemoryTokenStore(sessionToken = "guest-1")
         AuthRepository(api, store, SessionRepository(api, store), RecordingTeardown(), SyncSeqTracker())
-            .endGuestSession(refusedToken = null)
+            .endGuestSession(refusedToken = "guest-1")
 
         coVerify(exactly = 0) { api.logout(any(), any()) }
     }

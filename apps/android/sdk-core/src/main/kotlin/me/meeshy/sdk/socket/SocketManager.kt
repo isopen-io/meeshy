@@ -106,6 +106,7 @@ class SocketManager internal constructor(
     private val _disconnected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _sessionRevoked = MutableSharedFlow<String?>(replay = 0, extraBufferCapacity = 1)
     private val _socketErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
+    private val _serverErrors = MutableSharedFlow<SocketServerError>(replay = 0, extraBufferCapacity = 8)
 
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
@@ -115,6 +116,9 @@ class SocketManager internal constructor(
 
     /** Événement `error` du serveur : exposé, jamais cause de déconnexion. */
     val socketErrors: SharedFlow<String> = _socketErrors.asSharedFlow()
+
+    /** Le même événement `error`, marqué du jeton d'invité présenté au handshake de LA socket qui l'a reçu. */
+    val serverErrors: SharedFlow<SocketServerError> = _serverErrors.asSharedFlow()
 
     private val _connectionState = MutableStateFlow(SocketConnectionState.DISCONNECTED)
     val connectionState: StateFlow<SocketConnectionState> = _connectionState.asStateFlow()
@@ -143,7 +147,7 @@ class SocketManager internal constructor(
         val presented = (decision as? SocketConnectDecision.ConnectRegistered)?.jwt
         presentedToken = presented
         _socket = socket
-        installLifecycleListeners(socket, presented)
+        installLifecycleListeners(socket, presented, (decision as? SocketConnectDecision.ConnectGuest)?.sessionToken)
         registered.forEach { (event, callback) -> socket.on(event, callback) }
         socket.connect()
         return SocketConnectOutcome.ARMED
@@ -164,7 +168,7 @@ class SocketManager internal constructor(
         }
     }
 
-    private fun installLifecycleListeners(socket: RealtimeSocket, presented: String?) {
+    private fun installLifecycleListeners(socket: RealtimeSocket, presented: String?, presentedGuestToken: String?) {
         socket.on(Socket.EVENT_CONNECT) {
             Timber.d("Socket connected")
             _connectionState.value = SocketConnectionState.CONNECTED
@@ -186,7 +190,9 @@ class SocketManager internal constructor(
         }
         socket.on(EVENT_ERROR) { args ->
             Timber.w("Socket error event: %s", args.firstOrNull())
-            _socketErrors.tryEmit(args.firstOrNull()?.toString().orEmpty())
+            val payload = args.firstOrNull()?.toString().orEmpty()
+            _socketErrors.tryEmit(payload)
+            _serverErrors.tryEmit(SocketServerError(payload, presentedGuestToken))
         }
     }
 
@@ -273,3 +279,10 @@ class SocketManager internal constructor(
         const val EVENT_ERROR = "error"
     }
 }
+
+/**
+ * Un événement `error` du serveur et le jeton d'invité présenté au handshake de la socket qui l'a reçu (`null` pour une
+ * socket de compte). Pendant un appel, la coupure d'une socket est différée : son refus doit viser SA session, jamais
+ * celle ouverte depuis sur l'appareil.
+ */
+data class SocketServerError(val payload: String, val guestSessionToken: String?)

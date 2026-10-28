@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.net.GuestSessionEndSignal
+import me.meeshy.sdk.socket.SocketServerError
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -24,7 +25,7 @@ class GuestSessionEndViewModelTest {
 
     private class Fixture(purges: Boolean) {
         val signals = MutableSharedFlow<GuestSessionEndSignal>(extraBufferCapacity = 4)
-        val socketErrors = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val socketErrors = MutableSharedFlow<SocketServerError>(extraBufferCapacity = 4)
         val purgedTokens = mutableListOf<String?>()
         val viewModel = GuestSessionEndViewModel(
             ends = signals,
@@ -53,20 +54,30 @@ class GuestSessionEndViewModelTest {
     }
 
     @Test
-    fun `l evenement socket vise la session courante, sans jeton nomme`() = runTest(dispatcher) {
+    fun `l evenement socket vise la session presentee au handshake de CETTE socket`() = runTest(dispatcher) {
         val f = Fixture(purges = true)
         runCurrent()
-        f.socketErrors.emit("""{"message":"x","code":"GUEST_ACCESS_REVOKED"}""")
+        f.socketErrors.emit(SocketServerError("""{"message":"x","code":"GUEST_ACCESS_REVOKED"}""", guestSessionToken = "guest-A"))
         runCurrent()
-        assertThat(f.purgedTokens).containsExactly(null)
+        assertThat(f.purgedTokens).containsExactly("guest-A")
         assertThat(f.viewModel.ended.value?.end).isEqualTo(GuestSessionEnd.ACCESS_REVOKED)
+    }
+
+    @Test
+    fun `une socket qui n a presente aucun jeton d invite ne termine aucune session`() = runTest(dispatcher) {
+        val f = Fixture(purges = true)
+        runCurrent()
+        f.socketErrors.emit(SocketServerError("""{"code":"SHARE_LINK_EXPIRED"}""", guestSessionToken = null))
+        runCurrent()
+        assertThat(f.purgedTokens).isEmpty()
+        assertThat(f.viewModel.ended.value).isNull()
     }
 
     @Test
     fun `une erreur de socket ordinaire ne termine rien`() = runTest(dispatcher) {
         val f = Fixture(purges = true)
         runCurrent()
-        f.socketErrors.emit("""{"code":"RATE_LIMIT"}""")
+        f.socketErrors.emit(SocketServerError("""{"code":"RATE_LIMIT"}""", guestSessionToken = "guest-A"))
         runCurrent()
         assertThat(f.purgedTokens).isEmpty()
         assertThat(f.viewModel.ended.value).isNull()

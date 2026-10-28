@@ -34,11 +34,12 @@ enum class GuestSessionEnd(val code: String, val httpStatus: Int) {
         }
 
         /**
-         * La fin vise-t-elle la session courante ? Un refus qui nomme un autre jeton vise une session deja quittee (le
-         * depart d'une ancienne, refuse apres qu'un nouveau lien a ete ouvert). Sans jeton nomme (socket), la courante.
+         * La fin vise-t-elle la session courante ? Seulement si le refus NOMME son jeton et que c'est le sien : un refus
+         * qui nomme un autre jeton vise une session deja quittee (l'ancienne socket gardee ouverte par un appel, un depart
+         * refuse apres qu'un nouveau lien a ete ouvert), et un refus qui n'en nomme aucun ne vise personne.
          */
         fun targets(currentToken: String?, refusedToken: String?): Boolean =
-            currentToken != null && (refusedToken == null || refusedToken == currentToken)
+            currentToken != null && refusedToken == currentToken
     }
 }
 
