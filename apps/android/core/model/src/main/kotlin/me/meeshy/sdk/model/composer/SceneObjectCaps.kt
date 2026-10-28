@@ -10,14 +10,18 @@ import me.meeshy.sdk.model.scene.SceneLists
  * propose pas un geste que la pose refuserait ensuite en silence.
  */
 object SceneObjectCaps {
-    const val TEXT: Int = 5
+    const val TEXT: Int = StoryLimits.OBJECTS_PER_FAMILY
 
-    /** Médias visuels ET sons confondus : la scène est pleine à dix. */
-    const val MEDIA: Int = 10
-    const val IMAGE: Int = 5
-    const val VIDEO: Int = 4
-    const val AUDIO: Int = 5
-    const val STICKER: Int = 30
+    /**
+     * Médias VISUELS (images + vidéos) : cinquante. Le jeu de slides ne type pas ses médias, donc un seul seau
+     * de cinquante garantit qu'aucune combinaison ne dépasse le plafond de cinquante images ou de cinquante
+     * vidéos de la passerelle. Les sons ont leur propre seau [AUDIO] : ils ne partagent plus rien avec lui.
+     */
+    const val MEDIA: Int = StoryLimits.OBJECTS_PER_FAMILY
+    const val IMAGE: Int = StoryLimits.OBJECTS_PER_FAMILY
+    const val VIDEO: Int = StoryLimits.OBJECTS_PER_FAMILY
+    const val AUDIO: Int = StoryLimits.OBJECTS_PER_FAMILY
+    const val STICKER: Int = StoryLimits.OBJECTS_PER_FAMILY
 
     /** Ce que l'auteur peut vouloir ajouter. */
     enum class Entry { TEXT, IMAGE, VIDEO, AUDIO, STICKER, PLACE }
@@ -30,16 +34,19 @@ object SceneObjectCaps {
         data class Refused(val reason: Reason) : Verdict
     }
 
-    /** Le nombre de médias comptés contre le plafond de dix : médias visuels + sons, fonds compris. */
-    fun mediaCount(lists: SceneLists): Int = lists.medias.size + lists.audios.size
+    /** Le nombre de médias visuels comptés contre [MEDIA], fonds compris. */
+    fun mediaCount(lists: SceneLists): Int = lists.medias.size
 
-    /** La scène peut-elle porter un média ou un son de plus (dix en tout) ? */
+    /** La scène peut-elle porter un média visuel de plus ? */
     fun canAddMedia(lists: SceneLists): Boolean = mediaCount(lists) < MEDIA
 
-    /** Les places restantes sous les dix, médias visuels et sons confondus ; jamais négatif. */
-    fun remainingMediaSlots(visualMedia: Int, audios: Int): Int = (MEDIA - visualMedia - audios).coerceAtLeast(0)
+    /** Les places restantes pour un média visuel ; jamais négatif. */
+    fun remainingMediaSlots(visualMedia: Int): Int = (MEDIA - visualMedia).coerceAtLeast(0)
 
-    fun canAddMedia(visualMedia: Int, audios: Int): Boolean = remainingMediaSlots(visualMedia, audios) > 0
+    fun canAddMedia(visualMedia: Int): Boolean = remainingMediaSlots(visualMedia) > 0
+
+    /** Les places restantes pour un son ; jamais négatif. */
+    fun remainingAudioSlots(audios: Int): Int = (AUDIO - audios).coerceAtLeast(0)
 
     fun verdict(entry: Entry, lists: SceneLists): Verdict = when (entry) {
         Entry.TEXT -> refuseIf(lists.texts.size >= TEXT, Reason.TEXT_FULL)
@@ -47,7 +54,7 @@ object SceneObjectCaps {
         Entry.PLACE -> Verdict.Allowed
         Entry.IMAGE -> mediaFull(lists) ?: refuseIf(lists.medias.count { it.mediaType == "image" } >= IMAGE, Reason.IMAGE_FULL)
         Entry.VIDEO -> mediaFull(lists) ?: refuseIf(lists.medias.count { it.mediaType == "video" } >= VIDEO, Reason.VIDEO_FULL)
-        Entry.AUDIO -> mediaFull(lists) ?: refuseIf(lists.audios.size >= AUDIO, Reason.AUDIO_FULL)
+        Entry.AUDIO -> refuseIf(lists.audios.size >= AUDIO, Reason.AUDIO_FULL)
     }
 
     fun canAdd(entry: Entry, lists: SceneLists): Boolean = verdict(entry, lists) == Verdict.Allowed

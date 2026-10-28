@@ -50,16 +50,14 @@ object ComposerSoundPlacement {
     /** Un emprunt de plus est-il possible ? Même calcul que [borrow] : un fond emprunté se REMPLACE, un fond capté reste. */
     fun canBorrow(audios: List<StoryAudioPlayerObject>, visualMedia: Int = 0): Boolean = borrowRefusal(audios, visualMedia) == null
 
-    /** Pourquoi un emprunt de plus est refusé — les dix médias+sons, ou les cinq sons ; `null` ⇒ admis. Ce que la porte DIT. */
+    /** Pourquoi un emprunt de plus est refusé — les cinquante sons ; `null` ⇒ admis. Ce que la porte DIT. */
     fun borrowRefusal(audios: List<StoryAudioPlayerObject>, visualMedia: Int = 0): SceneObjectCaps.Reason? =
         refusalAfterBorrowing(keptBeforeBorrowing(audios, soundId = null).size, visualMedia)
 
-    /** Dix médias+sons en tout ET cinq sons au plus (`canAddAudio = canAddMedia && audio < 5`, iOS), dans l'ordre de [SceneObjectCaps.verdict]. */
-    private fun refusalAfterBorrowing(keptSounds: Int, visualMedia: Int): SceneObjectCaps.Reason? = when {
-        !SceneObjectCaps.canAddMedia(visualMedia, keptSounds) -> SceneObjectCaps.Reason.MEDIA_FULL
-        keptSounds >= SceneObjectCaps.AUDIO -> SceneObjectCaps.Reason.AUDIO_FULL
-        else -> null
-    }
+    /** Cinquante sons au plus : les sons ne partagent plus de plafond avec les médias visuels (#13590). */
+    @Suppress("UNUSED_PARAMETER")
+    private fun refusalAfterBorrowing(keptSounds: Int, visualMedia: Int): SceneObjectCaps.Reason? =
+        if (keptSounds >= SceneObjectCaps.AUDIO) SceneObjectCaps.Reason.AUDIO_FULL else null
 
     private fun keptBeforeBorrowing(audios: List<StoryAudioPlayerObject>, soundId: String?): List<StoryAudioPlayerObject> {
         val superseded = supersededId(background(audios), audios)?.let { id -> audios.first { it.id == id } }

@@ -793,6 +793,8 @@ class StoryComposerViewModel @Inject constructor(
             "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
         const val STICKER_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_STICKERS_PER_SLIDE} stickers per slide"
+        const val TEXT_LENGTH_LIMIT =
+            "A text holds ${me.meeshy.sdk.model.composer.StoryLimits.TEXT_LENGTH} characters at most"
         const val MEDIA_RESTORE_LOST = "Some media couldn't be restored"
     }
 }

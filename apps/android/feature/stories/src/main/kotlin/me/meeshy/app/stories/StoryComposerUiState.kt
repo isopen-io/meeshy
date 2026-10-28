@@ -116,6 +116,9 @@ data class StoryComposerUiState(
             deck.isWithinMediaLimit() &&
             deck.isWithinTextElementLimit() &&
             deck.isWithinStickerLimit() &&
+            deck.isWithinSceneCaps() &&
+            deck.isWithinElementTextLimit() &&
+            deck.isWithinTotalDuration() &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
             !isUploadingMedia

@@ -39,7 +39,7 @@ public object SceneObjectDuplication {
                 lists.copy(medias = lists.medias + clone)
             }
             is MeeshySceneObject.Audio -> {
-                if (!SceneObjectCaps.canAddMedia(lists)) return null
+                if (!SceneObjectCaps.canAdd(SceneObjectCaps.Entry.AUDIO, lists)) return null
                 val clone = source.value.copy(
                     id = newId,
                     isBackground = false,

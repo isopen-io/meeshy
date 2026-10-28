@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextLanguage
@@ -23,9 +24,10 @@ internal object StoryComposerTextReducer {
     fun typed(state: StoryComposerUiState, text: String): StoryComposerUiState {
         val editingId = state.selectedTextElement?.id
         if (editingId != null) {
+            val clamped = StoryLimits.clampText(text)
             return state.copy(
-                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = text) },
-                errorMessage = null,
+                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = clamped) },
+                errorMessage = if (clamped.length < text.length) StoryComposerViewModel.TEXT_LENGTH_LIMIT else null,
             )
         }
         return state.copy(
