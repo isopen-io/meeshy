@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostMentionInput
@@ -426,9 +427,7 @@ class StoryComposerViewModel @Inject constructor(
         val after = before.removeSlide(id)
         if (after === before) return
         val droppedMedia = removed.mediaIds.toSet() - after.slides.flatMap(StorySlide::mediaIds).toSet()
-        val pendingToCancel = _state.value.pendingUploads
-            .filter { it.cmid in droppedMedia }
-            .map(PendingMediaUpload::cmid)
+        val pendingToCancel = _state.value.pendingUploads.filter { it.cmid in droppedMedia }.onEach { MediaIntake.release(it.item) }.map(PendingMediaUpload::cmid)
         _state.update {
             it.copy(
                 deck = after,
@@ -567,7 +566,7 @@ class StoryComposerViewModel @Inject constructor(
                     _state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
                 }
                 when (val result = mediaUploader.upload(accepted, onProgress)) {
-                    is NetworkResult.Success -> applyUploaded(result.data)
+                    is NetworkResult.Success -> { applyUploaded(result.data); accepted.forEach(MediaIntake::release) }
                     is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) _state.update(StoryComposerUploadReducer::locationRefused) else queueDurably(accepted)
                 }
             } catch (e: CancellationException) {
@@ -607,7 +606,7 @@ class StoryComposerViewModel @Inject constructor(
      * is best-effort — if it fails the stranded row simply exhausts harmlessly.
      */
     fun onRemoveMedia(id: String) {
-        val wasPending = _state.value.pendingUploads.any { it.cmid == id }
+        val wasPending = _state.value.pendingUploads.firstOrNull { it.cmid == id }?.item?.also(MediaIntake::release) != null
         _state.update {
             val deck = it.deck.removeMedia(id)
             val next = if (wasPending) {

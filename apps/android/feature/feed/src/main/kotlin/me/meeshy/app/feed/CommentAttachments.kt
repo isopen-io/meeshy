@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.media.readMediaUploadItem
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -46,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -116,7 +118,12 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
     }
     val bitmap = remember(piece.item) {
         val options = BitmapFactory.Options().apply { inSampleSize = 8 }
-        runCatching { BitmapFactory.decodeByteArray(piece.item.bytes, 0, piece.item.bytes.size, options) }.getOrNull()
+        runCatching {
+            when (val source = piece.item.source) {
+                is MediaUploadSource.OnDisk -> BitmapFactory.decodeFile(source.file.path, options)
+                else -> piece.item.bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size, options) }
+            }
+        }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
 }
@@ -128,7 +135,7 @@ internal fun CommentAttachButton(enabled: Boolean, onPicked: (MediaUploadItem) -
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.contentResolver.readMediaUploadItem(uri) }?.let(onPicked) }
+        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let(onPicked) }
     }
     IconButton(
         onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
@@ -176,7 +183,7 @@ private suspend fun commentVideoPending(context: Context, item: MediaUploadItem)
     val dir = File(context.cacheDir, "captures").apply { mkdirs() }
     val now = System.currentTimeMillis()
     val source = File(dir, "comment_video_source_$now.mp4")
-    val probe = runCatching { source.writeBytes(item.bytes) }.getOrNull()?.let { RetouchVideoProbe.of(source) }
+    val probe = runCatching { item.source.open().use { input -> source.outputStream().use { input.copyTo(it) } } }.getOrNull()?.let { RetouchVideoProbe.of(source) }
     if (probe == null) {
         source.delete()
         return@withContext null

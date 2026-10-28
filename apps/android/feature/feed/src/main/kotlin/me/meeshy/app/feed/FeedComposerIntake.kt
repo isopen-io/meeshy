@@ -1,5 +1,7 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.media.readMediaUploadItem
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -84,9 +86,7 @@ internal fun rememberFeedComposerIntake(
     val unavailableMessage by rememberUpdatedState(stringResource(R.string.feed_composer_location_unavailable))
     val locationRefusedMessage by rememberUpdatedState(stringResource(R.string.feed_composer_media_location_refused))
 
-    suspend fun uploadAndAttach(items: List<MediaUploadItem>, previews: List<String?> = emptyList()) {
-        if (items.isEmpty()) return
-        state.isUploading = true
+    suspend fun deliver(items: List<MediaUploadItem>, previews: List<String?>) {
         when (val result = upload(items)) {
             is NetworkResult.Success ->
                 if (result.data.isEmpty()) reportError(unusableMessage) else state.attach(result.data)
@@ -99,7 +99,17 @@ internal fun rememberFeedComposerIntake(
                 }
             }
         }
-        state.isUploading = false
+    }
+
+    suspend fun uploadAndAttach(items: List<MediaUploadItem>, previews: List<String?> = emptyList()) {
+        if (items.isEmpty()) return
+        state.isUploading = true
+        try {
+            deliver(items, previews)
+        } finally {
+            items.forEach(MediaIntake::release)
+            state.isUploading = false
+        }
     }
 
     fun dispatchPicked(uris: List<Uri>) {
@@ -108,7 +118,7 @@ internal fun rememberFeedComposerIntake(
         if (remaining <= 0) return reportError(limitMessage)
         scope.launch {
             val picked = withContext(Dispatchers.IO) {
-                uris.take(remaining).mapNotNull { uri -> context.contentResolver.readMediaUploadItem(uri)?.let { it to uri.toString() } }
+                uris.take(remaining).mapNotNull { uri -> context.readMediaUploadItem(uri)?.let { it to uri.toString() } }
             }
             uploadAndAttach(picked.map { it.first }, picked.map { it.second })
         }
@@ -130,7 +140,7 @@ internal fun rememberFeedComposerIntake(
 
     var retouch by remember { mutableStateOf<FeedRetouchPending?>(null) }
     retouch?.let { pending ->
-        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { retouch = null })
+        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { MediaIntake.release(pending.item); retouch = null })
     }
     var videoRetouch by remember { mutableStateOf<FeedVideoRetouchPending?>(null) }
     videoRetouch?.let { pending ->
@@ -149,9 +159,9 @@ internal fun rememberFeedComposerIntake(
     val camera = rememberFeedCameraCapture(
         onPhoto = { uri ->
             scope.launch {
-                val item = withContext(Dispatchers.IO) { context.contentResolver.readMediaUploadItem(uri) }
+                val item = withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }
                 val pending = item?.let { withContext(Dispatchers.Default) { FeedRetouchPending.of(it) } }
-                if (pending != null) retouch = pending else dispatchPicked(listOf(uri))
+                if (pending != null) retouch = pending else { item?.let(MediaIntake::release); dispatchPicked(listOf(uri)) }
             }
         },
         onVideo = { uri ->

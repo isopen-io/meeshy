@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ProfileSnapshot
 import me.meeshy.sdk.model.AvatarBannerApply
@@ -68,8 +69,9 @@ class AvatarBannerUploadViewModel @Inject constructor(
     fun onImagePicked(target: ImageUploadTarget, item: MediaUploadItem) {
         if (_state.value.uploading != null) return
 
-        when (val validation = ImageUploadValidator.validate(target, item.bytes.size, item.mimeType)) {
+        when (val validation = ImageUploadValidator.validate(target, item.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), item.mimeType)) {
             is ImageUploadValidation.Rejected -> {
+                MediaIntake.release(item)
                 _state.update { it.copy(error = validation.reason.toError()) }
                 return
             }
@@ -107,6 +109,8 @@ class AvatarBannerUploadViewModel @Inject constructor(
             } catch (_: Exception) {
                 snapshot?.let(sessionRepository::adopt)
                 fail(ImageUploadError.UPDATE_FAILED)
+            } finally {
+                MediaIntake.release(item)
             }
         }
     }

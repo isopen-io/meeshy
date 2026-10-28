@@ -652,19 +652,6 @@ internal fun ImageUploadError.messageRes(): Int = when (this) {
     ImageUploadError.UPDATE_FAILED -> R.string.profile_image_error_update
 }
 
-/**
- * Reads the picked content into a [MediaUploadItem] (bytes + advertised filename +
- * MIME). Returns null when the stream can't be opened. Pure-IO glue — the
- * filename/MIME defaulting lives in `MediaUpload`, and the accept/reject decision in
- * `ImageUploadValidator`, so this stays a thin reader.
- */
-internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
-    val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
-    val mimeType = getType(uri).orEmpty()
-    val fileName = displayName(uri).orEmpty()
-    return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
-}
-
 private fun ContentResolver.displayName(uri: Uri): String? =
     runCatching {
         query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->

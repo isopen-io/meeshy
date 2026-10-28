@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -172,7 +173,7 @@ private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadVie
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }
+        uri?.let { context.readMediaUploadItem(it) }
             ?.let { uploadViewModel.onImagePicked(target, it) }
     }
     return { picked ->

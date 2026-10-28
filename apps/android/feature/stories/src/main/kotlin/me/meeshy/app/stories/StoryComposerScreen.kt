@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.media.readMediaUploadItem
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -126,7 +127,7 @@ fun StoryComposerScreen(
         if (uris.isEmpty()) return
         scope.launch {
             val items = withContext(Dispatchers.IO) {
-                uris.mapNotNull { context.contentResolver.readMediaUploadItem(it) }
+                uris.mapNotNull { context.readMediaUploadItem(it) }
             }
             if (items.isNotEmpty()) viewModel.onMediaPicked(items)
         }

@@ -13,6 +13,8 @@ import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.platform.LocalContext
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.call.montage.CallMontageCaption
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
@@ -104,10 +106,9 @@ internal class FeedVideoRetouchPending(val source: File, val output: File, val p
 internal object FeedVideoRetouchDelivery {
     const val VIDEO_MIME = "video/mp4"
 
-    fun item(pending: FeedVideoRetouchPending, file: File): MediaUploadItem? {
-        val bytes = runCatching { file.readBytes() }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+    fun item(pending: FeedVideoRetouchPending, file: File, cacheDir: File): MediaUploadItem? {
         val name = if (file == pending.source) pending.fileName else pending.fileName.substringBeforeLast('.').ifEmpty { "video" } + "_retouche.mp4"
-        return MediaUploadItem(bytes = bytes, fileName = name, mimeType = VIDEO_MIME)
+        return MediaIntake.adopt(file, cacheDir, name, VIDEO_MIME)
     }
 }
 
@@ -115,6 +116,7 @@ internal object FeedVideoRetouchDelivery {
 @Composable
 internal fun FeedVideoRetouchHost(pending: FeedVideoRetouchPending, onDeliver: (MediaUploadItem?) -> Unit, onDismiss: () -> Unit) {
     val author = rememberFeedRetouchAuthor()
+    val cacheDir = LocalContext.current.cacheDir
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
@@ -129,7 +131,7 @@ internal fun FeedVideoRetouchHost(pending: FeedVideoRetouchPending, onDeliver: (
                     ComposerVideoRetouchResult.Original -> pending.source
                     is ComposerVideoRetouchResult.Rendered -> result.file
                 }
-                val item = withContext(Dispatchers.IO) { FeedVideoRetouchDelivery.item(pending, file).also { pending.discard() } }
+                val item = withContext(Dispatchers.IO) { FeedVideoRetouchDelivery.item(pending, file, cacheDir).also { pending.discard() } }
                 onDeliver(item)
             },
             onCancel = onDismiss,

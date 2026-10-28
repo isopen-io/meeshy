@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.media.previewModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -40,7 +41,7 @@ internal fun StoryComposerScene(
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                    ?: state.selectedSlidePending.firstOrNull()?.item?.previewModel,
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },
