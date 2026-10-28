@@ -337,6 +337,12 @@ class OutboxRepository @Inject constructor(
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
 
+    /**
+     * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that
+     * suspends, and handed back to [enqueue]; `null` when this repository is not fenced.
+     */
+    fun ticket(): AccountTicket? = fence?.ticket()
+
     private suspend fun write(incoming: OutboxEntity): CoalesceDecision = database.withTransaction {
         val pending = outboxDao.deliverableForLane(incoming.lane)
             .filter { it.stateEnum == OutboxState.PENDING }
