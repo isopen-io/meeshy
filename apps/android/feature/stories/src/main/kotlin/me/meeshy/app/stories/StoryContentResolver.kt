@@ -23,6 +23,8 @@ private data class StoryTranslationLike(
  *
  * Rule 1: when no translation targets a preferred language, the ORIGINAL content
  * is shown ([isTranslated] = false) — never an arbitrary translation.
+ * Rule 3: the slide's original language competes at its own RANK — a French story read by
+ * `["fr", "en"]` stays French even when an English translation exists.
  *
  * [overrideLanguage] is the ephemeral "Exploration" pick from the language
  * bar (iOS `sessionLanguageOverride` parity): it is tried FIRST, without
@@ -49,7 +51,7 @@ object StoryContentResolver {
                     it.translatedContent.isNotBlank()
             }
         }
-        val match = overrideMatch ?: LanguageResolver.preferredTranslation(candidates, prefs)
+        val match = overrideMatch ?: LanguageResolver.preferredTranslation(candidates, prefs, originalLanguage = item.originalLanguage)
         return if (match != null) {
             ResolvedStoryText(
                 content = match.translatedContent,

@@ -41,6 +41,18 @@ class StoryLanguageExplorerTest {
     }
 
     @Test
+    fun `a caption already written in the reader's primary language is served as is and leaves the rows`() {
+        val french = item.copy(originalLanguage = "fr")
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "es")
+        val resolved = StoryContentResolver.resolve(french, prefs, null)
+        val result = StoryLanguageExplorerBuilder.build(french, prefs, resolved, null, emptySet())
+
+        assertThat(result.current?.text).isEqualTo("Bonjour")
+        assertThat(result.rows.none { it.isSelected }).isTrue()
+        assertThat(result.rows.map { it.code }).doesNotContain("fr")
+    }
+
+    @Test
     fun `when nothing matches the reader the original is served and no language row is selected`() {
         val result = explorer(Prefs(systemLanguage = "ja"))
 

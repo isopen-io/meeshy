@@ -25,6 +25,11 @@ data class StoryItem(
     val audioUrl: String? = null,
     val isViewed: Boolean = false,
     val translations: List<StoryTranslation>? = null,
+    /**
+     * Langue dans laquelle [content] est écrit (`Post.originalLanguage`, servi par la passerelle) :
+     * elle concourt à son RANG dans le Prisme. `null` d'un ancien cache ⇒ l'original ne concourt pas.
+     */
+    val originalLanguage: String? = null,
     val backgroundAudio: StoryBackgroundAudioEntry? = null,
     val reactionCount: Int = 0,
     val commentCount: Int = 0,
