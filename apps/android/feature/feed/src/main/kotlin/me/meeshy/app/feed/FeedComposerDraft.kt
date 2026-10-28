@@ -197,8 +197,11 @@ data class FeedComposerDraft(
         return if (hex == null) copy(background = null) else if (normalised == null) this else copy(background = normalised)
     }
 
-    /** The blank document of the same author: audience and language are choices of the author, not of the document. */
-    fun cleared(): FeedComposerDraft = FeedComposerDraft(visibility = visibility, language = language)
+    /**
+     * The blank document of the same author: audience, language and the Post format are choices of the author, not of the
+     * document (iOS `clearAll` leaves the format chip alone) — a host-governed `POST` is not re-applied after a clear.
+     */
+    fun cleared(): FeedComposerDraft = FeedComposerDraft(visibility = visibility, language = language, forcePlainPost = forcePlainPost)
 
     /** The payload to publish, or `null` when the draft is not yet publishable (see [canPublish]). */
     fun publishRequest(): FeedPostPublishRequest? {

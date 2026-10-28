@@ -2,8 +2,10 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryBackgroundPalette
+import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 
 class FeedComposerSceneTest {
@@ -67,14 +69,24 @@ class FeedComposerSceneTest {
     }
 
     @Test
-    fun `clear all empties the document but keeps the audience and the language`() {
+    fun `clear all empties the document but keeps the audience, the language and the chosen format`() {
         val draft = FeedComposerDraft(text = "x", visibility = FeedPostVisibility.FRIENDS, language = "es", forcePlainPost = true)
             .withBackground("08D9D6")
             .withLocation(SharedPlace(latitude = 1.0, longitude = 2.0))
 
         val after = PostOverflowLaw.perform(PostOverflowEntry.CLEAR_ALL, draft)
 
-        assertThat(after).isEqualTo(FeedComposerDraft(visibility = FeedPostVisibility.FRIENDS, language = "es"))
+        assertThat(after).isEqualTo(FeedComposerDraft(visibility = FeedPostVisibility.FRIENDS, language = "es", forcePlainPost = true))
+    }
+
+    @Test
+    fun `after clear all, a video posed under the Post format still publishes a post, not a reel`() {
+        val governedAsPost = FeedComposerDraft(text = "x").withForcePlainPost(true)
+
+        val after = PostOverflowLaw.perform(PostOverflowEntry.CLEAR_ALL, governedAsPost)
+            .withMedia(listOf(UploadedMedia(id = "v", url = "https://cdn/v.mp4", mimeType = "video/mp4", fileSize = 1, width = 1080, height = 1920, durationMs = 8_000, thumbnailUrl = null)))
+
+        assertThat(after.postType).isEqualTo(PostType.POST)
     }
 
     @Test
