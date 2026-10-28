@@ -74,4 +74,5 @@
         <item quantity="many">Puoi allegare fino a %1$d elementi</item>
         <item quantity="other">Puoi allegare fino a %1$d elementi</item>
     </plurals>
+    <string name="status_composer_emoji_too_long">Questa emoji è troppo lunga per uno stato: scegline un\'altra.</string>
 </resources>

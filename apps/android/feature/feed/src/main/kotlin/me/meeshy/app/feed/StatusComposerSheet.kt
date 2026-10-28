@@ -25,6 +25,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import kotlinx.coroutines.delay
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -166,8 +169,17 @@ private fun MoodPlateau(
         onAddWord = { isAsking = false; refocus++ },
         onPublishAnyway = { isAsking = false; onPublish() },
     )
+    val haptics = rememberMeeshyHaptics()
+    val context = LocalContext.current
+    val tooLong = stringResource(R.string.status_composer_emoji_too_long)
     if (isPicking) MoodEmojiSheet(
-        onPick = { onChange(draft.withPickedEmoji(it)); isPicking = false },
+        onPick = { picked ->
+            if (StatusBarePublish.acceptsPicked(picked)) {
+                onChange(draft.withPickedEmoji(picked)); isPicking = false; haptics.medium()
+            } else {
+                haptics.warning(); Toast.makeText(context, tooLong, Toast.LENGTH_SHORT).show()
+            }
+        },
         onDismiss = { isPicking = false },
     )
     ComposerPlateau(
