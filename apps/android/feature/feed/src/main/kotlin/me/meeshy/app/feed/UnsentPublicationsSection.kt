@@ -59,6 +59,7 @@ internal fun UnsentPublicationsEntry(
     viewModel: UnsentPublicationsViewModel = hiltViewModel(),
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
+    val offline by viewModel.offline.collectAsStateWithLifecycle()
     var showList by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
         viewModel.reopened.collect { draft ->
@@ -71,6 +72,7 @@ internal fun UnsentPublicationsEntry(
     if (showList) {
         UnsentPublicationsSheet(
             items = items,
+            offline = offline,
             onRetry = viewModel::retry,
             onReopen = viewModel::reopen,
             onDelete = viewModel::discard,
@@ -117,6 +119,7 @@ private fun UnsentPublicationsBanner(items: List<UnsentPublication>, onClick: ()
 @Composable
 private fun UnsentPublicationsSheet(
     items: List<UnsentPublication>,
+    offline: Boolean,
     onRetry: (String) -> Unit,
     onReopen: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -137,6 +140,7 @@ private fun UnsentPublicationsSheet(
             items(items, key = { it.cmid }) { item ->
                 UnsentPublicationRow(
                     item = item,
+                    offline = offline,
                     onRetry = { onRetry(item.cmid) },
                     onReopen = { onReopen(item.cmid) },
                     onDelete = { pendingDelete = item.cmid },
@@ -166,6 +170,7 @@ private fun UnsentPublicationsSheet(
 @Composable
 private fun UnsentPublicationRow(
     item: UnsentPublication,
+    offline: Boolean,
     onRetry: () -> Unit,
     onReopen: () -> Unit,
     onDelete: () -> Unit,
@@ -192,8 +197,9 @@ private fun UnsentPublicationRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        UnsentPublicationMedia(item, offline)
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            if (item.canRetry) TextButton(onClick = onRetry) { Text(stringResource(R.string.feed_unsent_retry)) }
+            if (UnsentRuptureRule.showsRetry(item, UnsentRuptureRule.rupture(item, offline))) TextButton(onClick = onRetry) { Text(stringResource(R.string.feed_unsent_retry)) }
             if (item.canReopen) TextButton(onClick = onReopen) { Text(stringResource(R.string.feed_unsent_reopen)) }
             TextButton(onClick = onDelete) {
                 Text(stringResource(R.string.feed_unsent_delete), color = MeeshyTheme.tokens.error)

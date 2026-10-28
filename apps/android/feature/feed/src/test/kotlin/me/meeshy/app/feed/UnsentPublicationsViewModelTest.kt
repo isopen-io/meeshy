@@ -31,6 +31,7 @@ class UnsentPublicationsViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val publications: PublicationOutbox = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
+    private val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = true)
     private val unsent = MutableStateFlow<List<UnsentPublication>>(emptyList())
 
     @Before
@@ -52,7 +53,7 @@ class UnsentPublicationsViewModelTest {
         failureReason = "Post refused: HTTP 415",
     )
 
-    private fun viewModel() = UnsentPublicationsViewModel(publications, workManager)
+    private fun viewModel() = UnsentPublicationsViewModel(publications, workManager, network)
 
     @Test
     fun `the list follows the publications the device still holds`() = runTest(dispatcher) {
@@ -103,6 +104,18 @@ class UnsentPublicationsViewModelTest {
             val draft = awaitItem()
             assertThat(draft.text).isEqualTo("mes photos")
             assertThat(draft.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
+        }
+    }
+
+    @Test
+    fun `the offline reading follows the connection`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.offline.test {
+            assertThat(awaitItem()).isFalse()
+            network.simulateOffline()
+            assertThat(awaitItem()).isTrue()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 }
