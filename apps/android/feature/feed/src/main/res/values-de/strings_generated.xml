@@ -20,6 +20,7 @@
     <string name="feed_composer_placeholder">Woran denkst du?</string>
     <string name="feed_composer_publish">Veröffentlichen</string>
     <string name="feed_composer_record_voice">Audio aufnehmen</string>
+    <string name="feed_composer_socle_audience">Publikum</string>
     <string name="feed_composer_take_photo">Foto aufnehmen</string>
     <string name="feed_composer_title">Neuer Beitrag</string>
     <string name="feed_composer_type_hint">Zwischen Reel und Beitrag wechseln</string>

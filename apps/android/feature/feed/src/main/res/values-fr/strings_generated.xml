@@ -20,6 +20,7 @@
     <string name="feed_composer_placeholder">Qu\'avez-vous en tête ?</string>
     <string name="feed_composer_publish">Publier</string>
     <string name="feed_composer_record_voice">Enregistrer un audio</string>
+    <string name="feed_composer_socle_audience">Audience</string>
     <string name="feed_composer_take_photo">Prendre une photo</string>
     <string name="feed_composer_title">Nouveau post</string>
     <string name="feed_composer_type_hint">Bascule entre réel et post</string>

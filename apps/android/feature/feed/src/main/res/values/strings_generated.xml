@@ -20,6 +20,7 @@
     <string name="feed_composer_placeholder">What\'s on your mind?</string>
     <string name="feed_composer_publish">Publish</string>
     <string name="feed_composer_record_voice">Record audio</string>
+    <string name="feed_composer_socle_audience">Audience</string>
     <string name="feed_composer_take_photo">Take a photo</string>
     <string name="feed_composer_title">New post</string>
     <string name="feed_composer_type_hint">Switch between reel and post</string>

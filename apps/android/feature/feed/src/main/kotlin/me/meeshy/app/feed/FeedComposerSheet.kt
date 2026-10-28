@@ -1,61 +1,34 @@
 package me.meeshy.app.feed
 
-import android.content.ContentResolver
-import android.media.MediaRecorder
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.FileProvider
-import coil.compose.AsyncImage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.PostType
-import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.composer.ComposerFormat
-import me.meeshy.sdk.model.formattedCoordinates
-import me.meeshy.sdk.model.waveform.VoiceRecordingFile
-import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.model.PermissionNature
-import me.meeshy.ui.component.permission.PermissionFlowHost
-import me.meeshy.ui.component.permission.launchWithCameraAccess
-import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.component.recording.VoiceRecordingPill
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import java.io.File
 
 /**
  * The feed-post composer — the "texte seul" first sub-slice of feature-parity
@@ -76,11 +49,11 @@ import java.io.File
  * `camera.fill` button — one system `ACTION_IMAGE_CAPTURE` activity
  * ([ActivityResultContracts.TakePicture]) writing into a fresh [CameraCaptureFile]-named
  * destination the composer creates via the app's [FileProvider] authority, then dispatched
- * through the exact same [dispatchPicked] pipeline as a gallery pick — zero new upload/error
+ * through the exact same [rememberFeedComposerIntake] pipeline as a gallery pick — zero new upload/error
  * logic. Camera-video capture (`onVideoCapture`, [MeeshyIcons.Video] tile) is the same
  * pattern one level over: `ACTION_VIDEO_CAPTURE` ([ActivityResultContracts.CaptureVideo]) writing
  * into a [CameraCaptureFile.nextVideo]-named destination, dispatched through the identical
- * [dispatchPicked] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
+ * [rememberFeedComposerIntake] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
  * tiles, no in-composer photo/video toggle ([CameraView]'s combined `.photo`/`.video` case) — iOS
  * opens a single custom AVFoundation capture screen with an in-app mode switch; Android delegates
  * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents. Because the
@@ -89,7 +62,7 @@ import java.io.File
  *
  * Generic file attachment (`onAttachFile`, [MeeshyIcons.AttachFile] tile) mirrors iOS's
  * `doc.fill` button: [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the
- * author pick ANY document from the system picker, dispatched through the **exact same** [dispatchPicked]
+ * author pick ANY document from the system picker, dispatched through the **exact same** [rememberFeedComposerIntake]
  * pipeline every other tile already uses — the TUS upload/error-handling logic is fully
  * MIME-agnostic (confirmed by reading `getAttachmentType`/`UploadProcessor.validateFile` gateway-side:
  * arbitrary MIME types are accepted and classified, never rejected outright), so no new upload path
@@ -117,7 +90,7 @@ import java.io.File
  * **Audio attachment** ([FeedVoiceRecorder], [MeeshyIcons.Mic] tile) mirrors iOS's
  * `mic.fill` button, but scoped to the smallest genuinely-unblocked slice rather than porting
  * iOS's dedicated full-screen `AudioPostComposerView` (its own record → on-device-transcribe →
- * pick-language → preview flow): a take recorded here dispatches through [dispatchItems] as one
+ * pick-language → preview flow): a take recorded here dispatches through [rememberFeedComposerIntake] as one
  * more `audio/mp4` attachment — the exact same MIME-agnostic upload pipeline the file tile
  * already proved handles non-media attachments correctly (renders as the generic file icon via
  * the already-tested [UploadedMedia.hasThumbnailPreview] `AUDIO` case). **Reuses, not
@@ -160,7 +133,6 @@ import java.io.File
  * and its upload orchestration, just without a dedicated ViewModel for this
  * sheet (matching this composer's own existing local-`remember` precedent).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedComposerSheet(
     onPublish: (FeedPostPublishRequest, FeedComposerDraft) -> Unit,
@@ -174,227 +146,135 @@ fun FeedComposerSheet(
     formatSlot: (@Composable () -> Unit)? = null,
     governingType: PostType? = null,
 ) {
-    var draft by remember { mutableStateOf(initialDraft) }
+    val state = remember { FeedComposerState(initialDraft) }
     // The host's format choice governs the type; the sheet's own reel toggle then has nothing to decide.
     LaunchedEffect(governingType) {
-        governingType?.let { draft = draft.withForcePlainPost(it == PostType.POST) }
+        governingType?.let { state.draft = state.draft.withForcePlainPost(it == PostType.POST) }
     }
-    var attachedMedia by remember { mutableStateOf(initialDraft.media) }
     // Autosave (#13417): every change reaches the durable draft, so a closed sheet or a killed
     // app reopens on what the author wrote.
-    LaunchedEffect(draft) { onDraftChange(draft) }
-    var isUploadingMedia by remember { mutableStateOf(false) }
+    LaunchedEffect(state.draft) { onDraftChange(state.draft) }
     var showLanguagePicker by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val mediaLimitMessage = pluralStringResource(R.plurals.feed_composer_media_limit, FeedComposerDraft.MAX_MEDIA, FeedComposerDraft.MAX_MEDIA)
-    val mediaUnusableMessage = stringResource(R.string.feed_composer_media_unusable)
-
-    // The shared upload tail every attach path (gallery/camera/file Uris, and now a
-    // directly-built voice-recording MediaUploadItem) converges on: upload, then fold the
-    // result into both the pure draft and the richer display-only previews. Extracted from
-    // dispatchPicked (refactor while extending, not duplicating).
-    suspend fun uploadAndAttach(items: List<MediaUploadItem>, previews: List<String?> = emptyList()) {
-        if (items.isEmpty()) return
-        isUploadingMedia = true
-        when (val result = onUploadMedia(items)) {
-            is NetworkResult.Success ->
-                if (result.data.isEmpty()) {
-                    onMediaError(mediaUnusableMessage)
-                } else {
-                    draft = draft.withMedia(result.data)
-                    attachedMedia = attachedMedia + result.data
-                }
-            is NetworkResult.Failure -> {
-                // Offline, refused, or a server fault: the media stays on the device (#13417) and
-                // a placeholder carries its upload cmid until the outbox uploads it.
-                val queue = onQueueMedia
-                if (queue == null) {
-                    onMediaError(result.error.message ?: mediaUnusableMessage)
-                } else {
-                    val pending = items.mapIndexed { index, item ->
-                        FeedPendingMedia.placeholder(queue(item), item, previews.getOrNull(index))
-                    }
-                    draft = draft.withMedia(pending)
-                    attachedMedia = attachedMedia + pending
-                }
-            }
-        }
-        isUploadingMedia = false
-    }
-
-    fun dispatchPicked(uris: List<Uri>) {
-        if (uris.isEmpty() || isUploadingMedia) return
-        val remaining = draft.remainingMediaSlots
-        if (remaining <= 0) {
-            onMediaError(mediaLimitMessage)
-            return
-        }
-        scope.launch {
-            val picked = withContext(Dispatchers.IO) {
-                uris.take(remaining).mapNotNull { uri -> context.contentResolver.readMediaUploadItem(uri)?.let { it to uri.toString() } }
-            }
-            uploadAndAttach(picked.map { it.first }, picked.map { it.second })
-        }
-    }
-
-    // Entry point for an already-built MediaUploadItem (the voice recorder hands off real
-    // bytes + an explicit "audio/mp4" MIME directly, unlike a picked Uri whose MIME/filename
-    // dispatchPicked reads via the ContentResolver) — same cap/error/upload tail as dispatchPicked,
-    // minus the Uri-reading step it doesn't need.
-    fun dispatchItems(items: List<MediaUploadItem>) {
-        if (items.isEmpty() || isUploadingMedia) return
-        if (draft.remainingMediaSlots <= 0) {
-            onMediaError(mediaLimitMessage)
-            return
-        }
-        scope.launch { uploadAndAttach(items) }
-    }
-
-    val pickSingle = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri)) }
-
-    val pickMultiple = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(FeedComposerDraft.MAX_MEDIA),
-    ) { uris: List<Uri> -> dispatchPicked(uris) }
-
-    val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-
-    fun launchMediaPicker() {
-        when (FeedMediaPicker.modeFor(draft.remainingMediaSlots)) {
-            FeedMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-            FeedMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-            FeedMediaPickMode.None -> onMediaError(mediaLimitMessage)
-        }
-    }
-
-    var retouch by remember { mutableStateOf<FeedRetouchPending?>(null) }
-    retouch?.let { pending ->
-        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { retouch = null })
-    }
-    var videoRetouch by remember { mutableStateOf<FeedVideoRetouchPending?>(null) }
-    videoRetouch?.let { pending ->
-        FeedVideoRetouchHost(
-            pending,
-            onDeliver = { item ->
-                videoRetouch = null
-                item?.let { dispatchItems(listOf(it)) } ?: onMediaError(mediaUnusableMessage)
-            },
-            onDismiss = {
-                pending.discard()
-                videoRetouch = null
-            },
-        )
-    }
-    val camera = rememberFeedCameraCapture(
-        onPhoto = { uri ->
-            scope.launch {
-                val item = withContext(Dispatchers.IO) { context.contentResolver.readMediaUploadItem(uri) }
-                val pending = item?.let { withContext(Dispatchers.Default) { FeedRetouchPending.of(it) } }
-                if (pending != null) retouch = pending else dispatchPicked(listOf(uri))
-            }
-        },
-        onVideo = { uri ->
-            scope.launch {
-                val name = withContext(Dispatchers.IO) { context.contentResolver.captureName(uri) }
-                val pending = FeedVideoRetouchPending.of(context, uri, name, System.currentTimeMillis())
-                if (pending != null) videoRetouch = pending else dispatchPicked(listOf(uri))
-            }
-        },
-    )
-
-    val cameraAccess = rememberPermissionFlow()
-    PermissionFlowHost(cameraAccess)
-
-    fun launchCapture(capture: () -> Unit) {
-        if (FeedMediaPicker.modeFor(draft.remainingMediaSlots) == FeedMediaPickMode.None) {
-            onMediaError(mediaLimitMessage)
-            return
-        }
-        scope.launch {
-            launchWithCameraAccess(
-                ensureAccess = { cameraAccess.ensure(PermissionNature.CAMERA) },
-                launch = capture,
-            )
-        }
-    }
-
-    // File attachment: unlike PickMultipleVisualMedia, OpenMultipleDocuments has no
-    // maxItems<=1 crash constraint, so there is no picker-mode routing to do — dispatchPicked
-    // already caps to draft.remainingMediaSlots and surfaces mediaLimitMessage on overflow.
-    val pickFiles = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris: List<Uri> -> dispatchPicked(uris) }
-
-    fun launchFilePicker() {
-        if (draft.isMediaFull) {
-            onMediaError(mediaLimitMessage)
-            return
-        }
-        pickFiles.launch(arrayOf("*/*"))
-    }
-
-    val voice = rememberFeedVoiceRecorder()
-
-    fun requestVoiceRecording() {
-        if (draft.isMediaFull) {
-            onMediaError(mediaLimitMessage)
-            return
-        }
-        voice.request()
-    }
-
-    fun finishVoiceRecording() {
-        voice.finish()?.let { take -> dispatchItems(listOf(take)) }
-    }
-
-    fun removeMedia(id: String) {
-        draft = draft.withoutMedia(id)
-        attachedMedia = attachedMedia.filterNot { it.id == id }
-        onRemoveMedia(id)
-    }
-
-    val locationUnavailableMessage = stringResource(R.string.feed_composer_location_unavailable)
-    val location = rememberFeedLocationCapture(
-        onPlace = { place -> draft = draft.withLocation(place) },
-        onUnavailable = { onMediaError(locationUnavailableMessage) },
-    )
+    val intake = rememberFeedComposerIntake(state, onUploadMedia, onMediaError, onQueueMedia)
+    val actions = rememberPostComposerActions(state, intake, onPublish, onDismiss, onRemoveMedia) { showLanguagePicker = true }
+    val draft = state.draft
+    val voice = intake.voice.session
 
     if (LocalOnComposerPlateau.current) {
         FeedComposerPlateau(
             draft = draft,
-            attachedMedia = attachedMedia,
-            isUploading = isUploadingMedia,
-            isCapturingLocation = location.isCapturing,
-            voice = voice.session,
+            attachedMedia = state.attachedMedia,
+            isUploading = state.isUploading,
+            isCapturingLocation = intake.location.isCapturing,
+            voice = voice,
             format = if (governingType == PostType.REEL) ComposerFormat.REEL else ComposerFormat.POST,
             formatSlot = formatSlot,
             showReelToggle = draft.qualifiesAsReel && governingType == null,
-            actions = PostPlateauActions(
-                onClose = onDismiss,
-                onPublish = { draft.publishRequest()?.let { request -> onPublish(request, draft) } },
-                onGallery = ::launchMediaPicker,
-                onCamera = { launchCapture(camera::photo) },
-                onVideo = { launchCapture(camera::video) },
-                onFile = ::launchFilePicker,
-                onVoice = ::requestVoiceRecording,
-                onCancelVoice = voice::cancel,
-                onFinishVoice = ::finishVoiceRecording,
-                onLocation = { if (draft.location != null) draft = draft.withoutLocation() else location.request() },
-                onLanguage = { showLanguagePicker = true },
-                onVisibility = { visibility -> draft = draft.withVisibility(visibility) },
-                onText = { value -> draft = draft.withText(value) },
-                onToggleReel = { draft = draft.withForcePlainPost(!draft.forcePlainPost) },
-                onRemoveMedia = ::removeMedia,
-                onAlt = { mediaId, text -> draft = draft.withAlt(mediaId, text) },
-                onRemoveLocation = { draft = draft.withoutLocation() },
-            ),
+            actions = actions,
         )
-    } else ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-    ) {
+    } else {
+        FeedComposerModal(
+            draft = draft,
+            attachedMedia = state.attachedMedia,
+            isUploading = state.isUploading,
+            isCapturingLocation = intake.location.isCapturing,
+            voice = voice,
+            formatSlot = formatSlot,
+            showReelToggle = draft.qualifiesAsReel && governingType == null,
+            actions = actions,
+        )
+    }
+
+    if (showLanguagePicker) {
+        ComposerLanguagePickerDialog(
+            currentCode = draft.language,
+            onSelect = { code ->
+                state.draft = state.draft.withLanguage(code)
+                showLanguagePicker = false
+            },
+            onDismiss = { showLanguagePicker = false },
+        )
+    }
+}
+
+/** What the post composer can do, handed over as one value — the plateau and the modal sheet share it. */
+internal class PostComposerActions(
+    val onClose: () -> Unit,
+    val onPublish: () -> Unit,
+    val onGallery: () -> Unit,
+    val onCamera: () -> Unit,
+    val onVideo: () -> Unit,
+    val onFile: () -> Unit,
+    val onVoice: () -> Unit,
+    val onCancelVoice: () -> Unit,
+    val onFinishVoice: () -> Unit,
+    val onLocation: () -> Unit,
+    val onLanguage: () -> Unit,
+    val onVisibility: (FeedPostVisibility) -> Unit,
+    val onText: (String) -> Unit,
+    val onToggleReel: () -> Unit,
+    val onRemoveMedia: (String) -> Unit,
+    val onAlt: (String, String) -> Unit,
+    val onRemoveLocation: () -> Unit,
+)
+
+/**
+ * Built ONCE per composer: every action reads the draft and the callbacks at call time, so typing never hands the
+ * plateau a new value — the corridors, the tool row and the socle skip while only the card follows the keystrokes.
+ */
+@Composable
+private fun rememberPostComposerActions(
+    state: FeedComposerState,
+    intake: FeedComposerIntake,
+    onPublish: (FeedPostPublishRequest, FeedComposerDraft) -> Unit,
+    onDismiss: () -> Unit,
+    onRemoveMedia: (String) -> Unit,
+    onLanguage: () -> Unit,
+): PostComposerActions {
+    val publish by rememberUpdatedState(onPublish)
+    val dismiss by rememberUpdatedState(onDismiss)
+    val removeMedia by rememberUpdatedState(onRemoveMedia)
+    val language by rememberUpdatedState(onLanguage)
+    return remember(state, intake) {
+        PostComposerActions(
+            onClose = { dismiss() },
+            onPublish = { state.draft.let { draft -> draft.publishRequest()?.let { request -> publish(request, draft) } } },
+            onGallery = intake.pickMedia,
+            onCamera = intake.capturePhoto,
+            onVideo = intake.captureVideo,
+            onFile = intake.pickFiles,
+            onVoice = intake.requestVoice,
+            onCancelVoice = intake.voice::cancel,
+            onFinishVoice = intake.finishVoice,
+            onLocation = intake.location::request,
+            onLanguage = { language() },
+            onVisibility = { visibility -> state.draft = state.draft.withVisibility(visibility) },
+            onText = { value -> state.draft = state.draft.withText(value) },
+            onToggleReel = { state.draft = state.draft.withForcePlainPost(!state.draft.forcePlainPost) },
+            onRemoveMedia = { id ->
+                state.detach(id)
+                removeMedia(id)
+            },
+            onAlt = { mediaId, text -> state.draft = state.draft.withAlt(mediaId, text) },
+            onRemoveLocation = { state.draft = state.draft.withoutLocation() },
+        )
+    }
+}
+
+/** The feed shortcut's presentation: a modal sheet (header, language, audience, body, attachments with their tiles). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedComposerModal(
+    draft: FeedComposerDraft,
+    attachedMedia: List<UploadedMedia>,
+    isUploading: Boolean,
+    isCapturingLocation: Boolean,
+    voice: VoiceRecordingSession,
+    formatSlot: (@Composable () -> Unit)?,
+    showReelToggle: Boolean,
+    actions: PostComposerActions,
+) {
+    ModalBottomSheet(onDismissRequest = actions.onClose, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -404,82 +284,45 @@ fun FeedComposerSheet(
         ) {
             formatSlot?.invoke()
             FeedComposerHeader(
-                canPublish = draft.canPublish && !isUploadingMedia && !voice.session.isRecording,
-                onClose = onDismiss,
-                onPublish = { draft.publishRequest()?.let { request -> onPublish(request, draft) } },
+                canPublish = draft.canPublish && !isUploading && !voice.isRecording,
+                onClose = actions.onClose,
+                onPublish = actions.onPublish,
             )
-
-            ComposerLanguagePill(
-                code = draft.language,
-                onClick = { showLanguagePicker = true },
-            )
-
-            FeedVisibilityRow(
-                selected = draft.visibility,
-                onSelect = { visibility -> draft = draft.withVisibility(visibility) },
-            )
-
-            if (draft.qualifiesAsReel && governingType == null) {
-                ReelTypeToggle(
-                    forcePlainPost = draft.forcePlainPost,
-                    onToggle = { draft = draft.withForcePlainPost(!draft.forcePlainPost) },
-                )
-            }
-
+            ComposerLanguagePill(code = draft.language, onClick = actions.onLanguage)
+            FeedVisibilityRow(selected = draft.visibility, onSelect = actions.onVisibility)
+            if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
             OutlinedTextField(
                 value = draft.text,
-                onValueChange = { value -> draft = draft.withText(value) },
+                onValueChange = actions.onText,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
                 minLines = 4,
             )
-
-            draft.location?.let { place ->
-                LocationAttachmentChip(
-                    place = place,
-                    onRemove = { draft = draft.withoutLocation() },
-                )
-            }
-
-            if (voice.session.isRecording) {
+            draft.location?.let { place -> LocationAttachmentChip(place = place, onRemove = actions.onRemoveLocation) }
+            if (voice.isRecording) {
                 VoiceRecordingPill(
-                    session = voice.session,
+                    session = voice,
                     accentColor = MeeshyPalette.Indigo500,
-                    onCancel = voice::cancel,
-                    onStop = ::finishVoiceRecording,
-                    onSend = ::finishVoiceRecording,
+                    onCancel = actions.onCancelVoice,
+                    onStop = actions.onFinishVoice,
+                    onSend = actions.onFinishVoice,
                 )
             } else {
                 MediaAttachmentsRow(
                     media = attachedMedia,
-                    isUploading = isUploadingMedia,
+                    isUploading = isUploading,
                     canAddMore = !draft.isMediaFull,
-                    isCapturingLocation = location.isCapturing,
-                    onAdd = ::launchMediaPicker,
-                    onCamera = { launchCapture(camera::photo) },
-                    onVideoCapture = { launchCapture(camera::video) },
-                    onAttachFile = ::launchFilePicker,
-                    onRecordVoice = ::requestVoiceRecording,
-                    onAddLocation = location::request,
-                    onRemove = ::removeMedia,
+                    isCapturingLocation = isCapturingLocation,
+                    onAdd = actions.onGallery,
+                    onCamera = actions.onCamera,
+                    onVideoCapture = actions.onVideo,
+                    onAttachFile = actions.onFile,
+                    onRecordVoice = actions.onVoice,
+                    onAddLocation = actions.onLocation,
+                    onRemove = actions.onRemoveMedia,
                 )
-                MediaAltTextFields(
-                    media = attachedMedia,
-                    altById = draft.mediaAlt,
-                    onAltChange = { mediaId, text -> draft = draft.withAlt(mediaId, text) },
-                )
+                MediaAltTextFields(media = attachedMedia, altById = draft.mediaAlt, onAltChange = actions.onAlt)
             }
         }
-    }
-
-    if (showLanguagePicker) {
-        ComposerLanguagePickerDialog(
-            currentCode = draft.language,
-            onSelect = { code ->
-                draft = draft.withLanguage(code)
-                showLanguagePicker = false
-            },
-            onDismiss = { showLanguagePicker = false },
-        )
     }
 }

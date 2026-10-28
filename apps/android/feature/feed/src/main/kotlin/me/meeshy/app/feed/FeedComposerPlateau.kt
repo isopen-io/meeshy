@@ -1,11 +1,17 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
@@ -19,53 +25,48 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.feed.R
-import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.auth.LanguageStepSelection
+import me.meeshy.sdk.model.composer.ComposerDocumentTool
 import me.meeshy.sdk.model.composer.ComposerFormat
-import me.meeshy.sdk.model.composer.ComposerRailDoor
 import me.meeshy.sdk.model.composer.ComposerRailPlan
 import me.meeshy.sdk.model.composer.PublicationControl
+import me.meeshy.sdk.model.composer.PublicationControlPlace
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailButton
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
-/** What the post plateau can do, handed over as one value so the composable stays readable. */
-internal class PostPlateauActions(
-    val onClose: () -> Unit,
-    val onPublish: () -> Unit,
-    val onGallery: () -> Unit,
-    val onCamera: () -> Unit,
-    val onVideo: () -> Unit,
-    val onFile: () -> Unit,
-    val onVoice: () -> Unit,
-    val onCancelVoice: () -> Unit,
-    val onFinishVoice: () -> Unit,
-    val onLocation: () -> Unit,
-    val onLanguage: () -> Unit,
-    val onVisibility: (FeedPostVisibility) -> Unit,
-    val onText: (String) -> Unit,
-    val onToggleReel: () -> Unit,
-    val onRemoveMedia: (String) -> Unit,
-    val onAlt: (String, String) -> Unit,
-    val onRemoveLocation: () -> Unit,
+/** The tools the post composer serves on its canonical row; the model keeps the iOS order and drops the rest. */
+private val ServedTools = ComposerDocumentTool.servedRow(
+    setOf(
+        ComposerDocumentTool.PHOTO, ComposerDocumentTool.CAMERA, ComposerDocumentTool.VIDEO,
+        ComposerDocumentTool.DOCUMENT, ComposerDocumentTool.PLACE, ComposerDocumentTool.MICROPHONE,
+    ),
 )
 
-/** The doors the post composer actually serves; the plan decides on which side each one stands. */
-private val ServedDoors = setOf(ComposerRailDoor.MEDIA, ComposerRailDoor.SOUND, ComposerRailDoor.PLACE)
-
 /**
- * The post / reel composer ON the plateau (iOS `MeeshyComposerHost` surfaces): what is PLACED (media, voice) in the left
- * corridor, what structures the PUBLICATION (location, language, audience) in the right one, the body and its
- * attachments on the card between them — nothing laid over the card. Publish stands in the socle.
+ * The post / reel composer ON the plateau — a post without a scene is the iOS DOCUMENT surface
+ * (`ComposerDocumentSurface` under `MeeshyComposerHost`): the cross and the format in the top corridor, the body on the
+ * card with its language at the FOOT of the text it qualifies, the attachments under it, the canonical row of tools
+ * (photo, camera, video, file, place, microphone) under the card, and the socle — audience, then Publish. No column:
+ * nothing is PLACED on a scene that does not exist, and nothing is laid over the card.
  */
 @Composable
 internal fun FeedComposerPlateau(
@@ -77,9 +78,9 @@ internal fun FeedComposerPlateau(
     format: ComposerFormat,
     formatSlot: (@Composable () -> Unit)?,
     showReelToggle: Boolean,
-    actions: PostPlateauActions,
+    actions: PostComposerActions,
 ) {
-    val plan = remember(format) { ComposerRailPlan.of(format, ServedDoors) }
+    val places = remember(format) { ComposerRailPlan.publicationControls(format) }
     val mediaEnabled = !draft.isMediaFull && !isUploading && !voice.isRecording
     ComposerPlateau(
         onDismiss = actions.onClose,
@@ -88,46 +89,34 @@ internal fun FeedComposerPlateau(
             formatSlot?.invoke()
             Spacer(Modifier.weight(1f))
         },
-        leadingRail = plan.leading.takeIf { it.isNotEmpty() }?.let { doors ->
-            {
-                doors.forEach { door ->
-                    when (door) {
-                        ComposerRailDoor.MEDIA -> MediaDoor(mediaEnabled, actions)
-                        ComposerRailDoor.SOUND -> ComposerRailButton(
-                            MeeshyIcons.Mic, stringResource(R.string.feed_composer_record_voice), actions.onVoice,
-                            enabled = mediaEnabled, active = voice.isRecording,
-                        )
-                        else -> Unit
-                    }
-                }
-            }
-        },
-        trailingRail = {
-            ComposerRailPlan.publicationControls(format).forEach { control ->
-                when (control) {
-                    PublicationControl.LANGUAGE -> LanguageDoor(draft.language, actions.onLanguage)
-                    PublicationControl.AUDIENCE -> AudienceDoor(draft.visibility, actions.onVisibility)
-                }
-            }
-            plan.trailing.forEach { door ->
-                if (door == ComposerRailDoor.PLACE) {
-                    ComposerRailButton(
-                        MeeshyIcons.LocationFilled, stringResource(R.string.feed_composer_add_location), actions.onLocation,
-                        enabled = !isCapturingLocation, active = draft.location != null,
-                    )
-                }
+        canonicalRow = {
+            ServedTools.forEach { tool ->
+                DocumentToolDoor(tool, enabled = if (tool.consumesMediaSlot) mediaEnabled else !isCapturingLocation, draft, voice, actions)
             }
         },
         socle = {
+            if (places[PublicationControl.AUDIENCE] == PublicationControlPlace.SOCLE) {
+                PlateauAudienceChip(draft.visibility, actions.onVisibility)
+            }
             MeeshyPrimaryButton(
                 text = stringResource(R.string.feed_composer_publish),
                 onClick = actions.onPublish,
                 enabled = draft.canPublish && !isUploading && !voice.isRecording,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
             )
         },
     ) {
-        PostCard(draft, attachedMedia, isUploading, isCapturingLocation, voice, showReelToggle, mediaEnabled, actions)
+        PostCard(
+            draft = draft,
+            attachedMedia = attachedMedia,
+            isUploading = isUploading,
+            isCapturingLocation = isCapturingLocation,
+            voice = voice,
+            showReelToggle = showReelToggle,
+            showsLanguage = places[PublicationControl.LANGUAGE] == PublicationControlPlace.CONTENT_FOOT,
+            canAddMore = mediaEnabled,
+            actions = actions,
+        )
     }
 }
 
@@ -139,14 +128,15 @@ private fun PostCard(
     isCapturingLocation: Boolean,
     voice: VoiceRecordingSession,
     showReelToggle: Boolean,
+    showsLanguage: Boolean,
     canAddMore: Boolean,
-    actions: PostPlateauActions,
+    actions: PostComposerActions,
 ) {
     Column(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         OutlinedTextField(
             value = draft.text,
@@ -155,6 +145,11 @@ private fun PostCard(
             placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
             minLines = 6,
         )
+        if (showsLanguage) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                ComposerLanguagePill(code = draft.language, onClick = actions.onLanguage)
+            }
+        }
         draft.location?.let { place -> LocationAttachmentChip(place = place, onRemove = actions.onRemoveLocation) }
         if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
         if (voice.isRecording) {
@@ -185,39 +180,61 @@ private fun PostCard(
     }
 }
 
-/** The media door: one glyph for every source (gallery, photo, video, file) — the author picks a MEDIA, not a path. */
+/** One tool of the canonical row, in the plateau's dark inks; the place and the microphone light up while set. */
 @Composable
-private fun MediaDoor(enabled: Boolean, actions: PostPlateauActions) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ComposerRailButton(MeeshyIcons.PhotoFilled, stringResource(R.string.feed_composer_attach_media), { open = true }, enabled = enabled, active = open)
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            SourceItem(R.string.feed_composer_attach_media) { open = false; actions.onGallery() }
-            SourceItem(R.string.feed_composer_take_photo) { open = false; actions.onCamera() }
-            SourceItem(R.string.feed_composer_take_video) { open = false; actions.onVideo() }
-            SourceItem(R.string.feed_composer_attach_file) { open = false; actions.onFile() }
-        }
+private fun DocumentToolDoor(
+    tool: ComposerDocumentTool,
+    enabled: Boolean,
+    draft: FeedComposerDraft,
+    voice: VoiceRecordingSession,
+    actions: PostComposerActions,
+) {
+    when (tool) {
+        ComposerDocumentTool.PHOTO ->
+            ComposerRailButton(MeeshyIcons.PhotoFilled, stringResource(R.string.feed_composer_attach_media), actions.onGallery, enabled = enabled)
+        ComposerDocumentTool.CAMERA ->
+            ComposerRailButton(MeeshyIcons.Camera, stringResource(R.string.feed_composer_take_photo), actions.onCamera, enabled = enabled)
+        ComposerDocumentTool.VIDEO ->
+            ComposerRailButton(MeeshyIcons.Video, stringResource(R.string.feed_composer_take_video), actions.onVideo, enabled = enabled)
+        ComposerDocumentTool.DOCUMENT ->
+            ComposerRailButton(MeeshyIcons.AttachFile, stringResource(R.string.feed_composer_attach_file), actions.onFile, enabled = enabled)
+        ComposerDocumentTool.PLACE -> ComposerRailButton(
+            MeeshyIcons.LocationFilled, stringResource(R.string.feed_composer_add_location), actions.onLocation,
+            enabled = enabled, active = draft.location != null,
+        )
+        ComposerDocumentTool.MICROPHONE -> ComposerRailButton(
+            MeeshyIcons.Mic, stringResource(R.string.feed_composer_record_voice), actions.onVoice,
+            enabled = enabled || voice.isRecording, active = voice.isRecording,
+        )
+        ComposerDocumentTool.EMOJI, ComposerDocumentTool.TEXT_SCENE, ComposerDocumentTool.MENTION -> Unit
     }
 }
 
+/** The socle's audience (iOS `audienceChip`): it CHOOSES — a capsule that opens the three audiences, in plateau inks. */
 @Composable
-private fun SourceItem(label: Int, onPick: () -> Unit) {
-    DropdownMenuItem(text = { Text(stringResource(label), style = MaterialTheme.typography.bodyLarge) }, onClick = onPick)
-}
-
-@Composable
-private fun LanguageDoor(code: String, onClick: () -> Unit) {
-    ComposerRailButton(
-        label = stringResource(R.string.feed_composer_language_button, LanguageStepSelection.selectedLanguageName(code)),
-        onClick = onClick,
-    ) { Text(text = ComposerLanguage.flag(code), style = MaterialTheme.typography.titleMedium) }
-}
-
-@Composable
-private fun AudienceDoor(selected: FeedPostVisibility, onSelect: (FeedPostVisibility) -> Unit) {
+private fun RowScope.PlateauAudienceChip(selected: FeedPostVisibility, onSelect: (FeedPostVisibility) -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val label = feedVisibilityLabel(selected)
+    val audience = stringResource(R.string.feed_composer_socle_audience)
     Box {
-        ComposerRailButton(audienceGlyph(selected), feedVisibilityLabel(selected), { open = true }, active = open)
+        Row(
+            modifier = Modifier
+                .heightIn(min = ComposerPlateauInk.HIT_TARGET_DP.dp)
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(ComposerPlateauInk.primary.copy(alpha = 0.12f))
+                .clickable(role = Role.Button) { open = true }
+                .clearAndSetSemantics {
+                    contentDescription = audience
+                    stateDescription = label
+                    role = Role.Button
+                }
+                .padding(horizontal = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(audienceGlyph(selected), contentDescription = null, tint = ComposerPlateauInk.primary)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = ComposerPlateauInk.primary)
+        }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             FeedPostVisibility.entries.forEach { visibility ->
                 DropdownMenuItem(
