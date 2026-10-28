@@ -11,6 +11,7 @@ import me.meeshy.app.R
 import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.PushActionReceiver
 import me.meeshy.sdk.model.push.PushNotificationActions
+import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
@@ -25,6 +26,7 @@ class MessageActionsEnricher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val session: SessionRepository,
     private val proof: LaunchIntentProof,
+    private val tokenStore: TokenStore,
 ) : NotificationEnricher {
     override val phase: EnrichmentPhase = EnrichmentPhase.ACTIONS
 
@@ -61,7 +63,7 @@ class MessageActionsEnricher @Inject constructor(
             .setData(Uri.parse("meeshy-push://${action.substringAfterLast('.').lowercase()}/${request.notificationId}"))
             .putExtra(PushActionReceiver.EXTRA_CONVERSATION_ID, conversationId)
             .putExtra(PushActionReceiver.EXTRA_NOTIFICATION_ID, request.notificationId)
-            .apply { session.currentUserId?.let { putExtra(PushActionReceiver.EXTRA_ACCOUNT_ID, it) } }
+            .apply { (session.currentUserId ?: tokenStore.userId)?.let { putExtra(PushActionReceiver.EXTRA_ACCOUNT_ID, it) } }
             .let(proof::stampAction)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
         return PendingIntent.getBroadcast(context, request.notificationId, intent, flags)
