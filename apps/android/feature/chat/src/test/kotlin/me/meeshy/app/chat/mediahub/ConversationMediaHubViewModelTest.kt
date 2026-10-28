@@ -6,6 +6,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -53,7 +54,7 @@ class ConversationMediaHubViewModelTest {
 
     @Test
     fun `l index vu se peint sans attendre le reseau`() = runTest(dispatcher) {
-        val index = ConversationMediaHubIndex().apply { merge("c1", ConversationMediaKind.VISUAL, listOf(photo("m1", 1)), complete = true) }
+        val index = ConversationMediaHubIndex().apply { runBlocking { merge("c1", ConversationMediaKind.VISUAL, listOf(photo("m1", 1)), complete = true, ticket = null) } }
         val repository = mockk<ConversationMediaHubRepository>()
         val vm = sut(repository, index)
 
@@ -151,7 +152,7 @@ class ConversationMediaHubViewModelTest {
             createdAt = "2026-10-01T10:09:00.000Z",
             attachments = listOf(ApiMessageAttachment(id = "a9", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/2026/10/p.png", thumbnailUrl = "/api/v1/attachments/file/2026/10/p_t.jpg")),
         )
-        val index = ConversationMediaHubIndex().apply { merge("c1", ConversationMediaKind.VISUAL, listOf(relative), complete = true) }
+        val index = ConversationMediaHubIndex().apply { runBlocking { merge("c1", ConversationMediaKind.VISUAL, listOf(relative), complete = true, ticket = null) } }
         val vm = sut(mockk(), index)
 
         vm.start("c1")
@@ -173,7 +174,7 @@ class ConversationMediaHubViewModelTest {
             ephemeralDuration = 30,
             attachments = listOf(ApiMessageAttachment(id = "a8", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/2026/10/f.png")),
         )
-        val index = ConversationMediaHubIndex().apply { merge("c1", ConversationMediaKind.VISUAL, listOf(flame), complete = true) }
+        val index = ConversationMediaHubIndex().apply { runBlocking { merge("c1", ConversationMediaKind.VISUAL, listOf(flame), complete = true, ticket = null) } }
         val vm = sut(mockk(), index)
 
         vm.start("c1")

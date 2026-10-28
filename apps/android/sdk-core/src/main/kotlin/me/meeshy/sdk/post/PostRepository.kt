@@ -55,7 +55,9 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -76,6 +78,7 @@ class PostRepository @Inject constructor(
     private val translationApi: TranslationApi,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock = SystemCacheClock,
+    private val fence: AccountFence? = null,
 ) : PerAccountCache {
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
@@ -312,15 +315,18 @@ class PostRepository @Inject constructor(
         val cursor = feedCursor
         if (!_feedHasMore.value || cursor == null) return false
         val current = _feedCache.value ?: return false
+        val ticket = fence?.currentTicket()
         return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
             is NetworkResult.Success -> {
                 val response = result.data
                 val page = response.data
                 if (!response.success || page == null) return false
                 val existingIds = current.mapTo(HashSet()) { it.id }
-                _feedCache.value = current + page.filter { it.id !in existingIds }
-                feedCursor = response.pagination?.nextCursor
-                _feedHasMore.value = response.pagination?.hasMore ?: false
+                fence.commitOrWrite(ticket) {
+                    _feedCache.value = current + page.filter { it.id !in existingIds }
+                    feedCursor = response.pagination?.nextCursor
+                    _feedHasMore.value = response.pagination?.hasMore ?: false
+                } ?: return false
                 _feedHasMore.value
             }
             is NetworkResult.Failure -> false
@@ -328,6 +334,7 @@ class PostRepository @Inject constructor(
     }
 
     private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
+        val ticket = fence?.currentTicket()
         try {
             when (val result = rawApiCall { postApi.getFeed(null, FEED_PAGE_SIZE) }) {
                 is NetworkResult.Success -> {
@@ -337,10 +344,12 @@ class PostRepository @Inject constructor(
                         onError(Exception(response.error ?: response.message ?: "Unknown error"))
                         return
                     }
-                    _feedCache.value = page
-                    _feedSyncedAt.value = clock.nowMillis()
-                    feedCursor = response.pagination?.nextCursor
-                    _feedHasMore.value = response.pagination?.hasMore ?: false
+                    fence.commitOrWrite(ticket) {
+                        _feedCache.value = page
+                        _feedSyncedAt.value = clock.nowMillis()
+                        feedCursor = response.pagination?.nextCursor
+                        _feedHasMore.value = response.pagination?.hasMore ?: false
+                    }
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }
