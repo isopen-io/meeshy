@@ -235,6 +235,12 @@
     <string name="story_composer_redo">Rétablir</string>
     <string name="story_composer_soundLibrary">Bibliothèque</string>
     <string name="story_composer_undo">Annuler</string>
+    <string name="story_language_close">Fermer</string>
+    <string name="story_language_original">Original</string>
+    <string name="story_language_original_hint">Chaque texte dans sa langue</string>
+    <string name="story_language_retranslate">Retraduire</string>
+    <string name="story_language_title">Langues</string>
+    <string name="story_language_translate">Traduire</string>
     <string name="story_media_accessibility">Accessibilité</string>
     <string name="story_media_alt_a11yHint">Décrit ce média aux personnes qui utilisent VoiceOver.</string>
     <string name="story_media_alt_label">Texte alternatif</string>

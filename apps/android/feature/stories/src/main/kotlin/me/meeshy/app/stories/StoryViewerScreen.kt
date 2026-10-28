@@ -179,7 +179,7 @@ fun StoryViewerScreen(
     val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
     val cover = StoryViewerCover(
-        sheet = showViewers || showComments || showSendTo,
+        sheet = showViewers || showComments || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
         menu = showOptions,
         dialog = showReportDialog || showDeleteDialog,
@@ -655,7 +655,7 @@ fun StoryViewerScreen(
             }
         }
 
-        val languageBadge = slide?.languageCode ?: state.languageOverride
+        val languageBadge = state.activeLanguageCode
         if (slide != null && !state.isDismissed && !state.isPaused) {
             StoryActionRail(
                 plan = StoryRailPlan.resolve(
@@ -728,6 +728,10 @@ fun StoryViewerScreen(
                 activeCode = languageBadge,
                 highlightedIndex = if (scrubKind == StoryScrubKind.Languages) hoveredIndex else null,
                 onTileBounds = { index, rect -> languageTileBounds[index] = rect },
+                onOpenAll = {
+                    closeRailBars()
+                    viewModel.openLanguageExplorer()
+                },
             )
         }
 
@@ -772,6 +776,15 @@ fun StoryViewerScreen(
                 )
             }
         }
+    }
+
+    state.languageExplorer?.let { explorer ->
+        StoryLanguageSheet(
+            explorer = explorer,
+            onSelectLanguage = viewModel::selectLanguage,
+            onTranslate = viewModel::requestStoryTranslation,
+            onDismiss = viewModel::closeLanguageExplorer,
+        )
     }
 
     val viewersStoryId = state.currentStoryId

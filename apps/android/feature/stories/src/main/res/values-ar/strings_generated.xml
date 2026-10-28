@@ -241,6 +241,12 @@
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
+    <string name="story_language_close">إغلاق</string>
+    <string name="story_language_original">الأصل</string>
+    <string name="story_language_original_hint">كل نص بلغته</string>
+    <string name="story_language_retranslate">إعادة الترجمة</string>
+    <string name="story_language_title">اللغات</string>
+    <string name="story_language_translate">ترجمة</string>
     <string name="story_media_accessibility">إمكانية الوصول</string>
     <string name="story_media_alt_a11yHint">يصف هذا الوسائط للأشخاص الذين يستخدمون VoiceOver.</string>
     <string name="story_media_alt_label">النص البديل</string>

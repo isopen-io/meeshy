@@ -76,7 +76,6 @@
     <string name="feed_translated">Traducción disponible</string>
     <string name="feed_translation_available">Traducciones disponibles</string>
     <string name="feed_translation_close">Cerrar</string>
-    <string name="feed_translation_confidence_a11y">Confianza de traducción %s</string>
     <string name="feed_translation_original">Original</string>
     <string name="feed_translation_other_languages">Otros idiomas</string>
     <string name="feed_translation_title">Idiomas</string>

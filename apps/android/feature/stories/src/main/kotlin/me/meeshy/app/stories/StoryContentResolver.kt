@@ -37,6 +37,9 @@ object StoryContentResolver {
         overrideLanguage: String? = null,
     ): ResolvedStoryText {
         val original = item.content.orEmpty()
+        if (StoryLanguageOverride.isOriginal(overrideLanguage)) {
+            return ResolvedStoryText(content = original, isTranslated = false, languageCode = null)
+        }
         val candidates = item.translations.orEmpty().map {
             StoryTranslationLike(targetLanguage = it.language, translatedContent = it.content)
         }

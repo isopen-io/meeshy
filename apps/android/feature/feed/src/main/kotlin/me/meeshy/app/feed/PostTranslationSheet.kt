@@ -190,12 +190,10 @@ private fun TranslationRow(row: PostLanguageRow, onClick: () -> Unit) {
             )
         }
         row.confidencePercent?.let { percent ->
-            val spoken = stringResource(R.string.feed_translation_confidence_a11y, "$percent%")
             Text(
                 text = "$percent%",
                 style = MaterialTheme.typography.labelMedium,
                 color = MeeshyTheme.tokens.textMuted,
-                modifier = Modifier.semantics { contentDescription = spoken },
             )
         }
         if (row.isActive) ActiveMark()
