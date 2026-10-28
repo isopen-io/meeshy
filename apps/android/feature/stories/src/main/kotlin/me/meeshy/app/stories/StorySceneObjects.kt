@@ -67,15 +67,18 @@ object StorySceneObjectsProjection {
     const val GENERIC_CREDIT: String = "♫ —"
 
     fun stickers(effects: StoryEffects?, mediaUrlOf: (String) -> String?): List<StoryStickerView> =
-        effects?.stickerObjects.orEmpty()
-            .sortedBy { it.zIndex }
-            .mapNotNull { it.toView(mediaUrlOf) }
+        SceneObjectNumbers.capped(
+            effects?.stickerObjects.orEmpty()
+                .sortedBy { it.zIndex }
+                .mapNotNull { it.toView(mediaUrlOf) },
+        )
 
     fun audioChips(effects: StoryEffects?): List<StoryAudioChipView> =
         effects?.audioPlayerObjects.orEmpty()
             .filterNot { it.isBackground == true }
             .sortedBy { it.zIndex ?: 0 }
             .map { it.toChip() }
+            .let(SceneObjectNumbers::capped)
 
     private fun StorySticker.toView(mediaUrlOf: (String) -> String?): StoryStickerView? {
         val image = postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf)

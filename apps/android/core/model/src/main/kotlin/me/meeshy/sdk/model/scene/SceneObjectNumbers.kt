@@ -25,6 +25,20 @@ object SceneObjectNumbers {
     /** Un sticker ne couvre pas plus de quatre largeurs de scène. */
     const val MAX_STICKER_SIDE_FRACTION: Double = 4.0
 
+    /** Les bornes du ratio d'un média que la passerelle accepte (`StoryMediaObjectSchema.aspectRatio`). */
+    const val MIN_ASPECT_RATIO: Double = 0.05
+    const val MAX_ASPECT_RATIO: Double = 20.0
+
+    /**
+     * Objets d'une même famille (textes, médias, stickers, puces) et keyframes d'un objet qu'une slide lit au plus : le plafond
+     * d'un document v3 (`CanvasV3Schema.objects`, 60), que la forme v1 (32 par famille) ne dépasse pas. Au-delà,
+     * chaque objet de plus recompose à chaque image du lecteur : des milliers d'objets le gèlent.
+     */
+    const val MAX_OBJECTS_PER_FAMILY: Int = 60
+
+    /** Deux fois le plafond d'un texte de story à la passerelle (`STORY_TEXT_MAX`, 2000) : un texte plus long ne vient que d'un tiers. */
+    const val MAX_TEXT_CHARS: Int = 4000
+
     private const val CENTER: Double = 0.5
     private const val FULL_TURN: Double = 360.0
     private const val DESIGN_CANVAS_WIDTH: Double = 1080.0
@@ -41,6 +55,23 @@ object SceneObjectNumbers {
 
     /** Un départ, une durée, un fondu : fini et positif ou nul (zéro : non borné, comme l'absence du champ). */
     fun seconds(value: Double): Double = if (value.isFinite() && value > 0.0) value else 0.0
+
+    fun aspectRatio(value: Double): Double =
+        if (value.isFinite() && value > 0.0) value.coerceIn(MIN_ASPECT_RATIO, MAX_ASPECT_RATIO) else 1.0
+
+    /** Une épaisseur de trait finie, positive ou nulle, au plus la largeur de la scène de référence. */
+    fun strokeWidth(value: Double): Double =
+        if (value.isFinite() && value > 0.0) value.coerceAtMost(DESIGN_CANVAS_WIDTH) else 0.0
+
+    fun <T> capped(objects: List<T>): List<T> =
+        if (objects.size <= MAX_OBJECTS_PER_FAMILY) objects else objects.take(MAX_OBJECTS_PER_FAMILY)
+
+    /** Un texte coupé à [MAX_TEXT_CHARS], sans jamais séparer une paire de substitution. */
+    fun text(value: String): String {
+        if (value.length <= MAX_TEXT_CHARS) return value
+        val cut = value.take(MAX_TEXT_CHARS)
+        return if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+    }
 
     fun stickerSideFraction(baseSize: Double, scale: Double): Double {
         val base = if (baseSize.isFinite()) baseSize.coerceAtLeast(0.0) else 0.0

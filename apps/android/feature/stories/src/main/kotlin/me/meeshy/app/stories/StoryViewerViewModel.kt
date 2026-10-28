@@ -39,6 +39,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.story.StoryRepository
@@ -703,8 +704,9 @@ class StoryViewerViewModel @Inject constructor(
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
             .mapNotNull { it.toForegroundMediaView(clipTransitions) }
+            .let(SceneObjectNumbers::capped)
         val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
-        val textObjects = storyEffects?.textObjects.orEmpty()
+        val textObjects = SceneObjectNumbers.capped(storyEffects?.textObjects.orEmpty())
             .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         // UNE lecture par piste, deux faits chacune (#5129).
         val backgroundTrack = resolveAudioTrack(preferBackground = true)
@@ -733,7 +735,9 @@ class StoryViewerViewModel @Inject constructor(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
-            strokes = storyEffects?.drawingStrokes.orEmpty(),
+            // Un dessin compte légitimement des centaines de traits : seule leur épaisseur est bornée.
+            strokes = storyEffects?.drawingStrokes.orEmpty()
+                .map { it.copy(width = SceneObjectNumbers.strokeWidth(it.width)) },
             lookRecipe = SceneLookRecipe.forEffects(storyEffects),
             stickers = StorySceneObjectsProjection.stickers(storyEffects) { mediaId ->
                 media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, config.apiBaseUrl) }
@@ -827,7 +831,7 @@ class StoryViewerViewModel @Inject constructor(
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
             sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
-        )
+        ).bounded()
     }
 
     /**

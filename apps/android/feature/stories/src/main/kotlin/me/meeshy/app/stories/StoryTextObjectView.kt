@@ -179,7 +179,7 @@ object StoryTextObjectProjection {
     ): StoryTextObjectView =
         StoryTextObjectView(
             id = textObject.id,
-            text = resolveText(textObject, preferredLanguages, overrideLanguage),
+            text = SceneObjectNumbers.text(resolveText(textObject, preferredLanguages, overrideLanguage)),
             x = SceneObjectNumbers.position(textObject.x),
             y = SceneObjectNumbers.position(textObject.y),
             scale = textObject.scale,
@@ -191,7 +191,7 @@ object StoryTextObjectProjection {
             duration = SceneObjectNumbers.seconds(textObject.duration ?: 0.0),
             fadeIn = SceneObjectNumbers.seconds(textObject.fadeIn ?: 0.0),
             fadeOut = SceneObjectNumbers.seconds(textObject.fadeOut ?: 0.0),
-            keyframes = textObject.keyframes.orEmpty().map(SceneObjectNumbers::keyframe),
+            keyframes = SceneObjectNumbers.capped(textObject.keyframes.orEmpty()).map(SceneObjectNumbers::keyframe),
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
             effect = StoryTextEffect.fromWire(textObject.textEffect),
             style = StoryTextStyle.fromWire(textObject.textStyle),
