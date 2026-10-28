@@ -1,7 +1,6 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.StoryBackgroundValue
 import org.junit.Test
 
 class ComposerSlideRailTest {
@@ -21,14 +20,5 @@ class ComposerSlideRailTest {
     fun `the steps mirror in a right to left layout and nothing moves when no tile is carried`() {
         assertThat(slotShift(index = 2, dragFrom = 1, target = 2, slotPx = 33f, rtl = true)).isEqualTo(33f)
         assertThat(slotShift(index = 2, dragFrom = -1, target = -1, slotPx = 33f, rtl = false)).isEqualTo(0f)
-    }
-
-    @Test
-    fun `a scene asks before it is deleted only when it holds something`() {
-        assertThat(StorySlide(id = "a").holdsMatter()).isFalse()
-        assertThat(StorySlide(id = "a", text = "  ").holdsMatter()).isFalse()
-        assertThat(StorySlide(id = "a", text = "Hi").holdsMatter()).isTrue()
-        assertThat(StorySlide(id = "a", mediaIds = listOf("m")).holdsMatter()).isTrue()
-        assertThat(StorySlide(id = "a", background = StoryBackgroundValue.Hex("#FF0000")).holdsMatter()).isTrue()
     }
 }

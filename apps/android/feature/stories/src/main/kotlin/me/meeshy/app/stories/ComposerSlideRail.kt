@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
@@ -58,11 +56,11 @@ import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerHeaderTiles
 import me.meeshy.sdk.model.composer.ComposerSceneAddition
-import me.meeshy.sdk.model.composer.ComposerSlideDeletion
 import me.meeshy.sdk.model.composer.ComposerSlideDrag
 import me.meeshy.ui.component.composer.SlideRailGeometry
 import me.meeshy.sdk.model.composer.SlideThumbEditAffordance
 import me.meeshy.ui.component.composer.SlideRailTile
+import me.meeshy.ui.component.composer.rememberConfirmedSlideDeletion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
@@ -73,8 +71,8 @@ private const val DRAG_LIFT_SCALE = 1.1f
 /**
  * One tile per scene (iOS `ComposerSlideRail`): the thumbnail of its scene, the current one ringed in the brand colour, a
  * tap to switch, the bin on the current tile only. A long press lifts a tile (with a haptic) and a horizontal drag carries it
- * across the others, which step aside; each slot crossed ticks, the drop commits. Deleting a scene that holds something asks
- * first. A long press released without crossing a slot opens the tile's menu — Duplicate, Delete — where iOS puts them
+ * across the others, which step aside; each slot crossed ticks, the drop commits. Deleting a scene always asks first
+ * ([rememberConfirmedSlideDeletion]). A long press released without crossing a slot opens the tile's menu — Duplicate, Delete — where iOS puts them
  * (the context menu of its slide strip). Out of cap, (+) and duplicate SAY why they do nothing — a greyed button explains
  * nothing ([rememberGuardedAddition]). The ten tiles fit the narrowest phone, so the row never scrolls and never competes
  * with the drag.
@@ -104,7 +102,7 @@ internal fun ComposerSlideRail(
     var dragFrom by remember { mutableIntStateOf(NO_DRAG) }
     var dragPx by remember { mutableFloatStateOf(0f) }
     var lastTarget by remember { mutableIntStateOf(NO_DRAG) }
-    var pendingRemoval by remember { mutableStateOf<String?>(null) }
+    val requestRemoval = rememberConfirmedSlideDeletion(onRemove)
     var menuFor by remember { mutableStateOf<String?>(null) }
     val target = if (dragFrom == NO_DRAG) NO_DRAG else SlideReorderResolver.targetIndex(dragFrom, dragPx * if (rtl) -1f else 1f, slotPx, deck.size)
     LaunchedEffect(target) {
@@ -119,10 +117,6 @@ internal fun ComposerSlideRail(
     ) {
         deck.slides.forEachIndexed { index, slide ->
             val shift = slotShift(index, dragFrom, target, slotPx, rtl)
-            val requestRemoval: (String) -> Unit = { id ->
-                val holds = deck.slides.firstOrNull { it.id == id }?.holdsMatter() == true
-                if (ComposerSlideDeletion.needsConfirmation(holds)) pendingRemoval = id else onRemove(id)
-            }
             SlideTile(
                 slide = slide,
                 index = index,
@@ -154,19 +148,6 @@ internal fun ComposerSlideRail(
             Icon(MeeshyIcons.Add, contentDescription = stringResource(R.string.stories_composer_add_slide))
         }
     }
-    pendingRemoval?.let { id ->
-        AlertDialog(
-            onDismissRequest = { pendingRemoval = null },
-            title = { Text(stringResource(R.string.stories_composer_remove_slide_title)) },
-            text = { Text(stringResource(R.string.stories_composer_remove_slide_message)) },
-            confirmButton = {
-                TextButton(onClick = { pendingRemoval = null; onRemove(id) }) {
-                    Text(stringResource(R.string.stories_composer_remove_slide_confirm))
-                }
-            },
-            dismissButton = { TextButton(onClick = { pendingRemoval = null }) { Text(stringResource(R.string.stories_cancel)) } },
-        )
-    }
 }
 
 private const val NO_DRAG = -1
@@ -181,11 +162,6 @@ internal fun slotShift(index: Int, dragFrom: Int, target: Int, slotPx: Float, rt
         else -> 0f
     }
 }
-
-/** A scene that holds something the author would regret losing: content, media, sound, or a chosen backdrop. */
-internal fun StorySlide.holdsMatter(): Boolean =
-    text.isNotBlank() || mediaIds.isNotEmpty() || elements.any { it.isPublishable } || stickers.any { it.isPublishable } ||
-        strokes.isNotEmpty() || audio.isNotEmpty() || background != null
 
 @Composable
 private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?, accentHex: String, tileWidth: Dp, canvasWidthPx: Float): SlideThumbnailSpec {
