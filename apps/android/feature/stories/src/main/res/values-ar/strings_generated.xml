@@ -60,6 +60,7 @@
     <string name="composer_object_editor_effects_grain">حبيبات</string>
     <string name="composer_publish_as_story">نشر القصة</string>
     <string name="composer_publish_as_storyAndReel">نشر القصة والريل</string>
+    <string name="composer_rail_object_exit">مغادرة العنصر</string>
     <string name="composer_socle_audience">الجمهور</string>
     <string name="composer_socle_publish">نشر</string>
     <string name="composer_sound_background_a11y">صوت الخلفية</string>

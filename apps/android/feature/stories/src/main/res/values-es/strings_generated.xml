@@ -60,6 +60,7 @@
     <string name="composer_object_editor_effects_grain">Grano</string>
     <string name="composer_publish_as_story">Publicar historia</string>
     <string name="composer_publish_as_storyAndReel">Publicar historia y reel</string>
+    <string name="composer_rail_object_exit">Salir del objeto</string>
     <string name="composer_socle_audience">Audiencia</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Sonido de fondo</string>

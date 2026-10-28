@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.composer.ComposerRailDoor
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
+import me.meeshy.ui.component.composer.ComposerRailBadge
 import me.meeshy.ui.component.composer.ComposerRailButton
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
@@ -38,9 +39,11 @@ import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * The story composer ON the plateau of the one host (iOS `MeeshyComposerHost` + `ComposerSceneSurface`): the dark tint,
- * the cross and the format in the top corridor, the controllers (history, a new slide) in the trailing column, the
- * socle — audience, then Publish — under the card. Nothing is laid on the scene: the card holds the strip, the stage
- * and the tool band, and a pull down that the scene does not absorb closes like the cross (the draft autosaves).
+ * the cross, the format, a new slide and the export menu in the top corridor (iOS `sceneAddSlideButton` is a top-bar
+ * accessory); the doors — each with the counter of what it already carries — in the leading column; in the trailing
+ * column the selected object's controllers from the top, closed by its (x), and the foot (timeline, undo, redo) at the
+ * thumb; the socle — audience, then Publish — under the card. Nothing is laid on the scene: the card holds the strip, the stage
+ * and the open tool's panel, and a pull down that the scene does not absorb closes like the cross (the draft autosaves).
  */
 @Composable
 internal fun StoryComposerPlateau(
@@ -60,6 +63,12 @@ internal fun StoryComposerPlateau(
                 ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.stories_composer_cancel), onClose)
                 titleContent?.invoke()
                 Spacer(Modifier.weight(1f))
+                ComposerRailButton(
+                    MeeshyIcons.Add,
+                    stringResource(R.string.stories_composer_add_slide),
+                    viewModel::onAddSlide,
+                    enabled = state.deck.canAddSlide,
+                )
                 ComposerOverflowMenu(
                     entries = sceneExport.entries,
                     enabled = !sceneExport.isExporting && !state.isPublishing,
@@ -68,14 +77,18 @@ internal fun StoryComposerPlateau(
             }
         },
         leadingRail = {
+            val matter = state.plateauDoorMatter
             StoryPlateauDoors.leading.forEach { door ->
                 val tool = StoryPlateauDoors.toolFor(door)
+                val count = StoryPlateauDoors.badge(door, matter)
                 ComposerRailButton(
                     icon = door.glyph(),
                     label = stringResource(door.labelRes()),
                     onClick = { tool?.let(viewModel::onBandToolTap) ?: onOpenStickers() },
                     enabled = !state.isDrawingActive,
                     active = tool != null && state.band.activeTool == tool,
+                    badge = ComposerRailBadge(count, stringResource(R.string.story_composer_fab_badge, count))
+                        .takeIf { count > 0 },
                 )
             }
         },
@@ -88,15 +101,12 @@ internal fun StoryComposerPlateau(
                         onClick = { viewModel.onObjectController(controllers.ref, action) },
                     )
                 }
+                ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.composer_rail_object_exit), {
+                    viewModel.onDeselectTextElement()
+                    viewModel.onDeselectSticker()
+                })
             }
-            ComposerRailButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), viewModel::onUndo, enabled = state.canUndo)
-            ComposerRailButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), viewModel::onRedo, enabled = state.canRedo)
-            ComposerRailButton(
-                MeeshyIcons.Add,
-                stringResource(R.string.stories_composer_add_slide),
-                viewModel::onAddSlide,
-                enabled = state.deck.canAddSlide,
-            )
+            Spacer(Modifier.weight(1f))
             ComposerRailButton(
                 icon = MeeshyIcons.ScheduleFilled,
                 label = stringResource(R.string.story_tool_timeline),
@@ -104,6 +114,8 @@ internal fun StoryComposerPlateau(
                 enabled = !state.isDrawingActive,
                 active = state.band.activeTool == StoryToolMode.TIMELINE,
             )
+            ComposerRailButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), viewModel::onUndo, enabled = state.canUndo)
+            ComposerRailButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), viewModel::onRedo, enabled = state.canRedo)
         },
         socle = {
             PlateauAudienceChip(state.draft.visibility, state.draft.visibilityUserIds.size, onOpenAudience)
@@ -158,7 +170,7 @@ private fun ComposerRailDoor.glyph() = when (this) {
     ComposerRailDoor.SOUND -> MeeshyIcons.MusicNote
     ComposerRailDoor.TEXT -> MeeshyIcons.TextFields
     ComposerRailDoor.BACKGROUND -> MeeshyIcons.Palette
-    ComposerRailDoor.DRAWING -> MeeshyIcons.EditFilled
+    ComposerRailDoor.DRAWING -> MeeshyIcons.Scribble
     else -> MeeshyIcons.EmojiFilled
 }
 

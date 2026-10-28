@@ -60,6 +60,7 @@
     <string name="composer_object_editor_effects_grain">Granulação</string>
     <string name="composer_publish_as_story">Publicar story</string>
     <string name="composer_publish_as_storyAndReel">Publicar story e reel</string>
+    <string name="composer_rail_object_exit">Sair do objeto</string>
     <string name="composer_socle_audience">Público</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Som de fundo</string>

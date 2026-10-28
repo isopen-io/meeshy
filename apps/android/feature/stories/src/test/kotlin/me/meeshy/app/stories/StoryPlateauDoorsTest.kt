@@ -28,4 +28,25 @@ class StoryPlateauDoorsTest {
         assertThat(StoryPlateauDoors.toolFor(ComposerRailDoor.DRAWING)).isEqualTo(StoryToolMode.DRAWING)
         assertThat(StoryPlateauDoors.toolFor(ComposerRailDoor.STICKER)).isNull()
     }
+
+    @Test
+    fun `each door counts what the slide already carries, and the background door carries nothing`() {
+        val matter = StoryPlateauDoors.Matter(media = 2, sounds = 1, texts = 3, strokes = 4, stickers = 5)
+        assertThat(StoryPlateauDoors.leading.associateWith { StoryPlateauDoors.badge(it, matter) }).containsExactly(
+            ComposerRailDoor.MEDIA, 2, ComposerRailDoor.SOUND, 1, ComposerRailDoor.TEXT, 3,
+            ComposerRailDoor.BACKGROUND, 0, ComposerRailDoor.DRAWING, 4, ComposerRailDoor.STICKER, 5,
+        )
+    }
+
+    @Test
+    fun `an empty slide shows no counter on any door`() {
+        val empty = StoryComposerUiState().plateauDoorMatter
+        assertThat(StoryPlateauDoors.leading.map { StoryPlateauDoors.badge(it, empty) }.distinct()).containsExactly(0)
+    }
+
+    @Test
+    fun `a sticker laid on the slide is counted on the sticker door`() {
+        val state = StoryComposerStickerReducer.added(StoryComposerUiState(), "😀", "s1")
+        assertThat(StoryPlateauDoors.badge(ComposerRailDoor.STICKER, state.plateauDoorMatter)).isEqualTo(1)
+    }
 }
