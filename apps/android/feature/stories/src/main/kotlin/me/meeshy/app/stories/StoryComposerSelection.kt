@@ -82,10 +82,13 @@ internal object StoryComposerSelectionReducer {
 
     fun sceneEffectClosed(state: StoryComposerUiState): StoryComposerUiState = state.copy(openSceneEffect = null)
 
-    /** Le Cadre et le carrousel d'effets se partagent le pied : ouvrir l'un referme l'autre. */
-    fun frameToggled(state: StoryComposerUiState): StoryComposerUiState =
-        if (state.selectedSlideSceneBackground == null) state
-        else state.copy(isFrameOpen = !state.frameOpen, openSceneEffect = null, band = state.band.closeAnyPanel())
+    /** Le Cadre et le carrousel d'effets se partagent le pied : ouvrir l'un referme l'autre ; l'ouvrir lâche l'objet touché, sinon le toucher ne ferait rien. */
+    fun frameToggled(state: StoryComposerUiState): StoryComposerUiState {
+        if (state.selectedSlideSceneBackground == null) return state
+        val opening = !state.frameOpen
+        val base = if (opening) state.withoutObjectSelection() else state
+        return base.copy(isFrameOpen = opening, openSceneEffect = null, band = state.band.closeAnyPanel())
+    }
 
     /** Le départ du son avance d'un cran, comme celui d'un texte ou d'un sticker ; la durée est intacte. */
     fun soundStartCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
