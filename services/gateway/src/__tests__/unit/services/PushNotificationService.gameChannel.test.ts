@@ -127,7 +127,7 @@ describe('PushNotificationService — the Android Game channel (#10266)', () => 
   });
 
   it('a game banner reaches the Game channel only on the shell token, which creates it (#10266)', async () => {
-    const channels = await sendGameBanner([{ id: 'tok', token: 'fcm-shell', bundleId: 'me.meeshy.app' }]);
+    const channels = await sendGameBanner([{ id: 'tok', token: 'fcm-shell', bundleId: 'me.meeshy.webapp' }]);
 
     expect(channels).toEqual(['meeshy_game']);
   });
@@ -136,8 +136,9 @@ describe('PushNotificationService — the Android Game channel (#10266)', () => 
     const channels = await sendGameBanner([
       { id: 'tok', token: 'fcm-native', bundleId: 'me.meeshy.android' },
       { id: 'tok-2', token: 'fcm-unknown', bundleId: null },
+      { id: 'tok-3', token: 'fcm-taken-over', bundleId: 'me.meeshy.app' },
     ]);
 
-    expect(channels).toEqual(['meeshy_notifications', 'meeshy_notifications']);
+    expect(channels).toEqual(['meeshy_notifications', 'meeshy_notifications', 'meeshy_notifications']);
   });
 });

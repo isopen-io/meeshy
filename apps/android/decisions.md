@@ -498,7 +498,7 @@ in CI; safe staged rollout of a large, security-sensitive app.
 ---
 
 ## ADR-024 — `applicationId = me.meeshy.android`, distinct de la coque Capacitor
-**Date:** 2026-10-22 · **Status:** accepted (décision porteur, #11570)
+**Date:** 2026-10-22 · **Status:** superseded par ADR-028 (#13619)
 
 **Context.** Le dégel du 2026-10-22 remet l'app native en développement, et la coque Capacitor de `apps/web`
 sert déjà Android sous `me.meeshy.app` (`apps/web/android/app/build.gradle`). Les deux déclaraient le même
@@ -589,3 +589,27 @@ jointe privée (clé = URL) : on ne garde rien plutôt que de deviner.
 fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de réels publics) est borné et sans risque.
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
+
+---
+
+## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`
+**Date:** 2026-10-29 · **Status:** accepted (décision porteur, #13619 — remplace ADR-024)
+
+**Context.** La coque Capacitor était publiée en production sous `me.meeshy.app`. Le porteur fait de
+l'application native l'application Android de Meeshy et met la coque hors service pour le moment.
+Un identifiant Play ne se renomme pas : seule la fiche existante garde les utilisateurs et les avis.
+
+**Decision.** `applicationId = me.meeshy.app` (`.debug` en debug), version 3.x au-dessus des 2.x de la coque,
+`versionCode` lu de `-PmeeshyBuildNumber` au-dessus de tout code déjà envoyé, signature avec la clé d'envoi
+de la fiche (lue hors dépôt, comme la coque). La coque passe sous `me.meeshy.webapp` et déclare ce
+`bundleId` ; la passerelle lit `me.meeshy.app` comme NATIVE, y compris le jeton qu'une coque 2.x avait
+enregistré (la mise à jour garde le jeton FCM et son `bundleId`).
+
+**Rejected.** Une nouvelle fiche `me.meeshy.android` : elle repartait de zéro utilisateur et laissait la coque
+en production. Distinguer coque et native sous `me.meeshy.app` par la version : inutile, la coque n'y est plus servie.
+
+**Consequences.** Les utilisateurs de la coque reçoivent la native en mise à jour et se reconnectent une fois
+(la session WebView ne se transfère pas). L'app Firebase `me.meeshy.app` et l'entrée `assetlinks.json`
+`me.meeshy.app` servent la native telles quelles. Republier la coque exige une fiche `me.meeshy.webapp`, une
+app Firebase et une entrée `assetlinks.json` à son nom.
+

@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import java.io.File
 import me.meeshy.app.i18n.ResourceTree
 import org.json.JSONArray
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -108,13 +107,14 @@ class AppLinksAssetlinksGuardTest {
 
     @Test
     fun `native debug package is verified with both relations and a fingerprint`() {
-        val entry = targets().getValue("me.meeshy.android.debug")
+        val entry = targets().getValue("me.meeshy.app.debug")
         assertThat(entry.first).containsExactly(handleAll, loginCreds)
         assertThat(entry.second).isNotEmpty()
     }
 
+    // #13619 : la native a repris la fiche Play `me.meeshy.app` de la coque, avec sa clé de signature.
     @Test
-    fun `the shell entries are unchanged`() {
+    fun `the app entries keep the store signing fingerprints`() {
         val t = targets()
         assertThat(t.getValue("me.meeshy.app").second)
             .containsExactly("57:AC:19:83:D4:AE:A5:2F:99:09:E4:28:B5:8F:AC:7F:34:71:38:C9:E3:B7:74:4D:74:3E:4A:C2:65:83:5C:AA")
@@ -125,13 +125,9 @@ class AppLinksAssetlinksGuardTest {
         }
     }
 
-    // ext:empreinte-signature-release — le porteur fournit le SHA-256 de la clé de signature
-    // release (Play App Signing). Retirer @Ignore dès que l'entrée me.meeshy.android est posée :
-    // tant qu'elle manque, les liens vérifiés ne s'ouvrent pas dans l'app installée du Play Store.
-    @Ignore("en attente de l'empreinte release fournie par le porteur (ext:empreinte-signature-release)")
     @Test
     fun `native release package is verified with both relations and a fingerprint`() {
-        val entry = targets().getValue("me.meeshy.android")
+        val entry = targets().getValue("me.meeshy.app")
         assertThat(entry.first).containsExactly(handleAll, loginCreds)
         assertThat(entry.second).isNotEmpty()
     }

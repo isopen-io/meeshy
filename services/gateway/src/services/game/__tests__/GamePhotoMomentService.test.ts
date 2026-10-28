@@ -54,7 +54,7 @@ const facts = (over: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
 const stepsOf = (block: GameBlock): string[] => photoStepsReached(catchUpStandingOf(block)).map((step) => step.id);
 
 /** Une coque Android qui route le push photo (`PUSH_TYPE_ROUTING_FLOORS`). */
-const CAPABLE_SHELL = { platform: 'android', type: 'fcm', isActive: true, appVersion: '2.23.0', bundleId: 'me.meeshy.app' };
+const CAPABLE_SHELL = { platform: 'android', type: 'fcm', isActive: true, appVersion: '2.23.0', bundleId: 'me.meeshy.webapp' };
 
 const world = (options: { user?: Record<string, unknown>; notify?: GameNotifyResult; tokens?: readonly Record<string, unknown>[] } = {}) => {
   const db: FakeGameDb = fakeGameDb();
