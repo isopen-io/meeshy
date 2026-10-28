@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.StateFlow
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
@@ -190,6 +191,7 @@ internal class ChatHostActions(
     val openReactionDetails: (String) -> Unit,
     val openImageViewer: (String, Int) -> Unit,
     val onFileAttachmentOpen: (String, String?) -> Unit,
+    val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     val onHubFileOpen: (String, ApiMessageAttachment) -> Unit,
     val onFileAttachmentShare: (String, String?) -> Unit,
     val onReplyPreviewTap: (String) -> Unit,
@@ -293,6 +295,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     openReactionDetails = this::openReactionDetails,
     openImageViewer = this::openImageViewer,
     onFileAttachmentOpen = this::onFileAttachmentOpen,
+    pieceOverlayFor = this::pieceOverlayFor,
     onHubFileOpen = this::onHubFileOpen,
     onFileAttachmentShare = this::onFileAttachmentShare,
     onReplyPreviewTap = this::onReplyPreviewTap,

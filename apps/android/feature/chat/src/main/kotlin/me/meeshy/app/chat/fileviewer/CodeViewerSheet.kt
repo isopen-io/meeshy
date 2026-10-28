@@ -56,6 +56,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshySyntaxColors
 import me.meeshy.ui.theme.MeeshyTheme
 
 private sealed interface CodeLoad {
@@ -188,7 +189,7 @@ private fun CodeLines(state: CodeLoad.Ready) {
     }
 }
 
-private fun styledLine(tokens: List<CodeToken>, colors: SyntaxColors): AnnotatedString = buildAnnotatedString {
+private fun styledLine(tokens: List<CodeToken>, colors: MeeshySyntaxColors): AnnotatedString = buildAnnotatedString {
     tokens.forEach { token ->
         val color = colors.of(token.kind)
         if (color == colors.plain) append(token.text) else withStyle(SpanStyle(color = color)) { append(token.text) }

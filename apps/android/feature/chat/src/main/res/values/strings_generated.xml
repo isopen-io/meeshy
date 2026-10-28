@@ -280,6 +280,9 @@
     <string name="message_detail_views_read_empty">No one has read this message</string>
     <string name="message_detail_views_sent">Sent</string>
     <string name="permission_location_denied">Location denied — allow it in Settings</string>
+    <string name="piece_a11y_photo">Photo %1$d of %2$d</string>
+    <string name="piece_a11y_video">Video %1$d of %2$d</string>
+    <string name="piece_whole_message">Whole message</string>
     <string name="reading_mode_bubbles_subtitle">The classic bubbles</string>
     <string name="reading_mode_bubbles_title">Bubbles</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Switches to the next mode. Long press for the list of modes.</string>

@@ -281,6 +281,9 @@
     <string name="message_detail_views_read_empty">Personne n\'a lu ce message</string>
     <string name="message_detail_views_sent">Envoyé</string>
     <string name="permission_location_denied">Localisation refusée — autorisez-la dans les Réglages</string>
+    <string name="piece_a11y_photo">Photo %1$d sur %2$d</string>
+    <string name="piece_a11y_video">Vidéo %1$d sur %2$d</string>
+    <string name="piece_whole_message">Tout le message</string>
     <string name="reading_mode_bubbles_subtitle">Les bulles classiques</string>
     <string name="reading_mode_bubbles_title">Bulles</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Passe au mode suivant. Appui long pour la liste des modes.</string>

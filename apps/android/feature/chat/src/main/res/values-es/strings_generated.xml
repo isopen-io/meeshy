@@ -281,6 +281,9 @@
     <string name="message_detail_views_read_empty">Nadie ha leído este mensaje</string>
     <string name="message_detail_views_sent">Enviado</string>
     <string name="permission_location_denied">Ubicación denegada: permítela en Ajustes</string>
+    <string name="piece_a11y_photo">Foto %1$d de %2$d</string>
+    <string name="piece_a11y_video">Vídeo %1$d de %2$d</string>
+    <string name="piece_whole_message">Todo el mensaje</string>
     <string name="reading_mode_bubbles_subtitle">Las burbujas clásicas</string>
     <string name="reading_mode_bubbles_title">Burbujas</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Cambia al siguiente modo. Mantén pulsado para ver la lista de modos.</string>

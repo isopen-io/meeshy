@@ -281,6 +281,9 @@
     <string name="message_detail_views_read_empty">Ninguém leu esta mensagem</string>
     <string name="message_detail_views_sent">Enviado</string>
     <string name="permission_location_denied">Localização negada — permita nos Ajustes</string>
+    <string name="piece_a11y_photo">Foto %1$d de %2$d</string>
+    <string name="piece_a11y_video">Vídeo %1$d de %2$d</string>
+    <string name="piece_whole_message">Mensagem inteira</string>
     <string name="reading_mode_bubbles_subtitle">As bolhas clássicas</string>
     <string name="reading_mode_bubbles_title">Bolhas</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Muda para o modo seguinte. Toque longo para a lista de modos.</string>

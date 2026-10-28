@@ -12,6 +12,8 @@
 # spécificateurs positionnels (%1$d). Comblé quand le lot de la fonctionnalité adopte la clé iOS
 # (ou la réécrit en %1$d).
 bare-specifier :feature:chat en chat_forward_members
+bare-specifier :feature:chat en viewer_contact_copied
+bare-specifier :feature:chat en viewer_doc_pages
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.

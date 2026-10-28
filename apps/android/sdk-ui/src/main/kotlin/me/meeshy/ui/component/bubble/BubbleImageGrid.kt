@@ -1,7 +1,9 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +48,7 @@ internal fun BubbleImageGrid(
     images: List<BubbleImage>,
     onImageClick: ((Int) -> Unit)?,
     modifier: Modifier = Modifier,
+    onImageLongClick: ((Int) -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(MeeshyRadius.md)
     when {
@@ -63,7 +66,8 @@ internal fun BubbleImageGrid(
                     .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
                     .let { base ->
                         if (onImageClick == null) base
-                        else base.clickable { onImageClick(0) }.semantics { role = Role.Button }
+                        else base.pieceClickable(onClick = { onImageClick(0) }, onLongClick = onImageLongClick?.let { long -> { long(0) } })
+                            .semantics { role = Role.Button }
                     },
             )
         }
@@ -78,6 +82,7 @@ internal fun BubbleImageGrid(
                         hiddenCount = if (hiddenCount > 0 && imageIndex == visible.lastIndex) hiddenCount else 0,
                         shape = shape,
                         onImageClick = onImageClick,
+                        onImageLongClick = onImageLongClick,
                     )
                 }
             }
@@ -115,6 +120,7 @@ private fun BubbleImageCell(
     hiddenCount: Int,
     shape: Shape,
     onImageClick: ((Int) -> Unit)?,
+    onImageLongClick: ((Int) -> Unit)?,
 ) {
     Box(
         modifier = Modifier
@@ -123,8 +129,10 @@ private fun BubbleImageCell(
             .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
             .let { base ->
                 if (onImageClick == null) base
-                else base.clickable { onImageClick(imageIndex) }
-                    .semantics { role = Role.Button }
+                else base.pieceClickable(
+                    onClick = { onImageClick(imageIndex) },
+                    onLongClick = onImageLongClick?.let { long -> { long(imageIndex) } },
+                ).semantics { role = Role.Button }
             },
     ) {
         AsyncImage(
@@ -167,3 +175,11 @@ private fun imageAspectRatio(image: BubbleImage): Float {
     if (width <= 0 || height <= 0) return 1f
     return (width.toFloat() / height.toFloat()).coerceIn(0.6f, 1.8f)
 }
+
+/**
+ * Un appui ouvre la pièce ; un appui long (quand l'hôte l'offre) l'aperçoit SEULE. Sans appui long, l'appui long
+ * retombe sur le message entier comme avant : `onLongClick` nul n'est pas câblé.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.pieceClickable(onClick: () -> Unit, onLongClick: (() -> Unit)?): Modifier =
+    if (onLongClick == null) clickable(onClick = onClick) else combinedClickable(onClick = onClick, onLongClick = onLongClick)

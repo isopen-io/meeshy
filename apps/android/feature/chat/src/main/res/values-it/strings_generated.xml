@@ -281,6 +281,9 @@
     <string name="message_detail_views_read_empty">Nessuno ha letto questo messaggio</string>
     <string name="message_detail_views_sent">Inviato</string>
     <string name="permission_location_denied">Posizione negata — consentila in Impostazioni</string>
+    <string name="piece_a11y_photo">Foto %1$d di %2$d</string>
+    <string name="piece_a11y_video">Video %1$d di %2$d</string>
+    <string name="piece_whole_message">Tutto il messaggio</string>
     <string name="reading_mode_bubbles_subtitle">Le bolle classiche</string>
     <string name="reading_mode_bubbles_title">Bolle</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Passa alla modalità successiva. Tocco prolungato per l\'elenco delle modalità.</string>

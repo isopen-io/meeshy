@@ -284,6 +284,9 @@
     <string name="message_detail_views_read_empty">لم يقرأ أحد هذه الرسالة</string>
     <string name="message_detail_views_sent">أُرسل</string>
     <string name="permission_location_denied">تم رفض الموقع — اسمح به من الإعدادات</string>
+    <string name="piece_a11y_photo">الصورة %1$d من %2$d</string>
+    <string name="piece_a11y_video">الفيديو %1$d من %2$d</string>
+    <string name="piece_whole_message">الرسالة كاملة</string>
     <string name="reading_mode_bubbles_subtitle">الفقاعات الكلاسيكية</string>
     <string name="reading_mode_bubbles_title">فقاعات</string>
     <string name="reading_mode_chip_a11y_hint_cycle">ينتقل إلى الوضع التالي. اضغط مطولاً لعرض قائمة الأوضاع.</string>
