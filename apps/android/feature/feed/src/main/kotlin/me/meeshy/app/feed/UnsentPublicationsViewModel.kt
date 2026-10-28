@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.publication.UnsentPublication
@@ -26,10 +28,15 @@ import javax.inject.Inject
 class UnsentPublicationsViewModel @Inject constructor(
     private val publications: PublicationOutbox,
     private val workManager: WorkManager,
+    networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     val items: StateFlow<List<UnsentPublication>> = publications.unsent()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /** Whether the connection is down: the break told to the author depends on it (wait, not retry). */
+    val offline: StateFlow<Boolean> = networkMonitor.isOnline.map { !it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), !networkMonitor.isOnline.value)
 
     private val _reopened = MutableSharedFlow<FeedComposerDraft>(extraBufferCapacity = 1)
 
