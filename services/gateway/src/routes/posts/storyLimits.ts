@@ -31,6 +31,21 @@ const codeOf = (family: Family) => `STORY_LIMIT_${family.toUpperCase()}` as Stor
 const mediaFamily = (mediaType: unknown): Family => (mediaType === 'video' ? 'videos' : 'images');
 const isBackgroundPayload = (o: Bag): boolean => isBag(o.payload) && o.payload.isBackground === true;
 
+/**
+ * Le fond d'une scène ne compte pas parmi les objets POSÉS — mais le drapeau vient du client : seul le PREMIER
+ * objet de chaque forme de fond est exempté, tout fond supplémentaire compte dans sa famille. Formes produites
+ * par les composeurs : le fond de couleur ou de média `plane: 'bg'`, le fond image/vidéo `plane: 'content'` +
+ * `payload.isBackground` (iOS, web), le son de fond `payload.isBackground` ; en v1, `mediaObjects[].isBackground`
+ * et `audioPlayerObjects[].isBackground`.
+ */
+const withoutFirst = (items: Bag[], isExempt: (o: Bag) => boolean): Bag[] => {
+  const index = items.findIndex(isExempt);
+  return index < 0 ? items : [...items.slice(0, index), ...items.slice(index + 1)];
+};
+
+const withoutExemptBackgrounds = (items: Bag[], forms: ReadonlyArray<(o: Bag) => boolean>): Bag[] =>
+  forms.reduce(withoutFirst, items);
+
 const tally = (families: Family[]): Record<Family, number> =>
   families.reduce<Record<Family, number>>(
     (acc, f) => ({ ...acc, [f]: acc[f] + 1 }),
@@ -40,21 +55,27 @@ const tally = (families: Family[]): Record<Family, number> =>
 const v1Families = (effects: Bag): Family[] => [
   ...bags(effects.stickerObjects).map((): Family => 'stickers'),
   ...bags(effects.textObjects).map((): Family => 'texts'),
-  ...bags(effects.audioPlayerObjects).filter((a) => a.isBackground !== true).map((): Family => 'audios'),
-  ...bags(effects.mediaObjects).filter((m) => m.isBackground !== true).map((m) => mediaFamily(m.mediaType)),
+  ...withoutExemptBackgrounds(bags(effects.audioPlayerObjects), [(a) => a.isBackground === true]).map((): Family => 'audios'),
+  ...withoutExemptBackgrounds(bags(effects.mediaObjects), [(m) => m.isBackground === true]).map((m) => mediaFamily(m.mediaType)),
 ];
 
 const v3ObjectFamily = (o: Bag): Family | null => {
-  if (isBackgroundPayload(o)) return null;
   if (o.kind === 'sticker') return 'stickers';
   if (o.kind === 'text') return 'texts';
   if (o.kind === 'audio') return 'audios';
-  if (o.kind === 'media' && o.plane !== 'bg') return mediaFamily(isBag(o.payload) ? o.payload.mediaType : undefined);
+  if (o.kind === 'media') return mediaFamily(isBag(o.payload) ? o.payload.mediaType : undefined);
   return null;
 };
 
+const V3_BACKGROUND_FORMS: ReadonlyArray<(o: Bag) => boolean> = [
+  (o) => o.kind === 'media' && o.plane === 'bg',
+  (o) => o.kind === 'media' && o.plane !== 'bg' && isBackgroundPayload(o),
+  (o) => o.kind === 'audio' && isBackgroundPayload(o),
+];
+
 const v3SceneFamilies = (scene: Bag): Family[] =>
-  bags(scene.objects).flatMap((o) => { const f = v3ObjectFamily(o); return f ? [f] : []; });
+  withoutExemptBackgrounds(bags(scene.objects), V3_BACKGROUND_FORMS)
+    .flatMap((o) => { const f = v3ObjectFamily(o); return f ? [f] : []; });
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 

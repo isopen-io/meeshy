@@ -37,7 +37,7 @@ describe('nombre d\'objets par famille et par scène', () => {
   });
 
   it('v3 : un fond (plane bg) ne compte pas comme image posée', () => {
-    const bg = many(5, (i) => obj('media', i, { mediaType: 'image' }, { plane: 'bg' }));
+    const bg = [obj('media', 0, { mediaType: 'image' }, { plane: 'bg' })];
     expect(limitOf(canvas([...bg, ...many(50, (i) => obj('media', 10 + i, { mediaType: 'image' }))]))).toBeNull();
   });
 
@@ -133,5 +133,35 @@ describe('audit #13590 — ce que les composeurs écrivent vraiment', () => {
     const r = CreatePostSchema.safeParse({ type: 'STORY', storyEffects: storedText });
     expect(r.success).toBe(false);
     if (!r.success) expect(storyLimitFromIssues(r.error.issues)).toEqual({ code: 'STORY_LIMIT_TEXT_LENGTH', max: 1000 });
+  });
+});
+
+describe('audit #13590 — le drapeau de fond, posé par le client, n\'ouvre aucun contournement', () => {
+  it('v3 : un fond de couleur (plane bg) + le fond image d\'iOS + 50 images posées passent', () => {
+    const colour = obj('media', 98, { background: '#000000' }, { plane: 'bg' });
+    const iosBackground = obj('media', 99, { mediaType: 'image', isBackground: true });
+    expect(limitOf(canvas([colour, iosBackground, ...many(50, (i) => obj('media', i, { mediaType: 'image' }))]))).toBeNull();
+  });
+
+  it('v3 : 60 médias marqués isBackground dans une scène sont refusés', () => {
+    expect(limitOf(canvas(many(60, (i) => obj('media', i, { mediaType: 'image', isBackground: true }))))).toEqual({ code: 'STORY_LIMIT_IMAGES', max: 50 });
+  });
+
+  it('v3 : 60 médias en plane bg dans une scène sont refusés', () => {
+    expect(limitOf(canvas(many(60, (i) => obj('media', i, { mediaType: 'video' }, { plane: 'bg' }))))).toEqual({ code: 'STORY_LIMIT_VIDEOS', max: 50 });
+  });
+
+  it('v3 : 60 sons marqués isBackground sont refusés', () => {
+    expect(limitOf(canvas(many(60, (i) => obj('audio', i, { isBackground: true }))))).toEqual({ code: 'STORY_LIMIT_AUDIOS', max: 50 });
+  });
+
+  it('v3 : le drapeau de fond ne dispense pas un sticker ni un texte', () => {
+    expect(limitOf(canvas(many(51, (i) => obj('sticker', i, { isBackground: true }))))).toEqual({ code: 'STORY_LIMIT_STICKERS', max: 50 });
+    expect(limitOf(canvas(many(51, (i) => obj('text', i, { text: 'a', isBackground: true }))))).toEqual({ code: 'STORY_LIMIT_TEXTS', max: 50 });
+  });
+
+  it('v1 : un seul fond et un seul son de fond exemptés, les suivants comptent', () => {
+    expect(limitOf({ mediaObjects: many(60, (i) => ({ id: `m${i}`, mediaType: 'image', isBackground: true })) })).toEqual({ code: 'STORY_LIMIT_IMAGES', max: 50 });
+    expect(limitOf({ audioPlayerObjects: many(60, (i) => ({ id: `a${i}`, isBackground: true })) })).toEqual({ code: 'STORY_LIMIT_AUDIOS', max: 50 });
   });
 });
