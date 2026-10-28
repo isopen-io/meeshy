@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryObjectPlacement
 import me.meeshy.sdk.model.composer.SceneObjectCaps
+import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObject
@@ -125,9 +126,9 @@ data class StorySlideDeck(
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int
-        get() = SceneObjectCaps.remainingMediaSlots(selectedSlide.mediaIds.size, selectedSlide.audio.size)
+        get() = SceneObjectCaps.remainingMediaSlots(selectedSlide.mediaIds.size)
 
-    /** La slide sélectionnée peut porter un média de plus : dix médias ET sons en tout (iOS `canAddMedia`). */
+    /** La slide sélectionnée peut porter un média de plus : cinquante médias visuels ; les sons ont leur propre seau (#13590). */
     val selectedCanAddMedia: Boolean get() = selectedRemainingMediaSlots > 0
 
     /** Free text-element slots left on the **selected** slide; never negative. */
@@ -458,7 +459,11 @@ data class StorySlideDeck(
      * already equals the slide's pin, so the slider never churns recomposition.
      */
     fun setSelectedDuration(seconds: Double): StorySlideDeck {
-        val clamped = StoryDurationPin.clamp(seconds)
+        val clamped = StoryLimits.durationWithinBudget(
+            wanted = StoryDurationPin.clamp(seconds),
+            usedByOthers = totalDurationSeconds - selectedSlideDurationSeconds,
+            floor = StoryDurationPin.MIN_SECONDS,
+        )
         if (selectedSlide.durationSecondsPin == clamped) return this
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(durationSecondsPin = clamped) else slide }
@@ -473,14 +478,30 @@ data class StorySlideDeck(
      * on-canvas caption text so far, so the fallback is fed the publishable text elements;
      * a background media pipeline will extend the same call when it lands.
      */
-    val selectedSlideDurationSeconds: Double
-        get() = selectedSlide.durationSecondsPin ?: StorySlideDuration.contentDerivedSeconds(
-            mediaObjects = null,
-            audioPlayerObjects = null,
-            textObjects = selectedSlide.elements
-                .filter { it.isPublishable }
-                .map { StoryTextObject(id = it.id, text = it.text) },
-        )
+    val selectedSlideDurationSeconds: Double get() = slideDurationSeconds(selectedSlide)
+
+    /** La durée effective d'UNE slide : son épingle, sinon celle que son contenu impose. */
+    fun slideDurationSeconds(slide: StorySlide): Double = slide.durationSecondsPin ?: StorySlideDuration.contentDerivedSeconds(
+        mediaObjects = null,
+        audioPlayerObjects = null,
+        textObjects = slide.elements
+            .filter { it.isPublishable }
+            .map { StoryTextObject(id = it.id, text = it.text) },
+    )
+
+    /** La durée de la story entière : toutes les slides additionnées, bornée à deux heures par [StoryLimits.TOTAL_SECONDS]. */
+    val totalDurationSeconds: Double get() = slides.sumOf { slideDurationSeconds(it) }
+
+    /** La durée totale tient dans les deux heures (#13590). */
+    fun isWithinTotalDuration(): Boolean = totalDurationSeconds <= StoryLimits.TOTAL_SECONDS
+
+    /** Chaque texte posé tient dans [StoryLimits.TEXT_LENGTH] caractères (un brouillon antérieur au plafond doit être raccourci). */
+    fun isWithinElementTextLimit(): Boolean =
+        slides.all { slide -> slide.elements.all { it.text.codePointCount(0, it.text.length) <= StoryLimits.TEXT_LENGTH } }
+
+    /** Chaque scène tient dans les plafonds de cinquante par famille (médias, sons, textes, stickers). */
+    fun isWithinSceneCaps(): Boolean = isWithinMediaLimit() && isWithinTextElementLimit() && isWithinStickerLimit() &&
+        slides.all { it.audio.size <= SceneObjectCaps.AUDIO }
 
     /** The **selected** slide's author-chosen backdrop, or `null` when none is set. */
     val selectedSlideBackground: StoryBackgroundValue? get() = selectedSlide.background

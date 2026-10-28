@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_scene_cap_text">خمسة نصوص كحد أقصى في كل مشهد — احذف نصًا لإضافة آخر</string>
-    <string name="composer_scene_cap_sticker">ثلاثون ملصقًا كحد أقصى في كل مشهد — احذف ملصقًا لإضافة آخر</string>
-    <string name="composer_scene_cap_media">عشر وسائط كحد أقصى في كل مشهد — أزل وسيطًا لإضافة آخر</string>
-    <string name="composer_scene_cap_sound">خمسة أصوات كحد أقصى في كل مشهد — أزل صوتًا لإضافة آخر</string>
+    <string name="composer_scene_cap_text">50 نصًا كحد أقصى في كل مشهد — احذف نصًا لإضافة آخر</string>
+    <string name="composer_scene_cap_sticker">50 ملصقًا كحد أقصى في كل مشهد — احذف ملصقًا لإضافة آخر</string>
+    <string name="composer_scene_cap_media">50 وسيطًا كحد أقصى في كل مشهد — أزل وسيطًا لإضافة آخر</string>
+    <string name="composer_scene_cap_sound">50 صوتًا كحد أقصى في كل مشهد — أزل صوتًا لإضافة آخر</string>
 </resources>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_scene_cap_text">Cinco textos como máximo por escena — elimina uno para añadir otro</string>
-    <string name="composer_scene_cap_sticker">Treinta stickers como máximo por escena — elimina uno para añadir otro</string>
-    <string name="composer_scene_cap_media">Diez medios como máximo por escena — quita uno para añadir otro</string>
-    <string name="composer_scene_cap_sound">Cinco sonidos como máximo por escena — quita uno para añadir otro</string>
+    <string name="composer_scene_cap_text">50 textos como máximo por escena — elimina uno para añadir otro</string>
+    <string name="composer_scene_cap_sticker">50 stickers como máximo por escena — elimina uno para añadir otro</string>
+    <string name="composer_scene_cap_media">50 medios como máximo por escena — quita uno para añadir otro</string>
+    <string name="composer_scene_cap_sound">50 sonidos como máximo por escena — quita uno para añadir otro</string>
 </resources>

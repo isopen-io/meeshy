@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_scene_cap_text">Höchstens fünf Texte pro Szene — lösche einen, um einen weiteren hinzuzufügen</string>
-    <string name="composer_scene_cap_sticker">Höchstens dreißig Sticker pro Szene — lösche einen, um einen weiteren hinzuzufügen</string>
-    <string name="composer_scene_cap_media">Höchstens zehn Medien pro Szene — entferne eines, um ein weiteres hinzuzufügen</string>
-    <string name="composer_scene_cap_sound">Höchstens fünf Sounds pro Szene — entferne einen, um einen weiteren hinzuzufügen</string>
+    <string name="composer_scene_cap_text">Höchstens 50 Texte pro Szene — lösche einen, um einen weiteren hinzuzufügen</string>
+    <string name="composer_scene_cap_sticker">Höchstens 50 Sticker pro Szene — lösche einen, um einen weiteren hinzuzufügen</string>
+    <string name="composer_scene_cap_media">Höchstens 50 Medien pro Szene — entferne eines, um ein weiteres hinzuzufügen</string>
+    <string name="composer_scene_cap_sound">Höchstens 50 Sounds pro Szene — entferne einen, um einen weiteren hinzuzufügen</string>
 </resources>
