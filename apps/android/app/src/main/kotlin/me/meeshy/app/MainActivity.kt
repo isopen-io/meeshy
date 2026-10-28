@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         launchRoute = launchRouteOf(intent)
-        callLink = CallLinkRequest.parse(intent.dataString)
+        callLink = callLinkOf(intent)
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
@@ -149,6 +149,10 @@ class MainActivity : ComponentActivity() {
         return route
     }
 
+    /** Un lien d'appel est une demande a usage unique : l'intent est vide de son adresse des qu'elle est recueillie. */
+    private fun callLinkOf(intent: Intent): CallLinkRequest? =
+        CallLinkRequest.parse(intent.dataString)?.also { intent.data = null }
+
     private fun enterCallPictureInPicture(): Boolean {
         val params = PictureInPictureParams.Builder()
             .setAspectRatio(Rational(CallPictureInPicturePolicy.ASPECT_WIDTH, CallPictureInPicturePolicy.ASPECT_HEIGHT))
@@ -187,7 +191,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         launchRoute = launchRouteOf(intent)
-        callLink = CallLinkRequest.parse(intent.dataString)
+        callLink = callLinkOf(intent)
         warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
     }
 
