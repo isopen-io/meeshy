@@ -18,9 +18,13 @@ fun FeedComposerDraft.withCarry(carry: ComposerCarry): FeedCarryResult {
     val kept = plan.remove.fold(this) { draft, id -> draft.withoutMedia(id) }
     val incoming = plan.add.map(CarriedMedia::media).filter { it.id !in kept.mediaIds }.distinctBy { it.id }
     val withMedia = kept.withMedia(incoming)
-    val described = plan.alts.entries
-        .filter { (id, _) -> id in withMedia.mediaIds }
+    val onPost = withMedia.mediaIds.toSet()
+    val alted = plan.alts.entries
+        .filter { (id, _) -> id in onPost }
         .fold(withMedia) { draft, (id, text) -> draft.withAlt(id, text) }
+    val described = plan.captions.entries
+        .filter { (id, _) -> id in onPost }
+        .fold(alted) { draft, (id, text) -> draft.withCaption(id, text) }
     val visibility = carry.audience
         ?.let(ComposerAudienceCarry::postWire)
         ?.let { wire -> FeedPostVisibility.entries.firstOrNull { it.wire == wire } }
@@ -30,7 +34,7 @@ fun FeedComposerDraft.withCarry(carry: ComposerCarry): FeedCarryResult {
 
 /** The post's side of the document, as the host plans transfers from it. */
 fun FeedComposerDraft.carriedMedia(): List<CarriedMedia> =
-    media.map { CarriedMedia(it, mediaAlt[it.id]) }
+    media.map { CarriedMedia(it, alt = mediaAlt[it.id], caption = mediaCaption[it.id]) }
 
 /** A post audience as the document's one audience vocabulary. */
 fun FeedPostVisibility.storyVisibility(): StoryVisibility =

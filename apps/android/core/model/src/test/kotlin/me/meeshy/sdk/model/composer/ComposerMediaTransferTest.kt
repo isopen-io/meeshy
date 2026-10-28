@@ -18,6 +18,22 @@ class ComposerMediaTransferTest {
     }
 
     @Test
+    fun `the caption of a media travels with it, distinct from its alt, and a blank one stays behind`() {
+        val withCaption = CarriedMedia(carried("a").media, alt = "chat", caption = "Au marché")
+        val blank = CarriedMedia(carried("b").media, caption = "  ")
+        val plan = ComposerMediaTransfer.plan(listOf(withCaption, blank), targetIds = emptyList(), ledger = emptySet(), room = 5)
+        assertThat(plan.captions).containsExactly("a", "Au marché")
+        assertThat(plan.alts).containsExactly("a", "chat")
+        assertThat(plan.isEmpty).isFalse()
+    }
+
+    @Test
+    fun `a caption whose media could not follow does not travel`() {
+        val plan = ComposerMediaTransfer.plan(listOf(CarriedMedia(carried("a").media, caption = "x")), emptyList(), emptySet(), room = 0)
+        assertThat(plan.captions).isEmpty()
+    }
+
+    @Test
     fun `a blank description never travels and a duplicate source id counts once`() {
         val plan = ComposerMediaTransfer.plan(listOf(carried("a", " "), carried("a")), emptyList(), emptySet(), room = 5)
         assertThat(plan.add).hasSize(1)
