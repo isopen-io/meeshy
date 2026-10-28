@@ -52,9 +52,19 @@ public class DefaultSessionTeardown(
     private val preferenceSnapshotStore: PreferenceSnapshotStore? = null,
     private val perAccountCaches: Set<PerAccountCache> = emptySet(),
     private val guestSessions: AnonymousSessionStore? = null,
+    private val fence: AccountFence? = null,
 ) : SessionTeardown {
 
+    /**
+     * Through [fence] (#13555): the account is closed FIRST — an outbox send in flight is cancelled and awaited, a write
+     * begun under it can no longer commit — then the stores are wiped, so nothing written for the account that leaves
+     * survives into the next one.
+     */
     override suspend fun wipe() {
+        if (fence == null) clearAll() else fence.close { clearAll() }
+    }
+
+    private suspend fun clearAll() {
         // Room's clearAllTables() is a blocking call — never on the caller's dispatcher.
         withContext(Dispatchers.IO) { database.clearAllTables() }
         categorySnapshotStore.clearAll()

@@ -27,7 +27,7 @@ class OutboxAuthorGuardTest {
             ApplicationProvider.getApplicationContext(),
             MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
-        outbox = OutboxRepository(db, db.outboxDao()) { signedIn }
+        outbox = OutboxRepository(db, db.outboxDao(), { signedIn })
     }
 
     @After

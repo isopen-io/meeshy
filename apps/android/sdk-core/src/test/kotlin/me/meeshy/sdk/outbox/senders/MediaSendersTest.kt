@@ -46,7 +46,7 @@ class MediaSendersTest {
 
     @Test
     fun `a legacy upload with a blank payload goes through the attachment upload and yields the real id`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { mediaRepository.upload(listOf(item)) } returns NetworkResult.Success(listOf(uploaded))
 
         val result = handler().send(row())
@@ -57,7 +57,7 @@ class MediaSendersTest {
 
     @Test
     fun `an upload tagged with a known context goes through the resumable upload`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } returns
             NetworkResult.Success(listOf(uploaded))
 
@@ -69,7 +69,7 @@ class MediaSendersTest {
 
     @Test
     fun `an unrecognised or malformed context falls back to the legacy upload instead of failing`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { mediaRepository.upload(listOf(item)) } returns NetworkResult.Success(listOf(uploaded))
 
         val unknown = handler().send(row(encodedPayload(MediaUploadPayload(uploadContext = "from-the-future"))))
@@ -81,7 +81,7 @@ class MediaSendersTest {
 
     @Test
     fun `a transient upload failure keeps the bytes for the retry`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { mediaRepository.upload(listOf(item)) } returns NetworkResult.Failure(ApiError("offline"))
 
         val result = handler().send(row())
@@ -92,7 +92,7 @@ class MediaSendersTest {
 
     @Test
     fun `a gone blob fails permanently and its record is dropped`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns null
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns null
 
         val result = handler().send(row())
 
@@ -102,7 +102,7 @@ class MediaSendersTest {
 
     @Test
     fun `an upload that yields no usable media fails permanently and drops the bytes`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { mediaRepository.upload(listOf(item)) } returns NetworkResult.Success(emptyList())
 
         val result = handler().send(row())
@@ -114,7 +114,7 @@ class MediaSendersTest {
     @Test
     fun `a publication upload that yields no usable media keeps its bytes until the author decides`() = runTest {
         listOf("post", "story", "status").forEach { context ->
-            coEvery { mediaBlobStore.get("cmid-1") } returns item
+            coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
             coEvery { tusUploadRepository.upload(item, any(), any(), any()) } returns NetworkResult.Success(emptyList())
 
             val result = handler().send(row(encodedPayload(MediaUploadPayload(uploadContext = context))))
@@ -143,7 +143,7 @@ class MediaSendersTest {
 
     @Test
     fun `the bytes sent by a durable upload are published per media while it runs and cleared when it ends`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         val seen = mutableListOf<me.meeshy.sdk.model.media.MediaUploadProgress?>()
         coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } coAnswers {
             @Suppress("UNCHECKED_CAST")
@@ -161,7 +161,7 @@ class MediaSendersTest {
 
     @Test
     fun `a failed durable upload leaves no progress behind`() = runTest {
-        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
         coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } returns
             NetworkResult.Failure(ApiError("offline"))
 

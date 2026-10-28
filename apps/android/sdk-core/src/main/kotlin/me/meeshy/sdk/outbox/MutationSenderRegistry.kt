@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.session.AccountFence
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -14,6 +15,7 @@ public class MutationSenderRegistry @Inject constructor(
     private val handlers: Map<OutboxKind, @JvmSuppressWildcards OutboxKindHandler>,
     private val ownerSource: OutboxOwnerSource? = null,
     private val plaintextAdmission: OutboxPlaintextAdmission? = null,
+    private val fence: AccountFence? = null,
 ) {
     /** The kinds that have a registered handler. */
     public val registeredKinds: Set<OutboxKind> get() = handlers.keys
@@ -45,6 +47,7 @@ public class MutationSenderRegistry @Inject constructor(
                 dependent.kindEnum?.let { handlers[it] }?.payloadGraft?.invoke(dependent.payload, placeholder, realId)
             },
             plaintextAdmission = plaintextAdmission ?: OutboxPlaintextAdmission.AdmitAll,
+            fence = fence,
         )
 
     /**

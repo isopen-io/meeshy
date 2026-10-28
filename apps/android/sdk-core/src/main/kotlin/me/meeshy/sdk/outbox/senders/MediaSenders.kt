@@ -41,7 +41,7 @@ public class UploadMediaHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
-        val item = mediaBlobStore.get(row.cmid)
+        val item = mediaBlobStore.get(row.cmid, row.ownerId)
         val context = uploadContextOf(row)
         val result = try {
             if (context != null) {
