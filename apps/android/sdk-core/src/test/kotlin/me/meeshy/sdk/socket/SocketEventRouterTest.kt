@@ -172,7 +172,7 @@ class SocketEventRouterTest {
     @Test
     fun `une charge qui n'est pas un objet est ignoree`() {
         val (transport, router) = rig()
-        router.install(listOf(SocketInboundRoute.decoding("a:one", json, MutableSharedFlow<Ping>())))
+        router.install(listOf(SocketInboundRoute.decoding("a:one", json, SocketInboundRoute.subject<Ping>())))
 
         transport.handlers.getValue("a:one").invoke(arrayOf("pas un objet"))
         transport.handlers.getValue("a:one").invoke(emptyArray())

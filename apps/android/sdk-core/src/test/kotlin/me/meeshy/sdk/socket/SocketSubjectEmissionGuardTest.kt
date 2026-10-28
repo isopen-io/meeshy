@@ -11,7 +11,9 @@ import org.junit.Test
  * `asSharedFlow()` rendrait un flux que le registre ne connaît pas, dont `collectArrived` écrirait chaque événement sous
  * le compte COURANT au lieu du compte d'arrivée.
  *
- * Une analyse de texte, pas de types : un alias (`val s = _sujet`), une fonction qui reçoit le sujet en paramètre ou un
+ * Depuis #13584 le TYPE ferme l'essentiel : [RouteSubject] n'expose ni `tryEmit` ni `emit`, donc un alias, un paramètre ou
+ * un `with` ne peuvent plus émettre en nu. Cette analyse de texte garde ce que le type ne ferme pas (`asSharedFlow()`, un
+ * retour au `MutableSharedFlow`) et reste une analyse de texte, pas de types : un alias (`val s = _sujet`), une fonction qui reçoit le sujet en paramètre ou un
  * `with(_sujet) { tryEmit(x) }` lui échappent. Les formes qu'elle attrape sont celles que le paquet écrit déjà ailleurs
  * (`::tryEmit` dans les gestionnaires d'appel, déclaration sur deux lignes dans les préférences).
  */
@@ -89,5 +91,16 @@ class SocketSubjectEmissionGuardTest {
         """.trimIndent()
 
         assertThat(offenders("F.kt", source)).isEmpty()
+    }
+
+    @Test
+    fun `the subject type offers no bare emission to alias, pass around or wrap in with`() {
+        val names = RouteSubject::class.java.methods.map { it.name }
+        assertThat(names.filter { it.startsWith("tryEmit") || it == "emit" || it == "emitAll" }).isEmpty()
+        assertThat(MutableSharedFlowCheck.isMutable(SocketInboundRoute.subject<String>())).isFalse()
+    }
+
+    private object MutableSharedFlowCheck {
+        fun isMutable(subject: Any): Boolean = subject is kotlinx.coroutines.flow.MutableSharedFlow<*>
     }
 }

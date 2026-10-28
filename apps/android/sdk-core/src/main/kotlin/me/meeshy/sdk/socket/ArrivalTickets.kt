@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import me.meeshy.sdk.session.AccountTicket
@@ -43,26 +44,45 @@ internal object ArrivalStamp {
 internal object ArrivalLedger {
     private val twins = Collections.synchronizedMap(WeakHashMap<Any, MutableSharedFlow<Arrived<*>>>())
 
-    fun twinOf(subject: MutableSharedFlow<*>): MutableSharedFlow<Arrived<*>> =
+    fun twinOf(subject: RouteSubject<*>): MutableSharedFlow<Arrived<*>> =
         synchronized(twins) {
             twins.getOrPut(subject) { MutableSharedFlow(replay = 0, extraBufferCapacity = Int.MAX_VALUE) }
         }
 
-    fun register(exposed: SharedFlow<*>, subject: MutableSharedFlow<*>) {
+    fun register(exposed: SharedFlow<*>, subject: RouteSubject<*>) {
         twins[exposed] = twinOf(subject)
     }
 
     fun twin(flow: SharedFlow<*>): MutableSharedFlow<Arrived<*>>? = twins[flow]
 }
 
-/** Publie [value] sur le sujet ET sur sa jumelle horodatée, sous le ticket de la trame en cours de livraison. */
-internal fun <T> MutableSharedFlow<T>.emitArrived(value: T): Boolean {
-    ArrivalLedger.twinOf(this).tryEmit(Arrived(value, ArrivalStamp.current()))
-    return tryEmit(value)
+/**
+ * Le sujet d'une route de socket (#13584) : un flux LISIBLE qui n'expose ni `tryEmit` ni `emit` — la seule façon de
+ * l'alimenter est [emitArrived], qui publie aussi sur la jumelle horodatée, et la seule façon de l'exposer est
+ * [exposed]. Un `tryEmit` direct ne COMPILE plus (il perdait l'événement sans bruit pour les collecteurs
+ * `collectArrived`) ; un alias, un paramètre ou un `with` n'y changent rien.
+ */
+class RouteSubject<T> internal constructor(
+    private val flow: MutableSharedFlow<T> = MutableSharedFlow(replay = 0, extraBufferCapacity = Int.MAX_VALUE),
+) : SharedFlow<T> by flow {
+
+    init {
+        ArrivalLedger.twinOf(this)
+    }
+
+    val subscriptionCount: StateFlow<Int> get() = flow.subscriptionCount
+
+    /** Publie [value] sur le sujet ET sur sa jumelle horodatée, sous le ticket de la trame en cours de livraison. */
+    internal fun emitArrived(value: T): Boolean {
+        ArrivalLedger.twinOf(this).tryEmit(Arrived(value, ArrivalStamp.current()))
+        return flow.tryEmit(value)
+    }
+
+    internal fun readOnly(): SharedFlow<T> = flow.asSharedFlow()
 }
 
 /** Le flux exposé au monde : lecture seule, et retrouvable par [arrivals] avec le ticket d'arrivée de chaque événement. */
-fun <T> MutableSharedFlow<T>.exposed(): SharedFlow<T> = asSharedFlow().also { ArrivalLedger.register(it, this) }
+fun <T> RouteSubject<T>.exposed(): SharedFlow<T> = readOnly().also { ArrivalLedger.register(it, this) }
 
 /**
  * Les événements de ce flux avec le compte sous lequel chacun est arrivé. Un flux qui ne vient pas d'une route de socket

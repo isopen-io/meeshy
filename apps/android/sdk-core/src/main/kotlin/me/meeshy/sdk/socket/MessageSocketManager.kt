@@ -267,7 +267,7 @@ class MessageSocketManager @Inject constructor(
 
     private inline fun <reified T> MutableList<SocketInboundRoute>.route(
         event: String,
-        subject: MutableSharedFlow<T>,
+        subject: RouteSubject<T>,
         noinline arrival: ((JSONObject) -> Unit)? = null,
     ) {
         add(SocketInboundRoute.decoding(event, json, subject, arrival))
