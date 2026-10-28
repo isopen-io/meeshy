@@ -230,7 +230,7 @@ class SocialSocketManager @Inject constructor(
         socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
     }
 
-    private inline fun <reified T> MutableList<SocketInboundRoute>.route(event: String, subject: MutableSharedFlow<T>) {
+    private inline fun <reified T> MutableList<SocketInboundRoute>.route(event: String, subject: RouteSubject<T>) {
         add(SocketInboundRoute.decoding(event, json, subject))
     }
 }

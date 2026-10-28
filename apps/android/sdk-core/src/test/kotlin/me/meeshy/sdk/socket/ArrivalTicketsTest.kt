@@ -111,7 +111,7 @@ class ArrivalTicketsTest {
     @Test
     fun `the ledger holds neither a subject nor its exposed flow alive`() {
         val refs = (0 until 50).map {
-            val subject = MutableSharedFlow<Ping>(extraBufferCapacity = 1)
+            val subject = SocketInboundRoute.subject<Ping>()
             val exposed = subject.exposed()
             subject.emitArrived(Ping(it))
             WeakReference(subject) to WeakReference(exposed)
