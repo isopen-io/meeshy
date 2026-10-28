@@ -81,6 +81,16 @@ object StoryTextFrameGeometry {
         }
     }
 
+    /**
+     * La plus large mesure de texte que tient une boîte de [boundsWidth] design-pixels : l'inverse de [metrics] sur la
+     * largeur. Sert à mesurer le texte dans la place qu'on lui donne, pour que la boîte ne déborde jamais de l'écran.
+     */
+    fun maxTextWidth(shape: StoryTextFrameShape, boundsWidth: Double, oGlyphWidth: Double, paddingScale: Double = 1.0): Double {
+        val chrome = metrics(shape, true, 0.0, 0.0, oGlyphWidth, paddingScale).boundsWidth
+        val widest = if (shape == StoryTextFrameShape.DIAMOND) min(boundsWidth / 2, boundsWidth - chrome) else boundsWidth - chrome
+        return max(0.0, widest)
+    }
+
     /** Le rayon des formes à coins (iOS `frameCornerRadius`). */
     fun cornerRadius(shape: StoryTextFrameShape, height: Double): Double = when (shape) {
         StoryTextFrameShape.PILL -> height / 2
