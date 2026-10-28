@@ -132,4 +132,34 @@ class PostGestureTracesTest {
         assertThat(liked()).isFalse()
         assertThat(count()).isEqualTo(10)
     }
+    @Test
+    fun `a like the queue replaced by the same like keeps its trace, so the replacement's refusal still turns the heart off`() = runTest {
+        seed(ApiPost(id = "p1", content = "a", likeCount = 10, isLikedByMe = false))
+        repository.toggleLike("p1")
+        val tapped = queued.single().cmid
+        coEvery { outbox.stateOf(tapped) } returns null
+        repository.setLiked("p1", true)
+        val replacement = queued.last().cmid
+
+        repository.rollbackLike("p1", liked = false, cmid = replacement)
+
+        assertThat(liked()).isFalse()
+        assertThat(count()).isEqualTo(10)
+    }
+
+    @Test
+    fun `a bookmark the queue replaced by the same bookmark keeps its trace too`() = runTest {
+        seed(ApiPost(id = "p1", content = "a", bookmarkCount = 2, isBookmarkedByMe = false))
+        repository.toggleBookmark("p1")
+        val tapped = queued.single().cmid
+        coEvery { outbox.stateOf(tapped) } returns null
+        repository.setBookmarked("p1", true)
+        val replacement = queued.last().cmid
+
+        repository.rollbackBookmark("p1", bookmarked = false, cmid = replacement)
+
+        val post = repository.cachedPost("p1")!!
+        assertThat(post.isBookmarkedByMe).isFalse()
+        assertThat(post.bookmarkCount).isEqualTo(2)
+    }
 }
