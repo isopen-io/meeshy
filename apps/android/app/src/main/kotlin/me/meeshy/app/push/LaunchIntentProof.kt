@@ -34,10 +34,28 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
         return MessageDigest.isEqual(presented.toByteArray(Charsets.US_ASCII), expected.toByteArray(Charsets.US_ASCII))
     }
 
-    private fun signature(intent: Intent): String {
-        val mac = Mac.getInstance(ALGORITHM).apply { init(SecretKeySpec(key, ALGORITHM)) }
-        return Base64.encodeToString(mac.doFinal(canonical(intent).toByteArray(Charsets.UTF_8)), Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+    fun stampAction(intent: Intent): Intent = intent.putExtra(EXTRA_PROOF, sign(actionCanonical(intent)))
+
+    fun admitsAction(intent: Intent): Boolean {
+        val presented = runCatching { intent.getStringExtra(EXTRA_PROOF) }.getOrNull() ?: return false
+        val expected = runCatching { sign(actionCanonical(intent)) }.getOrNull() ?: return false
+        return MessageDigest.isEqual(presented.toByteArray(Charsets.US_ASCII), expected.toByteArray(Charsets.US_ASCII))
     }
+
+    private fun signature(intent: Intent): String = sign(canonical(intent))
+
+    private fun sign(canonical: String): String {
+        val mac = Mac.getInstance(ALGORITHM).apply { init(SecretKeySpec(key, ALGORITHM)) }
+        return Base64.encodeToString(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+    }
+
+    private fun actionCanonical(intent: Intent): String = listOf(
+        ACTION_DOMAIN,
+        intent.action.field(),
+        intent.getStringExtra(PushActionReceiver.EXTRA_CONVERSATION_ID).field(),
+        intent.getIntExtra(PushActionReceiver.EXTRA_NOTIFICATION_ID, 0).toString(),
+        intent.getStringExtra(PushActionReceiver.EXTRA_ACCOUNT_ID).field(),
+    ).joinToString(separator = FIELD_SEPARATOR)
 
     private fun canonical(intent: Intent): String = listOf(
         intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID).field(),
@@ -67,6 +85,7 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
         private const val PREFERENCES = "meeshy.launch_proof"
         private const val KEY_SECRET = "secret"
         private const val SECRET_BYTES = 32
+        private const val ACTION_DOMAIN = "push-action"
         private const val FIELD_SEPARATOR = "\u0000"
     }
 }
