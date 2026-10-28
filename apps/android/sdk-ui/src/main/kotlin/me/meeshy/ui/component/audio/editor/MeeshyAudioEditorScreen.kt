@@ -25,11 +25,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -98,6 +100,7 @@ fun MeeshyAudioEditorScreen(
     val activeVersionId = state.document?.active?.id
 
     LaunchedEffect(controller) { controller.prepare() }
+    DisposableEffect(controller) { onDispose { controller.abandon() } }
     LaunchedEffect(activeVersionId) {
         val file = controller.activeFile ?: return@LaunchedEffect
         player.load(file)
@@ -120,7 +123,8 @@ fun MeeshyAudioEditorScreen(
         }
     }
     BackHandler(onBack = cancel)
-    val swipe = remember(cancel) { SwipeDownToDismiss(cancel) }
+    val currentCancel by rememberUpdatedState(cancel)
+    val swipe = remember { SwipeDownToDismiss { currentCancel() } }
     val thresholdPx = with(LocalDensity.current) { DISMISS_DP.dp.toPx() }
     swipe.thresholdPx = thresholdPx
 

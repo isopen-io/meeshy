@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.audioedit.AudioEditError
 import me.meeshy.sdk.model.audioedit.AudioEditOperation
@@ -145,4 +146,32 @@ class AudioEditorControllerTest {
         c.discard()
         assertThat(sessionDir.exists()).isFalse()
     }
+
+    @Test
+    fun `un ecran qui disparait sans issue arrete le rendu en cours et efface la session (activite recreee)`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val runner = FakeRunner(gate = gate)
+        val c = controller(this, runner = runner)
+        c.prepare()
+        val sessionDir = c.sessionDirectory!!
+        c.selectTool(AudioEditorTool.VOLUME)
+        c.update { it.copy(gain = 2.0) }
+        val job = c.apply()
+        runCurrent()
+        assertThat(runner.requests).hasSize(1)
+        assertThat(c.state.value.processing).isTrue()
+        c.abandon()
+        job.join()
+        assertThat(job.isCancelled).isTrue()
+        assertThat(sessionDir.exists()).isFalse()
+        assertThat(c.state.value.processing).isFalse()
+    }
+
+    @Test
+    fun `abandonner avant la preparation ne fait rien`() = runTest {
+        val root = tempDir()
+        controller(this, root = root).abandon()
+        assertThat(root.listFiles().orEmpty()).isEmpty()
+    }
 }
+

@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -138,6 +139,16 @@ public class AudioEditorController(
     public suspend fun discard() {
         cancelBackgroundWork()
         session?.discard()
+    }
+
+    /**
+     * L'écran disparaît sans être passé par [confirm] ni [discard] (activité recréée, hôte retiré) : le rendu en
+     * cours s'arrête et la session s'efface hors du fil principal, sans attendre — rien ne reste en cache.
+     */
+    public fun abandon() {
+        cancelBackgroundWork()
+        val opened = session ?: return
+        CoroutineScope(ioDispatcher + NonCancellable).launch { opened.discard() }
     }
 
     public fun cancelBackgroundWork() {
