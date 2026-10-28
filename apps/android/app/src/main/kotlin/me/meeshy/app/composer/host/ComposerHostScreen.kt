@@ -5,9 +5,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import me.meeshy.app.R
+import me.meeshy.app.feed.FeedViewModel
 import me.meeshy.app.feed.MoodComposerContent
 import me.meeshy.app.feed.PostComposerContent
+import me.meeshy.app.feed.StatusComposerDraftsViewModel
+import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoryComposerContent
 import me.meeshy.sdk.model.composer.ComposerFormat
 
@@ -16,16 +22,29 @@ import me.meeshy.sdk.model.composer.ComposerFormat
  * format n'est qu'un de ses champs. Les anciennes surfaces — scène de story, feuille de post/réel, feuille de mood —
  * sont les CONTENUS de l'hôte, pas des portes : chacune garde son brouillon, son envoi durable et ses médias.
  * Le choix du format vit dans le couloir du haut de chaque contenu (jamais sur la scène) et grise avec sa raison.
+ *
+ * [feedOwner] est l'entrée du FIL quand elle est dans la pile : les ViewModels du fil, des moods et de leurs brouillons
+ * y sont PARTAGÉS avec l'écran qu'on quitte — une seule instance (pas de second chargement du fil), et une publication
+ * ou une sauvegarde différée qui survit à la fermeture de l'hôte (l'entrée de l'hôte meurt avec lui). Hors du fil
+ * (porte du plateau de stories), l'hôte garde ses propres instances.
  */
 @Composable
 fun ComposerHostScreen(
     onClose: () -> Unit,
+    feedOwner: ViewModelStoreOwner? = null,
     viewModel: ComposerHostViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val shared = feedOwner ?: checkNotNull(LocalViewModelStoreOwner.current)
+    val choose: (ComposerFormat) -> Unit = { format ->
+        if (state.leavesMediaBehindOn(format)) {
+            Toast.makeText(context, R.string.composer_format_media_stay_behind, Toast.LENGTH_LONG).show()
+        }
+        viewModel.choose(format)
+    }
     val formatMenu: @Composable () -> Unit = {
-        ComposerFormatMenu(state.selectedFormat, state.verdicts, viewModel::choose)
+        ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
     }
     when (state.selectedFormat) {
         ComposerFormat.STORY -> StoryComposerContent(
@@ -43,12 +62,15 @@ fun ComposerHostScreen(
             governingType = state.chosen?.postType,
             offerReel = state.offersReelForPost,
             onFormatChosen = viewModel::choose,
+            viewModel = hiltViewModel<FeedViewModel>(shared),
         )
         ComposerFormat.STATUS -> MoodComposerContent(
             seedText = state.text,
             onText = viewModel::onMoodFacts,
             onClose = onClose,
             formatSlot = formatMenu,
+            viewModel = hiltViewModel<StatusesViewModel>(shared),
+            drafts = hiltViewModel<StatusComposerDraftsViewModel>(shared),
         )
     }
 }

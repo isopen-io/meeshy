@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,7 +65,7 @@ fun PostComposerContent(
     }
     val seed by produceState<FeedComposerDraft?>(null, viewModel) {
         val restored = viewModel.restorableDraft()
-        value = (restored ?: FeedComposerDraft()).let { if (it.text.isBlank() && seedText.isNotBlank()) it.withText(seedText) else it }
+        value = (restored ?: FeedComposerDraft()).let { if (seedText.isNotBlank() && seedText != it.text) it.withText(seedText) else it }
     }
     val initial = seed ?: return
     FeedComposerSheet(
@@ -96,7 +97,7 @@ fun MoodComposerContent(
 ) {
     val seed by produceState<StatusComposerDraft?>(null, drafts) {
         val restored = drafts.restorable() ?: StatusComposerDraft()
-        value = if (restored.text.isBlank() && seedText.isNotBlank()) restored.withText(seedText) else restored
+        value = if (seedText.isNotBlank() && seedText != restored.text) restored.withText(seedText) else restored
     }
     val initial = seed ?: return
     StatusComposerSheet(
@@ -132,7 +133,10 @@ private fun ReelOfferDialog(onReel: () -> Unit, onPost: () -> Unit, onCancel: ()
         text = { Text(stringResource(R.string.feed_reel_offer_body)) },
         confirmButton = { TextButton(onClick = onReel) { Text(stringResource(R.string.feed_reel_offer_reel)) } },
         dismissButton = {
-            TextButton(onClick = onPost) { Text(stringResource(R.string.feed_reel_offer_post)) }
+            Row {
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.feed_composer_cancel)) }
+                TextButton(onClick = onPost) { Text(stringResource(R.string.feed_reel_offer_post)) }
+            }
         },
     )
 }
