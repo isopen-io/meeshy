@@ -30,4 +30,12 @@ class ComposerBackgroundMenuActionTest {
         assertThat(served.filter { it.isDestructive }).containsExactly(ComposerBackgroundMenuAction.DELETE)
         assertThat(served.last().isDestructive).isTrue()
     }
+
+    @Test
+    fun `sans editeur monte, modifier n est pas offert`() {
+        assertThat(ComposerBackgroundMenuAction.served(offersPhoto = false, offersEdit = false)).containsExactly(
+            ComposerBackgroundMenuAction.BRING_FORWARD,
+            ComposerBackgroundMenuAction.DELETE,
+        ).inOrder()
+    }
 }

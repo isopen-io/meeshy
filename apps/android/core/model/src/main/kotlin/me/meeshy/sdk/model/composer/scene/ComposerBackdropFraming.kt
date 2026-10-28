@@ -3,10 +3,10 @@ package me.meeshy.sdk.model.composer.scene
 import me.meeshy.sdk.model.StoryBackgroundTransform
 
 /**
- * Le cadrage d'un fond de scène (miroir de `StoryBackgroundFraming` iOS, #6125). `null` n'est pas un état : c'est
+ * Le cadrage d'un fond de scène (miroir de `StoryFitMode` iOS, #6125). `null` n'est pas un état : c'est
  * un ALIAS de « remplir » — d'où [rendersFilled], qui rend le cycle décidable quelle que soit l'entrée.
  */
-public object StoryBackgroundFraming {
+public object StoryFitMode {
     public const val FIT: String = "fit"
     public const val FILL: String = "fill"
 
@@ -41,8 +41,8 @@ public enum class StoryBackdrop(public val wire: String, public val solidHex: St
 public object ComposerBackdropFraming {
 
     public fun fitMode(transform: StoryBackgroundTransform?): String =
-        if (StoryBackgroundFraming.rendersFilled(transform?.videoFitMode)) StoryBackgroundFraming.FILL
-        else StoryBackgroundFraming.FIT
+        if (StoryFitMode.rendersFilled(transform?.videoFitMode)) StoryFitMode.FILL
+        else StoryFitMode.FIT
 
     public fun backdrop(transform: StoryBackgroundTransform?): StoryBackdrop =
         StoryBackdrop.resolve(transform?.backdrop)
@@ -53,6 +53,6 @@ public object ComposerBackdropFraming {
     /** Choisir un fond AJUSTE la scène : rempli, le média n'a aucune bande où le laisser voir. */
     public fun applyingBackdrop(backdrop: StoryBackdrop, transform: StoryBackgroundTransform?): StoryBackgroundTransform? =
         (transform ?: StoryBackgroundTransform())
-            .copy(backdrop = backdrop.wire, videoFitMode = StoryBackgroundFraming.FIT)
+            .copy(backdrop = backdrop.wire, videoFitMode = StoryFitMode.FIT)
             .takeUnless { it.isIdentity }
 }
