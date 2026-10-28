@@ -38,6 +38,7 @@
     <string name="audio_trim_handle_end">Auswahlende</string>
     <string name="audio_trim_handle_start">Auswahlbeginn</string>
     <string name="avatar_a11y_mood">Stimmung %s</string>
+    <string name="bubble_contact_card_shared">Geteilter Kontakt</string>
     <string name="bubble_story_citation_answer">Antwort auf die Story</string>
     <string name="bubble_story_citation_open_hint">Öffnet die zitierte Story</string>
     <string name="bubble_story_citation_unavailable">Story nicht verfügbar</string>
