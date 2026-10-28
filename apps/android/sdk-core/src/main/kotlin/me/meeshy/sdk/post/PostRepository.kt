@@ -656,9 +656,14 @@ class PostRepository @Inject constructor(
         val target = targetLanguage.trim()
         val translated = translateSource(post.content, post.originalLanguage, target) ?: return false
         // Fusionné sur la ligne COURANTE au moment d'écrire : un « j'aime » posé pendant la traduction survit, et la copie
-        // du compte qui a tapé n'est jamais écrite après la purge (#13577, #13580).
-        return fence.commitOrWrite(ticket) { foldIntoCache(postId) { PostTranslationMerge.mergeTranslation(it, target, translated) } }
-            ?: false
+        // du compte qui a tapé n'est jamais écrite après la purge (#13577, #13580). Une ligne dont l'auteur a changé le
+        // texte pendant la traduction ne reçoit pas la traduction de l'ANCIEN texte.
+        return fence.commitOrWrite(ticket) {
+            foldIntoCache(postId) { current ->
+                PostTranslationMerge.mergeTranslation(current, target, translated)
+                    .takeIf { current.content == post.content && current.originalLanguage == post.originalLanguage }
+            }
+        } ?: false
     }
 
     /** Remplace dans le fil la ligne [postId] COURANTE par [merge] de cette ligne ; `false` : ligne absente ou fusion sans effet. */
