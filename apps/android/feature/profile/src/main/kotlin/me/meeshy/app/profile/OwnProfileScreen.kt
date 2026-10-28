@@ -73,6 +73,10 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
 
 /** Durée d'affichage de la capsule d'erreur (iOS : 3 s). */
 private const val ERROR_CAPSULE_MILLIS = 3_000L
@@ -172,9 +176,10 @@ fun OwnProfileScreen(
 private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadViewModel): (ImageUploadTarget) -> Unit {
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.readMediaUploadItem(it) }
-            ?.let { uploadViewModel.onImagePicked(target, it) }
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { uploadViewModel.onImagePicked(target, it) } }
     }
     return { picked ->
         target = picked

@@ -73,6 +73,10 @@ import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val PresetColors = listOf(
     "FF2E63", "A855F7", "08D9D6", "FF6B6B", "4ECDC4", "45B7D1",
@@ -94,8 +98,10 @@ fun CommunitySettingsScreen(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 2) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var pickTarget by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
+    val pickScope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.readMediaUploadItem(it) }?.let { viewModel.upload(pickTarget, it) }
+        uri ?: return@rememberLauncherForActivityResult
+        pickScope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { viewModel.upload(pickTarget, it) } }
     }
     fun pick(target: ImageUploadTarget) {
         pickTarget = target
