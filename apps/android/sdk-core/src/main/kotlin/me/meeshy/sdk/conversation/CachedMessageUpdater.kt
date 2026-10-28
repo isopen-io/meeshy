@@ -39,8 +39,15 @@ internal class CachedMessageUpdater(
         messageId: String,
         requireSynced: Boolean,
         transform: (ApiMessage) -> ApiMessage,
+    ): ApiMessage? = update(ticket(), messageId, requireSynced, transform)
+
+    /** [update] sous [ticket], pris AVANT la requête dont la réponse écrit la ligne (#13560) : rien n'atterrit chez B. */
+    suspend fun update(
+        ticket: AccountTicket?,
+        messageId: String,
+        requireSynced: Boolean,
+        transform: (ApiMessage) -> ApiMessage,
     ): ApiMessage? {
-        val ticket = ticket()
         return fence.commitOrWrite(ticket) {
             database.withTransaction {
                 val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction null
