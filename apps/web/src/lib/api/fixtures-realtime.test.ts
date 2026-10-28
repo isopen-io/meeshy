@@ -38,6 +38,7 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       user: { id: 'u-viewer', language: 'fr', isAnonymous: false },
       version: 'fixtures',
     });
+    client.disconnect();
   });
 
   /**
@@ -86,6 +87,7 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
     client.on(SERVER_EVENTS.AUTHENTICATED, handler);
     client.off(SERVER_EVENTS.AUTHENTICATED, handler);
     client.connect();
+    client.disconnect();
     expect(count).toBe(0);
   });
 
