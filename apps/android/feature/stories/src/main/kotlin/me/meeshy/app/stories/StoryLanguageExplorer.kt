@@ -60,7 +60,7 @@ object StoryLanguageExplorerBuilder {
         val originalSelected = StoryLanguageOverride.isOriginal(override)
         val servedCode = resolved.languageCode.takeUnless { originalSelected }
         val rows = MessageDetailExplorer.build(
-            originalLanguage = null,
+            originalLanguage = item.originalLanguage,
             content = item.content.orEmpty(),
             translations = item.translations.orEmpty().map { CaptionRow(it.language, it.content) },
             preferences = preferences,
