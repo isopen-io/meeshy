@@ -43,6 +43,7 @@ internal fun ComposerSoundPanel(
     audio: List<StoryAudioPlayerObject>,
     canAddSound: Boolean,
     onOpenShelf: () -> Unit,
+    @androidx.annotation.StringRes capRefusal: Int = R.string.composer_scene_cap_sound,
     onToggleMute: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
@@ -51,7 +52,7 @@ internal fun ComposerSoundPanel(
             icon = { Icon(MeeshyIcons.QueueMusic, contentDescription = null) },
             label = stringResource(R.string.story_composer_soundLibrary),
             enabled = true,
-            onClick = rememberGuardedAddition(canAddSound, R.string.composer_scene_cap_sound, onOpenShelf),
+            onClick = rememberGuardedAddition(canAddSound, capRefusal, onOpenShelf),
             modifier = Modifier.fillMaxWidth(),
         )
         audio.forEach { track ->

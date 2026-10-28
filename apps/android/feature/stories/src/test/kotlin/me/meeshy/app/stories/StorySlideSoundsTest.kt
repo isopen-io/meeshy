@@ -119,4 +119,41 @@ class StorySlideSoundsTest {
         assertThat(deckWith(media = 6, sounds = 3).selectedRemainingMediaSlots).isEqualTo(1)
         assertThat(deckWith(media = 6, sounds = 3).addMediaToSelected("new").selectedSlide.mediaIds).hasSize(7)
     }
+
+    private fun slideWith(media: Int, sounds: Int) = StorySlideDeck(
+        slides = listOf(
+            StorySlide(
+                id = "a",
+                mediaIds = (1..media).map { "m$it" },
+                audio = (1..sounds).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) },
+            ),
+        ),
+        selectedId = "a",
+    )
+
+    @Test
+    fun `a story composed past the shared cap still publishes, every media and sound kept`() {
+        val legacy = slideWith(media = 10, sounds = 3)
+        val state = StoryComposerUiState(deck = legacy)
+        assertThat(state.canPublish).isTrue()
+        assertThat(legacy.publishableSlides.single().mediaIds).hasSize(10)
+        assertThat(legacy.publishableSlides.single().audio).hasSize(3)
+        assertThat(legacy.selectedCanAddMedia).isFalse()
+        assertThat(state.canBorrowSound).isFalse()
+    }
+
+    @Test
+    fun `the sound door names the cap it hit`() {
+        assertThat(StoryComposerUiState(deck = slideWith(media = 10, sounds = 0)).soundCapRefusal)
+            .isEqualTo(me.meeshy.feature.stories.R.string.composer_scene_cap_media)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 0, sounds = 5)).soundCapRefusal)
+            .isEqualTo(me.meeshy.feature.stories.R.string.composer_scene_cap_sound)
+    }
+
+    @Test
+    fun `the gallery opens with the places left once the sounds are counted`() {
+        assertThat(StoryComposerUiState(deck = slideWith(media = 8, sounds = 1)).mediaPickMode).isEqualTo(StoryMediaPickMode.Single)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 5, sounds = 5)).mediaPickMode).isEqualTo(StoryMediaPickMode.None)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 3, sounds = 2)).mediaPickMode).isEqualTo(StoryMediaPickMode.Multiple)
+    }
 }

@@ -48,12 +48,18 @@ object ComposerSoundPlacement {
     }
 
     /** Un emprunt de plus est-il possible ? Même calcul que [borrow] : un fond emprunté se REMPLACE, un fond capté reste. */
-    fun canBorrow(audios: List<StoryAudioPlayerObject>, visualMedia: Int = 0): Boolean =
-        fitsAfterBorrowing(keptBeforeBorrowing(audios, soundId = null).size, visualMedia)
+    fun canBorrow(audios: List<StoryAudioPlayerObject>, visualMedia: Int = 0): Boolean = borrowRefusal(audios, visualMedia) == null
 
-    /** Cinq sons au plus ET dix médias+sons en tout (`canAddAudio = canAddMedia && audio < 5`, iOS). */
-    private fun fitsAfterBorrowing(keptSounds: Int, visualMedia: Int): Boolean =
-        keptSounds < SceneObjectCaps.AUDIO && SceneObjectCaps.canAddMedia(visualMedia, keptSounds)
+    /** Pourquoi un emprunt de plus est refusé — les dix médias+sons, ou les cinq sons ; `null` ⇒ admis. Ce que la porte DIT. */
+    fun borrowRefusal(audios: List<StoryAudioPlayerObject>, visualMedia: Int = 0): SceneObjectCaps.Reason? =
+        refusalAfterBorrowing(keptBeforeBorrowing(audios, soundId = null).size, visualMedia)
+
+    /** Dix médias+sons en tout ET cinq sons au plus (`canAddAudio = canAddMedia && audio < 5`, iOS), dans l'ordre de [SceneObjectCaps.verdict]. */
+    private fun refusalAfterBorrowing(keptSounds: Int, visualMedia: Int): SceneObjectCaps.Reason? = when {
+        !SceneObjectCaps.canAddMedia(visualMedia, keptSounds) -> SceneObjectCaps.Reason.MEDIA_FULL
+        keptSounds >= SceneObjectCaps.AUDIO -> SceneObjectCaps.Reason.AUDIO_FULL
+        else -> null
+    }
 
     private fun keptBeforeBorrowing(audios: List<StoryAudioPlayerObject>, soundId: String?): List<StoryAudioPlayerObject> {
         val superseded = supersededId(background(audios), audios)?.let { id -> audios.first { it.id == id } }
@@ -69,7 +75,7 @@ object ComposerSoundPlacement {
     fun borrow(audios: List<StoryAudioPlayerObject>, sound: ApiSound, visualMedia: Int = 0): SoundPlacement {
         if (background(audios)?.soundId == sound.id) return SoundPlacement.Placed(audios)
         val kept = keptBeforeBorrowing(audios, sound.id)
-        if (!fitsAfterBorrowing(kept.size, visualMedia)) return SoundPlacement.Refused
+        if (refusalAfterBorrowing(kept.size, visualMedia) != null) return SoundPlacement.Refused
         return SoundPlacement.Placed(kept + BorrowedSoundPost.audioObject(sound.toBorrowed(), isBackground = true))
     }
 
