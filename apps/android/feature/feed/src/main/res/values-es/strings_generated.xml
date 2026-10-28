@@ -20,6 +20,7 @@
     <string name="feed_composer_placeholder">¿Qué estás pensando?</string>
     <string name="feed_composer_publish">Publicar</string>
     <string name="feed_composer_record_voice">Grabar un audio</string>
+    <string name="feed_composer_socle_audience">Audiencia</string>
     <string name="feed_composer_take_photo">Hacer una foto</string>
     <string name="feed_composer_title">Nueva publicación</string>
     <string name="feed_composer_type_hint">Cambiar entre reel y publicación</string>

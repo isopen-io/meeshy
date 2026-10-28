@@ -20,6 +20,7 @@
     <string name="feed_composer_placeholder">بماذا تفكّر؟</string>
     <string name="feed_composer_publish">نشر</string>
     <string name="feed_composer_record_voice">تسجيل مقطع صوتي</string>
+    <string name="feed_composer_socle_audience">الجمهور</string>
     <string name="feed_composer_take_photo">التقاط صورة</string>
     <string name="feed_composer_title">منشور جديد</string>
     <string name="feed_composer_type_hint">التبديل بين ريل ومنشور</string>
