@@ -31,7 +31,15 @@ internal data class PieceOverlayModel(
         MessagePieceTarget.actions(isProtected = pages.getOrNull(index)?.isProtected ?: true, canReply = canReply)
 
     companion object {
-        fun of(message: ApiMessage, attachmentId: String, canReply: Boolean, resolveUrl: (String) -> String): PieceOverlayModel? {
+        /** Une conversation chiffrée de bout en bout n'ouvre aucun aperçu de pièce : ce téléphone n'en déchiffre pas les blobs. */
+        fun of(
+            message: ApiMessage,
+            attachmentId: String,
+            canReply: Boolean,
+            conversationIsEndToEnd: Boolean = false,
+            resolveUrl: (String) -> String,
+        ): PieceOverlayModel? {
+            if (conversationIsEndToEnd) return null
             MessagePieceTarget.piece(attachmentId, message) ?: return null
             val pieces = MessagePieceTarget.pieces(message)
             val pages = pieces.map { piece ->

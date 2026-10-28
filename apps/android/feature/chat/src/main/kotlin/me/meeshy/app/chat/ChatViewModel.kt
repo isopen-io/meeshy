@@ -712,7 +712,7 @@ class ChatViewModel @Inject constructor(
     /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
     internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
         latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
-            PieceOverlayModel.of(message, attachmentId, canReply = _state.value.viewerMayWrite) { resolveMediaUrl(it, config.apiBaseUrl) }
+            PieceOverlayModel.of(message, attachmentId, canReply = _state.value.viewerMayWrite, conversationIsEndToEnd = _state.value.isEndToEnd) { resolveMediaUrl(it, config.apiBaseUrl) }
         }
 
     // --- Forward --------------------------------------------------------------------------

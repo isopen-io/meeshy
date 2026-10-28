@@ -53,6 +53,7 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.location.LocationFullscreen
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.hexColor
 
 /**
  * List layer: the message list with its scroll behaviours (open scroll, auto-scroll on a new
@@ -323,7 +324,7 @@ internal fun ChatListHost(
     pieceOverlay?.let { overlay ->
         MessagePieceOverlay(
             model = overlay,
-            accent = androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor("#" + (state.accentColorHex ?: DEFAULT_PLACE_ACCENT).trimStart('#'))),
+            accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
             onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
             onDismiss = { pieceOverlay = null },

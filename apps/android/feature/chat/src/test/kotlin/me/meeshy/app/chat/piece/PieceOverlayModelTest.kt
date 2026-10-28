@@ -32,6 +32,13 @@ class PieceOverlayModelTest {
     }
 
     @Test
+    fun `une conversation chiffree de bout en bout n'ouvre aucun apercu de piece`() {
+        assertThat(
+            PieceOverlayModel.of(message(photo("a")), "a", canReply = true, conversationIsEndToEnd = true, resolveUrl = resolve),
+        ).isNull()
+    }
+
+    @Test
     fun `une piece floutee protege tout le message, aucun apercu et aucune page en clair a cote d elle`() {
         assertThat(PieceOverlayModel.of(message(photo("a"), photo("b", blurred = true)), "a", canReply = true, resolveUrl = resolve)).isNull()
         assertThat(PieceOverlayModel.of(message(photo("a"), photo("b", blurred = true)), "b", canReply = true, resolveUrl = resolve)).isNull()
