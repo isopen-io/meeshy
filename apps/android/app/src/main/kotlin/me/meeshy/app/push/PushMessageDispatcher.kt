@@ -55,9 +55,9 @@ class PushMessageDispatcher @Inject constructor(
 
     /**
      * #13567 : le compte connecté est lu sur son miroir PERSISTÉ — un processus réveillé à froid par FCM n'a pas encore
-     * restauré la session en mémoire. Rien sans session enregistrée. Une session ouverte dont le compte n'a pas encore
-     * été persisté (installation antérieure au miroir, réveillée à froid avant toute relecture) ne peut pas être jugée :
-     * le comportement d'avant tient, comme pour un push qui ne nomme personne.
+     * restauré la session en mémoire ; à défaut, l'identité de la session courante. Une identité introuvable est
+     * fail-closed : un push qui NOMME un destinataire est étranger ; seul un push qui ne nomme personne (passerelle
+     * antérieure) garde le chemin d'avant.
      *
      * Un push ÉTRANGER n'a aucun effet, retraits compris : la fin de session a déjà retiré toutes les bannières
      * (`PostedNotificationsTeardown`), donc un arrêt de sonnerie ou une révocation du compte quitté ne peut viser
@@ -65,8 +65,7 @@ class PushMessageDispatcher @Inject constructor(
      * [IncomingCallRingStore.route] y inscrirait l'appel comme déjà vu, faisant taire la sonnerie du compte connecté.
      */
     private fun recipientOf(push: IncomingPush): PushRecipient {
-        if (!tokenStore.isAuthenticated) return PushRecipient.of(push.payload.recipientUserId, signedInUserId = null)
-        val signedIn = tokenStore.userId ?: return PushRecipient.UNNAMED
+        val signedIn = (tokenStore.userId ?: session.currentUserId).takeIf { tokenStore.isAuthenticated }
         return PushRecipient.of(push.payload.recipientUserId, signedIn)
     }
 
