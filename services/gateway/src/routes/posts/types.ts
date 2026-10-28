@@ -4,6 +4,7 @@ import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import { parseMessageSticker } from '../../services/stickers/messageSticker';
+import { StoryKeyframesBoundsSchema, StoryScenesBoundsSchema, StoryTimelineDurationSchema } from './storyEffectsBounds';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -136,6 +137,7 @@ export const StoryMediaObjectSchema = z.object({
   filter: z.string().max(32).optional(),
   adjustments: StoryMediaAdjustmentsSchema.optional(),
   crop: StoryMediaCropSchema.optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
@@ -176,6 +178,7 @@ const StoryTextObjectSchema = z.object({
    * mérite d'être validé comme les autres.
    */
   referenceUserId: z.string().regex(OBJECT_ID_REGEX).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -186,6 +189,7 @@ const StoryStickerObjectSchema = z.object({
   scale: z.number().min(0).max(20).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 export const StoryAudioObjectSchema = z.object({
@@ -228,6 +232,8 @@ export const StoryEffectsSchema = z.object({
   stickerObjects: z.array(StoryStickerObjectSchema).max(STORY_ARRAY_CAP).optional(),
   audioPlayerObjects: z.array(StoryAudioObjectSchema).max(STORY_ARRAY_CAP).optional(),
   slideDuration: z.number().min(0).max(86400).optional(),
+  timelineDuration: StoryTimelineDurationSchema,
+  scenes: StoryScenesBoundsSchema,
 }).passthrough()
   .refine((effects) => {
     // Garde-fou final : sérialiser et vérifier taille totale. Couvre les
