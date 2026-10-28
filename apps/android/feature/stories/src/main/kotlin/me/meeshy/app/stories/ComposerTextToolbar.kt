@@ -182,7 +182,7 @@ internal fun TextStyleToolbar(
 
 /** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
 @Composable
-private fun CycleButton(icon: ImageVector, labelRes: Int, active: Boolean, onClick: () -> Unit) {
+internal fun CycleButton(icon: ImageVector, labelRes: Int, active: Boolean, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         Icon(
             icon,
