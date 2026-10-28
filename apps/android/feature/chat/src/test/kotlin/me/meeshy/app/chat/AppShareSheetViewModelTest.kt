@@ -37,6 +37,10 @@ import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import kotlinx.coroutines.delay
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -306,6 +310,94 @@ class AppShareSheetViewModelTest {
 
         assertThat(h.vm.state.value.subject).isNull()
         assertThat(h.vm.state.value.sheet.selection).isEmpty()
+    }
+
+    @Test
+    fun a_person_blocked_after_being_selected_receives_nothing_and_no_direct_is_created() = runTest(dispatcher) {
+        val h = harness(resolution = DirectConversationResolution.Created(direct("new-direct", "u9", "Marc")))
+        h.vm.bind(ShareSubject.Text("coucou"))
+        advanceUntilIdle()
+        h.vm.toggle(h.model().sections.people.single())
+
+        h.blocks.setBlocked("u9", true)
+        advanceUntilIdle()
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.conversations.directConversationWith(any(), any()) }
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(h.vm.state.value.sheet.selection).isEmpty()
+    }
+
+    @Test
+    fun an_existing_direct_whose_peer_is_blocked_after_selection_receives_nothing() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.bind(ShareSubject.Text("coucou"))
+        advanceUntilIdle()
+        h.vm.toggle(h.model().sections.recents.single { it.conversationId == "d1" })
+
+        h.blocks.setBlocked("u1", true)
+        advanceUntilIdle()
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun a_peer_blocked_while_their_direct_is_being_resolved_receives_nothing() = runTest(dispatcher) {
+        val h = harness()
+        coEvery { h.conversations.directConversationWith(any(), any()) } coAnswers {
+            h.blocks.setBlocked("u9", true)
+            DirectConversationResolution.Found(direct("d9", "u9", "Marc"), fromCache = true)
+        }
+        h.vm.bind(ShareSubject.Text("coucou"))
+        advanceUntilIdle()
+        h.vm.toggle(h.model().sections.people.single())
+
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(h.model().deliveries["user:u9"]).isInstanceOf(ShareDelivery.Failed::class.java)
+    }
+
+    @Test
+    fun closing_the_sheet_right_after_send_still_delivers_every_recipient_and_frees_the_received_copy_afterwards() = runTest(dispatcher) {
+        val h = harness()
+        coEvery { h.conversations.directConversationWith(any(), any()) } coAnswers {
+            delay(5_000)
+            DirectConversationResolution.Created(direct("new-direct", "u9", "Marc"))
+        }
+        val store = ViewModelStore()
+        val vm = ViewModelProvider(store, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = h.vm as T
+        })[AppShareSheetViewModel::class.java]
+        val copy = intakeCopy()
+        val existedAtEnqueue = mutableListOf<Boolean>()
+        coEvery { h.mediaQueue.enqueue(any(), any(), any()) } coAnswers {
+            existedAtEnqueue += copy.exists()
+            "upload-cmid"
+        }
+        vm.bindIncoming("regarde", listOf(MediaUploadItem.onDisk(copy, "a.png", "image/png")))
+        advanceUntilIdle()
+        vm.toggle(vm.model(vm.state.value).sections.recents.first())
+        vm.toggle(vm.model(vm.state.value).sections.people.single())
+
+        vm.send()
+        store.clear()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = "regarde", originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "new-direct", content = "regarde", originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
+        assertThat(existedAtEnqueue).containsExactly(true, true)
+        assertThat(copy.exists()).isFalse()
+    }
+
+    private fun intakeCopy(): File {
+        val dir = File(kotlin.io.path.createTempDirectory("share").toFile(), "media-intake").apply { mkdirs(); deleteOnExit() }
+        return File(dir, "copy").apply { writeText("x"); deleteOnExit() }
     }
 
     private fun file(name: String, mime: String): MediaUploadItem =

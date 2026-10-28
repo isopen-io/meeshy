@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
@@ -46,7 +47,7 @@ fun IncomingShareScreen(
     }
     val items = prepared ?: return
     if (items.isEmpty() && sharedText.isNullOrBlank()) {
-        onFinished()
+        LaunchedEffect(Unit) { onFinished() }
         return
     }
     IncomingShareSheetHost(

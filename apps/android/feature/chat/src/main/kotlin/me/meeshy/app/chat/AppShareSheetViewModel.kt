@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.interlocutor
 import me.meeshy.sdk.model.mayCurrentUserWrite
 import me.meeshy.sdk.model.share.OutgoingShare
 import me.meeshy.sdk.model.share.ShareAction
@@ -102,6 +104,9 @@ internal class AppShareSheetViewModel @Inject constructor(
     private var incomingItems: List<MediaUploadItem> = emptyList()
     private var loadJob: Job? = null
     private val inFlight = mutableSetOf<String>()
+    private var activeSends = 0
+    private var cleared = false
+    private val releaseWhenIdle = mutableListOf<MediaUploadItem>()
 
     init {
         viewModelScope.launch {
@@ -133,7 +138,7 @@ internal class AppShareSheetViewModel @Inject constructor(
      * s'ouvre pas : la feuille n'a rien à envoyer.
      */
     fun bindIncoming(text: String?, items: List<MediaUploadItem>) {
-        incomingItems.filterNot { it in items }.forEach(MediaIntake::release)
+        release(incomingItems.filterNot { it in items })
         incomingItems = items
         val media = items.mapIndexed { index, item ->
             ShareMedia(id = "incoming:$index", mimeType = item.mimeType, bytes = item.sizeBytes)
@@ -204,17 +209,33 @@ internal class AppShareSheetViewModel @Inject constructor(
         pending.forEach { inFlight += it.id; mark(it, ShareDelivery.Sending) }
         // #13558 : le partage appartient au compte qui a touché « Envoyer ».
         val gesture = mediaUploadQueue.ticket()
-        viewModelScope.launch(gesture.asCoroutineContext()) {
-            pending.forEach { recipient ->
-                val outcome = deliver(recipient, subject, posts, state.sheet.caption, user)
-                inFlight -= recipient.id
-                when (outcome) {
-                    is Outcome.Served -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, outcome.queued)) }
-                    is Outcome.Refused -> mark(recipient, ShareDelivery.Failed(outcome.failure))
+        activeSends += 1
+        // Fermer la feuille juste après « Envoyer » n'interrompt pas l'envoi : chaque destinataire coché part,
+        // et la copie reçue n'est libérée qu'une fois le dernier mis en file.
+        viewModelScope.launch(gesture.asCoroutineContext() + NonCancellable) {
+            try {
+                deliverAll(pending, subject, posts, state.sheet.caption, user)
+            } finally {
+                activeSends -= 1
+                if (activeSends == 0) {
+                    release(releaseWhenIdle.toList())
+                    releaseWhenIdle.clear()
+                    if (cleared) release(incomingItems)
                 }
             }
-            workManager.enqueue(OutboxFlushWorker.buildRequest())
         }
+    }
+
+    private suspend fun deliverAll(pending: List<ShareRecipient>, subject: ShareSubject, posts: List<OutgoingShare>, caption: String, user: MeeshyUser) {
+        pending.forEach { recipient ->
+            val outcome = deliver(recipient, subject, posts, caption, user)
+            inFlight -= recipient.id
+            when (outcome) {
+                is Outcome.Served -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, outcome.queued)) }
+                is Outcome.Refused -> mark(recipient, ShareDelivery.Failed(outcome.failure))
+            }
+        }
+        workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
 
     private sealed interface Outcome {
@@ -250,9 +271,13 @@ internal class AppShareSheetViewModel @Inject constructor(
 
     /** La conversation où le message part — la directe d'une personne est retrouvée ou créée, et relue avant tout envoi. */
     private suspend fun destination(recipient: ShareRecipient, user: MeeshyUser): Destination {
+        if (isBlocked(recipient.userId)) return Destination.Refused(ShareFailure.GENERIC)
         recipient.conversationId?.let { id ->
             val known = conversations.firstOrNull { it.id == id }
-            return if (known != null && !known.mayCurrentUserWrite(user.id)) Destination.Refused(ShareFailure.SEALED_DESTINATION) else Destination.Ready(id)
+            return when {
+                known == null -> Destination.Refused(ShareFailure.GENERIC)
+                else -> gate(known, user)
+            }
         }
         val userId = recipient.userId ?: return Destination.Refused(ShareFailure.GENERIC)
         return when (val resolution = conversationRepository.directConversationWith(userId)) {
@@ -264,8 +289,14 @@ internal class AppShareSheetViewModel @Inject constructor(
         }
     }
 
-    private fun gate(conversation: ApiConversation, user: MeeshyUser): Destination =
-        if (conversation.mayCurrentUserWrite(user.id)) Destination.Ready(conversation.id) else Destination.Refused(ShareFailure.SEALED_DESTINATION)
+    /** La conversation RENDUE est relue avant tout envoi : chiffrée ou fermée ⇒ refus, interlocuteur bloqué ⇒ refus. */
+    private fun gate(conversation: ApiConversation, user: MeeshyUser): Destination = when {
+        !conversation.mayCurrentUserWrite(user.id) -> Destination.Refused(ShareFailure.SEALED_DESTINATION)
+        isBlocked(conversation.interlocutor(user.id)?.userId) -> Destination.Refused(ShareFailure.GENERIC)
+        else -> Destination.Ready(conversation.id)
+    }
+
+    private fun isBlocked(userId: String?): Boolean = userId != null && blockCache.isBlocked(userId)
 
     private suspend fun post(conversationId: String, subject: ShareSubject, posts: List<OutgoingShare>, caption: String, user: MeeshyUser) {
         val language = user.systemLanguage?.takeIf { it.isNotBlank() } ?: LanguageResolver.FALLBACK_LANGUAGE
@@ -313,7 +344,13 @@ internal class AppShareSheetViewModel @Inject constructor(
 
     /** La copie en clair du média reçu ne survit pas à la feuille. */
     override fun onCleared() {
-        incomingItems.forEach(MediaIntake::release)
+        cleared = true
+        if (activeSends == 0) release(incomingItems)
+    }
+
+    /** Une copie qu'un envoi en cours lit encore attend la fin de cet envoi. */
+    private fun release(items: List<MediaUploadItem>) {
+        if (activeSends > 0) releaseWhenIdle += items else items.forEach(MediaIntake::release)
     }
 
     // --- Dérivation -------------------------------------------------------------------------------------
@@ -334,7 +371,9 @@ internal class AppShareSheetViewModel @Inject constructor(
         val user = sessionRepository.currentUser.value
         val blocked = blockCache.currentBlockedIds
         _state.update { state ->
+            val selection = state.sheet.selection.filterNot { it.userId in blocked && it.id !in inFlight }
             state.copy(
+                sheet = if (selection.size == state.sheet.selection.size) state.sheet else state.sheet.copy(selection = selection),
                 conversations = ShareRecipientDirectory.fromConversations(
                     conversations, state.subject?.sourceConversationId, user?.id, blocked,
                 ),
