@@ -1,29 +1,23 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.runtime.key
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.currentStateAsState
-import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
-import me.meeshy.ui.component.audio.AudioTrackSurface
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -44,11 +38,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,8 +54,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -70,7 +69,8 @@ import me.meeshy.sdk.model.composer.StoryCanvasFraming
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
-import androidx.compose.foundation.layout.Box
+import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
+import me.meeshy.ui.component.audio.AudioTrackSurface
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -98,7 +98,6 @@ fun StoryComposerScreen(
     val scope = rememberCoroutineScope()
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val sceneExport = rememberSceneExportHost(state, viewModel)
-    var backgroundMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, lifecycleOwner) {
         viewModel.published
@@ -198,29 +197,12 @@ fun StoryComposerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = titleContent ?: { Text(stringResource(R.string.stories_composer_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.stories_composer_cancel))
-                    }
-                },
-                actions = {
-                    ComposerOverflowMenu(
-                        entries = sceneExport.entries,
-                        enabled = !sceneExport.isExporting && !state.isPublishing,
-                        onPick = sceneExport::start,
-                    )
-                    IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
-                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.story_composer_undo))
-                    }
-                    IconButton(onClick = viewModel::onRedo, enabled = state.canRedo) {
-                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.story_composer_redo))
-                    }
-                    TextButton(onClick = viewModel::publish, enabled = state.canPublish) {
-                        Text(publishLabel(state.publishTitle))
-                    }
-                },
+            StoryComposerTopBar(
+                state = state,
+                viewModel = viewModel,
+                sceneExport = sceneExport,
+                onClose = onClose,
+                titleContent = titleContent,
             )
         },
     ) { padding ->
@@ -247,7 +229,6 @@ fun StoryComposerScreen(
                 onRemove = viewModel::onRemoveSlide,
                 onMove = viewModel::onMoveSlide,
             )
-
             ComposerStage(
                 carded = StoryCanvasFraming.shouldCard(
                     panelOpen = state.band.isPanelOpen &&
@@ -255,225 +236,22 @@ fun StoryComposerScreen(
                     keyboardVisible = keyboardVisible,
                     drawingActive = state.isDrawingActive,
                 ),
-                scene = { sceneModifier ->
-                    Box(sceneModifier) {
-                    StoryCanvasSurface(
-                        transform = state.selectedSlideTransform,
-                        backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                            ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
-                        sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
-                            StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
-                        },
-                        colorMatrix = state.selectedSlideFilterMatrix,
-                        textElements = state.selectedSlideTextElements,
-                        selectedElement = state.selectedTextElement,
-                        sceneMenu = state.sceneContextMenu,
-                        inlineEditEnabled = !state.isTimelineOpen,
-                        stickers = state.selectedSlideStickers,
-                        selectedStickerId = state.selectedStickerId,
-                        strokes = state.selectedSlideStrokes,
-                        isDrawingActive = state.isDrawingActive,
-                        drawColorHex = state.drawColorHex,
-                        drawWidthDesign = state.drawWidthDesign,
-                        onStrokeCaptured = viewModel::onStrokeCaptured,
-                        onTransform = viewModel::onCanvasTransform,
-                        onElementTap = viewModel::onSelectTextElement,
-                        onElementLongPress = viewModel::onOpenElementMenu,
-                        onSceneMenuAction = viewModel::onSceneMenuAction,
-                        onSceneMenuDismiss = viewModel::onDismissElementMenu,
-                        onElementDrag = viewModel::onTextElementMoved,
-                        onElementDragEnd = viewModel::onTextElementDragEnd,
-                        onElementTransform = viewModel::onTextElementTransform,
-                        onElementTextChange = viewModel::onTextChange,
-                        onStickerTap = viewModel::onSelectSticker,
-                        onStickerLongPress = viewModel::onOpenStickerMenu,
-                        onStickerDrag = viewModel::onStickerMoved,
-                        onStickerDragEnd = viewModel::onStickerDragEnd,
-                        onStickerTransform = viewModel::onStickerTransform,
-                        onBackgroundTap = {
-                            viewModel.onDeselectTextElement()
-                            viewModel.onDeselectSticker()
-                        },
-                        snapFeedback = state.snapFeedback,
-                        modifier = Modifier.fillMaxSize(),
-                        fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
-                        backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
-                        capture = sceneExport.capture,
-                        onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
-                            ?.let { { backgroundMenuOpen = true } },
-                    )
-                    ComposerBackgroundMenu(
-                        expanded = backgroundMenuOpen,
-                        onDismiss = { backgroundMenuOpen = false },
-                        onAction = { action ->
-                            backgroundMenuOpen = false
-                            val mediaId = state.deck.selectedSlideBackgroundMediaId ?: return@ComposerBackgroundMenu
-                            when (action) {
-                                ComposerBackgroundMenuAction.BRING_FORWARD -> viewModel.onToggleSlideBackgroundMedia(mediaId)
-                                ComposerBackgroundMenuAction.DELETE -> viewModel.onRemoveMedia(mediaId)
-                                ComposerBackgroundMenuAction.EDIT, ComposerBackgroundMenuAction.RETAKE_PHOTO -> Unit
-                            }
-                        },
-                    )
-                    }
-                },
-                footer = {
-                    val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
-                    state.sceneInspector?.let { inspector ->
-                        if (!state.isDrawingActive) {
-                            SceneInspectorRow(
-                                inspector = inspector,
-                                onOpenTiming = { viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE) },
-                            )
-                        }
-                    }
-                    if (state.isDrawingActive) {
-                        StoryDrawingToolbar(
-                            activeColorHex = state.drawColorHex,
-                            activeWidthDesign = state.drawWidthDesign,
-                            canUndo = state.drawingBoard.canUndo,
-                            onColorSelected = viewModel::onDrawColorSelected,
-                            onWidthSelected = viewModel::onDrawWidthSelected,
-                            onUndo = viewModel::onDrawUndo,
-                            onDone = viewModel::onExitDrawingMode,
-                        )
-                    } else if (editedText != null) {
-                        TextStyleToolbar(
-                            element = editedText,
-                            onStyle = { style -> viewModel.onTextElementStyle(editedText.id, style) },
-                            onColor = { color -> viewModel.onTextElementColor(editedText.id, color) },
-                            onAlign = { align -> viewModel.onTextElementAlign(editedText.id, align) },
-                            onBackground = { bg -> viewModel.onTextElementBackground(editedText.id, bg) },
-                            onCycleSize = { viewModel.onTextElementCycleSize(editedText.id) },
-                            onCycleOutline = { viewModel.onTextElementCycleOutline(editedText.id) },
-                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(editedText.id) },
-                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(editedText.id) },
-                            onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
-                            onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
-                            onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
-                            onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
-                            onDone = viewModel::onDeselectTextElement,
-                        )
-                    } else {
-                        // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun
-                        // pixel au rendu final) — et seulement quand aucun outil n'occupe la zone basse.
-                        val trace = ComposerSoundPlacement.traceServed(
-                            background = state.selectedSlideBackgroundSound,
-                            toolIsOpen = state.band.activeTool != null,
-                        )
-                        AnimatedVisibility(visible = trace != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                            trace?.let {
-                                SoundTraceRow(
-                                    sound = it,
-                                    onToggleMute = { viewModel.onToggleSoundMute(it.id) },
-                                    onRemove = { viewModel.onRemoveSound(it.id) },
-                                )
-                            }
-                        }
-                        // The slide CAPTION only: a text object is written on the scene itself
-                        // (ComposerInlineTextField), so this field never silently changes role.
-                        OutlinedTextField(
-                            value = state.editorText,
-                            onValueChange = viewModel::onTextChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.stories_composer_text_caption)) },
-                            placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
-                            isError = !state.draft.isWithinLimit,
-                            supportingText = {
-                                Text(
-                                    text = state.errorMessage
-                                        ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.End,
-                                )
-                            },
-                        )
-                    }
-
-                    if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
-                        MediaPreviewRow(
-                            attachments = state.selectedSlideAttachments,
-                            pending = state.selectedSlidePending,
-                            backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-                            backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-                            backgroundLoop = state.selectedSlideBackgroundLoop,
-                            onRemove = viewModel::onRemoveMedia,
-                            onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
-                            onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
-                        )
-                        ComposerMediaDescription(
-                            mediaIds = state.deck.selectedSlide.mediaIds,
-                            alt = state.draft.mediaAlt,
-                            caption = state.draft.mediaCaption,
-                            undescribedCount = state.undescribedMediaIds.size,
-                            offersSoundExtraction = state.offersSoundExtraction,
-                            allowSoundExtraction = state.draft.allowSoundExtraction == true,
-                            onAltChange = viewModel::onMediaAltChange,
-                            onCaptionChange = viewModel::onMediaCaptionChange,
-                            onAllowSoundExtractionChange = viewModel::onAllowSoundExtractionChange,
-                        )
-                    }
-                },
+                scene = { sceneModifier -> StoryComposerScene(state, viewModel, sceneExport, sceneModifier) },
+                footer = { StoryComposerFooter(state, viewModel) },
                 panel = {
-                    if (ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement)) {
-                        ComposerToolPanel(
-                            band = state.band,
-                            selectedFilter = state.selectedSlideFilter,
-                            filterIntensity = state.selectedSlideFilterIntensity,
-                            slideDurationSeconds = state.selectedSlideDurationSeconds,
-                            selectedBackground = state.selectedSlideBackground,
-                            canAddText = state.deck.selectedCanAddTextElement,
-                            canAddSticker = state.deck.selectedCanAddSticker,
-                            isUploadingMedia = state.isUploadingMedia,
-                            uploadingMedia = state.uploadingMedia,
-                            isMediaFull = state.draft.isMediaFull,
-                            mediaCount = state.draft.mediaIds.size,
-                            hasMedia = state.draft.hasMedia,
-                            onDismiss = viewModel::onBandDismiss,
-                            onAddText = viewModel::onAddTextElement,
-                            onAddSticker = { showStickerPicker = true },
-                            onPickMedia = {
-                                when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
-                                    StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-                                    StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-                                    StoryMediaPickMode.None -> Unit
-                                }
-                            },
-                            onEnterDrawing = viewModel::onEnterDrawingMode,
-                            onSelectFilter = viewModel::onSelectFilter,
-                            onFilterIntensityChange = viewModel::onFilterIntensityChange,
-                            onSlideDurationChange = viewModel::onSlideDurationChange,
-                            onSelectBackground = viewModel::onSlideBackgroundChange,
-                            sceneBackground = state.selectedSlideSceneBackground,
-                            sceneFrame = state.deck.selectedSlide.frame,
-                            objectSelected = state.selectedTextElement != null || state.selectedStickerId != null,
-                            sceneIsAnimated = state.sceneIsAnimated,
-                            onFitMode = { mode -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.fitModeSet(it, mode) } },
-                            onBackdrop = { fond -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.backdropChosen(it, fond) } },
-                            onSceneEffect = { choice -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.effectChosen(it, choice) } },
-                            onToggleAnimated = { viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled) },
-                            audio = state.selectedSlideAudio,
-                            canAddSound = state.canBorrowSound,
-                            onOpenSoundShelf = { showSoundShelf = true },
-                            onToggleSoundMute = viewModel::onToggleSoundMute,
-                            onRemoveSound = viewModel::onRemoveSound,
-                            timeline = {
-                                SceneFrise(
-                                    tracks = state.sceneTracks,
-                                    editableIds = state.sceneEditableTrackIds,
-                                    selectedId = state.selectedSceneObject?.id,
-                                    slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),
-                                    playheadSeconds = state.playheadSeconds,
-                                    onSelectTrack = { id, at ->
-                                        viewModel.onFriseTrackSelected(id)
-                                        viewModel.onPlayheadMoved(at)
-                                    },
-                                    onScrub = viewModel::onPlayheadMoved,
-                                    onWindow = viewModel::onSceneObjectWindow,
-                                )
-                            },
-                        )
-                    }
+                    StoryComposerPanel(
+                        state = state,
+                        viewModel = viewModel,
+                        onAddSticker = { showStickerPicker = true },
+                        onPickMedia = {
+                            when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                                StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                                StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                                StoryMediaPickMode.None -> Unit
+                            }
+                        },
+                        onOpenSoundShelf = { showSoundShelf = true },
+                    )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -498,32 +276,4 @@ fun StoryComposerScreen(
             }
         }
     }
-}
-
-/**
- * Reads the picked content into a [MediaUploadItem] (bytes + advertised filename +
- * MIME). Returns null when the stream can't be opened. Pure-IO glue — the
- * filename/MIME defaulting lives in `MediaUpload`, so this stays a thin reader.
- */
-internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
-    val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
-    val mimeType = getType(uri).orEmpty()
-    val fileName = displayName(uri).orEmpty()
-    return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
-}
-
-internal fun ContentResolver.displayName(uri: Uri): String? =
-    runCatching {
-        query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
-        }
-    }.getOrNull()
-
-/** Ce que le bouton de publication nomme : la story, N stories (une par slide), ou la story et son réel. */
-@androidx.compose.runtime.Composable
-internal fun publishLabel(title: me.meeshy.sdk.model.composer.StoryPublishTitle): String = when (title) {
-    me.meeshy.sdk.model.composer.StoryPublishTitle.Single -> stringResource(R.string.composer_publish_as_story)
-    is me.meeshy.sdk.model.composer.StoryPublishTitle.Many -> stringResource(R.string.stories_composer_publish_many, title.count)
-    me.meeshy.sdk.model.composer.StoryPublishTitle.StoryAndReel -> stringResource(R.string.composer_publish_as_storyAndReel)
 }
