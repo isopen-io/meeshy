@@ -15,8 +15,8 @@ enum class StoryTextFrameShape(val wire: String) {
     ;
 
     companion object {
-        /** Les formes offertes au choix, dans l'ordre d'iOS (`StoryTextFrameShape.allCases`, sans « aucun »). */
-        val offered: List<StoryTextFrameShape> = listOf(ROUNDED, PILL, RECTANGLE, DIAMOND, CLOUD, SPEECH)
+        /** Les formes offertes au choix, dans l'ordre d'iOS (`StoryTextFrameShape.allCases`, « Aucun » en tête). */
+        val offered: List<StoryTextFrameShape> = entries.toList()
 
         fun fromWire(raw: String?): StoryTextFrameShape = entries.firstOrNull { it.wire == raw } ?: ROUNDED
     }
@@ -46,10 +46,16 @@ data class StoryTextFrame(
      * six formes se choisiraient sans qu'aucune ne se voie. Un texte qui a un fond, ou dont l'auteur a choisi
      * « Aucun », n'est pas touché (iOS `initializeFrameDefaultsIfNeutral`).
      */
-    fun shaped(shape: StoryTextFrameShape, background: StoryTextBackground): StoryTextFrame {
-        val chosen = copy(shape = shape)
+    fun shaped(shape: StoryTextFrameShape, background: StoryTextBackground): StoryTextFrame =
+        copy(shape = shape).primed(background)
+
+    /**
+     * À l'ouverture de la section Cadre comme au choix d'une forme (iOS `initializeFrameDefaultsIfNeutral`) : un texte
+     * qui n'a rien à montrer reçoit le liseré discret ; un fond, un liseré déjà posé ou « Aucun » le laissent intact.
+     */
+    fun primed(background: StoryTextBackground): StoryTextFrame {
         val neutral = shape != StoryTextFrameShape.NONE && background == StoryTextBackground.None && borderWidth <= 0f
-        return if (neutral) chosen.copy(borderWidth = DEFAULT_BORDER_WIDTH, borderColor = DEFAULT_BORDER_COLOR) else chosen
+        return if (neutral) copy(borderWidth = DEFAULT_BORDER_WIDTH, borderColor = DEFAULT_BORDER_COLOR) else this
     }
 
     fun padded(scale: Float): StoryTextFrame = copy(paddingScale = scale.coerceIn(0f, MAX_PADDING))

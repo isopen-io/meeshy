@@ -200,4 +200,22 @@ class StoryComposerTextReducerTest {
         assertThat(framed.frameBorderWidth).isEqualTo(3.0)
         assertThat(framed.frameBorderColor).isEqualTo("34C759")
     }
+
+    @Test
+    fun `the published json carries the frame and the language under iOS StoryTextObject coding keys`() {
+        val element = StoryTextElement(
+            id = "x",
+            frame = StoryTextFrame(StoryTextFrameShape.NONE, paddingScale = 2.5f, borderWidth = 6f, borderColor = "FF2E63"),
+            sourceLanguage = "es",
+        )
+        val wire = kotlinx.serialization.json.Json.encodeToString(
+            me.meeshy.sdk.model.StoryTextObject.serializer(),
+            element.toTextObject("fr"),
+        )
+        assertThat(wire).contains("\"frameShape\":\"none\"")
+        assertThat(wire).contains("\"framePaddingScale\":2.5")
+        assertThat(wire).contains("\"frameBorderWidth\":6.0")
+        assertThat(wire).contains("\"frameBorderColor\":\"FF2E63\"")
+        assertThat(wire).contains("\"sourceLanguage\":\"es\"")
+    }
 }

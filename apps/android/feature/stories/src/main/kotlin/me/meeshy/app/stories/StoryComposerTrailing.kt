@@ -58,7 +58,18 @@ internal val StoryComposerUiState.timeServed: Boolean get() = sceneIsAnimated
 
 internal object StoryComposerTrailingReducer {
     fun sectionOpened(state: StoryComposerUiState, section: ComposerObjectEditorSection): StoryComposerUiState =
-        if (section in ServedTextSections) state.copy(openObjectSection = section) else state
+        if (section in ServedTextSections) primed(state.copy(openObjectSection = section), section) else state
+
+    /** Cadre et bordure s'ouvrent sur un retour visuel immédiat quand le texte n'a rien à montrer (iOS `onAppear`). */
+    private fun primed(state: StoryComposerUiState, section: ComposerObjectEditorSection): StoryComposerUiState {
+        val id = state.selectedTextElementId ?: return state
+        val prime: ((StoryTextElement) -> StoryTextElement) = when (section) {
+            ComposerObjectEditorSection.Tool(TextEditTool.FRAME) -> { text -> text.copy(frame = text.frame.primed(text.background)) }
+            ComposerObjectEditorSection.Tool(TextEditTool.BORDER) -> { text -> text.copy(outline = text.outline.primed()) }
+            else -> return state
+        }
+        return state.copy(deck = state.deck.updateTextElement(id, prime))
+    }
 
     fun drawingControlOpened(state: StoryComposerUiState, control: DrawingControl): StoryComposerUiState =
         state.copy(openDrawingControl = control)

@@ -92,4 +92,36 @@ class StoryComposerTrailingTest {
         val foot = me.meeshy.sdk.model.composer.ComposerTrailingColumn.foot(state.trailingFocus, state.timeServed)
         assertThat(foot).doesNotContain(me.meeshy.sdk.model.composer.ComposerTrailingColumn.Foot.TIME)
     }
+
+    private fun text(state: StoryComposerUiState) = state.deck.selectedSlide.elements.first { it.id == "t1" }
+
+    @Test
+    fun `opening the frame section on a neutral text shows the box at once, like iOS onAppear`() {
+        val opened = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Tool(TextEditTool.FRAME))
+        assertThat(text(opened).frame.borderWidth).isEqualTo(2f)
+        assertThat(text(opened).frame.borderColor).isEqualTo("FFFFFF")
+    }
+
+    @Test
+    fun `opening the border section on a never-outlined text strokes it white at four`() {
+        val opened = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Tool(TextEditTool.BORDER))
+        assertThat(text(opened).outline.width).isEqualTo(4f)
+        assertThat(text(opened).outline.color).isEqualTo("FFFFFF")
+    }
+
+    @Test
+    fun `opening any other section leaves the text untouched`() {
+        val base = withText()
+        val opened = StoryComposerTrailingReducer.sectionOpened(base, ComposerObjectEditorSection.Tool(TextEditTool.COLOR))
+        assertThat(opened.deck).isEqualTo(base.deck)
+    }
+
+    @Test
+    fun `the text palette is iOS StoryTextColors palette, in its order`() {
+        assertThat(STORY_TEXT_COLORS).containsExactly(
+            "FFFFFF", "000000", "FF2E63", "08D9D6", "F8B500",
+            "9B59B6", "2ECC71", "FF6B6B", "3498DB", "E91E63",
+            "FF7F50", "00CED1", "A855F7", "F59E0B",
+        ).inOrder()
+    }
 }

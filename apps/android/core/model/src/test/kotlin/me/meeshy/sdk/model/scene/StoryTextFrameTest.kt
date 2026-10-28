@@ -67,4 +67,22 @@ class StoryTextFrameTest {
         assertThat(coloured.borderWidth).isEqualTo(2f)
         assertThat(StoryTextFrame(borderWidth = 6f).colored("34C759").borderWidth).isEqualTo(6f)
     }
+
+    @Test
+    fun `the shape row offers none first then the six shapes, iOS allCases order`() {
+        assertThat(StoryTextFrameShape.offered).isEqualTo(StoryTextFrameShape.entries.toList())
+        assertThat(StoryTextFrameShape.offered.first()).isEqualTo(StoryTextFrameShape.NONE)
+    }
+
+    @Test
+    fun `opening the frame section primes a neutral text with the discreet border, and only a neutral one`() {
+        val primed = StoryTextFrame().primed(StoryTextBackground.None)
+        assertThat(primed.borderWidth).isEqualTo(2f)
+        assertThat(primed.borderColor).isEqualTo("FFFFFF")
+        assertThat(StoryTextFrame().primed(solid)).isEqualTo(StoryTextFrame())
+        val none = StoryTextFrame(shape = StoryTextFrameShape.NONE)
+        assertThat(none.primed(StoryTextBackground.None)).isEqualTo(none)
+        val bordered = StoryTextFrame(borderWidth = 5f, borderColor = "000000")
+        assertThat(bordered.primed(StoryTextBackground.None)).isEqualTo(bordered)
+    }
 }

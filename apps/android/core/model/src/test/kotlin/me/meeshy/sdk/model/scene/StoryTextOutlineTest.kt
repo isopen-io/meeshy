@@ -106,4 +106,13 @@ class StoryTextOutlineSliderTest {
         assertThat(on.isVisible).isTrue()
         assertThat(StoryTextOutline(width = 8f, color = "000000").colored("007AFF").width).isEqualTo(8f)
     }
+
+    @Test
+    fun `opening the border section primes a never-touched outline at white four, nothing else`() {
+        val primed = StoryTextOutline().primed()
+        assertThat(primed.width).isEqualTo(4f)
+        assertThat(primed.color).isEqualTo("FFFFFF")
+        val zeroed = StoryTextOutline(width = 0f, color = "FF3B30")
+        assertThat(zeroed.primed()).isEqualTo(zeroed)
+    }
 }

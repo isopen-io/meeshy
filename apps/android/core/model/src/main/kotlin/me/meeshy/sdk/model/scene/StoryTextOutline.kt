@@ -26,6 +26,13 @@ data class StoryTextOutline(
     fun widened(newWidth: Float): StoryTextOutline =
         copy(width = newWidth.coerceIn(NONE_WIDTH, MAX_WIDTH), color = color ?: StoryTextOutlineCycle.DEFAULT_COLOR)
 
+    /**
+     * À l'ouverture de la section Bordure (iOS `initializeBorderDefaultsIfNeutral`) : un contour jamais réglé se pose
+     * en blanc à l'épaisseur par défaut, pour un retour visuel immédiat ; un contour ramené à 0 garde son choix.
+     */
+    fun primed(): StoryTextOutline =
+        if (color == null && width <= NONE_WIDTH) copy(width = DEFAULT_WIDTH, color = StoryTextOutlineCycle.DEFAULT_COLOR) else this
+
     /** Une couleur choisie sur un contour à 0 le réveille à l'épaisseur par défaut. */
     fun colored(hex: String): StoryTextOutline =
         copy(color = hex, width = width.takeIf { it > NONE_WIDTH } ?: DEFAULT_WIDTH)
