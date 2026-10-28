@@ -5,7 +5,7 @@
  */
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { CreatePostSchema, StoryEffectsSchema } from '../../../../routes/posts/types';
+import { CreatePostSchema, StoryEffectsSchema, UpdatePostSchema } from '../../../../routes/posts/types';
 
 const sceneObject = (kind: string, index: number, overrides: Record<string, unknown> = {}) => ({
   id: `${kind}-${index}`,
@@ -50,45 +50,50 @@ describe('timelineDuration — borné comme slideDuration', () => {
   });
 });
 
-describe('document v3 non strict — plafonds par famille', () => {
-  it('refuse plus de 60 objets dans une scène', () => {
-    const objects = Array.from({ length: 61 }, (_, i) => sceneObject('drawing', i));
-    expect(accepted(canvas(objects))).toBe(false);
+describe('document v3 non strict — ce que les composeurs en production publient reste accepté', () => {
+  it('accepte 40 stickers dans une scène : le composeur iOS ne plafonne pas les stickers (addSticker)', () => {
+    const objects = Array.from({ length: 40 }, (_, i) => sceneObject('sticker', i));
+    expect(accepted(canvas(objects))).toBe(true);
   });
 
-  it('refuse plus de 32 objets d\'une famille que la forme v1 plafonne', () => {
-    const objects = Array.from({ length: 33 }, (_, i) => sceneObject('sticker', i));
-    expect(accepted(canvas(objects))).toBe(false);
+  it('accepte une scène iOS chargée : fond, 5 textes, 10 médias, 50 stickers, dessin (66 objets)', () => {
+    const objects = [
+      sceneObject('media', 0, { id: 'bg', plane: 'bg' }),
+      ...Array.from({ length: 5 }, (_, i) => sceneObject('text', i)),
+      ...Array.from({ length: 10 }, (_, i) => sceneObject('media', i + 1)),
+      ...Array.from({ length: 50 }, (_, i) => sceneObject('sticker', i)),
+      sceneObject('drawing', 0),
+    ];
+    expect(accepted(canvas(objects))).toBe(true);
   });
 
-  it('accepte 32 objets d\'une famille et un mélange de familles', () => {
-    const stickers = Array.from({ length: 32 }, (_, i) => sceneObject('sticker', i));
-    const texts = Array.from({ length: 20 }, (_, i) => sceneObject('text', i));
-    expect(accepted(canvas([...stickers, ...texts]))).toBe(true);
+  it('accepte un texte de 2500 caractères : ni iOS ni le web ne bornent la longueur d\'un texte de scène', () => {
+    expect(accepted(canvas([sceneObject('text', 0, { payload: { text: 'a'.repeat(2500) } })]))).toBe(true);
   });
 
-  it('refuse plus de 10 scènes', () => {
+  it('accepte une traduction SERVEUR plus longue que l\'original (1900 → 2600), que le client renvoie à l\'édition', () => {
+    const text = sceneObject('text', 0, { payload: { text: 'a'.repeat(1900), translations: { fr: 'b'.repeat(2600) } } });
+    expect(UpdatePostSchema.safeParse({ storyEffects: canvas([text]) }).success).toBe(true);
+    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: canvas([text]) }).success).toBe(true);
+  });
+
+  it('refuse plus de 10 scènes (plafond des trois composeurs)', () => {
     const scenes = Array.from({ length: 11 }, (_, i) => ({ id: `s${i}`, objects: [] }));
     expect(accepted({ v: 3, scenes })).toBe(false);
+    expect(accepted({ v: 3, scenes: scenes.slice(0, 10) })).toBe(true);
   });
 
-  it('refuse un texte de plus de 2000 caractères, comme la forme v1', () => {
-    const long = sceneObject('text', 0, { payload: { text: 'a'.repeat(2001) } });
-    expect(accepted(canvas([long]))).toBe(false);
-    const translated = sceneObject('text', 0, { payload: { text: 'ok', translations: { en: 'b'.repeat(2001) } } });
-    expect(accepted(canvas([translated]))).toBe(false);
-  });
-
-  it('accepte un texte de 2000 caractères et laisse voyager les clés inconnues', () => {
+  it('accepte 32 objets d\'une famille et laisse voyager les clés inconnues', () => {
     const exact = sceneObject('text', 0, { payload: { text: 'a'.repeat(2000), futur: { a: 1 } }, extra: 'x' });
     const result = StoryEffectsSchema.safeParse(canvas([exact]));
     expect(result.success).toBe(true);
     if (result.success) expect(result.data).toEqual(canvas([exact]));
   });
 
-  it('le refus passe par le schéma de création de post, comme la forme v1', () => {
-    const objects = Array.from({ length: 61 }, (_, i) => sceneObject('drawing', i));
-    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: canvas(objects) }).success).toBe(false);
+  it('le refus d\'une valeur hostile passe par le schéma de création ET d\'édition', () => {
+    const hostile = canvas([], { timelineDuration: 1e308 });
+    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: hostile }).success).toBe(false);
+    expect(UpdatePostSchema.safeParse({ storyEffects: hostile }).success).toBe(false);
   });
 });
 
@@ -102,9 +107,17 @@ describe('keyframes — nombres finis et bornés', () => {
     expect(accepted(withTiming([frame(hostile)]))).toBe(false);
   });
 
-  it('accepte des keyframes légitimes (dont optionnelles) et plafonne leur nombre à 60', () => {
+  it('accepte des keyframes légitimes (dont optionnelles)', () => {
     expect(accepted(withTiming([frame(), { time: 2 }, frame({ easing: 'easeIn' })]))).toBe(true);
-    expect(accepted(withTiming(Array.from({ length: 61 }, (_, i) => frame({ time: i }))))).toBe(false);
+  });
+
+  it('accepte 80 keyframes sur un clip : AddKeyframeCommand (iOS) ne plafonne pas leur nombre', () => {
+    expect(accepted(withTiming(Array.from({ length: 80 }, (_, i) => frame({ time: i * 0.1 }))))).toBe(true);
+    expect(accepted({ stickerObjects: [{ id: 'o1', keyframes: Array.from({ length: 80 }, (_, i) => frame({ time: i * 0.1 })) }] })).toBe(true);
+  });
+
+  it('accepte les nulls explicites d\'un encodeur et la volumétrie iOS (gain 2, échelle 4)', () => {
+    expect(accepted(withTiming([frame({ x: null, y: null, scale: 4, volume: 2 })]))).toBe(true);
   });
 
   it.each(['mediaObjects', 'textObjects', 'stickerObjects'])('borne les keyframes de %s (forme v1)', (family) => {
