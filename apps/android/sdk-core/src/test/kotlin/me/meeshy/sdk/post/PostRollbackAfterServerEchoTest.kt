@@ -23,7 +23,7 @@ class PostRollbackAfterServerEchoTest {
     }
 
     @Test
-    fun `a like rollback after the server echoed its own count leaves the count alone`() = runTest {
+    fun `a like rollback after the server echoed its own count keeps that count and turns the heart off`() = runTest {
         seed(ApiPost(id = "p1", content = "a", likeCount = 10, isLikedByMe = false))
         repository.toggleLike("p1")
 
@@ -32,11 +32,11 @@ class PostRollbackAfterServerEchoTest {
 
         val post = repository.cachedPost("p1")!!
         assertThat(post.likeCount).isEqualTo(10)
-        assertThat(post.isLikedByMe).isTrue()
+        assertThat(post.isLikedByMe).isFalse()
     }
 
     @Test
-    fun `an unlike rollback after the server echoed its own count leaves the count alone`() = runTest {
+    fun `an unlike rollback after the server echoed its own count keeps that count and turns the heart back on`() = runTest {
         seed(ApiPost(id = "p1", content = "a", likeCount = 10, isLikedByMe = true))
         repository.toggleLike("p1")
 
@@ -45,11 +45,11 @@ class PostRollbackAfterServerEchoTest {
 
         val post = repository.cachedPost("p1")!!
         assertThat(post.likeCount).isEqualTo(12)
-        assertThat(post.isLikedByMe).isFalse()
+        assertThat(post.isLikedByMe).isTrue()
     }
 
     @Test
-    fun `a bookmark rollback after the server echoed its own count leaves the count alone`() = runTest {
+    fun `a bookmark rollback after the server echoed its own count keeps that count and clears the bookmark`() = runTest {
         seed(ApiPost(id = "p1", content = "a", bookmarkCount = 4, isBookmarkedByMe = false))
         repository.toggleBookmark("p1")
 
@@ -58,7 +58,20 @@ class PostRollbackAfterServerEchoTest {
 
         val post = repository.cachedPost("p1")!!
         assertThat(post.bookmarkCount).isEqualTo(4)
-        assertThat(post.isBookmarkedByMe).isTrue()
+        assertThat(post.isBookmarkedByMe).isFalse()
+    }
+
+    @Test
+    fun `a like the server already shows on a refreshed row is not undone by a late exhaustion`() = runTest {
+        seed(ApiPost(id = "p1", content = "a", likeCount = 10, isLikedByMe = false))
+        repository.toggleLike("p1")
+
+        seed(ApiPost(id = "p1", content = "a", likeCount = 11, isLikedByMe = true))
+        repository.rollbackLike("p1", liked = false)
+
+        val post = repository.cachedPost("p1")!!
+        assertThat(post.likeCount).isEqualTo(11)
+        assertThat(post.isLikedByMe).isTrue()
     }
 
     @Test
