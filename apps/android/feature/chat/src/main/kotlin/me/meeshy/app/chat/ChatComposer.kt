@@ -182,7 +182,7 @@ internal fun ChatComposer(
     }
     var retouch by remember { mutableStateOf<ChatRetouchPending?>(null) }
     suspend fun deliverCapture(file: ChatRetouchedFile) {
-        val stage = onStageCapturedUris ?: return onPickFile(context.writeRetouchedCaptureFile(file), file.fileName, file.mimeType)
+        val stage = onStageCapturedUris ?: return onPickFile(withContext(Dispatchers.IO) { context.writeRetouchedCaptureFile(file) }, file.fileName, file.mimeType)
         val uri = context.writeRetouchedCapture(file)
         stage(listOf(uri))
         withContext(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }

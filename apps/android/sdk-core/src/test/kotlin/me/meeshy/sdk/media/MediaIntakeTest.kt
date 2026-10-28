@@ -81,4 +81,21 @@ class MediaIntakeTest {
         assertThat(item.previewModel).isEqualTo((item.source as MediaUploadSource.OnDisk).file)
         assertThat(MediaUploadItem(ByteArray(3), "b", "image/png").previewModel).isInstanceOf(ByteArray::class.java)
     }
+
+    @Test
+    fun `a provider name that climbs the tree only rides as metadata, never as the path`() {
+        val cache = folder.newFolder()
+        val escaped = File(MediaIntake.directory(cache), "../../shared_prefs/x.xml").canonicalFile
+        val recorded = folder.newFile("voice.m4a").apply { writeBytes(byteArrayOf(4, 5)) }
+
+        val copied = MediaIntake.copy(zeros(10), cache, "../../shared_prefs/x.xml", "image/png")!!
+        val adopted = MediaIntake.adopt(recorded, cache, "../../shared_prefs/x.xml", "audio/mp4")!!
+
+        listOf(copied, adopted).forEach { item ->
+            val file = (item.source as MediaUploadSource.OnDisk).file
+            assertThat(file.canonicalFile.parentFile).isEqualTo(MediaIntake.directory(cache).canonicalFile)
+            assertThat(item.fileName).isEqualTo("../../shared_prefs/x.xml")
+        }
+        assertThat(escaped.exists()).isFalse()
+    }
 }
