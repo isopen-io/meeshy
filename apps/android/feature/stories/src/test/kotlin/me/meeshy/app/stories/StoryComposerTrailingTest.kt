@@ -81,6 +81,16 @@ class StoryComposerTrailingTest {
     }
 
     @Test
+    fun `a sticker window set from its time section is published under the iOS keys`() {
+        val timed = StoryComposerStickerReducer.durationCycled(StoryComposerStickerReducer.startCycled(withSticker(), "s1"), "s1")
+        val timing = timed.selectedSticker!!.timing
+        val wire = timed.selectedSticker!!.toSticker()
+        assertThat(wire.startTime).isEqualTo(timing.startSeconds.toDouble())
+        assertThat(wire.duration).isEqualTo(timing.durationSeconds.toDouble())
+        assertThat(withSticker().selectedSticker!!.toSticker().startTime).isNull()
+    }
+
+    @Test
     fun `a text serves iOS's eight tools then time then plan, in that order`() {
         assertThat(ServedTextSections).isEqualTo(
             ComposerObjectEditorRail.entries(ComposerObjectKind.TEXT),

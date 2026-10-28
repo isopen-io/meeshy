@@ -11,14 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 
 /**
@@ -37,17 +33,10 @@ internal fun StickerSectionContent(state: StoryComposerUiState, sticker: StorySt
                 StoryPlanFrise(state, viewModel)
             }
             else -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                CycleButton(
-                    Icons.Filled.Schedule,
-                    R.string.stories_composer_timing_start,
-                    sticker.timing.hasStart,
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.startCycled(it, sticker.id) } },
-                )
-                CycleButton(
-                    Icons.Filled.Timelapse,
-                    R.string.stories_composer_timing_duration,
-                    sticker.timing.isTimed,
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.durationCycled(it, sticker.id) } },
+                TimingCycleButtons(
+                    timing = sticker.timing,
+                    onCycleStart = { viewModel.onSceneReduce { StoryComposerStickerReducer.startCycled(it, sticker.id) } },
+                    onCycleDuration = { viewModel.onSceneReduce { StoryComposerStickerReducer.durationCycled(it, sticker.id) } },
                 )
             }
         }
