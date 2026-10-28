@@ -8,8 +8,8 @@ package me.meeshy.sdk.media
  * `Cues`, `Cluster`, `Void`, `CRC-32` restent ; `Tags` (où un enregistreur pose `LOCATION`), `Attachments`, `Chapters` (texte
  * libre) deviennent `Void` ; un élément de premier niveau INCONNU fait refuser le fichier. Dans `Info` ne restent que
  * l'échelle de temps, la durée et l'identifiant du segment (titre, nom de fichier, date, applications : `Void`) ; seules
- * les pistes vidéo et audio sont admises, réduites à leurs champs techniques (nom, langue, nom de codec, `BlockAdditionMapping`
- * : `Void`) ; toute AUTRE piste (sous-titres, métadonnées, complex, boutons — #13543, revue de sécurité) devient `Void`, et
+ * les pistes vidéo et audio sont admises, réduites à leurs champs techniques, en liste blanche à chaque niveau (`Video`, `Colour`,
+ * `MasteringMetadata`, `Projection`, `Audio` ; nom, langue, nom de codec, `BlockAdditionMapping`, tout élément inconnu : `Void`) ; toute AUTRE piste (sous-titres, métadonnées, complex, boutons — #13543, revue de sécurité) devient `Void`, et
  * tout bloc dont la piste n'est pas admise — déclarée ou non — aussi, comme chaque `BlockAdditions`. Un `Cluster` de taille inconnue (enregistrement en direct) se
  * parcourt jusqu'au prochain élément de premier niveau. Tout ce qui ne se lit pas rend `null` : l'appelant refuse l'envoi.
  */
@@ -30,9 +30,29 @@ internal object MatroskaMetadataScrubber {
     private const val TRACK_TYPE = 0x83L
     private const val CODEC_ID = 0x86L
     private const val CONTENT_ENCODINGS = 0x6D80L
-    private val TRACK_KEPT = setOf(
-        0xD7L, 0x73C5L, 0x83L, 0xB9L, 0x88L, 0x55AAL, 0x9CL, 0x6DE7L, 0x6DF8L, 0x23E383L, 0x234E7AL, 0x23314FL, 0x55EEL,
-        0x86L, 0x63A2L, 0x56AAL, 0x56BBL, 0xAAL, 0xE0L, 0xE1L, CRC32,
+
+    /** Une liste blanche par conteneur : ses champs techniques ([leaves]) et ses sous-conteneurs, eux-mêmes en liste blanche. */
+    private class Schema(leaves: Set<Long>, val containers: Map<Long, Schema> = emptyMap()) {
+        val leaves: Set<Long> = leaves + CRC32
+    }
+
+    private val MASTERING = Schema((0x55D1L..0x55DAL).toSet())
+    private val COLOUR = Schema((0x55B1L..0x55BDL).toSet(), mapOf(0x55D0L to MASTERING))
+    private val PROJECTION = Schema(setOf(0x7671L, 0x7672L, 0x7673L, 0x7674L, 0x7675L))
+    private val VIDEO = Schema(
+        setOf(
+            0x9AL, 0x9DL, 0x53B8L, 0x53C0L, 0x53B9L, 0xB0L, 0xBAL, 0x54AAL, 0x54BBL, 0x54CCL, 0x54DDL, 0x54B0L, 0x54BAL,
+            0x54B2L, 0x54B3L, 0x2EB524L, 0x2FB523L, 0x2383E3L,
+        ),
+        mapOf(0x55B0L to COLOUR, 0x7670L to PROJECTION),
+    )
+    private val AUDIO = Schema(setOf(0xB5L, 0x78B5L, 0x9FL, 0x7D7BL, 0x6264L, 0x52F1L))
+    private val TRACK = Schema(
+        setOf(
+            0xD7L, 0x73C5L, 0x83L, 0xB9L, 0x88L, 0x55AAL, 0x9CL, 0x6DE7L, 0x6DF8L, 0x23E383L, 0x234E7AL, 0x23314FL, 0x55EEL,
+            0x86L, 0x63A2L, 0x56AAL, 0x56BBL, 0xAAL,
+        ),
+        mapOf(0xE0L to VIDEO, 0xE1L to AUDIO),
     )
     private const val TYPE_VIDEO = 1L
     private const val TYPE_AUDIO = 2L
@@ -107,7 +127,7 @@ internal object MatroskaMetadataScrubber {
      * Seules les pistes VIDÉO (`V_…`) et AUDIO (`A_…`) sont ADMISES, et un bloc ne reste que si sa piste l'est : une piste de
      * sous-titres, de métadonnées, « complex », de boutons ou de logo — du texte libre où une application écrit sa télémétrie —
      * devient `Void`, et tout bloc d'une piste non admise aussi, qu'elle soit déclarée ou non. Un numéro déclaré deux fois fait
-     * refuser. Dans une piste admise ne restent que ses champs TECHNIQUES ([TRACK_KEPT]) : tout autre devient `Void`. Une piste
+     * refuser. Dans une piste admise ne restent que ses champs TECHNIQUES ([TRACK], liste blanche par conteneur) : tout autre devient `Void`. Une piste
      * dont le contenu est encodé (`ContentEncodings` : compression, chiffrement) ne se vérifie pas : refusée.
      */
     private fun tracks(src: ByteArray, tracks: Element): TrackPlan {
@@ -125,7 +145,7 @@ internal object MatroskaMetadataScrubber {
                     declared += number
                     if ((type == TYPE_VIDEO && codec.startsWith("V_")) || (type == TYPE_AUDIO && codec.startsWith("A_"))) {
                         admitted += number
-                        voids += fields.filter { it.id !in TRACK_KEPT }
+                        voids += allowListed(src, fields, TRACK)
                     } else {
                         voids += entry
                     }
@@ -136,6 +156,16 @@ internal object MatroskaMetadataScrubber {
             }
         }
         return TrackPlan(voids, declared, admitted)
+    }
+
+    /** Ce qui n'est pas un champ technique connu du conteneur devient `Void`, à chaque niveau (Video, Colour, Audio…). */
+    private fun allowListed(src: ByteArray, fields: List<Element>, schema: Schema): List<Element> = fields.flatMap { field ->
+        val nested = schema.containers[field.id]
+        when {
+            nested != null -> allowListed(src, children(src, field), nested)
+            field.id in schema.leaves -> emptyList()
+            else -> listOf(field)
+        }
     }
 
     /** Un bloc d'une piste non admise devient `Void`, un `BlockAdditions` aussi, tout enfant de cluster inconnu aussi. */
