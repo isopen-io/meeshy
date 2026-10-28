@@ -167,6 +167,7 @@ fun FeedComposerSheet(
         FeedComposerPlateau(
             draft = draft,
             attachedMedia = state.attachedMedia,
+            currentMediaId = PostSlideLaw.current(draft.mediaIds, state.selectedMediaId),
             isUploading = state.isUploading,
             isCapturingLocation = intake.location.isCapturing,
             voice = voice,
@@ -222,6 +223,8 @@ internal class PostComposerActions(
     val onToggleReel: () -> Unit,
     val onRemoveMedia: (String) -> Unit,
     val onAlt: (String, String) -> Unit,
+    val onCaption: (String, String) -> Unit,
+    val onSelectMedia: (String) -> Unit,
     val onRemoveLocation: () -> Unit,
     val onBackground: (String) -> Unit,
     val onOverflow: (PostOverflowEntry) -> Unit,
@@ -265,6 +268,8 @@ private fun rememberPostComposerActions(
                 removeMedia(id)
             },
             onAlt = { mediaId, text -> state.draft = state.draft.withAlt(mediaId, text) },
+            onCaption = { mediaId, text -> state.draft = state.draft.withCaption(mediaId, text) },
+            onSelectMedia = { mediaId -> state.selectedMediaId = mediaId },
             onRemoveLocation = { state.draft = state.draft.withoutLocation() },
             onBackground = { hex -> state.draft = state.draft.withBackground(hex) },
             onOverflow = { entry ->

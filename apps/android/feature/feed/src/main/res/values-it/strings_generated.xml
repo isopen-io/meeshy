@@ -16,6 +16,7 @@
     <string name="feed_composer_background">Colore di sfondo</string>
     <string name="feed_composer_background_swatch">Colore %1$s di %2$s</string>
     <string name="feed_composer_cancel">Annulla</string>
+    <string name="feed_composer_caption_placeholder">Aggiungi una didascalia</string>
     <string name="feed_composer_language_search">Cerca una lingua</string>
     <string name="feed_composer_language_title">Lingua del post</string>
     <string name="feed_composer_open_label">Condividi qualcosa</string>
@@ -25,6 +26,9 @@
     <string name="feed_composer_placeholder">A cosa stai pensando?</string>
     <string name="feed_composer_publish">Pubblica</string>
     <string name="feed_composer_record_voice">Registra un audio</string>
+    <string name="feed_composer_slide_rail">Scene della pubblicazione</string>
+    <string name="feed_composer_slide_rail_delete">Elimina la scena %1$d</string>
+    <string name="feed_composer_slide_rail_position">Scena %1$d di %2$d</string>
     <string name="feed_composer_socle_audience">Pubblico</string>
     <string name="feed_composer_take_photo">Scatta una foto</string>
     <string name="feed_composer_title">Nuovo post</string>

@@ -37,9 +37,14 @@ internal class FeedComposerState(initialDraft: FeedComposerDraft) {
     var attachedMedia: List<UploadedMedia> by mutableStateOf(initialDraft.media)
     var isUploading: Boolean by mutableStateOf(false)
 
+    /** The slide being edited (iOS `currentSlideIndex`), by media id; resolved by [PostSlideLaw.current], so a stale id is harmless. */
+    var selectedMediaId: String? by mutableStateOf(null)
+
     fun attach(media: List<UploadedMedia>) {
         draft = draft.withMedia(media)
         attachedMedia = attachedMedia + media
+        // What the author just added is what they want to describe.
+        media.firstOrNull { it.id in draft.mediaIds }?.let { selectedMediaId = it.id }
     }
 
     /** An entry of the `⋯`: the pure draft answers, and the display-only previews follow when the document is emptied. */
@@ -49,6 +54,7 @@ internal class FeedComposerState(initialDraft: FeedComposerDraft) {
     }
 
     fun detach(id: String) {
+        selectedMediaId = PostSlideLaw.selectionAfterRemoval(draft.mediaIds, removed = id, current = PostSlideLaw.current(draft.mediaIds, selectedMediaId))
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
     }

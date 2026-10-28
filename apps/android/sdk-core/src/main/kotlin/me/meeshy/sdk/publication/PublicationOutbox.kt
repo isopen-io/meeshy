@@ -127,6 +127,7 @@ public class PublicationOutbox @Inject constructor(
         location = location,
         language = originalLanguage,
         mediaAlt = mediaAlt.orEmpty(),
+        mediaCaption = mediaCaption.orEmpty(),
     )
 
     private fun PostComposerDraftSnapshot.withServedIds(ids: List<String>): PostComposerDraftSnapshot {
@@ -135,6 +136,7 @@ public class PublicationOutbox @Inject constructor(
         return copy(
             media = media.zip(ids) { item, id -> item.copy(id = id) },
             mediaAlt = mediaAlt.mapKeys { (key, _) -> renamed[key] ?: key },
+            mediaCaption = mediaCaption.mapKeys { (key, _) -> renamed[key] ?: key },
         )
     }
 }

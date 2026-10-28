@@ -651,6 +651,7 @@ class FeedViewModel @Inject constructor(
         location: SharedPlace? = null,
         language: String? = null,
         mediaAlt: Map<String, String> = emptyMap(),
+        mediaCaption: Map<String, String> = emptyMap(),
         draft: PostComposerDraftSnapshot? = null,
         background: String? = null,
     ) {
@@ -668,6 +669,7 @@ class FeedViewModel @Inject constructor(
                         originalLanguage = language,
                         location = location,
                         mediaAlt = mediaAlt.ifEmpty { null },
+                        mediaCaption = mediaCaption.ifEmpty { null },
                         storyEffects = background?.let { StoryEffects(background = it) },
                     ),
                     draft,

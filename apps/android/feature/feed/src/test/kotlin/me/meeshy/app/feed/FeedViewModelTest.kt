@@ -1163,6 +1163,32 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `the caption of each media rides the post under PostMedia caption, beside the alt and never in the content`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.publishPost(
+            content = "le post",
+            visibility = "PUBLIC",
+            mediaIds = listOf("m1", "m2"),
+            mediaAlt = mapOf("m1" to "un vélo"),
+            mediaCaption = mapOf("m2" to "Au marché"),
+        )
+
+        coVerify(exactly = 1) {
+            publications.enqueuePost(
+                CreatePostRequest(
+                    content = "le post",
+                    visibility = "PUBLIC",
+                    mediaIds = listOf("m1", "m2"),
+                    mediaAlt = mapOf("m1" to "un vélo"),
+                    mediaCaption = mapOf("m2" to "Au marché"),
+                ),
+                null,
+            )
+        }
+    }
+
+    @Test
     fun `a post with a scene background publishes it as its story effects`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
 
