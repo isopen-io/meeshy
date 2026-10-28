@@ -120,16 +120,16 @@ internal fun ComposerToolPanel(
                             BandTile(
                                 icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
                                 label = stringResource(R.string.stories_composer_add_sticker),
-                                enabled = canAddSticker,
-                                onClick = onAddSticker,
+                                enabled = true,
+                                onClick = rememberGuardedAddition(canAddSticker, R.string.composer_scene_cap_sticker, onAddSticker),
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         StoryToolMode.TEXT -> BandTile(
                             icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
                             label = stringResource(R.string.stories_composer_add_text),
-                            enabled = canAddText,
-                            onClick = onAddText,
+                            enabled = true,
+                            onClick = rememberGuardedAddition(canAddText, R.string.composer_scene_cap_text, onAddText),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         StoryToolMode.DRAWING -> BandTile(
@@ -245,8 +245,8 @@ private fun MediaTile(
         } else {
             stringResource(R.string.stories_composer_add_media)
         },
-        enabled = !isUploadingMedia && !isMediaFull,
-        onClick = onPickMedia,
+        enabled = !isUploadingMedia,
+        onClick = rememberGuardedAddition(!isMediaFull, R.string.composer_scene_cap_media, onPickMedia),
         modifier = Modifier.fillMaxWidth(),
     )
 }
