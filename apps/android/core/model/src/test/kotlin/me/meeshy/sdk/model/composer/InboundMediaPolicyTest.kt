@@ -4,7 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class InboundMediaPolicyTest {
-    private val own = setOf("me.meeshy.app.fileprovider", "me.meeshy.app.provider")
+    private val own = "me.meeshy.app"
 
     private fun bytes(vararg head: Int, size: Int = 32) = ByteArray(size).also { head.forEachIndexed { i, b -> it[i] = b.toByte() } }
     private fun ftyp(brand: String) = bytes(0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70).also { brand.forEachIndexed { i, c -> it[8 + i] = c.code.toByte() } }
@@ -30,11 +30,12 @@ class InboundMediaPolicyTest {
 
     @Test
     fun `a uri of our own providers is not a source, whatever its case or user prefix`() {
-        listOf("me.meeshy.app.fileprovider", "ME.MEESHY.APP.FILEPROVIDER", "0@me.meeshy.app.fileprovider", "me.meeshy.app.provider").forEach {
+        listOf("me.meeshy.app.fileprovider", "ME.MEESHY.APP.FILEPROVIDER", "0@me.meeshy.app.fileprovider", "me.meeshy.app.androidx-startup", "me.meeshy.app").forEach {
             assertThat(InboundMediaPolicy.admitsSource("content", it, own)).isFalse()
         }
         assertThat(InboundMediaPolicy.admitsSource("content", null, own)).isFalse()
         assertThat(InboundMediaPolicy.admitsSource("content", "  ", own)).isFalse()
+        assertThat(InboundMediaPolicy.admitsSource("content", "me.meeshy.application.media", own)).isTrue()
     }
 
     @Test
