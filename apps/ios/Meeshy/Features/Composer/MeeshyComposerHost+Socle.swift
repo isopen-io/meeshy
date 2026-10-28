@@ -873,7 +873,7 @@ extension MeeshyComposerHost {
         Task {
             let accepted = await onPublishDocument(draft)
             isPublishingDocument = false
-            if accepted { discardAutosavedDraft(); onDismiss() }
+            if accepted { handOverAutosavedDraft(); onDismiss() }
         }
     }
 }

@@ -13,6 +13,8 @@
     <string name="feed_action_view_profile">Ver el perfil</string>
     <string name="feed_comments">Comentarios</string>
     <string name="feed_composer_attach_file">Adjuntar un archivo</string>
+    <string name="feed_composer_background">Color de fondo</string>
+    <string name="feed_composer_background_swatch">Color %1$s de %2$s</string>
     <string name="feed_composer_cancel">Cancelar</string>
     <string name="feed_composer_language_search">Buscar un idioma</string>
     <string name="feed_composer_language_title">Idioma de la publicación</string>
@@ -20,6 +22,7 @@
     <string name="feed_composer_placeholder">¿Qué estás pensando?</string>
     <string name="feed_composer_publish">Publicar</string>
     <string name="feed_composer_record_voice">Grabar un audio</string>
+    <string name="feed_composer_socle_audience">Audiencia</string>
     <string name="feed_composer_take_photo">Hacer una foto</string>
     <string name="feed_composer_title">Nueva publicación</string>
     <string name="feed_composer_type_hint">Cambiar entre reel y publicación</string>
@@ -56,6 +59,10 @@
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_offer_body">Tu publicación tiene un solo vídeo: como reel, se abre a pantalla completa en Reels.</string>
+    <string name="feed_reel_offer_post">Es una publicación</string>
+    <string name="feed_reel_offer_reel">Es un reel</string>
+    <string name="feed_reel_offer_title">¿Publicar como reel?</string>
     <string name="feed_report_reason_harassment">Acoso</string>
     <string name="feed_report_reason_hate_speech">Discurso de odio</string>
     <string name="feed_report_reason_impersonation">Suplantación de identidad</string>
@@ -72,7 +79,16 @@
     <string name="feed_repost_story">Historia</string>
     <string name="feed_reposts">Republicaciones</string>
     <string name="feed_retry">Reintentar</string>
+    <string name="feed_secondary_translation_a11y">Traducción en %1$s: %2$s</string>
     <string name="feed_translated">Traducción disponible</string>
+    <string name="feed_translation_available">Traducciones disponibles</string>
+    <string name="feed_translation_close">Cerrar</string>
+    <string name="feed_translation_original">Original</string>
+    <string name="feed_translation_other_languages">Otros idiomas</string>
+    <string name="feed_translation_title">Idiomas</string>
+    <string name="feed_translation_translate">Traducir</string>
+    <string name="feed_translations_badge">Traducciones</string>
+    <string name="feed_translations_badge_hint">Muestra los idiomas disponibles</string>
     <string name="feed_unknown_author">Desconocido</string>
     <string name="feed_unlike">Ya no me gusta</string>
     <string name="hashtag_results_empty">Sin publicaciones con #%s</string>
@@ -122,8 +138,12 @@
     <string name="status_bar_republish">Republicar</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">vía @%s</string>
+    <string name="status_composer_bare_add">Añadir unas palabras</string>
+    <string name="status_composer_bare_publish">Publicar igualmente</string>
+    <string name="status_composer_bare_title">¿Publicar tu estado de ánimo sin unas palabras?</string>
     <string name="status_composer_close">Cerrar</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">Más emojis</string>
     <string name="status_composer_mood_question">¿Cómo te sientes?</string>
     <string name="status_composer_publish">Publicar</string>
     <string name="status_composer_title">Estado</string>

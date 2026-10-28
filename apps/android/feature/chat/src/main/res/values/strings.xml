@@ -290,4 +290,5 @@
         <item quantity="one">%1$d unread message</item>
         <item quantity="other">%1$d unread messages</item>
     </plurals>
+    <string name="viewer_code_truncated">File truncated: only the first 512 KB are shown.</string>
 </resources>

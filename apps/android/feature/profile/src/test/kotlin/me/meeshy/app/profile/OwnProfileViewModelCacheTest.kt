@@ -20,6 +20,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
@@ -93,7 +94,7 @@ class OwnProfileViewModelCacheTest {
 
         assertThat(vm.state.value.stats).isNotNull()
         assertThat(messagesTileValue(vm.state.value)).isEqualTo("42")
-        coVerify(exactly = 0) { cache.persistStats(any(), any()) }
+        coVerify(exactly = 0) { cache.persistStats(any(), any(), any()) }
     }
 
     @Test
@@ -107,7 +108,7 @@ class OwnProfileViewModelCacheTest {
         advanceUntilIdle()
 
         assertThat(messagesTileValue(vm.state.value)).isEqualTo("99")
-        coVerify(exactly = 1) { cache.persistStats("u1", networkStats) }
+        coVerify(exactly = 1) { cache.persistStats("u1", networkStats, any()) }
     }
 
     @Test
@@ -122,7 +123,47 @@ class OwnProfileViewModelCacheTest {
 
         // network is truth — the fresher value replaces the cached paint
         assertThat(messagesTileValue(vm.state.value)).isEqualTo("99")
-        coVerify(exactly = 1) { cache.persistStats("u1", networkStats) }
+        coVerify(exactly = 1) { cache.persistStats("u1", networkStats, any()) }
+    }
+
+    private fun ticketRig(flipOnStats: Boolean): Triple<ProfileStatsCacheRepository, UserRepository, AccountTicket> {
+        val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
+        val ticketOfU1 = AccountTicket(ownerId = "u1", generation = 1)
+        var signedIn = ticketOfU1
+        val signedInAsU2 = AccountTicket(ownerId = "u2", generation = 2)
+        coEvery { cache.ticket() } answers { signedIn }
+        coEvery { cache.cachedStats(any()) } returns null
+        coEvery { cache.cachedTimeline(any()) } returns null
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.getUserStats("u1") } coAnswers {
+            if (flipOnStats) signedIn = signedInAsU2
+            if (flipOnStats) NetworkResult.Success(networkStats) else NetworkResult.Failure(ApiError("off"))
+        }
+        coEvery { userRepo.getUserStatsTimeline(any()) } coAnswers {
+            if (!flipOnStats) signedIn = signedInAsU2
+            if (!flipOnStats) NetworkResult.Success(timeline) else NetworkResult.Failure(ApiError("off"))
+        }
+        return Triple(cache, userRepo, ticketOfU1)
+    }
+
+    @Test
+    fun stats_areKeptUnderTheTicketTakenBeforeTheirRequestLeft_13560() = runTest(dispatcher) {
+        val (cache, userRepo, ticketOfU1) = ticketRig(flipOnStats = true)
+
+        ownProfileVm(MutableStateFlow(user()), userRepo, cache)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { cache.persistStats("u1", networkStats, ticketOfU1) }
+    }
+
+    @Test
+    fun timeline_isKeptUnderTheTicketTakenBeforeItsRequestLeft_13560() = runTest(dispatcher) {
+        val (cache, userRepo, ticketOfU1) = ticketRig(flipOnStats = false)
+
+        ownProfileVm(MutableStateFlow(user()), userRepo, cache)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { cache.persistTimeline("u1", timeline, ticketOfU1) }
     }
 
     // --- timeline ---
@@ -141,7 +182,7 @@ class OwnProfileViewModelCacheTest {
 
         assertThat(vm.state.value.timeline).isNotNull()
         assertThat(vm.state.value.timeline!!.peak).isEqualTo(8)
-        coVerify(exactly = 0) { cache.persistTimeline(any(), any()) }
+        coVerify(exactly = 0) { cache.persistTimeline(any(), any(), any()) }
     }
 
     @Test
@@ -157,7 +198,7 @@ class OwnProfileViewModelCacheTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.timeline).isNotNull()
-        coVerify(exactly = 1) { cache.persistTimeline("u1", timeline) }
+        coVerify(exactly = 1) { cache.persistTimeline("u1", timeline, any()) }
     }
 
     @Test
@@ -174,7 +215,7 @@ class OwnProfileViewModelCacheTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.timeline).isNull()
-        coVerify(exactly = 0) { cache.persistTimeline(any(), any()) }
+        coVerify(exactly = 0) { cache.persistTimeline(any(), any(), any()) }
     }
 
     @Test

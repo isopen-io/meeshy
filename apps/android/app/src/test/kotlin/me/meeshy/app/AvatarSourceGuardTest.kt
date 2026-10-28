@@ -19,6 +19,8 @@ class AvatarSourceGuardTest {
         "FriendsIllustration.kt" to "illustration d'onboarding : personnages fictifs, aucune photo servie",
         "StoryRingIllustration.kt" to "illustration d'onboarding : personnages fictifs, aucune photo servie",
         "MediaHubRichRows.kt" to "carte de contact : un fichier vCard, aucune photo servie",
+        "BubbleFileRow.kt" to "carte de visite dans la bulle : un fichier vCard, aucune photo servie",
+        "ContactCardSheet.kt" to "fiche d'une carte de visite : un fichier vCard, aucune photo servie (la PHOTO base64 n'est pas rendue)",
         "MeeshyAvatar.kt" to "l'atome lui-même",
     )
 

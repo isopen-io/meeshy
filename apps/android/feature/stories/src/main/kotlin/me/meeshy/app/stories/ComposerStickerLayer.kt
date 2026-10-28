@@ -1,58 +1,72 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.SceneObjectMenu
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 /**
  * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
  * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
- * pinch/rotate-able with one gesture, tappable to select, and — when selected —
- * carrying a small remove affordance. The normalised→pixel placement and the
- * pixel→normalised drag delta are the only arithmetic here; the clamp lives in the
- * pure [StoryStickerElement]. Mirrors [TextElementLayer]; pure glue.
+ * pinch/rotate-able with one gesture, tappable to select and long-pressable for its menu
+ * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Nothing is laid on the
+ * scene: removal lives in that menu. Lifting the finger closes the gesture (one undo step). The pointer handlers
+ * read the callbacks through [rememberUpdatedState], so a recomposition never leaves a
+ * gesture holding a stale canvas size. The normalised→pixel placement and the pixel→normalised
+ * drag delta are the only arithmetic here; the clamp lives in the pure [StoryStickerElement].
  */
 @Composable
 internal fun StickerLayer(
     sticker: StoryStickerElement,
     selected: Boolean,
+    menu: SceneObjectContextMenu?,
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onMenuAction: (SceneObjectMenu.Action) -> Unit,
+    onMenuDismiss: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
-    onRemove: () -> Unit,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    val haptics = rememberMeeshyHaptics()
+    val currentTap by rememberUpdatedState(onTap)
+    val currentLongPress by rememberUpdatedState(onLongPress)
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentDragEnd by rememberUpdatedState(onDragEnd)
+    val currentTransform by rememberUpdatedState(onTransform)
     Box(
         modifier = Modifier
             .offset {
@@ -67,12 +81,34 @@ internal fun StickerLayer(
                 rotationZ = sticker.rotationDeg
             }
             .onSizeChanged { sizePx = it }
-            .pointerInput(sticker.id) { detectTapGestures { onTap() } }
+            .pointerInput(sticker.id) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptics.medium()
+                        currentLongPress()
+                    },
+                    onTap = { currentTap() },
+                )
+            }
             .pointerInput(sticker.id) {
                 detectTransformGestures { _, pan, zoom, rotation ->
-                    onDrag(pan.x, pan.y)
-                    onTransform(zoom, rotation)
+                    currentDrag(pan.x, pan.y)
+                    currentTransform(zoom, rotation)
                 }
+            }
+            .pointerInput(sticker.id) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                    } while (event.changes.any { it.pressed })
+                    currentDragEnd()
+                }
+            }
+            .semantics {
+                contentDescription = sticker.emoji
+                onClick { currentTap(); true }
+                onLongClick { currentLongPress(); true }
             }
             .background(
                 color = if (selected) Color.Black.copy(alpha = 0.25f) else Color.Transparent,
@@ -82,23 +118,7 @@ internal fun StickerLayer(
         contentAlignment = Alignment.Center,
     ) {
         Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE)
-        if (selected) {
-            Surface(
-                onClick = onRemove,
-                shape = RoundedCornerShape(50),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(20.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.stories_composer_remove_sticker),
-                    tint = Color.White,
-                    modifier = Modifier.padding(2.dp),
-                )
-            }
-        }
+        SceneObjectMenuPopup(menu = menu, onAction = onMenuAction, onDismiss = onMenuDismiss)
     }
 }
 

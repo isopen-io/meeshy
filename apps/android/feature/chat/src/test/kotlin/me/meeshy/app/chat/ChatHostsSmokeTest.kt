@@ -46,6 +46,7 @@ class ChatHostsSmokeTest {
         openReactionDetails = { _ -> },
         openImageViewer = { _, _ -> },
         onFileAttachmentOpen = { _, _ -> },
+        pieceOverlayFor = { _, _ -> null },
         onHubFileOpen = { _, _ -> },
         onFileAttachmentShare = { _, _ -> },
         onReplyPreviewTap = { _ -> },
@@ -103,7 +104,6 @@ class ChatHostsSmokeTest {
         onReplyThreadReplyTap = { _ -> },
         closeForward = { },
         onForwardQueryChange = { _ -> },
-        forwardTo = { _ -> },
     )
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(

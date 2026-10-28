@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -47,8 +48,9 @@ class MessageRepository internal constructor(
         syncMetaDao: SyncMetaDao,
         outboxRepository: OutboxRepository,
         clock: CacheClock,
+        fence: AccountFence? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao),
@@ -134,8 +136,8 @@ class MessageRepository internal constructor(
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
         sends.reconcileSent(cmid, serverMessage)
 
-    /** The outbox exhausted its retries — surface the bubble as retryable. */
-    suspend fun markSendFailed(cmid: String) = sends.markSendFailed(cmid)
+    /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
+    suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)

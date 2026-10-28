@@ -37,8 +37,15 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.media.MediaUploadProgress
+import me.meeshy.ui.component.media.UploadProgressLine
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.StoryToolMode
+import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
+import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
+import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
+import me.meeshy.sdk.model.composer.scene.SceneFrame
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 
 /**
  * The open tool's panel under a resizable handle — parity with iOS, it slides over the
@@ -49,7 +56,6 @@ import me.meeshy.sdk.model.composer.StoryToolMode
 @Composable
 internal fun ComposerToolPanel(
     band: ComposerBandState,
-    visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
     slideDurationSeconds: Double,
@@ -57,6 +63,7 @@ internal fun ComposerToolPanel(
     canAddText: Boolean,
     canAddSticker: Boolean,
     isUploadingMedia: Boolean,
+    uploadingMedia: List<MediaUploadProgress>,
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
@@ -65,11 +72,25 @@ internal fun ComposerToolPanel(
     onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
     onEnterDrawing: () -> Unit,
-    onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
     onSlideDurationChange: (Double) -> Unit,
     onSelectBackground: (StoryBackgroundValue?) -> Unit,
+    audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject> = emptyList(),
+    canAddSound: Boolean = true,
+    @androidx.annotation.StringRes soundCapRefusal: Int = R.string.composer_scene_cap_sound,
+    onOpenSoundShelf: () -> Unit = {},
+    onToggleSoundMute: (String) -> Unit = {},
+    onRemoveSound: (String) -> Unit = {},
+    timeline: @Composable () -> Unit = {},
+    sceneBackground: ComposerSceneBackground? = null,
+    sceneFrame: SceneFrame = SceneFrame(),
+    objectSelected: Boolean = false,
+    sceneIsAnimated: Boolean = false,
+    onFitMode: (String) -> Unit = {},
+    onBackdrop: (StoryBackdrop) -> Unit = {},
+    onSceneEffect: (SceneEffectChoice) -> Unit = {},
+    onToggleAnimated: () -> Unit = {},
 ) {
     var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
     val activeTool = band.activeTool
@@ -96,19 +117,20 @@ internal fun ComposerToolPanel(
                     when (activeTool) {
                         StoryToolMode.MEDIA -> {
                             MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
+                            UploadingMediaLines(uploadingMedia)
                             BandTile(
                                 icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
                                 label = stringResource(R.string.stories_composer_add_sticker),
-                                enabled = canAddSticker,
-                                onClick = onAddSticker,
+                                enabled = true,
+                                onClick = rememberGuardedAddition(canAddSticker, R.string.composer_scene_cap_sticker, onAddSticker),
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         StoryToolMode.TEXT -> BandTile(
                             icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
                             label = stringResource(R.string.stories_composer_add_text),
-                            enabled = canAddText,
-                            onClick = onAddText,
+                            enabled = true,
+                            onClick = rememberGuardedAddition(canAddText, R.string.composer_scene_cap_text, onAddText),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         StoryToolMode.DRAWING -> BandTile(
@@ -118,17 +140,42 @@ internal fun ComposerToolPanel(
                             onClick = onEnterDrawing,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        StoryToolMode.AUDIO -> ComposerSoundPanel(
+                            audio = audio,
+                            canAddSound = canAddSound,
+                            capRefusal = soundCapRefusal,
+                            onOpenShelf = onOpenSoundShelf,
+                            onToggleMute = onToggleSoundMute,
+                            onRemove = onRemoveSound,
+                        )
                         StoryToolMode.TEXTURE -> {
                             BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)
-                            FilterRow(
-                                selected = selectedFilter,
-                                intensity = filterIntensity,
-                                onSelect = onSelectFilter,
-                                onIntensityChange = onFilterIntensityChange,
-                            )
+                            if (sceneBackground != null) {
+                                ComposerFramePanel(
+                                    fitMode = ComposerBackdropFraming.fitMode(sceneFrame.toTransform()),
+                                    backdrop = ComposerBackdropFraming.backdrop(sceneFrame.toTransform()),
+                                    onPickFitMode = onFitMode,
+                                    onPickBackdrop = onBackdrop,
+                                )
+                                ComposerSceneEffectsPanel(
+                                    background = sceneBackground,
+                                    frame = sceneFrame,
+                                    objectSelected = objectSelected,
+                                    onChoose = onSceneEffect,
+                                    visual = {
+                                        FilterRow(
+                                            selected = selectedFilter,
+                                            intensity = filterIntensity,
+                                            onSelect = onSelectFilter,
+                                            onIntensityChange = onFilterIntensityChange,
+                                        )
+                                    },
+                                )
+                            }
                             DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
-                            VisibilityRow(selected = visibility, onSelect = onSelectVisibility)
+                            AnimatedSceneToggle(isOn = sceneIsAnimated, onToggle = onToggleAnimated)
                         }
+                        StoryToolMode.TIMELINE -> timeline()
                         else -> Unit
                     }
                 }
@@ -200,10 +247,16 @@ private fun MediaTile(
         } else {
             stringResource(R.string.stories_composer_add_media)
         },
-        enabled = !isUploadingMedia && !isMediaFull,
-        onClick = onPickMedia,
+        enabled = !isUploadingMedia,
+        onClick = rememberGuardedAddition(!isMediaFull, R.string.composer_scene_cap_media, onPickMedia),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** One bar per media of the pick being sent, each with its own « 4,8 / 14,2 Mo » (#13429). */
+@Composable
+private fun UploadingMediaLines(lines: List<MediaUploadProgress>) {
+    lines.forEach { line -> (line as? MediaUploadProgress.Uploading)?.let { UploadProgressLine(it) } }
 }
 
 /** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */
@@ -219,4 +272,19 @@ internal fun BandTile(
         icon()
         Text(label, modifier = Modifier.padding(start = 8.dp))
     }
+}
+
+/** Le cadre d'une slide, lu comme le transform du fond que les lois du panneau Cadre savent interpréter. */
+private fun SceneFrame.toTransform() = backgroundTransform()
+
+/** **Animé** (l'éclair du rail iOS) : la scène devient animée et ouvre sa frise ; l'éteindre la rend statique. */
+@Composable
+internal fun AnimatedSceneToggle(isOn: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.FilterChip(
+        selected = isOn,
+        onClick = onToggle,
+        label = { Text(stringResource(R.string.stories_scene_animated)) },
+        leadingIcon = { Icon(me.meeshy.ui.icons.MeeshyIcons.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        modifier = modifier,
+    )
 }

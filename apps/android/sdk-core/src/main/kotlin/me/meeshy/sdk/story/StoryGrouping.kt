@@ -109,6 +109,7 @@ public fun ApiPost.toStoryItem(): StoryItem {
         updatedAt = updatedAt,
         contentEditedAt = contentEditedAt,
         translations = translations,
+        originalLanguage = originalLanguage,
         reactionCount = totalReactions,
         commentCount = commentCount ?: 0,
         shareCount = shareCount,

@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.remember
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -16,10 +17,13 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
+import me.meeshy.app.composer.host.ComposerHostRoute
+import me.meeshy.app.composer.host.ComposerHostScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryViewersSheet
 import me.meeshy.app.stories.StoryViewerScreen
@@ -37,6 +41,8 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+            onResumeStoryDraft = { navController.navigate(storyDoor) },
+            onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
         )
     }
     composable(
@@ -60,7 +66,7 @@ internal fun NavGraphBuilder.feedNavGraph(
     sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
         MyStoriesScreen(
             onBack = dismiss,
-            onCreateStory = { navController.navigateKeepingSheet(Routes.STORY_COMPOSER) },
+            onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
         )
     }
@@ -85,7 +91,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         arguments = listOf(
             navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
         ),
-        deepLinks = Routes.POST_SHARE_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
+        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
     ) {
         PostDetailScreen(
             onBack = { navController.popBackStack() },
@@ -102,6 +108,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         arguments = listOf(
             navArgument("seed") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
+        deepLinks = Routes.REEL_SHARE_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
     ) { entry ->
         ReelsScreen(
             seed = entry.arguments?.getString("seed"),
@@ -122,6 +129,35 @@ internal fun NavGraphBuilder.feedNavGraph(
             onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
+    }
+    composable(
+        route = Routes.COMPOSER,
+        arguments = listOf(
+            navArgument(ComposerHostRoute.ORIGIN_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+            navArgument(ComposerHostRoute.ID_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+            navArgument(ComposerHostRoute.SUB_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+            navArgument(ComposerHostRoute.SEED_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
+    ) { entry ->
+        // The feed's entry, when it is under the host: its ViewModels are SHARED, never re-created.
+        val feedOwner = remember(entry) { runCatching { navController.getBackStackEntry(Routes.FEED) }.getOrNull() }
+        ComposerHostScreen(onClose = { navController.popBackStack() }, feedOwner = feedOwner)
     }
     composable(
         route = Routes.STORY_COMPOSER_ROUTE,

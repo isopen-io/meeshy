@@ -32,6 +32,11 @@
     <string name="stories_composer_add_slide">Adicionar slide</string>
     <string name="stories_composer_duplicate_slide">Duplicar slide</string>
     <string name="stories_composer_remove_slide">Remover slide</string>
+    <string name="stories_composer_remove_slide_title">Remover este slide?</string>
+    <string name="stories_composer_remove_slide_message">Tudo o que ele contém será perdido.</string>
+    <string name="stories_composer_remove_slide_confirm">Remover</string>
+    <string name="stories_composer_slide_move_earlier">Mover para antes</string>
+    <string name="stories_composer_slide_move_later">Mover para depois</string>
     <string name="stories_composer_text_placeholder">Escreva algo…</string>
     <string name="stories_composer_remove_text">Remover texto</string>
     <string name="stories_composer_bg_none">Sem fundo</string>

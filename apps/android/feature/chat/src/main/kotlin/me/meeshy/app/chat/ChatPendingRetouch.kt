@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentType
+import me.meeshy.ui.component.audio.editor.LocalAudioEditorHost
 
 /**
  * **TOUCHER UNE PIÈCE EN ATTENTE L'OUVRE DANS LA RETOUCHE UNIQUE** (#12735) — miroir de `ConversationPieceRetouch`
@@ -24,6 +25,7 @@ import me.meeshy.sdk.model.composer.PendingAttachmentType
 internal fun rememberPendingRetouch(actions: ChatHostActions): (PendingAttachment) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val audioEditor = LocalAudioEditorHost.current
     var photo by remember { mutableStateOf<Pair<String, ChatRetouchPending>?>(null) }
     var video by remember { mutableStateOf<Pair<String, ChatVideoRetouchPending>?>(null) }
     photo?.let { (id, piece) ->
@@ -56,6 +58,13 @@ internal fun rememberPendingRetouch(actions: ChatHostActions): (PendingAttachmen
     return { item ->
         scope.launch {
             when (item.type) {
+                PendingAttachmentType.AUDIO -> item.localPath?.let { path ->
+                    audioEditor.open(
+                        source = File(path),
+                        onConfirm = { edited -> actions.replacePendingAudio(item.id, edited.file) },
+                        onCancel = {},
+                    )
+                }
                 PendingAttachmentType.VIDEO -> item.localPath?.let { path ->
                     ChatVideoRetouchPending.of(context, Uri.fromFile(File(path)), System.currentTimeMillis())?.let { video = item.id to it }
                 }

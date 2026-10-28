@@ -1,5 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
+
 import androidx.room.withTransaction
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,6 +43,8 @@ internal class MessageCacheSource(
     private val messageApi: MessageApi,
     private val clock: CacheClock,
     private val historyWindow: Flow<Int>,
+    /** #13558 — a revalidation lands only while the account that asked for it is still the one signed in. */
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -108,15 +114,16 @@ internal class MessageCacheSource(
      * exactly where it was — there is nothing to "advance" separately.
      */
     override suspend fun revalidate() {
+        val ticket = fence?.currentTicket()
         val gapAfterMillis = messageDao.newestSyncedCreatedAt(conversationId)
         if (gapAfterMillis != null) {
             val backfilled = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
             if (backfilled != null) {
-                if (backfilled.isNotEmpty()) persistAfterBackfill(backfilled)
+                if (backfilled.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(backfilled) }
                 return
             }
         }
-        revalidateFullWindow()
+        revalidateFullWindow(ticket)
     }
 
     /**
@@ -166,7 +173,7 @@ internal class MessageCacheSource(
      * a conditional request) and throws, rather than being silently read as
      * "unchanged" or as an empty success.
      */
-    private suspend fun revalidateFullWindow() {
+    private suspend fun revalidateFullWindow(ticket: AccountTicket?) {
         val currentEtag = syncMetaDao.etag(resourceKey)
         when (
             val result = messageApi.listConditionalResult(
@@ -180,9 +187,11 @@ internal class MessageCacheSource(
                         "Unexpected 304 for messages:$conversationId without If-None-Match sent",
                     )
                 }
-                syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+                fence.commitOrWrite(ticket) {
+                    syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+                }
             }
-            is ConditionalResult.Fresh -> persist(result.data, newEtag = result.etag)
+            is ConditionalResult.Fresh -> fence.commitOrWrite(ticket) { persist(result.data, newEtag = result.etag) }
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Die Ende-zu-Ende-Verschlüsselung lässt sich von diesem Telefon aus noch nicht aktivieren: Es kann Ende-zu-Ende-verschlüsselte Nachrichten weder lesen noch schreiben, du könntest hier nicht mehr schreiben.</string>
+    <string name="encryption_irreversible_refused">Die Ende-zu-Ende-Verschlüsselung lässt sich nicht deaktivieren. Um ohne sie zu chatten, starte eine neue Unterhaltung.</string>
+    <string name="encryption_action_failed">Die Änderung konnte nicht vorgenommen werden. Versuche es erneut.</string>
+    <string name="encryption_offline">Du bist offline: Verbinde dich erneut, um die Verschlüsselung zu lesen oder zu ändern.</string>
+    <string name="encryption_toggle_forbidden">Deine Rolle erlaubt es nicht, die Verschlüsselung hier ein- oder auszuschalten. Der Server entscheidet.</string>
+    <string name="encryption_read_failed">Der Verschlüsselungsstatus konnte nicht gelesen werden. Versuche es erneut.</string>
+    <string name="encryption_retry">Erneut versuchen</string>
+    <string name="security_verify_description">Nachrichten mit %1$s sind Ende-zu-Ende-verschlüsselt.</string>
+</resources>

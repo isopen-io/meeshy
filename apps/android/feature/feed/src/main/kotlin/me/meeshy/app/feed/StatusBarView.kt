@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.MoodStatusExpiry
@@ -71,8 +73,11 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun StatusBarView(
     modifier: Modifier = Modifier,
+    onOpenMoodComposer: (() -> Unit)? = null,
     viewModel: StatusesViewModel = hiltViewModel(),
+    drafts: StatusComposerDraftsViewModel = hiltViewModel(),
 ) {
+    val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val cells = remember(state) { buildStatusBarCells(state) }
     var selected by remember { mutableStateOf<StatusEntry?>(null) }
@@ -108,7 +113,10 @@ fun StatusBarView(
                     onClick = { selected = cell.entry },
                 )
 
-                StatusBarCell.AddStatus -> AddStatusPill(onClick = { composerSeed = StatusComposerDraft() })
+                StatusBarCell.AddStatus -> AddStatusPill(onClick = {
+                    if (onOpenMoodComposer != null) onOpenMoodComposer()
+                    else scope.launch { composerSeed = drafts.restorable() ?: StatusComposerDraft() }
+                })
 
                 StatusBarCell.ErrorRetry -> ErrorRetryPill(onClick = viewModel::refresh)
 
@@ -179,8 +187,10 @@ fun StatusBarView(
                     repostOfId = request.repostOfId,
                     viaUsername = request.viaUsername,
                 )
+                if (request.repostOfId == null) drafts.discard()
                 composerSeed = null
             },
+            onDraftChange = drafts::persist,
             onDismiss = { composerSeed = null },
         )
     }

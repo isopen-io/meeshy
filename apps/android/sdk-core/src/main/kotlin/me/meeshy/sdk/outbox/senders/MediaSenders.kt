@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.media.TusUploadContext
@@ -36,15 +37,22 @@ public class UploadMediaHandler @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val tusUploadRepository: TusUploadRepository,
     private val json: Json,
+    private val progressLedger: MediaUploadProgressLedger,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
-        val item = mediaBlobStore.get(row.cmid)
+        val item = mediaBlobStore.get(row.cmid, row.ownerId)
         val context = uploadContextOf(row)
-        val result = if (context != null) {
-            MediaUploadSender.send(item) { tusUploadRepository.upload(it, context) }
-        } else {
-            MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+        val result = try {
+            if (context != null) {
+                MediaUploadSender.send(item) {
+                    tusUploadRepository.upload(it, context) { sent, total -> progressLedger.report(row.cmid, sent, total) }
+                }
+            } else {
+                MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            }
+        } finally {
+            progressLedger.clear(row.cmid)
         }
         if (result.dropsBytes(context)) {
             mediaBlobStore.remove(row.cmid)

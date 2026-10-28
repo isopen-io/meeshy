@@ -269,11 +269,102 @@ class LaunchRouterTest {
     }
 
     @Test
-    fun `verification and reset links have no destination here and never route`() {
-        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co")).isNull()
-        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co")).isNull()
-        assertThat(routeOf("https://meeshy.me/reset-password#token=r")).isNull()
-        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r")).isNull()
+    fun `the reset link written in the mails routes to the new password screen with its fragment token`() {
+        assertThat(routeOf("https://meeshy.me/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r%2B1"))
+            .isEqualTo("auth/reset-password?token=r%2B1")
+    }
+
+    @Test
+    fun `a reset link still carrying its token in the query is read for mails sent before`() {
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old")).isEqualTo("auth/reset-password?token=old")
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old#token=new")).isEqualTo("auth/reset-password?token=new")
+    }
+
+    @Test
+    fun `the verification link routes with its token and its address`() {
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+    }
+
+    @Test
+    fun `a reset or verification link without its secret opens nothing`() {
+        assertThat(routeOf("https://meeshy.me/reset-password")).isNull()
+        assertThat(routeOf("https://meeshy.me/reset-password#token=")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#email=a%40b.co")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=")).isNull()
+    }
+
+    @Test
+    fun `every variant of a reset or verification link is refused`() {
+        listOf(
+            "http://meeshy.me/reset-password#token=r",
+            "https://meeshy.me:8443/reset-password#token=r",
+            "https://evil.example/reset-password#token=r",
+            "https://meeshy.me/reset-password/extra#token=r",
+            "https://meeshy.me/Reset-Password#token=r",
+            "https://meeshy.me//reset-password#token=r",
+            "https://meeshy.me/auth/reset-password/#token=r",
+            "https://meeshy.me/auth/verify-email/x#token=t&email=a%40b.co",
+            "https://meeshy.me/settings/verify-email-change#token=t",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `only the sign-in and password links open before any session`() {
+        assertThat(LaunchRouter.opensWithoutSession("auth/magic-link?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/reset-password?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/verify-email?token=a&email=b")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("conversations")).isFalse()
+        assertThat(LaunchRouter.opensWithoutSession(null)).isFalse()
+    }
+
+    // #13465 — après la mort du processus, le système rend à l'activité restaurée l'intent ORIGINAL (son adresse
+    // intacte : `intent.data = null` n'a vidé que la copie locale). Une route à jeton relue là rejouerait le lien.
+    @Test
+    fun `a restored activity never replays an email link token, a fresh launch does`() {
+        val reset = "auth/reset-password?token=a"
+
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/magic-link?token=a", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/verify-email?token=a&email=b", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = false)).isEqualTo(reset)
+        assertThat(LaunchRouter.onCreateRoute("conversations", restored = true)).isEqualTo("conversations")
+    }
+
+    // #13504 — une activité RECRÉÉE (changement de thème, de langue, de densité, mort du processus) relit l'intent
+    // ORIGINAL, preuve d'appel intacte. Le bouton « Répondre » relu là faisait redécrocher, micro ouvert, un appel de
+    // groupe que l'utilisateur avait quitté et qui durait encore : la demande d'appel a déjà été présentée.
+    @Test
+    fun `a recreated activity never replays a call launch, answered or ringing`() {
+        val answer = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = true)
+        val ringing = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = false)
+
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(ringing, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = false)).isEqualTo(answer)
+        assertThat(LaunchRouter.onCreateRoute(Routes.chat("conv-1"), restored = true)).isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `every email link the manifest claims is a link the router reads - none is swallowed`() {
+        val manifest = java.io.File("src/main/AndroidManifest.xml").readText()
+            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+        val claimed = Regex("android:host=\"([^\"]+)\" android:(?:path|pathPrefix)=\"([^\"]+)\"").findAll(manifest)
+            .map { it.groupValues[1] to it.groupValues[2] }
+            .filter { (_, path) -> me.meeshy.sdk.model.link.EmailLinkSecret.pathCarriesSecret(path) }
+            .toList()
+
+        assertThat(claimed).isNotEmpty()
+        assertThat(routeOf("https://www.meeshy.me.evil.example/reset-password#token=t")).isNull()
+        assertThat(routeOf("https://wwwmeeshy.me/reset-password#token=t")).isNull()
+        claimed.forEach { (host, path) ->
+            com.google.common.truth.Truth.assertWithMessage("https://$host$path").that(routeOf("https://$host$path#token=t&email=a%40b.co")).isNotNull()
+        }
     }
 
     @Test
@@ -326,5 +417,28 @@ class LaunchRouterTest {
     fun `a tap with nothing actionable yields no route`() {
         assertThat(tapRoute("type" to "post_like")).isNull()
         assertThat(LaunchRouter.route(LaunchExtras())).isNull()
+    }
+
+    // #13527 — un média partagé par une autre app s'ouvre dans l'hôte du composeur, une seule fois.
+    @Test
+    fun `a shared media seed opens the composer host on the share door`() {
+        val seed = "AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = seed))).isEqualTo("composer?origin=share&seed=$seed")
+    }
+
+    @Test
+    fun `a seed without the shape of the store's tokens opens nothing, and a call or a tap wins over it`() {
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = "../../etc"))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = ""))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(callId = "c1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv"))).startsWith("call")
+        assertThat(LaunchRouter.route(LaunchExtras(conversationId = "conv-1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv")))
+            .isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `a recreated activity never reopens the composer on a seed already taken`() {
+        val route = "composer?origin=share&seed=AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.onCreateRoute(route, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(route, restored = false)).isEqualTo(route)
     }
 }

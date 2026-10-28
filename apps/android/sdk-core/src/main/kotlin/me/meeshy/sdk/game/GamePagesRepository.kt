@@ -40,6 +40,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.GameApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * Le sort d'une écriture : prise en compte par le serveur, ou refusée. [Refused.code] est le code de la passerelle
@@ -70,7 +71,8 @@ class GamePagesRepository(
 ) : PerAccountCache {
 
     @Inject
-    constructor(api: GameApi, dao: KeyedJsonCacheDao) : this(api, KeyedJsonCache(dao), SystemCacheClock)
+    constructor(api: GameApi, dao: KeyedJsonCacheDao, fence: AccountFence) :
+        this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
 
     fun leagueWeek(onSyncError: (Throwable) -> Unit = {}): Flow<CacheResult<LeagueWeekResponse>> =
         weekSource().results(CachePolicy.UserStats, clock, onSyncError).readAs(GameWave2Parser::leagueWeek)

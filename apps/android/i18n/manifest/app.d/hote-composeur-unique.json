@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.format.story", "androidName": "composer_format_story", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.post", "androidName": "composer_format_post", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.reel", "androidName": "composer_format_reel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.status", "androidName": "composer_format_status", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.denied.reel", "androidName": "composer_format_denied_reel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.denied.mood", "androidName": "composer_format_denied_mood", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.denied.mood.empty", "androidName": "composer_format_denied_mood_empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.denied.story", "androidName": "composer_format_denied_story", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.format.denied.post", "androidName": "composer_format_denied_post", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.publish.menu.title", "androidName": "composer_publish_menu_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.publish.menu.a11y.hint", "androidName": "composer_publish_menu_a11y_hint", "status": "adopted" },
+        { "androidName": "composer_format_media_stay_behind", "status": "android-only" }
+      ]
+    }
+  }
+}

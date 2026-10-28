@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "androidName": "feed_unsent_media_row",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_media_uploaded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_media_waiting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_media_refused",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_media_lost",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_rupture_counts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_gesture_replace",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_gesture_replace_story",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_gesture_wait",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_gesture_retry",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

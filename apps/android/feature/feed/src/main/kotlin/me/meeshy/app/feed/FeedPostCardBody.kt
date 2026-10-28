@@ -13,14 +13,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +51,18 @@ internal fun FeedPostCardBody(
     post: FeedPostPresentation,
     onFlagTap: (String) -> Unit,
     onOpenHashtag: (String) -> Unit = {},
+    translatingCodes: Set<String> = emptySet(),
+    onSelectLanguage: (String) -> Unit = onFlagTap,
 ) {
+    var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
+    post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
+        PostTranslationSheet(
+            explorer = explorer,
+            translating = translatingCodes,
+            onSelectLanguage = onSelectLanguage,
+            onDismiss = { explorerOpen = false },
+        )
+    }
     Column(Modifier.floatingChromeLateralReserve()) {
         if (post.content.isNotBlank()) {
             Spacer(Modifier.height(MeeshySpacing.md))
@@ -65,9 +77,13 @@ internal fun FeedPostCardBody(
             }
         }
 
-        if (post.languageStrip.isNotEmpty()) {
+        if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {
             Spacer(Modifier.height(MeeshySpacing.xs))
-            PostLanguageStripRow(chips = post.languageStrip, onChipTap = onFlagTap)
+            PostLanguageStripRow(
+                chips = post.languageStrip,
+                onChipTap = onFlagTap,
+                onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
+            )
         }
     }
 }
@@ -102,17 +118,13 @@ internal fun HashtagAwareLinks(onOpenHashtag: (String) -> Unit, content: @Compos
 internal fun PostLanguageStripRow(
     chips: List<LanguageChip>,
     onChipTap: (String) -> Unit,
+    onOpenExplorer: (() -> Unit)? = null,
 ) {
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = Icons.Filled.Translate,
-            contentDescription = stringResource(R.string.feed_translated),
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
+        PostTranslationsBadge(onOpenExplorer)
         chips.forEach { chip ->
             val info = chip.info
             val accent = info?.colorHex

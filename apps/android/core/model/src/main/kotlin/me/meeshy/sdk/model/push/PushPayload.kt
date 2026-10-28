@@ -38,6 +38,8 @@ public data class PushPayload(
     val senderUsername: String? = null,
     val senderDisplayName: String? = null,
     val senderAvatar: String? = null,
+    /** Le compte que la passerelle vise (#13567) ; absent d'une passerelle antérieure. */
+    val recipientUserId: String? = null,
 ) {
     /**
      * Le média peut-il voyager jusqu'à la bannière ? Une protection déclarée
@@ -95,6 +97,7 @@ public data class PushPayload(
                 senderUsername = text("senderUsername"),
                 senderDisplayName = text("senderDisplayName"),
                 senderAvatar = text("senderAvatar"),
+                recipientUserId = text("recipientUserId"),
             )
         }
     }

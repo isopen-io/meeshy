@@ -82,6 +82,8 @@ internal object NavBackChrome {
         sheet("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         sheet("Routes.MAGIC_LINK", Routes.MAGIC_LINK, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         root("Routes.MAGIC_LINK_VALIDATE", Routes.MAGIC_LINK_VALIDATE),
+        root("Routes.VERIFY_EMAIL_LINK", Routes.VERIFY_EMAIL_LINK),
+        sheet("Routes.RESET_PASSWORD", Routes.RESET_PASSWORD, IosPresentation.SHEET, auth("NewPasswordScreen.kt")),
         sheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.COVER, auth("SignupScreen.kt")),
         sheet("Routes.GUEST_JOIN", Routes.GUEST_JOIN, IosPresentation.COVER, auth("ShareLinkEntryScreen.kt")),
         sheet("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, IosPresentation.COVER, auth("WorldGuestEntryScreen.kt")),
@@ -108,6 +110,7 @@ internal object NavBackChrome {
         modal("Routes.REELS", Routes.REELS, IosPresentation.COVER, "$FEATURE/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt"),
         modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
         modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt"),
+        modal("Routes.COMPOSER", Routes.COMPOSER, IosPresentation.COVER, "app/src/main/kotlin/me/meeshy/app/composer/host/ComposerHostScreen.kt"),
         // Réglages.
         arrow("Routes.SETTINGS", Routes.SETTINGS, settings("SettingsScreen.kt")),
         sheet("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, IosPresentation.SHEET, settings("NotificationSettingsScreen.kt")),
@@ -136,6 +139,7 @@ internal object NavBackChrome {
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),
         sheet("ProfileRoutes.STATS", ProfileRoutes.STATS, IosPresentation.SHEET, profile("UserStatsScreen.kt")),
+        sheet("ProfileRoutes.DECOR", ProfileRoutes.DECOR, IosPresentation.SHEET, profile("ProfileDecorSheet.kt")),
         // La route n'a plus d'écran : elle ouvre la fiche (`UserProfileSheet`, une feuille Material) par l'ouvreur global, puis se retire.
         modal("Routes.PROFILE_USER", Routes.PROFILE_USER, IosPresentation.SHEET, profile("UserProfileSheet.kt")),
         sheet("Routes.USER_POSTS", Routes.USER_POSTS, IosPresentation.SHEET, feed("UserPostsScreen.kt")),

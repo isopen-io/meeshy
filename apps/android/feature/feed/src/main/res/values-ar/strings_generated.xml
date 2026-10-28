@@ -13,6 +13,8 @@
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_comments">التعليقات</string>
     <string name="feed_composer_attach_file">إرفاق ملف</string>
+    <string name="feed_composer_background">لون الخلفية</string>
+    <string name="feed_composer_background_swatch">اللون %1$s من %2$s</string>
     <string name="feed_composer_cancel">إلغاء</string>
     <string name="feed_composer_language_search">البحث عن لغة</string>
     <string name="feed_composer_language_title">لغة المنشور</string>
@@ -20,6 +22,7 @@
     <string name="feed_composer_placeholder">بماذا تفكّر؟</string>
     <string name="feed_composer_publish">نشر</string>
     <string name="feed_composer_record_voice">تسجيل مقطع صوتي</string>
+    <string name="feed_composer_socle_audience">الجمهور</string>
     <string name="feed_composer_take_photo">التقاط صورة</string>
     <string name="feed_composer_title">منشور جديد</string>
     <string name="feed_composer_type_hint">التبديل بين ريل ومنشور</string>
@@ -59,6 +62,10 @@
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
+    <string name="feed_reel_offer_body">منشورك يحتوي على فيديو واحد فقط: كريل، يُعرض بملء الشاشة في الريلز.</string>
+    <string name="feed_reel_offer_post">إنه منشور</string>
+    <string name="feed_reel_offer_reel">إنه ريل</string>
+    <string name="feed_reel_offer_title">النشر كريل؟</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
     <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>
@@ -78,7 +85,16 @@
     <string name="feed_repost_story">قصة</string>
     <string name="feed_reposts">إعادات النشر</string>
     <string name="feed_retry">إعادة المحاولة</string>
+    <string name="feed_secondary_translation_a11y">الترجمة إلى %1$s: %2$s</string>
     <string name="feed_translated">الترجمة متاحة</string>
+    <string name="feed_translation_available">الترجمات المتاحة</string>
+    <string name="feed_translation_close">إغلاق</string>
+    <string name="feed_translation_original">الأصل</string>
+    <string name="feed_translation_other_languages">لغات أخرى</string>
+    <string name="feed_translation_title">اللغات</string>
+    <string name="feed_translation_translate">ترجمة</string>
+    <string name="feed_translations_badge">الترجمات</string>
+    <string name="feed_translations_badge_hint">يعرض اللغات المتاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%s</string>
@@ -134,8 +150,12 @@
     <string name="status_bar_republish">إعادة نشر</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">عبر @%s</string>
+    <string name="status_composer_bare_add">إضافة كلمة</string>
+    <string name="status_composer_bare_publish">النشر على أي حال</string>
+    <string name="status_composer_bare_title">هل تريد نشر مزاجك دون كلمة قصيرة؟</string>
     <string name="status_composer_close">إغلاق</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">رموز تعبيرية أخرى</string>
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
     <string name="status_composer_title">الحالة</string>

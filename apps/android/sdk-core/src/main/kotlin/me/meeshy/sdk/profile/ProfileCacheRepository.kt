@@ -5,6 +5,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.sdk.cache.KeyedJsonCache
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileSheetUser
@@ -19,15 +21,18 @@ import me.meeshy.sdk.model.profile.repainted
 class ProfileCacheRepository(private val cache: KeyedJsonCache) {
 
     @Inject
-    constructor(dao: KeyedJsonCacheDao) : this(KeyedJsonCache(dao))
+    constructor(dao: KeyedJsonCacheDao, fence: AccountFence) : this(KeyedJsonCache(dao, fence = fence))
+
+    /** Le compte auquel appartient une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = cache.ticket()
 
     /** La fiche gardée sous [key] (id ou pseudo), `null` à froid ou si la charge ne se lit plus. */
     suspend fun cachedProfile(key: String): MeeshyUser? =
         cache.get(NAMESPACE, normalize(key), MeeshyUser.serializer())?.value
 
     /** Range [user] sous son id, son pseudo et la clé [lookupKey] avec laquelle on l'a demandé. */
-    suspend fun store(user: MeeshyUser, lookupKey: String) {
-        keysOf(user, lookupKey).forEach { cache.put(NAMESPACE, it, user, MeeshyUser.serializer()) }
+    suspend fun store(user: MeeshyUser, lookupKey: String, ticket: AccountTicket?) {
+        keysOf(user, lookupKey).forEach { cache.put(NAMESPACE, it, user, MeeshyUser.serializer(), ticket) }
     }
 
     /** Une fiche qui n'est plus servie (bloqué par la cible) ne laisse aucune ligne, sous aucune clé. */

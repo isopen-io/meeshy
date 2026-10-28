@@ -19,6 +19,10 @@ internal object WarmDeepLink {
     fun replayable(intent: Intent): Uri? =
         intent.takeIf { it.action == Intent.ACTION_VIEW }?.data
 
+    /** Un lien que l'écran visiteur a mis en attente attend un COMPTE (JWT) ; une session d'invité ne le consomme pas (#13530). */
+    fun mayReplay(isAuthenticated: Boolean, hasAccount: Boolean, awaitsAccount: Boolean): Boolean =
+        isAuthenticated && (hasAccount || !awaitsAccount)
+
     /** `false` quand aucune destination du graphe ne porte cette adresse. */
     fun open(navController: NavController, uri: Uri): Boolean = try {
         navController.navigate(

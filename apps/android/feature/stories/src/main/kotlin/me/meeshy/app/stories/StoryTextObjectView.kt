@@ -137,6 +137,7 @@ object StoryTextObjectProjection {
     ): String {
         val translations = textObject.translations
         if (translations.isNullOrEmpty()) return textObject.text
+        if (StoryLanguageOverride.isOriginal(overrideLanguage)) return textObject.text
         val languages = if (overrideLanguage.isNullOrBlank()) {
             preferredLanguages
         } else {

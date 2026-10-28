@@ -29,6 +29,7 @@ import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -77,6 +78,10 @@ data class PostDetailUiState(
      * the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
      */
     val isReposted: Boolean = false,
+    /** The inline secondary translation under the post text (iOS `PostDetailSecondaryTranslationPanel`). */
+    val secondaryTranslation: PostSecondaryTranslation? = null,
+    /** The detail's flag strip (iOS `buildAvailableFlags`): without the language read, marking the secondary one. */
+    val detailLanguageStrip: List<LanguageChip> = emptyList(),
 )
 
 @HiltViewModel
@@ -350,11 +355,56 @@ class PostDetailViewModel @Inject constructor(
             translations = post.translations.toTranslationRows(),
         )
         when (result) {
-            is LanguageFlagTapResolver.Result.Activate -> activeCode.value = result.code
-            LanguageFlagTapResolver.Result.Revert -> activeCode.value = null
+            is LanguageFlagTapResolver.Result.Activate -> activateFromFlag(post, result.code)
+            LanguageFlagTapResolver.Result.Revert -> {
+                activeCode.value = null
+                status.update { it.copy(secondaryCode = null) }
+            }
             is LanguageFlagTapResolver.Result.RequestTranslation ->
                 requestOnDemandTranslation(result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * iOS `PostDetailView.handleFlagTap`: the original language becomes the displayed text; any
+     * other translation opens (or closes, on a second tap) the inline secondary panel under the
+     * unchanged text, so two languages can be read side by side.
+     */
+    private fun activateFromFlag(post: ApiPost, code: String) {
+        val original = post.originalLanguage?.trim()?.lowercase()
+        if (code == original) {
+            activeCode.value = code
+            status.update { it.copy(secondaryCode = null) }
+            return
+        }
+        status.update { it.copy(secondaryCode = if (it.secondaryCode == code) null else code) }
+    }
+
+    /**
+     * Pick in the language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`): the chosen
+     * language becomes the displayed text and closes the secondary panel — a pick never toggles
+     * back to the default, unlike a flag chip. A language the post has no content for is
+     * translated on demand and displayed once it lands.
+     */
+    fun onLanguageSelected(code: String) {
+        val post = rawPost.value ?: return
+        val preferences: LanguageResolver.ContentLanguagePreferences =
+            sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = FeedPostBuilder.resolveActiveCode(post, preferences, activeCode.value),
+            originalLanguage = post.originalLanguage,
+            translations = post.translations.toTranslationRows(),
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate -> {
+                activeCode.value = result.code
+                status.update { it.copy(secondaryCode = null) }
+            }
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(result.targetLanguage)
+            LanguageFlagTapResolver.Result.Revert, LanguageFlagTapResolver.Result.None -> Unit
         }
     }
 
@@ -541,6 +591,7 @@ class PostDetailViewModel @Inject constructor(
             )
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null
+        val displayedCode = post?.let { FeedPostBuilder.resolveActiveCode(it, prefs, active) }
         return PostDetailUiState(
             post = projected,
             isLoading = st.isLoading,
@@ -554,6 +605,10 @@ class PostDetailViewModel @Inject constructor(
                 PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
             isReposted = st.isReposted,
+            secondaryTranslation = post?.let { PostSecondaryTranslation.of(it, st.secondaryCode, displayedCode) },
+            detailLanguageStrip = projected?.let {
+                PostDetailLanguageStrip.of(it.languageStrip, displayedCode, post?.originalLanguage, st.secondaryCode)
+            }.orEmpty(),
         )
     }
 
@@ -573,4 +628,5 @@ private data class PostDetailStatus(
     val quoteComposer: QuoteComposerState? = null,
     val isReposted: Boolean = false,
     val isRepostInFlight: Boolean = false,
+    val secondaryCode: String? = null,
 )

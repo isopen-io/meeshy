@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.socket.SocketConnectOutcome
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.Renewal
 import me.meeshy.sdk.net.SessionRefresher
+import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.net.TokenStore
 import org.json.JSONObject
 import timber.log.Timber
@@ -61,6 +62,7 @@ class SocketManager internal constructor(
     ioDispatcher: CoroutineDispatcher,
     private val nowEpochSeconds: () -> Double,
     private val callGate: CallActivityGate,
+    private val transition: SessionTransitionFlags = SessionTransitionFlags(),
 ) {
     @Inject
     constructor(
@@ -71,10 +73,12 @@ class SocketManager internal constructor(
         refresher: SessionRefresher,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
         callGate: CallActivityGate,
+        transition: SessionTransitionFlags,
     ) : this(
         config, tokenStore, factory, clientIdentity, refresher, ioDispatcher,
         { System.currentTimeMillis() / 1000.0 },
         callGate,
+        transition,
     )
 
     internal constructor(
@@ -94,6 +98,20 @@ class SocketManager internal constructor(
     private val lock = Any()
 
     private var _socket: RealtimeSocket? = null
+
+    /** The session ([SessionTransitionFlags.generation]) the current socket was opened under (#13558). */
+    @Volatile
+    private var openedUnder: Long = 0L
+
+    @Volatile
+    private var staleReopenScheduled = false
+
+    /** A [disconnect] a call deferred: the session is over, nothing may replace it with a reopen (#13558). */
+    @Volatile
+    private var disconnectRequested = false
+
+    /** A [connect] the next session asked for while a call deferred the previous one's disconnect (#13566). */
+    private var connectAfterDisconnect = false
     private var refreshJob: Job? = null
     private val registered = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
 
@@ -106,6 +124,7 @@ class SocketManager internal constructor(
     private val _disconnected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _sessionRevoked = MutableSharedFlow<String?>(replay = 0, extraBufferCapacity = 1)
     private val _socketErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
+    private val _serverErrors = MutableSharedFlow<SocketServerError>(replay = 0, extraBufferCapacity = 8)
 
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
@@ -116,6 +135,9 @@ class SocketManager internal constructor(
     /** Événement `error` du serveur : exposé, jamais cause de déconnexion. */
     val socketErrors: SharedFlow<String> = _socketErrors.asSharedFlow()
 
+    /** Le même événement `error`, marqué du jeton d'invité présenté au handshake de LA socket qui l'a reçu. */
+    val serverErrors: SharedFlow<SocketServerError> = _serverErrors.asSharedFlow()
+
     private val _connectionState = MutableStateFlow(SocketConnectionState.DISCONNECTED)
     val connectionState: StateFlow<SocketConnectionState> = _connectionState.asStateFlow()
 
@@ -123,6 +145,10 @@ class SocketManager internal constructor(
 
     /** Ouvre la connexion UNE fois ; un second appel ne crée ni socket ni écouteurs. */
     fun connect(): SocketConnectOutcome = synchronized(lock) {
+        if (disconnectRequested) {
+            connectAfterDisconnect = true
+            return SocketConnectOutcome.ARMED
+        }
         if (_socket != null) return SocketConnectOutcome.ARMED
         val decision = SocketConnectDecision.decide(tokenStore.jwt, tokenStore.sessionToken, nowEpochSeconds())
         when (decision) {
@@ -140,11 +166,13 @@ class SocketManager internal constructor(
         val auth = SocketAuthPayload.of(decision, clientIdentity.identity()) ?: return SocketConnectOutcome.NOT_ARMED
         _connectionState.value = SocketConnectionState.CONNECTING
         val socket = factory.create(config.socketUrl, auth)
+        openedUnder = transition.generation
+        staleReopenScheduled = false
         val presented = (decision as? SocketConnectDecision.ConnectRegistered)?.jwt
         presentedToken = presented
         _socket = socket
-        installLifecycleListeners(socket, presented)
-        registered.forEach { (event, callback) -> socket.on(event, callback) }
+        installLifecycleListeners(socket, presented, (decision as? SocketConnectDecision.ConnectGuest)?.sessionToken)
+        registered.forEach { (event, callback) -> socket.on(event, boundToSession(socket, callback)) }
         socket.connect()
         return SocketConnectOutcome.ARMED
     }
@@ -164,7 +192,7 @@ class SocketManager internal constructor(
         }
     }
 
-    private fun installLifecycleListeners(socket: RealtimeSocket, presented: String?) {
+    private fun installLifecycleListeners(socket: RealtimeSocket, presented: String?, presentedGuestToken: String?) {
         socket.on(Socket.EVENT_CONNECT) {
             Timber.d("Socket connected")
             _connectionState.value = SocketConnectionState.CONNECTED
@@ -186,7 +214,9 @@ class SocketManager internal constructor(
         }
         socket.on(EVENT_ERROR) { args ->
             Timber.w("Socket error event: %s", args.firstOrNull())
-            _socketErrors.tryEmit(args.firstOrNull()?.toString().orEmpty())
+            val payload = args.firstOrNull()?.toString().orEmpty()
+            _socketErrors.tryEmit(payload)
+            _serverErrors.tryEmit(SocketServerError(payload, presentedGuestToken))
         }
     }
 
@@ -209,26 +239,45 @@ class SocketManager internal constructor(
 
     /**
      * Ferme la socket, retire ses écouteurs et OUBLIE le registre : la session est finie.
-     * Pendant un appel actif la coupure est différée à sa fin ([CallActivityGate]).
+     * Pendant un appel actif la coupure est différée à sa fin ([CallActivityGate]) ; le registre, lui, est oublié
+     * TOUT DE SUITE : les écouteurs qu'un compte connecté pendant l'appel pose ensuite sont les siens, et la fin de
+     * l'appel lui rouvre une socket au lieu de les vider (#13566).
      */
     fun disconnect() {
+        synchronized(lock) {
+            disconnectRequested = true
+            connectAfterDisconnect = false
+            registered.clear()
+        }
         callGate.runOrDefer { disconnectNow() }
     }
 
     private fun disconnectNow() = synchronized(lock) {
+        disconnectRequested = false
         closeTransport()
-        registered.clear()
+        if (connectAfterDisconnect) {
+            connectAfterDisconnect = false
+            connect()
+        }
     }
 
     /**
      * Referme puis rouvre avec le jeton courant, en gardant les écouteurs enregistrés. Pendant un
      * appel actif la rotation est différée à sa fin et rend l'issue courante (ARMED si ouverte).
+     * Une déconnexion demandée garde le dessus : la porte d'appel ne retient qu'UNE action, et une
+     * rotation qui la remplacerait garderait le registre de la session finie (#13558).
      */
     fun reconnectWithToken(): SocketConnectOutcome {
         var outcome: SocketConnectOutcome? = null
-        val ran = callGate.runOrDefer { outcome = reconnectNow() }
+        val ran = callGate.runOrDefer { outcome = rotateUnlessDisconnecting() }
         if (ran) return outcome ?: SocketConnectOutcome.NOT_ARMED
         return if (_socket != null) SocketConnectOutcome.ARMED else SocketConnectOutcome.NOT_ARMED
+    }
+
+    private fun rotateUnlessDisconnecting(): SocketConnectOutcome {
+        if (!disconnectRequested) return reconnectNow()
+        disconnectNow()
+        return SocketConnectOutcome.NOT_ARMED
     }
 
     private fun reconnectNow(): SocketConnectOutcome = synchronized(lock) {
@@ -251,25 +300,100 @@ class SocketManager internal constructor(
     fun on(event: String, callback: (Array<Any>) -> Unit) {
         synchronized(lock) {
             registered += event to callback
-            _socket?.on(event, callback)
+            if (!disconnectRequested) _socket?.let { socket -> socket.on(event, boundToSession(socket, callback)) }
         }
     }
 
-    fun emit(event: String, data: JSONObject) {
-        _socket?.emit(event, data)
+    /**
+     * #13558 : a socket opened under a session that has since ended (logout whose disconnect a call deferred, an account
+     * adopted over a live one) never hands its events on — they belong to the account that left. The first stale event
+     * reopens the transport under the current credentials (deferred to the call's end like any rotation).
+     */
+    private fun boundToSession(socket: RealtimeSocket, callback: (Array<Any>) -> Unit): (Array<Any>) -> Unit {
+        val generation = openedUnder
+        return { args ->
+            if (transition.generation == generation) {
+                callback(args)
+            } else {
+                reopenStale(socket)
+            }
+        }
     }
 
-    fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
-        _socket?.emit(event, data, ack)
+    private fun reopenStale(socket: RealtimeSocket) {
+        synchronized(lock) {
+            if (_socket !== socket || staleReopenScheduled || disconnectRequested) return
+            staleReopenScheduled = true
+        }
+        Timber.w("Socket: session terminee, evenement jete et socket rouverte")
+        scope.launch { rotateStale(socket) }
     }
+
+    /** Rouvre [socket] sous la session courante, une seule fois : une autre socket l'a peut-être déjà remplacée. */
+    private fun rotateStale(socket: RealtimeSocket) {
+        callGate.runOrDefer {
+            synchronized(lock) {
+                when {
+                    disconnectRequested -> disconnectNow()
+                    _socket === socket -> reconnectNow()
+                }
+            }
+        }
+    }
+
+    /**
+     * #13566 : une émission part au nom de la session COURANTE, donc jamais par une socket ouverte sous une session
+     * finie (elle porte le jeton du compte parti). Hors appel, la socket périmée est rouverte sous la session courante
+     * et l'émission part par elle ; pendant l'appel qui diffère cette réouverture, l'émission est refusée.
+     */
+    fun emit(event: String, data: JSONObject) {
+        socketOfCurrentSession()?.first?.emit(event, data)
+    }
+
+    /**
+     * Comme [emit] ; l'appelant reçoit toujours une issue : un refus ([SESSION_ENDED]) quand l'émission ne peut partir,
+     * ou quand l'accusé arrive après la fin de la session qui l'a émise — sa charge n'est jamais livrée.
+     */
+    fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
+        val (socket, generation) = socketOfCurrentSession() ?: return ack(sessionEndedAck())
+        socket.emit(event, data) { args ->
+            if (transition.generation == generation) ack(args) else ack(sessionEndedAck())
+        }
+    }
+
+    private fun socketOfCurrentSession(): Pair<RealtimeSocket, Long>? {
+        val stale = synchronized(lock) {
+            val socket = _socket ?: return null
+            if (openedUnder == transition.generation) return socket to openedUnder
+            socket
+        }
+        Timber.w("Socket: emission sous une session terminee, socket rouverte avant d'emettre")
+        rotateStale(stale)
+        return synchronized(lock) {
+            _socket?.takeIf { openedUnder == transition.generation }?.let { it to openedUnder }
+        }
+    }
+
+    private fun sessionEndedAck(): Array<Any> =
+        arrayOf(JSONObject().put("success", false).put("error", SESSION_ENDED))
 
     fun joinRoom(room: String) {
         Timber.d("Socket joining room: $room")
     }
 
-    private companion object {
-        const val EVENT_TOKEN_EXPIRED = SocketEventNames.AUTH_TOKEN_EXPIRED
-        const val EVENT_SESSION_REVOKED = SocketEventNames.AUTH_SESSION_REVOKED
-        const val EVENT_ERROR = "error"
+    companion object {
+        private const val EVENT_TOKEN_EXPIRED = SocketEventNames.AUTH_TOKEN_EXPIRED
+        private const val EVENT_SESSION_REVOKED = SocketEventNames.AUTH_SESSION_REVOKED
+        private const val EVENT_ERROR = "error"
+
+        /** L'erreur d'un accusé refusé parce que la session de l'émission est finie (#13566). */
+        const val SESSION_ENDED: String = "SESSION_ENDED"
     }
 }
+
+/**
+ * Un événement `error` du serveur et le jeton d'invité présenté au handshake de la socket qui l'a reçu (`null` pour une
+ * socket de compte). Pendant un appel, la coupure d'une socket est différée : son refus doit viser SA session, jamais
+ * celle ouverte depuis sur l'appareil.
+ */
+data class SocketServerError(val payload: String, val guestSessionToken: String?)

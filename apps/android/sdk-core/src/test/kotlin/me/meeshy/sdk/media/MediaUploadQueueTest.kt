@@ -34,7 +34,7 @@ class MediaUploadQueueTest {
             ApplicationProvider.getApplicationContext(),
             MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
-        blobStore = MediaBlobStore(db.mediaBlobDao())
+        blobStore = MediaBlobStore(db.mediaBlobDao(), MediaBlobFiles(kotlin.io.path.createTempDirectory("blobs").toFile()) { me.meeshy.core.crypto.primitives.StreamingSeal.ephemeral() })
         outbox = OutboxRepository(db, db.outboxDao())
         queue = MediaUploadQueue(blobStore, outbox)
     }

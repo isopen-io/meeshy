@@ -2,9 +2,14 @@ package me.meeshy.sdk.publication
 
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaUploadSender
+import me.meeshy.sdk.model.media.MediaFate
+import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
@@ -13,6 +18,9 @@ import me.meeshy.sdk.outbox.stateEnum
 public enum class UnsentPublicationKind { POST, REEL, STORY }
 
 public enum class UnsentPublicationStatus { SENDING, FAILED }
+
+/** One media of an unsent publication: where it stands, and how far it got if it is leaving now. */
+public data class UnsentMedia(val id: String, val fate: MediaFate, val progress: MediaUploadProgress)
 
 /**
  * One publication the device holds and the server has not confirmed (#13417) — a post, a reel
@@ -27,6 +35,7 @@ public data class UnsentPublication(
     val status: UnsentPublicationStatus,
     val createdAtMillis: Long,
     val failureReason: String?,
+    val media: List<UnsentMedia> = emptyList(),
 ) {
     /** A failed post or reel reopens in the composer; a story is retried or discarded. */
     val canReopen: Boolean get() = status == UnsentPublicationStatus.FAILED && kind != UnsentPublicationKind.STORY
@@ -35,37 +44,79 @@ public data class UnsentPublication(
     val canRetry: Boolean get() = status == UnsentPublicationStatus.FAILED
 }
 
-/** Reads the unsent publications out of the outbox rows — newest first, undecodable rows skipped. */
+/**
+ * Reads the unsent publications out of the outbox rows — newest first, undecodable rows skipped.
+ *
+ * Only [ownerId]'s rows are read: the outbox keeps an account's rows on the device when another account
+ * signs in (they leave when it comes back), so listing them all would show A's unsent text to B.
+ */
 public object UnsentPublications {
 
-    public fun from(rows: List<OutboxEntity>, json: Json = MeeshyApi.json): List<UnsentPublication> =
-        rows.mapNotNull { it.toUnsent(json) }.sortedByDescending { it.createdAtMillis }
+    public fun from(
+        rows: List<OutboxEntity>,
+        ownerId: String?,
+        progress: Map<String, MediaUploadProgress>,
+        json: Json = MeeshyApi.json,
+    ): List<UnsentPublication> {
+        if (ownerId == null) return emptyList()
+        val uploads = rows.associateBy { it.cmid }
+        return rows.filter { it.ownerId == ownerId }
+            .mapNotNull { it.toUnsent(json, uploads, progress) }
+            .sortedByDescending { it.createdAtMillis }
+    }
 
-    private fun OutboxEntity.toUnsent(json: Json): UnsentPublication? = when (kindEnum) {
+    private fun OutboxEntity.toUnsent(
+        json: Json,
+        uploads: Map<String, OutboxEntity>,
+        progress: Map<String, MediaUploadProgress>,
+    ): UnsentPublication? = when (kindEnum) {
         OutboxKind.CREATE_POST -> runCatching { json.decodeFromString(CreatePostRequest.serializer(), payload) }
             .getOrNull()
             ?.let { request ->
                 unsent(
                     kind = if (request.type == REEL) UnsentPublicationKind.REEL else UnsentPublicationKind.POST,
                     text = request.content,
-                    mediaCount = request.mediaIds.orEmpty().size,
+                    mediaIds = request.mediaIds.orEmpty(),
+                    uploads = uploads,
+                    progress = progress,
                 )
             }
         OutboxKind.PUBLISH_STORY -> runCatching { json.decodeFromString(CreateStoryRequest.serializer(), payload) }
             .getOrNull()
-            ?.let { request -> unsent(UnsentPublicationKind.STORY, request.content, request.mediaIds.orEmpty().size) }
+            ?.let { request -> unsent(UnsentPublicationKind.STORY, request.content, request.mediaIds.orEmpty(), uploads, progress) }
         else -> null
     }
 
-    private fun OutboxEntity.unsent(kind: UnsentPublicationKind, text: String?, mediaCount: Int) = UnsentPublication(
+    private fun OutboxEntity.unsent(
+        kind: UnsentPublicationKind,
+        text: String?,
+        mediaIds: List<String>,
+        uploads: Map<String, OutboxEntity>,
+        progress: Map<String, MediaUploadProgress>,
+    ) = UnsentPublication(
         cmid = cmid,
         kind = kind,
         text = text?.takeIf { it.isNotBlank() },
-        mediaCount = mediaCount,
+        mediaCount = mediaIds.size,
         status = if (stateEnum == OutboxState.EXHAUSTED) UnsentPublicationStatus.FAILED else UnsentPublicationStatus.SENDING,
         createdAtMillis = createdAt,
         failureReason = lastError,
+        media = mediaIds.map { it.toUnsentMedia(uploads, progress) },
     )
+
+    /** A server id is on the gateway; a `cmid` is a queued upload, refused, or gone with its bytes. */
+    private fun String.toUnsentMedia(uploads: Map<String, OutboxEntity>, progress: Map<String, MediaUploadProgress>): UnsentMedia {
+        if (!OutboxIds.isCmid(this)) return UnsentMedia(this, MediaFate.UPLOADED, MediaUploadProgress.Ready(this))
+        val upload = uploads[this]
+        val fate = when {
+            upload == null -> MediaFate.LOST
+            upload.stateEnum != OutboxState.EXHAUSTED -> MediaFate.WAITING
+            upload.lastError == MediaUploadSender.REASON_BLOB_GONE -> MediaFate.LOST
+            MediaLocationRefusal.isReason(upload.lastError) -> MediaFate.LOCATION_REFUSED
+            else -> MediaFate.REFUSED
+        }
+        return UnsentMedia(this, fate, progress[this] ?: MediaUploadProgress.Idle)
+    }
 
     private const val REEL = "REEL"
 }

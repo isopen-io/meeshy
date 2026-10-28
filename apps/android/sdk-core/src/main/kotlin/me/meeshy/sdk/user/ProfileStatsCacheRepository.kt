@@ -9,7 +9,10 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,7 +41,11 @@ import javax.inject.Singleton
 @Singleton
 class ProfileStatsCacheRepository @Inject constructor(
     private val dao: ProfileStatsCacheDao,
+    private val fence: AccountFence? = null,
 ) : PerAccountCache {
+
+    /** Le compte auquel appartient une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
     /** Changement de compte : aucune statistique ni activité d'un compte ne survit sous le suivant. */
     override suspend fun clear() {
@@ -52,14 +59,16 @@ class ProfileStatsCacheRepository @Inject constructor(
     }
 
     /** Write the network stats for [userId] through to Room for the next cold paint. */
-    suspend fun persistStats(userId: String, stats: UserStats) {
-        dao.upsert(
-            ProfileStatsCacheEntity(
-                cacheKey = statsKey(userId),
-                payload = MeeshyApi.json.encodeToString(stats),
-                cachedAt = SystemCacheClock.nowMillis(),
-            ),
-        )
+    suspend fun persistStats(userId: String, stats: UserStats, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            dao.upsert(
+                ProfileStatsCacheEntity(
+                    cacheKey = statsKey(userId),
+                    payload = MeeshyApi.json.encodeToString(stats),
+                    cachedAt = SystemCacheClock.nowMillis(),
+                ),
+            )
+        }
     }
 
     /** Forget [userId]'s stats (a profile that is no longer served leaves nothing behind). */
@@ -77,15 +86,17 @@ class ProfileStatsCacheRepository @Inject constructor(
         return runCatching { MeeshyApi.json.decodeFromString<List<TimelinePoint>>(payload) }.getOrNull()
     }
 
-    suspend fun persistTimeline(userId: String, points: List<TimelinePoint>) {
-        dao.deleteByKey(LEGACY_SHARED_TIMELINE_KEY)
-        dao.upsert(
-            ProfileStatsCacheEntity(
-                cacheKey = timelineKey(userId),
-                payload = MeeshyApi.json.encodeToString(points),
-                cachedAt = SystemCacheClock.nowMillis(),
-            ),
-        )
+    suspend fun persistTimeline(userId: String, points: List<TimelinePoint>, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            dao.deleteByKey(LEGACY_SHARED_TIMELINE_KEY)
+            dao.upsert(
+                ProfileStatsCacheEntity(
+                    cacheKey = timelineKey(userId),
+                    payload = MeeshyApi.json.encodeToString(points),
+                    cachedAt = SystemCacheClock.nowMillis(),
+                ),
+            )
+        }
     }
 
     internal companion object {

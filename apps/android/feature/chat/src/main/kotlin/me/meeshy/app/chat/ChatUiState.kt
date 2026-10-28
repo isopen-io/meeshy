@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -144,8 +145,12 @@ data class ChatUiState(
      * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
      * member (null permissions) gets every affordance; a share-link guest is gated
      * to the capabilities the join hardened. */
+    /** Les familles que le lien d'un invité ouvre ; sans restriction pour un membre (elles voyagent avec [composerPermissions]). */
+    val guestAttachmentAllowance: GuestAttachmentAllowance
+        get() = composerPermissions?.attachmentAllowance ?: GuestAttachmentAllowance.UNRESTRICTED
+
     val composerAffordances: ComposerAffordances
-        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions)
+        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions, guestAttachmentAllowance)
 
     /**
      * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
@@ -208,11 +213,9 @@ data class ChatUiState(
 }
 
 /**
- * State of the forward-picker sheet. `null` in [ChatUiState.forward] means the
- * sheet is closed. [sendingConversationId] gates the picker to one in-flight
- * forward at a time (parity with iOS, which disables every row while sending);
- * [sentConversationIds] keeps a checkmark on rows already forwarded to so the
- * user can forward one message to several conversations in one sitting.
+ * State of the single share sheet (#13469). `null` in [ChatUiState.forward] means the sheet is
+ * closed. [deliveries] carries each recipient's row state (sending, sent, failed), so one message
+ * reaches several conversations in one sitting without a row ever being served twice.
  */
 data class ForwardUiState(
     val sourceMessageId: String,
@@ -220,10 +223,18 @@ data class ForwardUiState(
     val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
     val targets: List<ForwardTarget> = emptyList(),
-    val sendingConversationId: String? = null,
-    val sentConversationIds: Set<String> = emptySet(),
     /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
     val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
+    /** The conversations ticked as recipients, in tap order (#13469): « toucher un récent, puis Envoyer ». */
+    val selectedConversationIds: List<String> = emptyList(),
+    /** The optional message sent with the copies (a separate message after them, D4). */
+    val caption: String = "",
+    /** What the exit law lets leave, what can be done with it, and whether Send is armed. */
+    val plan: me.meeshy.sdk.model.share.SharePlan? = null,
+    /** The flame duration chosen for the copies; never above the source's own. */
+    val chosenDurationSeconds: Int? = null,
+    /** Per recipient: sending, sent, queued or failed — the optimistic row state. */
+    val deliveries: Map<String, me.meeshy.sdk.model.share.ShareDelivery> = emptyMap(),
 )
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {

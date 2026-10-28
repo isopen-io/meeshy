@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="encryption_e2ee_unavailable_here">Ativar a encriptação ponto a ponto ainda não é possível a partir deste telemóvel: não sabe ler nem escrever mensagens encriptadas ponto a ponto e deixaria de poder escrever aqui.</string>
+    <string name="encryption_irreversible_refused">A encriptação ponto a ponto não se desativa. Para conversar sem ela, crie uma nova conversa.</string>
+    <string name="encryption_action_failed">Não foi possível fazer a alteração. Tente novamente.</string>
+    <string name="encryption_offline">Está offline: volte a ligar-se para ler ou alterar a encriptação.</string>
+    <string name="encryption_toggle_forbidden">A sua função não permite ativar nem desativar a encriptação aqui. Quem decide é o servidor.</string>
+    <string name="encryption_read_failed">Não foi possível ler o estado da encriptação. Tente novamente.</string>
+    <string name="encryption_retry">Tentar novamente</string>
+    <string name="security_verify_description">As mensagens com %1$s estão encriptadas ponto a ponto.</string>
+</resources>

@@ -14,6 +14,7 @@ import me.meeshy.sdk.auth.ProvenSessionOpener
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.auth.EmailProof
 import me.meeshy.sdk.model.auth.EmailProvenSession
+import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.LinkSignInConfirmationContent
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.ProvenOpenResult
@@ -31,10 +32,24 @@ data class MagicLinkValidateUiState(
     val isConfirming: Boolean = false,
     /** L'utilisateur a refusé : rien n'est ouvert, le jeton n'est pas consommé, l'écran se referme. */
     val declined: Boolean = false,
+    /** Le lien prouvé ouvre un AUTRE compte que celui qui est ouvert : « Ouvrir un autre compte ? » attend une réponse. */
+    val replacement: AccountReplacementQuestion? = null,
 )
 
+/** La question posée avant qu'un lien ne remplace le compte ouvert (iOS `AccountReplacementAlert`, #10445). */
+data class AccountReplacementQuestion(val incomingLabel: String, val currentLabel: String?)
+
 /**
- * Valide le token du magic link des l'arrivee sur l'ecran (miroir de `SignInLinkOpener`, iOS).
+ * Valide le lien de connexion recu par e-mail des l'arrivee sur l'ecran (miroir de `SignInLinkOpener`, iOS) : le
+ * lien de connexion (`token`) ou le lien de l'e-mail « code + lien » qui PROUVE l'adresse (`token` + `email`,
+ * #8035) et ouvre la session. Meme sequence pour les deux : prouver, confirmer, refermer, ouvrir.
+ *
+ * Le jeton (et l'adresse) sont lus UNE fois de l'argument de navigation puis RETIRES de l'etat sauvegarde : ils ne
+ * survivent pas a une restauration, et ne sont jamais journalises.
+ *
+ * Un lien dont la preuve ouvre un AUTRE compte que celui qui est ouvert, sans que l'utilisateur ait deja dit « oui »
+ * a la question « Se connecter en tant que @x ? », demande « Ouvrir un autre compte ? » : refuser referme la session
+ * prouvee cote passerelle et ne deconnecte personne (#10445).
  *
  * Un lien que cet appareil n'a PAS demande n'ouvre RIEN sans « oui » (#10872) : la passerelle rend
  * l'identite du compte, sans session et sans consommer le jeton ([LoginOutcome.LinkConfirmationRequired]) ;
@@ -54,7 +69,15 @@ class MagicLinkValidateViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val token: String = savedStateHandle.get<String>(TOKEN_ARG).orEmpty()
+    private val token: String = savedStateHandle.remove<String>(TOKEN_ARG).orEmpty()
+
+    /** La route de verification d'adresse porte `email` ; celle du lien de connexion ne le porte pas du tout. */
+    private val isVerificationLink: Boolean = savedStateHandle.contains(EMAIL_ARG)
+
+    private val email: String? = savedStateHandle.remove<String>(EMAIL_ARG)?.takeIf { it.isNotBlank() }
+
+    /** La session prouvee, tenue en memoire le temps de la question « Ouvrir un autre compte ? ». */
+    private var provenAwaitingReplacement: EmailProvenSession? = null
 
     private val _state = MutableStateFlow(MagicLinkValidateUiState())
     val state: StateFlow<MagicLinkValidateUiState> = _state.asStateFlow()
@@ -64,7 +87,7 @@ class MagicLinkValidateViewModel @Inject constructor(
     }
 
     private fun validate() {
-        if (token.isBlank()) {
+        if (token.isBlank() || (isVerificationLink && email == null)) {
             _state.update { it.copy(isValidating = false, errorMessage = null) }
             return
         }
@@ -84,7 +107,12 @@ class MagicLinkValidateViewModel @Inject constructor(
     }
 
     private suspend fun prove(confirmed: Boolean) {
-        when (val result = authRepository.verifyMagicLink(token, confirmed = confirmed)) {
+        val proof = if (isVerificationLink) {
+            authRepository.confirmEmail(EmailVerificationRequest.link(token, email.orEmpty(), confirmed))
+        } else {
+            authRepository.verifyMagicLink(token, confirmed = confirmed)
+        }
+        when (val result = proof) {
             is NetworkResult.Success -> follow(result.data, confirmed)
             is NetworkResult.Failure -> _state.update {
                 // Le gateway renvoie parfois un message vide (token expire) :
@@ -101,7 +129,7 @@ class MagicLinkValidateViewModel @Inject constructor(
 
     private suspend fun follow(outcome: LoginOutcome, confirmed: Boolean) {
         when (val proof = EmailProof.served(outcome, receivedAtMs = System.currentTimeMillis())) {
-            is EmailProof.Session -> openProven(proof.proven)
+            is EmailProof.Session -> openProven(proof.proven, consented = confirmed)
             is EmailProof.LinkConfirmation -> if (confirmed) stop() else ask(proof.required)
             is EmailProof.SecondFactor, null -> stop()
         }
@@ -133,11 +161,48 @@ class MagicLinkValidateViewModel @Inject constructor(
      * Le lien ne pose jamais la session lui-même : la preuve passe par le [ProvenSessionOpener]
      * (fenêtre d'adoption, garde de changement de compte), à l'instant où aucune feuille d'accès
      * n'est plus affichée ([SessionOpeningGate]).
+     *
+     * Un compte différent de celui qui est ouvert ne le remplace qu'après un « oui » explicite : celui de la question
+     * « Se connecter en tant que @x ? » ([consented]), sinon celui de « Ouvrir un autre compte ? ».
      */
-    private suspend fun openProven(proven: EmailProvenSession) {
-        if (authRepository.isAuthenticated && signedInUser()?.id != proven.userId) {
-            authRepository.logout()
+    private suspend fun openProven(proven: EmailProvenSession, consented: Boolean) {
+        val signedIn = signedInUser()
+        if (signedIn != null && signedIn.id != proven.userId && !consented) {
+            provenAwaitingReplacement = proven
+            _state.update {
+                it.copy(
+                    isValidating = false,
+                    isConfirming = false,
+                    confirmation = null,
+                    replacement = AccountReplacementQuestion(
+                        incomingLabel = LinkSignInConfirmationContent.accountLabel(proven.session.user.displayName, proven.session.user.username),
+                        currentLabel = signedIn.username.takeIf { name -> name.isNotEmpty() }
+                            ?.let { name -> LinkSignInConfirmationContent.accountLabel(signedIn.displayName, name) },
+                    ),
+                )
+            }
+            return
         }
+        install(proven, replacing = signedIn != null && signedIn.id != proven.userId)
+    }
+
+    /** « Ouvrir ce compte » installe la session prouvee ; « Annuler » la referme cote passerelle, sans toucher au compte ouvert. */
+    fun answerReplacement(accepted: Boolean) {
+        val proven = provenAwaitingReplacement ?: return
+        provenAwaitingReplacement = null
+        _state.update { it.copy(replacement = null, isValidating = accepted) }
+        viewModelScope.launch {
+            if (accepted) {
+                install(proven, replacing = true)
+            } else {
+                opener.discard(proven)
+                _state.update { it.copy(isValidating = false, declined = true) }
+            }
+        }
+    }
+
+    private suspend fun install(proven: EmailProvenSession, replacing: Boolean) {
+        if (replacing) authRepository.logout()
         gate.open {
             val opened = opener.open(proven) == ProvenOpenResult.Opened
             _state.update { it.copy(isValidating = false, isConfirming = false, confirmation = null, isAuthenticated = opened) }
@@ -146,5 +211,6 @@ class MagicLinkValidateViewModel @Inject constructor(
 
     companion object {
         const val TOKEN_ARG: String = "token"
+        const val EMAIL_ARG: String = "email"
     }
 }

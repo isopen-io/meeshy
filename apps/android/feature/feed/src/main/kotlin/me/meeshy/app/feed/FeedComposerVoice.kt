@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import java.io.File
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
@@ -80,11 +81,14 @@ internal class FeedVoiceRecorder(private val context: Context) {
         val take = release()
         val stop = session.stop()
         session = stop.session
-        val completed = take.takeIf { stop.outcome is VoiceRecordingOutcome.Completed }
-        val bytes = completed?.let { runCatching { it.readBytes() }.getOrNull() }
-        take?.delete()
-        if (completed == null || bytes == null || bytes.isEmpty()) return null
-        return MediaUploadItem(bytes = bytes, fileName = completed.name, mimeType = "audio/mp4")
+        val completed = take.takeIf { stop.outcome is VoiceRecordingOutcome.Completed } ?: run {
+            take?.delete()
+            return null
+        }
+        return MediaIntake.adopt(completed, context.cacheDir, completed.name, "audio/mp4") ?: run {
+            completed.delete()
+            null
+        }
     }
 
     /** The 100 ms tick-and-meter loop, alive only while a take is recording. */

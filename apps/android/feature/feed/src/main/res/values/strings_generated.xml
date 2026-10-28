@@ -13,6 +13,8 @@
     <string name="feed_action_view_profile">View profile</string>
     <string name="feed_comments">Comments</string>
     <string name="feed_composer_attach_file">Attach a file</string>
+    <string name="feed_composer_background">Background color</string>
+    <string name="feed_composer_background_swatch">Color %1$s of %2$s</string>
     <string name="feed_composer_cancel">Cancel</string>
     <string name="feed_composer_language_search">Search a language</string>
     <string name="feed_composer_language_title">Post language</string>
@@ -20,6 +22,7 @@
     <string name="feed_composer_placeholder">What\'s on your mind?</string>
     <string name="feed_composer_publish">Publish</string>
     <string name="feed_composer_record_voice">Record audio</string>
+    <string name="feed_composer_socle_audience">Audience</string>
     <string name="feed_composer_take_photo">Take a photo</string>
     <string name="feed_composer_title">New post</string>
     <string name="feed_composer_type_hint">Switch between reel and post</string>
@@ -55,6 +58,10 @@
     <string name="feed_quote_cancel">Cancel</string>
     <string name="feed_quote_submit">Repost</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_offer_body">Your post has a single video: as a reel, it plays full screen in Reels.</string>
+    <string name="feed_reel_offer_post">It’s a Post</string>
+    <string name="feed_reel_offer_reel">It’s a Reel</string>
+    <string name="feed_reel_offer_title">Publish as a reel?</string>
     <string name="feed_report_reason_harassment">Harassment</string>
     <string name="feed_report_reason_hate_speech">Hate speech</string>
     <string name="feed_report_reason_impersonation">Impersonation</string>
@@ -70,7 +77,16 @@
     <string name="feed_repost_story">Story</string>
     <string name="feed_reposts">Reposts</string>
     <string name="feed_retry">Try again</string>
+    <string name="feed_secondary_translation_a11y">Translation in %1$s: %2$s</string>
     <string name="feed_translated">Translation available</string>
+    <string name="feed_translation_available">Available translations</string>
+    <string name="feed_translation_close">Close</string>
+    <string name="feed_translation_original">Original</string>
+    <string name="feed_translation_other_languages">Other languages</string>
+    <string name="feed_translation_title">Languages</string>
+    <string name="feed_translation_translate">Translate</string>
+    <string name="feed_translations_badge">Translations</string>
+    <string name="feed_translations_badge_hint">Shows the available languages</string>
     <string name="feed_unknown_author">Unknown</string>
     <string name="feed_unlike">Unlike</string>
     <string name="hashtag_results_empty">No posts with #%s</string>
@@ -118,8 +134,12 @@
     <string name="status_bar_republish">Republish</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">via @%s</string>
+    <string name="status_composer_bare_add">Add a word</string>
+    <string name="status_composer_bare_publish">Publish anyway</string>
+    <string name="status_composer_bare_title">Publish your mood without a few words?</string>
     <string name="status_composer_close">Close</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">More emojis</string>
     <string name="status_composer_mood_question">How are you feeling?</string>
     <string name="status_composer_publish">Publish</string>
     <string name="status_composer_title">Status</string>

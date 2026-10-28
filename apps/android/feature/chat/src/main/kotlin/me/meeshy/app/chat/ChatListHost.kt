@@ -42,6 +42,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
+import me.meeshy.app.chat.piece.MessagePieceOverlay
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.app.chat.river.RiverPaneState
 import me.meeshy.app.chat.river.RiverScreen
 import me.meeshy.sdk.model.reading.river.RiverModeGate
@@ -51,6 +53,7 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.location.LocationFullscreen
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.hexColor
 
 /**
  * List layer: the message list with its scroll behaviours (open scroll, auto-scroll on a new
@@ -252,6 +255,7 @@ internal fun ChatListHost(
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
+    var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
@@ -263,6 +267,11 @@ internal fun ChatListHost(
             onReactionClick = { messageId, emoji -> actions.toggleReaction(messageId, emoji) },
             onReactionLongPress = { messageId -> actions.openReactionDetails(messageId) },
             onImageClick = { messageId, index -> actions.openImageViewer(messageId, index) },
+            onImageLongPress = { messageId, attachmentId ->
+                val overlay = actions.pieceOverlayFor(messageId, attachmentId)
+                // Message protégé : l'appui long vise le message entier, qui rend sa forme protégée.
+                if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
+            },
             onFileClick = { messageId, attachmentId ->
                 actions.onFileAttachmentOpen(messageId, attachmentId)
             },
@@ -312,6 +321,15 @@ internal fun ChatListHost(
             }
     }
 
+    pieceOverlay?.let { overlay ->
+        MessagePieceOverlay(
+            model = overlay,
+            accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
+            onReply = { actions.startReply(overlay.messageId) },
+            onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
+            onDismiss = { pieceOverlay = null },
+        )
+    }
     openedPlace?.let { opened ->
         LocationFullscreen(
             place = opened.place,

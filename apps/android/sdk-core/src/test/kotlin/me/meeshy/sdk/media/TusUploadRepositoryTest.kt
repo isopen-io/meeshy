@@ -27,15 +27,16 @@ class TusUploadRepositoryTest {
 
     private val api: TusApi = mockk(relaxed = true)
     private val checkpoints: TusUploadCheckpointDao = mockk(relaxed = true)
+    private val apiBaseUrl = "https://gate/api/v1/"
 
     // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
     // (with the specific matching key) before calling repository() — see the resume tests below.
-    private fun repository() = TusUploadRepository(api, checkpoints)
+    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl))
 
-    private fun item(name: String = "story.jpg", mime: String = "image/jpeg") =
+    private fun item(name: String = "story.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
 
-    private fun locationResponse(location: String = "https://staging.meeshy.me/api/v1/uploads/abc123") =
+    private fun locationResponse(location: String = "https://gate/api/v1/uploads/abc123") =
         Response.success(Unit, Headers.headersOf("Location", location))
 
     private fun errorResponse(code: Int) =
@@ -43,6 +44,36 @@ class TusUploadRepositoryTest {
 
     private fun finishResponse(attachment: MediaAttachmentWire?) =
         ApiResponse(success = true, data = TusUploadFinishData(attachment = attachment))
+
+
+    /** Un JPEG minimal dont l'EXIF porte un GPS (marqueur « SECRETGPS » dans une note du fabricant) et un XMP. */
+    private fun geotaggedJpeg(): ByteArray {
+        fun seg(marker: Int, payload: ByteArray) = byteArrayOf(0xFF.toByte(), marker.toByte(), ((payload.size + 2) shr 8).toByte(), (payload.size + 2).toByte()) + payload
+        val tiff = java.nio.ByteBuffer.allocate(96).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        tiff.put("II".toByteArray()).putShort(0x2A).putInt(8).putShort(1)
+        tiff.putShort(0x8825.toShort()).putShort(4).putInt(1).putInt(0x30).putInt(0)
+        tiff.position(0x30); tiff.putShort(1).putShort(1).putShort(2).putInt(2).putInt('N'.code).putInt(0)
+        return byteArrayOf(0xFF.toByte(), 0xD8.toByte()) +
+            seg(0xE1, "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1) + tiff.array()) +
+            seg(0xE1, "http://ns.adobe.com/xap/1.0/\u0000SECRETGPS".toByteArray(Charsets.ISO_8859_1)) +
+            seg(0xDA, byteArrayOf(1, 1, 0, 0, 63, 0)) + byteArrayOf(5, 6, 7) + byteArrayOf(0xFF.toByte(), 0xD9.toByte())
+    }
+
+    @Test
+    fun `a story photo with location is declared and sent without it`() = runTest {
+        val length = slot<Long>()
+        val body = slot<okhttp3.RequestBody>()
+        coEvery { api.createUpload(capture(length), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), capture(body)) } returns finishResponse(null)
+        val original = geotaggedJpeg()
+
+        repository().upload(MediaUploadItem(original, "story.jpg", "image/jpeg"), TusUploadContext.STORY)
+
+        val sent = okio.Buffer().also { body.captured.writeTo(it) }.readByteArray()
+        assertThat(String(sent, Charsets.ISO_8859_1)).doesNotContain("SECRETGPS")
+        assertThat(length.captured).isEqualTo(sent.size.toLong())
+        assertThat(sent.size).isLessThan(original.size)
+    }
 
     @Test
     fun `successful create and patch maps the finish attachment to UploadedMedia`() = runTest {
@@ -74,18 +105,18 @@ class TusUploadRepositoryTest {
         coEvery { api.createUpload(capture(length), capture(metadata), any()) } returns locationResponse()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
 
-        repository().upload(item(name = "clip.jpg", mime = "image/jpeg"), TusUploadContext.POST)
+        repository().upload(item(name = "clip.jpg", mime = "application/octet-stream"), TusUploadContext.POST)
 
         assertThat(length.captured).isEqualTo(3L)
         assertThat(metadata.captured).isEqualTo(
-            TusUploadMetadata.headerValue("clip.jpg", "image/jpeg", TusUploadContext.POST),
+            TusUploadMetadata.headerValue("clip.jpg", "application/octet-stream", TusUploadContext.POST),
         )
     }
 
     @Test
     fun `patches at the Location returned by create, offset zero, with the whole body`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns
-            locationResponse(location = "https://staging.meeshy.me/api/v1/uploads/xyz")
+            locationResponse(location = "https://gate/api/v1/uploads/xyz")
         val location = slot<String>()
         val offset = slot<Long>()
         val body = slot<okhttp3.RequestBody>()
@@ -94,7 +125,7 @@ class TusUploadRepositoryTest {
 
         repository().upload(item(), TusUploadContext.STORY)
 
-        assertThat(location.captured).isEqualTo("https://staging.meeshy.me/api/v1/uploads/xyz")
+        assertThat(location.captured).isEqualTo("https://gate/api/v1/uploads/xyz")
         assertThat(offset.captured).isEqualTo(0L)
         assertThat(body.captured.contentType().toString()).isEqualTo("application/offset+octet-stream")
     }
@@ -235,7 +266,7 @@ class TusUploadRepositoryTest {
         coEvery { api.uploadData(any(), any(), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
@@ -253,7 +284,7 @@ class TusUploadRepositoryTest {
         coEvery { api.uploadData(any(), capture(finalOffset), any(), capture(finalBody)) } returns
             finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(chunkOffsets).containsExactly(0L, 10L).inOrder()
@@ -262,12 +293,30 @@ class TusUploadRepositoryTest {
     }
 
     @Test
+    fun `a file-backed item is announced at its file size and sent slice by slice from the file`() = runTest {
+        val bodies = mutableListOf<okhttp3.RequestBody>()
+        val length = slot<Long>()
+        coEvery { api.createUpload(capture(length), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), capture(bodies)) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), capture(bodies)) } returns finishResponse(null)
+        val content = ByteArray(25) { (it * 3 + 1).toByte() }
+        val file = java.io.File.createTempFile("tus", ".bin").also { it.deleteOnExit(); it.writeBytes(content) }
+
+        repository().upload(MediaUploadItem.onDisk(file, "doc.bin", "application/octet-stream"), TusUploadContext.POST, chunkSizeBytes = 10L)
+
+        val sent = bodies.map { okio.Buffer().also { b -> it.writeTo(b) }.readByteArray() }
+        assertThat(length.captured).isEqualTo(25L)
+        assertThat(sent.map { it.size }).containsExactly(10, 10, 5).inOrder()
+        assertThat(sent.reduce { a, b -> a + b }).isEqualTo(content)
+    }
+
+    @Test
     fun `an intermediate chunk failure stops the upload and never sends the final chunk`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
         coEvery { api.uploadChunk(any(), any(), any(), any()) } returns
             Response.error(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
@@ -279,7 +328,13 @@ class TusUploadRepositoryTest {
     // already-acknowledged chunks instead of restarting from byte zero ---
 
     private fun bigItem(bytes: Int = 25) =
-        MediaUploadItem(bytes = ByteArray(bytes) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        MediaUploadItem(bytes = videoBytes(bytes), fileName = "video.mp4", mimeType = "video/mp4")
+
+    /** Une vidéo lisible de [size] octets (une seule boîte `mdat`) : des octets quelconques déclarés vidéo seraient refusés (#13543). */
+    private fun videoBytes(size: Int): ByteArray =
+        java.nio.ByteBuffer.allocate(size).putInt(size).put("mdat".toByteArray(Charsets.ISO_8859_1)).array().also { bytes ->
+            (8 until size).forEach { bytes[it] = it.toByte() }
+        }
 
     @Test
     fun `a single-chunk upload never persists intermediate progress via upsert`() = runTest {
@@ -372,46 +427,171 @@ class TusUploadRepositoryTest {
         coVerify(exactly = 0) { checkpoints.delete(any()) }
     }
 
-    @Test
-    fun `an existing checkpoint with confirmed progress resumes without creating a new session`() = runTest {
+    private fun headResponse(offset: Long) = Response.success(Unit, Headers.headersOf("Upload-Offset", offset.toString()))
+
+    private fun storedCheckpoint(uploaded: Long = 10L, location: String = "https://gate/uploads/resume-me"): String {
         val key = me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L)
         coEvery { checkpoints.find(key) } returns TusUploadCheckpointEntity(
             checkpointKey = key,
-            location = "https://gate/uploads/resume-me",
-            uploadedBytes = 10L,
+            location = location,
+            uploadedBytes = uploaded,
             totalBytes = 25L,
             updatedAt = 0L,
         )
-        val chunkLocation = slot<String>()
-        val chunkOffset = slot<Long>()
-        coEvery { api.uploadChunk(capture(chunkLocation), capture(chunkOffset), any(), any()) } returns chunkResponse()
-        coEvery { api.uploadData(any(), any(), any(), any()) } returns
+        return key
+    }
+
+    @Test
+    fun `an interrupted upload resumes at the offset the SERVER reports without creating a new session`() = runTest {
+        storedCheckpoint(uploaded = 10L)
+        coEvery { api.headUpload("https://gate/uploads/resume-me", any()) } returns headResponse(20L)
+        val chunkOffsets = mutableListOf<Long>()
+        val finalOffset = slot<Long>()
+        coEvery { api.uploadChunk(any(), capture(chunkOffsets), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), capture(finalOffset), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
 
         val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
         coVerify(exactly = 0) { api.createUpload(any(), any(), any()) }
-        assertThat(chunkLocation.captured).isEqualTo("https://gate/uploads/resume-me")
-        assertThat(chunkOffset.captured).isEqualTo(10L)
+        assertThat(chunkOffsets).isEmpty()
+        assertThat(finalOffset.captured).isEqualTo(20L)
     }
 
     @Test
-    fun `an existing checkpoint with zero confirmed progress still starts a fresh session`() = runTest {
-        val key = me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L)
-        coEvery { checkpoints.find(key) } returns TusUploadCheckpointEntity(
-            checkpointKey = key,
-            location = "https://gate/uploads/unconfirmed",
-            uploadedBytes = 0L,
-            totalBytes = 25L,
-            updatedAt = 0L,
-        )
+    fun `a server offset that is not on a chunk boundary is honoured to the byte`() = runTest {
+        storedCheckpoint(uploaded = 10L)
+        coEvery { api.headUpload(any(), any()) } returns headResponse(7L)
+        val chunkOffsets = mutableListOf<Long>()
+        val finalOffset = slot<Long>()
+        coEvery { api.uploadChunk(any(), capture(chunkOffsets), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), capture(finalOffset), any(), any()) } returns finishResponse(null)
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(chunkOffsets).containsExactly(7L)
+        assertThat(finalOffset.captured).isEqualTo(17L)
+    }
+
+    @Test
+    fun `a session the server forgot is dropped from the checkpoint and the upload starts over`() = runTest {
+        val key = storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } returns Response.error(404, "gone".toResponseBody("text/plain".toMediaTypeOrNull()))
         coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/fresh")
+        val patched = mutableListOf<String>()
+        coEvery { api.uploadChunk(capture(patched), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(capture(patched), any(), any(), any()) } returns finishResponse(null)
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify(exactly = 1) { api.createUpload(any(), any(), any()) }
+        assertThat(patched.distinct()).containsExactly("https://gate/uploads/fresh")
+        coVerify { checkpoints.delete(key) }
+    }
+
+    @Test
+    fun `a checkpoint at zero confirmed bytes is still verified with the server then reused`() = runTest {
+        storedCheckpoint(uploaded = 0L)
+        coEvery { api.headUpload(any(), any()) } returns headResponse(0L)
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 0) { api.createUpload(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a session the server holds complete starts over because its finish answer is lost`() = runTest {
+        storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } returns headResponse(25L)
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
         coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
 
         repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         coVerify(exactly = 1) { api.createUpload(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a server that cannot be reached is a failure and neither resumes nor restarts blindly`() = runTest {
+        storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } throws IOException("offline")
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        coVerify(exactly = 0) { api.createUpload(any(), any(), any()) }
+        coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { checkpoints.delete(any()) }
+    }
+
+    @Test
+    fun `progress is reported from the starting offset through every chunk to the whole body`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+        val seen = mutableListOf<Pair<Long, Long>>()
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L) { sent, total -> seen += sent to total }
+
+        assertThat(seen).containsExactly(0L to 25L, 10L to 25L, 20L to 25L, 25L to 25L).inOrder()
+    }
+
+    @Test
+    fun `a resumed upload starts its progress at the bytes already on the server`() = runTest {
+        storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } returns headResponse(20L)
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+        val seen = mutableListOf<Pair<Long, Long>>()
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L) { sent, total -> seen += sent to total }
+
+        assertThat(seen.first()).isEqualTo(20L to 25L)
+        assertThat(seen.last()).isEqualTo(25L to 25L)
+    }
+
+    @Test
+    fun `a session the server says is not ours (another account on this device) is dropped and the upload starts over`() = runTest {
+        val key = storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } returns errorResponse(403)
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/mine")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify { checkpoints.delete(key) }
+        coVerify(exactly = 1) { api.createUpload(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a stored session on another host is never contacted with the token and the upload starts over`() = runTest {
+        val key = storedCheckpoint(location = "https://staging.example/api/v1/uploads/resume-me")
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/mine")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 0) { api.headUpload(any(), any()) }
+        coVerify(exactly = 0) { api.uploadChunk(match { it.contains("staging.example") }, any(), any(), any()) }
+        coVerify { checkpoints.delete(key) }
+    }
+
+    @Test
+    fun `a session address on another host returned by create is refused before any byte or token leaves`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://evil.example/api/v1/uploads/x")
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { checkpoints.upsert(any()) }
     }
 }

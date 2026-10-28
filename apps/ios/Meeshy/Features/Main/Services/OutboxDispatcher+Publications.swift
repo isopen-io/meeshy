@@ -181,10 +181,6 @@ extension OutboxDispatcher {
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )
         }
-        for path in uploadedLocalPaths {
-            do { try FileManager.default.removeItem(atPath: path) } catch {
-                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        PublicationMediaUploader.discardUploadedFiles(uploadedLocalPaths)
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }}

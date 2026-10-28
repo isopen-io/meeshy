@@ -1,10 +1,48 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Playback position</string>
+    <string name="audio_editor_apply">Apply changes</string>
+    <string name="audio_editor_close">Close</string>
+    <string name="audio_editor_error_generic">Editing failed.</string>
+    <string name="audio_editor_error_load">Couldn\'t load this audio.</string>
+    <string name="audio_editor_fade_in">Fade in</string>
+    <string name="audio_editor_fade_out">Fade out</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simple</string>
+    <string name="audio_editor_op_fade">Fade</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Section removed</string>
+    <string name="audio_editor_op_speed">Speed</string>
+    <string name="audio_editor_op_trim">Trimmed</string>
+    <string name="audio_editor_pause">Pause</string>
+    <string name="audio_editor_play">Play</string>
+    <string name="audio_editor_preparing">Preparing audio…</string>
+    <string name="audio_editor_processing">Processing…</string>
+    <string name="audio_editor_redo">Redo</string>
+    <string name="audio_editor_reset">Reset</string>
+    <string name="audio_editor_split_hint">Select the section to remove.</string>
+    <string name="audio_editor_tool_fade">Fade</string>
+    <string name="audio_editor_tool_speed">Speed</string>
+    <string name="audio_editor_tool_split">Cut</string>
+    <string name="audio_editor_tool_transcribe">Transcribe</string>
+    <string name="audio_editor_tool_trim">Trim</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Drag the handles to keep a portion.</string>
+    <string name="audio_editor_undo">Undo</string>
+    <string name="audio_editor_use">Use audio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
+    <string name="audio_split_handle_end">Cut end</string>
+    <string name="audio_split_handle_start">Cut start</string>
+    <string name="audio_trim_handle_end">Selection end</string>
+    <string name="audio_trim_handle_start">Selection start</string>
     <string name="avatar_a11y_mood">mood %s</string>
+    <string name="bubble_contact_card_shared">Shared contact</string>
     <string name="bubble_story_citation_answer">reply to their story</string>
     <string name="bubble_story_citation_open_hint">Opens the quoted story</string>
     <string name="bubble_story_citation_unavailable">Story unavailable</string>
+    <string name="capture_microphone_denied">Microphone denied — the video will be silent. Tap to open Settings</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_clearSearch">Clear search</string>
     <string name="common_close">Close</string>
@@ -28,6 +66,7 @@
     <string name="focal_focus_add_reaction">Add a reaction</string>
     <string name="focal_focus_translation_detail">Translation details</string>
     <string name="focal_row_you">You</string>
+    <string name="language_strip_more">Other languages</string>
     <string name="location_fullscreen_directions">Directions</string>
     <string name="location_fullscreen_mapStyle">Map style</string>
     <string name="location_fullscreen_sharedPosition">Shared position</string>
@@ -113,6 +152,18 @@
     <string name="retouch_text_align_center">CENTER</string>
     <string name="retouch_text_align_left">LEFT</string>
     <string name="retouch_text_align_right">RIGHT</string>
+    <string name="retouch_text_background">Text background</string>
+    <string name="retouch_text_bg_amber">Amber</string>
+    <string name="retouch_text_bg_black">Black</string>
+    <string name="retouch_text_bg_black65" formatted="false">Black 65%</string>
+    <string name="retouch_text_bg_glass">Glass</string>
+    <string name="retouch_text_bg_green">Green</string>
+    <string name="retouch_text_bg_indigo">Indigo</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">Indigo 65%</string>
+    <string name="retouch_text_bg_pink">Pink</string>
+    <string name="retouch_text_bg_red">Red</string>
+    <string name="retouch_text_bg_white">White</string>
+    <string name="retouch_text_bg_white65" formatted="false">White 65%</string>
     <string name="retouch_text_color">Text color</string>
     <string name="retouch_text_style_bold">BOLD</string>
     <string name="retouch_text_style_classic">CLASSIC</string>

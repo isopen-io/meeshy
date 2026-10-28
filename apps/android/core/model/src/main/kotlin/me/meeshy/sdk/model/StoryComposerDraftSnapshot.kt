@@ -104,6 +104,8 @@ data class StoryDraftStickerElementSnapshot(
     val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
     val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
     val rotationDeg: Float = 0f,
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
 ) {
     /** True once the sticker carries publishable content — a non-blank [emoji]. */
     val isPublishable: Boolean get() = emoji.isNotBlank()
@@ -145,6 +147,13 @@ data class StoryDraftSlideSnapshot(
     val backgroundLoop: Boolean = true,
     val elements: List<StoryDraftTextElementSnapshot> = emptyList(),
     val stickers: List<StoryDraftStickerElementSnapshot> = emptyList(),
+    /** Les sons de la slide — l'objet de piste lui-même est déjà sérialisable, `soundId` et crédit compris. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadre de la slide (#13431) : cadrage du fond, fond des bandes, ouverture, fermeture — noms du fil, jamais d'enum. */
+    val fitMode: String? = null,
+    val backdrop: String? = null,
+    val opening: String? = null,
+    val closing: String? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -160,7 +169,28 @@ data class StoryDraftSlideSnapshot(
      */
     val hasContent: Boolean
         get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable }
+            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty()
+}
+
+/**
+ * What the author attached to the story as a whole beside its slides (#13451): the people it
+ * [mentions], the per-media alternative text [mediaAlt] and caption [mediaCaption] (keyed by
+ * media id, like the composer's `mediaAlt` / `mediaCaption`), and the [allowSoundExtraction]
+ * choice (`null` = never decided, the server default). All defaulted: a blob written before
+ * these were kept decodes to "nothing attached".
+ */
+@Serializable
+data class StoryDraftAnnotations(
+    val mentions: List<PostMentionInput> = emptyList(),
+    val mediaAlt: Map<String, String> = emptyMap(),
+    val mediaCaption: Map<String, String> = emptyMap(),
+    val allowSoundExtraction: Boolean? = null,
+) {
+    /** The annotations that still describe [present] media: a description never outlives its media. */
+    fun keepingMedia(present: Collection<String>): StoryDraftAnnotations = copy(
+        mediaAlt = mediaAlt.filterKeys { it in present },
+        mediaCaption = mediaCaption.filterKeys { it in present },
+    )
 }
 
 /**
@@ -191,7 +221,11 @@ data class StoryComposerDraftSnapshot(
     val selectedId: String = "",
     val visibility: String = DEFAULT_VISIBILITY,
     val repostOfId: String? = null,
+    /** La liste « visible par » / « sauf » du brouillon ; vide pour tout autre mode et pour un blob d'avant. */
+    val visibilityUserIds: List<String> = emptyList(),
     val updatedAt: String? = null,
+    /** Mentions, textes alternatifs, légendes et extraction du son (#13451) ; vide pour un blob d'avant. */
+    val annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
     val awaitingPublication: List<String> = emptyList(),
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
@@ -223,7 +257,9 @@ data class StoryComposerDraftSnapshot(
         slides == other.slides &&
             selectedId == other.selectedId &&
             visibility == other.visibility &&
-            repostOfId == other.repostOfId
+            repostOfId == other.repostOfId &&
+            visibilityUserIds == other.visibilityUserIds &&
+            annotations == other.annotations
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */

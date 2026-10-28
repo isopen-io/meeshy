@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
 
 /**
@@ -72,6 +73,9 @@ data class StatusComposerDraft(
     /** A status may be published as soon as a mood emoji is picked (the text is optional). */
     val canPublish: Boolean get() = selectedEmoji != null
 
+    /** Whether Publish goes straight out or first asks for a word (iOS `ComposerMoodBarePublish.step`). */
+    val publishStep: StatusBarePublish.Step get() = StatusBarePublish.step(text, isRepublish)
+
     /** True when this draft republishes another status — drives the "via @…" line + repost header. */
     val isRepublish: Boolean get() = repostOfId != null
 
@@ -100,6 +104,10 @@ data class StatusComposerDraft(
     /** Pick [emoji], or clear the selection when the already-selected one is tapped again. */
     fun toggleEmoji(emoji: String): StatusComposerDraft =
         copy(selectedEmoji = if (selectedEmoji == emoji) null else emoji)
+
+    /** Select the emoji the full picker returned — always selects (never toggles); refused when the gateway would 400. */
+    fun withPickedEmoji(emoji: String): StatusComposerDraft =
+        if (StatusBarePublish.acceptsPicked(emoji)) copy(selectedEmoji = emoji) else this
 
     /** Choose the publish audience. */
     fun withVisibility(value: StatusVisibility): StatusComposerDraft = copy(visibility = value)
@@ -134,3 +142,16 @@ data class StatusComposerDraft(
         )
     }
 }
+
+/** The mood draft in its durable form (#13430). A republication carries its source: it is never kept. */
+internal fun StatusComposerDraft.toSnapshot(nowMillis: Long): StatusComposerDraftSnapshot = StatusComposerDraftSnapshot(
+    emoji = selectedEmoji,
+    text = text,
+    visibility = visibility.wire,
+    updatedAtMillis = nowMillis,
+)
+
+internal fun StatusComposerDraftSnapshot.toComposerDraft(): StatusComposerDraft = StatusComposerDraft(
+    selectedEmoji = emoji,
+    visibility = StatusVisibility.entries.firstOrNull { it.wire == visibility } ?: StatusVisibility.PUBLIC,
+).withText(text)

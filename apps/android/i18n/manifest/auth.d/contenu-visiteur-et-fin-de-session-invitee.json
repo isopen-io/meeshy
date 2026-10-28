@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "visitor.title",
+          "androidName": "visitor_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.sharedBy.reel",
+          "androidName": "visitor_shared_by_reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.sharedBy.post",
+          "androidName": "visitor_shared_by_post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.sharedBy.story",
+          "androidName": "visitor_shared_by_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.body",
+          "androidName": "visitor_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.signup",
+          "androidName": "visitor_signup",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.login",
+          "androidName": "visitor_login",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.later",
+          "androidName": "visitor_later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.refused.title",
+          "androidName": "visitor_refused_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.refused.body",
+          "androidName": "visitor_refused_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "visitor.failed.body",
+          "androidName": "visitor_failed_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "visitor_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "visitor_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.post.media.image",
+          "androidName": "visitor_media_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.expired.title",
+          "androidName": "guest_ended_expired_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.expired.message",
+          "androidName": "guest_ended_expired_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.revoked.title",
+          "androidName": "guest_ended_revoked_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.revoked.message",
+          "androidName": "guest_ended_revoked_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.newLink.placeholder",
+          "androidName": "guest_ended_new_link_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.newLink.invalid",
+          "androidName": "guest_ended_new_link_invalid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.newLink.join",
+          "androidName": "guest_ended_new_link_join",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guest.ended.home",
+          "androidName": "guest_ended_home",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

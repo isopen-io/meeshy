@@ -20,7 +20,15 @@ data class ParticipantPermissions(
     val canSendAudios: Boolean = true,
     val canSendLocations: Boolean = true,
     val canSendLinks: Boolean = true,
+    /** Les familles de pieces que les termes du lien d'un invite ouvrent (#10001) ; `null` = aucune restriction. */
+    val allowedAttachmentKinds: List<String>? = null,
 ) {
+    /** Ce que CET invite peut joindre : les termes servis, tolerants (une famille inconnue n'ouvre rien). */
+    val attachmentAllowance: me.meeshy.sdk.model.guest.GuestAttachmentAllowance
+        get() = me.meeshy.sdk.model.guest.GuestAttachmentAllowance(
+            me.meeshy.sdk.model.guest.GuestAttachmentKind.knownKinds(allowedAttachmentKinds),
+        )
+
     companion object {
         /** Registered user: every capability granted — port of iOS `defaultUser`. */
         val defaultUser: ParticipantPermissions = ParticipantPermissions()

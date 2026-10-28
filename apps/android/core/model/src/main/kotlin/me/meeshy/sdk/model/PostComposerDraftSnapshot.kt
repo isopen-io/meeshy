@@ -20,6 +20,8 @@ data class PostComposerDraftSnapshot(
     val location: SharedPlace? = null,
     val language: String? = null,
     val mediaAlt: Map<String, String> = emptyMap(),
+    /** The scene's background colour (hex without `#`), absent for a post without a scene. */
+    val background: String? = null,
     val updatedAtMillis: Long = 0L,
 ) {
     /** Whether there is anything an author would want back: words or media. */

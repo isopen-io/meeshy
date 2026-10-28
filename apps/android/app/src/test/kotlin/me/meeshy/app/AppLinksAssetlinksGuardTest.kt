@@ -46,7 +46,7 @@ class AppLinksAssetlinksGuardTest {
     @Test
     fun `meeshy me and www meeshy me verify every path the app opens`() {
         val links = autoVerifyLinks()
-        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/", "/feeds/post/", "/post/")
+        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/", "/feeds/post/", "/post/", "/reel/", "/story/")
         listOf("meeshy.me", "www.meeshy.me").forEach { host ->
             assertThat(links.filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
         }
@@ -55,6 +55,55 @@ class AppLinksAssetlinksGuardTest {
     @Test
     fun `api hosts are not verified app links`() {
         assertThat(autoVerifyLinks().map { it.host }.toSet()).containsExactly("meeshy.me", "www.meeshy.me")
+        assertThat(exactPathLinks().map { it.host }.toSet()).containsExactly("meeshy.me", "www.meeshy.me")
+    }
+
+    private fun exactPathLinks(): List<Link> =
+        Regex("<intent-filter android:autoVerify=\"true\">(.*?)</intent-filter>", RegexOption.DOT_MATCHES_ALL)
+            .findAll(manifest.replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")).flatMap { filter ->
+                Regex("android:host=\"([^\"]+)\" android:path=\"([^\"]+)\"").findAll(filter.groupValues[1])
+                    .map { Link(it.groupValues[1], it.groupValues[2]) }
+            }.toList()
+
+    // #13465 : les e-mails de reinitialisation / verification s'ouvrent dans l'app. Chemins EXACTS — la forme que
+    // LaunchRouter lit — jamais un prefixe : un lien d'e-mail que l'app ne lit pas (revocation, suppression de compte)
+    // serait avale sans rien afficher au lieu d'aller au navigateur.
+    @Test
+    fun `reset and verification email links are verified by exact path on both hosts`() {
+        val paths = listOf("/reset-password", "/auth/reset-password", "/auth/verify-email")
+        listOf("meeshy.me", "www.meeshy.me").forEach { host ->
+            assertThat(exactPathLinks().filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
+        }
+    }
+
+    // #10859 / #10868 : les alias `/auth/email-link/…` ne sont JAMAIS des App Links — seules les adresses canoniques
+    // le sont ; le web redirige l'alias côté navigateur, et les versions publiées ne doivent pas les recevoir.
+    @Test
+    fun `email link aliases are never claimed as app links`() {
+        val aliases = listOf(
+            "/auth/email-link/reset-password", "/auth/email-link/verify-email", "/auth/email-link/magic-link",
+        )
+        assertThat(exactPathLinks().map { it.path }).containsNoneIn(aliases)
+    }
+
+    @Test
+    fun `no prefix claim reaches an email link the app does not read`() {
+        val unread = listOf(
+            "/auth/email-link", "/auth/revoke-sessions", "/account/deletion", "/settings/verify-email-change",
+            "/auth/reset-password/", "/reset-password/",
+        )
+        val prefixes = autoVerifyLinks().map { it.path }
+        unread.forEach { path -> assertThat(prefixes.any { path.startsWith(it) && it != "/auth/magic-link" }).isFalse() }
+        assertThat(exactPathLinks().map { it.path }).containsNoneIn(unread)
+    }
+
+    // #13464 : `/stories/new` (composer) et `/stories/mine` (archive) sont des PAGES du web, et iOS ne revendique que
+    // `/story/*` (apple-app-site-association). Un prefixe `/stories/` les avalait dans un detail de post introuvable.
+    @Test
+    fun `no prefix claim reaches a web page the app does not open`() {
+        val webPages = listOf("/stories/new", "/stories/mine", "/reels")
+        val prefixes = autoVerifyLinks().map { it.path }
+        webPages.forEach { page -> assertThat(prefixes.filter { page.startsWith(it) }).isEmpty() }
     }
 
     @Test

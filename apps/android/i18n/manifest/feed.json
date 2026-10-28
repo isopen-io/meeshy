@@ -713,7 +713,35 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.title",
+          "androidName": "status_composer_bare_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.add",
+          "androidName": "status_composer_bare_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.publish",
+          "androidName": "status_composer_bare_publish",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.emoji.more",
+          "androidName": "status_composer_emoji_more",
+          "status": "adopted"
+        },
+        {
           "androidName": "status_composer_placeholder",
+          "status": "android-only"
+        },
+        {
+          "androidName": "status_composer_emoji_too_long",
           "status": "android-only"
         },
         {

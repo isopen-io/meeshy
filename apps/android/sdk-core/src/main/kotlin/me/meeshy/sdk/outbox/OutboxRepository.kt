@@ -11,6 +11,9 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.model.ObjectIdGuard
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +28,7 @@ class OutboxRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val outboxDao: OutboxDao,
     private val ownerSource: OutboxOwnerSource = OutboxOwnerSource { null },
+    private val fence: AccountFence? = null,
 ) {
     private val _outcomes = MutableSharedFlow<OutboxOutcome>(extraBufferCapacity = 128)
 
@@ -36,14 +40,19 @@ class OutboxRepository @Inject constructor(
 
     /**
      * Enqueues [mutation], coalescing it against the pending lane.
+     *
+     * The row belongs to the account of [ticket] — the account the user acted under, taken when the write began
+     * (#13555). Once that account has closed ([AccountFence.close]) the row is never written: [AccountClosedException]
+     * instead, so a write begun under A and finished after B signed in can never leave as B.
+     *
      * @return the persisted row's `cmid`, or `null` if it annihilated existing rows.
      */
-    suspend fun enqueue(mutation: OutboxMutation): String? {
-        val incoming = mutation.toEntity(now(), ownerSource.currentOwnerId())
-        val decision = database.withTransaction {
-            val pending = outboxDao.deliverableForLane(incoming.lane)
-                .filter { it.stateEnum == OutboxState.PENDING }
-            OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+    suspend fun enqueue(mutation: OutboxMutation, ticket: AccountTicket? = null): String? {
+        val decision = if (fence == null) {
+            write(mutation.toEntity(now(), ticket?.ownerId ?: ownerSource.currentOwnerId()))
+        } else {
+            val owner = ticket ?: fence.currentTicket()
+            fence.commit(owner) { write(mutation.toEntity(now(), owner.ownerId)) } ?: throw AccountClosedException()
         }
         return when (decision) {
             is CoalesceDecision.Enqueue -> decision.row.cmid
@@ -222,6 +231,10 @@ class OutboxRepository @Inject constructor(
             .map { it.toSet() }
             .distinctUntilChanged()
 
+    /** La file vue par la notification d'envoi : types et prérequis seulement, sans les `payload`. */
+    fun observeActivityItems(): Flow<List<me.meeshy.sdk.model.ongoing.OutboxActivityItem>> =
+        outboxDao.observeAll().map(OutboxActivityProjection::project).distinctUntilChanged()
+
     /** Rows the "Synchronisation…" indicator counts, live. */
     fun observeSyncIndicatorCount(): Flow<Int> =
         outboxDao.observeActiveCount(OutboxKindCatalog.syncIndicatorExcludedDiskValues)
@@ -323,6 +336,21 @@ class OutboxRepository @Inject constructor(
 
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+
+    /**
+     * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that
+     * suspends, and handed back to [enqueue]; `null` when this repository is not fenced.
+     */
+    fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** The ticket of the work running here — the one installed at the gesture ([me.meeshy.sdk.session.withAccountTicket]) when there is one (#13558). */
+    suspend fun currentTicket(): AccountTicket? = fence?.currentTicket()
+
+    private suspend fun write(incoming: OutboxEntity): CoalesceDecision = database.withTransaction {
+        val pending = outboxDao.deliverableForLane(incoming.lane)
+            .filter { it.stateEnum == OutboxState.PENDING }
+        OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+    }
 
     private suspend fun apply(decision: CoalesceDecision) {
         when (decision) {

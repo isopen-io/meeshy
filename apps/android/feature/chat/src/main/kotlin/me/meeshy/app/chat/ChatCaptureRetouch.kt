@@ -8,8 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.UUID
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +21,7 @@ import me.meeshy.ui.component.retouch.ComposerRetouchResult
 import me.meeshy.ui.component.retouch.ComposerRetouchScreen
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchResult
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchScreen
+import me.meeshy.ui.component.retouch.RetouchExif
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 
@@ -49,11 +50,8 @@ internal object ChatRetouchDelivery {
 
     fun file(pending: ChatRetouchPending, result: ComposerRetouchResult, nowMillis: Long): ChatRetouchedFile = when (result) {
         ComposerRetouchResult.Original -> ChatRetouchedFile(pending.bytes, pending.fileName, pending.mimeType)
-        is ComposerRetouchResult.Rendered -> ChatRetouchedFile(jpeg(result.bitmap), ChatCameraCaptureFile.nextRetouched(nowMillis), JPEG_MIME)
+        is ComposerRetouchResult.Rendered -> ChatRetouchedFile(RetouchExif.jpeg(result.bitmap, like = pending.bytes), ChatCameraCaptureFile.nextRetouched(nowMillis), JPEG_MIME)
     }
-
-    private fun jpeg(bitmap: Bitmap): ByteArray =
-        ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }.toByteArray()
 }
 
 /**
@@ -101,9 +99,18 @@ private fun rememberRetouchAuthor(person: ComposerLookPerson): ComposerLookAutho
 
 /** Le fichier retouché, posé dans le dossier de prises du `FileProvider`, pour la mise en attente par adresse. */
 internal suspend fun Context.writeRetouchedCapture(file: ChatRetouchedFile): Uri = withContext(Dispatchers.IO) {
+    androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", writeRetouchedCaptureFile(file))
+}
+
+/**
+ * La prise retouchée posée dans le dossier de prises sous un nom GÉNÉRÉ : le nom d'origine vient du fournisseur de
+ * contenu (il peut porter `../`) et ne reste qu'une métadonnée d'envoi ; seule une extension sûre en est gardée.
+ */
+internal fun Context.writeRetouchedCaptureFile(file: ChatRetouchedFile): File {
     val capturesDir = File(cacheDir, "captures").apply { mkdirs() }
-    val written = File(capturesDir, file.fileName).apply { writeBytes(file.bytes) }
-    androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", written)
+    val target = File(capturesDir, ChatCameraCaptureFile.nextRetouchedNamed(UUID.randomUUID().toString(), file.fileName))
+    check(target.canonicalPath.startsWith(capturesDir.canonicalPath + File.separator)) { "capture hors du dossier de prises" }
+    return target.apply { writeBytes(file.bytes) }
 }
 
 /** Une vidéo prise, copiée hors de l'intention système, en attente de sa retouche. */
@@ -115,11 +122,11 @@ internal class ChatVideoRetouchPending(val source: File, val output: File, val p
     }
 
     companion object {
-        /** Une vidéo des récents (#12735), écrite dans le dossier de prises ; `null` si elle ne se lit pas. */
-        suspend fun of(context: Context, bytes: ByteArray, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
+        /** Une vidéo des récents (#12735), copiée en flux dans le dossier de prises ; `null` si elle ne se lit pas. */
+        suspend fun of(context: Context, video: File, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "captures").apply { mkdirs() }
             val source = File(dir, ChatCameraCaptureFile.nextVideoSource(nowMillis))
-            val probe = runCatching { source.writeBytes(bytes) }.getOrNull()?.let { RetouchVideoProbe.of(source) }
+            val probe = runCatching { video.inputStream().use { input -> source.outputStream().use { input.copyTo(it) } } }.getOrNull()?.let { RetouchVideoProbe.of(source) }
             if (probe == null) {
                 source.delete()
                 return@withContext null

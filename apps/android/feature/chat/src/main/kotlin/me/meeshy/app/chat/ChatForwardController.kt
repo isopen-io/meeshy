@@ -10,18 +10,27 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ForwardRefusalReason
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
-import me.meeshy.sdk.model.contentExitSubject
 import me.meeshy.sdk.model.exitOffer
+import me.meeshy.sdk.model.share.OutgoingShare
+import me.meeshy.sdk.model.share.ShareDelivery
+import me.meeshy.sdk.model.share.ShareDestination
+import me.meeshy.sdk.model.share.ShareFailure
+import me.meeshy.sdk.model.share.ShareLimits
+import me.meeshy.sdk.model.share.ShareOutgoingBuilder
+import me.meeshy.sdk.model.share.ShareOutgoingResult
+import me.meeshy.sdk.model.share.SharePlanner
+import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 
 /**
- * The forward-picker of the conversation screen: the sheet's lifecycle ([ChatUiState.forward]),
- * its target list painted cache-first from the conversations already loaded, and the
- * optimistic re-send of the source message into the picked conversation.
+ * The single share sheet of the conversation screen (#13469): its lifecycle ([ChatUiState.forward]),
+ * its recipients painted cache-first from the conversations already loaded, and the optimistic,
+ * durable re-send of the source messages into every ticked recipient.
  */
 internal class ChatForwardController(
     private val scope: CoroutineScope,
@@ -31,17 +40,31 @@ internal class ChatForwardController(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
+    /** The blocklist: a direct conversation with a blocked person is never a recipient. */
+    private val blockedUserIds: () -> Set<String> = { emptySet() },
 ) {
 
     private var allConversations: List<ApiConversation> = emptyList()
 
     /**
-     * sourceMessageId -> target conversation currently being forwarded to.
-     * Durable across closeForward()/openForward() (unlike ForwardUiState, which
-     * is recreated on open) so a dismiss-and-reopen mid-send can't lose the
-     * in-flight guard and let a second forwardTo() double-send the message.
+     * Shares in flight, keyed by [shareKey] (source message → target). Durable across
+     * close()/open() (unlike [ForwardUiState], recreated on open), so dismissing and reopening
+     * the sheet mid-send can neither lose the guard nor let a second Send duplicate the copy.
      */
-    private val sendingForwards = mutableMapOf<String, String>()
+    private val inFlight = mutableSetOf<Pair<String, String>>()
+
+    /**
+     * How many messages of a share already left for a target ([shareKey]) when it failed part
+     * way: a retry posts only the rest, never the copy that already reached the outbox twice.
+     */
+    private val alreadyPosted = mutableMapOf<Pair<String, String>, Int>()
+
+    private fun shareKey(sourceId: String, target: String) = sourceId to target
+
+    private companion object {
+        /** Refusals the plan states in « Ce qui part » (and the builder never posts). */
+        val WITHDRAWN_BY_THE_PLAN = setOf(ForwardRefusalReason.VIEW_ONCE, ForwardRefusalReason.AFTER_READ)
+    }
 
     /**
      * The conversation list changed. A `null` window (nothing loaded yet) keeps the
@@ -52,33 +75,36 @@ internal class ChatForwardController(
         recomputeTargets()
     }
 
-    /**
-     * Open the forward-picker sheet for [messageId]. Dismisses the long-press
-     * action sheet and paints the eligible targets cache-first from whatever
-     * conversation list is already loaded (the collector fills it in live).
-     */
+    /** Opens the share sheet for [messageId], dismissing the long-press action sheet. */
     fun open(messageId: String) = open(listOf(messageId))
 
     /**
-     * Opens the picker for a whole selection ([messageIds] in thread order, #13294). Only the
-     * messages the exit law lets out are carried; when none does, the refusal card of the first
-     * one is shown. The first carried message is the picker's source, the rest travel with it.
+     * Opens the sheet for a whole selection ([messageIds] in thread order, #13294). The first
+     * message the exit law lets out is the sheet's source; when none does, the refusal card of the
+     * first one is shown. A view-once or after-read message of the selection stays listed so the
+     * plan withdraws it and « Ce qui part » says why (it never leaves); a sealed or deleted one is
+     * dropped. A share of this source still in flight shows its rows as « sending ».
      */
     fun open(messageIds: List<String>) {
-        val carried = messageIds.filter { refusalFor(it) == null }
-        val messageId = carried.firstOrNull() ?: messageIds.first()
-        val refusal = if (carried.isEmpty()) refusalFor(messageId) else null
+        val refusals = messageIds.associateWith { refusalFor(it) }
+        val messageId = messageIds.firstOrNull { refusals[it] == null } ?: messageIds.first()
+        val refusal = if (refusals.values.all { it != null }) refusals[messageId] else null
+        val additional = messageIds.filter { id ->
+            id != messageId && refusals[id].let { it == null || it in WITHDRAWN_BY_THE_PLAN }
+        }
+        val sending = inFlight.filter { it.first == messageId }.map { it.second }
         state.update {
             it.copy(
                 actionMessageId = null,
                 forward = ForwardUiState(
                     sourceMessageId = messageId,
-                    additionalSourceMessageIds = carried.drop(1),
-                    sendingConversationId = sendingForwards[messageId],
+                    additionalSourceMessageIds = additional,
                     refusal = refusal,
+                    deliveries = sending.associateWith { ShareDelivery.Sending },
                 ),
             )
         }
+        updateForward { replan(it) }
         recomputeTargets()
     }
 
@@ -88,13 +114,20 @@ internal class ChatForwardController(
      */
     fun onGatewayRefusal(code: String?) {
         val reason = ForwardRefusalReason.fromCode(code) ?: return
-        state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, sendingConversationId = null)) } ?: s }
+        state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason)) } ?: s }
     }
 
-    /** What the exit law refuses for the message [messageId], or `null` when it may be forwarded. */
-    private fun refusalFor(messageId: String): ForwardRefusalReason? =
-        messages.value.firstOrNull { it.message.id == messageId }
-            ?.let { ForwardRefusalReason.local(it.message.exitOffer()) }
+    /**
+     * What the exit law refuses for the message [messageId], or `null` when it may be forwarded.
+     * Fail-closed on the conversation's regime: in an end-to-end conversation nothing is copied
+     * by the gateway, so nothing is offered — even a message served without its cipher flag.
+     * A message deleted meanwhile is no longer available.
+     */
+    private fun refusalFor(messageId: String): ForwardRefusalReason? {
+        val message = messages.value.firstOrNull { it.message.id == messageId }?.message ?: return null
+        if (!message.deletedAt.isNullOrBlank()) return ForwardRefusalReason.SOURCE_UNAVAILABLE
+        return ForwardRefusalReason.local(message.exitOffer(conversationIsEncrypted = state.value.isEndToEnd))
+    }
 
     fun onQueryChange(query: String) {
         state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
@@ -105,84 +138,113 @@ internal class ChatForwardController(
         state.update { it.copy(forward = null) }
     }
 
+    // --- The single share sheet (#13469): tick recipients, then Send ---------------------------
+
+    /** The synced source messages of the open sheet, in thread order. */
+    private fun sources(forward: ForwardUiState): List<ApiMessage> {
+        val synced = messages.value.filter { it.sendState == LocalSendState.SYNCED }.map { it.message }
+        return (listOf(forward.sourceMessageId) + forward.additionalSourceMessageIds)
+            .mapNotNull { id -> synced.firstOrNull { it.id == id && it.deletedAt.isNullOrBlank() } }
+    }
+
+    private fun subject(forward: ForwardUiState) =
+        ShareSubject.Messages(sources(forward), conversationId, conversationIsEncrypted = state.value.isEndToEnd)
+
+    private fun replan(forward: ForwardUiState): ForwardUiState {
+        val destinations = forward.selectedConversationIds.map { ShareDestination("conv:$it") }
+        val plan = SharePlanner.plan(subject(forward).entry(), destinations)
+        val bound = plan.flameMaxDurationSeconds
+        val chosen = forward.chosenDurationSeconds?.let { if (bound != null) minOf(it, bound) else it }
+        return forward.copy(plan = plan, chosenDurationSeconds = chosen ?: bound)
+    }
+
+    /** Ticks or unticks a recipient row; a row already served is inert, a failed one can be retried. */
+    fun toggleRecipient(targetConversationId: String) = updateForward { forward ->
+        val delivery = forward.deliveries[targetConversationId]
+        if (delivery != null && delivery !is ShareDelivery.Failed) return@updateForward forward
+        val selected = forward.selectedConversationIds
+        replan(
+            forward.copy(
+                selectedConversationIds = if (targetConversationId in selected) selected - targetConversationId else selected + targetConversationId,
+            ),
+        )
+    }
+
+    fun onCaptionChange(text: String) = updateForward { it.copy(caption = text.take(ShareLimits.MAX_CAPTION_LENGTH)) }
+
+    fun onDurationChange(seconds: Int) = updateForward { forward ->
+        val bound = forward.plan?.flameMaxDurationSeconds
+        forward.copy(chosenDurationSeconds = if (bound != null) minOf(seconds, bound) else seconds)
+    }
+
     /**
-     * Optimistically forward the source message into [targetConversationId]: the
-     * original content is re-sent there carrying the `forwardedFrom` refs (the
-     * gateway resolves attachments from the original). Only a server-acked source
-     * can be forwarded — an unsent bubble has no id the gateway knows. One
-     * forward is in flight at a time; an already-forwarded target is inert.
+     * Sends to every ticked recipient not yet served. Each row flips to « sending » at once (the
+     * optimistic feedback); every copy is a local bubble in its target plus a durable outbox entry,
+     * so the share survives going offline and closing the sheet. A failure flips only its own row,
+     * and its retry posts only what had not left yet. The exit law is read again at the tap: a
+     * source deleted or sealed meanwhile shows the refusal card and nothing leaves.
      */
-    fun forwardTo(targetConversationId: String) {
+    fun sendSelection() {
         val forward = state.value.forward ?: return
-        val sourceMessageId = forward.sourceMessageId
-        if (forward.refusal != null) return
-        refusalFor(sourceMessageId)?.let { reason ->
-            state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, targets = emptyList())) } ?: s }
+        if (forward.refusal != null || forward.plan?.canSend != true) return
+        val sourceId = forward.sourceMessageId
+        refusalFor(sourceId)?.let { reason ->
+            updateForward { it.copy(refusal = reason, targets = emptyList()) }
             return
         }
-        if (sendingForwards.containsKey(sourceMessageId)) return
-        if (targetConversationId in forward.sentConversationIds) return
         val user = sessionRepository.currentUser.value ?: return
-        val synced = messages.value.filter { it.sendState == LocalSendState.SYNCED }.map { it.message }
-        val sources = (listOf(sourceMessageId) + forward.additionalSourceMessageIds)
-            .mapNotNull { id -> synced.firstOrNull { it.id == id } }
-        if (sources.isEmpty()) return
-        // Each copy's protection, as the gateway will impose it: a timed flame keeps its
-        // flame with a duration bounded by the source, a blurred source (message or piece)
-        // hands its blur down. `null` = the law refuses that message: it is not sent.
-        val copies = sources.mapNotNull { source ->
-            ContentExitLaw.forwardedCopyProtection(source.contentExitSubject, null)?.let { source to it }
+        val pending = forward.selectedConversationIds.filter { id ->
+            shareKey(sourceId, id) !in inFlight && forward.deliveries[id].let { it == null || it is ShareDelivery.Failed }
         }
-        if (copies.isEmpty()) return
-        sendingForwards[sourceMessageId] = targetConversationId
-        state.update { s ->
-            if (s.forward?.sourceMessageId == sourceMessageId) {
-                s.copy(forward = s.forward.copy(sendingConversationId = targetConversationId))
-            } else {
-                s
-            }
+        if (pending.isEmpty()) return
+        val built = ShareOutgoingBuilder.build(subject(forward), emptySet(), forward.caption, forward.chosenDurationSeconds)
+        if (built is ShareOutgoingResult.Refused) {
+            pending.forEach { markDelivery(sourceId, it, ShareDelivery.Failed(built.failure)) }
+            return
+        }
+        val outgoing = (built as ShareOutgoingResult.Ready).messages
+        pending.forEach { target ->
+            inFlight += shareKey(sourceId, target)
+            markDelivery(sourceId, target, ShareDelivery.Sending)
         }
         scope.launch {
-            try {
-                copies.forEach { (source, copy) ->
-                    messageRepository.sendOptimistic(
-                        conversationId = targetConversationId,
-                        content = source.content,
-                        originalLanguage = source.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
-                        sender = user,
-                        forwardedFromId = source.id,
-                        forwardedFromConversationId = conversationId,
-                        effects = MessageEffects(flags = copy.effectFlags, ephemeralDuration = copy.ephemeralDuration),
-                    )
-                }
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-                sendingForwards.remove(sourceMessageId)
-                state.update { s ->
-                    if (s.forward?.sourceMessageId == sourceMessageId) {
-                        s.copy(
-                            forward = s.forward.copy(
-                                sendingConversationId = null,
-                                sentConversationIds = s.forward.sentConversationIds + targetConversationId,
-                            ),
-                        )
-                    } else {
-                        s
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                sendingForwards.remove(sourceMessageId)
-                state.update { s ->
-                    val forwardUpdate = if (s.forward?.sourceMessageId == sourceMessageId) {
-                        s.forward.copy(sendingConversationId = null)
-                    } else {
-                        s.forward
-                    }
-                    s.copy(errorMessage = e.message, forward = forwardUpdate)
-                }
+            pending.forEach { target ->
+                val delivery = deliver(outgoing, shareKey(sourceId, target), target, user)
+                inFlight -= shareKey(sourceId, target)
+                markDelivery(sourceId, target, delivery)
             }
+            workManager.enqueue(OutboxFlushWorker.buildRequest())
         }
+    }
+
+    private suspend fun deliver(outgoing: List<OutgoingShare>, key: Pair<String, String>, target: String, user: MeeshyUser): ShareDelivery = try {
+        outgoing.drop(alreadyPosted[key] ?: 0).forEach { post ->
+            messageRepository.sendOptimistic(
+                conversationId = target,
+                content = post.content,
+                originalLanguage = post.originalLanguage ?: user.systemLanguage?.takeIf { it.isNotBlank() } ?: LanguageResolver.FALLBACK_LANGUAGE,
+                sender = user,
+                forwardedFromId = post.forwardedFromId,
+                forwardedFromConversationId = post.forwardedFromConversationId,
+                effects = MessageEffects(flags = post.effectFlags, ephemeralDuration = post.ephemeralDuration),
+            )
+            alreadyPosted[key] = (alreadyPosted[key] ?: 0) + 1
+        }
+        alreadyPosted -= key
+        ShareDelivery.Sent
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ShareDelivery.Failed(ShareFailure.GENERIC)
+    }
+
+    private fun markDelivery(sourceId: String, target: String, delivery: ShareDelivery) = updateForward { forward ->
+        if (forward.sourceMessageId != sourceId) return@updateForward forward
+        forward.copy(deliveries = forward.deliveries + (target to delivery))
+    }
+
+    private fun updateForward(transform: (ForwardUiState) -> ForwardUiState) {
+        state.update { s -> s.forward?.let { s.copy(forward = transform(it)) } ?: s }
     }
 
     private fun recomputeTargets() {
@@ -196,6 +258,7 @@ internal class ChatForwardController(
                         sourceConversationId = conversationId,
                         query = forward.query,
                         currentUserId = sessionRepository.currentUser.value?.id,
+                        blockedUserIds = blockedUserIds(),
                     ),
                 ),
             )

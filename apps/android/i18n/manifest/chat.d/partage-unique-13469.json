@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.title.send",
+          "androidName": "share_title_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.title",
+          "androidName": "share_title_forward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content",
+          "androidName": "share_zone_content",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.messages-kept",
+          "androidName": "share_content_messages_kept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.caption",
+          "androidName": "share_caption_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.limits.recipients",
+          "androidName": "share_limits_recipients",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.section.conversations",
+          "androidName": "share_section_conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.search",
+          "androidName": "share_search_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.empty.title",
+          "androidName": "share_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.empty.body",
+          "androidName": "share_empty_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.offline",
+          "androidName": "share_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.status.queued",
+          "androidName": "share_status_queued",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.status.retry",
+          "androidName": "share_status_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.duration.title",
+          "androidName": "share_flame_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sent",
+          "androidName": "share_status_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sending",
+          "androidName": "share_status_sending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.error",
+          "androidName": "share_error_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "share_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withdrawn.view-once",
+          "androidName": "share_withdrawn_view_once",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withdrawn.after-read",
+          "androidName": "share_withdrawn_after_read",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withdrawn.unavailable",
+          "androidName": "share_withdrawn_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.refused.encrypted-destination",
+          "androidName": "share_refused_encrypted_destination",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.refused.undecrypted-source",
+          "androidName": "share_refused_undecrypted_source",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.detail.direct",
+          "androidName": "share_detail_direct",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.detail.group-unsized",
+          "androidName": "share_detail_group_unsized",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

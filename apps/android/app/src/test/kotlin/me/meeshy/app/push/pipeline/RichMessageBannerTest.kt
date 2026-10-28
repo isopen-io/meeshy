@@ -61,7 +61,7 @@ class RichMessageBannerTest {
                 override fun interruptionFilter() = 1
                 override suspend fun localUnreadConversations(): Int? = null
             },
-            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), MessageActionsEnricher(context, session)),
+            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), MessageActionsEnricher(context, session, me.meeshy.app.push.LaunchIntentProof(context), me.meeshy.sdk.net.InMemoryTokenStore())),
             summaryNotifier = PushSummaryNotifier(context),
         )
     }

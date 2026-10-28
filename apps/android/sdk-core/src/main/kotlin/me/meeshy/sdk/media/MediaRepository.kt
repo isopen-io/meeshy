@@ -8,23 +8,8 @@ import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.apiCall
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/**
- * One file to upload: its raw [bytes], the [fileName] to advertise and a
- * [mimeType]. A blank [fileName] or [mimeType] is replaced with a sane default by
- * [MediaUpload.formPart] so a missing value never produces a malformed part.
- *
- * Plain class (not a `data class`) because [bytes] is a `ByteArray` — value
- * equality over arrays is a footgun and the type is never compared by value.
- */
-class MediaUploadItem(
-    val bytes: ByteArray,
-    val fileName: String,
-    val mimeType: String,
-)
 
 /**
  * Pure construction of the multipart parts a media upload sends. Kept out of the
@@ -43,10 +28,9 @@ object MediaUpload {
     /** The content type, falling back to the octet-stream default when blank. */
     fun mimeType(raw: String): String = raw.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_MIME_TYPE
 
-    /** Builds the multipart `files` part for [item] with resolved name + content type. */
+    /** Builds the multipart `files` part for [item] with resolved name + content type, streamed from its source (#13551). */
     fun formPart(item: MediaUploadItem): MultipartBody.Part {
-        val resolvedMime = mimeType(item.mimeType)
-        val body = item.bytes.toRequestBody(resolvedMime.toMediaTypeOrNull())
+        val body = item.requestBody(mimeType(item.mimeType).toMediaTypeOrNull())
         return MultipartBody.Part.createFormData(FIELD_NAME, fileName(item.fileName), body)
     }
 }
@@ -63,11 +47,23 @@ object MediaUpload {
 @Singleton
 class MediaRepository @Inject constructor(
     private val mediaApi: MediaApi,
+    private val sanitizer: OutgoingMediaSanitizer,
 ) {
     suspend fun upload(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
-        val parts = items.map { MediaUpload.formPart(it) }
-        return apiCall { mediaApi.upload(parts) }
-            .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
+        val clean = mutableListOf<Pair<MediaUploadItem, MediaUploadItem>>()
+        try {
+            items.forEach { item ->
+                when (val result = sanitizer.sanitize(item)) {
+                    is NetworkResult.Failure -> return result
+                    is NetworkResult.Success -> clean += result.data to item
+                }
+            }
+            val parts = clean.map { (sent, _) -> MediaUpload.formPart(sent) }
+            return apiCall { mediaApi.upload(parts) }
+                .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
+        } finally {
+            clean.forEach { (sent, original) -> sanitizer.release(sent, original) }
+        }
     }
 }

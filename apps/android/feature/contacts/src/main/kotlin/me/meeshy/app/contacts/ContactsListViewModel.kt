@@ -170,6 +170,7 @@ class ContactsListViewModel @Inject constructor(
 
     private suspend fun revalidate() {
         val currentUserId = sessionRepository.currentUserId.orEmpty()
+        val ticket = friendListRepository.ticket()
         val served = coroutineScope {
             val blocks = async { blockRepository?.listBlocked() }
             val graphCall = async { friendRepository.friendshipGraph(currentUserId) }
@@ -185,7 +186,7 @@ class ContactsListViewModel @Inject constructor(
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
                 val friends = ContactList.fromAcceptedRequests(received + sent, currentUserId)
                 _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }
-                friendListRepository.persist(friends)
+                friendListRepository.persist(friends, ticket)
             }
             is NetworkResult.Failure -> _state.update {
                 it.copy(
@@ -219,7 +220,7 @@ class ContactsListViewModel @Inject constructor(
     private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
         PresenceOverlay.apply(friends, presenceStore.entries.value)
 
-    private fun onFriendshipCacheChanged() {
+    private suspend fun onFriendshipCacheChanged() {
         val cacheIds = friendshipCache.currentFriendIds
         if (cacheIds == lastReconciledFriendIds) return
         lastReconciledFriendIds = cacheIds
@@ -228,7 +229,8 @@ class ContactsListViewModel @Inject constructor(
         val result = ContactList.reconcile(current, cacheIds)
         if (result.friends != current) {
             _state.update { it.copy(friends = result.friends) }
-            viewModelScope.launch { friendListRepository.persist(result.friends) }
+            val ticket = friendListRepository.ticket()
+            viewModelScope.launch { friendListRepository.persist(result.friends, ticket) }
         }
         if (result.needsRefetch) refetch()
     }

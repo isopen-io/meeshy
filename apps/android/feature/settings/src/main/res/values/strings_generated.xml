@@ -181,6 +181,9 @@
     <string name="settings_media_capture_rendered_subtitle">Automatically when you confirm the edit. Otherwise, the arrow in the edit view saves it on demand.</string>
     <string name="settings_media_capture_rendered_title">Save the version with effects and frame</string>
     <string name="settings_media_download">Auto-download</string>
+    <string name="settings_media_outgoing_header">When sending</string>
+    <string name="settings_media_outgoing_location_subtitle">By default, the GPS position is removed from every photo before it is sent.</string>
+    <string name="settings_media_outgoing_location_title">Keep photo location</string>
     <string name="settings_new_message_notifications">New messages</string>
     <string name="settings_notif_cat_calls">Calls</string>
     <string name="settings_notif_cat_messages">Messages</string>

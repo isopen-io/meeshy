@@ -1115,6 +1115,42 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a sound borrowed from the library plays from its mediaURL, resolved against the gateway origin`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(
+                        id = "borrowed-s1",
+                        postMediaId = "",
+                        isBackground = true,
+                        mediaURL = "/api/v1/static/s1.m4a",
+                        soundId = "s1",
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("https://gate.meeshy.me/api/v1/static/s1.m4a")
+    }
+
+    @Test
+    fun `an author-written mediaURL outside the library route never plays, so the reader's identity never follows it`() = runTest {
+        listOf("/api/v1/users/me", "/api/v1/static/../conversations", "https://evil.example/api/v1/static/s.m4a").forEach { hostile ->
+            val post = storyPost("a1", "a", hoursAgo = 1).copy(
+                storyEffects = StoryEffects(
+                    audioPlayerObjects = listOf(
+                        StoryAudioPlayerObject(id = "b", postMediaId = "", isBackground = true, mediaURL = hostile, soundId = "s1"),
+                    ),
+                ),
+            )
+            val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+            assertThat(vm.state.value.current?.backgroundAudioUrl).isNull()
+        }
+    }
+
+    @Test
     fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),
@@ -1292,6 +1328,69 @@ class StoryViewerViewModelTest {
         vm.toggleLanguageOverride("es")
         assertThat(vm.state.value.current?.text).isEqualTo("hola")
         assertThat(vm.state.value.languageOverride).isEqualTo("es")
+    }
+
+    @Test
+    fun `selecting the Original entry shows the source text and never announces the sentinel as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "es"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+
+        vm.selectLanguage(StoryLanguageOverride.ORIGINAL)
+
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.current?.languageCode).isNull()
+        assertThat(vm.state.value.activeLanguageCode).isNull()
+    }
+
+    @Test
+    fun `selecting a language twice keeps it - the explorer never toggles back`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.selectLanguage("es")
+        vm.selectLanguage("es")
+
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.activeLanguageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `the explorer is built only while it is open and follows the served language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.languageExplorer).isNull()
+
+        vm.openLanguageExplorer()
+        vm.selectLanguage("es")
+
+        val explorer = vm.state.value.languageExplorer!!
+        assertThat(explorer.current?.text).isEqualTo("hola")
+        assertThat(explorer.rows.first { it.isSelected }.code).isEqualTo("es")
+
+        vm.closeLanguageExplorer()
+        assertThat(vm.state.value.languageExplorer).isNull()
     }
 
     @Test

@@ -1,10 +1,48 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Posizione di riproduzione</string>
+    <string name="audio_editor_apply">Applica le modifiche</string>
+    <string name="audio_editor_close">Chiudi</string>
+    <string name="audio_editor_error_generic">La modifica non è riuscita.</string>
+    <string name="audio_editor_error_load">Impossibile caricare questo audio.</string>
+    <string name="audio_editor_fade_in">Dissolvenza in entrata</string>
+    <string name="audio_editor_fade_out">Dissolvenza in uscita</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Semplice</string>
+    <string name="audio_editor_op_fade">Dissolvenza</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Originale</string>
+    <string name="audio_editor_op_removerange">Sezione tagliata</string>
+    <string name="audio_editor_op_speed">Velocità</string>
+    <string name="audio_editor_op_trim">Ritagliato</string>
+    <string name="audio_editor_pause">Pausa</string>
+    <string name="audio_editor_play">Riproduci</string>
+    <string name="audio_editor_preparing">Preparazione dell\'audio…</string>
+    <string name="audio_editor_processing">Elaborazione…</string>
+    <string name="audio_editor_redo">Ripristina</string>
+    <string name="audio_editor_reset">Reimposta</string>
+    <string name="audio_editor_split_hint">Seleziona la sezione da eliminare.</string>
+    <string name="audio_editor_tool_fade">Dissolvenza</string>
+    <string name="audio_editor_tool_speed">Velocità</string>
+    <string name="audio_editor_tool_split">Taglia</string>
+    <string name="audio_editor_tool_transcribe">Trascrivi</string>
+    <string name="audio_editor_tool_trim">Ritaglia</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Trascina le maniglie per conservare una porzione.</string>
+    <string name="audio_editor_undo">Annulla</string>
+    <string name="audio_editor_use">Usa l\'audio</string>
+    <string name="audio_editor_volume_normal">Normale</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
+    <string name="audio_split_handle_end">Fine del taglio</string>
+    <string name="audio_split_handle_start">Inizio del taglio</string>
+    <string name="audio_trim_handle_end">Fine della selezione</string>
+    <string name="audio_trim_handle_start">Inizio della selezione</string>
     <string name="avatar_a11y_mood">umore %s</string>
+    <string name="bubble_contact_card_shared">Contatto condiviso</string>
     <string name="bubble_story_citation_answer">risposta alla sua storia</string>
     <string name="bubble_story_citation_open_hint">Apre la storia citata</string>
     <string name="bubble_story_citation_unavailable">Storia non disponibile</string>
+    <string name="capture_microphone_denied">Microfono negato — il video sarà muto. Tocca per aprire Impostazioni</string>
     <string name="common_cancel">Annulla</string>
     <string name="common_clearSearch">Cancella la ricerca</string>
     <string name="common_close">Chiudi</string>
@@ -28,6 +66,7 @@
     <string name="focal_focus_add_reaction">Aggiungi una reazione</string>
     <string name="focal_focus_translation_detail">Dettagli della traduzione</string>
     <string name="focal_row_you">Tu</string>
+    <string name="language_strip_more">Altre lingue</string>
     <string name="location_fullscreen_directions">Itinerario</string>
     <string name="location_fullscreen_mapStyle">Stile mappa</string>
     <string name="location_fullscreen_sharedPosition">Posizione condivisa</string>
@@ -116,6 +155,18 @@
     <string name="retouch_text_align_center">CENTRO</string>
     <string name="retouch_text_align_left">SINISTRA</string>
     <string name="retouch_text_align_right">DESTRA</string>
+    <string name="retouch_text_background">Sfondo del testo</string>
+    <string name="retouch_text_bg_amber">Ambra</string>
+    <string name="retouch_text_bg_black">Nero</string>
+    <string name="retouch_text_bg_black65" formatted="false">Nero 65%</string>
+    <string name="retouch_text_bg_glass">Vetro</string>
+    <string name="retouch_text_bg_green">Verde</string>
+    <string name="retouch_text_bg_indigo">Indaco</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">Indaco 65%</string>
+    <string name="retouch_text_bg_pink">Rosa</string>
+    <string name="retouch_text_bg_red">Rosso</string>
+    <string name="retouch_text_bg_white">Bianco</string>
+    <string name="retouch_text_bg_white65" formatted="false">Bianco 65%</string>
     <string name="retouch_text_color">Colore del testo</string>
     <string name="retouch_text_style_bold">GRASSETTO</string>
     <string name="retouch_text_style_classic">CLASSICO</string>

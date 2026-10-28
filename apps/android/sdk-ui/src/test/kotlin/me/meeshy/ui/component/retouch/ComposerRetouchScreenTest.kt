@@ -2,7 +2,11 @@ package me.meeshy.ui.component.retouch
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assertAny
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasSetTextAction
@@ -24,6 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** La retouche unique : la rangée haute, le rail, la bande, et ce que « Terminé » remet (#12614). */
 @RunWith(RobolectricTestRunner::class)
@@ -39,11 +44,19 @@ class ComposerRetouchScreenTest {
 
     private val author = ComposerLookAuthor("self", "Ana", null, CallMontageCaption(CallMontageCaption.BRAND_TITLE, "24 Oct 2026", "10:42"), "24 Oct 2026")
 
+    /**
+     * Les peintures (aperçu, miniatures, export, visage) tournent sur l'horloge de la composition : hors du fil
+     * principal, elles revenaient à un instant qui dépendait de la vitesse du runner, et une CI chargée voyait
+     * la bande et le rail dans un ordre qu'aucun geste ne produisait (« Terminé » jamais revenu, le Crapaud
+     * centré mais pas choisi).
+     */
     private fun show() {
         val photo = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.RED) }
         compose.setContent {
-            MeeshyTheme {
-                ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+            CompositionLocalProvider(LocalRetouchPaintContext provides EmptyCoroutineContext) {
+                MeeshyTheme {
+                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+                }
             }
         }
         compose.waitForIdle()
@@ -159,5 +172,38 @@ class ComposerRetouchScreenTest {
         val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)
         rendered.bitmap.getPixels(pixels, 0, rendered.bitmap.width, 0, 0, rendered.bitmap.width, rendered.bitmap.height)
         assertThat(pixels.any { Color.green(it) > 150 }).isTrue()
+    }
+
+    @Test
+    fun `le fond Noir choisi sous le texte se cuit dans la photo`() {
+        show()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).performTextInput("MEESHY")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Black").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)
+        rendered.bitmap.getPixels(pixels, 0, rendered.bitmap.width, 0, 0, rendered.bitmap.width, rendered.bitmap.height)
+        assertThat(pixels.count { Color.red(it) < 30 && Color.green(it) < 30 && Color.blue(it) < 30 }).isGreaterThan(20)
+    }
+
+    @Test
+    fun `chaque fond est une pastille radio, Aucun d abord choisi puis Verre une fois touche`() {
+        show()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).performTextInput("MEESHY")
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("None").assertAny(isSelected())
+        compose.onNodeWithContentDescription("Glass").assertIsNotSelected().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Glass").assertIsSelected()
+        compose.onNodeWithContentDescription("Black").assertIsNotSelected()
     }
 }

@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -484,6 +485,38 @@ class FeedViewModelTest {
 
         vm.onPostFlagTap("1", "es")
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `picking a language in the explorer shows it on the card and marks that row active`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Hola")
+        assertThat(card.languageExplorer?.translations?.first { it.isActive }?.code).isEqualTo("es")
+    }
+
+    @Test
+    fun `picking the language already shown keeps it instead of reverting to the default`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+        vm.onPostLanguageSelected("1", "es")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `picking the original from the explorer shows the original text`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "fr")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Bonjour")
+        assertThat(card.languageExplorer?.originalIsActive).isTrue()
     }
 
     @Test
@@ -1126,6 +1159,20 @@ class FeedViewModelTest {
         }
         coVerify(exactly = 1) {
             publications.enqueuePost(CreatePostRequest(content = "hi", type = "POST", visibility = "PUBLIC"), null)
+        }
+    }
+
+    @Test
+    fun `a post with a scene background publishes it as its story effects`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.publishPost(content = "la vue", visibility = "PUBLIC", background = "302B63")
+
+        coVerify(exactly = 1) {
+            publications.enqueuePost(
+                CreatePostRequest(content = "la vue", visibility = "PUBLIC", storyEffects = StoryEffects(background = "302B63")),
+                null,
+            )
         }
     }
 

@@ -28,6 +28,7 @@ internal fun BubbleAttachmentSections(
         BubbleImageGrid(
             images = content.images,
             onImageClick = callbacks.onImageClick,
+            onImageLongClick = callbacks.onImageLongClick,
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }

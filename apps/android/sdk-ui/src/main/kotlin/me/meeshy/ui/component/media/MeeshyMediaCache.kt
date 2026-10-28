@@ -6,6 +6,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.ContentMetadata
@@ -62,7 +63,12 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         CacheDataSource.Factory()
             .setCache(cacheFor(category))
             .setCacheKeyFactory(MeeshyMediaCacheKey)
-            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(appContext))
+            .setUpstreamDataSourceFactory(
+                ResolvingDataSource.Factory(DefaultDataSource.Factory(appContext)) { spec ->
+                    val headers = MediaRequestHeaders.provider(spec.uri.toString())
+                    if (headers.isEmpty()) spec else spec.withAdditionalHeaders(headers)
+                },
+            )
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
     /**
@@ -80,6 +86,12 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
 
     public fun exporter(category: MediaCacheCategory): MediaFileExporter =
         MediaFileExporter(dataSourceFactory(category))
+
+    /** Vide [category] : chaque ressource du cache disque part (changement de compte, déconnexion). */
+    public fun clear(category: MediaCacheCategory) {
+        val cache = cacheFor(category)
+        cache.keys.toList().forEach { key -> runCatching { cache.removeResource(key) } }
+    }
 
     /**
      * Bail de lecture : tant qu'il n'est pas rendu, la ressource de [url] est à l'abri de

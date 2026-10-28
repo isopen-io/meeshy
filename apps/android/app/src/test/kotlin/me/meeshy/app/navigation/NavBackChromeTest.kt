@@ -168,10 +168,10 @@ class NavBackChromeTest {
     @Test
     fun `roots and immersive screens follow iOS and carry no edge swipe`() {
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.ROOT }.map { it.source }).containsExactly(
-            "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.CONVERSATIONS", "Routes.FEED",
+            "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.VERIFY_EMAIL_LINK", "Routes.CONVERSATIONS", "Routes.FEED",
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
-            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.STORY_COMPOSER_ROUTE",
+            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
             "Routes.PROFILE_USER", "Routes.CALL",
         )
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()

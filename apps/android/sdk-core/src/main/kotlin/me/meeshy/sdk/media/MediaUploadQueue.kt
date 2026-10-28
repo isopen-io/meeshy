@@ -1,5 +1,7 @@
 package me.meeshy.sdk.media
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.MeeshyApi
@@ -9,6 +11,8 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,10 +56,26 @@ class MediaUploadQueue @Inject constructor(
      * [conversationId] names the chat conversation a message attachment is destined for, so
      * the outbox's end-to-end guard withholds the bytes even before the message row exists
      * (#12956).
+     *
+     * The blob and the row belong to the account of the gesture's ticket when one is installed (#13558), else to the
+     * account signed in when this call BEGAN (#13555): if that account closes while
+     * the octets are being sealed, neither is kept and [AccountClosedException] is thrown — a media picked by A never
+     * leaves as B, however long the write took.
      */
     suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null): String {
         val cmid = OutboxIds.cmid()
-        blobStore.put(cmid, item)
+        val ticket = blobStore.currentTicket()
+        blobStore.put(cmid, item, ticket)
+        try {
+            enqueueRow(cmid, context, conversationId, ticket)
+        } catch (closed: AccountClosedException) {
+            withContext(NonCancellable) { blobStore.remove(cmid) }
+            throw closed
+        }
+        return cmid
+    }
+
+    private suspend fun enqueueRow(cmid: String, context: TusUploadContext?, conversationId: String?, ticket: AccountTicket?) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.UPLOAD_MEDIA,
@@ -68,9 +88,16 @@ class MediaUploadQueue @Inject constructor(
                 },
                 cmid = cmid,
             ),
+            ticket,
         )
-        return cmid
     }
+
+    /**
+     * The account a gesture belongs to, taken when the user ACTS (#13558): the screen installs it around the work that
+     * precedes [enqueue] ([me.meeshy.sdk.session.withAccountTicket]), so a copy or a compression finished after another
+     * account signed in is dropped instead of queued under it. `null` when the queue is not fenced.
+     */
+    fun ticket(): AccountTicket? = blobStore.ticket()
 
     /**
      * The mirror of [enqueue]: a user removing a still-queued media before it

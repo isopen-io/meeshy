@@ -49,6 +49,8 @@ internal class ChatMessageRowActions(
     val onReactionLongPress: (messageId: String) -> Unit = {},
     val onImageClick: (messageId: String, imageIndex: Int) -> Unit = { _, _ -> },
     val onFileClick: (messageId: String, attachmentId: String?) -> Unit = { _, _ -> },
+    /** Appui long sur UNE image de la grille (#13461) : cette pièce seule s'aperçoit. */
+    val onImageLongPress: (messageId: String, attachmentId: String) -> Unit = { _, _ -> },
     /** Tap sur la carte d'un lieu partagé : la carte plein écran s'ouvre. */
     val onLocationClick: (messageId: String, location: me.meeshy.ui.component.bubble.BubbleLocation) -> Unit = { _, _ -> },
     val onReplyPreviewClick: (messageId: String) -> Unit = {},
@@ -122,6 +124,10 @@ internal fun ChatMessageRow(
             onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
             onReactionLongPress = { actions.onReactionLongPress(messageId) },
             onImageClick = { index -> actions.onImageClick(messageId, index) },
+            onImageLongClick = { index ->
+                val attachmentId = bubble.images.getOrNull(index)?.attachmentId
+                if (attachmentId == null) actions.onLongPress(messageId) else actions.onImageLongPress(messageId, attachmentId)
+            },
             onLocationClick = { location -> actions.onLocationClick(messageId, location) },
             onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },

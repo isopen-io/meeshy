@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.interlocutor
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.mayCurrentUserWrite
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -19,6 +20,8 @@ data class ForwardTarget(
     val accentHex: String,
     /** Le compte du vis-à-vis d'une conversation directe : sa présence servie lit la carte unique. */
     val peerUserId: String? = null,
+    /** A one-to-one conversation: its row says « Conversation », never a member count. */
+    val isDirect: Boolean = false,
 )
 
 /**
@@ -35,6 +38,7 @@ data class ForwardTarget(
  *    reader soft-deleted for themselves) is never offered: it is a tappable row
  *    that would produce a message the gateway refuses (issue found in review,
  *    parity with `StorySendTargets`).
+ *  - A direct conversation with a BLOCKED person ([blockedUserIds]) is never offered.
  *  - A blank (or whitespace-only) query keeps every remaining non-source conversation.
  *  - A non-blank query is trimmed, then matched case-insensitively against the
  *    conversation's resolved [displayTitle] (what the user actually sees — the
@@ -50,11 +54,16 @@ object ForwardTargets {
         sourceConversationId: String,
         query: String,
         currentUserId: String? = null,
+        blockedUserIds: Set<String> = emptySet(),
     ): List<ForwardTarget> {
         val trimmed = query.trim()
         return conversations.asSequence()
             .filter { it.id != sourceConversationId }
             .filter { it.mayCurrentUserWrite(currentUserId) }
+            .filter { conversation ->
+                val peer = conversation.interlocutor(currentUserId)?.userId
+                peer == null || peer !in blockedUserIds
+            }
             .map { conversation ->
                 ForwardTarget(
                     conversationId = conversation.id,
@@ -64,6 +73,7 @@ object ForwardTargets {
                     avatar = conversation.avatar?.takeIf { it.isNotBlank() },
                     accentHex = conversation.accentHex(),
                     peerUserId = conversation.interlocutor(currentUserId)?.userId,
+                    isDirect = conversation.isDirect,
                 )
             }
             .filter { trimmed.isEmpty() || it.title.contains(trimmed, ignoreCase = true) }

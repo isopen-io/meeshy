@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Lecture d'un vocal en arrière-plan : service de premier plan « mediaPlayback » + CPU éveillé (#13393). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Audio/video calls (WebRTC media capture) -->
@@ -96,6 +97,26 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" android:host="profile" />
             </intent-filter>
+            <!-- App Links : les liens des e-mails de reinitialisation du mot de passe et de verification de l'adresse
+                 (LaunchRouter.routeForDeepLink, EmailLinkSecret.exactForm). EXACTS (android:path) et jamais en prefixe :
+                 le prefixe `/auth/email-link` revendiquerait aussi les liens d'e-mail que l'app ne lit pas (revocation de
+                 sessions, suppression de compte…), qui seraient avales sans rien afficher au lieu d'aller au navigateur.
+                 Les alias `/auth/email-link/...` ne sont PAS revendiques ici (#10859, #10868) : aucune application
+                 publiee ne revendique un alias — seules les adresses CANONIQUES le sont, le web se chargeant de la
+                 redirection alias -> canonique quand le lien s'ouvre au navigateur. `EmailLinkSecret.exactForm` lit
+                 encore ces alias pour les URI transmises par un autre chemin (partage, navigateur "ouvrir avec"),
+                 mais le manifeste ne les declenche jamais directement. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/verify-email" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/verify-email" />
+            </intent-filter>
             <!-- App Link : le lien de partage de profil (https://meeshy.me/u/{username},
                  me.meeshy.sdk.model.ProfileShareLink) ouvre l'app directement. meeshy://u/{username}
                  n'a pas besoin de son propre filtre : le filtre scheme-only ci-dessus (sans host)
@@ -136,6 +157,18 @@
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/feeds/post/" />
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
+            </intent-filter>
+            <!-- App Link : un reel (/reel/{id}) et une story (/story/{id}) partages. Connecte, ils ouvrent les reels /
+                 le detail du post ; sans session, l'ecran visiteur montre leur contenu public (VisitorLinkGate). Jamais
+                 /stories/ : /stories/new et /stories/mine sont des pages du web, et iOS ne revendique que /story/*. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/story/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/story/" />
             </intent-filter>
             <!-- App Link : le hub « Mes liens » (iOS LinksHubView, https://meeshy.me/links) ouvre
                  LinksRoutes.HUB (LinksRoutes.HUB_DEEP_LINKS). meeshy://links passe par le filtre
@@ -184,10 +217,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Session média + notification de lecture d'un vocal écouté (#13393). -->
         <service
             android:name=".audio.VoicePlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Garde le micro d'un vocal en cours quand l'app quitte l'écran (#13441) : « Arrêter » / « Annuler » dans la notification. -->
+        <service
+            android:name=".ongoing.VoiceRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- FCM Push -->
         <service

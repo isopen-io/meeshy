@@ -363,7 +363,7 @@ function StoryStudio({
   const discardUnsent = () => {
     latestDraft.current.pages.forEach((p) => (ALL_DOORS.forEach((door) => forgetUpload(p.id, door)), revokePageMedia(p)));
     historyRef.current = emptyStudioHistory;
-    outbox.discard();
+    void outbox.discard();
     if (viewerId !== null) deps.drafts.clear(viewerId);
     setDraft(emptyStudioDraft(language));
   };
@@ -612,9 +612,11 @@ function StoryStudio({
     // story deux fois.
 
     purgedRef.current = true;
-    outbox.discard();
     if (viewerId !== null) deps.drafts.clear(viewerId);
     current.pages.forEach(revokePageMedia);
+    // L'appareil est vidé AVANT de quitter le studio : une page qui part
+    // pendant l'écriture rendrait les médias publiés au studio suivant.
+    await outbox.discard();
     if (chosen.kind === 'STORY') {
       if (chosen.alsoAsReel === true) void refreshFeedAction().catch(() => undefined);
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });

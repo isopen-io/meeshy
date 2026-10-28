@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_media_row">Media %1$d</string>
+    <string name="feed_unsent_media_uploaded">Sent</string>
+    <string name="feed_unsent_media_waiting">Waiting</string>
+    <string name="feed_unsent_media_refused">Refused, to be sent again</string>
+    <string name="feed_unsent_media_lost">Not found on this device</string>
+    <string name="feed_unsent_rupture_counts">Missing: %1$d. Intact: %2$d.</string>
+    <string name="feed_unsent_gesture_replace">Reopen it to replace the missing media.</string>
+    <string name="feed_unsent_gesture_replace_story">Delete it and compose it again.</string>
+    <string name="feed_unsent_gesture_wait">It will go as soon as the connection is back.</string>
+    <string name="feed_unsent_gesture_retry">Retry: nothing is lost.</string>
+</resources>

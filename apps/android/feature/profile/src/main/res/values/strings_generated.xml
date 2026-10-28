@@ -26,6 +26,15 @@
     <string name="profile_connection_context_sent">You sent a connection request to %s. Waiting for their reply.</string>
     <string name="profile_conversations_interactionsDisabled">Interactions disabled</string>
     <string name="profile_conversations_noShared">No shared conversations</string>
+    <string name="profile_decor_banner_section">Banner</string>
+    <string name="profile_decor_done">Done</string>
+    <string name="profile_decor_error">Couldn\'t save this choice. Try again.</string>
+    <string name="profile_decor_frame_section">Banner frame</string>
+    <string name="profile_decor_image">Image</string>
+    <string name="profile_decor_image_hides_designs">Your banner image shows in front of the backgrounds.</string>
+    <string name="profile_decor_image_hint">Choose a banner image</string>
+    <string name="profile_decor_none">None</string>
+    <string name="profile_decor_ring_section">Avatar ring</string>
     <string name="profile_decor_subtitle">Visible to everyone on your profile</string>
     <string name="profile_decor_title">Ring and banner</string>
     <string name="profile_detail_country">Country</string>

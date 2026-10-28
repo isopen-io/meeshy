@@ -27,7 +27,7 @@ class OutboxAuthorGuardTest {
             ApplicationProvider.getApplicationContext(),
             MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
-        outbox = OutboxRepository(db, db.outboxDao()) { signedIn }
+        outbox = OutboxRepository(db, db.outboxDao(), { signedIn })
     }
 
     @After
@@ -117,5 +117,34 @@ class OutboxAuthorGuardTest {
         assertThat(db.outboxDao().find("old")!!.ownerId).isEqualTo("B")
         assertThat(db.outboxDao().find("old")!!.state).isEqualTo(OutboxState.PENDING.name)
         assertThat(db.outboxDao().find("mine")!!.ownerId).isEqualTo("A")
+    }
+
+    @Test
+    fun `A's queued media upload and the story waiting on it never leave under B's token, and leave when A returns`() = runTest {
+        outbox.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "m-a", "{}", cmid = "up-a"))
+        outbox.enqueue(
+            OutboxMutation(OutboxKind.PUBLISH_STORY, OutboxLanes.STORY, "s-a", "{}", dependsOn = setOf("up-a"), cmid = "story-a"),
+        )
+        signedIn = "B"
+        val chain = OutboxDrainer(
+            outbox,
+            mapOf(
+                OutboxKind.UPLOAD_MEDIA to MutationSender { row -> sent += row.cmid; SendResult.Success },
+                OutboxKind.PUBLISH_STORY to MutationSender { row -> sent += row.cmid; SendResult.Success },
+            ),
+            currentOwner = { signedIn },
+        )
+
+        chain.drainLane(OutboxLanes.MEDIA)
+        chain.drainLane(OutboxLanes.STORY)
+
+        assertThat(sent).isEmpty()
+        assertThat(outbox.observeAll().first().map { it.attempts }).containsExactly(0, 0)
+
+        signedIn = "A"
+        chain.drainLane(OutboxLanes.MEDIA)
+        chain.drainLane(OutboxLanes.STORY)
+
+        assertThat(sent).containsExactly("up-a", "story-a").inOrder()
     }
 }

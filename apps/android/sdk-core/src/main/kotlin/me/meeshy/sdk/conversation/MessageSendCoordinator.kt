@@ -1,26 +1,31 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
-import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountClosedException
 
 /**
  * The send lifecycle of one outgoing message (ARCHITECTURE.md §5): the optimistic `SENDING`
@@ -66,6 +71,7 @@ internal class MessageSendCoordinator(
         attachments: List<ApiMessageAttachment> = emptyList(),
         location: SharedPlace? = null,
     ): String {
+        val ticket = outboxRepository.currentTicket()
         val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
@@ -120,16 +126,22 @@ internal class MessageSendCoordinator(
         database.withTransaction {
             messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
         }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.SEND_MESSAGE,
-                lane = OutboxLanes.forMessage(conversationId),
-                targetId = conversationId,
-                payload = MeeshyApi.json.encodeToString(request),
-                dependsOn = placeholderIds.toSet(),
-                cmid = cid,
-            ),
-        )
+        try {
+            outboxRepository.enqueue(
+                OutboxMutation(
+                    kind = OutboxKind.SEND_MESSAGE,
+                    lane = OutboxLanes.forMessage(conversationId),
+                    targetId = conversationId,
+                    payload = MeeshyApi.json.encodeToString(request),
+                    dependsOn = placeholderIds.toSet(),
+                    cmid = cid,
+                ),
+                ticket,
+            )
+        } catch (closed: AccountClosedException) {
+            withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
+            throw closed
+        }
         return cid
     }
 
@@ -146,18 +158,33 @@ internal class MessageSendCoordinator(
         }
     }
 
-    /** The outbox exhausted its retries — surface the bubble as retryable. */
-    suspend fun markSendFailed(cmid: String) {
-        messageDao.updateSendState(cmid, LocalSendState.FAILED.name)
+    /**
+     * The outbox exhausted its retries — surface the bubble as retryable. A send refused because a media's
+     * location cannot be removed ([MediaLocationRefusal], #13550), or whose media was lost on the device ([MediaLoss], #13554),
+     * keeps that reason on the bubble, which says it.
+     */
+    suspend fun markSendFailed(cmid: String, reason: String? = null) {
+        val row = messageDao.find(cmid)
+        if (row == null || !isDefinitive(reason)) {
+            messageDao.updateSendState(cmid, LocalSendState.FAILED.name)
+            return
+        }
+        messageDao.recordSendAttempt(cmid, LocalSendState.FAILED.name, row.retryCount, reason)
     }
 
     /**
      * User-initiated retry of a failed bubble: flips it back to `SENDING` and
      * revives its outbox row (or re-enqueues from the cached payload when the
-     * row is gone).
+     * row is gone). A bubble refused for its location, or whose media was lost (#13554), is never retried — the same bytes would be refused
+     * again: the tap REMOVES it (bubble and outbox row), so the author can pick another file (#13550).
      */
     suspend fun retrySend(cmid: String) {
         val row = messageDao.find(cmid) ?: return
+        if (isDefinitive(row.lastError)) {
+            outboxRepository.discard(cmid)
+            messageDao.deleteByIds(listOf(cmid))
+            return
+        }
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
         if (outboxRepository.retry(cmid)) return
         val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
@@ -187,4 +214,6 @@ internal class MessageSendCoordinator(
             ),
         )
     }
+
+    private fun isDefinitive(reason: String?): Boolean = MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason)
 }

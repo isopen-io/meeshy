@@ -21,6 +21,7 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.mention.MentionComposer
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.applyRemote
@@ -106,14 +107,14 @@ internal class ChatComposerController(
      * posture. A store failure degrades to the full posture (never a crash).
      */
     suspend fun loadComposerPermissions() {
-        val permissions = try {
-            anonymousSessionStore.load()?.permissions
+        val context = try {
+            anonymousSessionStore.load()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
         } ?: return
-        state.update { it.copy(composerPermissions = permissions) }
+        state.update { it.copy(composerPermissions = context.permissions) }
     }
 
     /**
@@ -379,7 +380,10 @@ internal class ChatComposerController(
         _pendingPlace.value = null
         persistDraft("", replyToId = null)
         recordTypedEmojis(text)
-        scope.launch {
+        // #13558 : l'envoi appartient au compte du GESTE — la lecture des fichiers de travail et leur mise en file qui
+        // finissent après un changement de compte ne partent jamais sous le suivant.
+        val gesture = mediaUploadQueue.ticket()
+        scope.launch(gesture.asCoroutineContext()) {
             try {
                 val sentLanguage = ComposeLanguageDetector.originalLanguageAtSend(
                     text = text,
@@ -511,16 +515,16 @@ internal class ChatComposerController(
     ) {
         if (tray == null) return
         val uploaded = batch.items.mapNotNull { item ->
-            val bytes = tray.readBytes(item) ?: return@mapNotNull null
             val name = item.fileName?.trim()?.ifBlank { null } ?: DEFAULT_ATTACHMENT_NAME
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
-            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime), conversationId = conversationId)
+            val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
+            val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
                 originalName = name,
                 mimeType = mime,
-                fileSize = bytes.size,
+                fileSize = upload.sizeBytes.toInt(),
                 width = item.width,
                 height = item.height,
                 duration = item.durationMs?.toInt(),
@@ -551,92 +555,6 @@ internal class ChatComposerController(
             attachmentUploadCmids = uploaded.map { it.first },
             attachments = uploaded.map { it.second },
         )
-    }
-
-    /**
-     * Sends a file picked from the system document/photo picker through the same
-     * durable upload→graft→send chain the clipboard path already uses: the bytes
-     * are queued for upload, the send is enqueued gated on that upload and carrying
-     * its cmid as a placeholder attachment id, and the drainer grafts the real
-     * gateway id in once the upload lands. The message's coarse `messageType`
-     * (image/video/audio/file) is inferred from the resolved MIME via
-     * [AttachmentMessageType]; any text already in the composer rides along as the
-     * body and is cleared, mirroring [sendClipboardContent].
-     *
-     * A blank pick ([bytes] empty) or a signed-out session is inert. Note: audio
-     * picked here is delivered over REST like any other file — the socket audio
-     * pipeline (transcription/translation) is a separate slice; this path never
-     * triggers it.
-     */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
-        if (bytes.isEmpty()) return
-        val user = sessionRepository.currentUser.value ?: return
-        val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-        val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
-        val messageType = AttachmentMessageType.forMime(mime)
-        // Same unified gate the text path uses: a denied attachment capability or a
-        // running slow-mode cooldown refuses the pick before it leaves the composer.
-        // The "+" ladder stays visible during a cooldown, so this is where the block
-        // is really enforced — and a delivered attachment starts the cooldown too.
-        val sentAtMillis = clock.nowMillis()
-        val gate = ComposerSendGate.evaluate(
-            ComposerSendKind.fromMessageType(messageType),
-            state.value.composerAffordances,
-            state.value.slowModeState(sentAtMillis),
-        )
-        if (!gate.allowed) return
-        val text = composerText.text.trim()
-        val replyToId = state.value.replyingToMessageId
-        val effects = state.value.pendingEffects
-        val languageCode = state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
-        stopTypingEmission()
-        composerText.clear()
-        state.update {
-            it.copy(
-                replyingToMessageId = null,
-                mention = it.mention.reset(),
-                pendingEffects = MessageEffects(),
-                isEffectsPickerOpen = false,
-                lastSelfSentAtMillis = sentAtMillis,
-                composerLanguage = ComposerLanguageState(),
-            )
-        }
-        persistDraft("", replyToId = null)
-        recordTypedEmojis(text)
-        scope.launch {
-            try {
-                val uploadCmid = mediaUploadQueue.enqueue(
-                    MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
-                    conversationId = conversationId,
-                )
-                messageRepository.sendOptimistic(
-                    conversationId = conversationId,
-                    content = text,
-                    originalLanguage = languageCode,
-                    sender = user,
-                    replyToId = replyToId,
-                    effects = effects,
-                    messageType = messageType,
-                    attachmentUploadCmids = listOf(uploadCmid),
-                    attachments = listOf(
-                        ApiMessageAttachment(
-                            id = uploadCmid,
-                            fileName = safeName,
-                            originalName = safeName,
-                            mimeType = mime,
-                            fileSize = bytes.size,
-                        ),
-                    ),
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                state.update { it.copy(errorMessage = e.message) }
-            }
-        }
     }
 
     /** Present the composer's message-effects picker sheet. */

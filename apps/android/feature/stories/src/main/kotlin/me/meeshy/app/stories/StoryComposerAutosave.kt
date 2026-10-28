@@ -2,11 +2,13 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftAnnotations
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -74,6 +76,9 @@ object StoryComposerAutosave {
      * - **Restorable content, unchanged** from [previous] → [StoryDraftPersist.None].
      * - **Restorable content, changed** → [StoryDraftPersist.Save] with a fresh snapshot
      *   stamped [nowIso].
+     *
+     * A session that did not make the stored draft its own ([mayOverwriteStored] false — a door that
+     * seeded its matter) writes nothing over it, whatever the composer holds.
      */
     fun resolve(
         deck: StorySlideDeck,
@@ -81,8 +86,12 @@ object StoryComposerAutosave {
         repostOfId: String?,
         nowIso: String,
         previous: StoryComposerDraftSnapshot?,
+        visibilityUserIds: List<String> = emptyList(),
+        annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
+        mayOverwriteStored: Boolean = true,
     ): StoryDraftPersist {
-        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso)
+        if (!mayOverwriteStored && previous != null) return StoryDraftPersist.None
+        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations)
         if (!snapshot.isWorthRestoring) {
             val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
             return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
@@ -98,10 +107,16 @@ object StoryComposerAutosave {
      * asynchronous and may resolve after the first edit). A `null`, corrupt, or
      * content-empty [stored] draft is ignored (returns `null`), and so is a draft awaiting the
      * confirmation of its publication (#13417): it is already on its way, restoring it would
-     * publish it twice.
+     * publish it twice. A composer opened by a door that brings its own matter (a repost of someone
+     * else's story, #13430) restores nothing either: the stored draft is the author's own work and
+     * stays on the device, untouched, for the next plain opening (iOS `preservesStoredDraft`).
      */
-    fun restore(stored: StoryComposerDraftSnapshot?, deckIsPristine: Boolean): StoryComposerDraftSnapshot? {
-        if (!deckIsPristine) return null
+    fun restore(
+        stored: StoryComposerDraftSnapshot?,
+        deckIsPristine: Boolean,
+        seededByDoor: Boolean = false,
+    ): StoryComposerDraftSnapshot? {
+        if (!deckIsPristine || seededByDoor) return null
         if (stored == null || !stored.isWorthRestoring || stored.isAwaitingPublication) return null
         return stored
     }
@@ -121,7 +136,8 @@ object StoryComposerAutosave {
             deck.slides.all {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
-                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty()
+                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty() &&
+                    it.frame.isNeutral
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -133,6 +149,8 @@ fun StorySlideDeck.toDraftSnapshot(
     visibility: StoryVisibility,
     repostOfId: String?,
     nowIso: String,
+    visibilityUserIds: List<String> = emptyList(),
+    annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
     slides = slides.map {
         StoryDraftSlideSnapshot(
@@ -147,11 +165,18 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundLoop = it.backgroundLoop,
             elements = it.elements.map { element -> element.toDraftSnapshot() },
             stickers = it.stickers.map { sticker -> sticker.toDraftSnapshot() },
+            audio = it.audio,
+            fitMode = it.frame.fitMode,
+            backdrop = it.frame.backdrop,
+            opening = it.frame.opening?.let(SceneFrame::wire),
+            closing = it.frame.closing?.let(SceneFrame::wire),
         )
     },
     selectedId = selectedId,
     visibility = visibility.wire,
     repostOfId = repostOfId?.takeIf { it.isNotBlank() },
+    visibilityUserIds = visibilityUserIds,
+    annotations = annotations,
     updatedAt = nowIso,
 )
 
@@ -184,6 +209,13 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 background = it.background?.let(StoryBackgroundValue::parse),
                 backgroundMediaId = it.backgroundMediaId,
                 backgroundLoop = it.backgroundLoop,
+                audio = it.audio,
+                frame = SceneFrame(
+                    fitMode = it.fitMode,
+                    backdrop = it.backdrop,
+                    opening = SceneFrame.parseTransition(it.opening),
+                    closing = SceneFrame.parseTransition(it.closing),
+                ),
             )
         },
         selectedId = selectedId,
@@ -287,6 +319,8 @@ private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnaps
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        startSeconds = timing.startSeconds,
+        durationSeconds = timing.durationSeconds,
     )
 
 /**
@@ -304,4 +338,21 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        timing = me.meeshy.sdk.model.scene.StoryElementTiming(startSeconds, durationSeconds),
     ).normalised()
+
+/** What the composer's draft attaches beside its slides, in the durable form (#13451). */
+fun StoryComposerDraft.annotations(): StoryDraftAnnotations = StoryDraftAnnotations(
+    mentions = mentions,
+    mediaAlt = mediaAlt,
+    mediaCaption = mediaCaption,
+    allowSoundExtraction = allowSoundExtraction,
+)
+
+/** The draft with [annotations] put back (restore, reopening). */
+fun StoryComposerDraft.withAnnotations(annotations: StoryDraftAnnotations): StoryComposerDraft = copy(
+    mentions = annotations.mentions,
+    mediaAlt = annotations.mediaAlt,
+    mediaCaption = annotations.mediaCaption,
+    allowSoundExtraction = annotations.allowSoundExtraction,
+)

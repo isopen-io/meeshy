@@ -12,6 +12,8 @@
 # spécificateurs positionnels (%1$d). Comblé quand le lot de la fonctionnalité adopte la clé iOS
 # (ou la réécrit en %1$d).
 bare-specifier :feature:chat en chat_forward_members
+bare-specifier :feature:chat en viewer_contact_copied
+bare-specifier :feature:chat en viewer_doc_pages
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
@@ -173,6 +175,52 @@ bare-specifier :feature:game en game_spend_missing_reroll
 bare-specifier :feature:game en game_spend_missing_seal
 bare-specifier :feature:game en game_starFragments_one
 bare-specifier :feature:game en game_starFragments_other
+bare-specifier :feature:game en achievement_call_join_count
+bare-specifier :feature:game en achievement_call_join_count_one
+bare-specifier :feature:game en achievement_call_start_count
+bare-specifier :feature:game en achievement_call_start_count_one
+bare-specifier :feature:game en achievement_call_start_size
+bare-specifier :feature:game en achievement_community_create_count
+bare-specifier :feature:game en achievement_community_create_count_one
+bare-specifier :feature:game en achievement_community_create_size
+bare-specifier :feature:game en achievement_community_join_count
+bare-specifier :feature:game en achievement_community_join_count_one
+bare-specifier :feature:game en achievement_community_join_size
+bare-specifier :feature:game en achievement_conversation_create_count
+bare-specifier :feature:game en achievement_conversation_create_count_one
+bare-specifier :feature:game en achievement_conversation_join_count
+bare-specifier :feature:game en achievement_conversation_join_count_one
+bare-specifier :feature:game en achievement_conversation_join_size
+bare-specifier :feature:game en achievement_conversation_leave_count
+bare-specifier :feature:game en achievement_conversation_leave_count_one
+bare-specifier :feature:game en achievement_image_send_count
+bare-specifier :feature:game en achievement_image_send_count_one
+bare-specifier :feature:game en achievement_link_click_count
+bare-specifier :feature:game en achievement_link_click_count_one
+bare-specifier :feature:game en achievement_meesh_mint_count
+bare-specifier :feature:game en achievement_meesh_mint_count_one
+bare-specifier :feature:game en achievement_message_delete_count
+bare-specifier :feature:game en achievement_message_delete_count_one
+bare-specifier :feature:game en achievement_message_edit_count
+bare-specifier :feature:game en achievement_message_edit_count_one
+bare-specifier :feature:game en achievement_message_react_count
+bare-specifier :feature:game en achievement_message_react_count_one
+bare-specifier :feature:game en achievement_message_send_count
+bare-specifier :feature:game en achievement_message_send_count_one
+bare-specifier :feature:game en achievement_referral_complete_count
+bare-specifier :feature:game en achievement_referral_complete_count_one
+bare-specifier :feature:game en achievement_streak_hold_count
+bare-specifier :feature:game en achievement_streak_hold_count_one
+bare-specifier :feature:game en achievement_video_send_count
+bare-specifier :feature:game en achievement_video_send_count_one
+bare-specifier :feature:game en achievement_voice_send_count
+bare-specifier :feature:game en achievement_voice_send_count_one
+bare-specifier :feature:game en progression_level
+bare-specifier :feature:game en progression_obtained
+bare-specifier :feature:game en progression_streak_days
+bare-specifier :feature:game en reveal_badge_tier
+bare-specifier :feature:game en reveal_composed_subtitle
+bare-specifier :feature:game en reveal_streak_subtitle
 bare-specifier :feature:settings en account_contact_phone_too_short
 bare-specifier :feature:chat en composer_recent_addSelected
 bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
@@ -186,7 +234,6 @@ bare-specifier :feature:stories en stories_comments_count
 bare-specifier :feature:stories en stories_composer_slide_duration_value
 bare-specifier :feature:stories en stories_viewers_count
 bare-specifier :feature:stories en story_send_members
-
 # --- Quantité plurielle CLDR « many » absente en fr, es, pt ---------------------------------
 # CLDR exige one, many, other pour le français, l'espagnol et le portugais (« 1 million DE
 # réponses ») ; ces six <plurals> écrits à la main n'ont que one et other. On ne retouche pas
@@ -201,7 +248,6 @@ missing-quantity :feature:feed pt post_comments_view_all_replies
 missing-quantity :feature:stories es stories_publish_media_summary
 missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories pt stories_publish_media_summary
-
 # --- :feature:chat : dossiers ar, de, it partiels (chaînes générées seules) ----------------------
 # Les dossiers values-ar/de/it n'existent que par strings_generated.xml ; les chaînes écrites à la
 # main du module y restent en anglais tant que la génération des sept langues ne les comble pas.
@@ -1039,12 +1085,10 @@ missing-key :feature:chat it participant_profile_denied_can_send_videos
 missing-key :feature:chat it participant_profile_denied_can_send_audios
 missing-key :feature:chat it participant_profile_denied_can_send_links
 missing-key :feature:chat it participant_profile_denied_can_send_locations
-
 # --- feature:settings : ar, de, it ne portent que la précision du partage de position -------
 # La génération depuis iOS n a produit que les clés du partage de position dans ces trois
 # langues ; le reste des réglages (légal, notifications, ...) reste à générer pour ar, de, it
 # (./apps/android/meeshy.sh i18n). Le cliquet ne peut que rétrécir.
-
 # --- Intégration des lots Android du 2026-10-22 ------------------------------------------------
 # Le calque d'accueil (#11881) a ouvert values-ar, values-de et values-it dans :feature:auth avec ses
 # chaînes générées : les chaînes de connexion écrites à la main n'y ont pas encore de traduction.
@@ -1069,17 +1113,14 @@ bare-specifier :feature:conversations en my_share_links_joined_count
 bare-specifier :feature:conversations en shareLink_detail_concurrentMax
 bare-specifier :feature:conversations en shareLink_detail_createdOn
 bare-specifier :feature:conversations en shareLink_detail_usesUnlimited
-
 # Chaînes GÉNÉRÉES à un seul spécificateur adoptées par les lots fusionnés le 2026-10-22 au soir.
 bare-specifier :feature:auth en login_server_origin
 bare-specifier :feature:auth en signup_language_pill
 bare-specifier :feature:contacts en contacts_blocked_unblock_a11y
 bare-specifier :feature:contacts en contacts_blocked_unblock_message
-
 # Chaînes GÉNÉRÉES à un seul spécificateur (le générateur rend %s nu) relevées le 2026-10-23.
 bare-specifier :feature:auth en email_verification_subtitle
 bare-specifier :feature:auth en email_verification_subtitle_account_created
-
 # Chaîne GÉNÉRÉE à un seul spécificateur adoptée par #12810 (dialogues de confirmation
 # de la liste), relevée le 2026-10-25.
 bare-specifier :feature:conversations en dialogs_removal_message
@@ -1093,8 +1134,6 @@ bare-specifier :feature:stories en stories_viewer_profile_of
 bare-specifier :feature:settings en sessions_revoke_confirm_message
 bare-specifier :feature:conversations en accessibility_conversation_with
 bare-specifier :feature:conversations en accessibility_last_message_preview
-
-
 # --- :feature:calls reçoit ses premières locales (enregistrement consenti, a998eb5fd9) ---------
 # Ses chaînes écrites à la main n'existaient qu'en anglais ; avec values-ar…values-pt, chacune
 # devient une clé absente de ces locales. Comblé par le lot qui adopte les clés iOS des appels.
@@ -1598,6 +1637,7 @@ bare-specifier :feature:feed en hashtag_results_empty
 bare-specifier :feature:stories en my_stories_card_expired
 bare-specifier :feature:stories en my_stories_delete_selected
 bare-specifier :feature:stories en my_stories_delete_selected_error
+bare-specifier :feature:stories en composer_audience_sub_count
 bare-specifier :feature:feed en mood_spotlight_reply_placeholder
 bare-specifier :feature:auth en onboarding_global_reward
 bare-specifier :feature:auth en onboarding_story_reward
@@ -1607,6 +1647,9 @@ bare-specifier :feature:auth en link_signin_title
 bare-specifier :feature:auth en email_gate_sent
 bare-specifier :feature:auth en world_entry_enter
 bare-specifier :feature:auth en world_entry_language_greeting
+bare-specifier :feature:auth en link_switch_message_unknown_current
+bare-specifier :app en call_link_confirm_audio
+bare-specifier :app en call_link_confirm_video
 bare-specifier :feature:chat en message_detail_edits_previous_one
 bare-specifier :feature:chat en message_detail_edits_previous_other
 bare-specifier :feature:chat en message_detail_edits_version_n
@@ -1631,3 +1674,24 @@ bare-specifier :feature:chat en riviere_header_offscreen_right
 bare-specifier :feature:conversations en shareLink_arrivals_seeAll
 bare-specifier :feature:conversations en shareLink_arrivals_total
 bare-specifier :feature:chat en contact_card_a11y_label
+# Atelier « Imagine » (#13421) : le compteur de la galerie arrive en %d nu du catalogue iOS.
+bare-specifier :feature:chat en export_card_gallery_count
+# Étagère des sons (#13428) : compteurs et message de retrait adoptés tels quels du catalogue iOS, %d nu pour un seul argument.
+bare-specifier :feature:stories en story_sound_library_playCount
+bare-specifier :feature:stories en story_sound_library_postCount
+bare-specifier :feature:stories en story_sound_library_removeMessageUsed
+bare-specifier :feature:chat en chat_engagement_a11y_streak_days_one
+bare-specifier :feature:chat en chat_engagement_a11y_streak_days_other
+bare-specifier :feature:chat en chat_engagement_a11y_total_one
+bare-specifier :feature:chat en chat_engagement_a11y_total_other
+bare-specifier :feature:stories en composer_chip_align
+bare-specifier :feature:stories en composer_chip_rotation
+bare-specifier :feature:stories en composer_chip_size
+bare-specifier :feature:stories en composer_chip_style
+
+# --- Contenu visiteur et feuille de pieces jointes d'un invite (#13464) ---------------------
+# « %@ vous a partage ce reel » / « Partager dans %@ » : un seul argument, rendu nu par la generation.
+bare-specifier :feature:auth en visitor_shared_by_post
+bare-specifier :feature:auth en visitor_shared_by_reel
+bare-specifier :feature:auth en visitor_shared_by_story
+bare-specifier :feature:chat en guest_attach_title

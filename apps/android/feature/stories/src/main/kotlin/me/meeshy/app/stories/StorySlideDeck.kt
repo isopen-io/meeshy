@@ -1,11 +1,13 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryObjectPlacement
 import me.meeshy.sdk.model.composer.SceneObjectCaps
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -41,6 +43,10 @@ data class StorySlide(
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
     val backgroundLoop: Boolean = true,
+    /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
+    val frame: SceneFrame = SceneFrame(),
 )
 
 /**
@@ -97,6 +103,9 @@ data class StorySlideDeck(
     /** At least one slide carries a freehand-drawn stroke. */
     val hasDrawing: Boolean get() = slides.any { it.strokes.isNotEmpty() }
 
+    /** At least one slide carries a sound track (a borrowed or captured sound alone publishes). */
+    val hasAudio: Boolean get() = slides.any { it.audio.isNotEmpty() }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
@@ -110,12 +119,16 @@ data class StorySlideDeck(
                 slide.mediaIds.isNotEmpty() ||
                 slide.elements.any { it.isPublishable } ||
                 slide.stickers.any { it.isPublishable } ||
-                slide.strokes.isNotEmpty()
+                slide.strokes.isNotEmpty() ||
+                slide.audio.isNotEmpty()
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int
-        get() = (MAX_MEDIA_PER_SLIDE - selectedSlide.mediaIds.size).coerceAtLeast(0)
+        get() = SceneObjectCaps.remainingMediaSlots(selectedSlide.mediaIds.size, selectedSlide.audio.size)
+
+    /** La slide sélectionnée peut porter un média de plus : dix médias ET sons en tout (iOS `canAddMedia`). */
+    val selectedCanAddMedia: Boolean get() = selectedRemainingMediaSlots > 0
 
     /** Free text-element slots left on the **selected** slide; never negative. */
     val selectedRemainingTextSlots: Int
@@ -134,7 +147,11 @@ data class StorySlideDeck(
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
-    /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
+    /**
+     * Every slide's VISUAL media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). The shared ten
+     * (media + sounds, [selectedCanAddMedia]) gates ADDING only, as on iOS, whose publish gate counts nothing:
+     * a draft composed before the shared cap may carry more, and it still publishes, nothing dropped.
+     */
     fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
 
     /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
@@ -151,7 +168,7 @@ data class StorySlideDeck(
      */
     fun addMediaToSelected(mediaId: String): StorySlideDeck {
         val selected = selectedSlide
-        if (mediaId in selected.mediaIds || selected.mediaIds.size >= MAX_MEDIA_PER_SLIDE) return this
+        if (mediaId in selected.mediaIds || !selectedCanAddMedia) return this
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
             if (i == index) slide.copy(mediaIds = slide.mediaIds + mediaId) else slide
@@ -381,6 +398,10 @@ data class StorySlideDeck(
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.
      */
+    /** Réécrit le texte de CHAQUE slide (la publication est un seul niveau : retirer un hashtag les touche toutes). */
+    fun mapSlideTexts(transform: (String) -> String): StorySlideDeck =
+        copy(slides = slides.map { slide -> slide.copy(text = transform(slide.text)) })
+
     fun updateSelectedText(text: String): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(text = text) else slide }
@@ -395,6 +416,13 @@ data class StorySlideDeck(
     fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
+        return copy(slides = next)
+    }
+
+    /** Rewrites the **selected** slide's [SceneFrame] through [change], leaving every other slide untouched. */
+    fun updateSelectedFrame(change: (SceneFrame) -> SceneFrame): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(frame = change(slide.frame)) else slide }
         return copy(slides = next)
     }
 

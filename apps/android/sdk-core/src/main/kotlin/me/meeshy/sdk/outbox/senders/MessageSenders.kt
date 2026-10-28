@@ -49,7 +49,7 @@ public class SendMessageHandler @Inject constructor(
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        messageRepository.markSendFailed(row.cmid)
+        messageRepository.markSendFailed(row.cmid, row.lastError)
     }
 }
 

@@ -57,6 +57,7 @@ class NotificationChannelInstaller @Inject constructor(
                 setShowBadge(true)
             },
         )
+        me.meeshy.app.ongoing.OngoingChannel.ensure(context)
         // Renamed away from — delete the orphaned pre-drift channel so a returning
         // install doesn't carry a dead, possibly user-muted duplicate around forever.
         manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_MESSAGES)

@@ -241,17 +241,114 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `onFlagTap switches the displayed language to a translation`() = runTest {
+    fun `onFlagTap on a translation opens it under the text without replacing the displayed language`() = runTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
 
-        // System=en, regional=es → default resolution shows English; both are strip chips.
+        // System=en, regional=es → default resolution shows English; es is a second, readable language.
         val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
         vm.onFlagTap("es")
 
         vm.state.test {
             val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hello")
+            assertThat(s.secondaryTranslation?.content).isEqualTo("Hola")
+            assertThat(s.secondaryTranslation?.code).isEqualTo("es")
+        }
+    }
+
+    @Test
+    fun `the detail strip leaves out the language read and marks the secondary one, like iOS`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        // Rang 2 (es) : la puce marquee est celle du panneau ouvert, jamais celle du texte lu (en).
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+
+        vm.state.test {
+            val before = awaitItem()
+            assertThat(before.detailLanguageStrip.map { it.code }).doesNotContain("en")
+            assertThat(before.detailLanguageStrip.map { it.code }).containsAtLeast("fr", "es")
+            assertThat(before.detailLanguageStrip.none { it.isActive }).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.onFlagTap("es")
+        vm.state.test {
+            val after = awaitItem()
+            assertThat(after.post?.content).isEqualTo("Hello")
+            assertThat(after.detailLanguageStrip.single { it.isActive }.code).isEqualTo("es")
+            assertThat(after.secondaryTranslation?.code).isEqualTo("es")
+        }
+    }
+
+    @Test
+    fun `the detail strip offers no content-less language - those are asked from the explorer`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.detailLanguageStrip.map { it.code }).doesNotContain("de")
+            assertThat(s.post?.languageExplorer?.missing).contains("de")
+        }
+    }
+
+    @Test
+    fun `a second tap on the same translation closes the secondary panel`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onFlagTap("es")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hello")
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `onFlagTap on the original makes it the displayed text and clears the secondary panel`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onFlagTap("fr")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Bonjour")
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `picking a language in the explorer switches the displayed text and its chip together`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onLanguageSelected("es")
+
+        vm.state.test {
+            val s = awaitItem()
             assertThat(s.post?.content).isEqualTo("Hola")
             assertThat(s.post?.languageStrip?.first { it.code == "es" }?.isActive).isTrue()
+            assertThat(s.post?.languageExplorer?.translations?.first { it.code == "es" }?.isActive).isTrue()
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `picking the language already read keeps it instead of reverting`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onLanguageSelected("es")
+        vm.onLanguageSelected("es")
+
+        vm.state.test {
+            assertThat(awaitItem().post?.content).isEqualTo("Hola")
         }
     }
 
@@ -260,7 +357,7 @@ class PostDetailViewModelTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
 
         val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
-        vm.onFlagTap("es")
+        vm.onLanguageSelected("es")
         vm.onFlagTap("es")
 
         vm.state.test {

@@ -1,5 +1,8 @@
 package me.meeshy.app.chat
 
+import java.io.File
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.media.MediaIntake
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
@@ -30,8 +33,6 @@ import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.appearance.rememberConversationAppearance
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 
 /**
@@ -81,6 +82,11 @@ fun ChatScreen(
     val selectionController = remember(viewModel) { viewModel.controllers.find<MessageSelectionController>() }
     val selection by (selectionController?.selection ?: NO_SELECTION).collectAsStateWithLifecycle()
     BackHandler(enabled = selection.isActive, onBack = actions.endSelection)
+    val engagementController = remember(viewModel) { viewModel.controllers.find<ChatEngagementController>() }
+    val engagementSnapshot by (engagementController?.snapshot ?: NO_ENGAGEMENT).collectAsStateWithLifecycle()
+    val engagement = remember(engagementSnapshot, engagementController) {
+        ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
+    }
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
@@ -116,6 +122,7 @@ fun ChatScreen(
         readingMode = readingMode,
         pendingPlace = pendingPlace,
         selection = selection,
+        engagement = engagement,
     )
 
     ChatBackgroundHost(appearance) {
@@ -174,26 +181,30 @@ fun ChatScreen(
  * read through the exact same content-Uri glue as a locally picked one).
  */
 internal data class PickedAttachment(
-    val bytes: ByteArray,
+    val file: File,
     val fileName: String,
     val mimeType: String?,
-)
+) {
+    /** Les octets, pour une IMAGE à retoucher seulement : un média plus gros reste sur son fichier. */
+    val bytes: ByteArray get() = file.readBytes()
+}
 
 /**
- * Reads a document/photo the user picked from the system picker into memory,
- * resolving its display name and the platform's declared content-type. Returns
- * `null` when the stream cannot be opened (a revoked grant / deleted document) or
- * when the file is above the upload ceiling ([ComposerAttachmentLimits.MAX_UPLOAD_BYTES]):
- * a long video is never pulled whole into memory. The byte read and cursor query are
- * the Android-framework glue behind the pure send pipeline.
+ * Copies a document/photo the user picked from the system picker, IN A STREAM, into a private file
+ * ([MediaIntake]), resolving its display name and the platform's declared content-type. Returns
+ * `null` when the stream cannot be opened (a revoked grant / deleted document) or when the file is
+ * above the upload ceiling ([ComposerAttachmentLimits.MAX_UPLOAD_BYTES]), which stops the copy at
+ * the first octet over: a long video is never pulled into memory nor fully copied.
  */
 internal fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
     val resolver = context.contentResolver
-    val bytes = runCatching {
-        resolver.openInputStream(uri)?.use { readWithin(it, ComposerAttachmentLimits.MAX_UPLOAD_BYTES) }
-    }.getOrNull() ?: return null
     val fileName = queryDisplayName(resolver, uri) ?: uri.lastPathSegment ?: "attachment"
-    return PickedAttachment(bytes = bytes, fileName = fileName, mimeType = resolver.getType(uri))
+    val mimeType = resolver.getType(uri)
+    val item = runCatching {
+        resolver.openInputStream(uri)?.use { MediaIntake.copy(it, context.cacheDir, fileName, mimeType.orEmpty(), ComposerAttachmentLimits.MAX_UPLOAD_BYTES) }
+    }.getOrNull() ?: return null
+    val file = (item.source as? MediaUploadSource.OnDisk)?.file ?: return null
+    return PickedAttachment(file = file, fileName = fileName, mimeType = mimeType)
 }
 
 private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
@@ -205,18 +216,3 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
-/** Reads [input] whole, or `null` as soon as it runs past [maxBytes] — never more than the ceiling. */
-internal fun readWithin(input: InputStream, maxBytes: Long): ByteArray? {
-    val out = ByteArrayOutputStream()
-    val buffer = ByteArray(READ_BUFFER_BYTES)
-    var total = 0L
-    while (true) {
-        val read = input.read(buffer)
-        if (read < 0) return out.toByteArray()
-        total += read
-        if (total > maxBytes) return null
-        out.write(buffer, 0, read)
-    }
-}
-
-private const val READ_BUFFER_BYTES = 64 * 1024

@@ -24,6 +24,7 @@
     <string name="reels_menu_report">Segnala</string>
     <string name="reels_menu_share">Condividi</string>
     <string name="reels_mute">Muto</string>
+    <string name="reels_open_failure_back">Indietro</string>
     <string name="reels_repost">Ricondividi</string>
     <string name="reels_scrub">Avanti o indietro</string>
     <string name="reels_share">Condividi</string>

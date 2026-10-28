@@ -28,7 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
@@ -77,20 +77,29 @@ public fun ComposerRetouchScreen(
     var text by remember { mutableStateOf(ComposerRetouchTextBoard()) }
     val newTextId = { UUID.randomUUID().toString() }
     val scope = rememberCoroutineScope()
+    val paintContext = LocalRetouchPaintContext.current
     val previewSource = remember(source) { scaledCopy(source, ComposerLookCanvas.PREVIEW_LONG_SIDE) }
     val thumbSource = remember(source) { scaledCopy(source, ComposerLookCanvas.THUMBNAIL_LONG_SIDE) }
     var preview by remember { mutableStateOf(previewSource) }
-    val face by produceState<CallFaceLandmarks?>(null, source) { value = withContext(Dispatchers.Default) { RetouchFaceDetector.detect(previewSource) } }
+    val face by produceState<CallFaceLandmarks?>(null, source) { value = withContext(paintContext) { RetouchFaceDetector.detect(previewSource) } }
     val cropping = ComposerEditTools.showsBrackets(state.activeTools)
     val writing = ComposerEditTool.TEXT in state.activeTools && state.openFamily == null
     val previewCrop = if (cropping) null else state.crop
 
+    val glass by produceState<Bitmap?>(null, preview, text.fingerprint) {
+        if (!RetouchGlassPainter.hasGlass(text.texts)) {
+            value = null
+            return@produceState
+        }
+        delay(RetouchGlassPainter.SETTLE_MILLIS)
+        value = withContext(paintContext) { RetouchGlassPainter.panes(preview, text.texts) }
+    }
     val previewLook = if (cropping) state.look.withoutFrame else state.look
 
     LaunchedEffect(previewLook, previewCrop, face) {
         val look = previewLook
         preview = if (look.isUntouched && previewCrop == null) previewSource
-        else withContext(Dispatchers.Default) {
+        else withContext(paintContext) {
             ComposerLookPainter.paint(previewSource, look, author, ComposerLookCanvas.PREVIEW_LONG_SIDE, previewCrop, face)
         } ?: preview
     }
@@ -111,7 +120,7 @@ public fun ComposerRetouchScreen(
             val result = if (settled.delivery == ComposerRetouchDelivery.ORIGINAL && written.isEmpty()) {
                 ComposerRetouchResult.Original
             } else {
-                withContext(Dispatchers.Default) {
+                withContext(paintContext) {
                     ComposerLookPainter.paint(source, settled.look, author, ComposerLookCanvas.EXPORT_LONG_SIDE, settled.crop, face)
                         ?.let { RetouchTextPainter.composited(it, written) }
                 }?.let { ComposerRetouchResult.Rendered(it) }
@@ -140,7 +149,7 @@ public fun ComposerRetouchScreen(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Image(preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), preview.width, preview.height) }
-            if (!cropping) RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it })
+            if (!cropping) RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it }, glass = glass)
             if (cropping) {
                 RetouchCropBrackets(
                     crop = state.crop,

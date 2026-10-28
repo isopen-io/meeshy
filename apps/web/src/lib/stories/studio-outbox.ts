@@ -1,4 +1,5 @@
-import { idbDeviceRecords, type DeviceRecords } from '@/lib/send/send-queue';
+import { idbDeviceRecords, type DeviceRecords } from '@/lib/send/device-records';
+import { studioOutboxFilesKey, studioOutboxMetaKey } from './studio-outbox-records';
 
 import type { PublishChoice } from './publication-layout';
 import { isStudioDraftEmpty, STUDIO_PAGE_MAX, type StudioDraft } from './studio';
@@ -60,8 +61,8 @@ const DOORS: readonly StudioDoor[] = ['visual', 'overlay', 'sound'];
 
 const slotKey = (pageId: string, door: StudioDoor): string => `${pageId}:${door}`;
 
-const filesKey = (viewerId: string): string => `studio-outbox.${viewerId}.files`;
-const metaKey = (viewerId: string): string => `studio-outbox.${viewerId}.meta`;
+const filesKey = studioOutboxFilesKey;
+const metaKey = studioOutboxMetaKey;
 
 const assetOf = (page: StudioPage, door: StudioDoor): StudioVisualAsset | StudioSoundAsset | null =>
   door === 'sound' ? page.sound : door === 'visual' ? page.background : page.overlay;
@@ -185,6 +186,9 @@ const sameFiles = (a: readonly (readonly [string, File])[] | undefined, b: reado
 export function createStudioOutbox(records: DeviceRecords): StudioOutbox {
   const writtenFiles = new Map<string, readonly (readonly [string, File])[]>();
   const writtenMeta = new Map<string, string>();
+  /* Un effacement périme les écritures demandées avant lui : une publication
+     confirmée ne revient jamais par une écriture restée en file. */
+  const epochs = new Map<string, number>();
   let chain: Promise<unknown> = Promise.resolve();
 
   const serial = <T,>(work: () => Promise<T>): Promise<T> => {
@@ -214,8 +218,10 @@ export function createStudioOutbox(records: DeviceRecords): StudioOutbox {
     }
   };
 
-  const save = (viewerId: string, record: StudioOutboxRecord): Promise<boolean> =>
-    serial(async () => {
+  const save = (viewerId: string, record: StudioOutboxRecord): Promise<boolean> => {
+    const epoch = epochs.get(viewerId) ?? 0;
+    return serial(async () => {
+      if ((epochs.get(viewerId) ?? 0) !== epoch) return true;
       try {
         if (record.slots.length === 0 && record.intent === null) {
           if (writtenFiles.get(viewerId)?.length === 0 && writtenMeta.get(viewerId) === '') return true;
@@ -240,6 +246,7 @@ export function createStudioOutbox(records: DeviceRecords): StudioOutbox {
         return false;
       }
     });
+  };
 
   async function clearNow(viewerId: string): Promise<void> {
     writtenFiles.delete(viewerId);
@@ -250,8 +257,9 @@ export function createStudioOutbox(records: DeviceRecords): StudioOutbox {
     writtenMeta.set(viewerId, '');
   }
 
-  const clear = (viewerId: string): Promise<boolean> =>
-    serial(async () => {
+  const clear = (viewerId: string): Promise<boolean> => {
+    epochs.set(viewerId, (epochs.get(viewerId) ?? 0) + 1);
+    return serial(async () => {
       try {
         await clearNow(viewerId);
         return true;
@@ -261,6 +269,7 @@ export function createStudioOutbox(records: DeviceRecords): StudioOutbox {
         return false;
       }
     });
+  };
 
   return { load, save, clear };
 }

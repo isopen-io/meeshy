@@ -1,0 +1,193 @@
+package me.meeshy.sdk.media.scene
+
+import com.google.common.truth.Truth.assertThat
+import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.media.CaptureGallery
+import me.meeshy.sdk.model.composer.scene.SceneExportDestination
+import me.meeshy.sdk.model.composer.scene.SceneExportRecipe
+import me.meeshy.sdk.model.composer.scene.SceneExportState
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SceneExportCoordinatorTest {
+
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private class FakeRunner(
+        private val gate: CompletableDeferred<Unit>? = null,
+        private val failure: Throwable? = null,
+    ) : SceneTransformRunner {
+        val jobs = mutableListOf<SceneExportJob>()
+
+        override suspend fun run(job: SceneExportJob, onProgress: (Float) -> Unit) {
+            jobs += job
+            job.output.writeText("partiel")
+            onProgress(0.5f)
+            gate?.await()
+            failure?.let { throw it }
+            job.output.writeText("complet")
+            onProgress(1f)
+        }
+    }
+
+    private class FakeGallery(private val accepts: Boolean = true) : CaptureGallery {
+        val videos = mutableListOf<String>()
+        override suspend fun saveImage(jpeg: ByteArray, displayName: String): Boolean = true
+        override suspend fun saveVideo(file: File, displayName: String): Boolean {
+            videos += displayName
+            return accepts
+        }
+    }
+
+    private fun TestScope.coordinator(runner: SceneTransformRunner, gallery: CaptureGallery = FakeGallery()) =
+        SceneExportCoordinator(
+            runner = runner,
+            gallery = gallery,
+            tempDirectory = folder.newFolder("exports"),
+            scope = this,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            nowMillis = { 1_700_000_000_000L },
+        )
+
+    private fun job(output: File) = SceneExportJob(
+        recipe = SceneExportRecipe.of(3.0, null, emptyList()),
+        backgroundFile = null,
+        overlay = null,
+        soundFiles = emptyMap(),
+        output = output,
+    )
+
+    @Test
+    fun `la galerie recoit le fichier puis le temporaire est efface`() = runTest {
+        val gallery = FakeGallery()
+        val c = coordinator(FakeRunner(), gallery)
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Saved)
+        assertThat(gallery.videos).containsExactly("meeshy-scene-1700000000000.mp4")
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `une galerie qui refuse est un echec et rien ne traine`() = runTest {
+        val c = coordinator(FakeRunner(), FakeGallery(accepts = false))
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `le partage garde le fichier jusqu a la fermeture de la feuille`() = runTest {
+        val c = coordinator(FakeRunner())
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        advanceUntilIdle()
+        val ready = c.state.value as SceneExportState.Ready
+        assertThat(File(ready.path).readText()).isEqualTo("complet")
+        c.finishSharing()
+        assertThat(File(ready.path).exists()).isFalse()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Idle)
+    }
+
+    @Test
+    fun `un echec du moteur efface le fichier partiel`() = runTest {
+        val c = coordinator(FakeRunner(failure = IllegalStateException("codec")))
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `annuler en plein bake arrete le moteur, efface le partiel et rend le repos`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val runner = FakeRunner(gate = gate)
+        val c = coordinator(runner)
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        runCurrent()
+        assertThat((c.state.value as SceneExportState.Running).fraction).isEqualTo(0.5f)
+        c.cancel()
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Idle)
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `un second export pendant le bake est ignore`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val runner = FakeRunner(gate = gate)
+        val c = coordinator(runner)
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        runCurrent()
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(runner.jobs).hasSize(1)
+    }
+
+    @Test
+    fun `une preparation qui echoue (media introuvable) est un echec propre`() = runTest {
+        val c = coordinator(FakeRunner())
+        c.export(SceneExportDestination.SHARE) { _, _ -> error("fond introuvable") }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+    }
+
+    @Test
+    fun `le message d echec acquitte rend le repos et permet de relancer`() = runTest {
+        val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        advanceUntilIdle()
+        c.acknowledge()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Idle)
+    }
+
+    @Test
+    fun `le dossier de travail est efface avec le bake, reussi ou non`() = runTest {
+        val seen = mutableListOf<File>()
+        val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
+        c.export(SceneExportDestination.SHARE) { out, work ->
+            work.mkdirs()
+            File(work, "fond.png").writeText("png")
+            seen += work
+            job(out)
+        }
+        advanceUntilIdle()
+        assertThat(seen.single().exists()).isFalse()
+    }
+
+    @Test
+    fun `remis a une autre appli, le fichier reste et le prochain export balaie le dossier`() = runTest {
+        val c = coordinator(FakeRunner())
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        advanceUntilIdle()
+        val shared = File((c.state.value as SceneExportState.Ready).path)
+        c.handedOver()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Idle)
+        assertThat(shared.exists()).isTrue()
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(shared.exists()).isFalse()
+    }
+
+    @Test
+    fun `le calque peint est libere quand le bake s arrete, quelle qu en soit la raison`() = runTest {
+        var released = 0
+        val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
+        c.export(SceneExportDestination.SHARE) { out, _ ->
+            SceneExportJob(SceneExportRecipe.of(3.0, null, emptyList()), null, null, emptyMap(), out) { released++ }
+        }
+        advanceUntilIdle()
+        assertThat(released).isEqualTo(1)
+    }
+}

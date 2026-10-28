@@ -1,10 +1,48 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
+    <string name="audio_editor_apply">تطبيق التعديلات</string>
+    <string name="audio_editor_close">إغلاق</string>
+    <string name="audio_editor_error_generic">فشل التعديل.</string>
+    <string name="audio_editor_error_load">تعذّر تحميل هذا الصوت.</string>
+    <string name="audio_editor_fade_in">تلاشٍ عند البداية</string>
+    <string name="audio_editor_fade_out">تلاشٍ عند النهاية</string>
+    <string name="audio_editor_mode_pro">احترافي</string>
+    <string name="audio_editor_mode_simple">بسيط</string>
+    <string name="audio_editor_op_fade">تلاشٍ</string>
+    <string name="audio_editor_op_gain">مستوى الصوت</string>
+    <string name="audio_editor_op_original">الأصل</string>
+    <string name="audio_editor_op_removerange">مقطع محذوف</string>
+    <string name="audio_editor_op_speed">السرعة</string>
+    <string name="audio_editor_op_trim">مقصوص</string>
+    <string name="audio_editor_pause">إيقاف مؤقت</string>
+    <string name="audio_editor_play">تشغيل</string>
+    <string name="audio_editor_preparing">جارٍ تحضير الصوت…</string>
+    <string name="audio_editor_processing">جارٍ المعالجة…</string>
+    <string name="audio_editor_redo">إعادة</string>
+    <string name="audio_editor_reset">إعادة تعيين</string>
+    <string name="audio_editor_split_hint">حدّد المقطع المراد حذفه.</string>
+    <string name="audio_editor_tool_fade">تلاشٍ</string>
+    <string name="audio_editor_tool_speed">السرعة</string>
+    <string name="audio_editor_tool_split">قص</string>
+    <string name="audio_editor_tool_transcribe">نسخ نصي</string>
+    <string name="audio_editor_tool_trim">اقتصاص</string>
+    <string name="audio_editor_tool_volume">مستوى الصوت</string>
+    <string name="audio_editor_trim_hint">اسحب المقابض للاحتفاظ بجزء.</string>
+    <string name="audio_editor_undo">تراجع</string>
+    <string name="audio_editor_use">استخدام الصوت</string>
+    <string name="audio_editor_volume_normal">عادي</string>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
+    <string name="audio_split_handle_end">نهاية القص</string>
+    <string name="audio_split_handle_start">بداية القص</string>
+    <string name="audio_trim_handle_end">نهاية التحديد</string>
+    <string name="audio_trim_handle_start">بداية التحديد</string>
     <string name="avatar_a11y_mood">المزاج %s</string>
+    <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
     <string name="bubble_story_citation_answer">رد على القصة</string>
     <string name="bubble_story_citation_open_hint">يفتح القصة المقتبسة</string>
     <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
+    <string name="capture_microphone_denied">تم رفض الميكروفون — سيكون الفيديو صامتًا. اضغط لفتح الإعدادات</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>
@@ -28,6 +66,7 @@
     <string name="focal_focus_add_reaction">إضافة تفاعل</string>
     <string name="focal_focus_translation_detail">تفاصيل الترجمة</string>
     <string name="focal_row_you">أنت</string>
+    <string name="language_strip_more">لغات أخرى</string>
     <string name="location_fullscreen_directions">المسار</string>
     <string name="location_fullscreen_mapStyle">نمط الخريطة</string>
     <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
@@ -125,6 +164,18 @@
     <string name="retouch_text_align_center">توسيط</string>
     <string name="retouch_text_align_left">يسار</string>
     <string name="retouch_text_align_right">يمين</string>
+    <string name="retouch_text_background">خلفية النص</string>
+    <string name="retouch_text_bg_amber">كهرماني</string>
+    <string name="retouch_text_bg_black">أسود</string>
+    <string name="retouch_text_bg_black65" formatted="false">أسود 65%</string>
+    <string name="retouch_text_bg_glass">زجاج</string>
+    <string name="retouch_text_bg_green">أخضر</string>
+    <string name="retouch_text_bg_indigo">نيلي</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">نيلي 65%</string>
+    <string name="retouch_text_bg_pink">وردي</string>
+    <string name="retouch_text_bg_red">أحمر</string>
+    <string name="retouch_text_bg_white">أبيض</string>
+    <string name="retouch_text_bg_white65" formatted="false">أبيض 65%</string>
     <string name="retouch_text_color">لون النص</string>
     <string name="retouch_text_style_bold">عريض</string>
     <string name="retouch_text_style_classic">كلاسيكي</string>

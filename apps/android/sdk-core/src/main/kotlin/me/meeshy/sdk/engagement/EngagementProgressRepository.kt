@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.game.engagement.MeeshMintResult
 import me.meeshy.sdk.net.api.EngagementApi
 import me.meeshy.sdk.net.api.MeeshMintRequest
 import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * La source de la progression — port de `EngagementProgressService` iOS : lecture de `GET /me/engagement` et frappe
@@ -41,7 +42,8 @@ class EngagementProgressRepository(
 ) : PerAccountCache {
 
     @Inject
-    constructor(api: EngagementApi, dao: KeyedJsonCacheDao) : this(api, KeyedJsonCache(dao), SystemCacheClock)
+    constructor(api: EngagementApi, dao: KeyedJsonCacheDao, fence: AccountFence) :
+        this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
 
     /**
      * La progression du compte, cache d'abord. [onSyncError] reçoit l'échec d'une revalidation silencieuse :

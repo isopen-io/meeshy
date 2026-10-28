@@ -14,7 +14,7 @@ internal object FeedPendingMedia {
         id = cmid,
         url = preview.orEmpty(),
         mimeType = item.mimeType,
-        fileSize = item.bytes.size.toLong(),
+        fileSize = item.sizeBytes,
         width = null,
         height = null,
         durationMs = null,

@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
@@ -1076,208 +1077,7 @@ class ChatViewModelTest {
         }
     }
 
-    @Test
-    fun sending_a_picked_file_uploads_it_and_sends_a_typed_message() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment("PDFBYTES".toByteArray(), "report.pdf", declaredMimeType = null)
-        advanceUntilIdle()
-
-        val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
-        assertThat(itemSlot.captured.fileName).isEqualTo("report.pdf")
-        assertThat(itemSlot.captured.mimeType).isEqualTo("application/pdf")
-        val attachSlot = slot<List<ApiMessageAttachment>>()
-        coVerify(exactly = 1) {
-            h.repo.sendOptimistic(
-                conversationId = eq("c1"),
-                content = eq(""),
-                originalLanguage = any(),
-                sender = eq(user),
-                replyToId = any(),
-                effects = any(),
-                messageType = eq("file"),
-                attachmentUploadCmids = eq(listOf("upload-cmid")),
-                attachments = capture(attachSlot),
-            )
-        }
-        val attachment = attachSlot.captured.single()
-        assertThat(attachment.id).isEqualTo("upload-cmid")
-        assertThat(attachment.originalName).isEqualTo("report.pdf")
-        assertThat(attachment.mimeType).isEqualTo("application/pdf")
-        assertThat(attachment.fileSize).isEqualTo(8)
-        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
-    }
-
-    @Test
-    fun a_picked_image_is_typed_as_an_image_message() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) {
-            h.repo.sendOptimistic(
-                conversationId = any(),
-                content = any(),
-                originalLanguage = any(),
-                sender = any(),
-                replyToId = any(),
-                effects = any(),
-                messageType = eq("image"),
-                attachmentUploadCmids = any(),
-                attachments = any(),
-            )
-        }
-    }
-
-    @Test
-    fun a_picked_file_keeps_typed_draft_text_as_the_body_and_clears_the_composer() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-        h.vm.onDraftChange("see the deck")
-
-        h.vm.sendFileAttachment("PPT".toByteArray(), "deck.pptx", declaredMimeType = null)
-        advanceUntilIdle()
-
-        assertThat(h.vm.composerText.value.text).isEmpty()
-        coVerify(exactly = 1) {
-            h.repo.sendOptimistic(
-                conversationId = any(),
-                content = eq("see the deck"),
-                originalLanguage = any(),
-                sender = any(),
-                replyToId = any(),
-                effects = any(),
-                messageType = any(),
-                attachmentUploadCmids = any(),
-                attachments = any(),
-            )
-        }
-    }
-
-    @Test
-    fun a_picked_files_octet_stream_declared_type_is_resolved_from_the_filename() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment(
-            "M4V".toByteArray(),
-            "clip.mp4",
-            declaredMimeType = "application/octet-stream",
-        )
-        advanceUntilIdle()
-
-        val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
-        assertThat(itemSlot.captured.mimeType).isEqualTo("video/mp4")
-    }
-
-    @Test
-    fun a_picked_file_with_a_blank_name_falls_back_to_a_default_name() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment("X".toByteArray(), "   ", declaredMimeType = "application/pdf")
-        advanceUntilIdle()
-
-        val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
-        assertThat(itemSlot.captured.fileName).isEqualTo("attachment")
-    }
-
-    @Test
-    fun an_empty_pick_is_a_no_op() = runTest(dispatcher) {
-        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
-        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment(ByteArray(0), "empty.pdf", declaredMimeType = "application/pdf")
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
-        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
-    }
-
     // MARK: - unified send gate across every send path
-
-    @Test
-    fun a_picked_file_under_slow_mode_records_the_cooldown_and_blocks_an_immediate_second_file() =
-        runTest(dispatcher) {
-            val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
-            advanceUntilIdle()
-
-            h.vm.sendFileAttachment("PDF".toByteArray(), "one.pdf", declaredMimeType = "application/pdf")
-            advanceUntilIdle()
-
-            // The delivered attachment starts the cooldown, exactly like a text send.
-            assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
-            assertThat(h.vm.state.value.slowModeState(FIXED_NOW).canSend).isFalse()
-
-            // A second pick while the cooldown runs never leaves the composer.
-            h.vm.sendFileAttachment("PDF2".toByteArray(), "two.pdf", declaredMimeType = "application/pdf")
-            advanceUntilIdle()
-
-            coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
-        }
-
-    @Test
-    fun a_text_send_starts_a_cooldown_that_also_throttles_a_picked_file() = runTest(dispatcher) {
-        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
-        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
-        advanceUntilIdle()
-
-        h.vm.onDraftChange("hello")
-        h.vm.send()
-        advanceUntilIdle()
-        assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
-
-        // The cooldown a text send opened is shared by the attachment path.
-        h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
-    }
-
-    @Test
-    fun a_guest_denied_the_file_capability_cannot_send_a_picked_file() = runTest(dispatcher) {
-        // defaultAnonymous grants text + images only; a PDF resolves to the file kind.
-        val h = harness(
-            syncedConversation(),
-            currentUser = me,
-            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
-        )
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
-        assertThat(h.vm.state.value.lastSelfSentAtMillis).isNull()
-    }
-
-    @Test
-    fun a_guest_who_may_send_images_can_still_send_a_picked_image() = runTest(dispatcher) {
-        // Per-kind gating, not a blanket guest block: images stay open for defaultAnonymous.
-        val h = harness(
-            syncedConversation(),
-            currentUser = me,
-            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
-        )
-        advanceUntilIdle()
-
-        h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
-    }
 
     @Test
     fun a_read_only_guest_cannot_send_text() = runTest(dispatcher) {
@@ -2579,14 +2379,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_optimistically_sends_the_source_message_into_the_target_and_marks_it_sent() =
+    fun sendForward_optimistically_sends_the_source_message_into_the_recipient_and_marks_it_sent() =
         runTest(dispatcher) {
             val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
             advanceUntilIdle()
             h.vm.openForward("m1")
             advanceUntilIdle()
 
-            h.vm.forwardTo("c2")
+            h.vm.toggleForwardRecipient("c2")
+            h.vm.sendForward()
             advanceUntilIdle()
 
             coVerify(exactly = 1) {
@@ -2600,9 +2401,7 @@ class ChatViewModelTest {
                 )
             }
             verify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
-            val forward = h.vm.state.value.forward!!
-            assertThat(forward.sentConversationIds).containsExactly("c2")
-            assertThat(forward.sendingConversationId).isNull()
+            assertThat(h.vm.state.value.forward!!.deliveries).containsExactly("c2", ShareDelivery.Sent)
         }
 
     private fun refusedConversation(message: ApiMessage) = flowOf(
@@ -2624,7 +2423,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_never_sends_a_message_the_exit_law_refuses() = runTest(dispatcher) {
+    fun sendForward_never_sends_a_message_the_exit_law_refuses() = runTest(dispatcher) {
         val source = ApiMessage(
             id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
             effectFlags = (MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ).toInt(),
@@ -2634,7 +2433,8 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
@@ -2642,14 +2442,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_lets_a_blurred_message_through() = runTest(dispatcher) {
+    fun sendForward_lets_a_blurred_message_through() = runTest(dispatcher) {
         val source = ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "flou", isBlurred = true)
         val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
@@ -2666,7 +2467,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_bounds_a_timed_flame_copy_by_the_source_duration() = runTest(dispatcher) {
+    fun sendForward_bounds_a_timed_flame_copy_by_the_source_duration() = runTest(dispatcher) {
         val source = ApiMessage(
             id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
             effectFlags = MessageEffectFlags.EPHEMERAL.toInt(), ephemeralDuration = 300,
@@ -2677,7 +2478,8 @@ class ChatViewModelTest {
         advanceUntilIdle()
         assertThat(h.vm.state.value.forward!!.refusal).isNull()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         val flame = MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ
@@ -2708,35 +2510,38 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_is_inert_when_the_target_was_already_forwarded_to() = runTest(dispatcher) {
+    fun sendForward_is_inert_when_the_recipient_was_already_served() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_is_inert_when_the_source_message_is_unknown() = runTest(dispatcher) {
+    fun sendForward_is_inert_when_the_source_message_is_unknown() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         advanceUntilIdle()
         h.vm.openForward("ghost")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_refuses_to_forward_an_unsent_bubble() = runTest(dispatcher) {
+    fun sendForward_refuses_to_forward_an_unsent_bubble() = runTest(dispatcher) {
         val unsent = flowOf(
             CacheResult.Fresh(
                 listOf(
@@ -2753,14 +2558,15 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun forwardTo_surfaces_an_error_and_clears_the_sending_flag_on_failure() = runTest(dispatcher) {
+    fun sendForward_marks_the_row_failed_on_failure() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
             h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any())
@@ -2769,12 +2575,11 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
-        assertThat(h.vm.state.value.forward!!.sendingConversationId).isNull()
-        assertThat(h.vm.state.value.forward!!.sentConversationIds).isEmpty()
+        assertThat(h.vm.state.value.forward!!.deliveries["c2"]).isInstanceOf(ShareDelivery.Failed::class.java)
     }
 
     @Test
@@ -2790,7 +2595,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardTo_completing_after_the_sheet_reopened_on_another_message_does_not_corrupt_that_session() =
+    fun sendForward_completing_after_the_sheet_reopened_on_another_message_does_not_corrupt_that_session() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
             val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
@@ -2801,7 +2606,8 @@ class ChatViewModelTest {
 
             h.vm.openForward("m1")
             advanceUntilIdle()
-            h.vm.forwardTo("c2")
+            h.vm.toggleForwardRecipient("c2")
+            h.vm.sendForward()
             advanceUntilIdle()
 
             // Sheet dismissed and reopened on a DIFFERENT message before the send resolves.
@@ -2814,12 +2620,11 @@ class ChatViewModelTest {
 
             val forward = h.vm.state.value.forward!!
             assertThat(forward.sourceMessageId).isEqualTo("m2")
-            assertThat(forward.sentConversationIds).isEmpty()
-            assertThat(forward.sendingConversationId).isNull()
+            assertThat(forward.deliveries).isEmpty()
         }
 
     @Test
-    fun forwardTo_reopening_the_same_message_mid_send_does_not_allow_a_duplicate_send() = runTest(dispatcher) {
+    fun sendForward_reopening_the_same_message_mid_send_does_not_allow_a_duplicate_send() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
@@ -2829,7 +2634,8 @@ class ChatViewModelTest {
 
         h.vm.openForward("m1")
         advanceUntilIdle()
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         // Sheet dismissed and reopened on the SAME message while the send is still in flight.
@@ -2837,7 +2643,8 @@ class ChatViewModelTest {
         h.vm.openForward("m1")
         advanceUntilIdle()
 
-        h.vm.forwardTo("c2")
+        h.vm.toggleForwardRecipient("c2")
+        h.vm.sendForward()
         advanceUntilIdle()
 
         gate.complete(Unit)

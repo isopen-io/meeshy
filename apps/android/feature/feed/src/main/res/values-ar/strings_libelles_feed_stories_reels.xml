@@ -80,4 +80,5 @@
         <item quantity="many">يمكنك إرفاق %1$d عنصرًا كحد أقصى</item>
         <item quantity="other">يمكنك إرفاق %1$d عنصر كحد أقصى</item>
     </plurals>
+    <string name="status_composer_emoji_too_long">هذا الرمز التعبيري طويل جدًا لحالة — اختر رمزًا آخر.</string>
 </resources>

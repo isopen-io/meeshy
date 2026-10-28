@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_location_refused">Nicht gesendet: Der Standort dieser Datei konnte nicht entfernt werden. Tippe, um sie zu entfernen, und wähle eine andere Datei.</string>
+    <string name="bubble_failed_location_remove">Diese nicht gesendete Nachricht entfernen</string>
+</resources>

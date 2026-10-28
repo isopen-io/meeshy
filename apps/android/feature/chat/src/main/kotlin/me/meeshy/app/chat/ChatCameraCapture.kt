@@ -54,6 +54,16 @@ object ChatCameraCaptureFile {
     /** The rendered photo a retouch hands back (#12614), e.g. `"chat_retouch_1700000000000.jpg"`. */
     fun nextRetouched(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$PHOTO_EXTENSION"
 
+    /**
+     * A retouched capture written under a GENERATED [token], keeping only a safe extension (1–5 ASCII letters or
+     * digits) of the provider-supplied [displayName]: e.g. `nextRetouchedNamed("ab", "Vacances.PNG") == "chat_retouch_ab.png"`.
+     */
+    fun nextRetouchedNamed(token: String, displayName: String): String {
+        val extension = displayName.substringAfterLast('.', "").lowercase()
+            .takeIf { it.length in 1..5 && it.all { c -> c in 'a'..'z' || c in '0'..'9' } }
+        return "$RETOUCHED_PREFIX$token" + (extension?.let { ".$it" } ?: PHOTO_EXTENSION)
+    }
+
     /** The copy of a captured video a retouch reads (#12650), e.g. `"chat_video_source_1700000000000.mp4"`. */
     fun nextVideoSource(nowMillis: Long): String = "${VIDEO_PREFIX}source_$nowMillis$VIDEO_EXTENSION"
 

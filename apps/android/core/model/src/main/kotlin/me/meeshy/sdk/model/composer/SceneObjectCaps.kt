@@ -36,6 +36,11 @@ object SceneObjectCaps {
     /** La scène peut-elle porter un média ou un son de plus (dix en tout) ? */
     fun canAddMedia(lists: SceneLists): Boolean = mediaCount(lists) < MEDIA
 
+    /** Les places restantes sous les dix, médias visuels et sons confondus ; jamais négatif. */
+    fun remainingMediaSlots(visualMedia: Int, audios: Int): Int = (MEDIA - visualMedia - audios).coerceAtLeast(0)
+
+    fun canAddMedia(visualMedia: Int, audios: Int): Boolean = remainingMediaSlots(visualMedia, audios) > 0
+
     fun verdict(entry: Entry, lists: SceneLists): Verdict = when (entry) {
         Entry.TEXT -> refuseIf(lists.texts.size >= TEXT, Reason.TEXT_FULL)
         Entry.STICKER -> refuseIf(lists.stickers.size >= STICKER, Reason.STICKER_FULL)

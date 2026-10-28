@@ -127,3 +127,23 @@ public class SecureAnonymousSessionStore(
         private const val KEY = "anonymous_session"
     }
 }
+
+/**
+ * Une session invitee ne coexiste jamais avec un COMPTE : des qu'un JWT est detenu, le contexte invite persiste est un
+ * reste (session d'avant la mise a jour, jetons vides par un refus sans deconnexion) — il est ECARTE et efface au lieu
+ * de brider le composeur du compte, dans toutes ses conversations, avec les droits et les familles de l'invite.
+ */
+public class AccountAwareAnonymousSessionStore(
+    private val delegate: AnonymousSessionStore,
+    private val tokenStore: me.meeshy.sdk.net.TokenStore,
+) : AnonymousSessionStore {
+    override suspend fun load(): AnonymousSessionContext? {
+        if (tokenStore.jwt == null) return delegate.load()
+        delegate.clear()
+        return null
+    }
+
+    override suspend fun save(context: AnonymousSessionContext) = delegate.save(context)
+
+    override suspend fun clear() = delegate.clear()
+}

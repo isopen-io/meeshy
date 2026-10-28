@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
+import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
@@ -74,9 +75,16 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
     val memory = remember(appContext) { ChatHeaderMemory(appContext) }
     var expanded by remember(state.conversationId) { mutableStateOf(memory.isExpanded(state.conversationId)) }
     SideEffect { host.chrome.isHeaderExpanded = expanded }
+    // La Flamme masquée d'un toucher revient au prochain dépliement (iOS `HeaderFlameVisibility`).
+    var flameDismissed by remember(state.conversationId) { mutableStateOf(memory.isFlameDismissed(state.conversationId)) }
     val toggle: () -> Unit = {
         expanded = !expanded
         memory.setExpanded(expanded, state.conversationId)
+        val dismissedNow = HeaderFlameLaw.dismissedAfterHeaderExpanded(expanded, flameDismissed)
+        if (dismissedNow != flameDismissed) {
+            flameDismissed = dismissedNow
+            memory.setFlameDismissed(dismissedNow, state.conversationId)
+        }
     }
     val peerPresence = rememberPresence(state.directPeerUserId)
     val headerAvatar: @Composable (AvatarContext) -> Unit = { context ->
@@ -161,7 +169,18 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                             )
                         }
                     },
-                    avatar = { headerAvatar(AvatarContext.ConversationHeaderCollapsed) },
+                    avatar = {
+                        HeaderFlameDecoration(
+                            snapshot = host.engagement.snapshot,
+                            sent = host.engagement.sent,
+                            headerExpanded = expanded,
+                            dismissed = flameDismissed,
+                            onDismiss = {
+                                flameDismissed = true
+                                memory.setFlameDismissed(true, state.conversationId)
+                            },
+                        ) { headerAvatar(AvatarContext.ConversationHeaderCollapsed) }
+                    },
                     readingModeSlot = {
                         val readingMode = host.readingMode
                         if (readingMode != null && readingMode.state.showsChip) {

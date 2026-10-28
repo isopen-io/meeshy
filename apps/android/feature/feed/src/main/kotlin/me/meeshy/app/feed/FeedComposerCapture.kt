@@ -55,21 +55,6 @@ internal fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
         }
 }
 
-/**
- * Reads the picked content into a [MediaUploadItem] (bytes + advertised
- * filename + MIME). Returns null when the stream can't be opened. Pure-IO
- * glue — the filename/MIME defaulting lives in `MediaUpload`, so this stays a
- * thin reader. Mirror of `StoryComposerScreen`'s own private extension
- * (duplicated per this codebase's existing convention — see also
- * `RegistrationScreen`/`ProfileScreen`).
- */
-internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
-    val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
-    val mimeType = getType(uri).orEmpty()
-    val fileName = displayName(uri).orEmpty()
-    return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
-}
-
 /** The captured file's advertised name, `video.mp4` when the provider gives none. */
 internal fun ContentResolver.captureName(uri: Uri): String = displayName(uri)?.takeIf { it.isNotBlank() } ?: "video.mp4"
 

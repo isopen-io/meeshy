@@ -47,7 +47,9 @@ import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -57,6 +59,7 @@ import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -102,6 +105,7 @@ class ChatViewModel @Inject constructor(
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val blockCache: BlockCache = BlockCache(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -222,6 +226,7 @@ class ChatViewModel @Inject constructor(
         messageRepository = messageRepository,
         sessionRepository = sessionRepository,
         workManager = workManager,
+        blockedUserIds = { blockCache.currentBlockedIds },
     )
 
     private val fileDownload = ChatFileDownloadController(
@@ -561,13 +566,9 @@ class ChatViewModel @Inject constructor(
 
     fun send() = composer.send()
 
-    /** Sends a file picked from the system document/photo picker through the durable upload chain. */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        composer.sendFileAttachment(bytes, fileName, declaredMimeType)
-
     /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
-    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
+    fun onPickFile(file: java.io.File, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageFile(file, declaredMimeType, fileName)
 
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()
@@ -704,6 +705,12 @@ class ChatViewModel @Inject constructor(
 
     fun dismissFileDownload() = fileDownload.dismiss()
 
+    /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
+    internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
+            PieceOverlayModel.of(message, attachmentId, canReply = _state.value.viewerMayWrite, conversationIsEndToEnd = _state.value.isEndToEnd) { resolveMediaUrl(it, config.apiBaseUrl) }
+        }
+
     // --- Forward --------------------------------------------------------------------------
 
     /** Open the forward-picker sheet for [messageId], closing the long-press action sheet. */
@@ -718,8 +725,15 @@ class ChatViewModel @Inject constructor(
 
     fun closeForward() = forward.close()
 
-    /** Optimistically forward the source message into [targetConversationId]; one at a time. */
-    fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
+    /** The single share sheet (#13469): tick or untick a recipient row. */
+    fun toggleForwardRecipient(targetConversationId: String) = forward.toggleRecipient(targetConversationId)
+
+    fun onForwardCaptionChange(text: String) = forward.onCaptionChange(text)
+
+    fun onForwardDurationChange(seconds: Int) = forward.onDurationChange(seconds)
+
+    /** Send to every ticked recipient: optimistic per row, durable through the outbox. */
+    fun sendForward() = forward.sendSelection()
 
     /** The gateway refused the forward with [code] (`FORWARD_REFUSAL_CODES`): show the refusal card. */
     fun onForwardGatewayRefusal(code: String?) = forward.onGatewayRefusal(code)

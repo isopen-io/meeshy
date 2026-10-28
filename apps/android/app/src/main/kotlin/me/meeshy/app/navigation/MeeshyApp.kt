@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.map
 import androidx.navigation.NavHostController
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
+import me.meeshy.app.auth.guest.GuestSessionEndViewModel
+import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
@@ -45,6 +47,7 @@ import me.meeshy.app.startup.AppExtensionsViewModel
 import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.ui.component.chrome.FloatingChromeReserveState
 import me.meeshy.ui.component.chrome.LocalFloatingChromeReserve
@@ -66,7 +69,10 @@ fun MeeshyApp(
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     warmDeepLink: Uri? = null,
+    warmDeepLinkAwaitsAccount: Boolean = false,
     onWarmDeepLinkHandled: () -> Unit = {},
+    callLink: CallLinkRequest? = null,
+    onCallLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     SheetReturnEffect(navController)
@@ -86,6 +92,13 @@ fun MeeshyApp(
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
     val authState by authViewModel.state.collectAsStateWithLifecycle()
+    // La passerelle a terminé la session d'un invité de lien : l'appareil est déjà purgé, la racine retombe sur la
+    // connexion (état aligné ci-dessous) et l'écran de fin dit pourquoi, à la place du fil.
+    val guestEndViewModel: GuestSessionEndViewModel = hiltViewModel()
+    val guestEnded by guestEndViewModel.ended.collectAsStateWithLifecycle()
+    LaunchedEffect(guestEnded) {
+        if (guestEnded != null) authViewModel.onExternalSessionOpened()
+    }
     // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
     // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
     // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
@@ -120,11 +133,10 @@ fun MeeshyApp(
     // recomposition never re-navigates. An unauthenticated launch defers until
     // sign-in resolves (the route survives in Activity state across the login gate).
     LaunchedEffect(launchRoute, authState.isAuthenticated) {
-        // La validation d'un magic link est la SEULE destination de lancement
-        // legitime hors session : c'est precisement elle qui en ouvre une. Tout le
-        // reste (chat, appel) attend l'authentification.
-        val isMagicLink = launchRoute?.startsWith("auth/magic-link") == true
-        if (launchRoute != null && (authState.isAuthenticated || isMagicLink)) {
+        // Les liens d'e-mail a jeton (connexion, adresse prouvee, nouveau mot de passe) sont les SEULES
+        // destinations de lancement legitimes hors session : ce sont eux qui en ouvrent une ou qui
+        // choisissent le mot de passe. Tout le reste (chat, appel) attend l'authentification.
+        if (launchRoute != null && (authState.isAuthenticated || LaunchRouter.opensWithoutSession(launchRoute))) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }
@@ -134,9 +146,9 @@ fun MeeshyApp(
     // (MainActivity.onNewIntent) : les navDeepLink du graphe ne sont lus qu'au démarrage, c'est
     // donc ici qu'on rejoue l'intent, comme le routeur de liens d'iOS (`.onOpenURL`). Il attend la
     // session, puis la pile se refait avec la liste dessous (le retour revient à la liste).
-    LaunchedEffect(warmDeepLink, authState.isAuthenticated) {
+    LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
         val uri = warmDeepLink ?: return@LaunchedEffect
-        if (!authState.isAuthenticated) return@LaunchedEffect
+        if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
         WarmDeepLink.open(navController, uri)
         onWarmDeepLinkHandled()
     }
@@ -247,7 +259,29 @@ fun MeeshyApp(
 
         AppOverlayStack(extensions.overlays, navController)
 
+        EngagementRevealHost(navController)
+
+        CallLinkHost(
+            request = callLink,
+            isAuthenticated = authState.isAuthenticated,
+            onHandled = onCallLinkHandled,
+            navController = navController,
+        )
+
         ArrivalCelebrationHost()
+
+        guestEnded?.let { ended ->
+            GuestSessionEndedScreen(
+                end = ended.end,
+                onNewLink = { identifier ->
+                    guestEndViewModel.dismiss()
+                    navController.navigate(Routes.guestJoin(identifier)) { launchSingleTop = true }
+                },
+                onHome = guestEndViewModel::dismiss,
+            )
+        }
+
+        VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 

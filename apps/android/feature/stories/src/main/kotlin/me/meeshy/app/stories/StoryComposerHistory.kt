@@ -71,6 +71,7 @@ internal fun StoryComposerUiState.restoredTo(snapshot: ComposerSnapshot): StoryC
         selectedTextElementId = null,
         selectedStickerId = null,
         elementMenuId = null,
+        stickerMenuId = null,
         snapFeedback = null,
     ).mirrorDraftToSelection()
 }

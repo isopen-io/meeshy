@@ -9,6 +9,8 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.story.PublishMediaWriteBack
@@ -199,6 +201,45 @@ class OutboxDrainerTest {
         assertThat(report.delivered).isEqualTo(0)
         assertThat(exhaustedCmids).containsExactly("publish")
         assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.EXHAUSTED)
+    }
+
+    @Test
+    fun `a dependent of an upload refused for its location carries that reason, the row handed to onExhausted too`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        outbox.markExhausted("upload", MediaLocationRefusal.REASON)
+        enqueueOn("other", OutboxLanes.MEDIA)
+        outbox.markExhausted("other", "upload failed")
+        enqueueOn("send", lane, dependsOn = setOf("other", "upload"))
+        enqueueOn("plain", lane, dependsOn = setOf("other"))
+        val handed = mutableMapOf<String, String?>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { handed[it.cmid] = it.lastError },
+        ).drainLane(lane)
+
+        assertThat(outbox.row("send")?.lastError).isEqualTo(MediaLocationRefusal.REASON)
+        assertThat(handed["send"]).isEqualTo(MediaLocationRefusal.REASON)
+        assertThat(MediaLocationRefusal.isReason(outbox.row("plain")?.lastError)).isFalse()
+        assertThat(handed["plain"]).startsWith("Prerequisite(s) failed")
+    }
+
+    @Test
+    fun `a dependent of an upload whose bytes are lost carries that loss, so its bubble says it instead of retrying`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        outbox.markExhausted("upload", MediaLoss.REASON)
+        enqueueOn("send", lane, dependsOn = setOf("upload"))
+        val handed = mutableMapOf<String, String?>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { handed[it.cmid] = it.lastError },
+        ).drainLane(lane)
+
+        assertThat(outbox.row("send")?.lastError).isEqualTo(MediaLoss.REASON)
+        assertThat(handed["send"]).isEqualTo(MediaLoss.REASON)
     }
 
     @Test

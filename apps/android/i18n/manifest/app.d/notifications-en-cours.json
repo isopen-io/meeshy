@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "ongoing_channel_name",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_channel_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_activity_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_story",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_message_with_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_sent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_waiting_network",
+          "status": "android-only"
+        },
+        {
+          "androidName": "outbox_activity_remaining",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_recording_activity_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_recording_activity_stop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_recording_activity_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_recording_activity_kept_in_tray",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

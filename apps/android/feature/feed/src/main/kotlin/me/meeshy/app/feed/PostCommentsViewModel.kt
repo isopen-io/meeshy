@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
@@ -288,6 +289,7 @@ class PostCommentsViewModel @Inject constructor(
     /** Leaves the realtime room this VM joined in [observeRealtime]. */
     override fun onCleared() {
         if (postId.isNotBlank()) socialSocket.leavePostRoom(postId)
+        attachments.value.pieces.forEach { MediaIntake.release(it.item) }
         super.onCleared()
     }
 
@@ -410,6 +412,7 @@ class PostCommentsViewModel @Inject constructor(
         if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
         attachments.value = CommentAttachmentTray()
+        tray.pieces.forEach { MediaIntake.release(it.item) }
         composer.value?.let { target ->
             clearDraft()
             sendReply(target.parentId, content, attachmentIds)
@@ -451,12 +454,14 @@ class PostCommentsViewModel @Inject constructor(
 
     /** La pièce retouchée (#12735) remplace l'autre à sa place, et se téléverse de nouveau. */
     fun replaceMedia(id: String, item: MediaUploadItem) {
-        if (attachments.value.piece(id) == null) return
+        val replaced = attachments.value.piece(id) ?: return
         attachments.update { it.replacing(id, item) }
+        if (replaced.item !== item) MediaIntake.release(replaced.item)
         upload(id, item)
     }
 
     fun removeMedia(id: String) {
+        attachments.value.piece(id)?.let { MediaIntake.release(it.item) }
         attachments.update { it.removing(id) }
     }
 
@@ -475,7 +480,7 @@ class PostCommentsViewModel @Inject constructor(
                 when {
                     tray.piece(id)?.item !== item -> tray
                     media != null -> tray.uploaded(id, media)
-                    else -> tray.failed(id)
+                    else -> tray.failed(id).also { MediaIntake.release(item) }
                 }
             }
             if (media == null) status.update { it.copy(notice = CommentNotice.MEDIA_FAILED) }

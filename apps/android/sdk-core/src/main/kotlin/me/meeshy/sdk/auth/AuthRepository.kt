@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
 import me.meeshy.sdk.model.auth.SendPhoneCodeRequest
 import me.meeshy.sdk.model.auth.TwoFactorLoginRequest
 import me.meeshy.sdk.model.auth.TwoFactorVerifyResult
+import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.model.auth.VerificationStatusRequest
 import me.meeshy.sdk.model.auth.VerifyPhoneData
 import me.meeshy.sdk.model.auth.VerifyPhoneRequest
@@ -26,6 +27,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -40,8 +42,12 @@ class AuthRepository @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val sessionTeardown: SessionTeardown,
     private val syncSeqTracker: SyncSeqTracker,
+    private val fence: AccountFence? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
+
+    /** Un COMPTE est connecté (JWT) : une session d'invité de lien est [isAuthenticated] sans l'être (#13530). */
+    val hasAccountSession: Boolean get() = tokenStore.jwt != null
 
     /** Of [accountIds], those whose session sleeps on the device: only then is "stay signed in" offered. */
     fun accountsKeepingASession(accountIds: Collection<String>): Set<String> = tokenStore.accountsWithTokens(accountIds)
@@ -384,6 +390,24 @@ class AuthRepository @Inject constructor(
     suspend fun logout() {
         val frozenJwt = tokenStore.jwt
         val frozenSessionToken = tokenStore.sessionToken
+        purgeLocalSession()
+        closeServerSession(frozenJwt, frozenSessionToken)
+    }
+
+    /**
+     * La passerelle a TERMINE la session d'un invite de lien (lien echu, acces retire) : l'appareil est purge comme apres
+     * une deconnexion — jetons, caches, brouillons, file d'envoi, session invitee persistee — et rien ne part vers une
+     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` ne vise rien) :
+     * le refus tardif d'une session quittee ne purge pas celle ouverte depuis, et un compte inscrit n'est jamais touche.
+     * Rend `true` quand la purge a eu lieu.
+     */
+    suspend fun endGuestSession(refusedToken: String?): Boolean {
+        if (tokenStore.jwt != null || !GuestSessionEnd.targets(tokenStore.sessionToken, refusedToken)) return false
+        purgeLocalSession()
+        return true
+    }
+
+    private suspend fun purgeLocalSession() {
         tokenStore.clear()
         sessionRepository.clear()
         sessionTeardown.wipe()
@@ -393,7 +417,6 @@ class AuthRepository @Inject constructor(
         // PAR USER côté serveur : hérité, il ferait manquer au compte suivant
         // tous ses trous tant qu'il n'aurait pas dépassé la valeur du précédent.
         syncSeqTracker.reset()
-        closeServerSession(frozenJwt, frozenSessionToken)
     }
 
     private suspend fun closeServerSession(jwt: String?, sessionToken: String?) {
@@ -428,9 +451,23 @@ class AuthRepository @Inject constructor(
     }
 
     private fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        // #13558 : un compte posé par-dessus un autre, sans purge, retire d'abord les envois en vol du compte remplacé —
+        // leur prochaine requête partirait sinon sous les jetons du compte adopté.
+        // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
+        // pendant une fenêtre où un push de A serait jugé destiné au compte connecté. Sans identité, le temps de
+        // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B, puis les jetons s'écrivent sous B.
+        val replaced = sessionRepository.currentUserId ?: tokenStore.userId
+        if (replaced != null && replaced != session.user.id) {
+            fence?.revoke()
+            tokenStore.userId = null
+        }
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
         sessionRepository.adopt(session.user, origin)
+        // L'adoption ne recopie pas un jeton sur l'emplacement d'un compte qui en garde déjà un (compte enregistré) :
+        // les jetons de CETTE session s'y réécrivent, sans quoi l'ancien serait lu.
+        tokenStore.jwt = session.token
+        tokenStore.sessionToken = session.sessionToken
     }
 
     private companion object {

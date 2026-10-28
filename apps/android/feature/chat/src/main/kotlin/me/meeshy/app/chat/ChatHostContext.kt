@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.StateFlow
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
@@ -65,6 +66,12 @@ internal class ChatSheetVisibility {
 
     /** « Fond et accent » : le choix personnel du fond de la conversation. */
     var appearance by mutableStateOf(false)
+
+    /** La fiche Chiffrement (#13463). */
+    var encryption by mutableStateOf(false)
+
+    /** La vérification du numéro de sécurité d'un groupe chiffré de bout en bout (#13463). */
+    var securityVerification by mutableStateOf(false)
 }
 
 /**
@@ -110,7 +117,19 @@ internal class ChatHostContext(
     val pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
     /** Le mode sélection multiple (#13294) : inactif tant qu'aucun appui long n'a choisi « Sélectionner ». */
     val selection: MessageSelection = MessageSelection.Inactive,
+    /** La Flamme de l'en-tête (#13297) : l'instantané servi et l'annonce d'un envoi du lecteur. */
+    val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
 )
+
+/** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
+internal class ChatEngagementBinding(
+    val snapshot: me.meeshy.sdk.model.ConversationEngagementSnapshot?,
+    val sent: kotlinx.coroutines.flow.SharedFlow<Unit>,
+) {
+    companion object {
+        val None = ChatEngagementBinding(null, NO_SENT)
+    }
+}
 
 /** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
 internal class ChatReadingModeBinding(
@@ -144,13 +163,14 @@ internal fun rememberChatHostContext(
     readingMode: ChatReadingModeBinding? = null,
     pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
     selection: MessageSelection = MessageSelection.Inactive,
+    engagement: ChatEngagementBinding = ChatEngagementBinding.None,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -171,6 +191,7 @@ internal class ChatHostActions(
     val openReactionDetails: (String) -> Unit,
     val openImageViewer: (String, Int) -> Unit,
     val onFileAttachmentOpen: (String, String?) -> Unit,
+    val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     val onHubFileOpen: (String, ApiMessageAttachment) -> Unit,
     val onFileAttachmentShare: (String, String?) -> Unit,
     val onReplyPreviewTap: (String) -> Unit,
@@ -190,7 +211,7 @@ internal class ChatHostActions(
     val removeClipboardContent: () -> Unit,
     val setPendingPlace: (me.meeshy.sdk.model.SharedPlace) -> Unit,
     val clearPendingPlace: () -> Unit,
-    val pickFile: (ByteArray, String, String?) -> Unit,
+    val pickFile: (java.io.File, String, String?) -> Unit,
     val removePendingAttachment: (String) -> Unit,
     val stagePendingUris: (List<Uri>) -> Unit,
     val dismissImageViewer: () -> Unit,
@@ -228,7 +249,11 @@ internal class ChatHostActions(
     val onReplyThreadReplyTap: (String) -> Unit,
     val closeForward: () -> Unit,
     val onForwardQueryChange: (String) -> Unit,
-    val forwardTo: (String) -> Unit,
+    /** The single share sheet (#13469): tick a recipient, caption, flame duration, then Send. */
+    val toggleForwardRecipient: (String) -> Unit = {},
+    val onForwardCaptionChange: (String) -> Unit = {},
+    val onForwardDurationChange: (Int) -> Unit = {},
+    val sendForward: () -> Unit = {},
     val stageFile: (File, String?) -> Unit = { _, _ -> },
     val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
     /** Une pièce en attente retouchée (#12735) : elle est remplacée à sa place. */
@@ -236,6 +261,8 @@ internal class ChatHostActions(
     val readPendingBytes: suspend (PendingAttachment) -> ByteArray? = { null },
     /** Une vidéo en attente retouchée (#12735) : son rendu la remplace à sa place, puis s'efface. */
     val replacePendingVideo: (id: String, file: File) -> Unit = { _, file -> file.delete() },
+    /** Un son en attente édité (#13462) : le fichier rendu le remplace à sa place, puis s'efface. */
+    val replacePendingAudio: (id: String, file: File) -> Unit = { _, file -> file.delete() },
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
@@ -268,6 +295,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     openReactionDetails = this::openReactionDetails,
     openImageViewer = this::openImageViewer,
     onFileAttachmentOpen = this::onFileAttachmentOpen,
+    pieceOverlayFor = this::pieceOverlayFor,
     onHubFileOpen = this::onHubFileOpen,
     onFileAttachmentShare = this::onFileAttachmentShare,
     onReplyPreviewTap = this::onReplyPreviewTap,
@@ -295,6 +323,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     replacePendingAttachment = { id, bytes, name, mime -> controllers.find<ComposerTrayController>()?.replace(id, bytes, name, mime) },
     readPendingBytes = { item -> controllers.find<ComposerTrayController>()?.readBytes(item) },
     replacePendingVideo = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, ChatRetouchDelivery.VIDEO_MIME) ?: file.delete() },
+    replacePendingAudio = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, EDITED_AUDIO_MIME) ?: file.delete() },
     selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
@@ -332,7 +361,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onReplyThreadReplyTap = this::onReplyThreadReplyTap,
     closeForward = this::closeForward,
     onForwardQueryChange = this::onForwardQueryChange,
-    forwardTo = this::forwardTo,
+    toggleForwardRecipient = this::toggleForwardRecipient,
+    onForwardCaptionChange = this::onForwardCaptionChange,
+    onForwardDurationChange = this::onForwardDurationChange,
+    sendForward = this::sendForward,
     beginSelection = { id -> controllers.find<MessageSelectionController>()?.begin(id) },
     toggleSelection = { id -> controllers.find<MessageSelectionController>()?.toggle(id) ?: MessageSelection.Toggle.Ignored },
     endSelection = { controllers.find<MessageSelectionController>()?.end() },
@@ -341,3 +373,6 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
 )
+
+/** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */
+private const val EDITED_AUDIO_MIME = "audio/mp4"

@@ -27,11 +27,18 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
+import me.meeshy.app.composer.inbound.ComposerSeedLaunch
+import me.meeshy.app.composer.inbound.ComposerSeedStore
+import me.meeshy.app.navigation.InboundIntentGate
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
+import me.meeshy.app.navigation.VisitorContentPresenter
+import me.meeshy.app.navigation.VisitorLinkGate
+import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.app.navigation.WarmDeepLink
+import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
@@ -39,6 +46,7 @@ import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
+import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.sdk.net.MeeshyConfig
@@ -85,10 +93,30 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var callPictureInPicture: CallPictureInPictureCoordinator
 
+    /** La preuve que les extras d'appel d'un intent viennent d'une notification de Meeshy (#13504). */
+    @Inject
+    lateinit var launchProof: LaunchIntentProof
+
+    /** Un lien reçu SANS session s'ouvre en lecture seule (#13464) : la carte invite à se connecter, le lien attend. */
+    @Inject
+    lateinit var visitorContent: VisitorContentPresenter
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
+    @Inject
+    lateinit var composerSeedStore: ComposerSeedStore
+
     private var launchRoute by mutableStateOf<String?>(null)
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
     private var warmDeepLink by mutableStateOf<Uri?>(null)
+
+    /** Le lien en attente est celui qu'un VISITEUR a ouvert : il attend un compte, une session d'invité ne le rejoue pas. */
+    private var warmDeepLinkAwaitsAccount by mutableStateOf(false)
+
+    /** Un lien d'appel (`meeshy://call`) : une DEMANDE que [MeeshyApp] présente en confirmation, jamais un appel. */
+    private var callLink by mutableStateOf<CallLinkRequest?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
 
@@ -100,7 +128,12 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        InboundIntentGate.admit(intent, launchProof::admits, composerSeedStore::holds)
+        val restored = savedInstanceState != null
+        launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
+        if (!restored) divertVisitorLink(intent, atLaunch = true)
+        // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
+        callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
@@ -122,7 +155,13 @@ class MainActivity : ComponentActivity() {
                                 launchRoute = launchRoute,
                                 onLaunchRouteConsumed = { launchRoute = null },
                                 warmDeepLink = warmDeepLink,
-                                onWarmDeepLinkHandled = { warmDeepLink = null },
+                                warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
+                                onWarmDeepLinkHandled = {
+                                    warmDeepLink = null
+                                    warmDeepLinkAwaitsAccount = false
+                                },
+                                callLink = callLink,
+                                onCallLinkHandled = { callLink = null },
                             )
                         }
                     }
@@ -130,6 +169,21 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * La route de lancement d'un intent. Un lien d'e-mail a jeton (connexion, adresse, mot de passe) porte son
+     * secret dans l'adresse de l'intent : la route le recueille, et l'intent est VIDE de son adresse aussitot, pour
+     * que ni une restauration de l'activite ni une relecture ne rejoue un jeton a usage unique.
+     */
+    private fun launchRouteOf(intent: Intent): String? {
+        val route = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        if (LaunchRouter.opensWithoutSession(route)) intent.data = null
+        return route
+    }
+
+    /** Un lien d'appel est une demande a usage unique : l'intent est vide de son adresse des qu'elle est recueillie. */
+    private fun callLinkOf(intent: Intent): CallLinkRequest? =
+        CallLinkRequest.parse(intent.dataString)?.also { intent.data = null }
 
     private fun enterCallPictureInPicture(): Boolean {
         val params = PictureInPictureParams.Builder()
@@ -167,9 +221,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        InboundIntentGate.admit(intent, launchProof::admits, composerSeedStore::holds)
         setIntent(intent)
-        launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
-        warmDeepLink = if (launchRoute == null) WarmDeepLink.replayable(intent) else null
+        launchRoute = launchRouteOf(intent)
+        callLink = callLinkOf(intent)
+        warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
+        warmDeepLinkAwaitsAccount = false
+        divertVisitorLink(intent, atLaunch = false)
+    }
+
+    /**
+     * Un lien de publication, de réel ou de story reçu sans session montre son contenu public (iOS `VisitorContentPresenter`).
+     * Le lien reste EN ATTENTE (`warmDeepLink`, que la racine ne rejoue qu'une fois connectée) et, au démarrage à froid,
+     * l'adresse est retirée de l'intent pour que le NavHost n'ouvre pas l'écran connecté d'un visiteur.
+     */
+    private fun divertVisitorLink(intent: Intent, atLaunch: Boolean) {
+        val request = VisitorLinkGate.divert(intent, signedIn = authRepository.isAuthenticated) ?: return
+        warmDeepLink = intent.data
+        warmDeepLinkAwaitsAccount = true
+        if (atLaunch) intent.data = null
+        visitorContent.present(request)
     }
 
     /**
@@ -234,8 +305,9 @@ private fun LocalizedContent(
 /**
  * Thin platform glue: pull the notification extras [MeeshyFcmService] set on the
  * launch/full-screen intent into the pure [LaunchExtras] the [LaunchRouter] decodes.
+ * Only read AFTER [InboundIntentGate.admit] has stripped the call extras an unproven intent carried.
  */
-private fun Intent.launchExtras(): LaunchExtras {
+internal fun Intent.launchExtras(): LaunchExtras {
     val (tap, routeHint) = PushTapExtras.read(this)
     return LaunchExtras(
         callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
@@ -245,5 +317,6 @@ private fun Intent.launchExtras(): LaunchExtras {
         autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
         tap = tap,
         routeHint = routeHint,
+        composerSeed = getStringExtra(ComposerSeedLaunch.EXTRA_SEED),
     )
 }

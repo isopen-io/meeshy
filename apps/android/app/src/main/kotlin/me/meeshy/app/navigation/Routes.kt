@@ -1,6 +1,8 @@
 package me.meeshy.app.navigation
 
 import android.net.Uri
+import me.meeshy.app.composer.host.ComposerHostRoute
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.auth.GuestJoinViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.conversations.CreateShareLinkViewModel
@@ -18,6 +20,17 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot-password"
     const val MAGIC_LINK = "magic-link"
     const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
+
+    /**
+     * « Nouveau mot de passe » (iOS `MeeshyNewPasswordView`), ouvert par le lien de l'e-mail de reinitialisation.
+     * Le jeton voyage dans l'argument, encode, et le ViewModel l'efface de l'etat sauvegarde des qu'il l'a lu.
+     */
+    const val RESET_PASSWORD = "auth/reset-password?token={token}"
+    fun resetPassword(encodedToken: String): String = "auth/reset-password?token=$encodedToken"
+
+    /** La preuve de l'adresse par le lien de l'e-mail : jeton ET adresse (encodes), meme ecran que le lien de connexion. */
+    const val VERIFY_EMAIL_LINK = "auth/verify-email?token={token}&email={email}"
+    fun verifyEmailLink(token: String, email: String): String = "auth/verify-email?token=$token&email=$email"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
 
@@ -95,6 +108,19 @@ object Routes {
                 "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}"
             }
         }
+
+    /** Le lien de partage d'un reel (`/reel/{id}`, l'adresse que la passerelle grave) : ouvre les reels sur ce post. */
+    val REEL_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).map { host -> "https://$host/reel/{seed}" }
+
+    /**
+     * Le lien d'une story (`/story/{id}`, `/stories/{id}`) : une story est un post du meme espace d'identifiants, donc
+     * l'ouverture connectee est le detail du post — comme iOS quand la story a expire ou n'est pas dans le plateau.
+     */
+    val STORY_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).flatMap { host ->
+            listOf("story", "stories").map { segment -> "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}" }
+        }
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val CONTACTS_DISCOVER = "contacts/discover"
@@ -146,8 +172,13 @@ object Routes {
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
+    /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
+    const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
+
+    /** Ouvre l'hôte unique par [origin] ; `null` pour une porte que l'ancien composeur sert encore. */
+    fun composer(origin: ComposerOrigin, seedToken: String? = null): String? = ComposerHostRoute.route(origin, seedToken)
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
 
@@ -169,3 +200,6 @@ object Routes {
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }
+
+/** La porte « nouvelle story » : l'hôte unique ouvert sur la caméra/scène, jamais l'ancien écran seul. */
+internal val storyDoor: String get() = checkNotNull(Routes.composer(ComposerOrigin.StoryTray))

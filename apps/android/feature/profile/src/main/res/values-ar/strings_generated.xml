@@ -26,6 +26,15 @@
     <string name="profile_connection_context_sent">أرسلت طلب اتصال إلى %s. في انتظار ردّه.</string>
     <string name="profile_conversations_interactionsDisabled">التفاعلات معطّلة</string>
     <string name="profile_conversations_noShared">لا توجد محادثات مشتركة</string>
+    <string name="profile_decor_banner_section">البانر</string>
+    <string name="profile_decor_done">تم</string>
+    <string name="profile_decor_error">تعذّر حفظ هذا الاختيار. حاول مرة أخرى.</string>
+    <string name="profile_decor_frame_section">إطار البانر</string>
+    <string name="profile_decor_image">صورة</string>
+    <string name="profile_decor_image_hides_designs">صورة اللافتة تظهر فوق الخلفيات.</string>
+    <string name="profile_decor_image_hint">اختر صورة للافتة</string>
+    <string name="profile_decor_none">بدون</string>
+    <string name="profile_decor_ring_section">إطار الصورة الرمزية</string>
     <string name="profile_decor_subtitle">ظاهران للجميع على ملفك الشخصي</string>
     <string name="profile_decor_title">الإطار والبانر</string>
     <string name="profile_detail_country">البلد</string>

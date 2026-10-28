@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.reading.river
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 
 /**
@@ -61,17 +62,44 @@ class RiverVolumeTest {
         assertThat(elapsed).isLessThan(500L)
     }
 
-    @Test
-    fun `les en-tetes d un fil serialise de 40 000 bulles se calculent dans le budget d une image`() {
-        val geometry = RiverLaneResolver.resolveRiverLanes(alternating(count = 40_000, voices = 2))
+    private fun serializedFocus(count: Int): ResolveRiverLaneHeadersInput {
+        val geometry = RiverLaneResolver.resolveRiverLanes(alternating(count = count, voices = 2))
         assertThat(geometry.layout).isEqualTo(RiverLayout.SERIALIZED)
-        val focus = ResolveRiverLaneHeadersInput(geometry, focusRank = 20_000.0)
-        RiverLaneHeaders.resolveRiverLaneHeaders(focus)
+        return ResolveRiverLaneHeadersInput(geometry, focusRank = count / 2.0)
+    }
+
+    private fun fastestNanos(runs: Int, block: () -> Unit): Long =
+        (1..runs).minOf {
+            val start = System.nanoTime()
+            block()
+            System.nanoTime() - start
+        }
+
+    /**
+     * Les en-têtes se rappellent à chaque image de défilement : leur coût doit croître COMME le fil, pas
+     * comme son carré. On mesure la PENTE, jamais un seuil en millisecondes — un seuil absolu dépend de la
+     * machine (un runner de CI chargé dépassait les 16 ms d'une image sur un code linéaire). Huit fois plus
+     * de bulles coûtent 4 à 8× en linéaire, 44× sur l'ancienne recopie quadratique des groupes (196 ms à
+     * 40 000) ; la frontière à 24× reste loin de l'une et de l'autre.
+     * Chaque taille est préchauffée puis mesurée au MEILLEUR de plusieurs passages : la charge ne fait
+     * qu'ajouter du temps, le minimum mesure l'algorithme.
+     */
+    @Test
+    fun `les en-tetes d un fil serialise croissent lineairement avec le nombre de bulles`() {
+        val small = serializedFocus(count = 5_000)
+        val large = serializedFocus(count = 40_000)
+        repeat(10) {
+            RiverLaneHeaders.resolveRiverLaneHeaders(small)
+            RiverLaneHeaders.resolveRiverLaneHeaders(large)
+        }
 
         lateinit var headers: List<RiverLaneHeader>
-        val elapsed = fastestMillis(runs = 10) { headers = RiverLaneHeaders.resolveRiverLaneHeaders(focus) }
+        val smallNanos = fastestNanos(runs = 15) { RiverLaneHeaders.resolveRiverLaneHeaders(small) }
+        val largeNanos = fastestNanos(runs = 15) { headers = RiverLaneHeaders.resolveRiverLaneHeaders(large) }
 
         assertThat(headers.map { it.laneId }).containsExactly("u0")
-        assertThat(elapsed).isLessThan(16L)
+        assertWithMessage("5 000 bulles : %s ns ; 40 000 bulles : %s ns", smallNanos, largeNanos)
+            .that(largeNanos)
+            .isLessThan(smallNanos * 24)
     }
 }

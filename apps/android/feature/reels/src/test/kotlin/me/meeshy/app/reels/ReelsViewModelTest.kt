@@ -508,6 +508,51 @@ class ReelsViewModelTest {
     }
 
     @Test
+    fun `a seed that cannot be fetched says why instead of landing on another reel`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("gone") } returns NetworkResult.Failure(ApiError("nope", "HTTP_404", 404))
+        coEvery { repository.getReelsPage("gone", any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("other-1")), nextCursor = null, hasMore = false))
+
+        vm.load(seed = "gone")
+
+        assertThat(vm.state.value.seedFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NOT_FOUND)
+    }
+
+    @Test
+    fun `an offline seed fetch is typed NETWORK so that retry is offered`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+
+        vm.load(seed = "tapped")
+
+        assertThat(vm.state.value.seedFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NETWORK)
+        assertThat(vm.state.value.seedFailure?.offersRetry).isTrue()
+    }
+
+    @Test
+    fun `retry reopens the same seed and clears its failure once it resolves`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+        vm.load(seed = "tapped")
+
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Success(reel("tapped"))
+        vm.retry()
+
+        assertThat(vm.state.value.seedFailure).isNull()
+        assertThat(vm.state.value.reels.map { it.id }).contains("tapped")
+    }
+
+    @Test
+    fun `a seed served from the feed cache never raises a failure`() = runTest {
+        val vm = viewModel(cachedFeed = listOf(reel("tapped")))
+
+        vm.load(seed = "tapped")
+
+        assertThat(vm.state.value.seedFailure).isNull()
+    }
+
+    @Test
     fun `load leaves the thread to the network page alone when the explicit seed fetch fails`() = runTest {
         val vm = viewModel(cachedFeed = null)
         coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline"))

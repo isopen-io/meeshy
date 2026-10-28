@@ -18,17 +18,26 @@ class FeedVideoRetouchDeliveryTest {
     @Test
     fun `une video intouchee se televerse telle quelle, sous son nom de prise`() {
         val waiting = pending()
-        val item = FeedVideoRetouchDelivery.item(waiting, waiting.source)!!
+        val item = FeedVideoRetouchDelivery.item(waiting, waiting.source, waiting.source.parentFile!!)!!
         assertThat(item.bytes).isEqualTo(byteArrayOf(1, 2, 3))
         assertThat(item.fileName).isEqualTo("video_1700000000000.mp4")
         assertThat(item.mimeType).isEqualTo(FeedVideoRetouchDelivery.VIDEO_MIME)
     }
 
     @Test
+    fun `la video livree est adossee a un fichier du cache, sans etre relue en memoire`() {
+        val waiting = pending()
+        val item = FeedVideoRetouchDelivery.item(waiting, waiting.source, waiting.source.parentFile!!)!!
+        assertThat(item.source).isInstanceOf(me.meeshy.sdk.media.MediaUploadSource.OnDisk::class.java)
+        assertThat(waiting.source.exists()).isFalse()
+        assertThat(item.sizeBytes).isEqualTo(3L)
+    }
+
+    @Test
     fun `une video retouchee se televerse depuis son rendu, sous un nom de retouche`() {
         val waiting = pending()
         waiting.output.writeBytes(byteArrayOf(9, 9))
-        val item = FeedVideoRetouchDelivery.item(waiting, waiting.output)!!
+        val item = FeedVideoRetouchDelivery.item(waiting, waiting.output, waiting.source.parentFile!!)!!
         assertThat(item.bytes).isEqualTo(byteArrayOf(9, 9))
         assertThat(item.fileName).isEqualTo("video_1700000000000_retouche.mp4")
     }
@@ -36,7 +45,7 @@ class FeedVideoRetouchDeliveryTest {
     @Test
     fun `un rendu vide ou absent ne part pas, et la retouche abandonnee efface ses deux fichiers`() {
         val waiting = pending()
-        assertThat(FeedVideoRetouchDelivery.item(waiting, waiting.output)).isNull()
+        assertThat(FeedVideoRetouchDelivery.item(waiting, waiting.output, waiting.source.parentFile!!)).isNull()
         waiting.output.writeBytes(byteArrayOf(1))
         waiting.discard()
         assertThat(waiting.source.exists()).isFalse()

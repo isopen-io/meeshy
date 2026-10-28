@@ -1,0 +1,20 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_link_confirm_audio">إجراء مكالمة صوتية مع %s؟</string>
+    <string name="call_link_confirm_call">اتصال</string>
+    <string name="call_link_confirm_cancel">إلغاء</string>
+    <string name="call_link_confirm_video">إجراء مكالمة فيديو مع %s؟</string>
+    <string name="call_link_refused_blocked">لقد حظرت جهة الاتصال هذه</string>
+    <string name="call_link_refused_unknown">تعذّر العثور على جهة الاتصال هذه</string>
+    <string name="composer_format_denied_mood">نص فقط</string>
+    <string name="composer_format_denied_mood_empty">اكتب شيئًا أولاً</string>
+    <string name="composer_format_denied_post">غير متاح لهذا المحتوى</string>
+    <string name="composer_format_denied_reel">يتطلب فيديو أو صوتًا أو صورتين</string>
+    <string name="composer_format_denied_story">غير متاح من هذا المدخل</string>
+    <string name="composer_format_post">منشور</string>
+    <string name="composer_format_reel">ريل</string>
+    <string name="composer_format_status">مزاج</string>
+    <string name="composer_format_story">قصة</string>
+    <string name="composer_publish_menu_a11y_hint">يفتح اختيار التنسيق والتخطيط</string>
+    <string name="composer_publish_menu_title">النشر بصفة</string>
+</resources>

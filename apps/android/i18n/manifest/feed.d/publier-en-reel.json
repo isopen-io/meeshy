@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.reelOffer.title", "androidName": "feed_reel_offer_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.reelOffer.body", "androidName": "feed_reel_offer_body", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.reelOffer.reel", "androidName": "feed_reel_offer_reel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.reelOffer.post", "androidName": "feed_reel_offer_post", "status": "adopted" }
+      ]
+    }
+  }
+}

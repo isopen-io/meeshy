@@ -36,6 +36,8 @@ data class AuthUiState(
     val errorMessage: String? = null,
     @get:StringRes val errorRes: Int? = null,
     val isAuthenticated: Boolean = false,
+    /** Un compte (JWT) est connecté, pas seulement une session d'invité de lien : un lien de visiteur en attente ne se rejoue qu'alors. */
+    val hasAccount: Boolean = false,
     val savedAccounts: List<SavedAccount> = emptyList(),
     val selectedAccount: SavedAccount? = null,
     val showNormalLogin: Boolean = false,
@@ -110,6 +112,7 @@ class AuthViewModel @Inject constructor(
     private val _state = MutableStateFlow(
         AuthUiState(
             isAuthenticated = authRepository.isAuthenticated,
+            hasAccount = authRepository.hasAccountSession,
             savedAccounts = savedAccountsStore.accounts.value,
             selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
             customHostInput = serverEnvironmentStore.customHost,
@@ -367,6 +370,7 @@ class AuthViewModel @Inject constructor(
             it.copy(
                 isSubmitting = false,
                 isAuthenticated = true,
+                hasAccount = authRepository.hasAccountSession,
                 twoFactorToken = null,
                 twoFactorCode = "",
                 pendingVerification = null,
@@ -398,7 +402,7 @@ class AuthViewModel @Inject constructor(
      */
     fun onExternalSessionOpened() {
         realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
-        _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated) }
+        _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated, hasAccount = authRepository.hasAccountSession) }
     }
 
     /**

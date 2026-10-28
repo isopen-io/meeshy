@@ -1,6 +1,10 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 
 /** Result of delivering one outbox mutation over the network. */
 public sealed interface SendResult {
@@ -83,6 +87,12 @@ public class OutboxDrainer(
     private val now: () -> Long = System::currentTimeMillis,
     /** #12956 — never lets a plaintext row leave for a conversation this device knows end-to-end. */
     private val plaintextAdmission: OutboxPlaintextAdmission = OutboxPlaintextAdmission.AdmitAll,
+    /**
+     * #13555 — when set, the account a row is judged and SENT under is the fence's: the send runs inside
+     * [AccountFence.guard], so closing the account cancels it before the next account can sign in, and its outcome is
+     * never written once that account has closed.
+     */
+    private val fence: AccountFence? = null,
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -91,8 +101,9 @@ public class OutboxDrainer(
 
         for (row in pending) {
             val kind = row.kindEnum ?: continue
-            if (currentOwner != null) {
-                when (OutboxAuthorGuard.verdict(row.ownerId, currentOwner.invoke())) {
+            val ticket = fence?.ticket()
+            if (ticket != null || currentOwner != null) {
+                when (OutboxAuthorGuard.verdict(row.ownerId, ticket?.ownerId ?: currentOwner?.invoke())) {
                     AuthorVerdict.SEND -> Unit
                     AuthorVerdict.WAIT -> continue
                     AuthorVerdict.EXHAUST_NO_AUTHOR -> {
@@ -113,8 +124,9 @@ public class OutboxDrainer(
                         val failed = prerequisites.filterIndexed { i, _ ->
                             states[i] == OutboxState.EXHAUSTED
                         }
-                        outbox.markExhausted(row.cmid, "Prerequisite(s) failed: ${failed.joinToString()}")
-                        onExhausted(row)
+                        val reason = cascadeReason(failed)
+                        outbox.markExhausted(row.cmid, reason)
+                        onExhausted(row.copy(lastError = reason))
                         exhausted++
                         continue
                     }
@@ -134,8 +146,7 @@ public class OutboxDrainer(
                 exhausted++
                 continue
             }
-            outbox.markInflight(row.cmid)
-            when (val result = sender.send(row)) {
+            when (val result = sendUnder(ticket, sender, row) ?: return blocked(delivered, exhausted)) {
                 SendResult.Success -> {
                     outbox.markSucceeded(row.cmid)
                     delivered++
@@ -173,6 +184,31 @@ public class OutboxDrainer(
             }
         }
         return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
+    }
+
+    /**
+     * Ce que dit un dépendant dont un prérequis a échoué : un média refusé pour son lieu (#13550) se transmet tel quel — la
+     * bulle, la publication non envoyée le disent, et ne proposent pas un nouvel essai voué au même refus ; un média perdu sur
+     * l'appareil ([MediaLoss], #13554) de même ; sinon, la liste.
+     */
+    private suspend fun cascadeReason(failed: List<String>): String {
+        val reasons = failed.map { outbox.row(it)?.lastError }
+        return when {
+            reasons.any(MediaLocationRefusal::isReason) -> MediaLocationRefusal.REASON
+            reasons.any(MediaLoss::isReason) -> MediaLoss.REASON
+            else -> "Prerequisite(s) failed: ${failed.joinToString()}"
+        }
+    }
+
+    /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
+    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
+        val send: suspend () -> SendResult = {
+            outbox.markInflight(row.cmid)
+            sender.send(row)
+        }
+        val fence = fence
+        if (fence == null || ticket == null) return send()
+        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) }
     }
 
     private fun blocked(delivered: Int, exhausted: Int) = DrainReport(

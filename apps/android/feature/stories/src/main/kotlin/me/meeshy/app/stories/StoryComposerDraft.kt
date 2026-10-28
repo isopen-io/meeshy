@@ -1,36 +1,21 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.CanvasMediaAdoption
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.wireValue
 import me.meeshy.sdk.net.api.CreateStoryRequest
 
-/**
- * Audience a published story is visible to — mirrors the gateway `Visibility`
- * enum (`packages/shared`) carried on `CreateStoryRequest.visibility`. [wire] is
- * the exact string the API expects; the UI never hardcodes the literal.
- */
-enum class StoryVisibility(val wire: String) {
-    PUBLIC("PUBLIC"),
-    FRIENDS("FRIENDS"),
-    COMMUNITY("COMMUNITY"),
-    PRIVATE("PRIVATE"),
-    ;
-
-    companion object {
-        /**
-         * The audience whose [wire] string is [value], or [PUBLIC] when none matches. Tolerant
-         * by design: a legacy or unknown persisted value decays to the safe default rather than
-         * throwing, so restoring a story-composer draft can never crash on a stale visibility.
-         */
-        fun fromWire(value: String): StoryVisibility =
-            entries.firstOrNull { it.wire == value } ?: PUBLIC
-    }
-}
+/** L'audience d'une publication — l'enum est celui du modèle (six modes du serveur). */
+typealias StoryVisibility = me.meeshy.sdk.model.StoryVisibility
 
 /**
  * Pure, immutable model of an in-progress text story. It owns the single product
@@ -53,6 +38,19 @@ data class StoryComposerDraft(
     val background: StoryBackgroundValue? = null,
     val backgroundMedia: StoryBackgroundMedia? = null,
     val repostOfId: String? = null,
+    /** La liste « visible par » / « sauf » : n'a de sens que sous ONLY / EXCEPT. */
+    val visibilityUserIds: List<String> = emptyList(),
+    /** Les personnes que la publication NOMME hors du texte (jamais INLINE : le serveur le dérive). */
+    val mentions: List<PostMentionInput> = emptyList(),
+    /** Texte alternatif par média (clé = id de média), distinct de [mediaCaption] et du texte. */
+    val mediaAlt: Map<String, String> = emptyMap(),
+    /** Légende par média (clé = id de média). */
+    val mediaCaption: Map<String, String> = emptyMap(),
+    /** `null` = l'auteur n'a rien décidé ; la passerelle applique son défaut. */
+    val allowSoundExtraction: Boolean? = null,
+    /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
+    val frame: SceneFrame = SceneFrame(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -96,12 +94,15 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing) &&
-            isWithinLimit && isWithinMediaLimit
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty()) &&
+            isWithinLimit && isWithinMediaLimit &&
+            ComposerAudienceSelection.isPublishable(visibility, visibilityUserIds)
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
 
     fun withVisibility(value: StoryVisibility): StoryComposerDraft = copy(visibility = value)
+
+    fun withVisibilityUserIds(value: List<String>): StoryComposerDraft = copy(visibilityUserIds = value)
 
     fun withMediaIds(value: List<String>): StoryComposerDraft = copy(mediaIds = value)
 
@@ -137,14 +138,20 @@ data class StoryComposerDraft(
      */
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest {
         val effects = storyEffects(originalLanguage)
+        val publishedMediaIds = CanvasMediaAdoption.publicationMediaIds(mediaIds, effects)
         return CreateStoryRequest(
             type = STORY_TYPE,
             content = trimmedText.takeIf { it.isNotEmpty() },
             storyEffects = effects,
             visibility = visibility.wire,
             originalLanguage = originalLanguage,
-            mediaIds = CanvasMediaAdoption.publicationMediaIds(mediaIds, effects).takeIf { it.isNotEmpty() },
+            mediaIds = publishedMediaIds.takeIf { it.isNotEmpty() },
             repostOfId = repostOfId?.takeIf { it.isNotBlank() },
+            visibilityUserIds = ComposerAudienceSelection.wireUserIds(visibility, visibilityUserIds),
+            mentions = mentions.takeIf { it.isNotEmpty() },
+            mediaAlt = MediaDescriptionLaw.wire(mediaAlt, publishedMediaIds),
+            mediaCaption = MediaDescriptionLaw.wire(mediaCaption, publishedMediaIds),
+            allowSoundExtraction = allowSoundExtraction,
         )
     }
 
@@ -153,7 +160,8 @@ data class StoryComposerDraft(
         val stickerObjects = publishableStickers.map { it.toSticker() }
         val mediaObjects = listOfNotNull(backgroundMedia?.toMediaObject())
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
-            filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty()
+            filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
+            audio.isEmpty() && frame.isNeutral
         if (hasNothing) return null
         return StoryEffects(
             background = background?.serialized(),
@@ -164,6 +172,10 @@ data class StoryComposerDraft(
             filter = filter?.wireValue(),
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,
+            audioPlayerObjects = audio.takeIf { it.isNotEmpty() },
+            backgroundTransform = frame.backgroundTransform(),
+            opening = frame.opening,
+            closing = frame.closing,
         )
     }
 

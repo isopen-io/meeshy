@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -49,6 +50,8 @@ fun FeedScreen(
     onOpenNearby: () -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
     onOpenHashtag: (String) -> Unit = {},
+    onResumeStoryDraft: () -> Unit = {},
+    onOpenComposer: ((ComposerOrigin) -> Unit)? = null,
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -97,12 +100,23 @@ fun FeedScreen(
             // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
             // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
             // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
-            StatusBarView()
+            StatusBarView(onOpenMoodComposer = onOpenComposer?.let { open -> { open(ComposerOrigin.MoodChip) } })
             // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
             // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
             FeedComposerPlaceholder(
-                onClick = { scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() } },
+                onClick = {
+                    if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
+                    else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
+                },
+            )
+            // « Reprendre votre brouillon » (#13430): the drafts this account left, at the head of the feed.
+            DraftResumeSection(
+                onResumePost = {
+                    if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
+                    else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
+                },
+                onResumeStory = onResumeStoryDraft,
             )
             // « Publications non envoyées » (#13417): visible only while the device holds a
             // publication the server has not confirmed; « Rouvrir » opens the composer on it.
@@ -158,6 +172,8 @@ fun FeedScreen(
                             onLike = { viewModel.toggleLike(post.id) },
                             onBookmark = { viewModel.toggleBookmark(post.id) },
                             onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
+                            onSelectLanguage = { code -> viewModel.onPostLanguageSelected(post.id, code) },
+                            translatingCodes = state.translatingCodesOf(post.id),
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
                             onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
@@ -227,6 +243,7 @@ fun FeedScreen(
                     location = request.location,
                     language = request.language,
                     mediaAlt = request.mediaAlt,
+                    background = request.background,
                     draft = draft.toSnapshot(System.currentTimeMillis()),
                 )
                 composerDraft = null

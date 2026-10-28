@@ -1,0 +1,480 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.activate",
+          "androidName": "encryption_detail_activate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.activeLabel",
+          "androidName": "encryption_detail_active_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.detailsHeader",
+          "androidName": "encryption_detail_details_header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.enabledOn",
+          "androidName": "encryption_detail_enabled_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.inactiveLabel",
+          "androidName": "encryption_detail_inactive_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.inactiveSubtitle",
+          "androidName": "encryption_detail_inactive_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.loading",
+          "androidName": "encryption_detail_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.modeHeader",
+          "androidName": "encryption_detail_mode_header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.modeLabel",
+          "androidName": "encryption_detail_mode_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.title",
+          "androidName": "encryption_detail_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.translation",
+          "androidName": "encryption_detail_translation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.translation.available",
+          "androidName": "encryption_detail_translation_available",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.translation.disabled",
+          "androidName": "encryption_detail_translation_disabled",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.legacy.subtitle",
+          "androidName": "encryption_legacy_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.legacy.title",
+          "androidName": "encryption_legacy_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.e2ee.description",
+          "androidName": "encryption_mode_e2ee_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.e2ee.label",
+          "androidName": "encryption_mode_e2ee_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.hybrid.description",
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.hybrid.label",
+          "androidName": "encryption_mode_hybrid_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.server.description",
+          "androidName": "encryption_mode_server_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.server.label",
+          "androidName": "encryption_mode_server_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.activationFooterFinal",
+          "androidName": "encryption_detail_activation_footer_final",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.servedGap",
+          "androidName": "encryption_detail_served_gap",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.deactivate",
+          "androidName": "encryption_detail_deactivate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.deactivateAtRestConfirmTitle",
+          "androidName": "encryption_detail_deactivate_at_rest_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.deactivateAtRestConfirmMessage",
+          "androidName": "encryption_detail_deactivate_at_rest_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.deactivateAtRestFooter",
+          "androidName": "encryption_detail_deactivate_at_rest_footer",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.regimeChanged",
+          "androidName": "encryption_detail_regime_changed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.summary.none",
+          "androidName": "encryption_summary_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.summary.server",
+          "androidName": "encryption_summary_server",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.summary.hybrid",
+          "androidName": "encryption_summary_hybrid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.summary.endToEnd",
+          "androidName": "encryption_summary_end_to_end",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.whoReads",
+          "androidName": "encryption_topic_who_reads",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.available",
+          "androidName": "encryption_topic_available",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.absent",
+          "androidName": "encryption_topic_absent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.notYet",
+          "androidName": "encryption_topic_not_yet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.devices",
+          "androidName": "encryption_topic_devices",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.switching",
+          "androidName": "encryption_topic_switching",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.topic.permanence",
+          "androidName": "encryption_topic_permanence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.transitProtected",
+          "androidName": "encryption_fact_transit_protected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.storedWithoutEncryption",
+          "androidName": "encryption_fact_stored_without_encryption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.encryptedOnServerServerReads",
+          "androidName": "encryption_fact_encrypted_on_server_server_reads",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.hybridIsServerToday",
+          "androidName": "encryption_fact_hybrid_is_server_today",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.onlyParticipantsRead",
+          "androidName": "encryption_fact_only_participants_read",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.everyServerFeature",
+          "androidName": "encryption_fact_every_server_feature",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.translatedOnDevice",
+          "androidName": "encryption_fact_translated_on_device",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noServerTranscription",
+          "androidName": "encryption_fact_no_server_transcription",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noNotificationPreview",
+          "androidName": "encryption_fact_no_notification_preview",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noSearch",
+          "androidName": "encryption_fact_no_search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noEdit",
+          "androidName": "encryption_fact_no_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noForward",
+          "androidName": "encryption_fact_no_forward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.noOfflineSending",
+          "androidName": "encryption_fact_no_offline_sending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.notYetAttachments",
+          "androidName": "encryption_fact_not_yet_attachments",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.notYetDecryptedNotifications",
+          "androidName": "encryption_fact_not_yet_decrypted_notifications",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.notYetGroups",
+          "androidName": "encryption_fact_not_yet_groups",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.groupSendingUnavailable",
+          "androidName": "encryption_fact_group_sending_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.notYetSafetyNumbers",
+          "androidName": "encryption_fact_not_yet_safety_numbers",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.oneKeyPerDevice",
+          "androidName": "encryption_fact_one_key_per_device",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.deviceLimit",
+          "androidName": "encryption_fact_device_limit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.restoredDeviceIsNew",
+          "androidName": "encryption_fact_restored_device_is_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.whoMayToggle",
+          "androidName": "encryption_fact_who_may_toggle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.switchKeepsHistory",
+          "androidName": "encryption_fact_switch_keeps_history",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.switchIsShownInThread",
+          "androidName": "encryption_fact_switch_is_shown_in_thread",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.endToEndIsFinal",
+          "androidName": "encryption_fact_end_to_end_is_final",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.endToEndNeverTurnedOff",
+          "androidName": "encryption_fact_end_to_end_never_turned_off",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.endToEndNeverTurnedOffDirect",
+          "androidName": "encryption_fact_end_to_end_never_turned_off_direct",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.fact.serverCannotTurnItOff",
+          "androidName": "encryption_fact_server_cannot_turn_it_off",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.translation.onDevice",
+          "androidName": "encryption_detail_translation_on_device",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "security.verify.title",
+          "androidName": "security_verify_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "security_verify_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "security.verify.unavailable.title",
+          "androidName": "security_verify_unavailable_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "security.verify.unavailable.description",
+          "androidName": "security_verify_unavailable_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "encryption_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.done",
+          "androidName": "encryption_done",
+          "status": "adopted"
+        },
+        {
+          "androidName": "encryption_e2ee_unavailable_here",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_irreversible_refused",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_action_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_toggle_forbidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_read_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_retry",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

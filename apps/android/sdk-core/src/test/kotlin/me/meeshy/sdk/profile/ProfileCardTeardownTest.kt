@@ -27,8 +27,8 @@ class ProfileCardTeardownTest {
             ApplicationProvider.getApplicationContext(),
             MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
-        val profiles = ProfileCacheRepository(db.keyedJsonCacheDao())
-        profiles.store(MeeshyUser(id = "64b7f0a1c2d3e4f5a6b7c8d9", username = "bob"), "bob")
+        val profiles = ProfileCacheRepository(me.meeshy.sdk.cache.KeyedJsonCache(db.keyedJsonCacheDao()))
+        profiles.store(MeeshyUser(id = "64b7f0a1c2d3e4f5a6b7c8d9", username = "bob"), "bob", null)
         assertThat(profiles.cachedProfile("bob")).isNotNull()
 
         DefaultSessionTeardown(

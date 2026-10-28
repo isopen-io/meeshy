@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.lifecycle.SavedStateHandle
@@ -77,6 +78,7 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
     private var languageOverride: Pair<String, String>? = null
+    private var explorerOpen = false
 
     /** In-flight on-demand translation requests, keyed `storyId|lang` (lowercased). */
     private val translatingLanguages = mutableSetOf<String>()
@@ -387,6 +389,24 @@ class StoryViewerViewModel @Inject constructor(
         emit()
     }
 
+    /** Choix dans l'explorateur de langues : la langue s'AFFICHE et se rechoisit sans basculer (≠ puce). */
+    fun selectLanguage(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        languageOverride = storyId to code
+        emit()
+    }
+
+    fun openLanguageExplorer() {
+        if (playback.currentSlide == null) return
+        explorerOpen = true
+        emit()
+    }
+
+    fun closeLanguageExplorer() {
+        explorerOpen = false
+        emit()
+    }
+
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
@@ -503,6 +523,9 @@ class StoryViewerViewModel @Inject constructor(
         transitionDwell(if (playback.isDismissed) null else currentId)
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
+        val prefsNow = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val currentItem = currentId?.let { rawItems[it] }
+        val currentResolved = currentItem?.let { StoryContentResolver.resolve(it, prefsNow, override) }
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
         // The current slide is always re-projected from its raw item: [rawItems] is the
         // single source of truth for translated content and can change at runtime (a
@@ -540,6 +563,19 @@ class StoryViewerViewModel @Inject constructor(
             canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
             availableLanguages = availableLanguagesFor(currentId),
             languageOverride = override,
+            activeLanguageCode = currentResolved?.languageCode
+                ?: override?.takeUnless(StoryLanguageOverride::isOriginal),
+            languageExplorer = if (explorerOpen && currentItem != null && currentResolved != null) {
+                StoryLanguageExplorerBuilder.build(
+                    item = currentItem,
+                    preferences = prefsNow,
+                    resolved = currentResolved,
+                    override = override,
+                    translatingCodes = translatingCodesOf(currentId),
+                )
+            } else {
+                null
+            },
             isPaused = isHoldPaused,
             isMuted = isMuted,
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
@@ -601,6 +637,11 @@ class StoryViewerViewModel @Inject constructor(
             isTranslating = translationKey(storyId, code) in translatingLanguages,
         )
     }
+
+    private fun translatingCodesOf(storyId: String): Set<String> =
+        translatingLanguages.mapNotNullTo(mutableSetOf()) { key ->
+            key.substringAfter('|', "").takeIf { it.isNotEmpty() && key.substringBefore('|') == storyId }
+        }
 
     private fun translationKey(storyId: String, code: String): String =
         "$storyId|${code.trim().lowercase()}"
@@ -813,13 +854,17 @@ class StoryViewerViewModel @Inject constructor(
     private fun StoryItem.resolveAudioTrack(preferBackground: Boolean): AudioTrack? {
         val match = storyEffects?.audioPlayerObjects.orEmpty()
             .firstOrNull { (it.isBackground == true) == preferBackground }
+        // Un son EMPRUNTÉ à la bibliothèque n'a aucun média de post (`postMediaId` vide) : il voyage par son
+        // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent — mais cette adresse est
+        // écrite par l'AUTEUR : seule la forme canonique d'un son de la bibliothèque est jouée.
         val fromObject = match?.postMediaId
             ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
             ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            ?: MediaRequestCredential.libraryAudioUrl(match?.mediaURL, config.apiBaseUrl)
         if (fromObject != null) {
             return AudioTrack(
                 url = fromObject,
-                window = StorySourceWindow.clippingMs(match.sourceStart, match.sourceEnd),
+                window = StorySourceWindow.clippingMs(match?.sourceStart, match?.sourceEnd),
             )
         }
         if (!preferBackground) return null

@@ -70,6 +70,7 @@ class SessionTeardownTest {
         preferenceSnapshots: me.meeshy.sdk.preferences.PreferenceSnapshotStore =
             me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
         perAccountCaches: Set<PerAccountCache> = emptySet(),
+        guestSessions: AnonymousSessionStore? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -81,6 +82,7 @@ class SessionTeardownTest {
         blockCache,
         preferenceSnapshots,
         perAccountCaches,
+        guestSessions,
     )
 
     private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
@@ -96,6 +98,23 @@ class SessionTeardownTest {
         selectedId = "s1",
         updatedAt = "2026-08-27T12:00:00Z",
     )
+
+    @Test
+    fun wipe_dropsTheGuestSessionSoNoLaterAccountInheritsItsPermissionsOrToken() = runTest {
+        val guest = InMemoryAnonymousSessionStore(
+            me.meeshy.sdk.model.AnonymousSessionContext(
+                sessionToken = "guest-token",
+                participantId = "p1",
+                permissions = me.meeshy.sdk.model.ParticipantPermissions.anonymous(false, false, false),
+                linkId = "l1",
+                conversationId = "c1",
+            ),
+        )
+
+        teardown(guestSessions = guest).wipe()
+
+        assertThat(guest.load()).isNull()
+    }
 
     @Test
     fun wipe_clearsEveryRoomTable() = runTest {

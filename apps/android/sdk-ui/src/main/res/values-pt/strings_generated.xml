@@ -1,10 +1,48 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Posição de reprodução</string>
+    <string name="audio_editor_apply">Aplicar as alterações</string>
+    <string name="audio_editor_close">Fechar</string>
+    <string name="audio_editor_error_generic">A edição falhou.</string>
+    <string name="audio_editor_error_load">Não foi possível carregar este áudio.</string>
+    <string name="audio_editor_fade_in">Fade in</string>
+    <string name="audio_editor_fade_out">Fade out</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simples</string>
+    <string name="audio_editor_op_fade">Fade</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Trecho removido</string>
+    <string name="audio_editor_op_speed">Velocidade</string>
+    <string name="audio_editor_op_trim">Cortado</string>
+    <string name="audio_editor_pause">Pausar</string>
+    <string name="audio_editor_play">Reproduzir</string>
+    <string name="audio_editor_preparing">Preparando o áudio…</string>
+    <string name="audio_editor_processing">Processando…</string>
+    <string name="audio_editor_redo">Refazer</string>
+    <string name="audio_editor_reset">Redefinir</string>
+    <string name="audio_editor_split_hint">Selecione o trecho a remover.</string>
+    <string name="audio_editor_tool_fade">Fade</string>
+    <string name="audio_editor_tool_speed">Velocidade</string>
+    <string name="audio_editor_tool_split">Cortar</string>
+    <string name="audio_editor_tool_transcribe">Transcrever</string>
+    <string name="audio_editor_tool_trim">Aparar</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Arraste as alças para manter um trecho.</string>
+    <string name="audio_editor_undo">Desfazer</string>
+    <string name="audio_editor_use">Usar o áudio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Posição na mensagem de voz</string>
+    <string name="audio_split_handle_end">Fim do corte</string>
+    <string name="audio_split_handle_start">Início do corte</string>
+    <string name="audio_trim_handle_end">Fim da seleção</string>
+    <string name="audio_trim_handle_start">Início da seleção</string>
     <string name="avatar_a11y_mood">humor %s</string>
+    <string name="bubble_contact_card_shared">Contato compartilhado</string>
     <string name="bubble_story_citation_answer">resposta ao story</string>
     <string name="bubble_story_citation_open_hint">Abre o story citado</string>
     <string name="bubble_story_citation_unavailable">Story indisponível</string>
+    <string name="capture_microphone_denied">Microfone negado — o vídeo ficará mudo. Toque para abrir os Ajustes</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Limpar pesquisa</string>
     <string name="common_close">Fechar</string>
@@ -28,6 +66,7 @@
     <string name="focal_focus_add_reaction">Adicionar uma reação</string>
     <string name="focal_focus_translation_detail">Detalhes da tradução</string>
     <string name="focal_row_you">Você</string>
+    <string name="language_strip_more">Outros idiomas</string>
     <string name="location_fullscreen_directions">Direções</string>
     <string name="location_fullscreen_mapStyle">Estilo do mapa</string>
     <string name="location_fullscreen_sharedPosition">Posição compartilhada</string>
@@ -116,6 +155,18 @@
     <string name="retouch_text_align_center">CENTRO</string>
     <string name="retouch_text_align_left">ESQUERDA</string>
     <string name="retouch_text_align_right">DIREITA</string>
+    <string name="retouch_text_background">Fundo do texto</string>
+    <string name="retouch_text_bg_amber">Âmbar</string>
+    <string name="retouch_text_bg_black">Preto</string>
+    <string name="retouch_text_bg_black65" formatted="false">Preto 65%</string>
+    <string name="retouch_text_bg_glass">Vidro</string>
+    <string name="retouch_text_bg_green">Verde</string>
+    <string name="retouch_text_bg_indigo">Índigo</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">Índigo 65%</string>
+    <string name="retouch_text_bg_pink">Rosa</string>
+    <string name="retouch_text_bg_red">Vermelho</string>
+    <string name="retouch_text_bg_white">Branco</string>
+    <string name="retouch_text_bg_white65" formatted="false">Branco 65%</string>
     <string name="retouch_text_color">Cor do texto</string>
     <string name="retouch_text_style_bold">NEGRITO</string>
     <string name="retouch_text_style_classic">CLÁSSICA</string>
