@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.media.TusChunkPlan
 import me.meeshy.sdk.model.media.TusChunkRange
 import me.meeshy.sdk.model.media.TusResumeDecision
 import me.meeshy.sdk.model.media.TusResumePlanner
+import me.meeshy.sdk.model.media.TusServerProbe
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.TusUploadMetadata
 import me.meeshy.sdk.model.toUploadedMedia
@@ -15,6 +16,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.createSession
 import me.meeshy.sdk.net.api.patchChunk
+import me.meeshy.sdk.net.api.probeSession
 import me.meeshy.sdk.net.apiCall
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -36,7 +38,7 @@ import javax.inject.Singleton
  * **Checkpointed retries** (`feature-parity.md` §Q): every acknowledged
  * intermediate chunk persists a [TusUploadCheckpointEntity] keyed by
  * [TusCheckpointKey]. A retried [upload] call for the same content
- * ([TusResumePlanner] decides — see its doc comment for the safety trade-off)
+ * (the gateway is asked what it holds — [TusResumePlanner.reconcile])
  * resumes at the last confirmed offset instead of re-uploading from byte zero,
  * skipping [TusApi.createUpload] entirely. The row is deleted once the final
  * chunk succeeds. This does **not** yet survive an app kill mid-upload — the
@@ -68,6 +70,7 @@ public class TusUploadRepository @Inject constructor(
         item: MediaUploadItem,
         context: TusUploadContext,
         chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
+        onProgress: (sent: Long, total: Long) -> Unit = { _, _ -> },
     ): NetworkResult<List<UploadedMedia>> {
         val outgoing = when (val result = sanitizer.sanitize(item)) {
             is NetworkResult.Failure -> return result
@@ -78,12 +81,10 @@ public class TusUploadRepository @Inject constructor(
         val totalBytes = outgoing.bytes.size.toLong()
         val checkpointKey = TusCheckpointKey.of(context, fileName, mimeType, totalBytes)
 
-        val existing = checkpoints.find(checkpointKey)
-        val decision = TusResumePlanner.plan(
-            existingLocation = existing?.location,
-            existingUploadedBytes = existing?.uploadedBytes ?: 0L,
-            totalBytes = totalBytes,
-        )
+        val decision = when (val verdict = resolveSession(checkpointKey, totalBytes)) {
+            is NetworkResult.Failure -> return verdict
+            is NetworkResult.Success -> verdict.data
+        }
 
         val location: String
         val resumeOffset: Long
@@ -106,8 +107,9 @@ public class TusUploadRepository @Inject constructor(
             }
         }
 
-        val ranges = TusChunkPlan.chunks(totalBytes = totalBytes, chunkSize = chunkSizeBytes)
-            .filter { it.offset >= resumeOffset }
+        onProgress(resumeOffset, totalBytes)
+        val ranges = TusChunkPlan.chunks(totalBytes = totalBytes - resumeOffset, chunkSize = chunkSizeBytes)
+            .map { it.copy(offset = it.offset + resumeOffset) }
         for (range in ranges) {
             if (!range.isFinal) {
                 val chunkResult = tusApi.patchChunk(
@@ -126,6 +128,7 @@ public class TusUploadRepository @Inject constructor(
                         updatedAt = System.currentTimeMillis(),
                     ),
                 )
+                onProgress(range.offset + range.length, totalBytes)
                 continue
             }
 
@@ -139,12 +142,31 @@ public class TusUploadRepository @Inject constructor(
             }
             if (finishResult is NetworkResult.Failure) return finishResult
             checkpoints.delete(checkpointKey)
+            onProgress(totalBytes, totalBytes)
             return finishResult.map { data -> listOfNotNull(data.attachment?.toUploadedMedia()) }
         }
 
         // Unreachable: TusChunkPlan.chunks always returns at least one (final) range, and
         // TusResumePlanner never resumes at an offset that has already reached totalBytes.
         error("TusChunkPlan produced no ranges for ${outgoing.bytes.size} bytes at resumeOffset=$resumeOffset")
+    }
+
+    /**
+     * Whether to resume a stored session or open a new one (#13429). A stored session is never trusted
+     * on its own: the gateway is asked (`HEAD`) what it really holds, so a lost acknowledgement does not
+     * earn a `409` forever and a session the gateway swept does not fail every retry — its checkpoint
+     * is dropped and the upload starts over. An unreachable gateway is a failure the caller retries.
+     */
+    private suspend fun resolveSession(checkpointKey: String, totalBytes: Long): NetworkResult<TusResumeDecision> {
+        val existing = checkpoints.find(checkpointKey)
+        val location = existing?.location
+        if (location.isNullOrBlank()) return NetworkResult.Success(TusResumeDecision.Fresh)
+        val probe = when (val result = tusApi.probeSession(location, TusUploadMetadata.TUS_RESUMABLE_VERSION)) {
+            is NetworkResult.Failure -> return result
+            is NetworkResult.Success -> result.data
+        }
+        if (probe == TusServerProbe.Gone) checkpoints.delete(checkpointKey)
+        return NetworkResult.Success(TusResumePlanner.reconcile(location, probe, totalBytes))
     }
 
     private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
