@@ -566,10 +566,6 @@ class ChatViewModel @Inject constructor(
 
     fun send() = composer.send()
 
-    /** Sends a file picked from the system document/photo picker through the durable upload chain. */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        composer.sendFileAttachment(bytes, fileName, declaredMimeType)
-
     /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
     fun onPickFile(file: java.io.File, fileName: String, declaredMimeType: String?) =
         controllers.find<ComposerTrayController>()?.stageFile(file, declaredMimeType, fileName)
