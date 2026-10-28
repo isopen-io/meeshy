@@ -1335,6 +1335,35 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `removing a duplicated slide keeps the media its original still shows`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onDuplicateSelectedSlide()
+        val duplicateId = vm.state.value.deck.slides[1].id
+
+        vm.onRemoveSlide(duplicateId)
+
+        assertThat(vm.state.value.deck.slides.single().mediaIds).containsExactly("m1")
+        assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
+    }
+
+    @Test
+    fun `removing a duplicated slide never cancels an upload its original still carries`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onDuplicateSelectedSlide()
+        val duplicateId = vm.state.value.deck.slides[1].id
+
+        vm.onRemoveSlide(duplicateId)
+
+        assertThat(vm.state.value.pendingUploads).hasSize(1)
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
     fun `removing the last slide is inert and keeps its media`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
