@@ -79,7 +79,7 @@ pyarrow==25.0.1
 # insoluble ("No solution found... huggingface-hub>=0.25.0,<2.0" vs "==2.1.1") et
 # casse le job Docker "Build translator" (#10035). NE PAS bumper au-delà de 1.x
 # tant que datasets reste sur 5.0.1 — revalider avec `uv pip compile` si l'un bouge.
-huggingface_hub==1.32.0
+huggingface_hub==2.2.0
 safetensors==0.8.0
 peft==0.21.2
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
