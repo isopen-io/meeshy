@@ -73,6 +73,16 @@ data class ResolvedTrackedLink(
     val sharerId: String? = null,
     val isActive: Boolean? = null,
     val expiresAt: String? = null,
+    /** Qui a partage ce contenu (nom public seulement) ; `null` hors partage de contenu (#9149). */
+    val sharer: TrackedLinkSharer? = null,
+)
+
+/** L'identite PUBLIQUE de qui a partage un lien (`displayName`, `username`, `avatar` — jamais d'identifiant ni de presence). */
+@Serializable
+data class TrackedLinkSharer(
+    val displayName: String? = null,
+    val username: String,
+    val avatar: String? = null,
 )
 
 /** Corps de `POST /tracking-links/:token/click`. */
