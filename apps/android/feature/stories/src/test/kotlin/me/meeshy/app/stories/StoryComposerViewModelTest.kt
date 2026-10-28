@@ -1367,6 +1367,25 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `leaving the composer cancels the uploads of a removed slide, never those the draft still shows`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-2"
+        vm.onSelectSlide(vm.state.value.deck.slides[0].id)
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveSlide(secondSlideId)
+        val store = androidx.lifecycle.ViewModelStore()
+        androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = vm as T
+        })[StoryComposerViewModel::class.java]
+
+        store.clear()
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+        coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
+    }
+
+    @Test
     fun `the held uploads are cancelled once no reachable history step shows them`() = runTest {
         val (vm, secondSlideId) = vmWithPendingSecondSlide()
         vm.onRemoveSlide(secondSlideId)

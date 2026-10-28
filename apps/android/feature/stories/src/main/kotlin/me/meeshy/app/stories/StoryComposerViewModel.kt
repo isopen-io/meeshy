@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -777,8 +780,19 @@ class StoryComposerViewModel @Inject constructor(
 
     internal fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
 
-    /** Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées. */
-    override fun onCleared() = (_state.value.pendingUploads + buried.held).forEach { MediaIntake.release(it.item) }
+    /**
+     * Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées.
+     * Les envois d'une slide supprimée (#13541) n'ont plus d'historique pour la rétablir ni de brouillon qui les montre : leur
+     * envoi durable est annulé, hors de [viewModelScope] déjà fermé, pour ne pas téléverser un média qu'aucune story n'utilisera.
+     */
+    override fun onCleared() {
+        val held = buried.held
+        (_state.value.pendingUploads + held).forEach { MediaIntake.release(it.item) }
+        if (held.isEmpty()) return
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+            held.forEach { pending -> runCatching { mediaUploadQueue.cancel(pending.cmid) } }
+        }
+    }
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"
