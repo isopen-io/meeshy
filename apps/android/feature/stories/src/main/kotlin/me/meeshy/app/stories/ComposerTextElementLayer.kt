@@ -32,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -160,9 +161,17 @@ internal fun TextElementLayer(
             shadow = element.style.presetEffect().composeShadow(canvasFontSizePx, textColor),
             textDirection = textDirection,
         )
-        Box(
-            modifier = Modifier
-                .composerTextFrame(element.background, element.frame, canvasWidthPx),
+        FramedTextBox(
+            background = element.background,
+            frame = element.frame,
+            pxPerDesign = StoryTextMetrics.pxPerDesign(1.0, canvasWidthPx),
+            glyphStyle = TextStyle(
+                fontSize = canvasFontSize,
+                fontWeight = FontWeight(typography.fontWeight),
+                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                fontFamily = typography.family.toFontFamily(),
+                letterSpacing = typography.letterSpacingEm.em,
+            ),
         ) {
             val outline = element.outline
             if (outline.isVisible && !editing) {

@@ -10,6 +10,8 @@ import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
@@ -50,7 +52,12 @@ data class StoryTextObjectView(
     val style: StoryTextStyle = StoryTextStyle.BOLD,
     /** The published glyph outline ([StoryTextObject.borderWidth] / [StoryTextObject.borderColor]), design px. */
     val outline: StoryTextOutline = StoryTextOutline(),
+    /** The published box ([StoryTextObject.frameShape] & co.), iOS `StoryTextLayer`'s — shape, padding scale and ring. */
+    val frame: StoryTextFrame = StoryTextFrame(),
 ) {
+    /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's own scale — the frame's unit. */
+    fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(scale, canvasWidthPx)
+
     /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
     fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), scale, canvasWidthPx)
 
@@ -186,6 +193,12 @@ object StoryTextObjectProjection {
             outline = StoryTextOutline(
                 width = textObject.borderWidth?.toFloat()?.takeIf { it > StoryTextOutline.NONE_WIDTH } ?: StoryTextOutline.NONE_WIDTH,
                 color = textObject.borderColor,
+            ),
+            frame = StoryTextFrame(
+                shape = StoryTextFrameShape.fromWire(textObject.frameShape),
+                paddingScale = textObject.framePaddingScale?.toFloat() ?: StoryTextFrame.DEFAULT_PADDING,
+                borderWidth = textObject.frameBorderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                borderColor = textObject.frameBorderColor,
             ),
         )
 }
