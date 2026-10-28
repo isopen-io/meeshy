@@ -353,6 +353,26 @@ class StoryComposerPublicationViewModelTest {
     }
 
     @Test
+    fun `un brouillon restaure perd la mention d'une personne bloquee depuis`() = runTest {
+        blocks.setBlocked("b", true)
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut")),
+            selectedId = "s1",
+            annotations = me.meeshy.sdk.model.StoryDraftAnnotations(
+                mentions = listOf(
+                    me.meeshy.sdk.model.PostMentionInput(userId = "a", username = "ana", display = "PINNED"),
+                    me.meeshy.sdk.model.PostMentionInput(userId = "b", username = "bob", display = "PINNED"),
+                ),
+            ),
+        )
+        val vm = viewModel(InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.draft.mentions.map { it.userId }).containsExactly("a")
+    }
+
+    @Test
     fun `un brouillon d'avant les annotations se restaure sans rien inventer`() = runTest {
         val stored = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut")),
