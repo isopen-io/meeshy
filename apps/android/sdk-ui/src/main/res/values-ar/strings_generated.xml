@@ -187,6 +187,9 @@
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
     <string name="settings_info_button_label">معرفة المزيد عن %s</string>
+    <string name="slide_rail_delete_cancel">إلغاء</string>
+    <string name="slide_rail_delete_confirm_action">حذف</string>
+    <string name="slide_rail_delete_confirm_title">حذف هذا المشهد؟</string>
     <string name="sticker_sheet_close">إغلاق</string>
     <string name="sticker_sheet_favorites_empty">اضغط مطولاً على زخرفة لتثبيتها هنا.</string>
     <string name="sticker_sheet_instants_lieu">أماكن</string>
