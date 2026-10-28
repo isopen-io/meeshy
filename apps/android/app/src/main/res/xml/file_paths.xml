@@ -14,4 +14,9 @@
     <cache-path
         name="shared-media"
         path="shared-media/" />
+    <!-- Composer "Transférer" : the MP4 baked from the scene, handed to the system share sheet
+         (SceneExportCoordinator). Swept at the next export. -->
+    <cache-path
+        name="scene-exports"
+        path="scene-exports/" />
 </paths>
