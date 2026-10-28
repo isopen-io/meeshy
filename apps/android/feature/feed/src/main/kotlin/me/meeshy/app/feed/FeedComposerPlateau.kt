@@ -21,6 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +84,8 @@ internal fun FeedComposerPlateau(
     formatSlot: (@Composable () -> Unit)?,
     showReelToggle: Boolean,
     actions: PostComposerActions,
+    raiseKeyboard: Boolean = false,
+    onKeyboardRaised: () -> Unit = {},
 ) {
     val places = remember(format) { ComposerRailPlan.publicationControls(format) }
     val mediaEnabled = !draft.isMediaFull && !isUploading && !voice.isRecording
@@ -116,6 +123,8 @@ internal fun FeedComposerPlateau(
             showsLanguage = places[PublicationControl.LANGUAGE] == PublicationControlPlace.CONTENT_FOOT,
             canAddMore = mediaEnabled,
             actions = actions,
+            raiseKeyboard = raiseKeyboard,
+            onKeyboardRaised = onKeyboardRaised,
         )
     }
 }
@@ -131,7 +140,20 @@ private fun PostCard(
     showsLanguage: Boolean,
     canAddMore: Boolean,
     actions: PostComposerActions,
+    raiseKeyboard: Boolean,
+    onKeyboardRaised: () -> Unit,
 ) {
+    val contentFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val raised by rememberUpdatedState(onKeyboardRaised)
+    // The door promised writing: the field takes focus and the keyboard rises once the card is laid out, and the debt
+    // is paid once — a later format switch remounts the card without raising it again.
+    LaunchedEffect(raiseKeyboard) {
+        if (!raiseKeyboard) return@LaunchedEffect
+        runCatching { contentFocus.requestFocus() }
+        keyboard?.show()
+        raised()
+    }
     Column(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
@@ -141,7 +163,7 @@ private fun PostCard(
         OutlinedTextField(
             value = draft.text,
             onValueChange = actions.onText,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
             placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
             minLines = 6,
         )

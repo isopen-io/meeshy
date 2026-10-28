@@ -38,6 +38,7 @@ fun ComposerHostScreen(
     viewModel: ComposerHostViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val keyboardOwed by viewModel.keyboardOwed.collectAsStateWithLifecycle()
     val seed by viewModel.seed.collectAsStateWithLifecycle()
     // Une graine périmée ou déjà reprise : il n'y a rien à composer, le composeur ne s'ouvre pas sur du vide.
     LaunchedEffect(seed) { if (seed is SeedState.Lost) onClose() }
@@ -75,6 +76,8 @@ fun ComposerHostScreen(
             governingType = state.chosen?.postType,
             offerReel = state.offersReelForPost,
             onFormatChosen = viewModel::choose,
+            raiseKeyboard = keyboardOwed,
+            onKeyboardRaised = viewModel::onKeyboardRaised,
             viewModel = hiltViewModel<FeedViewModel>(shared),
         ) }
         ComposerFormat.STATUS -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { MoodComposerContent(

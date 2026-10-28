@@ -49,6 +49,8 @@ fun PostComposerContent(
     governingType: PostType? = null,
     offerReel: Boolean = false,
     onFormatChosen: (ComposerFormat) -> Unit = {},
+    raiseKeyboard: Boolean = false,
+    onKeyboardRaised: () -> Unit = {},
     carry: ComposerCarry? = null,
     onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     viewModel: FeedViewModel = hiltViewModel(),
@@ -99,6 +101,8 @@ fun PostComposerContent(
         onMediaError = onMediaError,
         formatSlot = formatSlot,
         governingType = governingType,
+        raiseKeyboard = raiseKeyboard,
+        onKeyboardRaised = onKeyboardRaised,
     )
 }
 

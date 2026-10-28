@@ -145,6 +145,8 @@ fun FeedComposerSheet(
     onRemoveMedia: (String) -> Unit = {},
     formatSlot: (@Composable () -> Unit)? = null,
     governingType: PostType? = null,
+    raiseKeyboard: Boolean = false,
+    onKeyboardRaised: () -> Unit = {},
 ) {
     val state = remember { FeedComposerState(initialDraft) }
     // The host's format choice governs the type; the sheet's own reel toggle then has nothing to decide.
@@ -171,6 +173,8 @@ fun FeedComposerSheet(
             formatSlot = formatSlot,
             showReelToggle = draft.qualifiesAsReel && governingType == null,
             actions = actions,
+            raiseKeyboard = raiseKeyboard,
+            onKeyboardRaised = onKeyboardRaised,
         )
     } else {
         FeedComposerModal(
