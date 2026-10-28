@@ -136,8 +136,12 @@
     <string name="status_bar_republish">Republicar</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">vía @%s</string>
+    <string name="status_composer_bare_add">Añadir unas palabras</string>
+    <string name="status_composer_bare_publish">Publicar igualmente</string>
+    <string name="status_composer_bare_title">¿Publicar tu estado de ánimo sin unas palabras?</string>
     <string name="status_composer_close">Cerrar</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">Más emojis</string>
     <string name="status_composer_mood_question">¿Cómo te sientes?</string>
     <string name="status_composer_publish">Publicar</string>
     <string name="status_composer_title">Estado</string>
