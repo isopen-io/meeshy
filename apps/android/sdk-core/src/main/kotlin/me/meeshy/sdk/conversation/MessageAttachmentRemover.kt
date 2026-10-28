@@ -26,6 +26,7 @@ enum class PieceRemoval {
  * du cache tout de suite, puis la passerelle l'efface (`DELETE /attachments/:id`). Sur un refus ou sans réponse, la pièce
  * REVIENT à sa place — le geste inverse, jamais l'écrasement par un instantané : une réaction arrivée entre-temps sur une
  * autre pièce n'est pas perdue. En ligne seulement (comme iOS) : un effacement de fichiers ne se rejoue pas à l'aveugle.
+ * Le retour se pose sous le ticket du GESTE (#13560) : une réponse arrivée après un changement de compte n'écrit rien.
  */
 class MessageAttachmentRemover internal constructor(
     private val updater: CachedMessageUpdater,
@@ -40,8 +41,9 @@ class MessageAttachmentRemover internal constructor(
     ) : this(CachedMessageUpdater(database, messageDao, fence), mediaApi)
 
     suspend fun remove(messageId: String, attachmentId: String): PieceRemoval {
+        val ticket = updater.ticket()
         var removed: Pair<Int, ApiMessageAttachment>? = null
-        updater.update(messageId, requireSynced = true) { message ->
+        updater.update(ticket, messageId, requireSynced = true) { message ->
             val index = message.attachments.indexOfFirst { it.id == attachmentId }
             if (index < 0) return@update message
             removed = index to message.attachments[index]
@@ -51,7 +53,7 @@ class MessageAttachmentRemover internal constructor(
         return when (apiCall { mediaApi.delete(attachmentId) }) {
             is NetworkResult.Success -> PieceRemoval.REMOVED
             is NetworkResult.Failure -> {
-                updater.update(messageId, requireSynced = false) { message ->
+                updater.update(ticket, messageId, requireSynced = false) { message ->
                     if (message.attachments.any { it.id == attachmentId }) {
                         message
                     } else {
