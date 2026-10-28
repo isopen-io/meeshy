@@ -37,6 +37,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+            onResumeStoryDraft = { navController.navigate(Routes.STORY_COMPOSER) },
         )
     }
     composable(
