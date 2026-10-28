@@ -35,6 +35,8 @@ data class FeedPostPublishRequest(
      * typed nothing" (never sent as `mediaAlt: {}` — see [FeedViewModel]).
      */
     val mediaAlt: Map<String, String> = emptyMap(),
+    /** The scene's background (hex without `#`), `null` for a post without a scene — published as its `storyEffects`. */
+    val background: String? = null,
 )
 
 /**
@@ -93,7 +95,12 @@ data class FeedComposerDraft(
     val location: SharedPlace? = null,
     val language: String = ComposerLanguage.DEFAULT,
     val mediaAlt: Map<String, String> = emptyMap(),
+    /** The scene's background colour, hex without `#` — the scene is born when it is chosen (iOS `documentBackground`). */
+    val background: String? = null,
 ) {
+    /** The scene is mounted at the top of the document as soon as a background is chosen (iOS `showsScene`). */
+    val showsScene: Boolean get() = background != null
+
     /** The post body actually published — whitespace-stripped. */
     val trimmedContent: String get() = text.trim()
 
@@ -184,6 +191,12 @@ data class FeedComposerDraft(
      */
     fun withLanguage(code: String): FeedComposerDraft = copy(language = code)
 
+    /** Paints (or, with `null`, removes) the scene's background; anything but a six-digit hex is inert. */
+    fun withBackground(hex: String?): FeedComposerDraft {
+        val normalised = hex?.removePrefix("#")?.uppercase()?.takeIf { HEX_COLOR.matches(it) }
+        return if (hex == null) copy(background = null) else if (normalised == null) this else copy(background = normalised)
+    }
+
     /** The payload to publish, or `null` when the draft is not yet publishable (see [canPublish]). */
     fun publishRequest(): FeedPostPublishRequest? {
         if (!canPublish) return null
@@ -195,12 +208,15 @@ data class FeedComposerDraft(
             location = location,
             language = language,
             mediaAlt = mediaAlt.filterKeys { it in mediaIds },
+            background = background,
         )
     }
 
     companion object {
         /** Parity with the story composer's own ≤10 media-per-item rule. */
         const val MAX_MEDIA: Int = 10
+
+        private val HEX_COLOR = Regex("[0-9A-F]{6}")
     }
 }
 

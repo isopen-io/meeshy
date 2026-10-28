@@ -243,6 +243,7 @@ fun FeedScreen(
                     location = request.location,
                     language = request.language,
                     mediaAlt = request.mediaAlt,
+                    background = request.background,
                     draft = draft.toSnapshot(System.currentTimeMillis()),
                 )
                 composerDraft = null

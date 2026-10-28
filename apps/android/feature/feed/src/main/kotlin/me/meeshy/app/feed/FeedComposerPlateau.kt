@@ -21,15 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,8 +55,6 @@ import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
-
-private const val CONTENT_FOCUS_FRAMES = 3
 
 /** The tools the post composer serves on its canonical row; the model keeps the iOS order and drops the rest. */
 private val ServedTools = ComposerDocumentTool.servedRow(
@@ -92,6 +86,7 @@ internal fun FeedComposerPlateau(
     onKeyboardRaised: () -> Unit = {},
 ) {
     val places = remember(format) { ComposerRailPlan.publicationControls(format) }
+    var paletteOpen by rememberSaveable { mutableStateOf(false) }
     val mediaEnabled = !draft.isMediaFull && !isUploading && !voice.isRecording
     ComposerPlateau(
         onDismiss = actions.onClose,
@@ -103,6 +98,13 @@ internal fun FeedComposerPlateau(
         canonicalRow = {
             ServedTools.forEach { tool ->
                 DocumentToolDoor(tool, enabled = if (tool.consumesMediaSlot) mediaEnabled else !isCapturingLocation, draft, voice, actions)
+                // The background door follows the capture tools, where iOS places it — behind the emoji / text births of the scene.
+                if (tool == ComposerDocumentTool.VIDEO) {
+                    ComposerRailButton(
+                        MeeshyIcons.Palette, stringResource(R.string.feed_composer_background),
+                        { paletteOpen = !paletteOpen }, active = paletteOpen || draft.showsScene,
+                    )
+                }
             }
         },
         socle = {
@@ -124,6 +126,7 @@ internal fun FeedComposerPlateau(
             isCapturingLocation = isCapturingLocation,
             voice = voice,
             showReelToggle = showReelToggle,
+            paletteOpen = paletteOpen,
             showsLanguage = places[PublicationControl.LANGUAGE] == PublicationControlPlace.CONTENT_FOOT,
             canAddMore = mediaEnabled,
             actions = actions,
@@ -141,74 +144,61 @@ private fun PostCard(
     isCapturingLocation: Boolean,
     voice: VoiceRecordingSession,
     showReelToggle: Boolean,
+    paletteOpen: Boolean,
     showsLanguage: Boolean,
     canAddMore: Boolean,
     actions: PostComposerActions,
     raiseKeyboard: Boolean,
     onKeyboardRaised: () -> Unit,
 ) {
-    val contentFocus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val raised by rememberUpdatedState(onKeyboardRaised)
-    // The door promised writing: the field takes focus and the keyboard rises once the card is laid out, and the debt
-    // is paid once — a later format switch remounts the card without raising it again. The field may only be attached
-    // a frame later (navigation enter), so focus is retried frame by frame before the keyboard is asked for.
-    LaunchedEffect(raiseKeyboard) {
-        if (!raiseKeyboard) return@LaunchedEffect
-        var focused = false
-        for (attempt in 0 until CONTENT_FOCUS_FRAMES) {
-            focused = runCatching { contentFocus.requestFocus() }.isSuccess
-            if (focused) break
-            withFrameNanos { }
-        }
-        if (focused) keyboard?.show()
-        raised()
-    }
+    val contentFocus = rememberContentFocus(raiseKeyboard, onKeyboardRaised)
     Column(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        val field = rememberHostedTextField(draft.text, actions.onText)
-        OutlinedTextField(
-            value = field.value,
-            onValueChange = field.onValueChange,
-            modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
-            placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
-            minLines = 6,
-        )
-        if (showsLanguage) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                ComposerLanguagePill(code = draft.language, onClick = actions.onLanguage)
+        PostSceneBlock(background = draft.background, paletteOpen = paletteOpen, onPick = actions.onBackground)
+        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+            val field = rememberHostedTextField(draft.text, actions.onText)
+            OutlinedTextField(
+                value = field.value,
+                onValueChange = field.onValueChange,
+                modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
+                placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
+                minLines = 6,
+            )
+            if (showsLanguage) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    ComposerLanguagePill(code = draft.language, onClick = actions.onLanguage)
+                }
             }
-        }
-        draft.location?.let { place -> LocationAttachmentChip(place = place, onRemove = actions.onRemoveLocation) }
-        if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
-        if (voice.isRecording) {
-            VoiceRecordingPill(
-                session = voice,
-                accentColor = MeeshyPalette.Indigo500,
-                onCancel = actions.onCancelVoice,
-                onStop = actions.onFinishVoice,
-                onSend = actions.onFinishVoice,
-            )
-        } else {
-            MediaAttachmentsRow(
-                media = attachedMedia,
-                isUploading = isUploading,
-                canAddMore = canAddMore,
-                isCapturingLocation = isCapturingLocation,
-                onAdd = actions.onGallery,
-                onCamera = actions.onCamera,
-                onVideoCapture = actions.onVideo,
-                onAttachFile = actions.onFile,
-                onRecordVoice = actions.onVoice,
-                onAddLocation = actions.onLocation,
-                onRemove = actions.onRemoveMedia,
-                showAddTiles = false,
-            )
-            MediaAltTextFields(media = attachedMedia, altById = draft.mediaAlt, onAltChange = actions.onAlt)
+            draft.location?.let { place -> LocationAttachmentChip(place = place, onRemove = actions.onRemoveLocation) }
+            if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
+            if (voice.isRecording) {
+                VoiceRecordingPill(
+                    session = voice,
+                    accentColor = MeeshyPalette.Indigo500,
+                    onCancel = actions.onCancelVoice,
+                    onStop = actions.onFinishVoice,
+                    onSend = actions.onFinishVoice,
+                )
+            } else {
+                MediaAttachmentsRow(
+                    media = attachedMedia,
+                    isUploading = isUploading,
+                    canAddMore = canAddMore,
+                    isCapturingLocation = isCapturingLocation,
+                    onAdd = actions.onGallery,
+                    onCamera = actions.onCamera,
+                    onVideoCapture = actions.onVideo,
+                    onAttachFile = actions.onFile,
+                    onRecordVoice = actions.onVoice,
+                    onAddLocation = actions.onLocation,
+                    onRemove = actions.onRemoveMedia,
+                    showAddTiles = false,
+                )
+                MediaAltTextFields(media = attachedMedia, altById = draft.mediaAlt, onAltChange = actions.onAlt)
+            }
         }
     }
 }

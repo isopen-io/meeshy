@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -1158,6 +1159,20 @@ class FeedViewModelTest {
         }
         coVerify(exactly = 1) {
             publications.enqueuePost(CreatePostRequest(content = "hi", type = "POST", visibility = "PUBLIC"), null)
+        }
+    }
+
+    @Test
+    fun `a post with a scene background publishes it as its story effects`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.publishPost(content = "la vue", visibility = "PUBLIC", background = "302B63")
+
+        coVerify(exactly = 1) {
+            publications.enqueuePost(
+                CreatePostRequest(content = "la vue", visibility = "PUBLIC", storyEffects = StoryEffects(background = "302B63")),
+                null,
+            )
         }
     }
 

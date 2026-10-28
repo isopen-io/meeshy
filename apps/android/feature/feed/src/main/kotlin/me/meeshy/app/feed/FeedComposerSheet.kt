@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
@@ -186,6 +187,8 @@ fun FeedComposerSheet(
             formatSlot = formatSlot,
             showReelToggle = draft.qualifiesAsReel && governingType == null,
             actions = actions,
+            raiseKeyboard = raiseKeyboard,
+            onKeyboardRaised = onKeyboardRaised,
         )
     }
 
@@ -220,6 +223,7 @@ internal class PostComposerActions(
     val onRemoveMedia: (String) -> Unit,
     val onAlt: (String, String) -> Unit,
     val onRemoveLocation: () -> Unit,
+    val onBackground: (String) -> Unit,
 )
 
 /**
@@ -261,6 +265,7 @@ private fun rememberPostComposerActions(
             },
             onAlt = { mediaId, text -> state.draft = state.draft.withAlt(mediaId, text) },
             onRemoveLocation = { state.draft = state.draft.withoutLocation() },
+            onBackground = { hex -> state.draft = state.draft.withBackground(PostSceneLaw.pick(state.draft.background, hex)) },
         )
     }
 }
@@ -277,7 +282,10 @@ private fun FeedComposerModal(
     formatSlot: (@Composable () -> Unit)?,
     showReelToggle: Boolean,
     actions: PostComposerActions,
+    raiseKeyboard: Boolean,
+    onKeyboardRaised: () -> Unit,
 ) {
+    val contentFocus = rememberContentFocus(raiseKeyboard, onKeyboardRaised)
     ModalBottomSheet(onDismissRequest = actions.onClose, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
@@ -298,7 +306,7 @@ private fun FeedComposerModal(
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = actions.onText,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
                 placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
                 minLines = 4,
             )
