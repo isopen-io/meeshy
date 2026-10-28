@@ -46,7 +46,7 @@ class AppLinksAssetlinksGuardTest {
     @Test
     fun `meeshy me and www meeshy me verify every path the app opens`() {
         val links = autoVerifyLinks()
-        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/", "/feeds/post/", "/post/", "/reel/", "/story/", "/stories/")
+        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/", "/feeds/post/", "/post/", "/reel/", "/story/")
         listOf("meeshy.me", "www.meeshy.me").forEach { host ->
             assertThat(links.filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
         }
@@ -88,6 +88,15 @@ class AppLinksAssetlinksGuardTest {
         val prefixes = autoVerifyLinks().map { it.path }
         unread.forEach { path -> assertThat(prefixes.any { path.startsWith(it) && it != "/auth/magic-link" }).isFalse() }
         assertThat(exactPathLinks().map { it.path }).containsNoneIn(unread)
+    }
+
+    // #13464 : `/stories/new` (composer) et `/stories/mine` (archive) sont des PAGES du web, et iOS ne revendique que
+    // `/story/*` (apple-app-site-association). Un prefixe `/stories/` les avalait dans un detail de post introuvable.
+    @Test
+    fun `no prefix claim reaches a web page the app does not open`() {
+        val webPages = listOf("/stories/new", "/stories/mine", "/reels")
+        val prefixes = autoVerifyLinks().map { it.path }
+        webPages.forEach { page -> assertThat(prefixes.filter { page.startsWith(it) }).isEmpty() }
     }
 
     @Test
