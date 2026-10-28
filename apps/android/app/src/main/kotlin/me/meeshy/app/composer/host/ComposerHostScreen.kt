@@ -3,6 +3,7 @@ package me.meeshy.app.composer.host
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,6 +38,9 @@ fun ComposerHostScreen(
     viewModel: ComposerHostViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val seed by viewModel.seed.collectAsStateWithLifecycle()
+    // Une graine périmée ou déjà reprise : il n'y a rien à composer, le composeur ne s'ouvre pas sur du vide.
+    LaunchedEffect(seed) { if (seed is SeedState.Lost) onClose() }
     val context = LocalContext.current
     val shared = feedOwner ?: checkNotNull(LocalViewModelStoreOwner.current)
     val sayMediaStayBehind = { Toast.makeText(context, R.string.composer_format_media_stay_behind, Toast.LENGTH_LONG).show() }
@@ -56,6 +60,9 @@ fun ComposerHostScreen(
             onCarryApplied = onCarryApplied,
             onClose = onClose,
             titleContent = formatMenu,
+            seedMedia = (seed as? SeedState.Ready)?.items.orEmpty(),
+            seededByDoor = viewModel.seededByDoor,
+            onSeedApplied = viewModel::onSeedApplied,
         ) }
         ComposerFormat.POST, ComposerFormat.REEL -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { PostComposerContent(
             seedText = state.text,

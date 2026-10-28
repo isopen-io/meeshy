@@ -11,6 +11,7 @@ import androidx.navigation.Navigator
 import androidx.navigation.createGraph
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.push.MeeshyFcmService
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -122,5 +123,29 @@ class InboundIntentGateTest {
 
             assertThat(intent.dataString).isEqualTo(address)
         }
+    }
+
+    // #13527 — la graine d'un partage est un jeton que seul le store de Meeshy connaît.
+    @Test
+    fun `a composer seed the store does not hold is stripped, one it holds is kept`() {
+        val token = "AbCdEfGhIjKlMnOpQrStUv"
+        val forged = Intent().putExtra(ComposerSeedLaunch.EXTRA_SEED, token)
+        InboundIntentGate.admit(forged)
+        assertThat(forged.hasExtra(ComposerSeedLaunch.EXTRA_SEED)).isFalse()
+
+        val other = Intent().putExtra(ComposerSeedLaunch.EXTRA_SEED, "ZZZZZZZZZZZZZZZZZZZZZZ")
+        InboundIntentGate.admit(other, holdsComposerSeed = { it == token })
+        assertThat(other.hasExtra(ComposerSeedLaunch.EXTRA_SEED)).isFalse()
+
+        val genuine = Intent().putExtra(ComposerSeedLaunch.EXTRA_SEED, token)
+        InboundIntentGate.admit(genuine, holdsComposerSeed = { it == token })
+        assertThat(genuine.getStringExtra(ComposerSeedLaunch.EXTRA_SEED)).isEqualTo(token)
+    }
+
+    @Test
+    fun `a composer seed that is not even a string is dropped, never thrown`() {
+        val intent = Intent().putExtra(ComposerSeedLaunch.EXTRA_SEED, 42)
+        InboundIntentGate.admit(intent, holdsComposerSeed = { true })
+        assertThat(intent.hasExtra(ComposerSeedLaunch.EXTRA_SEED)).isFalse()
     }
 }

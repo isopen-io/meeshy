@@ -63,6 +63,8 @@ fun ShareTargetScreen(
     onFinished: () -> Unit,
     sharedAttachmentUri: Uri? = null,
     sharedAttachmentMimeType: String? = null,
+    /** « Modifier dans le studio » (iOS `share.sheet.studio`) : la pièce reçue s'ouvre dans le composeur au lieu de partir vers une conversation. Absent, rien n'est offert. */
+    onEditInStudio: (() -> Unit)? = null,
     viewModel: ShareTargetViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -81,6 +83,9 @@ fun ShareTargetScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.share_target_title)) },
                 actions = {
+                    if (onEditInStudio != null && sharedAttachmentUri != null && !state.isSessionLoading && !state.isSignedOut) {
+                        TextButton(onClick = onEditInStudio) { Text(stringResource(R.string.share_target_studio)) }
+                    }
                     TextButton(onClick = viewModel::dismiss) { Text(stringResource(R.string.share_target_cancel)) }
                 },
             )

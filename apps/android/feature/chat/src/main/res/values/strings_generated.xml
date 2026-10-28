@@ -351,6 +351,7 @@
     <string name="share_target_cancel">Cancel</string>
     <string name="share_target_loading">Loading conversations…</string>
     <string name="share_target_preview_title">What’s being sent</string>
+    <string name="share_target_studio">Edit in the studio</string>
     <string name="share_title_forward">Forward</string>
     <string name="share_title_send">Send</string>
     <string name="share_withdrawn_after_read">A message that disappears after reading stays in this conversation.</string>

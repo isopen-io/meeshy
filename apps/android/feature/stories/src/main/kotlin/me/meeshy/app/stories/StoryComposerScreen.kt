@@ -90,6 +90,8 @@ import me.meeshy.ui.component.audio.AudioTrackSurface
 fun StoryComposerScreen(
     onClose: () -> Unit,
     repostOfId: String? = null,
+    /** La porte pose elle-même la matière (partage entrant, média de conversation ou de post) : le brouillon enregistré ne se restaure pas par-dessus et n'est pas écrasé. */
+    seededByDoor: Boolean = false,
     titleContent: (@Composable () -> Unit)? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
@@ -116,7 +118,7 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer(seededByDoor = repostOfId != null)
+        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor)
         onDispose { viewModel.persistDraft() }
     }
 

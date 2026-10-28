@@ -38,4 +38,13 @@ class ComposerSceneDoorTest {
             assertThat(state.offeredFormats).containsAtLeast(ComposerFormat.STORY, ComposerFormat.POST)
         }
     }
+
+    @Test
+    fun `only the doors that post their own matter keep a stored draft from being restored over it`() {
+        assertThat(ComposerOrigin.Share.postsItsOwnMatter).isTrue()
+        assertThat(ComposerOrigin.ConversationMedia("m1").postsItsOwnMatter).isTrue()
+        assertThat(ComposerOrigin.SocialMedia("p1", "x").postsItsOwnMatter).isTrue()
+        assertThat(ComposerOrigin.Draft("d1").postsItsOwnMatter).isFalse()
+        assertThat(ComposerOrigin.StoryTray.postsItsOwnMatter).isFalse()
+    }
 }

@@ -351,6 +351,7 @@
     <string name="share_target_cancel">Abbrechen</string>
     <string name="share_target_loading">Unterhaltungen werden geladen …</string>
     <string name="share_target_preview_title">Was gesendet wird</string>
+    <string name="share_target_studio">Im Studio bearbeiten</string>
     <string name="share_title_forward">Weiterleiten</string>
     <string name="share_title_send">Senden</string>
     <string name="share_withdrawn_after_read">Eine Nachricht, die nach dem Lesen verschwindet, bleibt in dieser Unterhaltung.</string>

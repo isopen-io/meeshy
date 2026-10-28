@@ -27,6 +27,8 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
+import me.meeshy.app.composer.inbound.ComposerSeedLaunch
+import me.meeshy.app.composer.inbound.ComposerSeedStore
 import me.meeshy.app.navigation.InboundIntentGate
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
@@ -102,6 +104,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    @Inject
+    lateinit var composerSeedStore: ComposerSeedStore
+
     private var launchRoute by mutableStateOf<String?>(null)
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
@@ -120,7 +125,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        InboundIntentGate.admit(intent, launchProof::admits)
+        InboundIntentGate.admit(intent, launchProof::admits, composerSeedStore::holds)
         val restored = savedInstanceState != null
         launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
         if (!restored) divertVisitorLink(intent, atLaunch = true)
@@ -209,7 +214,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        InboundIntentGate.admit(intent, launchProof::admits)
+        InboundIntentGate.admit(intent, launchProof::admits, composerSeedStore::holds)
         setIntent(intent)
         launchRoute = launchRouteOf(intent)
         callLink = callLinkOf(intent)
@@ -303,5 +308,6 @@ internal fun Intent.launchExtras(): LaunchExtras {
         autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
         tap = tap,
         routeHint = routeHint,
+        composerSeed = getStringExtra(ComposerSeedLaunch.EXTRA_SEED),
     )
 }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.composer.CarriedMedia
 import me.meeshy.sdk.model.composer.ComposerCarry
 
@@ -23,10 +24,19 @@ fun StoryComposerContent(
     onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     onClose: () -> Unit,
     titleContent: @Composable () -> Unit,
+    /** La matière que la porte pose (partage entrant, média de conversation ou de post) : déjà jugée et copiée dans le cache privé, elle rejoint la scène par le chemin d'un média choisi. */
+    seedMedia: List<MediaUploadItem> = emptyList(),
+    seededByDoor: Boolean = false,
+    onSeedApplied: () -> Unit = {},
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    StoryComposerScreen(onClose = onClose, titleContent = titleContent, viewModel = viewModel)
+    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, titleContent = titleContent, viewModel = viewModel)
+    LaunchedEffect(seedMedia) {
+        if (seedMedia.isEmpty()) return@LaunchedEffect
+        viewModel.onMediaPicked(seedMedia)
+        onSeedApplied()
+    }
     // After the screen: its own draft restore has run. The host's text is the latest the author typed, under any
     // format; an empty one (a fresh door) never clobbers a restored draft.
     LaunchedEffect(Unit) {
