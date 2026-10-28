@@ -6,4 +6,15 @@
     <string name="call_link_confirm_video">Appeler %s en vidéo ?</string>
     <string name="call_link_refused_blocked">Vous avez bloqué ce contact</string>
     <string name="call_link_refused_unknown">Ce contact est introuvable</string>
+    <string name="composer_format_denied_mood">Ne porte que du texte</string>
+    <string name="composer_format_denied_mood_empty">Écrivez d\'abord quelque chose</string>
+    <string name="composer_format_denied_post">Indisponible pour ce contenu</string>
+    <string name="composer_format_denied_reel">Demande une vidéo, un son ou deux photos</string>
+    <string name="composer_format_denied_story">Indisponible depuis cette porte</string>
+    <string name="composer_format_post">Post</string>
+    <string name="composer_format_reel">Réel</string>
+    <string name="composer_format_status">Mood</string>
+    <string name="composer_format_story">Story</string>
+    <string name="composer_publish_menu_a11y_hint">Ouvre le choix du format et de la disposition</string>
+    <string name="composer_publish_menu_title">Publier comme</string>
 </resources>

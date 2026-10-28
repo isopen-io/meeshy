@@ -1,6 +1,8 @@
 package me.meeshy.app.navigation
 
 import android.net.Uri
+import me.meeshy.app.composer.host.ComposerHostRoute
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.auth.GuestJoinViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.conversations.CreateShareLinkViewModel
@@ -157,8 +159,13 @@ object Routes {
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
+    /** L'hôte unique du composeur : la porte (story, flux, mood) voyage en argument, le format est un champ du document. */
+    const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
+
+    /** Ouvre l'hôte unique par [origin] ; `null` pour une porte que l'ancien composeur sert encore. */
+    fun composer(origin: ComposerOrigin): String? = ComposerHostRoute.route(origin)
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
 
@@ -180,3 +187,6 @@ object Routes {
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }
+
+/** La porte « nouvelle story » : l'hôte unique ouvert sur la caméra/scène, jamais l'ancien écran seul. */
+internal val storyDoor: String get() = checkNotNull(Routes.composer(ComposerOrigin.StoryTray))

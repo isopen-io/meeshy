@@ -35,6 +35,7 @@ import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
@@ -79,7 +80,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             header = {
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
-                    onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
+                    onAddStory = { navController.navigate(storyDoor) },
                     onManageStories = { navController.navigate(Routes.MY_STORIES) },
                     onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     viewModel = storiesViewModel,

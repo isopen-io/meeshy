@@ -73,6 +73,7 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun StatusBarView(
     modifier: Modifier = Modifier,
+    onOpenMoodComposer: (() -> Unit)? = null,
     viewModel: StatusesViewModel = hiltViewModel(),
     drafts: StatusComposerDraftsViewModel = hiltViewModel(),
 ) {
@@ -112,7 +113,10 @@ fun StatusBarView(
                     onClick = { selected = cell.entry },
                 )
 
-                StatusBarCell.AddStatus -> AddStatusPill(onClick = { scope.launch { composerSeed = drafts.restorable() ?: StatusComposerDraft() } })
+                StatusBarCell.AddStatus -> AddStatusPill(onClick = {
+                    if (onOpenMoodComposer != null) onOpenMoodComposer()
+                    else scope.launch { composerSeed = drafts.restorable() ?: StatusComposerDraft() }
+                })
 
                 StatusBarCell.ErrorRetry -> ErrorRetryPill(onClick = viewModel::refresh)
 

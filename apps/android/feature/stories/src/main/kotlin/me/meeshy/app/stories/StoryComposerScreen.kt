@@ -89,6 +89,7 @@ import androidx.compose.foundation.layout.Box
 fun StoryComposerScreen(
     onClose: () -> Unit,
     repostOfId: String? = null,
+    titleContent: (@Composable () -> Unit)? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -198,7 +199,7 @@ fun StoryComposerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.stories_composer_title)) },
+                title = titleContent ?: { Text(stringResource(R.string.stories_composer_title)) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.stories_composer_cancel))

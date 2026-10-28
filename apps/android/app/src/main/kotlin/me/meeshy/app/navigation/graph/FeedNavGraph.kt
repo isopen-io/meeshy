@@ -16,10 +16,13 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
+import me.meeshy.app.composer.host.ComposerHostRoute
+import me.meeshy.app.composer.host.ComposerHostScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryViewersSheet
 import me.meeshy.app.stories.StoryViewerScreen
@@ -37,7 +40,8 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
-            onResumeStoryDraft = { navController.navigate(Routes.STORY_COMPOSER) },
+            onResumeStoryDraft = { navController.navigate(storyDoor) },
+            onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
         )
     }
     composable(
@@ -61,7 +65,7 @@ internal fun NavGraphBuilder.feedNavGraph(
     sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
         MyStoriesScreen(
             onBack = dismiss,
-            onCreateStory = { navController.navigateKeepingSheet(Routes.STORY_COMPOSER) },
+            onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
         )
     }
@@ -123,6 +127,18 @@ internal fun NavGraphBuilder.feedNavGraph(
             onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
+    }
+    composable(
+        route = Routes.COMPOSER,
+        arguments = listOf(
+            navArgument(ComposerHostRoute.ORIGIN_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
+    ) {
+        ComposerHostScreen(onClose = { navController.popBackStack() })
     }
     composable(
         route = Routes.STORY_COMPOSER_ROUTE,
