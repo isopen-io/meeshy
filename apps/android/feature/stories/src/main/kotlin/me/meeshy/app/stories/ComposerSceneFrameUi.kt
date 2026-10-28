@@ -1,5 +1,10 @@
 package me.meeshy.app.stories
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,7 +80,7 @@ internal fun ComposerFramePanel(
         FitChoice(StoryFitMode.FILL, fitMode, MeeshyIcons.PhotoFilled, stringResource(R.string.stories_scene_frame_fill), onPickFitMode)
         Box(Modifier.size(width = 1.dp, height = 28.dp).background(MeeshyTheme.tokens.hairline))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            items(StoryBackdrop.entries.toList()) { fond ->
+            items(StoryBackdrop.entries, key = { it.wire }) { fond ->
                 BackdropChoice(
                     fond = fond,
                     chosen = backdrop == fond && fitMode == StoryFitMode.FIT,
@@ -166,8 +171,16 @@ internal fun ComposerSceneEffectsPanel(
                 EffectToggle(effect, isOpen = effect == open) { requested = ComposerSceneEffects.toggled(effect, requested) }
             }
         }
-        if (open != null) {
-            EffectCarousel(open, frame, onClose = { requested = null }, onChoose = onChoose, visual = visual)
+        val lastOpen = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(open) }
+        if (open != null) lastOpen.value = open
+        AnimatedVisibility(
+            visible = open != null,
+            enter = slideInVertically { it / 2 } + fadeIn(),
+            exit = slideOutVertically { it / 2 } + fadeOut(),
+        ) {
+            lastOpen.value?.let { shown ->
+                EffectCarousel(shown, frame, onClose = { requested = null }, onChoose = onChoose, visual = visual)
+            }
         }
     }
 }
@@ -241,7 +254,7 @@ private fun TransitionRow(title: String, selection: StoryTransitionEffect?, onSe
                     label = { Text(stringResource(R.string.stories_scene_opening_none)) },
                 )
             }
-            items(StoryTransitionEffect.entries.toList()) { effect ->
+            items(StoryTransitionEffect.entries, key = { it.name }) { effect ->
                 FilterChip(
                     selected = selection == effect,
                     onClick = { onSelect(effect) },
