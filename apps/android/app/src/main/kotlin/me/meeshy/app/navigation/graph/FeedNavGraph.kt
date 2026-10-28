@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.remember
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -137,8 +138,10 @@ internal fun NavGraphBuilder.feedNavGraph(
                 defaultValue = null
             },
         ),
-    ) {
-        ComposerHostScreen(onClose = { navController.popBackStack() })
+    ) { entry ->
+        // The feed's entry, when it is under the host: its ViewModels are SHARED, never re-created.
+        val feedOwner = remember(entry) { runCatching { navController.getBackStackEntry(Routes.FEED) }.getOrNull() }
+        ComposerHostScreen(onClose = { navController.popBackStack() }, feedOwner = feedOwner)
     }
     composable(
         route = Routes.STORY_COMPOSER_ROUTE,

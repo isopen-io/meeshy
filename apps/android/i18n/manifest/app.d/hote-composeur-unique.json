@@ -14,7 +14,8 @@
         { "catalog": "app", "iosKey": "composer.format.denied.story", "androidName": "composer_format_denied_story", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.format.denied.post", "androidName": "composer_format_denied_post", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.publish.menu.title", "androidName": "composer_publish_menu_title", "status": "adopted" },
-        { "catalog": "app", "iosKey": "composer.publish.menu.a11y.hint", "androidName": "composer_publish_menu_a11y_hint", "status": "adopted" }
+        { "catalog": "app", "iosKey": "composer.publish.menu.a11y.hint", "androidName": "composer_publish_menu_a11y_hint", "status": "adopted" },
+        { "androidName": "composer_format_media_stay_behind", "status": "android-only" }
       ]
     }
   }

@@ -88,4 +88,5 @@
     <string name="widget_quick_reply_ok">OK</string>
     <string name="widget_quick_reply_thanks">Danke!</string>
     <string name="widget_quick_reply_call_me">Ruf mich an</string>
+    <string name="composer_format_media_stay_behind">Deine Medien bleiben im vorherigen Format: Wechsle zurück, um sie wiederzufinden.</string>
 </resources>

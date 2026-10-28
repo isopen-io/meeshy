@@ -9,7 +9,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 /**
  * The story body of the ONE composer: [StoryComposerScreen] mounted as a CONTENT of the host. The scene
  * survives a round trip through another format (the ViewModel belongs to the host's back-stack entry);
- * [seedText] is what the author already wrote under another format, carried in when the caption is empty.
+ * [seedText] is what the author already wrote under another format: their LATEST words, whichever format
+ * they were typed under, carried in.
  * [onFacts] reports the text and whether a scene exists, so the host lets the other formats breathe.
  */
 @Composable
@@ -22,9 +23,10 @@ fun StoryComposerContent(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     StoryComposerScreen(onClose = onClose, titleContent = titleContent, viewModel = viewModel)
-    // After the screen: its own draft restore has run, so a carried text never clobbers a restored one.
+    // After the screen: its own draft restore has run. The host's text is the latest the author typed, under any
+    // format; an empty one (a fresh door) never clobbers a restored draft.
     LaunchedEffect(Unit) {
-        if (seedText.isNotBlank() && state.editorText.isBlank()) viewModel.onTextChange(seedText)
+        if (seedText.isNotBlank() && seedText != state.editorText) viewModel.onTextChange(seedText)
     }
     val hasScene = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() ||
         state.selectedSlideTextElements.isNotEmpty() || state.selectedSlideStickers.isNotEmpty() ||

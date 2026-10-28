@@ -88,4 +88,5 @@
     <string name="widget_quick_reply_ok">حسنًا</string>
     <string name="widget_quick_reply_thanks">شكرًا!</string>
     <string name="widget_quick_reply_call_me">اتصل بي</string>
+    <string name="composer_format_media_stay_behind">تبقى وسائطك في التنسيق السابق: ارجع إليه لتجدها.</string>
 </resources>
