@@ -110,7 +110,7 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer()
+        viewModel.onEnterComposer(seededByDoor = repostOfId != null)
         onDispose { viewModel.persistDraft() }
     }
 
