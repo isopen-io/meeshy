@@ -7,6 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import okhttp3.OkHttpClient
 import me.meeshy.sdk.media.CaptureGallery
 
 /**
@@ -17,7 +18,11 @@ import me.meeshy.sdk.media.CaptureGallery
 public class SceneExportCoordinatorFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gallery: CaptureGallery,
+    okHttp: OkHttpClient,
 ) {
+    public val fetcher: SceneAssetFetcher = SceneAssetFetcher(okHttp)
+
+
     public fun create(scope: CoroutineScope): SceneExportCoordinator = SceneExportCoordinator(
         runner = Media3SceneTransformRunner(context, Dispatchers.Main),
         gallery = gallery,
