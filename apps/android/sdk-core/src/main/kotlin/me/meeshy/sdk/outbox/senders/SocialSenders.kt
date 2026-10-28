@@ -57,10 +57,11 @@ public class PublishStoryHandler @Inject constructor(
 }
 
 /**
- * Un j'aime, un favori ou leur retrait que le serveur dit DÉJÀ appliqué est un succès idempotent (#13588) : la passerelle
- * rend 410 `MUTATION_RESULT_GONE` pour le rejeu d'un j'aime dont elle a oublié le résultat (« ton geste a bien eu
- * lieu »), et 409 ne peut dire ici que « déjà dans l'état demandé ». Les classer échec ferait réessayer jusqu'à
- * l'épuisement, puis DÉFAIRE une valeur que le serveur a confirmée.
+ * Un j'aime, un favori ou leur retrait que le serveur dit DÉJÀ acquis est un succès idempotent (#13588). Seul
+ * `POST /posts/:id/like` rend 409 aujourd'hui (`REACTION_LIMIT_REACHED` : cinq réactions déjà posées, donc le post est
+ * déjà aimé côté serveur, `isLikedByMe` valant « au moins une réaction »). 410 `MUTATION_RESULT_GONE` n'est servi par
+ * aucune de ces quatre routes (j'aime et retrait déclarent `replayCost: 'converges'`, le rejeu est rejoué) ; il est
+ * accepté pour qu'une passerelle qui le servirait ne fasse pas réessayer jusqu'à l'épuisement, puis DÉFAIRE le geste.
  */
 internal fun NetworkResult<*>.toToggleSendResult(): SendResult = when {
     this is NetworkResult.Failure && error.httpStatus in ALREADY_APPLIED_STATUSES -> SendResult.Success
