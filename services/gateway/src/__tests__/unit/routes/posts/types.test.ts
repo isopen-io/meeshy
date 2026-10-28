@@ -408,14 +408,14 @@ describe('StoryEffectsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects mediaObjects array exceeding 32 entries', () => {
-    const mediaObjects = Array.from({ length: 33 }, (_, i) => ({ id: `media-${i}` }));
+  it('rejects more than 50 images in mediaObjects (#13590)', () => {
+    const mediaObjects = Array.from({ length: 51 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(false);
   });
 
-  it('accepts mediaObjects array at max cap (32 entries)', () => {
-    const mediaObjects = Array.from({ length: 32 }, (_, i) => ({ id: `media-${i}` }));
+  it('accepts mediaObjects array at max cap (50 entries)', () => {
+    const mediaObjects = Array.from({ length: 50 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(true);
   });

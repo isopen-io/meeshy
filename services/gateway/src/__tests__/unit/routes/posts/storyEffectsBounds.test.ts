@@ -26,11 +26,11 @@ const canvas = (objects: unknown[], scene: Record<string, unknown> = {}) => ({
 const accepted = (effects: unknown) => StoryEffectsSchema.safeParse(effects).success;
 
 describe('timelineDuration — borné comme slideDuration', () => {
-  it.each([1e308, 86401, -1, Number.POSITIVE_INFINITY])('refuse %s', (timelineDuration) => {
+  it.each([1e308, 7201, -1, Number.POSITIVE_INFINITY])('refuse %s', (timelineDuration) => {
     expect(accepted({ timelineDuration })).toBe(false);
   });
 
-  it.each([0, 2, 45.5, 600, 86400])('accepte %s', (timelineDuration) => {
+  it.each([0, 2, 45.5, 600, 7200])('accepte %s', (timelineDuration) => {
     expect(accepted({ timelineDuration })).toBe(true);
   });
 
@@ -74,7 +74,8 @@ describe('document v3 non strict — ce que les composeurs en production publien
   it('accepte une traduction SERVEUR plus longue que l\'original (1900 → 2600), que le client renvoie à l\'édition', () => {
     const text = sceneObject('text', 0, { payload: { text: 'a'.repeat(1900), translations: { fr: 'b'.repeat(2600) } } });
     expect(UpdatePostSchema.safeParse({ storyEffects: canvas([text]) }).success).toBe(true);
-    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: canvas([text]) }).success).toBe(true);
+    const shortText = sceneObject('text', 0, { payload: { text: 'a'.repeat(900), translations: { fr: 'b'.repeat(2600) } } });
+    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: canvas([shortText]) }).success).toBe(true);
   });
 
   it('refuse plus de 10 scènes (plafond des trois composeurs)', () => {

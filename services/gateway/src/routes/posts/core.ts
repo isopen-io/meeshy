@@ -17,6 +17,7 @@ import {
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
+import { storyLimitFromIssues } from './storyLimits';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
@@ -80,6 +81,14 @@ import { logError, logWarn } from '../../utils/logger.js';
  *   jour serait un mensonge) ⇒ 400 CANVAS_INVALID + `issues`.
  * Rend `true` si une réponse d'erreur est partie (l'appelant sort).
  */
+function rejectInvalidBody(reply: FastifyReply, issues: ReadonlyArray<object>): void {
+  const limit = storyLimitFromIssues(issues);
+  sendBadRequest(reply, 'Invalid request', {
+    code: 'VALIDATION_ERROR',
+    ...(limit ? { details: { storyLimit: limit.code, limit: limit.max } } : {}),
+  });
+}
+
 /**
  * Plancher `X-App-Version` (spec §C3, O2) — la porte d'en-tête ne juge que
  * les requêtes qui EN PORTENT UN : l'ABSENCE passe TOUJOURS (le web est
@@ -412,7 +421,7 @@ export function registerCoreRoutes(
 
       const parsed = CreatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+        return rejectInvalidBody(reply, parsed.error.issues ?? []);
       }
 
       if (rejectBelowAppVersionFloor(request, reply, parsed.data)) {
@@ -659,7 +668,7 @@ export function registerCoreRoutes(
       const { postId } = request.params;
       const parsed = UpdatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+        return rejectInvalidBody(reply, parsed.error.issues ?? []);
       }
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {

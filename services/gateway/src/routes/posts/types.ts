@@ -4,6 +4,7 @@ import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import { parseMessageSticker } from '../../services/stickers/messageSticker';
+import { enforceStoryLimits, enforceStoryTextLengthOnCreate } from './storyLimits';
 import { StoryKeyframesBoundsSchema, StoryScenesBoundsSchema, StoryTimelineDurationSchema } from './storyEffectsBounds';
 
 // ============================================
@@ -62,7 +63,7 @@ const STORY_LANG_MAX = 16;              // BCP-47
 const STORY_HEX_MAX = 16;               // "#RRGGBBAA" + marge
 const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
-const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
+const STORY_ARRAY_CAP = 32;             // keyframes/variantes ; le NOMBRE d'objets par scène est dans storyLimits.ts
 
 // Les REGLAGES d'une image posee (#9175) — `ImageAdjustments` iOS : seules les
 // valeurs actives voyagent. Bornes LARGES (le client borne chaque reglage a sa
@@ -166,7 +167,8 @@ const StoryTextObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
+  // Traductions écrites par le serveur : jamais bornées par le plafond de création (#13590).
+  translations: z.record(z.string(), z.string()).optional(),
   /**
    * `User.id` quand cet objet EST un badge de référence, absent pour du texte
    * libre. C'est LUI que `collectMentionableText` lit pour exclure le badge de
@@ -227,10 +229,10 @@ const STORY_EFFECTS_MAX_BYTES = 256 * 1024;
 export const StoryEffectsSchema = z.object({
   background: z.string().max(64).optional(),
   thumbHash: z.string().max(STORY_THUMBHASH_MAX).optional(),
-  mediaObjects: z.array(StoryMediaObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  textObjects: z.array(StoryTextObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  stickerObjects: z.array(StoryStickerObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  audioPlayerObjects: z.array(StoryAudioObjectSchema).max(STORY_ARRAY_CAP).optional(),
+  mediaObjects: z.array(StoryMediaObjectSchema).optional(),
+  textObjects: z.array(StoryTextObjectSchema).optional(),
+  stickerObjects: z.array(StoryStickerObjectSchema).optional(),
+  audioPlayerObjects: z.array(StoryAudioObjectSchema).optional(),
   slideDuration: z.number().min(0).max(86400).optional(),
   timelineDuration: StoryTimelineDurationSchema,
   scenes: StoryScenesBoundsSchema,
@@ -243,7 +245,11 @@ export const StoryEffectsSchema = z.object({
     } catch {
       return false;
     }
-  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` });
+  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` })
+  .superRefine(enforceStoryLimits);
+
+/** Création : en plus, 1000 caractères par texte (une story stockée reste modifiable au-delà). */
+export const StoryEffectsCreateSchema = StoryEffectsSchema.superRefine(enforceStoryTextLengthOnCreate);
 
 /**
  * Une personne que le post NOMME sans que son texte le dise.
@@ -288,7 +294,7 @@ export const CreatePostSchema = z.object({
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
-  storyEffects: StoryEffectsSchema.optional(),
+  storyEffects: StoryEffectsCreateSchema.optional(),
   // Opt-in AUTEUR : autorise l'extraction de la bande-son des VIDÉOS du post
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
