@@ -98,6 +98,10 @@ data class StoryComposerUiState(
     val canRedo: Boolean = false,
     /** Le mode ANIMÉ de la scène : chaque objet a sa piste, un objet neuf entre à la tête de lecture. */
     val sceneIsAnimated: Boolean = false,
+    /** La section de l'éditeur du texte dont les options sont ouvertes dans la colonne droite ; `null` ⇒ la première servie. */
+    val openObjectSection: me.meeshy.sdk.model.composer.ComposerObjectEditorSection? = null,
+    /** Le réglage du pinceau déplié dans la colonne droite. */
+    val openDrawingControl: DrawingControl = DrawingControl.COLOR,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
