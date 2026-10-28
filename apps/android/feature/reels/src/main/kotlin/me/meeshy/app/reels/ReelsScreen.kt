@@ -100,7 +100,10 @@ fun ReelsScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        if (state.reels.isEmpty()) {
+        val seedFailure = state.seedFailure
+        if (seedFailure != null) {
+            ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = onClose)
+        } else if (state.reels.isEmpty()) {
             ReelEmptyStates(state = state, onRetry = viewModel::retry)
         } else {
             ReelsPager(

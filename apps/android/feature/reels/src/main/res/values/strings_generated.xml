@@ -23,6 +23,7 @@
     <string name="reels_menu_report">Report</string>
     <string name="reels_menu_share">Share</string>
     <string name="reels_mute">Mute</string>
+    <string name="reels_open_failure_back">Back</string>
     <string name="reels_repost">Repost</string>
     <string name="reels_scrub">Skip forward or back</string>
     <string name="reels_share">Share</string>

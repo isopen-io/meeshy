@@ -24,6 +24,7 @@
     <string name="reels_menu_report">Signaler</string>
     <string name="reels_menu_share">Partager</string>
     <string name="reels_mute">Muet</string>
+    <string name="reels_open_failure_back">Retour</string>
     <string name="reels_repost">Republier</string>
     <string name="reels_scrub">Avancer ou reculer</string>
     <string name="reels_share">Partager</string>

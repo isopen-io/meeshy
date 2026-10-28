@@ -48,6 +48,11 @@ data class ReelsUiState(
     val loadFailure: ContentFetchFailure? = null,
     /** Faux jusqu'a la fin du premier chargement : distingue froid / vide / echec. */
     val hasLoadedOnce: Boolean = false,
+    /**
+     * Cause pour laquelle le reel DEMANDE (notification, lien) n'a pas pu s'ouvrir. Tant qu'elle est
+     * posee, le lecteur dit la cause au lieu d'atterrir sur un autre reel (iOS `ReelOpenFailureView`).
+     */
+    val seedFailure: ContentFetchFailure? = null,
 )
 
 @HiltViewModel
@@ -146,7 +151,7 @@ class ReelsViewModel @Inject constructor(
         _state.update {
             // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
             val shown = if (cached.isEmpty()) it.reels else cached
-            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty())
+            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty(), seedFailure = null)
         }
 
         if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
@@ -197,6 +202,10 @@ class ReelsViewModel @Inject constructor(
     private fun loadSeedAndPrepend(seedId: String) {
         viewModelScope.launch {
             val result = postRepository.getPost(seedId)
+            if (result is NetworkResult.Failure) {
+                _state.update { it.copy(seedFailure = result.error.toContentFetchFailure()) }
+                return@launch
+            }
             if (result !is NetworkResult.Success) return@launch
             val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
             _state.update { current ->
