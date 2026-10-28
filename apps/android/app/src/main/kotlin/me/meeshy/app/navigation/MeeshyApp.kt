@@ -247,6 +247,8 @@ fun MeeshyApp(
 
         AppOverlayStack(extensions.overlays, navController)
 
+        EngagementRevealHost(navController)
+
         ArrivalCelebrationHost()
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
