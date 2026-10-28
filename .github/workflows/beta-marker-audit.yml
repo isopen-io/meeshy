@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
-          fetch-depth: 100
+          fetch-depth: 101
 
       - name: Beta/skip conflict guard self-test
         run: node scripts/check-beta-skip-conflict.mjs --self-test
