@@ -46,4 +46,16 @@ class FeedComposerDraftPersistenceTest {
         assertThat(placeholder.url).isEqualTo("content://picked/1")
         assertThat(FeedComposerDraft().withMedia(listOf(placeholder)).publishRequest()?.mediaIds).containsExactly("cmid_up")
     }
+
+    @Test
+    fun `a photo kept on the device keeps its measured shape, so its scene carries the ratio iOS writes`() {
+        val item = MediaUploadItem(bytes = ByteArray(7), fileName = "vue.jpg", mimeType = "image/jpeg")
+        val first = FeedPendingMedia.placeholder("cmid_11111111-1111-1111-1111-111111111111", item, "content://picked/1", 1200 to 800)
+        val second = FeedPendingMedia.placeholder("cmid_22222222-2222-2222-2222-222222222222", item, "content://picked/2", 900 to 1200)
+
+        assertThat(first.width to first.height).isEqualTo(1200 to 800)
+        val ratios = me.meeshy.sdk.model.composer.PostPhotoScenes.effects(listOf(first, second), "fr", null)!!
+            .canvas!!.scenes.map { scene -> scene.objects.single { it.plane == "content" }.payload["aspectRatio"].toString().toDouble() }
+        assertThat(ratios).containsExactly(1.5, 0.75).inOrder()
+    }
 }
