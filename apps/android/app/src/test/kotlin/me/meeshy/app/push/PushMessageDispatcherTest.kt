@@ -6,6 +6,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import me.meeshy.sdk.model.call.CallStopPush
 import me.meeshy.sdk.model.call.IncomingCallPush
+import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 
@@ -18,6 +19,7 @@ class PushMessageDispatcherTest {
 
     private class Fixture(observers: Set<PushObserver> = emptySet()) {
         val session: SessionRepository = mockk { every { currentUserId } returns "me" }
+        val tokenStore = InMemoryTokenStore(jwt = "jwt").apply { userId = "me" }
         val callPresenter: IncomingCallNotificationPresenter = mockk(relaxed = true)
         val revocationHandler: RevocationPushHandler = mockk { every { handle(any()) } answers {
             firstArg<Map<String, String>>()["type"] == NotificationRevocationParser.TYPE
@@ -26,6 +28,7 @@ class PushMessageDispatcherTest {
         val dispatcher = PushMessageDispatcher(
             ringStore = IncomingCallRingStore(),
             session = session,
+            tokenStore = tokenStore,
             callPresenter = callPresenter,
             revocationHandler = revocationHandler,
             messagePresenter = messagePresenter,
@@ -155,5 +158,60 @@ class PushMessageDispatcherTest {
         fixture.dispatcher.dispatch(push("type" to "new_message"))
 
         verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push destine au compte quitte n'affiche rien et ne parvient a aucun observateur sous le compte suivant`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)))
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "user-a"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+        assertThat(log).isEmpty()
+    }
+
+    @Test
+    fun `un appel destine au compte quitte ne sonne pas sous le compte suivant`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1", "recipientUserId" to "user-a"),
+            nowMillis = 100,
+        )
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+    }
+
+    @Test
+    fun `apres la deconnexion, un push qui nomme le compte parti n'affiche rien`() {
+        val fixture = Fixture()
+        fixture.tokenStore.clear()
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une revocation et un arret de sonnerie du compte quitte s'appliquent encore, ils ne font que retirer`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "notification_revoked", "notificationIds" to "n1", "recipientUserId" to "user-a"))
+        fixture.dispatcher.dispatch(push("type" to "call_cancel", "callId" to "call-1", "recipientUserId" to "user-a"), nowMillis = 100)
+
+        verify(exactly = 1) { fixture.revocationHandler.handle(any()) }
+        verify(exactly = 1) { fixture.callPresenter.cancel(match<CallStopPush> { it.callId == "call-1" }) }
+    }
+
+    @Test
+    fun `un push qui nomme le compte connecte suit son chemin ordinaire`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)))
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+        assertThat(log).containsExactly("prepersist")
     }
 }
