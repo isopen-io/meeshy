@@ -70,13 +70,20 @@ class AppLinksAssetlinksGuardTest {
     // serait avale sans rien afficher au lieu d'aller au navigateur.
     @Test
     fun `reset and verification email links are verified by exact path on both hosts`() {
-        val paths = listOf(
-            "/reset-password", "/auth/reset-password", "/auth/verify-email",
-            "/auth/email-link/reset-password", "/auth/email-link/verify-email", "/auth/email-link/magic-link",
-        )
+        val paths = listOf("/reset-password", "/auth/reset-password", "/auth/verify-email")
         listOf("meeshy.me", "www.meeshy.me").forEach { host ->
             assertThat(exactPathLinks().filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
         }
+    }
+
+    // #10859 / #10868 : les alias `/auth/email-link/…` ne sont JAMAIS des App Links — seules les adresses canoniques
+    // le sont ; le web redirige l'alias côté navigateur, et les versions publiées ne doivent pas les recevoir.
+    @Test
+    fun `email link aliases are never claimed as app links`() {
+        val aliases = listOf(
+            "/auth/email-link/reset-password", "/auth/email-link/verify-email", "/auth/email-link/magic-link",
+        )
+        assertThat(exactPathLinks().map { it.path }).containsNoneIn(aliases)
     }
 
     @Test
