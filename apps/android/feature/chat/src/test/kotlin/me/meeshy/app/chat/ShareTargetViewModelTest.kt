@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
@@ -254,6 +255,22 @@ class ShareTargetViewModelTest {
 
         coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun a_reloaded_share_drops_the_previous_plain_copy_and_keeps_the_new_one() = runTest(dispatcher) {
+        val h = harness()
+        val intake = java.nio.file.Files.createTempDirectory("cache").toFile().resolve(MediaIntake.DIRECTORY).apply { mkdirs() }
+        val first = intake.resolve("first").apply { writeText("PNG") }
+        val second = intake.resolve("second").apply { writeText("PNG") }
+
+        h.vm.loadAttachment(first, "photo.png", "image/png")
+        h.vm.loadAttachment(first, "photo.png", "image/png")
+        assertThat(first.exists()).isTrue()
+        h.vm.loadAttachment(second, "photo.png", "image/png")
+
+        assertThat(first.exists()).isFalse()
+        assertThat(second.exists()).isTrue()
     }
 
     @Test

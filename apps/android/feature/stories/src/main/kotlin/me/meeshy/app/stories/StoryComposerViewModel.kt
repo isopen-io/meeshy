@@ -567,11 +567,12 @@ class StoryComposerViewModel @Inject constructor(
                 }
                 when (val result = mediaUploader.upload(accepted, onProgress)) {
                     is NetworkResult.Success -> { applyUploaded(result.data); accepted.forEach(MediaIntake::release) }
-                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) _state.update(StoryComposerUploadReducer::locationRefused) else queueDurably(accepted)
+                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) { accepted.forEach(MediaIntake::release); _state.update(StoryComposerUploadReducer::locationRefused) } else queueDurably(accepted)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                accepted.filter { item -> _state.value.pendingUploads.none { it.item === item } }.forEach(MediaIntake::release)
                 _state.update { StoryComposerUploadReducer.settled(it).copy(errorMessage = e.message ?: MEDIA_FAILED) }
             }
         }
@@ -768,20 +769,16 @@ class StoryComposerViewModel @Inject constructor(
      * pan the author applied to another attachment. Applies to an image or a video background
      * identically — each client's reader honours the framing on both.
      */
-    private fun resolveBackgroundFraming(
-        slide: StorySlide,
-        media: UploadedMedia,
-        state: StoryComposerUiState,
-    ): StoryBackgroundFraming {
+    private fun resolveBackgroundFraming(slide: StorySlide, media: UploadedMedia, state: StoryComposerUiState): StoryBackgroundFraming {
         val framedMediaId = slide.mediaIds.firstOrNull { id -> state.attachments.any { it.id == id } }
         if (media.id != framedMediaId) return StoryBackgroundFraming.IDENTITY
         return slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
     }
 
-    private fun resolvePublishLanguage(): String =
-        sessionRepository.currentUser.value
-            ?.let { LanguageResolver.resolveUserLanguage(it) }
-            ?: LanguageResolver.FALLBACK_LANGUAGE
+    private fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
+
+    /** Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées. */
+    override fun onCleared() = _state.value.pendingUploads.forEach { MediaIntake.release(it.item) }
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"

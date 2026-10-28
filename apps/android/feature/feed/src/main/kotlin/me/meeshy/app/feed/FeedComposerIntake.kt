@@ -125,8 +125,12 @@ internal fun rememberFeedComposerIntake(
     }
 
     fun dispatchItems(items: List<MediaUploadItem>) {
-        if (items.isEmpty() || state.isUploading) return
-        if (state.draft.remainingMediaSlots <= 0) return reportError(limitMessage)
+        if (items.isEmpty()) return
+        if (state.isUploading || state.draft.remainingMediaSlots <= 0) {
+            items.forEach(MediaIntake::release)
+            if (!state.isUploading) reportError(limitMessage)
+            return
+        }
         scope.launch { uploadAndAttach(items) }
     }
 
@@ -140,7 +144,7 @@ internal fun rememberFeedComposerIntake(
 
     var retouch by remember { mutableStateOf<FeedRetouchPending?>(null) }
     retouch?.let { pending ->
-        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { MediaIntake.release(pending.item); retouch = null })
+        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; if (item !== pending.item) MediaIntake.release(pending.item); dispatchItems(listOf(item)) }, onDismiss = { MediaIntake.release(pending.item); retouch = null })
     }
     var videoRetouch by remember { mutableStateOf<FeedVideoRetouchPending?>(null) }
     videoRetouch?.let { pending ->
