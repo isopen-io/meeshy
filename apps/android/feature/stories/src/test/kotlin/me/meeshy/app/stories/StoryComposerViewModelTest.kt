@@ -1317,20 +1317,62 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 0) { uploadQueue.cancel(any()) }
     }
 
-    @Test
-    fun `removing a slide cancels the durable uploads it carried`() = runTest {
+    private fun vmWithPendingSecondSlide(): Pair<StoryComposerViewModel, String> {
         val vm = viewModel()
         vm.onTextChange("keep")
         vm.onAddSlide()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
-        val secondSlideId = vm.state.value.deck.slides[1].id
+        return vm to vm.state.value.deck.slides[1].id
+    }
+
+    @Test
+    fun `removing a slide holds the durable uploads it carried while undo can still bring it back`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
 
         vm.onRemoveSlide(secondSlideId)
 
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.deck.size).isEqualTo(1)
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `undoing the removal of a slide gives back its pending media, enqueued once`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.size).isEqualTo(2)
+        assertThat(vm.state.value.deck.slides[1].mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `redoing the removal sets the pending media aside again, and undo finds them once more`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+        vm.onUndo()
+
+        vm.onRedo()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
+        vm.onUndo()
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `the held uploads are cancelled once no reachable history step shows them`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+
+        repeat(60) { i -> vm.onSelectFilter(if (i % 2 == 0) StoryFilter.WARM else null) }
+
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
     }
 
