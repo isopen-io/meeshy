@@ -23,9 +23,9 @@ internal object StoryComposerCarryReducer {
         val plan = carry.plan
         val removed = plan.remove.fold(state.deck) { deck, id -> deck.removeMedia(id) }
         val known = state.attachments.map { it.id }.toSet()
-        val fresh = plan.add.map { it.media }.filter { it.id !in known }
         val deck = plan.add.fold(removed) { acc, item -> acc.addMediaToSelected(item.media.id) }
         val onDeck = deck.slides.flatMap { it.mediaIds }.toSet()
+        val fresh = plan.add.map { it.media }.filter { it.id !in known && it.id in onDeck }.distinctBy { it.id }
         val alts = plan.alts.entries.filter { (id, _) -> id in onDeck }
             .fold(state.draft.mediaAlt) { map, (id, text) -> MediaDescriptionLaw.with(map, id, text) }
         val visibility = carry.audience?.takeUnless { it.requiresUserSelection } ?: state.draft.visibility
@@ -34,5 +34,11 @@ internal object StoryComposerCarryReducer {
             attachments = state.attachments.filterNot { it.id in plan.remove } + fresh,
             draft = state.draft.copy(mediaAlt = alts, visibility = visibility),
         ).withDescriptionsPruned().mirrorDraftToSelection()
+    }
+
+    /** The carried media the deck could not take (a restored slide fuller than the host knew): said, never silent. */
+    fun lost(state: StoryComposerUiState, carry: ComposerCarry): Int {
+        val onDeck = state.deck.slides.flatMap { it.mediaIds }.toSet()
+        return carry.plan.add.count { it.media.id !in onDeck }
     }
 }

@@ -39,8 +39,15 @@ class ComposerHostViewModel @Inject constructor(
         it.withText(facts.text).withMedia(facts.kinds).withPostDocument(facts.media, facts.visibility)
     }
 
-    /** The target surface took what the switch carried: it is never handed over twice. */
-    fun onCarryApplied(token: Int) = _state.update { it.carryApplied(token) }
+    /**
+     * The target surface took what the switch carried: it is never handed over twice. [lost] counts what the
+     * arrival could not take beyond the plan (a restored draft already full): `true` when it must still be SAID.
+     */
+    fun onCarryApplied(token: Int, lost: Int): Boolean {
+        val carried = _state.value.carry?.takeIf { it.token == token }
+        _state.update { it.carryApplied(token) }
+        return lost > 0 && carried != null && carried.plan.leftBehind == 0
+    }
 
     fun onMoodFacts(text: String, emoji: String?) = _state.update { it.withText(text).withMoodEmoji(emoji) }
 }
