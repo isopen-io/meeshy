@@ -19,6 +19,9 @@
     <string name="feed_composer_language_search">Sprache suchen</string>
     <string name="feed_composer_language_title">Sprache des Beitrags</string>
     <string name="feed_composer_open_label">Etwas teilen</string>
+    <string name="feed_composer_overflow_clear_all">Alles löschen</string>
+    <string name="feed_composer_overflow_menu">Weitere Optionen</string>
+    <string name="feed_composer_overflow_remove_background">Hintergrund entfernen</string>
     <string name="feed_composer_placeholder">Woran denkst du?</string>
     <string name="feed_composer_publish">Veröffentlichen</string>
     <string name="feed_composer_record_voice">Audio aufnehmen</string>

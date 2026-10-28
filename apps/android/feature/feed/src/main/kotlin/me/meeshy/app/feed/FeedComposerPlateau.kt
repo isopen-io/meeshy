@@ -88,12 +88,17 @@ internal fun FeedComposerPlateau(
     val places = remember(format) { ComposerRailPlan.publicationControls(format) }
     var paletteOpen by rememberSaveable { mutableStateOf(false) }
     val mediaEnabled = !draft.isMediaFull && !isUploading && !voice.isRecording
+    val overflowEnabled = !isUploading && !voice.isRecording
+    val overflowEntries = remember(draft.showsScene, draft.text.isNotBlank(), draft.media.isNotEmpty(), draft.location != null) {
+        PostOverflowLaw.entries(draft)
+    }
     ComposerPlateau(
         onDismiss = actions.onClose,
         topCorridor = {
             ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.feed_composer_cancel), actions.onClose)
             formatSlot?.invoke()
             Spacer(Modifier.weight(1f))
+            PostOverflowMenu(overflowEntries, enabled = overflowEnabled, onPick = actions.onOverflow)
         },
         canonicalRow = {
             ServedTools.forEach { tool ->
