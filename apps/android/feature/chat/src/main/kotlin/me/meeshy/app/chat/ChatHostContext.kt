@@ -259,6 +259,8 @@ internal class ChatHostActions(
     val readPendingBytes: suspend (PendingAttachment) -> ByteArray? = { null },
     /** Une vidéo en attente retouchée (#12735) : son rendu la remplace à sa place, puis s'efface. */
     val replacePendingVideo: (id: String, file: File) -> Unit = { _, file -> file.delete() },
+    /** Un son en attente édité (#13462) : le fichier rendu le remplace à sa place, puis s'efface. */
+    val replacePendingAudio: (id: String, file: File) -> Unit = { _, file -> file.delete() },
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
@@ -318,6 +320,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     replacePendingAttachment = { id, bytes, name, mime -> controllers.find<ComposerTrayController>()?.replace(id, bytes, name, mime) },
     readPendingBytes = { item -> controllers.find<ComposerTrayController>()?.readBytes(item) },
     replacePendingVideo = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, ChatRetouchDelivery.VIDEO_MIME) ?: file.delete() },
+    replacePendingAudio = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, EDITED_AUDIO_MIME) ?: file.delete() },
     selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
@@ -367,3 +370,6 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
 )
+
+/** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */
+private const val EDITED_AUDIO_MIME = "audio/mp4"
