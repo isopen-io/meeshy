@@ -39,7 +39,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 public object SlideRailGeometry {
     public const val TILE_HEIGHT_DP: Int = 44
     public const val SCENE_ASPECT: Float = 9f / 16f
-    public const val DELETE_TARGET_DP: Int = 28
     public const val DELETE_GLYPH_DP: Int = 16
     public val TileWidth: Dp = (TILE_HEIGHT_DP * SCENE_ASPECT).dp
     public val TileHeight: Dp = TILE_HEIGHT_DP.dp
@@ -50,8 +49,11 @@ public object SlideRailGeometry {
 /**
  * The one tile of every slide rail. The host owns the DATA (what a tile shows, what the gestures mean); the tile owns what
  * must read the same everywhere: the geometry, the ring that eases between the current tile and the others, the bin on the
- * current tile (a 28 dp target around a 16 dp glyph), the haptics (a tick when a tile becomes current, a light tap on the
- * bin) and the TalkBack node ("Scene i of n", selected, the host's custom actions).
+ * current tile, the haptics (a tick when a tile becomes current, a light tap on the bin) and the TalkBack node ("Scene i of
+ * n", selected, the host's custom actions).
+ *
+ * The bin is a 16 dp glyph that overhangs the top-end corner (iOS `offset(4, -4)`); it never covers the body of the tile, so
+ * a tap on the current tile can never delete it. Compose's minimum-touch-target expansion widens it outside the tile only.
  *
  * [tileModifier] lands BEFORE the click, so a host can carry a drag gesture (the story's long press) without losing the tap.
  * [actions] is the complete list of TalkBack actions — the bin is a separate target and is not added for the host.
@@ -103,18 +105,14 @@ public fun SlideRailTile(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .offset(x = MeeshySpacing.xs, y = -MeeshySpacing.xs)
-                    .size(SlideRailGeometry.DELETE_TARGET_DP.dp)
+                    .size(SlideRailGeometry.DELETE_GLYPH_DP.dp)
                     .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f))
                     .clickable(role = Role.Button) { haptics.light(); delete() }
                     .clearAndSetSemantics { contentDescription = deleteLabel; role = Role.Button },
-                contentAlignment = Alignment.TopEnd,
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier.size(SlideRailGeometry.DELETE_GLYPH_DP.dp).clip(CircleShape).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(MeeshyIcons.Close, contentDescription = null, tint = ComposerPlateauInk.primary, modifier = Modifier.size(10.dp))
-                }
+                Icon(MeeshyIcons.Close, contentDescription = null, tint = ComposerPlateauInk.primary, modifier = Modifier.size(10.dp))
             }
         }
     }

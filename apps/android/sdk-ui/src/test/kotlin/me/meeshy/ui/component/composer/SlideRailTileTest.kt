@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.composer
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
@@ -9,6 +10,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.topRight
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -76,6 +80,31 @@ class SlideRailTileTest {
         compose.onNodeWithContentDescription("Delete scene 2").performClick()
         assertThat(deletes).isEqualTo(1)
         assertThat(selects).isEqualTo(0)
+    }
+
+    @Test
+    fun `a tap on the body of the current tile never deletes it`() {
+        show(isCurrent = true)
+        compose.onNodeWithContentDescription("Scene 2 of 3").performTouchInput { click(center) }
+        assertThat(deletes).isEqualTo(0)
+    }
+
+    @Test
+    fun `a tap just below the bin on the current tile never deletes it`() {
+        show(isCurrent = true)
+        compose.onNodeWithContentDescription("Scene 2 of 3").performTouchInput {
+            click(Offset(width * 0.75f, height * 0.4f))
+        }
+        assertThat(deletes).isEqualTo(0)
+    }
+
+    @Test
+    fun `a tap on the corner of the current tile deletes it`() {
+        show(isCurrent = true)
+        compose.onNodeWithContentDescription("Scene 2 of 3").performTouchInput {
+            click(topRight + Offset(-2f, 2f))
+        }
+        assertThat(deletes).isEqualTo(1)
     }
 
     @Test
