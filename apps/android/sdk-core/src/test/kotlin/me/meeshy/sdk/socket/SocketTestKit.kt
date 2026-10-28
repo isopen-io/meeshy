@@ -25,6 +25,7 @@ internal class FakeRealtimeSocket(val auth: Map<String, Any>) : RealtimeSocket {
     var removedAll = false
     var live = false
     val emitted = mutableListOf<String>()
+    val acks = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
 
     override val isConnected: Boolean get() = live
     override fun on(event: String, listener: (Array<Any>) -> Unit) {
@@ -46,7 +47,10 @@ internal class FakeRealtimeSocket(val auth: Map<String, Any>) : RealtimeSocket {
     }
     override fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
         emitted += event
+        acks += event to ack
     }
+
+    fun answer(event: String, vararg args: Any) = acks.filter { it.first == event }.forEach { it.second(arrayOf<Any>(*args)) }
 
     fun fire(event: String, vararg args: Any) = listeners.filter { it.first == event }.forEach { it.second(arrayOf<Any>(*args)) }
     fun count(event: String) = listeners.count { it.first == event }
