@@ -1,3 +1,4 @@
+import { clampStoryText, STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
 import { clampMediaCrop, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 import type { ApiFailure } from '@/lib/api/http';
@@ -164,6 +165,7 @@ export const selectedTextLayerOf = (page: StudioPage): StudioTextLayer | null =>
 /** `textId` est calculé par l'appelant contre TOUTES les pages (même raison
  * que `emptyStudioPage`). */
 export function pageWithAddedText(page: StudioPage, textId: string, language: string): StudioPage {
+  if (page.texts.length >= STORY_LIMITS.maxTextsPerScene) return page;
   const layer = newTextLayer({ id: textId, language });
   return { ...page, texts: [...page.texts, layer], selected: layer.id };
 }
@@ -189,7 +191,7 @@ export function pageWithTextLayer(page: StudioPage, id: string, change: (layer: 
 }
 
 export function pageWithText(page: StudioPage, id: string, text: string): StudioPage {
-  return pageWithTextLayer(page, id, (layer) => ({ ...layer, text }));
+  return pageWithTextLayer(page, id, (layer) => ({ ...layer, text: clampStoryText(text) }));
 }
 
 /* ── LES TROIS PORTES, sur une page ──────────────────────────────────────── */
