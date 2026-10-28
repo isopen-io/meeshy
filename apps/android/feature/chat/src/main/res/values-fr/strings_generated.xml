@@ -330,10 +330,14 @@
     <string name="security_verify_unavailable_title">Vérification indisponible</string>
     <string name="sentiment_very_negative">Très négatif</string>
     <string name="sentiment_very_positive">Très positif</string>
+    <string name="share_action_copy_link">Copier le lien</string>
+    <string name="share_action_share_out">Partager hors de Meeshy</string>
     <string name="share_caption_hint">Ajouter un message…</string>
     <string name="share_close">Fermer</string>
     <string name="share_content_messages_kept">Ce qui part · %1$d messages sur %2$d</string>
+    <string name="share_copied">Copié</string>
     <string name="share_detail_direct">Conversation</string>
+    <string name="share_detail_friend">Ami · pas encore de conversation</string>
     <string name="share_detail_group_unsized">Groupe</string>
     <string name="share_empty_body">Cherchez une personne par son nom, son pseudo ou son numéro.</string>
     <string name="share_empty_title">Personne ici pour l’instant</string>
@@ -345,6 +349,7 @@
     <string name="share_refused_undecrypted_source">Ce message n’a pas été déchiffré sur cet appareil : il ne peut pas être copié.</string>
     <string name="share_search_hint">Rechercher une personne, un groupe</string>
     <string name="share_section_conversations">Conversations</string>
+    <string name="share_section_people">Personnes</string>
     <string name="share_status_queued">En file</string>
     <string name="share_status_retry">Réessayer</string>
     <string name="share_status_sending">Envoi en cours…</string>
@@ -355,6 +360,8 @@
     <string name="share_target_studio">Modifier dans le studio</string>
     <string name="share_title_forward">Transférer</string>
     <string name="share_title_send">Envoyer</string>
+    <string name="share_toast_open">Ouvrir</string>
+    <string name="share_toast_sent_to">Envoyé à %s</string>
     <string name="share_withdrawn_after_read">Un message qui disparaît après lecture reste dans cette conversation.</string>
     <string name="share_withdrawn_unavailable">Un message qui n’est plus disponible ne part pas.</string>
     <string name="share_withdrawn_view_once">Un message à vue unique reste dans cette conversation.</string>

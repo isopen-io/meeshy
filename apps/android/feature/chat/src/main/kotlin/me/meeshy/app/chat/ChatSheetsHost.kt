@@ -466,7 +466,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 accentColor = accentColor,
                 actions = ShareSheetActions(
                     onQueryChange = actions.onForwardQueryChange,
-                    onToggle = actions.toggleForwardRecipient,
+                    onToggle = { recipient -> recipient.conversationId?.let(actions.toggleForwardRecipient) },
                     onCaptionChange = actions.onForwardCaptionChange,
                     onDurationChange = actions.onForwardDurationChange,
                     onSend = actions.sendForward,

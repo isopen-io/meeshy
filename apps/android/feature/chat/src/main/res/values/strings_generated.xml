@@ -329,10 +329,14 @@
     <string name="security_verify_unavailable_title">Verification unavailable</string>
     <string name="sentiment_very_negative">Very negative</string>
     <string name="sentiment_very_positive">Very positive</string>
+    <string name="share_action_copy_link">Copy link</string>
+    <string name="share_action_share_out">Share outside Meeshy</string>
     <string name="share_caption_hint">Add a message…</string>
     <string name="share_close">Close</string>
     <string name="share_content_messages_kept">What’s being sent · %1$d of %2$d messages</string>
+    <string name="share_copied">Copied</string>
     <string name="share_detail_direct">Conversation</string>
+    <string name="share_detail_friend">Friend · no conversation yet</string>
     <string name="share_detail_group_unsized">Group</string>
     <string name="share_empty_body">Search for someone by name, username or number.</string>
     <string name="share_empty_title">No one here yet</string>
@@ -344,6 +348,7 @@
     <string name="share_refused_undecrypted_source">This message wasn’t decrypted on this device: it can’t be copied.</string>
     <string name="share_search_hint">Search for a person or a group</string>
     <string name="share_section_conversations">Conversations</string>
+    <string name="share_section_people">People</string>
     <string name="share_status_queued">Queued</string>
     <string name="share_status_retry">Retry</string>
     <string name="share_status_sending">Sending…</string>
@@ -354,6 +359,8 @@
     <string name="share_target_studio">Edit in the studio</string>
     <string name="share_title_forward">Forward</string>
     <string name="share_title_send">Send</string>
+    <string name="share_toast_open">Open</string>
+    <string name="share_toast_sent_to">Sent to %s</string>
     <string name="share_withdrawn_after_read">A message that disappears after reading stays in this conversation.</string>
     <string name="share_withdrawn_unavailable">A message that’s no longer available isn’t sent.</string>
     <string name="share_withdrawn_view_once">A view-once message stays in this conversation.</string>
