@@ -18,6 +18,7 @@ import me.meeshy.app.push.pipeline.PushNotificationPipeline
 import me.meeshy.app.push.pipeline.PushSummaryNotifier
 import me.meeshy.app.push.media.PushMediaFetcher
 import me.meeshy.sdk.notification.ActiveConversationStore
+import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
@@ -38,6 +39,7 @@ class PushActionProofTest {
     private val proof = LaunchIntentProof(context)
     private val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val session = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns "me" }
+    private val tokenStore = InMemoryTokenStore(jwt = "jwt", userId = "me")
 
     private suspend fun postedIntents(): List<Intent> {
         manager.cancelAll()
@@ -51,7 +53,7 @@ class PushActionProofTest {
                 override fun interruptionFilter() = 1
                 override suspend fun localUnreadConversations(): Int? = null
             },
-            enrichers = setOf(MessagingStyleEnricher(context, mockk<PushMediaFetcher>(relaxed = true)), BigTextEnricher(), MessageActionsEnricher(context, session, proof)),
+            enrichers = setOf(MessagingStyleEnricher(context, mockk<PushMediaFetcher>(relaxed = true)), BigTextEnricher(), MessageActionsEnricher(context, session, proof, tokenStore)),
             summaryNotifier = PushSummaryNotifier(context),
         )
         pipeline.renderNow(
@@ -114,6 +116,7 @@ class PushActionProofTest {
     @Test
     fun `un compte que la banniere n avait pas pose ne peut pas etre ajoute par un relais`() = runTest {
         every { session.currentUserId } returns null
+        tokenStore.userId = null
         val reply = postedIntents().first { it.action == PushActionReceiver.ACTION_REPLY }
         val relay = typed("x").putExtra(PushActionReceiver.EXTRA_ACCOUNT_ID, "autre")
 
@@ -134,5 +137,19 @@ class PushActionProofTest {
 
         assertThat(PushActionRequest.from(markRead, proof)?.conversationId).isEqualTo("6501a1b2c3d4e5f607182930")
         assertThat(PushActionRequest.from(Intent(markRead).putExtra(PushActionReceiver.EXTRA_CONVERSATION_ID, "autre"), proof)).isNull()
+    }
+
+    /**
+     * Un push réveille d'ordinaire un processus FROID, où la session en mémoire n'est pas encore restaurée
+     * (`currentUserId` nul) : la bannière doit quand même nommer son compte, lu dans le miroir persisté
+     * (`TokenStore.userId`). Sans lui, la réponse partirait sous le compte connecté au moment du toucher,
+     * quel qu'il soit.
+     */
+    @Test
+    fun `une banniere posee par un processus froid nomme quand meme son compte`() = runTest {
+        every { session.currentUserId } returns null
+        val actions = postedIntents()
+
+        actions.forEach { assertThat(PushActionRequest.from(it, proof)?.accountId).isEqualTo("me") }
     }
 }
