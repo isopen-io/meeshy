@@ -51,6 +51,7 @@ bubble.left.fill
 bubble.right
 camera.fill
 camera.filters
+captions.bubble
 cellularbars
 character.book.closed.fill
 character.bubble
@@ -241,6 +242,7 @@ rectangle.expand.vertical
 rectangle.on.rectangle
 rectangle.portrait.and.arrow.forward
 rectangle.portrait.and.arrow.right
+rectangle.split.2x1
 rectangle.stack
 rectangle.stack.badge.plus
 repeat
@@ -259,6 +261,7 @@ sparkles.rectangle.stack
 speaker.fill
 speaker.slash.fill
 speaker.wave.3.fill
+speedometer
 square
 square.and.arrow.down
 square.and.arrow.up
