@@ -9,6 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -39,7 +40,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +60,8 @@ import me.meeshy.sdk.model.composer.capture.CaptureStage
 import me.meeshy.sdk.model.composer.capture.CaptureTopRow
 import me.meeshy.sdk.model.composer.capture.ShutterGesture
 import me.meeshy.ui.R
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.MeeshyFeedbackToast
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -77,6 +82,8 @@ public class CaptureViewfinderActions(
     val onViewSize: (IntSize) -> Unit = {},
     /** L'équivalent TalkBack de « tenir et glisser vers le verrou » : la prise démarre déjà verrouillée. */
     val onFilmHandsFree: () -> Unit = {},
+    /** Le toucher de l'avis « micro refusé » : ouvre les Réglages de l'app. */
+    val onMicrophoneNoticeTap: () -> Unit = {},
 )
 
 /** Ce que la scène montre en plus de la machine : le temps, le zoom lu sur l'objectif, le verrou en cours de glissé. */
@@ -87,6 +94,8 @@ public data class CaptureViewfinderDisplay(
     val lockProgress: Float = 0f,
     val unavailable: Boolean = false,
     val reduceMotion: Boolean = false,
+    /** Le micro a été refusé au premier film : l'avis « la vidéo sera muette » est affiché. */
+    val microphoneDenied: Boolean = false,
 )
 
 /**
@@ -123,6 +132,7 @@ public fun CaptureViewfinderContent(
                 },
         )
         if (display.unavailable) UnavailableNotice()
+        if (display.microphoneDenied) MicrophoneDeniedNotice(actions.onMicrophoneNoticeTap)
         TopRow(state, display, actions)
         BottomStack(state, display, actions, floorLit)
         if (state.discard.isPresented) DiscardDialog(actions.onDiscardAnswer)
@@ -256,6 +266,21 @@ private fun BoxScope.UnavailableNotice() {
         fontSize = 15.sp,
         textAlign = TextAlign.Center,
         modifier = Modifier.align(Alignment.Center).padding(32.dp),
+    )
+}
+
+/** L'avis unique du micro refusé : sous la rangée haute, tactile — il ouvre les Réglages (iOS `camera.microphone.denied`). */
+@Composable
+private fun BoxScope.MicrophoneDeniedNotice(onTap: () -> Unit) {
+    MeeshyFeedbackToast(
+        message = stringResource(R.string.capture_microphone_denied),
+        kind = FeedbackKind.Error,
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .statusBarsPadding()
+            .padding(top = 72.dp, start = 16.dp, end = 16.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .clickable(onClick = onTap),
     )
 }
 
