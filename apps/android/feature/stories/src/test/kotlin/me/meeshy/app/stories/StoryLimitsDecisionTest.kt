@@ -69,4 +69,38 @@ class StoryLimitsDecisionTest {
         val pinned = deck.setSelectedDuration(600.0)
         assertThat(pinned.selectedSlide.durationSecondsPin).isEqualTo(StoryLimits.TOTAL_SECONDS - 11 * 600.0)
     }
+
+    @Test
+    fun `une frappe dans un texte restaure de plus de mille caracteres le garde et le signale`() {
+        val long = "a".repeat(1200)
+        val state = StoryComposerTextReducer.added(StoryComposerUiState(), "t1")
+            .let { StoryComposerTextReducer.typed(it, "a") }
+            .let { it.copy(deck = it.deck.updateTextElement("t1") { e -> e.copy(text = long) }) }
+        val typed = StoryComposerTextReducer.typed(state, long + "b")
+        assertThat(typed.deck.selectedSlide.elements.single().text).hasLength(1201)
+        assertThat(typed.errorMessage).isEqualTo(StoryComposerViewModel.TEXT_LENGTH_LIMIT)
+        assertThat(typed.publishBlock).isEqualTo(StoryPublishBlock.TEXT_TOO_LONG)
+        assertThat(typed.canPublish).isFalse()
+    }
+
+    @Test
+    fun `un brouillon trop long dit pourquoi la publication est bloquee`() {
+        val deck = StorySlideDeck.single("a").addTextElementToSelected(StoryTextElement(id = "t", text = "a".repeat(1001)))
+        assertThat(StoryComposerUiState(deck = deck).publishBlock).isEqualTo(StoryPublishBlock.TEXT_TOO_LONG)
+        assertThat(StoryComposerUiState(deck = StorySlideDeck.single("a").addTextElementToSelected(text(1))).publishBlock).isNull()
+    }
+
+    @Test
+    fun `une duree de plus de deux heures nomme la duree`() {
+        val over = StorySlideDeck(slides = (1..13).map { StorySlide(id = "s$it", durationSecondsPin = 600.0) }, selectedId = "s1")
+        assertThat(StoryComposerUiState(deck = over).publishBlock).isEqualTo(StoryPublishBlock.DURATION_TOO_LONG)
+    }
+
+    @Test
+    fun `une republication n est pas bloquee par la longueur du texte stocke`() {
+        val deck = StorySlideDeck.single("a").addTextElementToSelected(StoryTextElement(id = "t", text = "a".repeat(1800)))
+        val repost = StoryComposerUiState(deck = deck, draft = StoryComposerDraft().withRepostOf("aaaaaaaaaaaaaaaaaaaaaaaa"))
+        assertThat(repost.publishBlock).isNull()
+        assertThat(repost.canPublish).isTrue()
+    }
 }

@@ -11,6 +11,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
 
 /**
@@ -37,6 +44,14 @@ internal fun StoryComposerBody(
                 count = state.draft.visibilityUserIds.size,
                 onClick = open,
                 modifier = Modifier.align(Alignment.End),
+            )
+        }
+        state.publishBlock?.let { block ->
+            Text(
+                text = stringResource(block.messageRes()),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         if (!state.band.isChromeHidden) {
@@ -84,4 +99,14 @@ internal fun StoryComposerBody(
             )
         }
     }
+}
+
+private fun StoryPublishBlock.messageRes(): Int = when (this) {
+    StoryPublishBlock.CAPTION_TOO_LONG -> R.string.composer_publish_block_caption
+    StoryPublishBlock.TEXT_TOO_LONG -> R.string.composer_publish_block_text
+    StoryPublishBlock.TOO_MANY_TEXTS -> R.string.composer_publish_block_texts
+    StoryPublishBlock.TOO_MANY_STICKERS -> R.string.composer_publish_block_stickers
+    StoryPublishBlock.TOO_MANY_MEDIA -> R.string.composer_publish_block_media
+    StoryPublishBlock.TOO_MANY_SOUNDS -> R.string.composer_publish_block_sounds
+    StoryPublishBlock.DURATION_TOO_LONG -> R.string.composer_publish_block_duration
 }

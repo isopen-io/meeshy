@@ -500,8 +500,10 @@ data class StorySlideDeck(
         slides.all { slide -> slide.elements.all { it.text.codePointCount(0, it.text.length) <= StoryLimits.TEXT_LENGTH } }
 
     /** Chaque scène tient dans les plafonds de cinquante par famille (médias, sons, textes, stickers). */
-    fun isWithinSceneCaps(): Boolean = isWithinMediaLimit() && isWithinTextElementLimit() && isWithinStickerLimit() &&
-        slides.all { it.audio.size <= SceneObjectCaps.AUDIO }
+    fun isWithinSceneCaps(): Boolean = isWithinMediaLimit() && isWithinTextElementLimit() && isWithinStickerLimit() && isWithinSoundLimit()
+
+    /** Chaque scène porte au plus cinquante sons. */
+    fun isWithinSoundLimit(): Boolean = slides.all { it.audio.size <= SceneObjectCaps.AUDIO }
 
     /** The **selected** slide's author-chosen backdrop, or `null` when none is set. */
     val selectedSlideBackground: StoryBackgroundValue? get() = selectedSlide.background
