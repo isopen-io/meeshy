@@ -179,4 +179,15 @@ class SceneExportCoordinatorTest {
         advanceUntilIdle()
         assertThat(shared.exists()).isFalse()
     }
+
+    @Test
+    fun `le calque peint est libere quand le bake s arrete, quelle qu en soit la raison`() = runTest {
+        var released = 0
+        val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
+        c.export(SceneExportDestination.SHARE) { out, _ ->
+            SceneExportJob(SceneExportRecipe.of(3.0, null, emptyList()), null, null, emptyMap(), out) { released++ }
+        }
+        advanceUntilIdle()
+        assertThat(released).isEqualTo(1)
+    }
 }
