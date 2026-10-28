@@ -41,6 +41,8 @@ fun ComposerHostScreen(
             onMediaError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
             formatSlot = formatMenu,
             governingType = state.chosen?.postType,
+            offerReel = state.offersReelForPost,
+            onFormatChosen = viewModel::choose,
         )
         ComposerFormat.STATUS -> MoodComposerContent(
             seedText = state.text,

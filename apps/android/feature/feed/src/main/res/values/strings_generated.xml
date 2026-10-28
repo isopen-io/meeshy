@@ -55,6 +55,10 @@
     <string name="feed_quote_cancel">Cancel</string>
     <string name="feed_quote_submit">Repost</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_offer_body">Your post has a single video: as a reel, it plays full screen in Reels.</string>
+    <string name="feed_reel_offer_post">It’s a Post</string>
+    <string name="feed_reel_offer_reel">It’s a Reel</string>
+    <string name="feed_reel_offer_title">Publish as a reel?</string>
     <string name="feed_report_reason_harassment">Harassment</string>
     <string name="feed_report_reason_hate_speech">Hate speech</string>
     <string name="feed_report_reason_impersonation">Impersonation</string>

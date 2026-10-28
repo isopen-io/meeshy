@@ -1,6 +1,15 @@
 package me.meeshy.app.feed
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.composer.ComposerFormat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,8 +36,32 @@ fun PostComposerContent(
     onMediaError: (String) -> Unit,
     formatSlot: @Composable () -> Unit,
     governingType: PostType? = null,
+    offerReel: Boolean = false,
+    onFormatChosen: (ComposerFormat) -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
+    var pendingOffer by remember { mutableStateOf<FeedComposerDraft?>(null) }
+    fun publish(draft: FeedComposerDraft) {
+        val request = draft.publishRequest() ?: return
+        viewModel.publishPost(
+            content = request.content,
+            visibility = request.visibility,
+            mediaIds = request.mediaIds,
+            type = request.type,
+            location = request.location,
+            language = request.language,
+            mediaAlt = request.mediaAlt,
+            draft = draft.toSnapshot(System.currentTimeMillis()),
+        )
+        onClose()
+    }
+    pendingOffer?.let { draft ->
+        ReelOfferDialog(
+            onReel = { pendingOffer = null; onFormatChosen(ComposerFormat.REEL); publish(draft.withForcePlainPost(false)) },
+            onPost = { pendingOffer = null; onFormatChosen(ComposerFormat.POST); publish(draft.withForcePlainPost(true)) },
+            onCancel = { pendingOffer = null },
+        )
+    }
     val seed by produceState<FeedComposerDraft?>(null, viewModel) {
         val restored = viewModel.restorableDraft()
         value = (restored ?: FeedComposerDraft()).let { if (it.text.isBlank() && seedText.isNotBlank()) it.withText(seedText) else it }
@@ -36,19 +69,7 @@ fun PostComposerContent(
     val initial = seed ?: return
     FeedComposerSheet(
         initialDraft = initial,
-        onPublish = { request, draft ->
-            viewModel.publishPost(
-                content = request.content,
-                visibility = request.visibility,
-                mediaIds = request.mediaIds,
-                type = request.type,
-                location = request.location,
-                language = request.language,
-                mediaAlt = request.mediaAlt,
-                draft = draft.toSnapshot(System.currentTimeMillis()),
-            )
-            onClose()
-        },
+        onPublish = { _, draft -> if (offerReel) pendingOffer = draft else publish(draft) },
         onDismiss = onClose,
         onDraftChange = { draft ->
             viewModel.persistComposerDraft(draft)
@@ -99,5 +120,19 @@ fun MoodComposerContent(
         },
         onDismiss = onClose,
         formatSlot = formatSlot,
+    )
+}
+
+/** « Publier en réel ? » (#8603): one qualifying video composed as a post — the reel is the PREFERRED answer. */
+@Composable
+private fun ReelOfferDialog(onReel: () -> Unit, onPost: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.feed_reel_offer_title)) },
+        text = { Text(stringResource(R.string.feed_reel_offer_body)) },
+        confirmButton = { TextButton(onClick = onReel) { Text(stringResource(R.string.feed_reel_offer_reel)) } },
+        dismissButton = {
+            TextButton(onClick = onPost) { Text(stringResource(R.string.feed_reel_offer_post)) }
+        },
     )
 }

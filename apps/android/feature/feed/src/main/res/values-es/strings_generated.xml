@@ -56,6 +56,10 @@
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_offer_body">Tu publicación tiene un solo vídeo: como reel, se abre a pantalla completa en Reels.</string>
+    <string name="feed_reel_offer_post">Es una publicación</string>
+    <string name="feed_reel_offer_reel">Es un reel</string>
+    <string name="feed_reel_offer_title">¿Publicar como reel?</string>
     <string name="feed_report_reason_harassment">Acoso</string>
     <string name="feed_report_reason_hate_speech">Discurso de odio</string>
     <string name="feed_report_reason_impersonation">Suplantación de identidad</string>
