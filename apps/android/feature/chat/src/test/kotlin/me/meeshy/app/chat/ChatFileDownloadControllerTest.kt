@@ -140,4 +140,22 @@ class ChatFileDownloadControllerTest {
 
         assertThat(r.download).isNull()
     }
+
+    @Test
+    fun `a view-once file never leaves Meeshy, neither to open nor to share, and nothing is downloaded`() = runTest {
+        val protectedPiece = ApiMessageAttachment(
+            id = "a1", fileName = "secret.pdf", originalName = "secret.pdf", mimeType = "application/pdf",
+            fileUrl = "https://cdn/a1", isViewOnce = true,
+        )
+        val r = rig(listOf(message(protectedPiece)))
+
+        r.controller.open("m1", attachmentId = "a1")
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason)
+            .isEqualTo(FileAttachmentDownloadFailure.Protected)
+
+        r.controller.share("m1", attachmentId = "a1")
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason)
+            .isEqualTo(FileAttachmentDownloadFailure.Protected)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+    }
 }

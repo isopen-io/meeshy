@@ -21,6 +21,8 @@ import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
 import me.meeshy.app.chat.export.CardExportSheet
+import me.meeshy.app.chat.fileviewer.FileViewerHost
+import me.meeshy.app.chat.fileviewer.FileViewerRequest
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.selection.MessageSelectionHost
@@ -169,8 +171,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
     }
 
+    var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
+    FileViewerHost(fileViewer, accentColor) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
+        onOpenInApp = { fileViewer = it },
         onDismiss = actions.dismissFileDownload,
         onRetry = { download ->
             val attachmentId = download.attachmentId.takeIf { it.isNotBlank() }

@@ -291,4 +291,5 @@
         <item quantity="many">%1$d mensajes sin leer</item>
         <item quantity="other">%1$d mensajes sin leer</item>
     </plurals>
+    <string name="viewer_code_truncated">Archivo truncado: solo se muestran los primeros 512 KB.</string>
 </resources>

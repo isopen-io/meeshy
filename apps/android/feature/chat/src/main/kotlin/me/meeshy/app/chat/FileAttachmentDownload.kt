@@ -46,6 +46,8 @@ enum class FileAttachmentDownloadFailure {
     ServerError,
     /** The attachment has no `fileUrl` yet (still uploading, or a purely local echo). */
     NotAvailable,
+    /** The piece disappears (view-once, flame, blur) or sits in an encrypted conversation: it never leaves Meeshy. */
+    Protected,
 }
 
 /**
