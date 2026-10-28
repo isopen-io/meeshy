@@ -21,21 +21,27 @@ class InboundMediaPolicyTest {
 
     @Test
     fun `only a content uri of another app is a source`() {
-        assertThat(InboundMediaPolicy.admitsSource("content", "com.android.providers.media.documents", own)).isTrue()
-        assertThat(InboundMediaPolicy.admitsSource("CONTENT", "media", own)).isTrue()
+        assertThat(InboundMediaPolicy.admitsSource("content", "com.android.providers.media.documents", own, grantedBySender = true)).isTrue()
+        assertThat(InboundMediaPolicy.admitsSource("CONTENT", "media", own, grantedBySender = true)).isTrue()
         listOf("file", "android.resource", "http", "https", "intent", "javascript", "data", "", null).forEach {
-            assertThat(InboundMediaPolicy.admitsSource(it, "media", own)).isFalse()
+            assertThat(InboundMediaPolicy.admitsSource(it, "media", own, grantedBySender = true)).isFalse()
         }
+    }
+
+    @Test
+    fun `a uri the sender did not grant is not a source - Meeshy would read it with its own permissions`() {
+        assertThat(InboundMediaPolicy.admitsSource("content", "media", own, grantedBySender = false)).isFalse()
+        assertThat(InboundMediaPolicy.admitsSource("content", "com.android.contacts", own, grantedBySender = false)).isFalse()
     }
 
     @Test
     fun `a uri of our own providers is not a source, whatever its case or user prefix`() {
         listOf("me.meeshy.app.fileprovider", "ME.MEESHY.APP.FILEPROVIDER", "0@me.meeshy.app.fileprovider", "me.meeshy.app.androidx-startup", "me.meeshy.app").forEach {
-            assertThat(InboundMediaPolicy.admitsSource("content", it, own)).isFalse()
+            assertThat(InboundMediaPolicy.admitsSource("content", it, own, grantedBySender = true)).isFalse()
         }
-        assertThat(InboundMediaPolicy.admitsSource("content", null, own)).isFalse()
-        assertThat(InboundMediaPolicy.admitsSource("content", "  ", own)).isFalse()
-        assertThat(InboundMediaPolicy.admitsSource("content", "me.meeshy.application.media", own)).isTrue()
+        assertThat(InboundMediaPolicy.admitsSource("content", null, own, grantedBySender = true)).isFalse()
+        assertThat(InboundMediaPolicy.admitsSource("content", "  ", own, grantedBySender = true)).isFalse()
+        assertThat(InboundMediaPolicy.admitsSource("content", "me.meeshy.application.media", own, grantedBySender = true)).isTrue()
     }
 
     @Test
@@ -51,6 +57,14 @@ class InboundMediaPolicyTest {
         assertThat(admitted(ftyp("qt  ")).mimeType).isEqualTo("video/quicktime")
         assertThat(admitted(ftyp("3gp4")).mimeType).isEqualTo("video/3gpp")
         assertThat(admitted(bytes(0x1A, 0x45, 0xDF, 0xA3)).mimeType).isEqualTo("video/webm")
+    }
+
+    @Test
+    fun `an avif is refused even when its major brand is the generic heif one`() {
+        val avif = ftyp("mif1").also { "avif".forEachIndexed { i, c -> it[16 + i] = c.code.toByte() } }
+        assertThat(refused(avif)).isEqualTo(InboundMediaRefusal.UNRECOGNIZED)
+        val heic = ftyp("mif1").also { "heic".forEachIndexed { i, c -> it[16 + i] = c.code.toByte() } }
+        assertThat(admitted(heic).mimeType).isEqualTo("image/heic")
     }
 
     @Test

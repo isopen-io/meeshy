@@ -53,7 +53,7 @@ internal object InboundIntentGate {
         holdsComposerSeed: (String) -> Boolean = { false },
     ) {
         val seed = runCatching { intent.getStringExtra(ComposerSeedLaunch.EXTRA_SEED) }.getOrNull()
-        if (seed == null || !holdsComposerSeed(seed)) intent.removeExtra(ComposerSeedLaunch.EXTRA_SEED)
+        if (seed == null || !holdsComposerSeed(seed)) runCatching { intent.removeExtra(ComposerSeedLaunch.EXTRA_SEED) }
         if (intent.data?.scheme.equals(IMPLICIT_ROUTE_SCHEME, ignoreCase = true)) intent.data = null
         val navigationKeys = runCatching {
             intent.extras?.keySet().orEmpty().filter { it.startsWith(NAV_CONTROLLER_EXTRA_PREFIX) }

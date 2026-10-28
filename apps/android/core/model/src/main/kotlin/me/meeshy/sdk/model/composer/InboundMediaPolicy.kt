@@ -27,12 +27,18 @@ object InboundMediaPolicy {
     const val MAX_BYTES: Long = ComposerAttachmentLimits.MAX_UPLOAD_BYTES
 
     /** Les octets de tête suffisants pour reconnaître chaque format admis. */
-    const val HEADER_BYTES: Int = 32
+    const val HEADER_BYTES: Int = 64
 
     private const val CONTENT_SCHEME = "content"
 
-    /** [ownNamespace] est l'identifiant de l'application : ses fournisseurs (`<id>.fileprovider`, `<id>.androidx-startup`…) en portent le préfixe. */
-    fun admitsSource(scheme: String?, authority: String?, ownNamespace: String): Boolean {
+    /**
+     * [ownNamespace] est l'identifiant de l'application : ses fournisseurs (`<id>.fileprovider`, `<id>.androidx-startup`…) en portent le préfixe.
+     * [grantedBySender] : l'intent porte `FLAG_GRANT_READ_URI_PERMISSION`. Sans lui, Meeshy lirait l'URI avec SES propres
+     * permissions (`content://media/…`, contacts) : n'importe quelle app sans accès enverrait la photo privée d'un autre. Avec lui, le
+     * système a vérifié que l'EXPÉDITEUR pouvait lire l'URI qu'il accorde (il lève `SecurityException` à son `startActivity` sinon).
+     */
+    fun admitsSource(scheme: String?, authority: String?, ownNamespace: String, grantedBySender: Boolean): Boolean {
+        if (!grantedBySender) return false
         if (!CONTENT_SCHEME.equals(scheme?.trim(), ignoreCase = true)) return false
         val host = authority?.substringAfterLast('@')?.trim()?.lowercase().orEmpty()
         val own = ownNamespace.trim().lowercase()
@@ -51,7 +57,7 @@ object InboundMediaPolicy {
 
     private fun identify(header: ByteArray): Identity? {
         if (header.size >= 4 && header.startsWith(0x1A, 0x45, 0xDF, 0xA3)) return Identity(InboundMediaKind.VIDEO, "video/webm", "webm")
-        if (header.size >= FTYP_END && header.at(4, 0x66, 0x74, 0x79, 0x70)) return brand(String(header, 8, 4, Charsets.ISO_8859_1))
+        if (header.size >= FTYP_END && header.at(4, 0x66, 0x74, 0x79, 0x70)) return brand(header)
         if (header.size < FTYP_END) return null
         return when (ImageSourceFormat.sniff(header)) {
             ImageSourceFormat.JPEG -> Identity(InboundMediaKind.IMAGE, "image/jpeg", "jpg")
@@ -62,7 +68,16 @@ object InboundMediaPolicy {
         }
     }
 
-    private fun brand(major: String): Identity? = when {
+    /** Les marques de la boîte `ftyp` : la principale, puis les compatibles. Un AVIF est souvent `mif1` AVEC `avif` compatible. */
+    private fun brand(header: ByteArray): Identity? {
+        val major = String(header, 8, 4, Charsets.ISO_8859_1)
+        val size = (header.take(4).fold(0L) { acc, byte -> (acc shl 8) or (byte.toLong() and 0xFF) }).coerceIn(FTYP_END.toLong(), header.size.toLong()).toInt()
+        val compatible = (16 until size - 3 step 4).map { String(header, it, 4, Charsets.ISO_8859_1) }
+        if ((compatible + major).any { it in UNREWRITABLE_BRANDS }) return null
+        return brandIdentity(major)
+    }
+
+    private fun brandIdentity(major: String): Identity? = when {
         major in IMAGE_BRANDS -> Identity(InboundMediaKind.IMAGE, "image/heic", "heic")
         major == "qt  " -> Identity(InboundMediaKind.VIDEO, "video/quicktime", "mov")
         major.startsWith("3g") -> Identity(InboundMediaKind.VIDEO, "video/3gpp", "3gp")
@@ -84,6 +99,7 @@ object InboundMediaPolicy {
     private fun ByteArray.startsWith(vararg expected: Int) = at(0, *expected)
 
     private const val FTYP_END = 12
+    private val UNREWRITABLE_BRANDS = setOf("avif", "avis")
     private val IMAGE_BRANDS = setOf("heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1")
     private val VIDEO_BRANDS = setOf("isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ", "M4VH", "M4VP", "dash", "MSNV", "f4v ")
 }

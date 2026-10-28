@@ -32,18 +32,27 @@ class ComposerSeedStore internal constructor(
     @Inject
     constructor(@ApplicationContext context: Context) : this(File(context.cacheDir, DIRECTORY), System::currentTimeMillis, SecureRandom())
 
-    /** Dépose [media] (au plus [MAX_ITEMS]) et rend le jeton qui les reprend ; `null` s'il n'y a rien à déposer ou si le disque refuse. */
-    fun stash(media: List<InboundMedia>): String? {
-        val items = media.take(MAX_ITEMS).ifEmpty { return null }
+    /**
+     * Copie [sources] (au plus [MAX_ITEMS]) dans le cache privé, jugées une à une ([InboundMediaReader]) — aucune n'est tenue en
+     * mémoire — et rend le jeton qui les reprend ; `null` si aucune n'est admissible ou si le disque refuse.
+     */
+    fun stash(sources: List<InboundSource>): String? {
+        val picked = sources.take(MAX_ITEMS).ifEmpty { return null }
         purgeExpired()
         val token = newToken()
         val directory = File(root, token)
-        val written = runCatching {
+        val kept = runCatching {
             check(directory.mkdirs())
-            items.forEachIndexed { index, item -> File(directory, "$index.${item.extension}").writeBytes(item.bytes) }
+            var count = 0
+            picked.forEach { source ->
+                val part = File(directory, "$count.part")
+                val copy = InboundMediaReader.copy(source, part) as? InboundCopy.Stored ?: return@forEach
+                if (part.renameTo(File(directory, "$count.${copy.media.extension}"))) count++ else part.delete()
+            }
             directory.setLastModified(now())
-        }.isSuccess
-        if (!written) {
+            count
+        }.getOrDefault(0)
+        if (kept == 0) {
             directory.deleteRecursively()
             return null
         }
@@ -60,8 +69,10 @@ class ComposerSeedStore internal constructor(
     }
 
     /** Le jeton désigne-t-il un dépôt vivant ? Sans le consommer. */
-    fun holds(token: String?): Boolean =
-        directoryOf(token)?.let { it.isDirectory && now() - it.lastModified() <= TTL_MS } == true
+    fun holds(token: String?): Boolean {
+        purgeExpired()
+        return directoryOf(token)?.let { it.isDirectory && now() - it.lastModified() <= TTL_MS } == true
+    }
 
     fun discard(token: String?) {
         directoryOf(token)?.deleteRecursively()
