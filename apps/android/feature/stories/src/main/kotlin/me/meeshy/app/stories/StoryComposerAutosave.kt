@@ -75,6 +75,9 @@ object StoryComposerAutosave {
      * - **Restorable content, unchanged** from [previous] → [StoryDraftPersist.None].
      * - **Restorable content, changed** → [StoryDraftPersist.Save] with a fresh snapshot
      *   stamped [nowIso].
+     *
+     * A session that did not make the stored draft its own ([mayOverwriteStored] false — a door that
+     * seeded its matter) writes nothing over it, whatever the composer holds.
      */
     fun resolve(
         deck: StorySlideDeck,
@@ -84,7 +87,9 @@ object StoryComposerAutosave {
         previous: StoryComposerDraftSnapshot?,
         visibilityUserIds: List<String> = emptyList(),
         annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
+        mayOverwriteStored: Boolean = true,
     ): StoryDraftPersist {
+        if (!mayOverwriteStored && previous != null) return StoryDraftPersist.None
         val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations)
         if (!snapshot.isWorthRestoring) {
             val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
@@ -101,10 +106,16 @@ object StoryComposerAutosave {
      * asynchronous and may resolve after the first edit). A `null`, corrupt, or
      * content-empty [stored] draft is ignored (returns `null`), and so is a draft awaiting the
      * confirmation of its publication (#13417): it is already on its way, restoring it would
-     * publish it twice.
+     * publish it twice. A composer opened by a door that brings its own matter (a repost of someone
+     * else's story, #13430) restores nothing either: the stored draft is the author's own work and
+     * stays on the device, untouched, for the next plain opening (iOS `preservesStoredDraft`).
      */
-    fun restore(stored: StoryComposerDraftSnapshot?, deckIsPristine: Boolean): StoryComposerDraftSnapshot? {
-        if (!deckIsPristine) return null
+    fun restore(
+        stored: StoryComposerDraftSnapshot?,
+        deckIsPristine: Boolean,
+        seededByDoor: Boolean = false,
+    ): StoryComposerDraftSnapshot? {
+        if (!deckIsPristine || seededByDoor) return null
         if (stored == null || !stored.isWorthRestoring || stored.isAwaitingPublication) return null
         return stored
     }

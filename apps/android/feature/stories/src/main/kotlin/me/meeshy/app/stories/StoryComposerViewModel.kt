@@ -87,6 +87,12 @@ class StoryComposerViewModel @Inject constructor(
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()
 
+    /** The door that opened this composer brought its own matter (a repost): the stored draft is not this session's. */
+    private var seededByDoor = false
+
+    /** This session restored the stored draft or wrote it itself: from then on it may keep it up to date. */
+    private var ownsStoredDraft = false
+
     /**
      * Restores a persisted composer draft when the screen opens — iOS `onAppear` +
      * `StoryDraftStore.load`. Cache-first: the load is silent and only seeds the deck
@@ -95,14 +101,17 @@ class StoryComposerViewModel @Inject constructor(
      * stored blob is inert. The audience and repost link are re-armed alongside the
      * slides; the draft mirror is re-pointed at the restored selection.
      */
-    fun onEnterComposer() {
+    fun onEnterComposer(seededByDoor: Boolean = false) {
+        this.seededByDoor = seededByDoor
         viewModelScope.launch {
             draftConfirmation.settle()
             val stored = draftStore.load()
             val restored = StoryComposerAutosave.restore(
                 stored = stored,
                 deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
+                seededByDoor = seededByDoor,
             ) ?: return@launch
+            ownsStoredDraft = true
             val availableIds = restored.slides
                 .flatMap { it.mediaIds }
                 .toSet()
@@ -165,9 +174,13 @@ class StoryComposerViewModel @Inject constructor(
                 previous = draftStore.load(),
                 visibilityUserIds = current.draft.visibilityUserIds,
                 annotations = current.draft.annotations(),
+                mayOverwriteStored = !seededByDoor || ownsStoredDraft,
             )
             when (action) {
-                is StoryDraftPersist.Save -> draftStore.save(action.snapshot)
+                is StoryDraftPersist.Save -> {
+                    draftStore.save(action.snapshot)
+                    ownsStoredDraft = true
+                }
                 StoryDraftPersist.Clear -> draftStore.clear()
                 StoryDraftPersist.None -> Unit
             }
@@ -663,6 +676,7 @@ class StoryComposerViewModel @Inject constructor(
      * the server or discarded by the author.
      */
     private suspend fun keepDraftUntilConfirmed(published: StoryComposerUiState, queued: List<String>) {
+        if (seededByDoor && !ownsStoredDraft && draftStore.load() != null) return
         if (queued.isEmpty()) {
             draftStore.clear()
             return

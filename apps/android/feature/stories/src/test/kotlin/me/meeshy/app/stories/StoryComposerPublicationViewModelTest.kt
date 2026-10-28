@@ -378,4 +378,65 @@ class StoryComposerPublicationViewModelTest {
 
         assertThat(store.load()?.annotations?.allowSoundExtraction).isFalse()
     }
+
+    // ---- #13430 : une porte qui apporte sa matière ne touche pas au brouillon de l'auteur ----
+
+    private fun ownDraft() = StoryComposerDraftSnapshot(
+        slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "mon brouillon")),
+        selectedId = "s1",
+    )
+
+    @Test
+    fun `un repost ne restaure pas le brouillon de l'auteur, et ne l'ecrase pas en partant`() = runTest {
+        val store = InMemoryStoryComposerDraftStore(ownDraft())
+        val vm = viewModel(store)
+
+        vm.onRepostSource("src-1")
+        vm.onEnterComposer(seededByDoor = true)
+        vm.onTextChange("mon repost")
+        vm.persistDraft()
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("mon repost")
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("mon brouillon")
+        assertThat(store.load()?.repostOfId).isNull()
+    }
+
+    @Test
+    fun `un repost sans brouillon ecrit le sien, et peut ensuite le tenir a jour`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(store)
+        vm.onRepostSource("src-1")
+        vm.onEnterComposer(seededByDoor = true)
+
+        vm.onTextChange("premier jet")
+        vm.persistDraft()
+        vm.onTextChange("second jet")
+        vm.persistDraft()
+
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("second jet")
+        assertThat(store.load()?.repostOfId).isEqualTo("src-1")
+    }
+
+    @Test
+    fun `publier un repost laisse le brouillon de l'auteur a sa place`() = runTest {
+        val store = InMemoryStoryComposerDraftStore(ownDraft())
+        val vm = viewModel(store)
+        vm.onRepostSource("src-1")
+        vm.onEnterComposer(seededByDoor = true)
+        vm.onTextChange("mon repost")
+
+        vm.published()
+
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("mon brouillon")
+        assertThat(store.load()?.isAwaitingPublication).isFalse()
+    }
+
+    @Test
+    fun `une ouverture ordinaire restaure toujours le brouillon`() = runTest {
+        val vm = viewModel(InMemoryStoryComposerDraftStore(ownDraft()))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("mon brouillon")
+    }
 }
