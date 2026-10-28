@@ -55,6 +55,8 @@ class ChatComposerTrayTest {
             return IngestedFile("/work/$id", bytes.size.toLong(), thumbnail)
         }
         override suspend fun readBytes(path: String): ByteArray? = "bytes-of-$path".toByteArray()
+        override suspend fun uploadItem(path: String, fileName: String, mimeType: String): MediaUploadItem? =
+            MediaUploadItem(bytes = "bytes-of-$path".toByteArray(), fileName = fileName, mimeType = mimeType)
         override suspend fun delete(paths: Collection<String>) = Unit
     }
 

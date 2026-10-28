@@ -74,7 +74,7 @@ fun ShareTargetScreen(
     LaunchedEffect(sharedAttachmentUri) {
         val uri = sharedAttachmentUri ?: return@LaunchedEffect
         val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uri) } ?: return@LaunchedEffect
-        viewModel.loadAttachment(picked.bytes, picked.fileName, picked.mimeType ?: sharedAttachmentMimeType)
+        viewModel.loadAttachment(picked.file, picked.fileName, picked.mimeType ?: sharedAttachmentMimeType)
     }
     LaunchedEffect(state.isFinished) { if (state.isFinished) onFinished() }
 

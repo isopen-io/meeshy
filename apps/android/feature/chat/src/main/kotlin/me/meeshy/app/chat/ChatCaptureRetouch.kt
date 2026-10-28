@@ -98,9 +98,13 @@ private fun rememberRetouchAuthor(person: ComposerLookPerson): ComposerLookAutho
 
 /** Le fichier retouché, posé dans le dossier de prises du `FileProvider`, pour la mise en attente par adresse. */
 internal suspend fun Context.writeRetouchedCapture(file: ChatRetouchedFile): Uri = withContext(Dispatchers.IO) {
+    androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", writeRetouchedCaptureFile(file))
+}
+
+/** La prise retouchée posée dans le dossier de prises, sous son nom. */
+internal fun Context.writeRetouchedCaptureFile(file: ChatRetouchedFile): File {
     val capturesDir = File(cacheDir, "captures").apply { mkdirs() }
-    val written = File(capturesDir, file.fileName).apply { writeBytes(file.bytes) }
-    androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", written)
+    return File(capturesDir, file.fileName).apply { writeBytes(file.bytes) }
 }
 
 /** Une vidéo prise, copiée hors de l'intention système, en attente de sa retouche. */
@@ -112,11 +116,11 @@ internal class ChatVideoRetouchPending(val source: File, val output: File, val p
     }
 
     companion object {
-        /** Une vidéo des récents (#12735), écrite dans le dossier de prises ; `null` si elle ne se lit pas. */
-        suspend fun of(context: Context, bytes: ByteArray, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
+        /** Une vidéo des récents (#12735), copiée en flux dans le dossier de prises ; `null` si elle ne se lit pas. */
+        suspend fun of(context: Context, video: File, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "captures").apply { mkdirs() }
             val source = File(dir, ChatCameraCaptureFile.nextVideoSource(nowMillis))
-            val probe = runCatching { source.writeBytes(bytes) }.getOrNull()?.let { RetouchVideoProbe.of(source) }
+            val probe = runCatching { video.inputStream().use { input -> source.outputStream().use { input.copyTo(it) } } }.getOrNull()?.let { RetouchVideoProbe.of(source) }
             if (probe == null) {
                 source.delete()
                 return@withContext null

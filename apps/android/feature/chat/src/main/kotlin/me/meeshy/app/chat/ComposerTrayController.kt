@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.media.MediaUploadItem
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -89,13 +90,14 @@ class ComposerTrayController @Inject constructor(
      * Ajoute un fichier enregistré par l'app (un vocal) : copié en arrière-plan, sans passer
      * par la mémoire ni par le fil principal, puis sa source est supprimée.
      */
-    fun stageFile(file: File, declaredMimeType: String?) {
+    fun stageFile(file: File, declaredMimeType: String?, fileName: String? = null) {
         val scope = host?.scope ?: run {
             file.delete()
             return
         }
-        val mime = MimeTypeResolver.resolve(declaredMimeType, file.name)
-        val info = AttachmentSourceInfo(file.name, mime, 0L)
+        val name = fileName?.takeIf { it.isNotBlank() } ?: file.name
+        val mime = MimeTypeResolver.resolve(declaredMimeType, name)
+        val info = AttachmentSourceInfo(name, mime, 0L)
         scope.launch {
             try {
                 admitSource(info)?.let { placeholder -> prepareFrom(Uri.fromFile(file), placeholder, info) }
@@ -201,6 +203,10 @@ class ComposerTrayController @Inject constructor(
     }
 
     suspend fun readBytes(item: PendingAttachment): ByteArray? = item.localPath?.let { ingestor.readBytes(it) }
+
+    /** Le fichier de travail d'une pièce prête, tel qu'il part à la file d'envoi (jamais relu en mémoire) ; `null` s'il a disparu. */
+    suspend fun uploadItem(item: PendingAttachment, fileName: String, mimeType: String): MediaUploadItem? =
+        item.localPath?.let { ingestor.uploadItem(it, fileName, mimeType) }
 
     /** Supprime les fichiers de travail d'un lot une fois ses octets remis à la file d'envoi. */
     fun release(batch: StagedBatch) {

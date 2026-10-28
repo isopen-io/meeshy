@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.media.MediaUploadItem
 import android.net.Uri
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
@@ -51,6 +52,8 @@ class ComposerTrayControllerTest {
             if (bytes.isEmpty()) null else IngestedFile("/work/${id}_$fileName", bytes.size.toLong())
 
         override suspend fun readBytes(path: String): ByteArray? = path.toByteArray()
+        override suspend fun uploadItem(path: String, fileName: String, mimeType: String): MediaUploadItem? =
+            MediaUploadItem(bytes = path.toByteArray(), fileName = fileName, mimeType = mimeType)
 
         override suspend fun delete(paths: Collection<String>) {
             deleted += paths

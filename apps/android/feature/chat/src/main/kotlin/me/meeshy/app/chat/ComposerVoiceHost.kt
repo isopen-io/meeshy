@@ -46,7 +46,7 @@ internal class ComposerVoiceHandle(
 @Composable
 internal fun rememberComposerVoice(
     onStageVoiceFile: ((File) -> Unit)?,
-    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
 ): ComposerVoiceHandle {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
@@ -60,10 +60,7 @@ internal fun rememberComposerVoice(
         val file = take?.file ?: return
         val stage = onStageVoiceFile
         if (stage != null) return stage(file)
-        ioScope.launch {
-            val bytes = withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull().also { file.delete() } }
-            if (bytes != null && bytes.isNotEmpty()) onPickFile(bytes, file.name, VOICE_MIME_TYPE)
-        }
+        if (file.length() > 0L) onPickFile(file, file.name, VOICE_MIME_TYPE) else file.delete()
     }
 
     fun start() {

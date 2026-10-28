@@ -571,8 +571,8 @@ class ChatViewModel @Inject constructor(
         composer.sendFileAttachment(bytes, fileName, declaredMimeType)
 
     /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
-    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
+    fun onPickFile(file: java.io.File, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageFile(file, declaredMimeType, fileName)
 
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()

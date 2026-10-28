@@ -175,7 +175,7 @@ class ShareTargetViewModelTest {
     fun loadAttachment_then_sendTo_uploads_it_and_sends_an_image_message() = runTest(dispatcher) {
         val h = harness()
         h.vm.load("")
-        h.vm.loadAttachment("PNG".toByteArray(), "photo.png", "image/png")
+        h.vm.loadAttachment(sharedFile("PNG"), "photo.png", "image/png")
         advanceUntilIdle()
 
         h.vm.sendTo("c1")
@@ -200,7 +200,7 @@ class ShareTargetViewModelTest {
     fun sendTo_with_an_attachment_and_no_shared_text_still_sends() = runTest(dispatcher) {
         val h = harness()
         h.vm.load("   ")
-        h.vm.loadAttachment("MP4".toByteArray(), "clip.mp4", "video/mp4")
+        h.vm.loadAttachment(sharedFile("MP4"), "clip.mp4", "video/mp4")
         advanceUntilIdle()
 
         h.vm.sendTo("c1")
@@ -223,7 +223,7 @@ class ShareTargetViewModelTest {
     fun loadAttachment_resolves_the_mime_from_the_file_name_when_no_type_is_declared() = runTest(dispatcher) {
         val h = harness()
         h.vm.load("")
-        h.vm.loadAttachment("DATA".toByteArray(), "clip.mp4", declaredMimeType = null)
+        h.vm.loadAttachment(sharedFile("DATA"), "clip.mp4", declaredMimeType = null)
         advanceUntilIdle()
 
         h.vm.sendTo("c1")
@@ -243,10 +243,10 @@ class ShareTargetViewModelTest {
     }
 
     @Test
-    fun loadAttachment_with_empty_bytes_is_a_noop() = runTest(dispatcher) {
+    fun loadAttachment_with_an_empty_file_is_a_noop() = runTest(dispatcher) {
         val h = harness()
         h.vm.load("   ")
-        h.vm.loadAttachment(ByteArray(0), "photo.png", "image/png")
+        h.vm.loadAttachment(sharedFile(""), "photo.png", "image/png")
         advanceUntilIdle()
 
         h.vm.sendTo("c1")
@@ -371,4 +371,7 @@ class ShareTargetViewModelTest {
 
         coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
+
+    private fun sharedFile(content: String): java.io.File =
+        java.io.File.createTempFile("shared", ".bin").apply { writeText(content); deleteOnExit() }
 }

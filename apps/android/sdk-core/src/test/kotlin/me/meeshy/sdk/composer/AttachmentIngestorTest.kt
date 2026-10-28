@@ -91,4 +91,18 @@ class AttachmentIngestorTest {
 
         assertThat(File(result.localPath).parentFile!!.name).isEqualTo("composer-pending")
     }
+
+    @Test
+    fun `uploadItem hands the working file itself to the queue, never its octets, and null once it is gone`() = runTest {
+        val ingestor = ingestor()
+        val uri = source("clip.mp4", ByteArray(2048) { 5 })
+        val ingested = ingestor.ingest(uri, "id5", ingestor.describe(uri))!!
+
+        val item = ingestor.uploadItem(ingested.localPath, "clip.mp4", "video/mp4")!!
+
+        assertThat(item.source).isInstanceOf(me.meeshy.sdk.media.MediaUploadSource.OnDisk::class.java)
+        assertThat(item.sizeBytes).isEqualTo(2048L)
+        File(ingested.localPath).delete()
+        assertThat(ingestor.uploadItem(ingested.localPath, "clip.mp4", "video/mp4")).isNull()
+    }
 }

@@ -511,16 +511,16 @@ internal class ChatComposerController(
     ) {
         if (tray == null) return
         val uploaded = batch.items.mapNotNull { item ->
-            val bytes = tray.readBytes(item) ?: return@mapNotNull null
             val name = item.fileName?.trim()?.ifBlank { null } ?: DEFAULT_ATTACHMENT_NAME
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
-            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime), conversationId = conversationId)
+            val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
+            val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
                 originalName = name,
                 mimeType = mime,
-                fileSize = bytes.size,
+                fileSize = upload.sizeBytes.toInt(),
                 width = item.width,
                 height = item.height,
                 duration = item.durationMs?.toInt(),
