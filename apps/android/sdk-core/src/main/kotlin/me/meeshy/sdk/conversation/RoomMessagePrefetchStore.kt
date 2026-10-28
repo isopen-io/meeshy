@@ -1,5 +1,8 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+
 import androidx.room.withTransaction
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,6 +25,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : MessagePrefetchStore {
 
     override suspend fun heldWindow(conversationId: String, limit: Int): HeldMessageWindow {
@@ -35,11 +39,14 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     }
 
     override suspend fun persist(page: List<ApiMessage>, conversationId: String): Boolean {
+        val ticket = fence?.currentTicket()
         val now = clock.nowMillis()
-        database.withTransaction {
-            MessageIngestPipeline(database).mergeInTransaction(page, now, conversationId)
-        }
-        return true
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                MessageIngestPipeline(database).mergeInTransaction(page, now, conversationId)
+            }
+            true
+        } ?: false
     }
 }
 

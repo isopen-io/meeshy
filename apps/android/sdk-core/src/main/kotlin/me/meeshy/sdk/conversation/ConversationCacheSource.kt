@@ -37,6 +37,9 @@ import me.meeshy.sdk.sync.fetchPageWithRetry
 import me.meeshy.sdk.sync.fetchPagesInParallel
 import kotlinx.coroutines.CancellationException
 import me.meeshy.sdk.search.LocalSearchIndex
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
@@ -61,6 +64,8 @@ internal class ConversationCacheSource(
     private val protectedIds: () -> Set<String> = { emptySet() },
     /** #12956 — the conversations this account has seen end-to-end encrypted: never served back in clear. */
     private val endToEnd: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    /** #13558 — the sweep's pages land only while the account that asked for them is still the one signed in. */
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -287,16 +292,17 @@ internal class ConversationCacheSource(
      * "exhaustively confirmed current".
      */
     override suspend fun revalidate() {
+        val ticket = fence?.currentTicket()
         val account = accountProvider.activeAccountId()
         if (account != null) ownership.claim(account)
         try {
-            revalidateOwned(account)
+            revalidateOwned(account, ticket)
         } finally {
             if (account != null) ownership.release(account)
         }
     }
 
-    private suspend fun revalidateOwned(account: String?) {
+    private suspend fun revalidateOwned(account: String?, ticket: AccountTicket?) {
         val watermark = syncMetaDao.watermark(RESOURCE_KEY)
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
@@ -314,23 +320,27 @@ internal class ConversationCacheSource(
         if (outcome.notModified) {
             // Confirmed unchanged: zero body decoded, zero Room writes beyond
             // freshness — watermark, etag and its scope all carry over as-is.
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
-            recordCheckpoint(account, now, pruned = false, fullReconcile = false)
+            fence.commitOrWrite(ticket) {
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+                recordCheckpoint(account, now, pruned = false, fullReconcile = false)
+            }
             return
         }
 
         if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
-        persist(
-            conversations = outcome.conversations,
-            prune = !useDelta && outcome.isComplete,
-            currentWatermark = watermark,
-            advanceWatermark = outcome.isComplete,
-            etag = outcome.capturedEtag ?: currentEtag,
-            etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
-        )
-        val prunedNow = !useDelta && outcome.isComplete
-        recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
+        fence.commitOrWrite(ticket) {
+            persist(
+                conversations = outcome.conversations,
+                prune = !useDelta && outcome.isComplete,
+                currentWatermark = watermark,
+                advanceWatermark = outcome.isComplete,
+                etag = outcome.capturedEtag ?: currentEtag,
+                etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
+            )
+            val prunedNow = !useDelta && outcome.isComplete
+            recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
+        }
     }
 
     private suspend fun recordCheckpoint(account: String?, now: Long, pruned: Boolean, fullReconcile: Boolean) {
@@ -406,7 +416,12 @@ internal class ConversationCacheSource(
      * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
      */
     suspend fun remember(conversation: ApiConversation) {
+        val ticket = fence?.currentTicket()
         val now = clock.nowMillis()
+        fence.commitOrWrite(ticket) { rememberNow(conversation, now) }
+    }
+
+    private suspend fun rememberNow(conversation: ApiConversation, now: Long) {
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = keepingEndToEnd(carryingKnownPeers(conversation))

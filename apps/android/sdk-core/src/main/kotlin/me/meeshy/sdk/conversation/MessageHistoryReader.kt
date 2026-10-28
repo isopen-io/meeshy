@@ -1,5 +1,8 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +28,8 @@ internal class MessageHistoryReader(
     private val messageDao: MessageDao,
     private val syncMetaDao: SyncMetaDao,
     private val clock: CacheClock,
+    /** #13558 — a page lands only while the account that asked for it is still the one signed in. */
+    private val fence: AccountFence? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -83,6 +88,7 @@ internal class MessageHistoryReader(
      * newest page fresher. Returns whether more history remains.
      */
     suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
+        val ticket = fence?.currentTicket()
         val cursor = messageDao.oldestSynced(conversationId) ?: return true
         val response = when (
             val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
@@ -95,7 +101,7 @@ internal class MessageHistoryReader(
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
         val now = clock.nowMillis()
-        MessageIngestPipeline(database).ingest(page, now)
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(page, now) } ?: return true
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
         // by messagesStream's bound.
@@ -114,6 +120,7 @@ internal class MessageHistoryReader(
         messageApi = messageApi,
         clock = clock,
         historyWindow = historyWindow(conversationId),
+        fence = fence,
     )
 
     companion object {
