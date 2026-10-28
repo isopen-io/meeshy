@@ -2,6 +2,8 @@ package me.meeshy.app.navigation
 
 import android.content.Intent
 import android.os.Bundle
+import me.meeshy.app.push.LaunchIntentProof
+import me.meeshy.app.push.MeeshyFcmService
 
 /**
  * **Ce qu'un intent reçu de l'extérieur a le droit de dire à la navigation** (#13465).
@@ -15,12 +17,25 @@ import android.os.Bundle
  *
  * L'app ne fabrique aucun de ces deux formats (aucun `NavDeepLinkBuilder`) : les retirer ne coupe aucun chemin
  * légitime. Des extras illisibles (parcelable piégé) sont jetés en bloc plutôt que de faire tomber l'activité.
+ *
+ * **Les extras d'appel ne sont crus que prouvés (#13504).** Un intent forgé portant `callId` + `autoAnswer` faisait
+ * décrocher l'appel d'un attaquant, caméra et micro ouverts, sans geste ; sans `autoAnswer`, il présentait un faux appel
+ * entrant sous un nom choisi. Sauf si [isGenuineCallLaunch] reconnaît la preuve que seul Meeshy pose dans ses propres
+ * `PendingIntent` ([LaunchIntentProof]), tous les extras d'appel sont retirés : il ne reste, au plus, qu'une conversation
+ * à ouvrir, comme un lien `meeshy://` le permet déjà.
  */
 internal object InboundIntentGate {
     private const val IMPLICIT_ROUTE_SCHEME = "android-app"
     private const val NAV_CONTROLLER_EXTRA_PREFIX = "android-support-nav:controller:"
+    private val CALL_EXTRAS = listOf(
+        MeeshyFcmService.EXTRA_CALL_ID,
+        MeeshyFcmService.EXTRA_CALLER_NAME,
+        MeeshyFcmService.EXTRA_IS_VIDEO,
+        MeeshyFcmService.EXTRA_AUTO_ANSWER,
+        LaunchIntentProof.EXTRA_PROOF,
+    )
 
-    fun admit(intent: Intent) {
+    fun admit(intent: Intent, isGenuineCallLaunch: (Intent) -> Boolean = { false }) {
         if (intent.data?.scheme.equals(IMPLICIT_ROUTE_SCHEME, ignoreCase = true)) intent.data = null
         val navigationKeys = runCatching {
             intent.extras?.keySet().orEmpty().filter { it.startsWith(NAV_CONTROLLER_EXTRA_PREFIX) }
@@ -29,5 +44,6 @@ internal object InboundIntentGate {
             emptyList()
         }
         navigationKeys.forEach(intent::removeExtra)
+        if (!isGenuineCallLaunch(intent)) CALL_EXTRAS.forEach(intent::removeExtra)
     }
 }

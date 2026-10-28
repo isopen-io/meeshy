@@ -63,6 +63,7 @@ fun CallScreen(
     val permissionGate = rememberCallPermissionGate(config.isVideo)
     val declineReply: CallDeclineReplyViewModel = hiltViewModel()
     val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
+    val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
     val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
     DisposableEffect(pipViewModel) {
         pipViewModel.callScreenShown(true)
@@ -77,8 +78,10 @@ fun CallScreen(
             // Bouton « Répondre » de la notification : décrocher directement —
             // même chemin gated permissions que le bouton Accepter de l'écran.
             // Gardé sur INCOMING : une ré-entrée (second tap de notification,
-            // onNewIntent) sur un appel déjà décroché ne re-join jamais.
-            if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
+            // onNewIntent) sur un appel déjà décroché ne re-join jamais. Et seulement l'appel que la
+            // passerelle tient pour en cours sous cet identifiant, jamais un callId arbitraire (#13504) :
+            // la sonde passe d'abord, le statut se relit après (l'utilisateur a pu refuser entre-temps).
+            if (autoAnswer && autoAnswerGate.confirms(config) && viewModel.state.value.status == CallStatus.INCOMING) {
                 permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
             }
         }

@@ -34,6 +34,7 @@ import javax.inject.Singleton
 @Singleton
 class IncomingCallNotificationPresenter @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val launchProof: LaunchIntentProof,
 ) {
 
     fun cancel(push: CallStopPush) {
@@ -80,6 +81,8 @@ class IncomingCallNotificationPresenter @Inject constructor(
             putExtra(EXTRA_CALLER_NAME, push.displayName)
             putExtra(EXTRA_IS_VIDEO, push.isVideo)
         }
+        // La preuve (#13504) : sans elle, MainActivity jette les extras d'appel, comme ceux d'un intent forgé.
+        launchProof.stamp(fullScreenIntent)
         val pendingIntent = PendingIntent.getActivity(
             context,
             push.callId.hashCode(),
@@ -101,7 +104,8 @@ class IncomingCallNotificationPresenter @Inject constructor(
         // auto-answer — l'écran d'appel décroche directement (gated permissions)
         // au lieu d'exiger un second tap sur Accepter. RequestCode distinct :
         // un même requestCode écraserait le PendingIntent du tap/full-screen.
-        val answerIntent = Intent(fullScreenIntent).putExtra(EXTRA_AUTO_ANSWER, true)
+        // La preuve signe aussi le décroché : celle de la sonnerie ne vaut pas pour « Répondre » (#13504).
+        val answerIntent = launchProof.stamp(Intent(fullScreenIntent).putExtra(EXTRA_AUTO_ANSWER, true))
         val answerPendingIntent = PendingIntent.getActivity(
             context,
             ("answer:" + push.callId).hashCode(),
