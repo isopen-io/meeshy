@@ -39,13 +39,13 @@ final class StoryComposerViewModelCanvasAspectTests: XCTestCase {
     /// Le cas MESURÉ par le porteur : une photo paysage posée en fond.
     func test_unFondPAYSAGE_neRendPasLaSceneLARGE() {
         let effects = makeBackground(kind: .image, aspectRatio: 16.0 / 9.0)
-        XCTAssertNil(StoryComposerViewModel.canvasAspectRatio(forBackgroundOf: effects),
+        XCTAssertNil(StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects),
                      "`nil` = portrait 9:16 — la scène garde sa forme, le média s'y range")
     }
 
     func test_uneVIDEOpaysage_nonPlus() {
         let effects = makeBackground(kind: .video, aspectRatio: 16.0 / 9.0)
-        XCTAssertNil(StoryComposerViewModel.canvasAspectRatio(forBackgroundOf: effects))
+        XCTAssertNil(StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects))
     }
 
     /// **Un fond DÉJÀ vertical ne fait pas exception non plus**, et c'est ce qui
@@ -53,16 +53,16 @@ final class StoryComposerViewModelCanvasAspectTests: XCTestCase {
     /// qui ne porterait que sur le paysage laisserait croire à une condition.
     func test_unFondDEJAvertical_neChangeRienNonPlus() {
         let effects = makeBackground(kind: .image, aspectRatio: 9.0 / 16.0)
-        XCTAssertNil(StoryComposerViewModel.canvasAspectRatio(forBackgroundOf: effects))
+        XCTAssertNil(StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects))
     }
 
     func test_unFondPresqueCARRE_neChangeRien() {
         let effects = makeBackground(kind: .image, aspectRatio: 4.0 / 5.0)
-        XCTAssertNil(StoryComposerViewModel.canvasAspectRatio(forBackgroundOf: effects))
+        XCTAssertNil(StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects))
     }
 
     func test_sansAucunFond_laSceneEstDejaVerticale() {
-        XCTAssertNil(StoryComposerViewModel.canvasAspectRatio(forBackgroundOf: StoryEffects()))
+        XCTAssertNil(StorySceneFrame.canvasAspectRatio(forBackgroundOf: StoryEffects()))
     }
 
     /// Les formes EXTRÊMES étaient l'argument du clamp [9/21, 21/9] — un
@@ -72,7 +72,7 @@ final class StoryComposerViewModelCanvasAspectTests: XCTestCase {
     func test_lesFormesEXTREMES_nOntPlusDeBorneATenir() {
         for extreme in [4.0, 0.2, 100.0, 0.01] {
             XCTAssertNil(
-                StoryComposerViewModel.canvasAspectRatio(
+                StorySceneFrame.canvasAspectRatio(
                     forBackgroundOf: makeBackground(kind: .image, aspectRatio: extreme)),
                 "aucun ratio de fond ne peut plus déformer la scène — même absurde")
         }

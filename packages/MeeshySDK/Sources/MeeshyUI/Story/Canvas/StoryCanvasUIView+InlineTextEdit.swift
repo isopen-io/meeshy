@@ -25,6 +25,23 @@ nonisolated struct StoryInlineEditZone: Equatable, Sendable {
     /// hauteur absurde.
     var height: CGFloat { max(0, bottom - top) }
     var midY: CGFloat { (top + bottom) / 2 }
+
+    /// Centre vertical du bloc édité. Pure et testable hors fenêtre.
+    ///
+    /// Sans zone mesurée → centre du canvas, comportement historique (canvas de
+    /// lecture, tests hors fenêtre, ouverture avant que le composer n'ait
+    /// mesuré ses contrôleurs).
+    static func centerY(of zone: StoryInlineEditZone?, canvasMidY: CGFloat) -> CGFloat {
+        zone?.midY ?? canvasMidY
+    }
+
+    /// Hauteur VISIBLE du bloc édité. Pure et testable hors fenêtre.
+    ///
+    /// Sans zone mesurée → hauteur naturelle, croissance libre d'origine.
+    static func blockHeight(natural: CGFloat, zoneHeight: CGFloat?) -> CGFloat {
+        guard let zoneHeight else { return natural }
+        return min(natural, zoneHeight)
+    }
 }
 
 extension StoryCanvasUIView: UITextViewDelegate {
@@ -151,8 +168,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// `rebuildLayers()` d'après — donc on mesure sur la PLUS HAUTE des deux.
     func anchorInlineEditing(layer: StoryTextLayer, editor: StoryInlineTextEditor) {
         let zone = inlineEditZone
-        let centerY = Self.inlineEditCenterY(zone: zone, canvasMidY: bounds.midY)
-        let visibleHeight = Self.inlineEditBlockHeight(
+        let centerY = StoryInlineEditZone.centerY(of: zone, canvasMidY: bounds.midY)
+        let visibleHeight = StoryInlineEditZone.blockHeight(
             natural: max(layer.bounds.height, editor.bounds.height),
             zoneHeight: zone?.height)
 
@@ -177,25 +194,6 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
     /// Opacité de l'ombrage posé sur le canvas pendant l'édition.
     static let inlineEditScrimAlpha: CGFloat = 0.45
-
-    /// Centre vertical du bloc édité. Pure et testable hors fenêtre.
-    ///
-    /// Sans zone mesurée → centre du canvas, comportement historique (canvas de
-    /// lecture, tests hors fenêtre, ouverture avant que le composer n'ait
-    /// mesuré ses contrôleurs).
-    nonisolated static func inlineEditCenterY(zone: StoryInlineEditZone?,
-                                              canvasMidY: CGFloat) -> CGFloat {
-        zone?.midY ?? canvasMidY
-    }
-
-    /// Hauteur VISIBLE du bloc édité. Pure et testable hors fenêtre.
-    ///
-    /// Sans zone mesurée → hauteur naturelle, croissance libre d'origine.
-    nonisolated static func inlineEditBlockHeight(natural: CGFloat,
-                                                  zoneHeight: CGFloat?) -> CGFloat {
-        guard let zoneHeight else { return natural }
-        return min(natural, zoneHeight)
-    }
 
     /// Zone d'édition en repère canvas, ou `nil` tant que le composer n'a pas
     /// mesuré ses DEUX contrôleurs (ou que la vue n'est pas en fenêtre).
@@ -287,14 +285,14 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// touché, et `rebuildLayers()` replace toujours la calque depuis le modèle
     /// (d'où le re-recentrage dans `reapplyInlineEditingIfNeeded`).
     ///
-    /// « Recentre » au sens de `inlineEditCenterY(zone:canvasMidY:)` : milieu de
+    /// « Recentre » au sens de `StoryInlineEditZone.centerY(of:canvasMidY:)` : milieu de
     /// la zone d'édition, ou centre du canvas tant qu'aucune zone n'est mesurée.
     private func centerLayerForEditing(_ layer: StoryTextLayer) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.position = CGPoint(
             x: bounds.midX,
-            y: Self.inlineEditCenterY(zone: inlineEditZone, canvasMidY: bounds.midY))
+            y: StoryInlineEditZone.centerY(of: inlineEditZone, canvasMidY: bounds.midY))
         layer.transform = CATransform3DIdentity
         CATransaction.commit()
     }
@@ -335,21 +333,11 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
     // MARK: - UITextViewDelegate
 
-    /// Le plafond de caractères se tient À LA FRAPPE (#13590) : un collage trop
-    /// long entre coupé à la place qui reste, et la main le sent.
-    public func textView(_ textView: UITextView,
-                         shouldChangeTextIn range: NSRange,
-                         replacementText text: String) -> Bool {
-        let current = textView.text ?? ""
-        guard let swiftRange = Range(range, in: current) else { return true }
-        let fitted = StoryComposerLimits.fittedReplacement(current: current, replacing: swiftRange, with: text)
-        guard fitted != text else { return true }
-        HapticFeedback.warning()
-        guard !fitted.isEmpty else { return false }
-        textView.textStorage.replaceCharacters(in: range, with: fitted)
-        textView.selectedRange = NSRange(location: range.location + (fitted as NSString).length, length: 0)
-        textViewDidChange(textView)
-        return false
+    /// Les 1 000 caractères se tiennent à la frappe (#13590) : `StoryInlineTextLengthGate`.
+    public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        let verdict = StoryInlineTextLengthGate.admit(text, in: range, of: textView)
+        if verdict.wroteHead { textViewDidChange(textView) }
+        return verdict.accepted
     }
 
     public func textViewDidChange(_ textView: UITextView) {

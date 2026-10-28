@@ -5,7 +5,8 @@ import Foundation
 ///
 /// Plafonds LARGES : assez hauts pour ne refuser aucun contenu réaliste, assez
 /// bas pour qu'une scène reste un document borné. Les nombres sont ceux de la
-/// passerelle et du composeur web (`packages/shared/constants/story-limits.ts`) :
+/// passerelle et du composeur web (`packages/shared/utils/story-limits.ts`,
+/// `services/gateway/src/routes/posts/storyLimits.ts`) :
 /// un nombre qui diverge entre deux clients refuse sur l'un ce que l'autre
 /// publie.
 ///
@@ -50,6 +51,29 @@ public nonisolated enum StoryComposerLimits {
     /// totalisent `others` — jamais négative.
     public static func remainingDuration(otherScenes others: Float) -> Float {
         max(0, maxStoryDurationSeconds - others)
+    }
+
+    /// Ce qu'il reste des deux heures quand on met de côté la scène `index` :
+    /// la somme des durées des AUTRES scènes est déjà prise.
+    public static func remainingDuration(excludingSceneAt index: Int, of slides: [StorySlide]) -> Float {
+        let others = slides.enumerated()
+            .filter { $0.offset != index }
+            .reduce(Float(0)) { $0 + Float($1.element.computedTotalDuration()) }
+        return remainingDuration(otherScenes: others)
+    }
+
+    /// La scène `effects` peut-elle recevoir un objet de plus de la famille
+    /// `limit` ? Les plafonds de longueur et de durée ne se jugent pas ici.
+    public static func canAdd(_ limit: StoryComposerLimit, to effects: StoryEffects) -> Bool {
+        let medias = effects.mediaObjects ?? []
+        switch limit {
+        case .sticker: return (effects.stickerObjects?.count ?? 0) < maxStickersPerScene
+        case .image: return medias.filter { $0.kind == .image }.count < maxImagesPerScene
+        case .video: return medias.filter { $0.kind == .video }.count < maxVideosPerScene
+        case .audio: return (effects.audioPlayerObjects?.count ?? 0) < maxAudiosPerScene
+        case .text: return effects.textObjects.count < maxTextsPerScene
+        case .textLength, .duration: return true
+        }
     }
 }
 

@@ -32,14 +32,14 @@ final class StoryInlineTextEditAnchorTests: XCTestCase {
 
     func test_noZone_keepsHistoricCentering() {
         XCTAssertEqual(
-            StoryCanvasUIView.inlineEditCenterY(zone: nil, canvasMidY: canvasMidY),
+            StoryInlineEditZone.centerY(of: nil, canvasMidY: canvasMidY),
             canvasMidY,
             "Sans zone mesurée, le bloc reste au centre du canvas — repli d'origine")
     }
 
     func test_zone_centersInsideTheZone_notOnTheCanvas() {
         let zone = StoryInlineEditZone(top: 120, bottom: 460)
-        let y = StoryCanvasUIView.inlineEditCenterY(zone: zone, canvasMidY: canvasMidY)
+        let y = StoryInlineEditZone.centerY(of: zone, canvasMidY: canvasMidY)
 
         XCTAssertEqual(y, 290, accuracy: 0.001,
                        "Le centre du bloc est celui de la zone")
@@ -50,7 +50,7 @@ final class StoryInlineTextEditAnchorTests: XCTestCase {
     func test_zoneCenter_leavesRoomBetweenAnEmptyTextAndTheControls() {
         // Zone typique clavier levé : « Terminé » à 120, bulles à 460.
         let zone = StoryInlineEditZone(top: 120, bottom: 460)
-        let y = StoryCanvasUIView.inlineEditCenterY(zone: zone, canvasMidY: canvasMidY)
+        let y = StoryInlineEditZone.centerY(of: zone, canvasMidY: canvasMidY)
         let emptyBlockHeight: CGFloat = 44   // hauteur du placeholder seul
 
         XCTAssertGreaterThan(zone.bottom - (y + emptyBlockHeight / 2), 100,
@@ -74,21 +74,21 @@ final class StoryInlineTextEditAnchorTests: XCTestCase {
 
     func test_blockHeight_withoutZone_staysNatural() {
         XCTAssertEqual(
-            StoryCanvasUIView.inlineEditBlockHeight(natural: 900, zoneHeight: nil),
+            StoryInlineEditZone.blockHeight(natural: 900, zoneHeight: nil),
             900,
             "Sans zone, aucune borne — croissance libre, comportement d'origine")
     }
 
     func test_blockHeight_shorterThanZone_staysNatural() {
         XCTAssertEqual(
-            StoryCanvasUIView.inlineEditBlockHeight(natural: 120, zoneHeight: 340),
+            StoryInlineEditZone.blockHeight(natural: 120, zoneHeight: 340),
             120,
             "Un texte qui tient dans la zone garde sa hauteur réelle")
     }
 
     func test_blockHeight_tallerThanZone_isClampedToTheZone() {
         XCTAssertEqual(
-            StoryCanvasUIView.inlineEditBlockHeight(natural: 900, zoneHeight: 340),
+            StoryInlineEditZone.blockHeight(natural: 900, zoneHeight: 340),
             340,
             "Un texte long est borné à la zone — il défilera à l'intérieur")
     }

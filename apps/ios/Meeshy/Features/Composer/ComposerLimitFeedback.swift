@@ -32,11 +32,21 @@ enum ComposerLimitFeedback {
         return String(format: format, limit.value)
     }
 
-    /// Branche le retour sur `composer` : haptique d'erreur + message.
-    static func attach(to composer: StoryComposerViewModel) {
-        composer.onLimitReached = { limit in
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(message(for: limit))
-        }
+    /// Branche le retour sur `composer` et le rend : `showError` porte l'haptique
+    /// d'erreur et le message.
+    @discardableResult
+    static func attached(to composer: StoryComposerViewModel) -> StoryComposerViewModel {
+        composer.onLimitReached = { FeedbackToastManager.shared.showError(message(for: $0)) }
+        _ = typingRelay
+        return composer
+    }
+
+    /// La frappe sur la scène ne passe pas par le viewmodel : le canvas coupe le
+    /// texte et poste `StoryInlineTextLengthGate.limitReached`, que ce relais dit
+    /// comme les autres refus.
+    static let typingRelay: NSObjectProtocol = NotificationCenter.default.addObserver(
+        forName: StoryInlineTextLengthGate.limitReached, object: nil, queue: nil
+    ) { _ in
+        MainActor.assumeIsolated { FeedbackToastManager.shared.showError(message(for: .textLength)) }
     }
 }

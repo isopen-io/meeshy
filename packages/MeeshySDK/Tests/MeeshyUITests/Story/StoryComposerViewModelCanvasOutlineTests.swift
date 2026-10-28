@@ -23,18 +23,18 @@ final class StoryComposerViewModelCanvasOutlineTests: XCTestCase {
     }
 
     func test_noBackgroundMedia_doesNotFillCanvas() {
-        XCTAssertFalse(StoryComposerViewModel.backgroundFillsCanvas(for: StoryEffects()),
+        XCTAssertFalse(StorySceneFrame.backgroundFillsCanvas(for: StoryEffects()),
                        "Sans fond visuel, le canvas n'est pas rempli → contours visibles")
     }
 
     func test_fillMode_fillsCanvas() {
-        XCTAssertTrue(StoryComposerViewModel.backgroundFillsCanvas(for: background(fitMode: nil)),
+        XCTAssertTrue(StorySceneFrame.backgroundFillsCanvas(for: background(fitMode: nil)),
                       "Mode auto (nil = aspectFill) remplit le canvas → pas de contours")
-        XCTAssertTrue(StoryComposerViewModel.backgroundFillsCanvas(for: background(fitMode: "fill")))
+        XCTAssertTrue(StorySceneFrame.backgroundFillsCanvas(for: background(fitMode: "fill")))
     }
 
     func test_fitMode_doesNotFillCanvas() {
-        XCTAssertFalse(StoryComposerViewModel.backgroundFillsCanvas(for: background(fitMode: "fit")),
+        XCTAssertFalse(StorySceneFrame.backgroundFillsCanvas(for: background(fitMode: "fit")),
                        "Mode « fit » (letterbox) laisse des bandes → contours visibles")
     }
 
@@ -43,7 +43,7 @@ final class StoryComposerViewModelCanvasOutlineTests: XCTestCase {
                                   aspectRatio: 1, isBackground: false)
         var effects = StoryEffects()
         effects.mediaObjects = [fg]
-        XCTAssertFalse(StoryComposerViewModel.backgroundFillsCanvas(for: effects),
+        XCTAssertFalse(StorySceneFrame.backgroundFillsCanvas(for: effects),
                        "Un média foreground ne remplit pas le fond du canvas")
     }
 }

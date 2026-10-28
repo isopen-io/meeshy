@@ -39,8 +39,7 @@ extension StoryComposerViewModel {
         // retombe sur la durée auto du contenu tant qu'aucun pin n'est posé.
         get { Float(currentSlide.effects.timelineDuration ?? currentSlide.computedTotalDuration()) }
         set {
-            let room = remainingDuration(excludingSlideAt: currentSlideIndex)
-            let ceiling = max(2, room)
+            let ceiling = max(2, StoryComposerLimits.remainingDuration(excludingSceneAt: currentSlideIndex, of: slides))
             let clamped = max(2, min(ceiling, newValue))
             if newValue > ceiling { refuse(.duration) }
             var slide = currentSlide
@@ -62,15 +61,6 @@ extension StoryComposerViewModel {
         return slides.indices.contains(currentSlideIndex) ? currentSlideIndex : nil
     }
 
-    /// Ce qu'il reste des deux heures de la story quand on met de côté la scène
-    /// `index` (#13590) : la somme des durées des AUTRES scènes est déjà prise.
-    func remainingDuration(excludingSlideAt index: Int) -> Float {
-        let others = slides.enumerated()
-            .filter { $0.offset != index }
-            .reduce(Float(0)) { $0 + Float($1.element.computedTotalDuration()) }
-        return StoryComposerLimits.remainingDuration(otherScenes: others)
-    }
-
     func autoExtendDuration(forElementEnd end: Float, slideId: String? = nil) {
         // Target the slide that owns the element, NOT the currently-visible one.
         // Without this, a video added to slide 0 while the user is on slide 1
@@ -83,7 +73,7 @@ extension StoryComposerViewModel {
         // on n'écrit PAS de pin ici (éviterait un pin obsolète après suppression du média).
         let current = Float(slides[targetIndex].duration)
         if end > current {
-            let room = remainingDuration(excludingSlideAt: targetIndex)
+            let room = StoryComposerLimits.remainingDuration(excludingSceneAt: targetIndex, of: slides)
             slides[targetIndex].duration = TimeInterval(min(max(current, room), end + 0.5))
         }
     }
