@@ -138,4 +138,30 @@ class VoiceRecordingOngoingNotificationsTest {
         assertThat(stops).isEmpty()
         assertThat(posted(VoiceRecordingOngoingNotifications.KEPT_IN_TRAY_ID)).isNull()
     }
+
+    @Test
+    fun `with the app's notifications turned off the microphone is never kept in the background unseen`() {
+        shadowOf(context.getSystemService(NotificationManager::class.java)).setNotificationsEnabled(false)
+        val bridge = VoiceRecordingActivityBridge()
+        val launcher = FakeLauncher(accepts = true)
+
+        VoiceRecordingOngoingNotifications(context, bridge, launcher, ProcessForegroundState()).show(snapshot)
+
+        assertThat(launcher.started).isEmpty()
+        assertThat(bridge.keepsRecordingInBackground).isFalse()
+    }
+
+    @Test
+    fun `a blocked ongoing channel keeps the take on screen only`() {
+        OngoingChannel.ensure(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel = manager.getNotificationChannel(me.meeshy.app.push.NotificationChannelIds.CHANNEL_ONGOING)
+        channel.importance = NotificationManager.IMPORTANCE_NONE
+        manager.createNotificationChannel(channel)
+        val launcher = FakeLauncher(accepts = true)
+
+        VoiceRecordingOngoingNotifications(context, VoiceRecordingActivityBridge(), launcher, ProcessForegroundState()).show(snapshot)
+
+        assertThat(launcher.started).isEmpty()
+    }
 }
