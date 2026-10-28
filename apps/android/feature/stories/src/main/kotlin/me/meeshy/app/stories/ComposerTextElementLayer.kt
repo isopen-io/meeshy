@@ -162,8 +162,7 @@ internal fun TextElementLayer(
         )
         Box(
             modifier = Modifier
-                .composerTextBacking(element.background)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .composerTextFrame(element.background, element.frame, canvasWidthPx),
         ) {
             val outline = element.outline
             if (outline.isVisible && !editing) {

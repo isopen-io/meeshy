@@ -1,10 +1,13 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.composer.ComposerObjectEditorRail
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Entry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Focus
 import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
+import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.TextEditTool
 import org.junit.Test
 
@@ -37,7 +40,7 @@ class StoryComposerTrailingTest {
         val color = ComposerObjectEditorSection.Tool(TextEditTool.COLOR)
         val opened = StoryComposerTrailingReducer.sectionOpened(withText(), color)
         assertThat((opened.trailingFocus as Focus.Object).open).isEqualTo(color)
-        val ignored = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE))
+        val ignored = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Media(MediaEditTool.TRIM))
         assertThat(ignored.openObjectSection).isNull()
     }
 
@@ -51,10 +54,30 @@ class StoryComposerTrailingTest {
     }
 
     @Test
-    fun `no section duplicates an action of the column`() {
-        val sections = ServedTextSections.filterIsInstance<ComposerObjectEditorSection.Media>()
-        assertThat(sections).isEmpty()
-        assertThat(ServedTextSections).doesNotContain(ComposerObjectEditorSection.Plan)
+    fun `a text serves iOS's eight tools then time then plan, in that order`() {
+        assertThat(ServedTextSections).isEqualTo(
+            ComposerObjectEditorRail.entries(ComposerObjectKind.TEXT),
+        )
+    }
+
+    @Test
+    fun `every served section sits in the iOS rail and none repeats an action of the column`() {
+        val actions = (StoryComposerTextReducer.added(withText(), "t2").trailingFocus as Focus.Object).actions
+        assertThat(ServedTextSections.filterIsInstance<ComposerObjectEditorSection.Media>()).isEmpty()
+        assertThat(ServedTextSections).containsNoDuplicates()
+        // le plan est la frise des pistes : l'empilement reste aux seules actions de l'objet
+        assertThat(actions).containsAtLeast(Action.BRING_FORWARD, Action.SEND_BACKWARD)
+    }
+
+    @Test
+    fun `frame, border, language and plan are all openable`() {
+        listOf(TextEditTool.FRAME, TextEditTool.BORDER, TextEditTool.LANGUAGE).forEach { tool ->
+            val section = ComposerObjectEditorSection.Tool(tool)
+            val opened = StoryComposerTrailingReducer.sectionOpened(withText(), section)
+            assertThat((opened.trailingFocus as Focus.Object).open).isEqualTo(section)
+        }
+        val plan = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Plan)
+        assertThat((plan.trailingFocus as Focus.Object).open).isEqualTo(ComposerObjectEditorSection.Plan)
     }
 
     @Test

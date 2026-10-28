@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 
@@ -1095,5 +1097,30 @@ class StoryComposerAutosaveTest {
             """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1","visibility":"FRIENDS"}""",
         )
         assertThat(legacy.visibilityUserIds).isEmpty()
+    }
+
+    @Test
+    fun `frame, border and language survive the draft snapshot round-trip`() {
+        val element = StoryTextElement(
+            id = "t1",
+            text = "Bonjour",
+            outline = StoryTextOutline(width = 6f, color = "FF3B30"),
+            frame = StoryTextFrame(StoryTextFrameShape.CLOUD, paddingScale = 2f, borderWidth = 3f, borderColor = "007AFF"),
+            sourceLanguage = "es",
+        )
+        val deck = StorySlideDeck.single("s1").addTextElementToSelected(element)
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()!!
+        assertThat(rebuilt.selectedSlide.elements.single()).isEqualTo(element)
+    }
+
+    @Test
+    fun `a draft saved before frames existed restores to the neutral frame`() {
+        val legacy = StoryDraftTextElementSnapshot(id = "t1", text = "old")
+        val deck = StorySlideDeck.single("s1").addTextElementToSelected(StoryTextElement(id = "t1", text = "old"))
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+        val withLegacy = snap.copy(slides = snap.slides.map { it.copy(elements = listOf(legacy)) })
+        val restored = withLegacy.toDeck()!!.selectedSlide.elements.single()
+        assertThat(restored.frame).isEqualTo(StoryTextFrame())
+        assertThat(restored.sourceLanguage).isNull()
     }
 }

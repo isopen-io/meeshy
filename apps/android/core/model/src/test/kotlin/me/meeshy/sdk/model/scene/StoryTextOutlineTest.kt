@@ -82,3 +82,28 @@ class StoryTextOutlineTest {
         assertThat(StoryTextOutlineCycle.steps).containsExactly(2f, 4f, 8f, 12f).inOrder()
     }
 }
+
+class StoryTextOutlineSliderTest {
+    @Test
+    fun `the slider bounds the width and posts white when no colour was chosen`() {
+        val outline = StoryTextOutline().widened(40f)
+        assertThat(outline.width).isEqualTo(12f)
+        assertThat(outline.color).isEqualTo("FFFFFF")
+        assertThat(outline.isVisible).isTrue()
+    }
+
+    @Test
+    fun `back to zero keeps the colour so raising it again needs no new pick`() {
+        val off = StoryTextOutline(width = 4f, color = "FF3B30").widened(0f)
+        assertThat(off.isVisible).isFalse()
+        assertThat(off.color).isEqualTo("FF3B30")
+    }
+
+    @Test
+    fun `a colour on a switched off outline wakes it at four`() {
+        val on = StoryTextOutline().colored("007AFF")
+        assertThat(on.width).isEqualTo(4f)
+        assertThat(on.isVisible).isTrue()
+        assertThat(StoryTextOutline(width = 8f, color = "000000").colored("007AFF").width).isEqualTo(8f)
+    }
+}

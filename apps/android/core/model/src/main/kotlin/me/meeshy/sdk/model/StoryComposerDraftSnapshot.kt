@@ -61,6 +61,13 @@ data class StoryDraftTextElementSnapshot(
     val background: StoryTextBackgroundStyle? = null,
     val outlineWidth: Float = 0f,
     val outlineColor: String? = null,
+    /** Le cadre (#13561) : nom de fil de la forme (`""` : arrondi), marge, liseré — défauts d'un blob d'avant. */
+    val frameShape: String = "",
+    val framePaddingScale: Float = 1f,
+    val frameBorderWidth: Float = 0f,
+    val frameBorderColor: String? = null,
+    /** La langue d'ÉCRITURE choisie par l'auteur (#13534) ; `null` : celle de la publication. */
+    val sourceLanguage: String? = null,
     val fadeIn: Float = 0f,
     val fadeOut: Float = 0f,
     val startSeconds: Float = 0f,
