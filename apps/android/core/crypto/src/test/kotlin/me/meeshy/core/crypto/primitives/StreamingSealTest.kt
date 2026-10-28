@@ -72,4 +72,45 @@ class StreamingSealTest {
 
         assertThat(runCatching { seal.opening(file.inputStream(), aad).use { it.readBytes() } }.isFailure).isTrue()
     }
+
+    @Test
+    fun `a file cut at a segment boundary or with two segments swapped does not open`() {
+        val seal = StreamingSeal.ephemeral()
+        val original = sealedFile(seal, ByteArray(40_000) { (it % 251).toByte() }).readBytes()
+
+        fun opens(bytes: ByteArray): Boolean = runCatching {
+            val file = folder.newFile().also { it.writeBytes(bytes) }
+            seal.opening(file.inputStream(), aad).use { it.readBytes() }
+        }.isSuccess
+
+        val segment = 4096
+        val swapped = original.copyOf().also { copy ->
+            original.copyInto(copy, segment, 2 * segment, 3 * segment)
+            original.copyInto(copy, 2 * segment, segment, 2 * segment)
+        }
+        assertThat(opens(original)).isTrue()
+        assertThat(opens(original.copyOf(3 * segment))).isFalse()
+        assertThat(opens(swapped)).isFalse()
+    }
+
+    @Test
+    fun `a keyset stored in the clear is recognised, an encrypted one is not`() {
+        com.google.crypto.tink.streamingaead.StreamingAeadConfig.register()
+        com.google.crypto.tink.aead.AeadConfig.register()
+        val handle = com.google.crypto.tink.KeysetHandle.generateNew(
+            com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters.AES256_GCM_HKDF_4KB,
+        )
+        fun hexOf(write: (com.google.crypto.tink.KeysetWriter) -> Unit): String {
+            val out = java.io.ByteArrayOutputStream()
+            write(com.google.crypto.tink.BinaryKeysetWriter.withOutputStream(out))
+            return com.google.crypto.tink.subtle.Hex.encode(out.toByteArray())
+        }
+        val master = com.google.crypto.tink.KeysetHandle.generateNew(com.google.crypto.tink.aead.PredefinedAeadParameters.AES256_GCM)
+            .getPrimitive(com.google.crypto.tink.RegistryConfiguration.get(), com.google.crypto.tink.Aead::class.java)
+
+        assertThat(StreamingSeal.isCleartextKeyset(hexOf { com.google.crypto.tink.CleartextKeysetHandle.write(handle, it) })).isTrue()
+        assertThat(StreamingSeal.isCleartextKeyset(hexOf { handle.write(it, master) })).isFalse()
+        assertThat(StreamingSeal.isCleartextKeyset(null)).isFalse()
+        assertThat(StreamingSeal.isCleartextKeyset("not hex")).isFalse()
+    }
 }
