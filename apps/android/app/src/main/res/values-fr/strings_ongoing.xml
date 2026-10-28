@@ -14,4 +14,5 @@
     <string name="voice_recording_activity_title">Enregistrement vocal</string>
     <string name="voice_recording_activity_stop">Arrêter</string>
     <string name="voice_recording_activity_cancel">Annuler</string>
+    <string name="voice_recording_activity_kept_in_tray">L’enregistrement s’est arrêté — votre vocal attend dans le composeur</string>
 </resources>

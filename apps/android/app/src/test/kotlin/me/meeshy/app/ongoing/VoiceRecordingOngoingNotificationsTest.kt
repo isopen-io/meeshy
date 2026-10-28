@@ -1,6 +1,7 @@
 package me.meeshy.app.ongoing
 
 import android.content.Context
+import android.app.NotificationManager
 import android.content.Intent
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
@@ -36,7 +37,7 @@ class VoiceRecordingOngoingNotificationsTest {
         val bridge = VoiceRecordingActivityBridge()
         val launcher = FakeLauncher(accepts = true)
 
-        VoiceRecordingOngoingNotifications(context, bridge, launcher).show(snapshot)
+        VoiceRecordingOngoingNotifications(context, bridge, launcher, ProcessForegroundState()).show(snapshot)
 
         assertThat(launcher.started).containsExactly(snapshot)
         assertThat(bridge.keepsRecordingInBackground).isTrue()
@@ -46,7 +47,7 @@ class VoiceRecordingOngoingNotificationsTest {
     fun `a refused service leaves the take to the old foreground-only behaviour`() {
         val bridge = VoiceRecordingActivityBridge()
 
-        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = false)).show(snapshot)
+        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = false), ProcessForegroundState()).show(snapshot)
 
         assertThat(bridge.keepsRecordingInBackground).isFalse()
     }
@@ -54,7 +55,7 @@ class VoiceRecordingOngoingNotificationsTest {
     @Test
     fun `the service starts once per take, later updates only refresh the notification`() {
         val launcher = FakeLauncher(accepts = true)
-        val sink = VoiceRecordingOngoingNotifications(context, VoiceRecordingActivityBridge(), launcher)
+        val sink = VoiceRecordingOngoingNotifications(context, VoiceRecordingActivityBridge(), launcher, ProcessForegroundState())
 
         sink.show(snapshot)
         sink.show(snapshot.copy(statusLabel = "Autre"))
@@ -66,7 +67,7 @@ class VoiceRecordingOngoingNotificationsTest {
     fun `ending the take stops the service and forgets the keep-alive`() {
         val bridge = VoiceRecordingActivityBridge()
         val launcher = FakeLauncher(accepts = true)
-        val sink = VoiceRecordingOngoingNotifications(context, bridge, launcher)
+        val sink = VoiceRecordingOngoingNotifications(context, bridge, launcher, ProcessForegroundState())
         sink.show(snapshot)
 
         sink.cancel()
@@ -81,12 +82,60 @@ class VoiceRecordingOngoingNotificationsTest {
         val seen = mutableListOf<String>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { bridge.stopRequests.collect { seen += "stop" } }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { bridge.cancelRequests.collect { seen += "cancel" } }
-        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = true)).show(snapshot)
+        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = true), ProcessForegroundState()).show(snapshot)
 
         context.sendBroadcast(Intent(VoiceRecordingOngoingNotifications.ACTION_CANCEL).setPackage(context.packageName))
         context.sendBroadcast(Intent(VoiceRecordingOngoingNotifications.ACTION_STOP).setPackage(context.packageName))
         shadowOf(Looper.getMainLooper()).idle()
 
         assertThat(seen).containsExactly("cancel", "stop").inOrder()
+    }
+
+    private fun foreground(visible: Boolean) = ProcessForegroundState().apply { onVisibilityChanged(visible) }
+
+    private fun posted(id: Int) = shadowOf(context.getSystemService(NotificationManager::class.java)).getNotification(id)
+
+    @Test
+    fun `a service lost after the app left stops the take into the tray and says so`() = runTest {
+        val bridge = VoiceRecordingActivityBridge()
+        val stops = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { bridge.stopRequests.collect { stops += it } }
+        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = true), foreground(visible = false)).show(snapshot)
+
+        VoiceRecordingService.refusal?.invoke()
+
+        assertThat(stops).hasSize(1)
+        assertThat(bridge.keepsRecordingInBackground).isFalse()
+        assertThat(posted(VoiceRecordingOngoingNotifications.KEPT_IN_TRAY_ID)).isNotNull()
+    }
+
+    @Test
+    fun `a service lost while the app is on screen keeps the take and puts the notification back`() = runTest {
+        val bridge = VoiceRecordingActivityBridge()
+        val stops = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { bridge.stopRequests.collect { stops += it } }
+        VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = true), foreground(visible = true)).show(snapshot)
+
+        VoiceRecordingService.refusal?.invoke()
+
+        assertThat(stops).isEmpty()
+        assertThat(bridge.keepsRecordingInBackground).isFalse()
+        assertThat(posted(VoiceRecordingOngoingNotifications.NOTIFICATION_ID)).isNotNull()
+        assertThat(posted(VoiceRecordingOngoingNotifications.KEPT_IN_TRAY_ID)).isNull()
+    }
+
+    @Test
+    fun `a late refusal after the take ended stops nothing`() = runTest {
+        val bridge = VoiceRecordingActivityBridge()
+        val stops = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { bridge.stopRequests.collect { stops += it } }
+        val sink = VoiceRecordingOngoingNotifications(context, bridge, FakeLauncher(accepts = true), foreground(visible = false))
+        sink.show(snapshot)
+        sink.cancel()
+
+        VoiceRecordingService.refusal?.invoke()
+
+        assertThat(stops).isEmpty()
+        assertThat(posted(VoiceRecordingOngoingNotifications.KEPT_IN_TRAY_ID)).isNull()
     }
 }

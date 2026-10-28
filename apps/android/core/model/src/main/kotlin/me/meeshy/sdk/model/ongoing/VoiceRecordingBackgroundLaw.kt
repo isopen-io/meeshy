@@ -31,4 +31,16 @@ object VoiceRecordingBackgroundLaw {
         input.keptAliveByService -> Decision.KeepRecording
         else -> Decision.AbandonToTray
     }
+
+    /**
+     * Le système retire le premier plan APRÈS avoir accepté le démarrage du service. L'app encore à l'écran :
+     * la prise continue sous les yeux de l'utilisateur, et [onAppLeft] la rangera s'il quitte. L'app déjà
+     * partie : plus rien ne tient le micro, la prise est arrêtée et posée dans le tiroir — jamais perdue en
+     * silence.
+     */
+    fun onServiceLost(isRecording: Boolean, appVisible: Boolean): Decision = when {
+        !isRecording -> Decision.Nothing
+        appVisible -> Decision.KeepRecording
+        else -> Decision.AbandonToTray
+    }
 }

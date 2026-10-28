@@ -14,4 +14,5 @@
     <string name="voice_recording_activity_title">Grabación de voz</string>
     <string name="voice_recording_activity_stop">Detener</string>
     <string name="voice_recording_activity_cancel">Cancelar</string>
+    <string name="voice_recording_activity_kept_in_tray">La grabación se detuvo: tu mensaje de voz te espera en el compositor</string>
 </resources>

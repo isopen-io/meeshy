@@ -14,4 +14,5 @@
     <string name="voice_recording_activity_title">تسجيل صوتي</string>
     <string name="voice_recording_activity_stop">إيقاف</string>
     <string name="voice_recording_activity_cancel">إلغاء</string>
+    <string name="voice_recording_activity_kept_in_tray">توقف التسجيل — رسالتك الصوتية بانتظارك في نافذة الكتابة</string>
 </resources>
