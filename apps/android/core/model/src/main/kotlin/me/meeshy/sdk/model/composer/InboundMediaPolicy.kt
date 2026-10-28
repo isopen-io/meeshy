@@ -31,10 +31,12 @@ object InboundMediaPolicy {
 
     private const val CONTENT_SCHEME = "content"
 
-    fun admitsSource(scheme: String?, authority: String?, ownAuthorities: Set<String>): Boolean {
+    /** [ownNamespace] est l'identifiant de l'application : ses fournisseurs (`<id>.fileprovider`, `<id>.androidx-startup`…) en portent le préfixe. */
+    fun admitsSource(scheme: String?, authority: String?, ownNamespace: String): Boolean {
         if (!CONTENT_SCHEME.equals(scheme?.trim(), ignoreCase = true)) return false
         val host = authority?.substringAfterLast('@')?.trim()?.lowercase().orEmpty()
-        return host.isNotEmpty() && host !in ownAuthorities.map { it.lowercase() }
+        val own = ownNamespace.trim().lowercase()
+        return host.isNotEmpty() && own.isNotEmpty() && host != own && !host.startsWith("$own.")
     }
 
     fun judge(header: ByteArray, totalBytes: Long, declaredMime: String?): InboundMediaVerdict {
