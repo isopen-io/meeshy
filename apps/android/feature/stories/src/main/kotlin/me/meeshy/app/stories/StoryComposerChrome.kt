@@ -1,9 +1,5 @@
 package me.meeshy.app.stories
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -13,6 +9,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * The story composer's own top bar (title or format menu, close, export menu, undo/redo, publish) — the
@@ -31,7 +28,7 @@ internal fun StoryComposerTopBar(
         title = titleContent ?: { Text(stringResource(R.string.stories_composer_title)) },
         navigationIcon = {
             IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.stories_composer_cancel))
+                Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.stories_composer_cancel))
             }
         },
         actions = {
@@ -41,10 +38,10 @@ internal fun StoryComposerTopBar(
                 onPick = sceneExport::start,
             )
             IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.story_composer_undo))
+                Icon(MeeshyIcons.Undo, contentDescription = stringResource(R.string.story_composer_undo))
             }
             IconButton(onClick = viewModel::onRedo, enabled = state.canRedo) {
-                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.story_composer_redo))
+                Icon(MeeshyIcons.Redo, contentDescription = stringResource(R.string.story_composer_redo))
             }
             TextButton(onClick = viewModel::publish, enabled = state.canPublish) {
                 Text(publishLabel(state.publishTitle))
