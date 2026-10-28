@@ -78,6 +78,7 @@ internal fun ComposerToolPanel(
     onSelectBackground: (StoryBackgroundValue?) -> Unit,
     audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject> = emptyList(),
     canAddSound: Boolean = true,
+    @androidx.annotation.StringRes soundCapRefusal: Int = R.string.composer_scene_cap_sound,
     onOpenSoundShelf: () -> Unit = {},
     onToggleSoundMute: (String) -> Unit = {},
     onRemoveSound: (String) -> Unit = {},
@@ -142,6 +143,7 @@ internal fun ComposerToolPanel(
                         StoryToolMode.AUDIO -> ComposerSoundPanel(
                             audio = audio,
                             canAddSound = canAddSound,
+                            capRefusal = soundCapRefusal,
                             onOpenShelf = onOpenSoundShelf,
                             onToggleMute = onToggleSoundMute,
                             onRemove = onRemoveSound,

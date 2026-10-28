@@ -67,6 +67,27 @@ class ComposerSoundPlacementTest {
     }
 
     @Test
+    fun `the refusal names the cap that was reached, the ten before the five`() {
+        val five = (1..5).map { recording("r$it", background = false) }
+        assertThat(ComposerSoundPlacement.borrowRefusal(emptyList(), visualMedia = 10))
+            .isEqualTo(me.meeshy.sdk.model.composer.SceneObjectCaps.Reason.MEDIA_FULL)
+        assertThat(ComposerSoundPlacement.borrowRefusal(five, visualMedia = 0))
+            .isEqualTo(me.meeshy.sdk.model.composer.SceneObjectCaps.Reason.AUDIO_FULL)
+        assertThat(ComposerSoundPlacement.borrowRefusal(five, visualMedia = 5))
+            .isEqualTo(me.meeshy.sdk.model.composer.SceneObjectCaps.Reason.MEDIA_FULL)
+        assertThat(ComposerSoundPlacement.borrowRefusal(five.take(4), visualMedia = 5)).isNull()
+    }
+
+    @Test
+    fun `removing a sound on a full scene frees the place again`() {
+        val three = (1..3).map { recording("r$it", background = false) }
+        assertThat(ComposerSoundPlacement.canBorrow(three, visualMedia = 7)).isFalse()
+        val freed = ComposerSoundPlacement.remove(three, "r2")
+        assertThat(ComposerSoundPlacement.canBorrow(freed, visualMedia = 7)).isTrue()
+        assertThat(ComposerSoundPlacement.borrow(freed, sound("s1"), visualMedia = 7)).isInstanceOf(SoundPlacement.Placed::class.java)
+    }
+
+    @Test
     fun `a borrowed background is replaced even on a scene at the ten cap`() {
         val borrowed = (ComposerSoundPlacement.borrow(emptyList(), sound("s0")) as SoundPlacement.Placed).audios
         assertThat(ComposerSoundPlacement.canBorrow(borrowed, visualMedia = 9)).isTrue()

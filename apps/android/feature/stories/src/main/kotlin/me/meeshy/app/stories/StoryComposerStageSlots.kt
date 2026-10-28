@@ -250,6 +250,7 @@ internal fun StoryComposerPanel(
                 onToggleAnimated = { viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled) },
                 audio = state.selectedSlideAudio,
                 canAddSound = state.canBorrowSound,
+                soundCapRefusal = state.soundCapRefusal,
                 onOpenSoundShelf = onOpenSoundShelf,
                 onToggleSoundMute = viewModel::onToggleSoundMute,
                 onRemoveSound = viewModel::onRemoveSound,

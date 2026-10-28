@@ -165,6 +165,18 @@ data class StoryComposerUiState(
     val canBorrowSound: Boolean
         get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.canBorrow(deck.selectedSlide.audio, deck.selectedSlide.mediaIds.size)
 
+    /** Ce que la porte du son DIT au plafond : une scène pleine de médias n'est pas « cinq sons au plus ». */
+    @get:androidx.annotation.StringRes
+    val soundCapRefusal: Int
+        get() = when (me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.borrowRefusal(deck.selectedSlide.audio, deck.selectedSlide.mediaIds.size)) {
+            me.meeshy.sdk.model.composer.SceneObjectCaps.Reason.MEDIA_FULL -> me.meeshy.feature.stories.R.string.composer_scene_cap_media
+            else -> me.meeshy.feature.stories.R.string.composer_scene_cap_sound
+        }
+
+    /** Le sélecteur système se règle sur les places de la SLIDE, sons compris — jamais sur les seuls médias du brouillon. */
+    val mediaPickMode: StoryMediaPickMode
+        get() = StoryMediaPicker.modeFor(deck.selectedRemainingMediaSlots)
+
     /** Le son de FOND de la slide sélectionnée — ce que la trace de la scène montre. */
     val selectedSlideBackgroundSound: me.meeshy.sdk.model.StoryAudioPlayerObject?
         get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.background(deck.selectedSlide.audio)

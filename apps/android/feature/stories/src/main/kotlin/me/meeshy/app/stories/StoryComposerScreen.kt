@@ -205,7 +205,7 @@ fun StoryComposerScreen(
             viewModel = viewModel,
             onAddSticker = { showStickerPicker = true },
             onPickMedia = {
-                when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                when (state.mediaPickMode) {
                     StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
                     StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
                     StoryMediaPickMode.None -> Unit

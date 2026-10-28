@@ -147,8 +147,12 @@ data class StorySlideDeck(
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
-    /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
-    fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size + it.audio.size <= MAX_MEDIA_PER_SLIDE }
+    /**
+     * Every slide's VISUAL media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). The shared ten
+     * (media + sounds, [selectedCanAddMedia]) gates ADDING only, as on iOS, whose publish gate counts nothing:
+     * a draft composed before the shared cap may carry more, and it still publishes, nothing dropped.
+     */
+    fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
 
     /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
     fun isWithinTextElementLimit(): Boolean = slides.all { it.elements.size <= MAX_TEXT_ELEMENTS_PER_SLIDE }
