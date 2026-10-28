@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -66,8 +68,14 @@ internal fun NavGraphBuilder.socialNavGraph(
         )
     }
     // iOS présente `ProfileDecorSheet` en `.sheet` depuis ma page : « Terminé » + glissé vers le bas (#13364).
-    sheetComposable(ProfileRoutes.DECOR, navController) { _, dismiss ->
-        ProfileDecorSheet(onDone = dismiss)
+    // La photo de bannière choisie ici est téléversée par le téléverseur de MA PAGE (celui que la page affiche) :
+    // fermer la feuille pendant l'envoi ne l'annule pas, et la page garde l'indicateur et l'erreur.
+    sheetComposable(ProfileRoutes.DECOR, navController) { entry, dismiss ->
+        val page = remember(entry) { runCatching { navController.getBackStackEntry(ProfileRoutes.OWN) }.getOrNull() }
+        ProfileDecorSheet(
+            onDone = dismiss,
+            uploadViewModel = if (page != null) hiltViewModel(page) else hiltViewModel(),
+        )
     }
     // iOS présente `UserStatsView` en `.sheet` depuis ma page et les Réglages : croix + glissé vers le bas (#13364).
     sheetComposable(ProfileRoutes.STATS, navController) { _, dismiss ->

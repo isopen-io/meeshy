@@ -24,12 +24,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,11 +101,19 @@ fun ProfileDecorSheet(
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
+    val upload by uploadViewModel.state.collectAsStateWithLifecycle()
+    val uploadingBanner = upload.uploading == ImageUploadTarget.BANNER
+    val uploadError = upload.error?.let { stringResource(it.messageRes()) }
     val haptics = rememberMeeshyHaptics()
     val pickBanner = rememberBannerPicker(uploadViewModel)
     val errorText = stringResource(R.string.profile_decor_error)
     val view = LocalView.current
     LaunchedEffect(ui.failed) { if (ui.failed) view.announceForAccessibility(errorText) }
+    // L'erreur de téléversement est retenue ICI : le téléverseur est celui de ma page, qui la consomme pour sa capsule.
+    var shownUploadError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(uploadError) {
+        uploadError?.let { shownUploadError = it; view.announceForAccessibility(it) }
+    }
 
     MeeshyBackground {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -114,14 +125,14 @@ fun ProfileDecorSheet(
                 val catalog = ui.catalog
                 if (catalog != null) {
                     RingSection(ui, catalog) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.AVATAR_RING) }
-                    BannerSection(ui, catalog, onPickImage = { haptics.light(); pickBanner() }) { ref ->
+                    BannerSection(ui, catalog, uploadingBanner, onPickImage = { haptics.light(); shownUploadError = null; pickBanner() }) { ref ->
                         haptics.light()
                         viewModel.equip(ref, ProfileDecorSide.BANNER)
                     }
                     FrameSection(ui, catalog) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.BANNER_FRAME) }
                 }
-                if (ui.failed) {
-                    Text(errorText, style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium), color = MeeshyPalette.Error)
+                listOfNotNull(errorText.takeIf { ui.failed }, shownUploadError).forEach { message ->
+                    Text(message, style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium), color = MeeshyPalette.Error)
                 }
             }
         }
@@ -196,7 +207,7 @@ private fun RingTile(design: AvatarRingDesign?, label: String, selected: Boolean
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, onPickImage: () -> Unit, onChoose: (ProfileDecorRef) -> Unit) {
+private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, uploading: Boolean, onPickImage: () -> Unit, onChoose: (ProfileDecorRef) -> Unit) {
     val language = remember { Locale.getDefault().language }
     val title = stringResource(R.string.profile_decor_banner_section)
     val choice = ui.bannerChoice
@@ -208,7 +219,7 @@ private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, o
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
-            ImageTile(choice.imagePreview, stringResource(R.string.profile_decor_image), choice.imageSelected, Modifier.weight(1f), onPickImage)
+            ImageTile(choice.imagePreview, stringResource(R.string.profile_decor_image), choice.imageSelected, uploading, Modifier.weight(1f), onPickImage)
             ProfileDecorOptions.flattened(ui.banners).forEach { entry ->
                 val label = catalog.designName(entry.design.key, language) ?: entry.design.key
                 BannerTile(entry.design, label, choice.isSelected(entry.ref), accent, Modifier.weight(1f)) { onChoose(entry.ref) }
@@ -221,10 +232,10 @@ private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, o
 }
 
 @Composable
-private fun ImageTile(preview: String?, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ImageTile(preview: String?, label: String, selected: Boolean, uploading: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val hint = stringResource(R.string.profile_decor_image_hint)
     val base = LocalMediaBaseUrl.current
-    DecorTile(label, selected, modifier, onClick, hint = hint) {
+    DecorTile(label, selected, modifier, onClick.takeUnless { uploading } ?: {}, hint = hint) {
         Box(Modifier.fillMaxWidth().aspectRatio(BANNER_ASPECT).clip(RoundedCornerShape(MeeshyRadius.sm)).background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
             val url = resolveServedImageUrl(preview, base)
             if (url != null) {
@@ -232,6 +243,7 @@ private fun ImageTile(preview: String?, label: String, selected: Boolean, modifi
             } else {
                 Icon(MeeshyIcons.AddPhoto, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(28.dp))
             }
+            if (uploading) CircularProgressIndicator(color = MeeshyPalette.Indigo500, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
         }
         TileLabel(label)
     }
