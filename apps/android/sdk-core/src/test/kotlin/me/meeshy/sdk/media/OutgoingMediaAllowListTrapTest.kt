@@ -141,4 +141,21 @@ class OutgoingMediaAllowListTrapTest {
         assertThat("V_VP8".occursIn(out)).isTrue()
         assertThat("FRAME".occursIn(out)).isTrue()
     }
+
+    @Test
+    fun `un texte inconnu glissé sous Video ou sous Colour d une piste admise part vidé, les dimensions restent`() = runTest {
+        val video = ebml("E0", ebml("B0", byteArrayOf(64)) + ebml("BA", byteArrayOf(48)) + ebml("7446", ascii("Chez moi, porte 3")) +
+            ebml("55B0", ebml("55B9", byteArrayOf(1)) + ebml("4D80", ascii("Tour Eiffel"))))
+        val audio = ebml("E1", ebml("9F", byteArrayOf(2)) + ebml("7446", ascii("Lieu-dit")))
+        val original = webm(trackEntry(1, 1, "V_VP8", video) + trackEntry(2, 2, "A_OPUS", audio), simpleBlock(1, ascii("FRAME")))
+
+        val out = sent(original, "video/webm")
+
+        assertThat(out.size).isEqualTo(original.size)
+        listOf("Chez moi", "Tour Eiffel", "Lieu-dit").forEach { assertWithMessage(it).that(it.occursIn(out)).isFalse() }
+        listOf(hex("B0400140"), hex("BA400130"), hex("55B9400101"), hex("9F400102")).forEach { field ->
+            assertWithMessage(field.joinToString()).that(String(out, Charsets.ISO_8859_1).contains(String(field, Charsets.ISO_8859_1))).isTrue()
+        }
+        assertThat(sent(out, "video/webm")).isEqualTo(out)
+    }
 }
