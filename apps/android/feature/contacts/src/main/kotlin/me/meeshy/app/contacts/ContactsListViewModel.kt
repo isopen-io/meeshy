@@ -182,7 +182,7 @@ class ContactsListViewModel @Inject constructor(
                 val blockedIds = blockCache.currentBlockedIds
                 val sent = BlockedExclusion.requests(graph.data.sent, blockedIds)
                 val received = BlockedExclusion.requests(graph.data.received, blockedIds)
-                friendshipCache.hydrate(sent = sent, received = received)
+                friendshipCache.hydrate(sent = sent, received = received, ticket = ticket)
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
                 val friends = ContactList.fromAcceptedRequests(received + sent, currentUserId)
                 _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }

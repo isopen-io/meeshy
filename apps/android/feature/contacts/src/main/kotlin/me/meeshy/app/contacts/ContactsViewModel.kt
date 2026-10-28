@@ -181,7 +181,7 @@ class ContactsViewModel @Inject constructor(
             val received = servedReceived.map { BlockedExclusion.requests(it, blockedIds) }
             val sent = servedSent.map { BlockedExclusion.requests(it, blockedIds) }
             if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data) }
+                ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data, ticket = ticket) }
             }
             val bothSucceeded = received is NetworkResult.Success && sent is NetworkResult.Success
             _state.update { current ->

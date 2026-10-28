@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.FriendshipStatus
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,7 @@ import javax.inject.Singleton
 @Singleton
 class FriendshipCache @Inject constructor(
     private val persisted: PersistedFriendCaches,
+    private val fence: AccountFence? = null,
 ) {
 
     /**
@@ -38,7 +42,7 @@ class FriendshipCache @Inject constructor(
      * Kotlin emit a second, no-arg JVM constructor that inherits `@Inject`, and Dagger
      * refuses a type with two injected constructors.
      */
-    constructor() : this(PersistedFriendCaches.None)
+    constructor() : this(PersistedFriendCaches.None, null)
 
     private val lock = Any()
     private val friendIds = mutableSetOf<String>()
@@ -97,6 +101,14 @@ class FriendshipCache @Inject constructor(
      * lists. `accepted` rows become friends; `pending` rows become directional
      * pending entries; any other status (rejected/cancelled) is dropped. Fully
      * replaces prior state so a stale entry can never survive a refresh.
+     */
+    suspend fun hydrate(sent: List<FriendRequest>, received: List<FriendRequest>, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) { hydrate(sent, received) }
+    }
+
+    /**
+     * [hydrate] sans garde de compte : pour un appelant qui n'a aucune requête réseau derrière lui (test, aperçu). Une
+     * réponse réseau passe par la variante à ticket : celle de A arrivée après la purge n'écrase pas le graphe de B (#13577).
      */
     fun hydrate(sent: List<FriendRequest>, received: List<FriendRequest>) {
         synchronized(lock) {

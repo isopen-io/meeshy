@@ -651,10 +651,14 @@ class PostRepository @Inject constructor(
      * blank string, or the translation already matches what is cached (idempotent).
      */
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
+        val ticket = fence?.currentTicket()
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val merged = translatePost(post, targetLanguage) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
+        // La copie `post` est celle du compte qui a tapé : écrite après la purge, elle porterait ses « j'aime » chez B (#13577).
+        return fence.commitOrWrite(ticket) {
+            _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+            true
+        } ?: false
     }
 
     /**
