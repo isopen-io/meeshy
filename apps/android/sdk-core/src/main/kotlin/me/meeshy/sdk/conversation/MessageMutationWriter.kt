@@ -72,12 +72,13 @@ internal class MessageMutationWriter(
      * and an `EDIT_MESSAGE` mutation joins the conversation's FIFO lane.
      */
     suspend fun editOptimistic(messageId: String, content: String): Boolean {
+        val ticket = updater.ticket()
         var previousContent: String? = null
         val updated = updater.update(messageId, requireSynced = true) { message ->
             previousContent = message.content
             message.copy(content = content, isEdited = true, translations = emptyList())
         } ?: return false
-        revisions?.record(messageId, previousContent, content)
+        revisions?.record(messageId, previousContent, content, ticket)
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.EDIT_MESSAGE,

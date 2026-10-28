@@ -8,6 +8,9 @@ import me.meeshy.core.database.entity.EditRevisionEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.EditHistoryProjection
 import me.meeshy.sdk.model.EditRevision
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 
 /**
  * Les versions antérieures des messages que CET appareil a modifiés (le serveur n'expose pas
@@ -19,13 +22,19 @@ import me.meeshy.sdk.model.EditRevision
 class EditRevisionLedger @Inject constructor(
     private val dao: EditRevisionDao,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) {
-    suspend fun record(messageId: String, previousContent: String?, newContent: String) {
+    /** Le compte auquel appartient le geste d'édition qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
+
+    suspend fun record(messageId: String, previousContent: String?, newContent: String, ticket: AccountTicket?) {
         if (!EditHistoryProjection.shouldRecord(previousContent, newContent)) return
-        val next = (dao.forMessage(messageId).maxOfOrNull { it.revision } ?: 0) + 1
-        dao.upsert(EditRevisionEntity(messageId, next, previousContent.orEmpty(), clock.nowMillis()))
-        dao.deleteUpTo(messageId, next - MAX_REVISIONS_PER_MESSAGE)
-        dao.keepMostRecentMessages(MAX_TRACKED_MESSAGES)
+        fence.commitOrWrite(ticket) {
+            val next = (dao.forMessage(messageId).maxOfOrNull { it.revision } ?: 0) + 1
+            dao.upsert(EditRevisionEntity(messageId, next, previousContent.orEmpty(), clock.nowMillis()))
+            dao.deleteUpTo(messageId, next - MAX_REVISIONS_PER_MESSAGE)
+            dao.keepMostRecentMessages(MAX_TRACKED_MESSAGES)
+        }
     }
 
     suspend fun forget(messageIds: Collection<String>) {

@@ -574,7 +574,7 @@ class StatusesViewModelTest {
             assertThat(awaitItem().statuses.map { it.id }).containsExactly("a", "b").inOrder()
         }
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a", "b") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a", "b") }, any())
         }
     }
 
@@ -608,7 +608,7 @@ class StatusesViewModelTest {
         }
         coVerify(exactly = 1) { diskCache.invalidate(StatusFeedMode.FRIENDS) }
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("net") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("net") }, any())
         }
     }
 
@@ -623,7 +623,7 @@ class StatusesViewModelTest {
         vm.setStatus(emoji = "🔥")
 
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("new", "a") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("new", "a") }, any())
         }
     }
 
@@ -637,7 +637,7 @@ class StatusesViewModelTest {
         vm.clearStatus()
 
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a") }, any())
         }
     }
 
@@ -654,7 +654,7 @@ class StatusesViewModelTest {
         vm.state.test {
             assertThat(awaitItem().statuses.map { it.id }).containsExactly("mine", "a").inOrder()
         }
-        coVerify(exactly = 0) { diskCache.persistBar(any(), match { it.none { e -> e.id == "mine" } }) }
+        coVerify(exactly = 0) { diskCache.persistBar(any(), match { it.none { e -> e.id == "mine" } }, any()) }
     }
 
     // --- Realtime socket wiring (parity with iOS StatusViewModel.subscribeToSocketEvents) ---

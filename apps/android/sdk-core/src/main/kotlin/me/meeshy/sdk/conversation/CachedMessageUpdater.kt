@@ -5,6 +5,9 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 
 /**
  * The read-modify-write of one cached message row, shared by the collaborators that mutate a
@@ -15,7 +18,11 @@ import me.meeshy.sdk.net.MeeshyApi
 internal class CachedMessageUpdater(
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
+    private val fence: AccountFence?,
 ) {
+
+    /** Le compte auquel appartient l'événement ou le geste qui écrit MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
     /** The cached message [messageId], or `null` when no row exists. */
     suspend fun find(messageId: String): ApiMessage? {
@@ -32,16 +39,28 @@ internal class CachedMessageUpdater(
         messageId: String,
         requireSynced: Boolean,
         transform: (ApiMessage) -> ApiMessage,
-    ): ApiMessage? = database.withTransaction {
-        val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction null
-        if (requireSynced && row.sendState != null) return@withTransaction null
-        val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-        val updated = transform(current)
-        // A transform that returns its input unchanged (an inert socket update, e.g.
-        // a duplicate translation) skips the redundant Room write + re-encode.
-        if (updated !== current) {
-            messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
+    ): ApiMessage? = update(ticket(), messageId, requireSynced, transform)
+
+    /** [update] sous [ticket], pris AVANT la requête dont la réponse écrit la ligne (#13560) : rien n'atterrit chez B. */
+    suspend fun update(
+        ticket: AccountTicket?,
+        messageId: String,
+        requireSynced: Boolean,
+        transform: (ApiMessage) -> ApiMessage,
+    ): ApiMessage? {
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction null
+                if (requireSynced && row.sendState != null) return@withTransaction null
+                val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+                val updated = transform(current)
+                // A transform that returns its input unchanged (an inert socket update, e.g.
+                // a duplicate translation) skips the redundant Room write + re-encode.
+                if (updated !== current) {
+                    messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
+                }
+                updated
+            }
         }
-        updated
     }
 }

@@ -40,6 +40,8 @@
     <string name="stories_composer_fade_out">Dissolvenza in uscita del testo</string>
     <string name="stories_composer_timing_start">Inizio del testo</string>
     <string name="stories_composer_timing_duration">Durata di visualizzazione del testo</string>
+    <string name="stories_composer_timing_unset">Non impostato</string>
+    <string name="stories_composer_timing_value">%1$s secondi</string>
     <string name="stories_composer_draw_undo">Annulla tratto</string>
     <string name="stories_composer_draw_done">Fine disegno</string>
     <string name="stories_composer_remove_sticker">Rimuovi sticker</string>

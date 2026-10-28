@@ -9,7 +9,16 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.KeyedJsonCacheSource
+import io.mockk.coEvery
+import io.mockk.mockk
+import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.friend.FriendListRepository
+import me.meeshy.sdk.friend.FriendRequestListRepository
+import me.meeshy.sdk.friend.RoomSuggestionsSource
+import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.friend.BlockedUser
+import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.user.UserRepository
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UserStats
@@ -22,6 +31,7 @@ import me.meeshy.sdk.profile.ProfileRemote
 import me.meeshy.sdk.profile.ProfileSheetLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.outbox.OutboxOwnerSource
@@ -182,5 +192,43 @@ class AccountPrivateCacheWriteRaceTest {
         withAccountTicket(acceptedByA) { friends.insertAtHead(FriendRequestUser(id = "ami-de-A", username = "a")) }
 
         assertThat(friends.cachedSnapshot()?.map { it.id }).containsExactly("ami-de-B")
+    }
+
+    @Test
+    fun `friend requests persisted under A's ticket after A signed out are not kept for B`(): Unit = runBlocking {
+        val requests = FriendRequestListRepository(db, db.friendRequestDao(), db.syncMetaDao(), fence)
+        val ticket = requests.ticket()
+        signOutThenSignInAsB()
+
+        requests.persistReceived(listOf(FriendRequest(id = "r-de-A", senderId = "x", receiverId = "A", status = "pending")), ticket)
+        requests.persistSent(listOf(FriendRequest(id = "s-de-A", senderId = "A", receiverId = "x", status = "pending")), ticket)
+
+        assertThat(requests.cachedReceived()).isNull()
+        assertThat(requests.cachedSent()).isNull()
+    }
+
+    @Test
+    fun `a blocklist persisted under A's ticket after A signed out is not kept for B`(): Unit = runBlocking {
+        val blocked = BlockedListRepository(db, db.blockedUserDao(), db.syncMetaDao(), fence)
+        val ticket = blocked.ticket()
+        signOutThenSignInAsB()
+
+        blocked.persist(listOf(BlockedUser(id = "bloque-par-A", username = "b")), ticket)
+
+        assertThat(blocked.cachedSnapshot()).isNull()
+    }
+
+    @Test
+    fun `suggestions fetched for A and answered after A signed out are not kept for B`(): Unit = runBlocking {
+        val users: UserRepository = mockk()
+        coEvery { users.searchUsers("", 20, 0) } coAnswers {
+            signOutThenSignInAsB()
+            NetworkResult.Success(listOf(UserSearchResult(id = "suggere-a-A", username = "s")))
+        }
+        val source = RoomSuggestionsSource(db, db.suggestionDao(), db.syncMetaDao(), users, clock, fence)
+
+        source.revalidate()
+
+        assertThat(db.suggestionDao().observeAll().first()).isEmpty()
     }
 }

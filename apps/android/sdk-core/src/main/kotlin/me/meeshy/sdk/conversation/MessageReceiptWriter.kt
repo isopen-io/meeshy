@@ -5,6 +5,9 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /**
@@ -14,6 +17,7 @@ import me.meeshy.sdk.util.isoToEpochMillis
 internal class MessageReceiptWriter(
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
+    private val fence: AccountFence?,
 ) {
 
     /**
@@ -32,7 +36,8 @@ internal class MessageReceiptWriter(
         val incomingRank = deliveryRank(deliveredCount, readCount, readByAllAt = null)
         if (incomingRank == RANK_SENT) return
         val frontier = frontierIso?.let(::isoToEpochMillis) ?: Long.MAX_VALUE
-        database.withTransaction {
+        val ticket = fence?.currentTicket()
+        fence.commitOrWrite(ticket) { database.withTransaction {
             val upgraded = messageDao.listForConversation(conversationId).mapNotNull { row ->
                 if (row.sendState != null || row.createdAt > frontier) return@mapNotNull null
                 val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
@@ -46,7 +51,7 @@ internal class MessageReceiptWriter(
                 ).bumped()
             }
             if (upgraded.isNotEmpty()) messageDao.upsertAll(upgraded)
-        }
+        } }
     }
 
     private fun deliveryRank(deliveredCount: Int, readCount: Int, readByAllAt: String?): Int = when {

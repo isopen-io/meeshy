@@ -82,3 +82,33 @@ object ShareRecipientMerge {
     private fun fold(text: String): String =
         Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 }
+
+/** Les rangées de la feuille : les récents avant toute frappe, puis les conversations et les personnes. */
+data class ShareRecipientSections(
+    val recents: List<ShareRecipient>,
+    val conversations: List<ShareRecipient>,
+    val people: List<ShareRecipient>,
+) {
+    val isEmpty: Boolean get() = conversations.isEmpty() && people.isEmpty()
+}
+
+object ShareRecipientListing {
+
+    /**
+     * Récents (les plus récentes conversations, tant que rien n'est tapé), conversations filtrées, et les
+     * personnes SANS conversation ouverte : un ami dont la directe est listée est absorbé par elle (D6).
+     */
+    fun of(conversations: List<ShareRecipient>, people: List<ShareRecipient>, query: String): ShareRecipientSections {
+        val typing = query.isNotBlank()
+        val visibleConversations = ShareRecipientMerge.matching(conversations, query)
+        val visiblePeople = ShareRecipientMerge.matching(
+            ShareRecipientMerge.merge(conversations, people).filter { it.kind == ShareRecipient.Kind.PERSON },
+            query,
+        )
+        return ShareRecipientSections(
+            recents = if (typing) emptyList() else conversations.take(ShareSheetState.RECENTS_COUNT),
+            conversations = visibleConversations,
+            people = visiblePeople,
+        )
+    }
+}

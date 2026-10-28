@@ -9,7 +9,11 @@ import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
@@ -50,12 +54,20 @@ data class StoryTextObjectView(
     val style: StoryTextStyle = StoryTextStyle.BOLD,
     /** The published glyph outline ([StoryTextObject.borderWidth] / [StoryTextObject.borderColor]), design px. */
     val outline: StoryTextOutline = StoryTextOutline(),
+    /** The published box ([StoryTextObject.frameShape] & co.), iOS `StoryTextLayer`'s — shape, padding scale and ring. */
+    val frame: StoryTextFrame = StoryTextFrame(),
 ) {
+    /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's own scale — the frame's unit. */
+    fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(renderScale, canvasWidthPx)
+
+    /** The scale a published (untrusted) text renders at: the scene object bounds, NaN, zero or negative as identity. */
+    private val renderScale: Double get() = SceneObjectScalePolicy.clamped(scale)
+
     /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
-    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), scale, canvasWidthPx)
+    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), renderScale, canvasWidthPx)
 
     /** The glyph size in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
-    fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, scale, canvasWidthPx)
+    fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, renderScale, canvasWidthPx)
 
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -101,10 +113,10 @@ data class StoryTextObjectView(
 
         val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
         return copy(
-            x = base.x,
-            y = base.y,
-            scale = base.scale,
-            opacity = fadeEnvelope ?: base.opacity,
+            x = SceneObjectNumbers.position(base.x),
+            y = SceneObjectNumbers.position(base.y),
+            scale = SceneObjectScalePolicy.clamped(base.scale),
+            opacity = SceneObjectNumbers.opacity(fadeEnvelope ?: base.opacity),
         )
     }
 }
@@ -167,25 +179,33 @@ object StoryTextObjectProjection {
     ): StoryTextObjectView =
         StoryTextObjectView(
             id = textObject.id,
-            text = resolveText(textObject, preferredLanguages, overrideLanguage),
-            x = textObject.x,
-            y = textObject.y,
+            text = SceneObjectNumbers.text(resolveText(textObject, preferredLanguages, overrideLanguage)),
+            x = SceneObjectNumbers.position(textObject.x),
+            y = SceneObjectNumbers.position(textObject.y),
             scale = textObject.scale,
-            rotation = textObject.rotation,
-            fontSize = textObject.fontSize,
+            rotation = SceneObjectNumbers.rotation(textObject.rotation),
+            fontSize = SceneObjectNumbers.fontSize(textObject.fontSize),
             colorHex = textObject.textColor,
             align = textObject.textAlign,
-            startTime = textObject.startTime ?: 0.0,
-            duration = textObject.duration ?: 0.0,
-            fadeIn = textObject.fadeIn ?: 0.0,
-            fadeOut = textObject.fadeOut ?: 0.0,
-            keyframes = textObject.keyframes.orEmpty(),
+            startTime = SceneObjectNumbers.seconds(textObject.startTime ?: 0.0),
+            duration = SceneObjectNumbers.seconds(textObject.duration ?: 0.0),
+            fadeIn = SceneObjectNumbers.seconds(textObject.fadeIn ?: 0.0),
+            fadeOut = SceneObjectNumbers.seconds(textObject.fadeOut ?: 0.0),
+            keyframes = SceneObjectNumbers.capped(textObject.keyframes.orEmpty()).map(SceneObjectNumbers::keyframe),
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
             effect = StoryTextEffect.fromWire(textObject.textEffect),
             style = StoryTextStyle.fromWire(textObject.textStyle),
             outline = StoryTextOutline(
                 width = textObject.borderWidth?.toFloat()?.takeIf { it > StoryTextOutline.NONE_WIDTH } ?: StoryTextOutline.NONE_WIDTH,
                 color = textObject.borderColor,
+            ),
+            frame = StoryTextFrame(
+                shape = StoryTextFrameShape.fromWire(textObject.frameShape),
+                paddingScale = textObject.framePaddingScale?.toFloat()?.takeIf { it.isFinite() }
+                    ?.coerceIn(0f, StoryTextFrame.MAX_PADDING) ?: StoryTextFrame.DEFAULT_PADDING,
+                borderWidth = textObject.frameBorderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f }
+                    ?.coerceAtMost(StoryTextFrame.MAX_BORDER) ?: 0f,
+                borderColor = textObject.frameBorderColor,
             ),
         )
 }

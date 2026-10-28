@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.model.share.ShareFailure
+import me.meeshy.sdk.model.share.ShareRecipient
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
@@ -49,7 +50,7 @@ internal fun shareFailureText(failure: ShareFailure): String = stringResource(
  */
 @Composable
 internal fun ShareRecipientRow(
-    target: ForwardTarget,
+    recipient: ShareRecipient,
     selected: Boolean,
     delivery: ShareDelivery?,
     accentColor: Color,
@@ -67,22 +68,22 @@ internal fun ShareRecipientRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         MeeshyAvatar(
-            name = target.title,
+            name = recipient.title,
             size = 40.dp,
-            containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified } ?: accentColor,
-            imageUrl = target.avatar,
-            presence = rememberPresence(target.peerUserId),
+            containerColor = recipient.accentHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified } ?: accentColor,
+            imageUrl = recipient.avatarUrl,
+            presence = rememberPresence(recipient.userId.takeUnless { recipient.isGroup }),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = target.title,
+                text = recipient.title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MeeshyTheme.tokens.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = rowDetail(target, delivery),
+                text = rowDetail(recipient, delivery),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (delivery is ShareDelivery.Failed) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,
@@ -94,15 +95,17 @@ internal fun ShareRecipientRow(
 }
 
 @Composable
-private fun rowDetail(target: ForwardTarget, delivery: ShareDelivery?): String = when (delivery) {
+private fun rowDetail(recipient: ShareRecipient, delivery: ShareDelivery?): String = when (delivery) {
     ShareDelivery.Sending -> stringResource(R.string.share_status_sending)
     ShareDelivery.Sent -> stringResource(R.string.share_status_sent)
     ShareDelivery.Queued -> stringResource(R.string.share_status_queued)
     is ShareDelivery.Failed -> "${shareFailureText(delivery.reason)} · ${stringResource(R.string.share_status_retry)}"
-    null -> when {
-        target.isDirect -> stringResource(R.string.share_detail_direct)
-        target.memberCount > 0 -> stringResource(R.string.chat_forward_members, target.memberCount)
-        else -> stringResource(R.string.share_detail_group_unsized)
+    null -> when (val detail = recipient.detail) {
+        ShareRecipient.Detail.Direct -> stringResource(R.string.share_detail_direct)
+        is ShareRecipient.Detail.Group ->
+            if (detail.members > 0) stringResource(R.string.chat_forward_members, detail.members) else stringResource(R.string.share_detail_group_unsized)
+        ShareRecipient.Detail.FriendWithoutConversation -> stringResource(R.string.share_detail_friend)
+        is ShareRecipient.Detail.Handle -> "@${detail.handle}"
     }
 }
 

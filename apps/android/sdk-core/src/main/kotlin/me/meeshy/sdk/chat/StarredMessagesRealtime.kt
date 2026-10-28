@@ -18,10 +18,12 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.model.MessageStarredEvent
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -66,6 +68,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
     private val source: RoomStarredSource,
     private val session: SessionRepository,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val fence: AccountFence,
 ) : RealtimeBinding, PerAccountCache {
 
     private var scope: CoroutineScope? = null
@@ -78,6 +81,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
             conversationName = { it.displayTitle(session.currentUserId) },
             conversationAccent = { it.accentHex() },
             nowMillis = System::currentTimeMillis,
+            fence = fence,
         )
 
     override fun attach() {
@@ -87,9 +91,9 @@ class StarredMessagesRealtimeBinding @Inject constructor(
             socketListenerRegistered = true
             socketManager.on("message:starred") { args -> onStarredFrame(args) }
         }
-        live.launchSafely { messageSocketManager.messageDeleted.collect { sync.onGone(it.messageId) } }
-        live.launchSafely { messageSocketManager.messageExpired.collect { sync.onGone(it.messageId) } }
-        live.launchSafely { messageSocketManager.messageEdited.collect { sync.onEdited(it) } }
+        live.launchSafely { messageSocketManager.messageDeleted.collectArrived { sync.onGone(it.messageId) } }
+        live.launchSafely { messageSocketManager.messageExpired.collectArrived { sync.onGone(it.messageId) } }
+        live.launchSafely { messageSocketManager.messageEdited.collectArrived { sync.onEdited(it, fence.currentTicket()) } }
     }
 
     override fun detach() {
@@ -102,9 +106,10 @@ class StarredMessagesRealtimeBinding @Inject constructor(
     private fun onStarredFrame(args: Array<Any>) {
         val live = scope ?: return
         val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return
+        val ticket = fence.ticket()
         live.launchSafely {
             val event = MeeshyApi.json.decodeFromString<MessageStarredEvent>(raw)
-            sync.onStarred(event)
+            sync.onStarred(event, ticket)
         }
     }
 

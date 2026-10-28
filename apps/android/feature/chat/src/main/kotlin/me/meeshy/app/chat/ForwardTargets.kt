@@ -1,11 +1,10 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.interlocutor
-import me.meeshy.sdk.model.isDirect
-import me.meeshy.sdk.model.mayCurrentUserWrite
+import me.meeshy.sdk.model.share.ShareRecipient
+import me.meeshy.sdk.model.share.ShareRecipientMerge
+import me.meeshy.sdk.share.ShareRecipientDirectory
 import me.meeshy.sdk.theme.accentHex
-import me.meeshy.sdk.theme.displayTitle
 
 /**
  * A conversation the user can forward a message into — a thin presentation
@@ -49,6 +48,10 @@ data class ForwardTarget(
  *    null.
  */
 object ForwardTargets {
+    /**
+     * Who may be offered is the single law of [ShareRecipientDirectory] (source excluded, write-admission,
+     * blocked direct, input order kept); this only projects its rows and applies the accent-insensitive name filter.
+     */
     fun of(
         conversations: List<ApiConversation>,
         sourceConversationId: String,
@@ -56,27 +59,20 @@ object ForwardTargets {
         currentUserId: String? = null,
         blockedUserIds: Set<String> = emptySet(),
     ): List<ForwardTarget> {
-        val trimmed = query.trim()
-        return conversations.asSequence()
-            .filter { it.id != sourceConversationId }
-            .filter { it.mayCurrentUserWrite(currentUserId) }
-            .filter { conversation ->
-                val peer = conversation.interlocutor(currentUserId)?.userId
-                peer == null || peer !in blockedUserIds
-            }
-            .map { conversation ->
-                ForwardTarget(
-                    conversationId = conversation.id,
-                    title = conversation.displayTitle(currentUserId),
-                    type = conversation.type,
-                    memberCount = conversation.memberCount,
-                    avatar = conversation.avatar?.takeIf { it.isNotBlank() },
-                    accentHex = conversation.accentHex(),
-                    peerUserId = conversation.interlocutor(currentUserId)?.userId,
-                    isDirect = conversation.isDirect,
-                )
-            }
-            .filter { trimmed.isEmpty() || it.title.contains(trimmed, ignoreCase = true) }
-            .toList()
+        val byId = conversations.associateBy { it.id }
+        val eligible = ShareRecipientDirectory.fromConversations(conversations, sourceConversationId, currentUserId, blockedUserIds)
+        return ShareRecipientMerge.matching(eligible, query).mapNotNull { recipient ->
+            val conversation = byId[recipient.conversationId] ?: return@mapNotNull null
+            ForwardTarget(
+                conversationId = conversation.id,
+                title = recipient.title,
+                type = conversation.type,
+                memberCount = conversation.memberCount,
+                avatar = recipient.avatarUrl,
+                accentHex = recipient.accentHex ?: conversation.accentHex(),
+                peerUserId = recipient.userId,
+                isDirect = recipient.detail == ShareRecipient.Detail.Direct,
+            )
+        }
     }
 }

@@ -22,9 +22,30 @@ data class StoryTextOutline(
      */
     val isVisible: Boolean get() = width > NONE_WIDTH && color != null
 
+    /** Le curseur continu 0…12 : l'épaisseur se borne, la couleur manquante se pose en blanc (iOS `borderOptions`). */
+    fun widened(newWidth: Float): StoryTextOutline =
+        copy(width = newWidth.coerceIn(NONE_WIDTH, MAX_WIDTH), color = color ?: StoryTextOutlineCycle.DEFAULT_COLOR)
+
+    /**
+     * À l'ouverture de la section Bordure (iOS `initializeBorderDefaultsIfNeutral`) : un contour jamais réglé se pose
+     * en blanc à l'épaisseur par défaut, pour un retour visuel immédiat ; un contour ramené à 0 garde son choix.
+     */
+    fun primed(): StoryTextOutline =
+        if (color == null && width <= NONE_WIDTH) copy(width = DEFAULT_WIDTH, color = StoryTextOutlineCycle.DEFAULT_COLOR) else this
+
+    /** Une couleur choisie sur un contour à 0 le réveille à l'épaisseur par défaut. */
+    fun colored(hex: String): StoryTextOutline =
+        copy(color = hex, width = width.takeIf { it > NONE_WIDTH } ?: DEFAULT_WIDTH)
+
     companion object {
         /** The at-rest width — no stroke drawn. */
         const val NONE_WIDTH: Float = 0f
+
+        /** Le plafond du curseur de contour (design-pixels). */
+        const val MAX_WIDTH: Float = 12f
+
+        /** L'épaisseur posée quand on choisit une couleur sur un contour éteint. */
+        const val DEFAULT_WIDTH: Float = 4f
     }
 }
 

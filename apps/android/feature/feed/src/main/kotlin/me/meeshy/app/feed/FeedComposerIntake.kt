@@ -42,6 +42,12 @@ internal class FeedComposerState(initialDraft: FeedComposerDraft) {
         attachedMedia = attachedMedia + media
     }
 
+    /** An entry of the `⋯`: the pure draft answers, and the display-only previews follow when the document is emptied. */
+    fun apply(entry: PostOverflowEntry) {
+        draft = PostOverflowLaw.perform(entry, draft)
+        if (entry == PostOverflowEntry.CLEAR_ALL) attachedMedia = emptyList()
+    }
+
     fun detach(id: String) {
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }

@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -134,5 +136,86 @@ class StoryComposerTextReducerTest {
         val base = withElement("t1")
 
         assertThat(StoryComposerTextReducer.reordered(base, "t1", StoryZOrder.TO_FRONT)).isSameInstanceAs(base)
+    }
+
+    // --- cadre, bordure, langue (#13561, #13534) ---
+
+    private fun element(state: StoryComposerUiState, id: String = "t1") =
+        state.deck.selectedSlide.elements.first { it.id == id }
+
+    @Test
+    fun `choosing a frame shape on a neutral text posts the discreet border and keeps the shape`() {
+        val after = StoryComposerTextReducer.frameShaped(withElement(), "t1", StoryTextFrameShape.PILL)
+        assertThat(element(after).frame.shape).isEqualTo(StoryTextFrameShape.PILL)
+        assertThat(element(after).frame.borderIsVisible).isTrue()
+    }
+
+    @Test
+    fun `padding and border width are bounded and the border colour is kept at zero`() {
+        var state = StoryComposerTextReducer.framePadded(withElement(), "t1", 9f)
+        assertThat(element(state).frame.paddingScale).isEqualTo(3f)
+        state = StoryComposerTextReducer.frameColored(state, "t1", "FF3B30")
+        state = StoryComposerTextReducer.frameBordered(state, "t1", 0f)
+        assertThat(element(state).frame.borderWidth).isEqualTo(0f)
+        assertThat(element(state).frame.borderColor).isEqualTo("FF3B30")
+    }
+
+    @Test
+    fun `the border section draws the glyph outline, and a colour wakes it at four`() {
+        val coloured = StoryComposerTextReducer.outlineColored(withElement(), "t1", "007AFF")
+        assertThat(element(coloured).outline.isVisible).isTrue()
+        assertThat(element(coloured).outline.width).isEqualTo(4f)
+        val raised = StoryComposerTextReducer.outlineWidened(withElement(), "t1", 7.5f)
+        assertThat(element(raised).outline.width).isEqualTo(7.5f)
+        assertThat(element(raised).outline.color).isEqualTo("FFFFFF")
+    }
+
+    @Test
+    fun `the chosen language is stored normalised on the element`() {
+        val after = StoryComposerTextReducer.languaged(withElement(), "t1", "pt-BR")
+        assertThat(element(after).sourceLanguage).isEqualTo("pt")
+        assertThat(element(StoryComposerTextReducer.languaged(after, "t1", " ")).sourceLanguage).isNull()
+    }
+
+    @Test
+    fun `the language of the author rides the published text, the publication language only fills a gap`() {
+        val chosen = element(StoryComposerTextReducer.languaged(withElement(), "t1", "es"))
+        assertThat(chosen.toTextObject(sourceLanguage = "fr").sourceLanguage).isEqualTo("es")
+        assertThat(StoryTextElement(id = "x").toTextObject(sourceLanguage = "fr").sourceLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `the frame rides the wire with iOS's encoding and omits its own defaults`() {
+        val plain = StoryTextElement(id = "x").toTextObject("fr")
+        assertThat(plain.frameShape).isNull()
+        assertThat(plain.framePaddingScale).isNull()
+        assertThat(plain.frameBorderWidth).isNull()
+        assertThat(plain.frameBorderColor).isNull()
+        val framed = StoryTextElement(
+            id = "x",
+            frame = StoryTextFrame(StoryTextFrameShape.SPEECH, paddingScale = 1.5f, borderWidth = 3f, borderColor = "34C759"),
+        ).toTextObject("fr")
+        assertThat(framed.frameShape).isEqualTo("speech")
+        assertThat(framed.framePaddingScale).isEqualTo(1.5)
+        assertThat(framed.frameBorderWidth).isEqualTo(3.0)
+        assertThat(framed.frameBorderColor).isEqualTo("34C759")
+    }
+
+    @Test
+    fun `the published json carries the frame and the language under iOS StoryTextObject coding keys`() {
+        val element = StoryTextElement(
+            id = "x",
+            frame = StoryTextFrame(StoryTextFrameShape.NONE, paddingScale = 2.5f, borderWidth = 6f, borderColor = "FF2E63"),
+            sourceLanguage = "es",
+        )
+        val wire = kotlinx.serialization.json.Json.encodeToString(
+            me.meeshy.sdk.model.StoryTextObject.serializer(),
+            element.toTextObject("fr"),
+        )
+        assertThat(wire).contains("\"frameShape\":\"none\"")
+        assertThat(wire).contains("\"framePaddingScale\":2.5")
+        assertThat(wire).contains("\"frameBorderWidth\":6.0")
+        assertThat(wire).contains("\"frameBorderColor\":\"FF2E63\"")
+        assertThat(wire).contains("\"sourceLanguage\":\"es\"")
     }
 }

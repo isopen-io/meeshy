@@ -173,6 +173,7 @@ fun MeeshyApp(
         }
     }
 
+    ShareLaunchHost(navController) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -288,6 +289,7 @@ fun MeeshyApp(
         LoggingOutVeil(visible = authState.isLoggingOut)
 
         SplashOverlay()
+    }
     }
 }
 

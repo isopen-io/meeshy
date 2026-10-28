@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.ComposerObjectEditorRail
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerToolControl
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn
 import me.meeshy.sdk.model.composer.TextEditTool
@@ -10,8 +12,9 @@ enum class DrawingControl(val id: String) { COLOR("drawing.color"), WIDTH("drawi
 
 /**
  * Les sections de l'éditeur d'un texte que ce meuble sert, dans l'ordre appris par les doigts (`TextEditTool.all`, puis
- * le temps). Cadre, bordure et langue n'ont aucun réglage ici : servir un bouton inerte serait mentir (loi 4). Le plan
- * (empilement) est servi par les ACTIONS de l'objet, pas par une section : un réglage, un seul chemin.
+ * le temps, puis le plan). Chaque section a son réglage réel (loi 4) : cadre, bordure et langue sont des réducteurs du
+ * texte ; le plan est la frise des pistes (iOS `Plan2DView`), qui ne double PAS l'empilement — celui-ci reste aux ACTIONS
+ * de l'objet : un réglage, un seul chemin.
  */
 internal val ServedTextSections: List<ComposerObjectEditorSection> = listOf(
     ComposerObjectEditorSection.Tool(TextEditTool.STYLE),
@@ -19,12 +22,30 @@ internal val ServedTextSections: List<ComposerObjectEditorSection> = listOf(
     ComposerObjectEditorSection.Tool(TextEditTool.COLOR),
     ComposerObjectEditorSection.Tool(TextEditTool.ALIGN),
     ComposerObjectEditorSection.Tool(TextEditTool.BACKGROUND),
+    ComposerObjectEditorSection.Tool(TextEditTool.FRAME),
+    ComposerObjectEditorSection.Tool(TextEditTool.BORDER),
+    ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE),
     ComposerObjectEditorSection.Timing,
+    ComposerObjectEditorSection.Plan,
 )
+
+/** Les sections d'un sticker : `ComposerObjectEditorRail.entries(STICKER)` — Temps puis Plan, valables pour les cinq familles. */
+internal val ServedStickerSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.STICKER)
 
 /** La section dont les options sont ouvertes : celle que l'auteur a touchée si elle est servie, sinon la première. */
 internal val StoryComposerUiState.openTextSection: ComposerObjectEditorSection
     get() = openObjectSection?.takeIf { it in ServedTextSections } ?: ServedTextSections.first()
+
+/** Idem pour le sticker sélectionné : une section de texte laissée ouverte ne déborde pas sur lui. */
+internal val StoryComposerUiState.openStickerSection: ComposerObjectEditorSection
+    get() = openObjectSection?.takeIf { it in ServedStickerSections } ?: ServedStickerSections.first()
+
+private val StoryComposerUiState.servedSections: List<ComposerObjectEditorSection>
+    get() = when {
+        isEditingTextElement -> ServedTextSections
+        selectedSticker != null -> ServedStickerSections
+        else -> emptyList()
+    }
 
 /**
  * Sur quoi la colonne droite agit : le pinceau (un outil, ses contrôleurs), un objet sélectionné (ses sections quand
@@ -38,10 +59,13 @@ internal val StoryComposerUiState.trailingFocus: ComposerTrailingColumn.Focus
             null
         }
         val selection = selectedObjectControllers?.let { objectControllers ->
-            val editsText = isEditingTextElement
             ComposerTrailingColumn.Focus.Object(
-                sections = if (editsText) ServedTextSections else emptyList(),
-                open = if (editsText) openTextSection else null,
+                sections = servedSections,
+                open = when {
+                    isEditingTextElement -> openTextSection
+                    selectedSticker != null -> openStickerSection
+                    else -> null
+                },
                 actions = objectControllers.actions,
             )
         }
@@ -53,7 +77,18 @@ internal val StoryComposerUiState.timeServed: Boolean get() = sceneIsAnimated
 
 internal object StoryComposerTrailingReducer {
     fun sectionOpened(state: StoryComposerUiState, section: ComposerObjectEditorSection): StoryComposerUiState =
-        if (section in ServedTextSections) state.copy(openObjectSection = section) else state
+        if (section in state.servedSections) primed(state.copy(openObjectSection = section), section) else state
+
+    /** Cadre et bordure s'ouvrent sur un retour visuel immédiat quand le texte n'a rien à montrer (iOS `onAppear`). */
+    private fun primed(state: StoryComposerUiState, section: ComposerObjectEditorSection): StoryComposerUiState {
+        val id = state.selectedTextElementId ?: return state
+        val prime: ((StoryTextElement) -> StoryTextElement) = when (section) {
+            ComposerObjectEditorSection.Tool(TextEditTool.FRAME) -> { text -> text.copy(frame = text.frame.primed(text.background)) }
+            ComposerObjectEditorSection.Tool(TextEditTool.BORDER) -> { text -> text.copy(outline = text.outline.primed()) }
+            else -> return state
+        }
+        return state.copy(deck = state.deck.updateTextElement(id, prime))
+    }
 
     fun drawingControlOpened(state: StoryComposerUiState, control: DrawingControl): StoryComposerUiState =
         state.copy(openDrawingControl = control)

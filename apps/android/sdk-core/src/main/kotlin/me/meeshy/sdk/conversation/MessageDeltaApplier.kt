@@ -40,7 +40,8 @@ class MessageDeltaApplier internal constructor(
         database: MeeshyDatabase,
         messageDao: MessageDao,
         clock: CacheClock,
-    ) : this(database, CachedMessageUpdater(database, messageDao), clock)
+        fence: me.meeshy.sdk.session.AccountFence?,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock)
 
     /**
      * Applique [event] s'il est un delta local et rend `true` ; rend `false` pour un événement qui

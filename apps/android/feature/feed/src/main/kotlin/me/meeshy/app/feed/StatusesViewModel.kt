@@ -335,6 +335,7 @@ class StatusesViewModel @Inject constructor(
      */
     private fun fetchFirstPage(disk: DiskCachePlan = DiskCachePlan.NONE) {
         val activeMode = mode.value
+        val ticket = statusBarCacheRepository.ticket()
         viewModelScope.launch {
             try {
                 when (disk) {
@@ -352,7 +353,7 @@ class StatusesViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         listState.value = StatusBarListState().appended(result.data)
                         statusBarCache.save(activeMode, result.data.statuses)
-                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses)
+                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses, ticket)
                         status.update { it.copy(isLoading = false, isRefreshing = false) }
                     }
                     is NetworkResult.Failure ->
@@ -414,6 +415,7 @@ class StatusesViewModel @Inject constructor(
         viaUsername: String? = null,
     ) {
         status.update { it.copy(error = null) }
+        val ticket = statusBarCacheRepository.ticket()
         viewModelScope.launch {
             try {
                 val result = statusRepository.create(
@@ -428,7 +430,7 @@ class StatusesViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         listState.update { it.created(result.data) }
                         statusBarCache.save(mode.value, listState.value.statuses)
-                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
+                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                     }
                     is NetworkResult.Failure -> status.update { it.copy(error = result.error.message) }
                 }
@@ -447,6 +449,7 @@ class StatusesViewModel @Inject constructor(
      */
     fun clearStatus() {
         val ownId = _state.value.myStatus?.id ?: return
+        val ticket = statusBarCacheRepository.ticket()
         val snapshot = listState.value
         listState.update { it.removed(ownId) }
         viewModelScope.launch {
@@ -457,7 +460,7 @@ class StatusesViewModel @Inject constructor(
                     status.update { it.copy(error = result.error.message) }
                 } else {
                     statusBarCache.save(mode.value, listState.value.statuses)
-                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
+                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                 }
             } catch (e: CancellationException) {
                 throw e

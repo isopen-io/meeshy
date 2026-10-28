@@ -435,7 +435,14 @@ public object CanvasV3Migration {
         effects: StoryEffects,
         carrierAspect: Double? = null,
         content: String? = null,
-    ): CanvasV3 {
+    ): CanvasV3 = readJson.decodeFromJsonElement(CanvasV3.serializer(), wireDocument(effects, carrierAspect, content))
+
+    /** Le même document, tel qu'il PART sur le fil (`v: 3` compris) : le chemin des publications qui écrivent du v3. */
+    public fun wireDocument(
+        effects: StoryEffects,
+        carrierAspect: Double? = null,
+        content: String? = null,
+    ): JsonObject {
         val encoded = wireJson.encodeToJsonElement(StoryEffects.serializer(), effects) as? JsonObject
             ?: JsonObject(emptyMap())
         val blob = JsonObject(
@@ -444,8 +451,7 @@ public object CanvasV3Migration {
                 if (carrierAspect != null) put("canvasAspectRatio", JsonPrimitive(carrierAspect))
             },
         )
-        val document = convertDocument(listOf(blob), content, effects.layout)
-        return readJson.decodeFromJsonElement(CanvasV3.serializer(), document)
+        return convertDocument(listOf(blob), content, effects.layout)
     }
 
     /** `StoryKeyframe.id` est synthétisé à la lecture : le fil n'en a jamais porté. */

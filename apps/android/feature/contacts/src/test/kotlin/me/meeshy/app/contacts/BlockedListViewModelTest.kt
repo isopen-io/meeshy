@@ -275,7 +275,7 @@ class BlockedListViewModelTest {
         vm.load()
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 
@@ -289,7 +289,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") }, any())
         }
     }
 
@@ -303,7 +303,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 }

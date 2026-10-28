@@ -38,6 +38,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import me.meeshy.sdk.session.commitOrWrite
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -53,6 +54,7 @@ class StoryRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
+    private val fence: me.meeshy.sdk.session.AccountFence? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -60,6 +62,7 @@ class StoryRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         storyApi = storyApi,
         clock = SystemCacheClock,
+        fence = fence,
     )
 
     /**
@@ -85,7 +88,7 @@ class StoryRepository @Inject constructor(
      * published story on success). The next revalidation stays authoritative.
      */
     suspend fun adoptPublished(story: ApiPost) {
-        cacheSource.upsertLocal(story)
+        cacheSource.upsertLocal(story, cacheSource.ticket())
     }
 
     /**
@@ -97,8 +100,9 @@ class StoryRepository @Inject constructor(
      * whether the cache changed.
      */
     suspend fun adoptAnnounced(story: ApiPost): Boolean {
+        val ticket = cacheSource.ticket()
         if (cacheSource.findLocal(story.id) != null) return false
-        cacheSource.upsertLocal(story)
+        cacheSource.upsertLocal(story, ticket)
         return true
     }
 
@@ -109,8 +113,19 @@ class StoryRepository @Inject constructor(
      * for the Room-backed tray. Port of iOS `StoryViewModel.storyDeleted → purgeDeadStories`.
      */
     suspend fun removeCachedStory(storyId: String) {
-        cacheSource.deleteLocal(storyId)
+        cacheSource.deleteLocal(storyId, cacheSource.ticket())
     }
+
+    /** [removeCachedStory] sous [ticket], pris AVANT la requête dont la réponse retire la story (#13560). */
+    suspend fun removeCachedStory(storyId: String, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        cacheSource.deleteLocal(storyId, ticket)
+    }
+
+    /**
+     * Le compte auquel appartient un geste qui part MAINTENANT (#13560) : à prendre AVANT la requête dont la réponse
+     * écrit l'archive « Mes stories » ([persistMyStories]) ou retire une story ([removeCachedStory]).
+     */
+    suspend fun ticket(): me.meeshy.sdk.session.AccountTicket? = cacheSource.ticket()
 
     /**
      * Folds a realtime `story:updated` into the authoritative Room cache so the tray stream
@@ -126,10 +141,11 @@ class StoryRepository @Inject constructor(
         engagementReset: Boolean,
         currentUserId: String?,
     ): Boolean {
+        val ticket = cacheSource.ticket()
         val previous = cacheSource.findLocal(updated.id) ?: return false
         val isOwnStory = currentUserId != null && updated.author?.id == currentUserId
         val merged = StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory) ?: return false
-        cacheSource.upsertLocal(merged)
+        cacheSource.upsertLocal(merged, ticket)
         return true
     }
 
@@ -158,6 +174,7 @@ class StoryRepository @Inject constructor(
      * drained. A drain that returned nothing never overwrites a non-empty cache.
      */
     suspend fun drainMyStories(limit: Int = 50, maxPages: Int = MAX_ARCHIVE_PAGES): NetworkResult<List<ApiPost>> {
+        val ticket = cacheSource.ticket()
         val collected = LinkedHashMap<String, ApiPost>()
         var cursor: String? = null
         repeat(maxPages) { page ->
@@ -165,26 +182,34 @@ class StoryRepository @Inject constructor(
             val paged = when (result) {
                 is NetworkResult.Success -> result.data
                 is NetworkResult.Failure ->
-                    return if (page == 0) result else finishDrain(collected)
+                    return if (page == 0) result else finishDrain(collected, ticket)
             }
             val before = collected.size
             paged.data.forEach { collected.putIfAbsent(it.id, it) }
             val stagnant = paged.data.isEmpty() || collected.size == before
             val next = paged.pagination?.nextCursor
-            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected)
+            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected, ticket)
             cursor = next
         }
-        return finishDrain(collected)
+        return finishDrain(collected, ticket)
     }
 
-    private suspend fun finishDrain(collected: Map<String, ApiPost>): NetworkResult<List<ApiPost>> {
+    private suspend fun finishDrain(
+        collected: Map<String, ApiPost>,
+        ticket: me.meeshy.sdk.session.AccountTicket?,
+    ): NetworkResult<List<ApiPost>> {
         val posts = collected.values.toList()
-        if (posts.isNotEmpty()) archiveCache.write(posts)
+        if (posts.isNotEmpty()) fence.commitOrWrite(ticket) { archiveCache.write(posts) }
         return NetworkResult.Success(posts)
     }
 
-    /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
-    suspend fun persistMyStories(posts: List<ApiPost>) = archiveCache.write(posts)
+    /**
+     * Persists the screen's current « Mes stories » list so a delete or republish survives a restart — under [ticket],
+     * taken at the gesture BEFORE its request (#13560): A's answer never writes B's archive.
+     */
+    suspend fun persistMyStories(posts: List<ApiPost>, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        fence.commitOrWrite(ticket) { archiveCache.write(posts) }
+    }
 
     /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
     suspend fun republish(storyId: String): NetworkResult<ApiPost> =
@@ -202,9 +227,10 @@ class StoryRepository @Inject constructor(
     }
 
     private suspend fun markViewedLocally(storyId: String) {
+        val ticket = cacheSource.ticket()
         val cached = cacheSource.findLocal(storyId) ?: return
         if (cached.isViewedByMe == true) return
-        cacheSource.upsertLocal(cached.copy(isViewedByMe = true))
+        cacheSource.upsertLocal(cached.copy(isViewedByMe = true), ticket)
     }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =

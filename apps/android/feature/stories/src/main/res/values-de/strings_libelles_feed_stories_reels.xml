@@ -40,6 +40,8 @@
     <string name="stories_composer_fade_out">Text ausblenden</string>
     <string name="stories_composer_timing_start">Startzeit des Texts</string>
     <string name="stories_composer_timing_duration">Sichtbarkeitsdauer des Texts</string>
+    <string name="stories_composer_timing_unset">Nicht festgelegt</string>
+    <string name="stories_composer_timing_value">%1$s Sekunden</string>
     <string name="stories_composer_draw_undo">Strich rückgängig machen</string>
     <string name="stories_composer_draw_done">Zeichnen beenden</string>
     <string name="stories_composer_remove_sticker">Sticker entfernen</string>

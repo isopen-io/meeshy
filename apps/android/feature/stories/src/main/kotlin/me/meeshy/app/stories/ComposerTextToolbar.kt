@@ -45,24 +45,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.TextEditTool
+import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
-/** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
+/** La palette des textes — celle d'iOS `StoryTextColors.palette` (couleur, contour, liseré), hex sans `#`, blanc en tête. */
 internal val STORY_TEXT_COLORS = listOf(
-    StoryTextElement.DEFAULT_COLOR,
-    "000000",
-    "FF3B30",
-    "FF9500",
-    "FFCC00",
-    "34C759",
-    "007AFF",
-    "AF52DE",
-    "FF2D55",
+    StoryTextElement.DEFAULT_COLOR, "000000", "FF2E63", "08D9D6", "F8B500",
+    "9B59B6", "2ECC71", "FF6B6B", "3498DB", "E91E63",
+    "FF7F50", "00CED1", "A855F7", "F59E0B",
 )
 
 internal fun StoryTextStyle.labelRes(): Int = when (this) {
@@ -99,7 +95,13 @@ internal fun TextStyleToolbar(
     onDone: (() -> Unit)? = null,
     /** Sur le plateau, la colonne droite range les sections : la rangée ne montre que celle qui est ouverte, sans doublon. */
     section: ComposerObjectEditorSection? = null,
+    /** Cadre, bordure, langue (#13561, #13534) : servis par la colonne, jamais par la rangée complète d'avant le plateau. */
+    intents: TextSectionIntents = TextSectionIntents(),
 ) {
+    if (section != null && section in StackedTextSections) {
+        TextStackedSection(element, section, intents, modifier)
+        return
+    }
     fun shows(group: ComposerObjectEditorSection?) = section == null || section == group
     val style = ComposerObjectEditorSection.Tool(TextEditTool.STYLE)
     val effect = ComposerObjectEditorSection.Tool(TextEditTool.EFFECT)
@@ -130,7 +132,9 @@ internal fun TextStyleToolbar(
             }
             if (shows(style)) {
                 CycleButton(Icons.Filled.FormatSize, R.string.stories_composer_size, element.size != StoryTextSize.DEFAULT, onCycleSize)
-                CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
+                if (section == null) {
+                    CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
+                }
             }
             if (shows(color)) {
                 STORY_TEXT_COLORS.forEach { hex ->
@@ -147,8 +151,7 @@ internal fun TextStyleToolbar(
                 CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
             }
             if (shows(ComposerObjectEditorSection.Timing)) {
-                CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
-                CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
+                TimingCycleButtons(element.timing, onCycleStart, onCycleDuration)
             }
             if (section == null) {
                 CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
@@ -178,10 +181,40 @@ internal fun TextStyleToolbar(
     }
 }
 
+/** La section Temps d'un objet (texte ou sticker, iOS `ComposerObjectEditorRail`) : son départ, puis sa durée. */
+@Composable
+internal fun TimingCycleButtons(timing: StoryElementTiming, onCycleStart: () -> Unit, onCycleDuration: () -> Unit) {
+    CycleButton(
+        Icons.Filled.Schedule, R.string.stories_composer_timing_start, timing.hasStart, onCycleStart,
+        stateDescription = timingSecondsText(timing.startSeconds, timing.hasStart),
+    )
+    CycleButton(
+        Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, timing.isTimed, onCycleDuration,
+        stateDescription = timingSecondsText(timing.durationSeconds, timing.isTimed),
+    )
+}
+
+/** Ce que TalkBack annonce d'un départ ou d'une durée : la valeur en secondes, ou « non défini ». */
+@Composable
+internal fun timingSecondsText(seconds: Float, isSet: Boolean): String {
+    if (!isSet) return stringResource(R.string.stories_composer_timing_unset)
+    val shown = java.text.NumberFormat.getInstance().apply { maximumFractionDigits = 1 }.format(seconds)
+    return stringResource(R.string.stories_composer_timing_value, shown)
+}
+
 /** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
 @Composable
-private fun CycleButton(icon: ImageVector, labelRes: Int, active: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+internal fun CycleButton(
+    icon: ImageVector,
+    labelRes: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+    stateDescription: String? = null,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = if (stateDescription != null) Modifier.semantics { this.stateDescription = stateDescription } else Modifier,
+    ) {
         Icon(
             icon,
             contentDescription = stringResource(labelRes),

@@ -329,10 +329,14 @@
     <string name="security_verify_unavailable_title">Überprüfung nicht verfügbar</string>
     <string name="sentiment_very_negative">Sehr negativ</string>
     <string name="sentiment_very_positive">Sehr positiv</string>
+    <string name="share_action_copy_link">Link kopieren</string>
+    <string name="share_action_share_out">Außerhalb von Meeshy teilen</string>
     <string name="share_caption_hint">Nachricht hinzufügen…</string>
     <string name="share_close">Schließen</string>
     <string name="share_content_messages_kept">Was gesendet wird · %1$d von %2$d Nachrichten</string>
+    <string name="share_copied">Kopiert</string>
     <string name="share_detail_direct">Unterhaltung</string>
+    <string name="share_detail_friend">Freund · noch keine Unterhaltung</string>
     <string name="share_detail_group_unsized">Gruppe</string>
     <string name="share_empty_body">Suche jemanden nach Name, Benutzername oder Nummer.</string>
     <string name="share_empty_title">Noch niemand hier</string>
@@ -344,6 +348,7 @@
     <string name="share_refused_undecrypted_source">Diese Nachricht wurde auf diesem Gerät nicht entschlüsselt: Sie kann nicht kopiert werden.</string>
     <string name="share_search_hint">Person oder Gruppe suchen</string>
     <string name="share_section_conversations">Unterhaltungen</string>
+    <string name="share_section_people">Personen</string>
     <string name="share_status_queued">In Warteschlange</string>
     <string name="share_status_retry">Erneut versuchen</string>
     <string name="share_status_sending">Wird gesendet…</string>
@@ -354,6 +359,8 @@
     <string name="share_target_studio">Im Studio bearbeiten</string>
     <string name="share_title_forward">Weiterleiten</string>
     <string name="share_title_send">Senden</string>
+    <string name="share_toast_open">Öffnen</string>
+    <string name="share_toast_sent_to">An %s gesendet</string>
     <string name="share_withdrawn_after_read">Eine Nachricht, die nach dem Lesen verschwindet, bleibt in dieser Unterhaltung.</string>
     <string name="share_withdrawn_unavailable">Eine nicht mehr verfügbare Nachricht wird nicht gesendet.</string>
     <string name="share_withdrawn_view_once">Eine einmalig ansehbare Nachricht bleibt in dieser Unterhaltung.</string>

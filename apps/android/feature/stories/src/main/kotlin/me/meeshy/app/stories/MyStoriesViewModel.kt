@@ -253,10 +253,11 @@ class MyStoriesViewModel internal constructor(
         fresh = fresh.filterNot { it.id == id }
         archive = archive.filterNot { it.id == id }
         rebuild(coldDone = true)
+        val ticket = storyRepository.ticket()
         val ok = storyRepository.delete(id) is NetworkResult.Success
         if (ok) {
-            storyRepository.removeCachedStory(id)
-            storyRepository.persistMyStories(archive)
+            storyRepository.removeCachedStory(id, ticket)
+            storyRepository.persistMyStories(archive, ticket)
         } else {
             fresh = (fresh + previousFresh.filter { it.id == id }).distinctBy { it.id }
             archive = (archive + previousArchive.filter { it.id == id }).distinctBy { it.id }
@@ -270,6 +271,7 @@ class MyStoriesViewModel internal constructor(
         if (_state.value.isRepublishing) return
         _state.update { it.copy(isRepublishing = true) }
         viewModelScope.launch {
+            val ticket = storyRepository.ticket()
             when (val result = storyRepository.republish(id)) {
                 is NetworkResult.Success -> {
                     val post = result.data
@@ -277,7 +279,7 @@ class MyStoriesViewModel internal constructor(
                     archive = archive.map { if (it.id == post.id) post else it }
                     if (fresh.none { it.id == post.id } && archive.none { it.id == post.id }) archive = archive + post
                     rebuild(coldDone = true)
-                    storyRepository.persistMyStories(archive)
+                    storyRepository.persistMyStories(archive, ticket)
                     _effects.send(MyStoriesUiEffect.Republished)
                 }
                 is NetworkResult.Failure -> _effects.send(MyStoriesUiEffect.RepublishFailed)

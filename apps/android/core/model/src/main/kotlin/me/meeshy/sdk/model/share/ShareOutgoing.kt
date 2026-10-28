@@ -51,6 +51,14 @@ object ShareOutgoingBuilder {
             chosenDurationSeconds = chosenDurationSeconds,
         )
         is ShareSubject.Piece -> ShareOutgoingResult.Refused(ShareFailure.GENERIC)
+        is ShareSubject.Incoming -> {
+            val text = subject.composedText(caption)
+            when {
+                !text.isNullOrBlank() -> ShareOutgoingResult.Ready(listOf(plainText(text, ContentExitLaw.CopyProtection(0L, false, null))))
+                subject.media.isNotEmpty() -> ShareOutgoingResult.Ready(emptyList())
+                else -> ShareOutgoingResult.Refused(ShareFailure.NOTHING_TO_SEND)
+            }
+        }
         is ShareSubject.Text, is ShareSubject.Link, is ShareSubject.Card -> {
             val text = subject.composedText(caption)
             if (text.isNullOrBlank()) {

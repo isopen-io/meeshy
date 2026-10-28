@@ -31,6 +31,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.ReelSwitchWork
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.fullscreen.FullscreenScrims
@@ -69,6 +73,7 @@ fun ReelsScreen(
     // Mode immersif : un appui long efface tout le chrome, un toucher le rend.
     var chromeHidden by rememberSaveable { mutableStateOf(false) }
     val shareContext = LocalContext.current
+    val shareLauncher = LocalShareLauncher.current
     val haptics = rememberMeeshyHaptics()
     // Commentaires en feuille superposee (issue #4815) : le lecteur ne quitte jamais
     // l'ecran, la video du reel visible continue de jouer sous la feuille.
@@ -138,11 +143,15 @@ fun ReelsScreen(
             onOpen = { id -> onOpenPost(id) },
             onShare = { reel ->
                 viewModel.recordShare(reel.id)
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(reel.id))
-                }
-                shareContext.startActivity(Intent.createChooser(send, null))
+                // La feuille de partage unique (#13474) : conversations, copier le lien, partage système.
+                shareLauncher?.open(
+                    ShareSubject.Card(ShareCards.reel(reel.id, title = reel.caption.orEmpty(), authorId = reel.authorId)),
+                ) ?: shareContext.startActivity(
+                    Intent.createChooser(
+                        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(reel.id)),
+                        null,
+                    ),
+                )
             },
         )
         FeedbackToastHost(toasts = viewModel.toasts)

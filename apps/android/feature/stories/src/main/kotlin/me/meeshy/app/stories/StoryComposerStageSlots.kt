@@ -1,13 +1,22 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.media.previewModel
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -105,6 +114,7 @@ internal fun StoryComposerScene(
 @Composable
 internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
         val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
+        val editedSticker = state.selectedSticker.takeIf { editedText == null && !state.isTimelineOpen }
         val onPlateau = LocalOnComposerPlateau.current
         state.sceneInspector?.let { inspector ->
             if (!state.isDrawingActive) {
@@ -125,24 +135,25 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 onDone = viewModel::onExitDrawingMode,
                 control = state.openDrawingControl.takeIf { onPlateau },
             )
+        } else if (editedText != null && onPlateau) {
+            // Une section chasse l'autre en fondu (iOS : le contenu change sous la colonne, sans saut de hauteur).
+            AnimatedContent(
+                targetState = state.openTextSection,
+                transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+                label = "text-section",
+            ) { open ->
+                if (open == ComposerObjectEditorSection.Plan) {
+                    Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+                        StoryPlanFrise(state, viewModel)
+                    }
+                } else {
+                    TextSectionToolbar(editedText, open, viewModel, onPlateau)
+                }
+            }
+        } else if (editedSticker != null && onPlateau) {
+            StickerSectionContent(state, editedSticker, viewModel)
         } else if (editedText != null) {
-            TextStyleToolbar(
-                element = editedText,
-                onStyle = { style -> viewModel.onTextElementStyle(editedText.id, style) },
-                onColor = { color -> viewModel.onTextElementColor(editedText.id, color) },
-                onAlign = { align -> viewModel.onTextElementAlign(editedText.id, align) },
-                onBackground = { bg -> viewModel.onTextElementBackground(editedText.id, bg) },
-                onCycleSize = { viewModel.onTextElementCycleSize(editedText.id) },
-                onCycleOutline = { viewModel.onTextElementCycleOutline(editedText.id) },
-                onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(editedText.id) },
-                onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(editedText.id) },
-                onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
-                onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
-                onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
-                onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
-                onDone = if (onPlateau) null else viewModel::onDeselectTextElement,
-                section = state.openTextSection.takeIf { onPlateau },
-            )
+            TextSectionToolbar(editedText, null, viewModel, onPlateau)
         } else {
             // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun
             // pixel au rendu final) — et seulement quand aucun outil n'occupe la zone basse.
@@ -254,21 +265,31 @@ internal fun StoryComposerPanel(
                 onOpenSoundShelf = onOpenSoundShelf,
                 onToggleSoundMute = viewModel::onToggleSoundMute,
                 onRemoveSound = viewModel::onRemoveSound,
-                timeline = {
-                    SceneFrise(
-                        tracks = state.sceneTracks,
-                        editableIds = state.sceneEditableTrackIds,
-                        selectedId = state.selectedSceneObject?.id,
-                        slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),
-                        playheadSeconds = state.playheadSeconds,
-                        onSelectTrack = { id, at ->
-                            viewModel.onFriseTrackSelected(id)
-                            viewModel.onPlayheadMoved(at)
-                        },
-                        onScrub = viewModel::onPlayheadMoved,
-                        onWindow = viewModel::onSceneObjectWindow,
-                    )
-                },
+                timeline = { StoryPlanFrise(state, viewModel) },
             )
         }
+}
+
+private val PLAN_MAX_HEIGHT = 220.dp
+
+/**
+ * Le plan 2D de la scène (iOS `ComposerObjectPlanControls` → `Plan2DView`) : UN montage, deux portes — l'outil « temps »
+ * de la bande et la section « plan » de la colonne droite d'un texte. Le même plan, les mêmes gestes ; l'empilement,
+ * lui, reste aux actions de l'objet.
+ */
+@Composable
+internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    SceneFrise(
+        tracks = state.sceneTracks,
+        editableIds = state.sceneEditableTrackIds,
+        selectedId = state.selectedSceneObject?.id,
+        slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),
+        playheadSeconds = state.playheadSeconds,
+        onSelectTrack = { id, at ->
+            viewModel.onFriseTrackSelected(id)
+            viewModel.onPlayheadMoved(at)
+        },
+        onScrub = viewModel::onPlayheadMoved,
+        onWindow = viewModel::onSceneObjectWindow,
+    )
 }

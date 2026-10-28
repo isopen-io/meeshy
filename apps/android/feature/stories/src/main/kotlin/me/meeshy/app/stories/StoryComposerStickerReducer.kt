@@ -45,4 +45,12 @@ internal object StoryComposerStickerReducer {
 
     fun transformed(state: StoryComposerUiState, id: String, scaleBy: Float, rotateByDeg: Float): StoryComposerUiState =
         state.copy(deck = state.deck.transformSticker(id, scaleBy, rotateByDeg))
+
+    /** Le départ du sticker avance d'un cran (iOS : section Temps), comme celui d'un texte. */
+    fun startCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
+        state.copy(deck = state.deck.updateSticker(id) { it.copy(timing = it.timing.cycledStart()) })
+
+    /** La durée du sticker avance d'un cran ; le départ est intact. */
+    fun durationCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
+        state.copy(deck = state.deck.updateSticker(id) { it.copy(timing = it.timing.cycledDuration()) })
 }

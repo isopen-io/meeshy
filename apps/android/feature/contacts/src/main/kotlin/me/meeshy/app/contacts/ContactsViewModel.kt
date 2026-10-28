@@ -23,6 +23,7 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.ConnectionFeedback
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
 
 enum class ContactsTab { Contacts, Requests, Discover, Blocked }
@@ -167,6 +168,7 @@ class ContactsViewModel @Inject constructor(
     }
 
     private suspend fun fetchAndPublishRequests() {
+        val ticket = friendRequestListRepository.ticket()
         try {
             val (servedReceived, servedSent) = coroutineScope {
                 val blocks = async { blockRepository?.listBlocked() }
@@ -179,7 +181,7 @@ class ContactsViewModel @Inject constructor(
             val received = servedReceived.map { BlockedExclusion.requests(it, blockedIds) }
             val sent = servedSent.map { BlockedExclusion.requests(it, blockedIds) }
             if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data) }
+                ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data, ticket = ticket) }
             }
             val bothSucceeded = received is NetworkResult.Success && sent is NetworkResult.Success
             _state.update { current ->
@@ -194,8 +196,8 @@ class ContactsViewModel @Inject constructor(
                     },
                 )
             }
-            if (received is NetworkResult.Success) friendRequestListRepository.persistReceived(received.data)
-            if (sent is NetworkResult.Success) friendRequestListRepository.persistSent(sent.data)
+            if (received is NetworkResult.Success) friendRequestListRepository.persistReceived(received.data, ticket)
+            if (sent is NetworkResult.Success) friendRequestListRepository.persistSent(sent.data, ticket)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -208,6 +210,7 @@ class ContactsViewModel @Inject constructor(
     fun declineRequest(requestId: String) = respondToReceived(requestId, accepted = false)
 
     private fun respondToReceived(requestId: String, accepted: Boolean) {
+        val ticket = friendRequestListRepository.ticket()
         val snapshot = _state.value.receivedRequests
         val removed = snapshot.firstOrNull { it.id == requestId } ?: return
         val updated = snapshot.filterNot { it.id == requestId }
@@ -219,7 +222,7 @@ class ContactsViewModel @Inject constructor(
             )
         }
         applyRespondToCache(removed.senderId, accepted)
-        persistReceivedAsync(updated)
+        persistReceivedAsync(updated, ticket)
         viewModelScope.launch {
             val result = runCatching { friendRepository.respond(requestId, accepted) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
@@ -228,7 +231,7 @@ class ContactsViewModel @Inject constructor(
                 if (result is NetworkResult.Failure) {
                     rollbackRespondCache(removed.senderId, removed.id, accepted)
                     val restored = restore(it.receivedRequests, snapshot, removed)
-                    persistReceivedAsync(restored)
+                    persistReceivedAsync(restored, ticket)
                     it.copy(
                         receivedRequests = restored,
                         errorMessage = result.error.message,
@@ -239,6 +242,7 @@ class ContactsViewModel @Inject constructor(
     }
 
     fun cancelRequest(requestId: String) {
+        val ticket = friendRequestListRepository.ticket()
         val snapshot = _state.value.sentRequests
         val removed = snapshot.firstOrNull { it.id == requestId } ?: return
         val updated = snapshot.filterNot { it.id == requestId }
@@ -250,7 +254,7 @@ class ContactsViewModel @Inject constructor(
             )
         }
         if (removed.receiverId.isNotBlank()) ownCacheChange { friendshipCache.didCancelRequest(removed.receiverId) }
-        persistSentAsync(updated)
+        persistSentAsync(updated, ticket)
         viewModelScope.launch {
             val result = runCatching { friendRepository.deleteRequest(requestId) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
@@ -263,7 +267,7 @@ class ContactsViewModel @Inject constructor(
                         ownCacheChange { friendshipCache.didSendRequest(removed.receiverId, removed.id) }
                     }
                     val restored = restore(it.sentRequests, snapshot, removed)
-                    persistSentAsync(restored)
+                    persistSentAsync(restored, ticket)
                     it.copy(
                         sentRequests = restored,
                         errorMessage = result.error.message,
@@ -273,12 +277,12 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
-    private fun persistReceivedAsync(requests: List<FriendRequest>) {
-        viewModelScope.launch { friendRequestListRepository.persistReceived(requests) }
+    private fun persistReceivedAsync(requests: List<FriendRequest>, ticket: AccountTicket?) {
+        viewModelScope.launch { friendRequestListRepository.persistReceived(requests, ticket) }
     }
 
-    private fun persistSentAsync(requests: List<FriendRequest>) {
-        viewModelScope.launch { friendRequestListRepository.persistSent(requests) }
+    private fun persistSentAsync(requests: List<FriendRequest>, ticket: AccountTicket?) {
+        viewModelScope.launch { friendRequestListRepository.persistSent(requests, ticket) }
     }
 
     private fun applyRespondToCache(senderId: String, accepted: Boolean) {

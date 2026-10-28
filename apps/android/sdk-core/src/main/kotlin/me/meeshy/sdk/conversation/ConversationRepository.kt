@@ -48,6 +48,7 @@ import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
@@ -63,7 +64,7 @@ class ConversationRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
     endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
-    fence: AccountFence? = null,
+    private val fence: AccountFence? = null,
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -487,19 +488,24 @@ class ConversationRepository @Inject constructor(
      * the messages actually shown, and a body-less list mark-read would declare unseen messages
      * read. No-op (returns false) when the conversation is unknown or already read.
      */
-    suspend fun markReadLocally(id: String): Boolean = database.withTransaction {
-        val row = conversationDao.find(id) ?: return@withTransaction false
-        val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-        if (conversation.unreadCount == 0) return@withTransaction false
-        conversationDao.upsertAll(
-            listOf(
-                row.copy(
-                    payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
-                    unreadCount = 0,
-                ),
-            ),
-        )
-        true
+    suspend fun markReadLocally(id: String): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(id) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                if (conversation.unreadCount == 0) return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                            unreadCount = 0,
+                        ),
+                    ),
+                )
+                true
+            }
+        } ?: false
     }
 
     /**
@@ -661,18 +667,23 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun applyRemoteConversationPreferences(
         event: UserPreferencesConversationUpdatedSocketData,
-    ): Boolean = database.withTransaction {
-        val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
-        val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-        val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
-        conversationDao.upsertAll(
-            listOf(
-                row.copy(
-                    payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
-                ),
-            ),
-        )
-        true
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
+                        ),
+                    ),
+                )
+                true
+            }
+        } ?: false
     }
 
     /**

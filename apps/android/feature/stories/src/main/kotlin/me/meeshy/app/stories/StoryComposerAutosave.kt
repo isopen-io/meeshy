@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
+import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /** The persistence action a composer change implies for its single durable draft. */
@@ -267,6 +269,11 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         background = background.toStyleWire(),
         outlineWidth = outline.width,
         outlineColor = outline.color,
+        frameShape = frame.shape.wire,
+        framePaddingScale = frame.paddingScale,
+        frameBorderWidth = frame.borderWidth,
+        frameBorderColor = frame.borderColor,
+        sourceLanguage = sourceLanguage,
         fadeIn = fade.inSeconds,
         fadeOut = fade.outSeconds,
         startSeconds = timing.startSeconds,
@@ -297,6 +304,13 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         size = StoryTextSize.entries.firstOrNull { it.name == size } ?: StoryTextSize.DEFAULT,
         background = StoryTextBackground.resolve(backgroundStyle = background, textBg = null),
         outline = StoryTextOutline(width = outlineWidth, color = outlineColor),
+        frame = StoryTextFrame(
+            shape = StoryTextFrameShape.fromWire(frameShape),
+            paddingScale = framePaddingScale,
+            borderWidth = frameBorderWidth,
+            borderColor = frameBorderColor,
+        ),
+        sourceLanguage = sourceLanguage,
         fade = StoryTextFade(inSeconds = fadeIn, outSeconds = fadeOut),
         timing = StoryElementTiming(startSeconds = startSeconds, durationSeconds = durationSeconds),
         x = x,

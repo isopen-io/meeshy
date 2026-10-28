@@ -1,6 +1,5 @@
 package me.meeshy.sdk.socket
 
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -24,8 +23,7 @@ class SocketInboundRoute internal constructor(
     companion object {
 
         /** Le sujet d'un flux d'événements : sans perte tant qu'il y a un abonné, sans bloquer l'émetteur. */
-        fun <T> subject(): MutableSharedFlow<T> =
-            MutableSharedFlow(replay = 0, extraBufferCapacity = Int.MAX_VALUE)
+        fun <T> subject(): RouteSubject<T> = RouteSubject()
 
         /** Décode la charge en [T] puis la remet à [deliver], sur la voie série. */
         fun <T> decoding(
@@ -45,7 +43,7 @@ class SocketInboundRoute internal constructor(
         inline fun <reified T> decoding(
             event: String,
             json: Json,
-            subject: MutableSharedFlow<T>,
+            subject: RouteSubject<T>,
             noinline arrival: ((JSONObject) -> Unit)? = null,
         ): SocketInboundRoute = decoding(event, json, serializer<T>(), arrival) { value ->
             subject.emitOrLog(event, value)
@@ -64,8 +62,8 @@ class SocketInboundRoute internal constructor(
             }
         }
 
-        fun <T> MutableSharedFlow<T>.emitOrLog(event: String, value: T) {
-            if (!tryEmit(value)) Timber.e("Socket route [%s]: evenement refuse par le sujet", event)
+        fun <T> RouteSubject<T>.emitOrLog(event: String, value: T) {
+            if (!emitArrived(value)) Timber.e("Socket route [%s]: evenement refuse par le sujet", event)
         }
 
         private fun observe(event: String, raw: JSONObject, arrival: ((JSONObject) -> Unit)?) {

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StorySticker
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 
@@ -66,15 +67,18 @@ object StorySceneObjectsProjection {
     const val GENERIC_CREDIT: String = "♫ —"
 
     fun stickers(effects: StoryEffects?, mediaUrlOf: (String) -> String?): List<StoryStickerView> =
-        effects?.stickerObjects.orEmpty()
-            .sortedBy { it.zIndex }
-            .mapNotNull { it.toView(mediaUrlOf) }
+        SceneObjectNumbers.capped(
+            effects?.stickerObjects.orEmpty()
+                .sortedBy { it.zIndex }
+                .mapNotNull { it.toView(mediaUrlOf) },
+        )
 
     fun audioChips(effects: StoryEffects?): List<StoryAudioChipView> =
         effects?.audioPlayerObjects.orEmpty()
             .filterNot { it.isBackground == true }
             .sortedBy { it.zIndex ?: 0 }
             .map { it.toChip() }
+            .let(SceneObjectNumbers::capped)
 
     private fun StorySticker.toView(mediaUrlOf: (String) -> String?): StoryStickerView? {
         val image = postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf)
@@ -83,25 +87,25 @@ object StorySceneObjectsProjection {
             id = id,
             emoji = emoji,
             imageUrl = image,
-            x = x,
-            y = y,
-            rotation = rotation,
-            sideFraction = (baseSize.coerceAtLeast(0.0) * scale.coerceAtLeast(0.0)) / DESIGN_CANVAS_WIDTH,
-            startTime = startTime ?: 0.0,
-            duration = duration ?: 0.0,
-            fadeIn = fadeIn ?: 0.0,
-            fadeOut = fadeOut ?: 0.0,
+            x = SceneObjectNumbers.position(x),
+            y = SceneObjectNumbers.position(y),
+            rotation = SceneObjectNumbers.rotation(rotation),
+            sideFraction = SceneObjectNumbers.stickerSideFraction(baseSize, scale),
+            startTime = SceneObjectNumbers.seconds(startTime ?: 0.0),
+            duration = SceneObjectNumbers.seconds(duration ?: 0.0),
+            fadeIn = SceneObjectNumbers.seconds(fadeIn ?: 0.0),
+            fadeOut = SceneObjectNumbers.seconds(fadeOut ?: 0.0),
         )
     }
 
     private fun StoryAudioPlayerObject.toChip(): StoryAudioChipView = StoryAudioChipView(
         id = id,
-        x = x,
-        y = y,
+        x = SceneObjectNumbers.position(x),
+        y = SceneObjectNumbers.position(y),
         credit = soundId?.let { creditLine(name, soundAuthorUsername) ?: GENERIC_CREDIT },
         waveform = waveformSamples,
-        startTime = startTime?.toDouble() ?: 0.0,
-        duration = duration?.toDouble() ?: 0.0,
+        startTime = SceneObjectNumbers.seconds(startTime?.toDouble() ?: 0.0),
+        duration = SceneObjectNumbers.seconds(duration?.toDouble() ?: 0.0),
     )
 
     private fun creditLine(title: String?, username: String?): String? =

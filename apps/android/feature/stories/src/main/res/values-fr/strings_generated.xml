@@ -36,6 +36,9 @@
     <string name="composer_chip_style_handwriting">MANUSCRIT</string>
     <string name="composer_chip_style_neon">NÉON</string>
     <string name="composer_chip_style_typewriter">MACHINE</string>
+    <string name="composer_column_text_frame">Cadrage du texte</string>
+    <string name="composer_column_text_language">Langue du texte</string>
+    <string name="composer_column_text_plan">TIMELINE</string>
     <string name="composer_frise_earlier">Plus tôt</string>
     <string name="composer_frise_empty">Posez un texte ou un sticker : chaque objet devient une piste.</string>
     <string name="composer_frise_entry">Entre ici</string>
@@ -68,6 +71,12 @@
     <string name="composer_socle_audience">Audience</string>
     <string name="composer_socle_publish">Publier</string>
     <string name="composer_sound_background_a11y">Son de fond</string>
+    <string name="composer_text_frame_cloud">Nuage</string>
+    <string name="composer_text_frame_diamond">Losange</string>
+    <string name="composer_text_frame_pill">Pilule</string>
+    <string name="composer_text_frame_rectangle">Carré</string>
+    <string name="composer_text_frame_rounded">Arrondi</string>
+    <string name="composer_text_frame_speech">Bulle BD</string>
     <string name="my_stories_archive_empty_subtitle">Vos stories expirées rejoindront cette archive.</string>
     <string name="my_stories_archive_empty_title">Aucune archive</string>
     <string name="my_stories_back">Retour</string>
@@ -100,6 +109,7 @@
     <string name="my_stories_tab_published">Publiées</string>
     <string name="my_stories_title">Mes stories</string>
     <string name="my_stories_viewers">Listing des vues</string>
+    <string name="share_story_text">🔗 Story de %1$s : %2$s</string>
     <string name="stories_action_delete">Supprimer</string>
     <string name="stories_action_react">Réagir</string>
     <string name="stories_action_report">Signaler</string>

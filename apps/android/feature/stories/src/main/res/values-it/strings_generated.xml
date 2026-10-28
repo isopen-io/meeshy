@@ -36,6 +36,9 @@
     <string name="composer_chip_style_handwriting">CORSIVO</string>
     <string name="composer_chip_style_neon">NEON</string>
     <string name="composer_chip_style_typewriter">MACCHINA</string>
+    <string name="composer_column_text_frame">Cornice del testo</string>
+    <string name="composer_column_text_language">Lingua del testo</string>
+    <string name="composer_column_text_plan">TIMELINE</string>
     <string name="composer_frise_earlier">Prima</string>
     <string name="composer_frise_empty">Aggiungi un testo o uno sticker: ogni oggetto diventa una traccia.</string>
     <string name="composer_frise_entry">Entra qui</string>
@@ -68,6 +71,12 @@
     <string name="composer_socle_audience">Pubblico</string>
     <string name="composer_socle_publish">Pubblica</string>
     <string name="composer_sound_background_a11y">Suono di sottofondo</string>
+    <string name="composer_text_frame_cloud">Nuvola</string>
+    <string name="composer_text_frame_diamond">Rombo</string>
+    <string name="composer_text_frame_pill">Pillola</string>
+    <string name="composer_text_frame_rectangle">Quadrato</string>
+    <string name="composer_text_frame_rounded">Arrotondato</string>
+    <string name="composer_text_frame_speech">Fumetto</string>
     <string name="my_stories_archive_empty_subtitle">Le tue storie scadute confluiranno in questo archivio.</string>
     <string name="my_stories_archive_empty_title">Nessun archivio</string>
     <string name="my_stories_back">Indietro</string>
@@ -100,6 +109,7 @@
     <string name="my_stories_tab_published">Pubblicate</string>
     <string name="my_stories_title">Le mie storie</string>
     <string name="my_stories_viewers">Elenco delle visualizzazioni</string>
+    <string name="share_story_text">🔗 Storia di %1$s: %2$s</string>
     <string name="stories_action_delete">Elimina</string>
     <string name="stories_action_react">Reagisci</string>
     <string name="stories_action_report">Segnala</string>

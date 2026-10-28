@@ -3,6 +3,7 @@ package me.meeshy.sdk.share
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.share.ShareRecipient
 import org.junit.Test
 
@@ -55,5 +56,30 @@ class ShareRecipientDirectoryTest {
         assertThat(ShareRecipientDirectory.recents(rows).map { it.id }).containsExactly(
             "conv:g2", "conv:g3", "conv:g4", "conv:g5", "conv:g6", "conv:g7", "conv:g8", "conv:g9",
         ).inOrder()
+    }
+
+    @Test
+    fun `accepted friends are people without a conversation, never me nor a blocked friend`() {
+        val people = ShareRecipientDirectory.fromFriends(
+            friends = listOf(
+                FriendRequestUser(id = "u1", username = "lea", displayName = "Léa Dupont", avatar = "https://a/b.png"),
+                FriendRequestUser(id = me, username = "moi"),
+                FriendRequestUser(id = "u2", username = "bob"),
+                FriendRequestUser(id = "u3", username = "carl", firstName = "Carl", lastName = "Roy"),
+            ),
+            currentUserId = me,
+            blockedUserIds = setOf("u2"),
+        )
+        assertThat(people.map { it.id }).containsExactly("user:u1", "user:u3").inOrder()
+        assertThat(people[0].title).isEqualTo("Léa Dupont")
+        assertThat(people[0].detail).isEqualTo(ShareRecipient.Detail.FriendWithoutConversation)
+        assertThat(people[0].avatarUrl).isEqualTo("https://a/b.png")
+        assertThat(people[1].title).isEqualTo("Carl Roy")
+    }
+
+    @Test
+    fun `a friend with no name at all is listed by pseudo`() {
+        val people = ShareRecipientDirectory.fromFriends(listOf(FriendRequestUser(id = "u1", username = "lea")), me)
+        assertThat(people.single().title).isEqualTo("lea")
     }
 }
