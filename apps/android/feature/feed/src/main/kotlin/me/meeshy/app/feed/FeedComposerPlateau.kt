@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -57,6 +58,8 @@ import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+
+private const val CONTENT_FOCUS_FRAMES = 3
 
 /** The tools the post composer serves on its canonical row; the model keeps the iOS order and drops the rest. */
 private val ServedTools = ComposerDocumentTool.servedRow(
@@ -147,11 +150,17 @@ private fun PostCard(
     val keyboard = LocalSoftwareKeyboardController.current
     val raised by rememberUpdatedState(onKeyboardRaised)
     // The door promised writing: the field takes focus and the keyboard rises once the card is laid out, and the debt
-    // is paid once — a later format switch remounts the card without raising it again.
+    // is paid once — a later format switch remounts the card without raising it again. The field may only be attached
+    // a frame later (navigation enter), so focus is retried frame by frame before the keyboard is asked for.
     LaunchedEffect(raiseKeyboard) {
         if (!raiseKeyboard) return@LaunchedEffect
-        runCatching { contentFocus.requestFocus() }
-        keyboard?.show()
+        var focused = false
+        for (attempt in 0 until CONTENT_FOCUS_FRAMES) {
+            focused = runCatching { contentFocus.requestFocus() }.isSuccess
+            if (focused) break
+            withFrameNanos { }
+        }
+        if (focused) keyboard?.show()
         raised()
     }
     Column(
