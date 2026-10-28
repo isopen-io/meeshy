@@ -47,6 +47,9 @@ object HttpPriority {
     const val CLIENT_CAPABILITIES = 1_100
     const val DEVICE_LOCALE = 1_200
     const val AUTH_EXPIRY = 1_300
+
+    /** Apres l'identite : voit la requete telle qu'elle part, sous son jeton. */
+    const val GUEST_SESSION_END = 1_350
     const val AUTHENTICATOR = 1_400
     const val SLOW_REQUEST = 1_500
     const val LOGGING = 9_000

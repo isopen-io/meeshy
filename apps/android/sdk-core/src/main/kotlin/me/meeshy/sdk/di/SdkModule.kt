@@ -317,6 +317,7 @@ object SdkModule {
         blockCache: BlockCache,
         preferenceSnapshotStore: PreferenceSnapshotStore,
         perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
+        guestSessions: me.meeshy.sdk.session.AnonymousSessionStore,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -329,6 +330,7 @@ object SdkModule {
             blockCache,
             preferenceSnapshotStore,
             perAccountCaches,
+            guestSessions,
         )
 
     @Provides

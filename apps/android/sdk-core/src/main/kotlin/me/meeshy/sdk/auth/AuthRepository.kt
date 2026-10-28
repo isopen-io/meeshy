@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
 import me.meeshy.sdk.model.auth.SendPhoneCodeRequest
 import me.meeshy.sdk.model.auth.TwoFactorLoginRequest
 import me.meeshy.sdk.model.auth.TwoFactorVerifyResult
+import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.model.auth.VerificationStatusRequest
 import me.meeshy.sdk.model.auth.VerifyPhoneData
 import me.meeshy.sdk.model.auth.VerifyPhoneRequest
@@ -384,6 +385,24 @@ class AuthRepository @Inject constructor(
     suspend fun logout() {
         val frozenJwt = tokenStore.jwt
         val frozenSessionToken = tokenStore.sessionToken
+        purgeLocalSession()
+        closeServerSession(frozenJwt, frozenSessionToken)
+    }
+
+    /**
+     * La passerelle a TERMINE la session d'un invite de lien (lien echu, acces retire) : l'appareil est purge comme apres
+     * une deconnexion — jetons, caches, brouillons, file d'envoi, session invitee persistee — et rien ne part vers une
+     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` = la courante) :
+     * le refus tardif d'une session quittee ne purge pas celle ouverte depuis, et un compte inscrit n'est jamais touche.
+     * Rend `true` quand la purge a eu lieu.
+     */
+    suspend fun endGuestSession(refusedToken: String?): Boolean {
+        if (tokenStore.jwt != null || !GuestSessionEnd.targets(tokenStore.sessionToken, refusedToken)) return false
+        purgeLocalSession()
+        return true
+    }
+
+    private suspend fun purgeLocalSession() {
         tokenStore.clear()
         sessionRepository.clear()
         sessionTeardown.wipe()
@@ -393,7 +412,6 @@ class AuthRepository @Inject constructor(
         // PAR USER côté serveur : hérité, il ferait manquer au compte suivant
         // tous ses trous tant qu'il n'aurait pas dépassé la valeur du précédent.
         syncSeqTracker.reset()
-        closeServerSession(frozenJwt, frozenSessionToken)
     }
 
     private suspend fun closeServerSession(jwt: String?, sessionToken: String?) {

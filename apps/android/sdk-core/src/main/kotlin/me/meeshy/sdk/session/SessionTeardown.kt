@@ -51,6 +51,7 @@ public class DefaultSessionTeardown(
     private val blockCache: BlockCache,
     private val preferenceSnapshotStore: PreferenceSnapshotStore? = null,
     private val perAccountCaches: Set<PerAccountCache> = emptySet(),
+    private val guestSessions: AnonymousSessionStore? = null,
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -64,6 +65,9 @@ public class DefaultSessionTeardown(
         notificationRepository.clear()
         blockCache.clear()
         preferenceSnapshotStore?.clearAll()
+        // Une session invitee persistee survivait a la deconnexion : ses droits d'envoi bridaient le composeur du compte
+        // suivant, et son jeton restait sur le disque. Une fin de session invitee purge tout, comme une deconnexion.
+        guestSessions?.clear()
         perAccountCaches.forEach { cache ->
             try {
                 cache.clear()
