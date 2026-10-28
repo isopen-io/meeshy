@@ -196,6 +196,7 @@ object SocketEventNames {
     const val ATTACHMENT_REACTION_ADDED = "attachment:reaction-added"
     const val ATTACHMENT_REACTION_REMOVE = "attachment:reaction-remove"
     const val ATTACHMENT_REACTION_REMOVED = "attachment:reaction-removed"
+    const val ATTACHMENT_DELETED = "attachment:deleted"
     const val ATTACHMENT_READY = "attachment:ready"
     const val ATTACHMENT_STATUS_UPDATED = "attachment-status:updated"
     const val AUDIO_TRANSCRIPTION_FAILED = "audio:transcription-failed"
@@ -365,6 +366,7 @@ object SocketEventNames {
         ATTACHMENT_REACTION_ADDED,
         ATTACHMENT_REACTION_REMOVE,
         ATTACHMENT_REACTION_REMOVED,
+        ATTACHMENT_DELETED,
         ATTACHMENT_READY,
         ATTACHMENT_STATUS_UPDATED,
         AUDIO_TRANSCRIPTION_FAILED,
