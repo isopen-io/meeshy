@@ -15,6 +15,12 @@
         { "catalog": "app", "iosKey": "composer.format.denied.post", "androidName": "composer_format_denied_post", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.publish.menu.title", "androidName": "composer_publish_menu_title", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.publish.menu.a11y.hint", "androidName": "composer_publish_menu_a11y_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.section", "androidName": "composer_mosaic_section", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.carousel", "androidName": "composer_mosaic_carousel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.reel", "androidName": "composer_mosaic_reel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.hero", "androidName": "composer_mosaic_hero", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.wave", "androidName": "composer_mosaic_wave", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.mosaic.sine", "androidName": "composer_mosaic_sine", "status": "adopted" },
         { "androidName": "composer_format_media_stay_behind", "status": "android-only" }
       ]
     }

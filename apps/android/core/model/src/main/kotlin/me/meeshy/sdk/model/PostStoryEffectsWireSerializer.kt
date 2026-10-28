@@ -13,7 +13,7 @@ import kotlinx.serialization.json.JsonEncoder
  * que depuis le v3. La passerelle sert ce v3 tel quel aux clients qui annoncent `X-Canvas-Caps: 3` et rend aux autres la
  * sentinelle de la table O17 : l'ancien client lit donc toujours le post, sans que le client écrive deux formes.
  *
- * Seul l'ensemble « un fond et rien d'autre » part en v3 : c'est ce que le composeur de post sait composer, et la traversée
+ * Seul l'ensemble « un fond et, si l'auteur l'a choisie, une disposition des scènes (`layout`, #13540), et rien d'autre » part en v3 : c'est ce que le composeur de post sait composer, et la traversée
  * v1 → v3 d'une autre charge (rendue puis réécrite par l'outbox) n'a pas à perdre quoi que ce soit en route. Tout le reste
  * garde le fil v1 d'avant. La LECTURE est celle de [StoryEffectsWireSerializer] : v3 rabattu sur les familles v1.
  */
@@ -31,6 +31,8 @@ object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
         }
     }
 
+    /** « Un fond, éventuellement une disposition, et rien d'autre » : la disposition est un attribut du document, pas d'une scène. */
     private fun isBackgroundOnly(value: StoryEffects): Boolean =
-        value.background != null && value == StoryEffects(background = value.background)
+        (value.background != null || value.layout != null) &&
+            value == StoryEffects(background = value.background, layout = value.layout)
 }
