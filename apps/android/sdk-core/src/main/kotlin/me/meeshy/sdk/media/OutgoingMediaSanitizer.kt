@@ -36,8 +36,8 @@ import me.meeshy.sdk.net.NetworkResult
  * WebM ([MatroskaMetadataScrubber]), MP3 ([Mp3MetadataScrubber]), WAV/AIFF/CAF ([ChunkedAudioMetadataScrubber]) et FLAC
  * ([FlacMetadataScrubber]) perdent leurs métadonnées sans réencodage ni déplacement d'octet, la sortie se revérifie
  * (stabilité + aucune signature de lieu, [MediaLocationSignatures]) ; un conteneur illisible ou inconnu ÉCHOUE
- * ([MEDIA_REFUSED_CODE]). Un fichier qui n'est ni une image ni un média connu ne part inchangé que s'il ne porte aucune
- * signature de lieu ; sinon, il est refusé aussi.
+ * ([MEDIA_REFUSED_CODE]). Un fichier qui n'est ni une image ni un média connu (PDF, Office, texte, CSV, archive…) est un DOCUMENT : il part TEL QUEL,
+ * jamais balayé ni refusé (#13591, décision porteur #13552 : on ne retire le lieu que des médias, reconnus à leurs octets).
  *
  * **Une vidéo ou un son ne se charge JAMAIS en mémoire** (#13551) : il se lit par position ([MediaBytes]), le plan du nettoyeur
  * ([MediaPlan]) s'écrit EN FLUX dans une copie du cache privé ([scratch]), et cette copie se revérifie en flux (stabilité,
@@ -80,7 +80,6 @@ public class OutgoingMediaSanitizer internal constructor(
             null -> when {
                 format != ImageSourceFormat.UNKNOWN || mayBeAnImage(item, head) ->
                     image(item.loaded(), format)?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
-                MediaLocationSignatures.foundIn(media) -> mediaRefused()
                 else -> NetworkResult.Success(item)
             }
             else -> media(item, media, container)?.let { NetworkResult.Success(it) } ?: mediaRefused()
@@ -142,7 +141,7 @@ public class OutgoingMediaSanitizer internal constructor(
      * M4A), Matroska (WebM), MP3, WAV, AIFF, CAF et FLAC se réécrivent sans réencodage ; un conteneur reconnu qu'on ne sait pas
      * réécrire (AVI, RF64/BW64, RIFX, Ogg, AMR, Sun AU, MPEG-TS, ou un des précédents illisible), et tout fichier qui se DÉCLARE `video/…` ou `audio/…`, est refusé — on ne
      * sait pas prouver qu'il ne porte pas de lieu. `null` : ce n'est pas un média connu ; une image suit son chemin, tout
-     * autre fichier ne part que s'il ne porte aucune signature de lieu.
+     * autre fichier est un document et part inchangé.
      */
     private fun mediaContainer(item: MediaUploadItem, media: MediaBytes, head: ByteArray, format: ImageSourceFormat): MediaContainer? = when {
         format == ImageSourceFormat.HEIC -> MediaContainer.ISO.takeIf { isClearlyNotAnImage(item, media) }
