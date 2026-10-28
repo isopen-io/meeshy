@@ -266,7 +266,7 @@ class TusUploadRepositoryTest {
         coEvery { api.uploadData(any(), any(), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
@@ -284,7 +284,7 @@ class TusUploadRepositoryTest {
         coEvery { api.uploadData(any(), capture(finalOffset), any(), capture(finalBody)) } returns
             finishResponse(MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn/pm1.jpg"))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(chunkOffsets).containsExactly(0L, 10L).inOrder()
@@ -298,7 +298,7 @@ class TusUploadRepositoryTest {
         coEvery { api.uploadChunk(any(), any(), any(), any()) } returns
             Response.error(409, "offset mismatch".toResponseBody("text/plain".toMediaTypeOrNull()))
 
-        val bigItem = MediaUploadItem(bytes = ByteArray(25) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        val bigItem = MediaUploadItem(bytes = videoBytes(25), fileName = "video.mp4", mimeType = "video/mp4")
         val result = repository().upload(bigItem, TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
@@ -310,7 +310,13 @@ class TusUploadRepositoryTest {
     // already-acknowledged chunks instead of restarting from byte zero ---
 
     private fun bigItem(bytes: Int = 25) =
-        MediaUploadItem(bytes = ByteArray(bytes) { it.toByte() }, fileName = "video.mp4", mimeType = "video/mp4")
+        MediaUploadItem(bytes = videoBytes(bytes), fileName = "video.mp4", mimeType = "video/mp4")
+
+    /** Une vidéo lisible de [size] octets (une seule boîte `mdat`) : des octets quelconques déclarés vidéo seraient refusés (#13543). */
+    private fun videoBytes(size: Int): ByteArray =
+        java.nio.ByteBuffer.allocate(size).putInt(size).put("mdat".toByteArray(Charsets.ISO_8859_1)).array().also { bytes ->
+            (8 until size).forEach { bytes[it] = it.toByte() }
+        }
 
     @Test
     fun `a single-chunk upload never persists intermediate progress via upsert`() = runTest {
