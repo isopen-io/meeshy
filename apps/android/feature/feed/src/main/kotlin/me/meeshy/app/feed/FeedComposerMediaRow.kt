@@ -65,6 +65,7 @@ internal fun MediaAttachmentsRow(
     onRecordVoice: () -> Unit,
     onAddLocation: () -> Unit,
     onRemove: (String) -> Unit,
+    showAddTiles: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -74,6 +75,8 @@ internal fun MediaAttachmentsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val attachEnabled = canAddMore && !isUploading
+        // On the plateau the doors live in the rails: the row then only SHOWS what is attached.
+        if (showAddTiles) {
         AttachTile(MeeshyIcons.PhotoFilled, stringResource(R.string.feed_composer_attach_media), attachEnabled, onAdd)
         AttachTile(MeeshyIcons.Camera, stringResource(R.string.feed_composer_take_photo), attachEnabled, onCamera)
         AttachTile(MeeshyIcons.Video, stringResource(R.string.feed_composer_take_video), attachEnabled, onVideoCapture)
@@ -101,6 +104,7 @@ internal fun MediaAttachmentsRow(
                     tint = MeeshyPalette.Indigo500,
                 )
             }
+        }
         }
 
         media.forEach { item ->

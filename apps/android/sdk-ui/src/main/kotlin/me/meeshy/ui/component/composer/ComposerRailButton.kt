@@ -35,6 +35,21 @@ public fun ComposerRailButton(
     enabled: Boolean = true,
     active: Boolean = false,
 ) {
+    ComposerRailButton(label = label, onClick = onClick, modifier = modifier, enabled = enabled, active = active) { ink ->
+        Icon(imageVector = icon, contentDescription = null, tint = ink)
+    }
+}
+
+/** The same door with a glyph of its own (a language flag is text, not a vector); [glyph] receives the ink to use. */
+@Composable
+public fun ComposerRailButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    active: Boolean = false,
+    glyph: @Composable (ink: Color) -> Unit,
+) {
     Box(
         modifier = modifier
             .size(ComposerPlateauInk.HIT_TARGET_DP.dp)
@@ -48,10 +63,8 @@ public fun ComposerRailButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = when {
+        glyph(
+            when {
                 !enabled -> ComposerPlateauInk.secondary.copy(alpha = 0.4f)
                 active -> ComposerPlateauInk.accent
                 else -> ComposerPlateauInk.primary

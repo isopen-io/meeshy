@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.auth.LanguageStepSelection
+import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.formattedCoordinates
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
 import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
@@ -48,6 +49,7 @@ import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.launchWithCameraAccess
 import me.meeshy.ui.component.permission.rememberPermissionFlow
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -359,7 +361,37 @@ fun FeedComposerSheet(
         onUnavailable = { onMediaError(locationUnavailableMessage) },
     )
 
-    ModalBottomSheet(
+    if (LocalOnComposerPlateau.current) {
+        FeedComposerPlateau(
+            draft = draft,
+            attachedMedia = attachedMedia,
+            isUploading = isUploadingMedia,
+            isCapturingLocation = location.isCapturing,
+            voice = voice.session,
+            format = if (governingType == PostType.REEL) ComposerFormat.REEL else ComposerFormat.POST,
+            formatSlot = formatSlot,
+            showReelToggle = draft.qualifiesAsReel && governingType == null,
+            actions = PostPlateauActions(
+                onClose = onDismiss,
+                onPublish = { draft.publishRequest()?.let { request -> onPublish(request, draft) } },
+                onGallery = ::launchMediaPicker,
+                onCamera = { launchCapture(camera::photo) },
+                onVideo = { launchCapture(camera::video) },
+                onFile = ::launchFilePicker,
+                onVoice = ::requestVoiceRecording,
+                onCancelVoice = voice::cancel,
+                onFinishVoice = ::finishVoiceRecording,
+                onLocation = { if (draft.location != null) draft = draft.withoutLocation() else location.request() },
+                onLanguage = { showLanguagePicker = true },
+                onVisibility = { visibility -> draft = draft.withVisibility(visibility) },
+                onText = { value -> draft = draft.withText(value) },
+                onToggleReel = { draft = draft.withForcePlainPost(!draft.forcePlainPost) },
+                onRemoveMedia = ::removeMedia,
+                onAlt = { mediaId, text -> draft = draft.withAlt(mediaId, text) },
+                onRemoveLocation = { draft = draft.withoutLocation() },
+            ),
+        )
+    } else ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {

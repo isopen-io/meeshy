@@ -2,6 +2,7 @@ package me.meeshy.app.composer.host
 
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -16,6 +17,7 @@ import me.meeshy.app.feed.StatusComposerDraftsViewModel
 import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoryComposerContent
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 
 /**
  * UN composeur : la porte donne le format d'ouverture, le document (texte, médias, scène, audience) est UN, et le
@@ -53,7 +55,7 @@ fun ComposerHostScreen(
             onClose = onClose,
             titleContent = formatMenu,
         )
-        ComposerFormat.POST, ComposerFormat.REEL -> PostComposerContent(
+        ComposerFormat.POST, ComposerFormat.REEL -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { PostComposerContent(
             seedText = state.text,
             onFacts = { facts -> viewModel.onPostFacts(facts.text, facts.media) },
             onClose = onClose,
@@ -63,14 +65,14 @@ fun ComposerHostScreen(
             offerReel = state.offersReelForPost,
             onFormatChosen = viewModel::choose,
             viewModel = hiltViewModel<FeedViewModel>(shared),
-        )
-        ComposerFormat.STATUS -> MoodComposerContent(
+        ) }
+        ComposerFormat.STATUS -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { MoodComposerContent(
             seedText = state.text,
             onText = viewModel::onMoodFacts,
             onClose = onClose,
             formatSlot = formatMenu,
             viewModel = hiltViewModel<StatusesViewModel>(shared),
             drafts = hiltViewModel<StatusComposerDraftsViewModel>(shared),
-        )
+        ) }
     }
 }

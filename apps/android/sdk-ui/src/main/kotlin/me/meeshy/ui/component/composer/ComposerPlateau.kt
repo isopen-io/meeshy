@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -38,6 +40,13 @@ import me.meeshy.sdk.model.composer.ComposerRailGeometry
 import me.meeshy.sdk.model.composer.PullDownDismiss
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.PlateauTint
+
+/**
+ * True under the unified composer host: the sheets it mounts (post, mood) then draw themselves ON the plateau — rails in
+ * the corridors, card in the middle — instead of floating as a modal sheet. Elsewhere (feed shortcut, republish) the
+ * sheets keep their own presentation.
+ */
+public val LocalOnComposerPlateau: ProvidableCompositionLocal<Boolean> = compositionLocalOf { false }
 
 /**
  * The PLATEAU of the one composer (iOS `ComposerPlateau` + the rails of `MeeshyComposerHost`): a permanent dark tint,
