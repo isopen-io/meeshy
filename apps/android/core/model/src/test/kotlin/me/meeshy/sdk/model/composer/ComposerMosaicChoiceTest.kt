@@ -30,4 +30,26 @@ class ComposerMosaicChoiceTest {
             MosaicLayoutMode.WAVE, MosaicLayoutMode.SINE,
         ).inOrder()
     }
+
+    @Test
+    fun `the layouts unfold under Post only, as on iOS - a reel has none to choose`() {
+        assertThat(ComposerMosaicChoice.offered(3, ComposerFormat.POST)).isEqualTo(ComposerMosaicChoice.ordered)
+        assertThat(ComposerMosaicChoice.offered(3, ComposerFormat.REEL)).isEmpty()
+        assertThat(ComposerMosaicChoice.offered(1, ComposerFormat.POST)).isEmpty()
+        assertThat(ComposerMosaicChoice.offered(3, ComposerFormat.STORY)).isEmpty()
+    }
+
+    @Test
+    fun `the menu ticks the fallback until the author chooses`() {
+        assertThat(ComposerMosaicChoice.checked(null)).isEqualTo(MosaicLayoutMode.CAROUSEL)
+        assertThat(ComposerMosaicChoice.checked(MosaicLayoutMode.HERO)).isEqualTo(MosaicLayoutMode.HERO)
+    }
+
+    @Test
+    fun `the publication writes the armed layout only where the control was offered`() {
+        assertThat(ComposerMosaicChoice.published(MosaicLayoutMode.WAVE, 3, ComposerFormat.POST)).isEqualTo(MosaicLayoutMode.WAVE)
+        assertThat(ComposerMosaicChoice.published(MosaicLayoutMode.WAVE, 1, ComposerFormat.POST)).isNull()
+        assertThat(ComposerMosaicChoice.published(MosaicLayoutMode.WAVE, 3, ComposerFormat.REEL)).isNull()
+        assertThat(ComposerMosaicChoice.published(null, 3, ComposerFormat.POST)).isNull()
+    }
 }

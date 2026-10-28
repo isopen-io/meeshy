@@ -15,6 +15,12 @@
     <string name="composer_format_reel">ريل</string>
     <string name="composer_format_status">مزاج</string>
     <string name="composer_format_story">قصة</string>
+    <string name="composer_mosaic_carousel">صورة تلو الأخرى</string>
+    <string name="composer_mosaic_hero">واحدة كبيرة والبقية بجانبها</string>
+    <string name="composer_mosaic_reel">تمرير متواصل</string>
+    <string name="composer_mosaic_section">تخطيط المشاهد</string>
+    <string name="composer_mosaic_sine">متعرّج</string>
+    <string name="composer_mosaic_wave">متموّج</string>
     <string name="composer_publish_menu_a11y_hint">يفتح اختيار التنسيق والتخطيط</string>
     <string name="composer_publish_menu_title">النشر بصفة</string>
 </resources>

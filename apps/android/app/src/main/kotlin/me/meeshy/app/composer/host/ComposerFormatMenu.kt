@@ -1,5 +1,12 @@
 package me.meeshy.app.composer.host
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,14 +29,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.R
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerMosaicChoice
 import me.meeshy.sdk.model.composer.FormatVerdict
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshySpacing
@@ -46,9 +59,13 @@ fun ComposerFormatMenu(
     verdicts: List<FormatVerdict>,
     onChoose: (ComposerFormat) -> Unit,
     modifier: Modifier = Modifier,
+    layouts: List<MosaicLayoutMode> = emptyList(),
+    armedLayout: MosaicLayoutMode? = null,
+    onChooseLayout: (MosaicLayoutMode) -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val hasMenu = verdicts.size > 1
+    val haptics = rememberMeeshyHaptics()
+    val hasMenu = verdicts.size > 1 || layouts.isNotEmpty()
     val hint = stringResource(R.string.composer_publish_menu_a11y_hint)
     val onPlateau = LocalOnComposerPlateau.current
     val ink = if (onPlateau) ComposerPlateauInk.primary else MeeshyTheme.tokens.textPrimary
@@ -81,6 +98,50 @@ fun ComposerFormatMenu(
                     onChoose(verdict.format)
                 }
             }
+            AnimatedVisibility(
+                visible = layouts.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                LayoutSection(layouts, ComposerMosaicChoice.checked(armedLayout)) { mode ->
+                    haptics.selection()
+                    open = false
+                    onChooseLayout(mode)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * « Disposition des scènes » (iOS `ComposerPublishMenu`, sous-menu de Post) : cinq entrées, le repli d'abord, la
+ * disposition armée — ou, tant que l'auteur n'a rien choisi, le repli que la publication applique — cochée. Le glyphe
+ * dessine la géométrie du mode.
+ */
+@Composable
+private fun LayoutSection(layouts: List<MosaicLayoutMode>, checked: MosaicLayoutMode, onPick: (MosaicLayoutMode) -> Unit) {
+    Column {
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.composer_mosaic_section),
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs).semantics { heading() },
+        )
+        layouts.forEach { mode ->
+            val label = stringResource(ComposerFormatCopy.layoutLabel(mode))
+            val isChecked = mode == checked
+            DropdownMenuItem(
+                onClick = { onPick(mode) },
+                modifier = Modifier.semantics { selected = isChecked; role = Role.RadioButton },
+                leadingIcon = { Icon(ComposerFormatCopy.layoutIcon(mode), contentDescription = null) },
+                text = { Text(label, style = MaterialTheme.typography.bodyLarge) },
+                trailingIcon = {
+                    AnimatedVisibility(visible = isChecked, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                        Icon(MeeshyIcons.Check, contentDescription = null)
+                    }
+                },
+            )
         }
     }
 }

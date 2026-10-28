@@ -26,4 +26,21 @@ object ComposerMosaicChoice {
     )
 
     val fallback: MosaicLayoutMode get() = MosaicLayoutMode.FALLBACK
+
+    /**
+     * The layouts the format menu unfolds — iOS `ComposerPublishMenuRule.entries`: under Post only (a reel is one clip after
+     * another, it has no layout to choose), and only where [isServed]. Empty means no section at all.
+     */
+    fun offered(slideCount: Int, format: ComposerFormat): List<MosaicLayoutMode> =
+        if (format == ComposerFormat.POST && isServed(slideCount, format)) ordered else emptyList()
+
+    /** The entry the menu ticks: the armed layout, or — until the author chooses — the fallback the publication applies. */
+    fun checked(armed: MosaicLayoutMode?): MosaicLayoutMode = armed ?: fallback
+
+    /**
+     * What the publication writes (`storyEffects.layout`): the armed layout, and only where the control was offered — the
+     * same rule the control reads, so a layout the author no longer sees (a media removed, the format changed) never travels.
+     */
+    fun published(armed: MosaicLayoutMode?, slideCount: Int, format: ComposerFormat): MosaicLayoutMode? =
+        armed?.takeIf { it in offered(slideCount, format) }
 }

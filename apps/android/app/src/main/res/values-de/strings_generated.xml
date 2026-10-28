@@ -15,6 +15,12 @@
     <string name="composer_format_reel">Reel</string>
     <string name="composer_format_status">Mood</string>
     <string name="composer_format_story">Story</string>
+    <string name="composer_mosaic_carousel">Bild für Bild</string>
+    <string name="composer_mosaic_hero">Eine große, die anderen daneben</string>
+    <string name="composer_mosaic_reel">Durchgehendes Scrollen</string>
+    <string name="composer_mosaic_section">Anordnung der Szenen</string>
+    <string name="composer_mosaic_sine">Im Zickzack</string>
+    <string name="composer_mosaic_wave">In Wellen</string>
     <string name="composer_publish_menu_a11y_hint">Öffnet die Auswahl von Format und Anordnung</string>
     <string name="composer_publish_menu_title">Veröffentlichen als</string>
 </resources>

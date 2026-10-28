@@ -77,4 +77,37 @@ class PostStoryEffectsWireSerializerTest {
         assertThat(wire(null).keys).isEmpty()
         assertThat(wire(StoryEffects())["storyEffects"]).isEqualTo(JsonObject(emptyMap()))
     }
+
+    @Test
+    fun `a layout travels in the v3 document next to the background, as iOS writes canvasV3 layout`() {
+        val document = wire(StoryEffects(background = "302B63", layout = MosaicLayoutMode.HERO))["storyEffects"]!!.jsonObject
+
+        assertThat(document["v"]!!.jsonPrimitive.int).isEqualTo(3)
+        assertThat(document["layout"]!!.jsonPrimitive.content).isEqualTo("hero")
+        assertThat(document["scenes"]!!.jsonArray).hasSize(1)
+    }
+
+    @Test
+    fun `a layout alone is a v3 document with no scene, which the gateway schema allows`() {
+        val document = wire(StoryEffects(layout = MosaicLayoutMode.WAVE))["storyEffects"]!!.jsonObject
+
+        assertThat(document["v"]!!.jsonPrimitive.int).isEqualTo(3)
+        assertThat(document["layout"]!!.jsonPrimitive.content).isEqualTo("wave")
+        assertThat(document.keys).doesNotContain("scenes")
+    }
+
+    @Test
+    fun `read back, the document gives the post its layout again and every wire value is one of the five`() {
+        MosaicLayoutMode.entries.forEach { mode ->
+            val text = json.encodeToString(Body(StoryEffects(layout = mode)))
+            assertThat(json.decodeFromString<Body>(text).storyEffects?.layout).isEqualTo(mode)
+        }
+    }
+
+    @Test
+    fun `a layout beside richer effects keeps the v1 wire, nothing is lost in translation`() {
+        val effects = StoryEffects(layout = MosaicLayoutMode.SINE, textObjects = listOf(StoryTextObject(id = "t", text = "x", x = 0.5, y = 0.5)))
+
+        assertThat(wire(effects)["storyEffects"]!!.jsonObject.keys).doesNotContain("v")
+    }
 }
