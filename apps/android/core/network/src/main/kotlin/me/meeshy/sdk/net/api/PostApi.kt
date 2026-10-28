@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.PublicationModerationReceipt
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.PostStoryEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -56,8 +57,8 @@ data class CreatePostRequest(
     val mediaAlt: Map<String, String>? = null,
     /** Audience restreinte (`EXCEPT` / `ONLY`) : les ids concernés. */
     val visibilityUserIds: List<String>? = null,
-    /** Scène composée (v1 + canvas v3), absente d'un post sans scène. */
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    /** Scène composée (v1 + canvas v3), absente d'un post sans scène ; un fond seul part en v3 comme iOS (#13575). */
+    @Serializable(with = PostStoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val allowSoundExtraction: Boolean? = null,
     /** `null` = ne rien déclarer ; jamais `[]` (ne pas effacer). */

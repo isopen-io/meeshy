@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.PostEditPayload
 import me.meeshy.sdk.model.PostLocationUpdate
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.net.MeeshyApi
 import org.junit.Test
 
@@ -80,5 +81,23 @@ class PostApiRequestSerializationTest {
     fun `an empty mentions list on edit is kept as the clear gesture`() {
         val body = json.parseToJsonElement(json.encodeToString(PostEditDraft(mentions = emptyList()).toUpdateRequest())).jsonObject
         assertThat(body.keys).containsExactly("mentions")
+    }
+
+    @Test
+    fun `a post with a background publishes the v3 scene document and an old story keeps its v1 wire`() {
+        val post = wire(CreatePostRequest(content = "x", storyEffects = StoryEffects(background = "302B63")))["storyEffects"]!!.jsonObject
+        assertThat(post["v"].toString()).isEqualTo("3")
+        assertThat(post.keys).doesNotContain("background")
+
+        val story = json.parseToJsonElement(json.encodeToString(CreateStoryRequest(storyEffects = StoryEffects(background = "302B63"))))
+            .jsonObject["storyEffects"]!!.jsonObject
+        assertThat(story.keys).doesNotContain("v")
+    }
+
+    @Test
+    fun `the outbox reads back the colour of the post it parked`() {
+        val parked = json.encodeToString(CreatePostRequest(content = "x", storyEffects = StoryEffects(background = "302B63")))
+
+        assertThat(json.decodeFromString<CreatePostRequest>(parked).storyEffects?.background).isEqualTo("302B63")
     }
 }
