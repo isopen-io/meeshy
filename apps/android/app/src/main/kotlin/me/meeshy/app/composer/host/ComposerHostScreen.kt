@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModelStoreOwner
@@ -18,6 +19,8 @@ import me.meeshy.app.feed.StatusComposerDraftsViewModel
 import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoryComposerContent
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.ui.component.composer.HostedSelection
+import me.meeshy.ui.component.composer.LocalHostedSelection
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 
 /**
@@ -53,7 +56,8 @@ fun ComposerHostScreen(
     val formatMenu: @Composable () -> Unit = {
         ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
     }
-    when (state.selectedFormat) {
+    val hostedSelection = remember(viewModel) { HostedSelection(initial = { viewModel.selection }, onChange = viewModel::onSelection) }
+    CompositionLocalProvider(LocalHostedSelection provides hostedSelection) { when (state.selectedFormat) {
         ComposerFormat.STORY -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { StoryComposerContent(
             seedText = state.text,
             onFacts = viewModel::onStoryFacts,
@@ -88,5 +92,5 @@ fun ComposerHostScreen(
             viewModel = hiltViewModel<StatusesViewModel>(shared),
             drafts = hiltViewModel<StatusComposerDraftsViewModel>(shared),
         ) }
-    }
+    } }
 }

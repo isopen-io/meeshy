@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
 import me.meeshy.sdk.model.composer.ComposerProfile
+import me.meeshy.sdk.model.composer.ComposerTextSelection
 import me.meeshy.sdk.model.composer.sceneOpening
 import javax.inject.Inject
 
@@ -57,6 +58,18 @@ class ComposerHostViewModel @Inject constructor(
 
     fun onKeyboardRaised() {
         saved[KEYBOARD_OWED_KEY] = false
+    }
+
+    /**
+     * Le curseur et la sélection du texte du document, là où l'auteur les a laissés : la bascule démonte une surface et en
+     * monte une autre, qui les reprend au montage (iOS : le document garde son état d'édition). Ce n'est PAS de l'état
+     * observé — chaque déplacement du curseur réveillerait tout l'hôte pendant la frappe — mais une valeur lue au montage.
+     */
+    var selection: ComposerTextSelection = ComposerTextSelection.AT_END
+        private set
+
+    fun onSelection(value: ComposerTextSelection) {
+        selection = value
     }
 
     private val _seed = MutableStateFlow<SeedState>(if (door.origin === ComposerOrigin.Share) SeedState.Loading else SeedState.None)

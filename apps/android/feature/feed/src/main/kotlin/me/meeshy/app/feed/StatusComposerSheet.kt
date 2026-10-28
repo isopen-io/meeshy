@@ -56,6 +56,7 @@ import me.meeshy.sdk.model.composer.PublicationControl
 import me.meeshy.sdk.model.composer.PublicationControlPlace
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
+import me.meeshy.ui.component.composer.rememberHostedTextField
 import me.meeshy.ui.component.composer.ComposerRailButton
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.icons.MeeshyIcons
@@ -412,9 +413,10 @@ private fun TextInput(
     focusRequester: FocusRequester? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        val field = rememberHostedTextField(draft.text, onTextChange)
         OutlinedTextField(
-            value = draft.text,
-            onValueChange = onTextChange,
+            value = field.value,
+            onValueChange = field.onValueChange,
             modifier = Modifier.fillMaxWidth().then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             placeholder = { Text(stringResource(R.string.status_composer_placeholder)) },
             singleLine = true,

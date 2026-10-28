@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import androidx.compose.foundation.layout.ColumnScope
+import me.meeshy.ui.component.composer.rememberHostedTextField
 
 /** The scene of the story composer: the canvas and the long-press menu of its background media. */
 @Composable
@@ -156,9 +157,10 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
             }
             // The slide CAPTION only: a text object is written on the scene itself
             // (ComposerInlineTextField), so this field never silently changes role.
+            val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
             OutlinedTextField(
-                value = state.editorText,
-                onValueChange = viewModel::onTextChange,
+                value = caption.value,
+                onValueChange = caption.onValueChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.stories_composer_text_caption)) },
                 placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },

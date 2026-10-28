@@ -52,6 +52,7 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailButton
+import me.meeshy.ui.component.composer.rememberHostedTextField
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
@@ -169,9 +170,10 @@ private fun PostCard(
             .padding(MeeshySpacing.lg),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
+        val field = rememberHostedTextField(draft.text, actions.onText)
         OutlinedTextField(
-            value = draft.text,
-            onValueChange = actions.onText,
+            value = field.value,
+            onValueChange = field.onValueChange,
             modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
             placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
             minLines = 6,
