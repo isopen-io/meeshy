@@ -8,6 +8,7 @@ import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -149,11 +150,12 @@ internal class MessageSendCoordinator(
 
     /**
      * The outbox exhausted its retries — surface the bubble as retryable. A send refused because a media's
-     * location cannot be removed ([MediaLocationRefusal], #13550) keeps that reason on the bubble, which says it.
+     * location cannot be removed ([MediaLocationRefusal], #13550), or whose media was lost on the device ([MediaLoss], #13554),
+     * keeps that reason on the bubble, which says it.
      */
     suspend fun markSendFailed(cmid: String, reason: String? = null) {
         val row = messageDao.find(cmid)
-        if (row == null || !MediaLocationRefusal.isReason(reason)) {
+        if (row == null || !isDefinitive(reason)) {
             messageDao.updateSendState(cmid, LocalSendState.FAILED.name)
             return
         }
@@ -163,12 +165,12 @@ internal class MessageSendCoordinator(
     /**
      * User-initiated retry of a failed bubble: flips it back to `SENDING` and
      * revives its outbox row (or re-enqueues from the cached payload when the
-     * row is gone). A bubble refused for its location is never retried — the same bytes would be refused
+     * row is gone). A bubble refused for its location, or whose media was lost (#13554), is never retried — the same bytes would be refused
      * again: the tap REMOVES it (bubble and outbox row), so the author can pick another file (#13550).
      */
     suspend fun retrySend(cmid: String) {
         val row = messageDao.find(cmid) ?: return
-        if (MediaLocationRefusal.isReason(row.lastError)) {
+        if (isDefinitive(row.lastError)) {
             outboxRepository.discard(cmid)
             messageDao.deleteByIds(listOf(cmid))
             return
@@ -202,4 +204,6 @@ internal class MessageSendCoordinator(
             ),
         )
     }
+
+    private fun isDefinitive(reason: String?): Boolean = MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason)
 }

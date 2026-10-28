@@ -224,7 +224,7 @@ private fun BubbleBody(
             },
     ) {
         val isFailed = content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed
-        BubbleFailedRetryEdge(isFailed = isFailed, isLocationRefused = content.isLocationRefused, onColor = onColor, onRetry = callbacks.onRetry) {
+        BubbleFailedRetryEdge(isFailed = isFailed, failure = BubbleFailure.of(content), onColor = onColor, onRetry = callbacks.onRetry) {
         BubbleBodyFooterLayout(
             body = {
                 // iOS : le corps est rembourré 14 × 10 (BubbleStandardLayout+TextBubble).
@@ -271,13 +271,13 @@ private val RetryBandWidth = 34.dp
 /**
  * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 34 dp INTÉGRÉE au bord
  * droit de la bulle (rognée par son coin arrondi), le contenu décalé d'autant pour que l'heure
- * reste lisible ; un tap renvoie. Refusé pour le lieu d'un fichier (#13550), la bulle le dit et le tap la retire.
+ * reste lisible ; un tap renvoie. Refusé pour le lieu d'un fichier (#13550) ou média perdu (#13554), la bulle le dit et le tap la retire.
  * Sans échec, le contenu passe tel quel.
  */
 @Composable
 private fun BubbleFailedRetryEdge(
     isFailed: Boolean,
-    isLocationRefused: Boolean,
+    failure: BubbleFailure,
     onColor: Color,
     onRetry: (() -> Unit)?,
     content: @Composable () -> Unit,
@@ -286,12 +286,13 @@ private fun BubbleFailedRetryEdge(
         content()
         return
     }
-    val label = BubbleFailedTap.label(isLocationRefused)
+    val label = BubbleFailedTap.label(failure)
     Box {
         Column(modifier = Modifier.padding(end = RetryBandWidth)) {
             content()
-            if (isLocationRefused) {
-                BubbleLocationRefusalCaption(
+            if (failure.removes) {
+                BubbleFailureCaption(
+                    failure = failure,
                     color = onColor,
                     modifier = Modifier.padding(start = MeeshySpacing.mdPlus, end = MeeshySpacing.mdPlus, bottom = MeeshySpacing.sm),
                 )
@@ -308,7 +309,7 @@ private fun BubbleFailedRetryEdge(
                 .semantics { contentDescription = label },
         ) {
             Icon(
-                imageVector = BubbleFailedTap.icon(isLocationRefused),
+                imageVector = BubbleFailedTap.icon(failure),
                 contentDescription = null,
                 tint = MeeshyPalette.White,
                 modifier = Modifier.size(16.dp),

@@ -21,6 +21,9 @@ import me.meeshy.sdk.outbox.SendResult
  *   ([OutgoingMediaSanitizer.REFUSED_CODE], [OutgoingMediaSanitizer.MEDIA_REFUSED_CODE]) →
  *   [SendResult.PermanentFailure]: the same bytes are refused on every retry, so the row is
  *   failed at once instead of being replayed until the attempts run out (#13543).
+ * - the held bytes **no longer read** ([OutgoingMediaSanitizer.UNREADABLE_CODE]: altered, or sealed under a key lost
+ *   with the process) → [SendResult.PermanentFailure] with the same reason as a gone blob ([MediaLoss], #13554): a
+ *   retry would read the same unreadable file.
  * - the upload **fails transiently** (offline, 5xx) → [SendResult.TransientFailure]:
  *   the lane stops and WorkManager retries with the bytes still durably held.
  * - the upload **succeeds but yields no usable media** → [SendResult.PermanentFailure]:
@@ -42,8 +45,11 @@ object MediaUploadSender {
     ): SendResult {
         if (item == null) return SendResult.PermanentFailure(REASON_BLOB_GONE)
         return when (val result = upload(item)) {
-            is NetworkResult.Failure ->
-                if (result.error.code in LOCATION_REFUSALS) SendResult.PermanentFailure(REASON_LOCATION_NOT_REMOVABLE) else SendResult.TransientFailure
+            is NetworkResult.Failure -> when (result.error.code) {
+                in LOCATION_REFUSALS -> SendResult.PermanentFailure(REASON_LOCATION_NOT_REMOVABLE)
+                OutgoingMediaSanitizer.UNREADABLE_CODE -> SendResult.PermanentFailure(REASON_BLOB_GONE)
+                else -> SendResult.TransientFailure
+            }
             is NetworkResult.Success -> {
                 val producedId = result.data.firstOrNull()?.id
                 if (producedId.isNullOrBlank()) {

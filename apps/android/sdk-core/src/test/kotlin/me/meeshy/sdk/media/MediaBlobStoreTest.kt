@@ -76,6 +76,24 @@ class MediaBlobStoreTest {
     }
 
     @Test
+    fun `a blob sealed under a key held in memory only reads as gone after a restart, never as present`() = runTest {
+        store.put("c1", item(bytes = ByteArray(5_000) { 4 }))
+        val afterRestart = MediaBlobStore(db.mediaBlobDao(), MediaBlobFiles(directory) { StreamingSeal.ephemeral() })
+
+        assertThat(afterRestart.has("c1")).isFalse()
+        assertThat(afterRestart.get("c1")).isNull()
+        assertThat(store.has("c1")).isTrue()
+    }
+
+    @Test
+    fun `a held row whose sealed file is gone reads as gone`() = runTest {
+        store.put("c1", item())
+        directory.listFiles()!!.forEach { it.delete() }
+
+        assertThat(store.has("c1")).isFalse()
+    }
+
+    @Test
     fun `has turns false once the blob is removed`() = runTest {
         store.put("c1", item())
         store.remove("c1")

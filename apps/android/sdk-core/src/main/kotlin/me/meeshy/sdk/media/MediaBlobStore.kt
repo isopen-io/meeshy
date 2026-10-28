@@ -89,10 +89,11 @@ class MediaBlobStore internal constructor(
     }
 
     /**
-     * Whether a blob is still held for [cmid] — a cheap existence check that never loads the octets, so an
-     * availability probe over many queued uploads (the story draft restore reconciler) costs a boolean per id.
+     * Whether [cmid]'s octets can still be SENT (#13554): a row is held AND its sealed file exists and opens under the
+     * current key for the signed-in account. A file sealed under a key kept in memory only (Keystore unusable) no longer
+     * opens after a restart: it reads as gone, never as present. Reads one segment, never the media.
      */
-    suspend fun has(cmid: String): Boolean = mediaBlobDao.exists(cmid)
+    suspend fun has(cmid: String): Boolean = get(cmid) != null
 
     /** The account a write begun now belongs to (#13555) — `null` when this store is not fenced. */
     fun ticket(): AccountTicket? = fence?.ticket()

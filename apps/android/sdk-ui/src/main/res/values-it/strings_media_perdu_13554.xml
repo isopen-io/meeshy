@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_media_lost">Non inviato: questo file non è più disponibile su questo dispositivo. Tocca per rimuoverlo, poi sceglilo di nuovo.</string>
+</resources>

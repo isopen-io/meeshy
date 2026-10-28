@@ -2,6 +2,7 @@ package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 
@@ -187,14 +188,17 @@ public class OutboxDrainer(
 
     /**
      * Ce que dit un dépendant dont un prérequis a échoué : un média refusé pour son lieu (#13550) se transmet tel quel — la
-     * bulle, la publication non envoyée le disent, et ne proposent pas un nouvel essai voué au même refus ; sinon, la liste.
+     * bulle, la publication non envoyée le disent, et ne proposent pas un nouvel essai voué au même refus ; un média perdu sur
+     * l'appareil ([MediaLoss], #13554) de même ; sinon, la liste.
      */
-    private suspend fun cascadeReason(failed: List<String>): String =
-        if (failed.any { MediaLocationRefusal.isReason(outbox.row(it)?.lastError) }) {
-            MediaLocationRefusal.REASON
-        } else {
-            "Prerequisite(s) failed: ${failed.joinToString()}"
+    private suspend fun cascadeReason(failed: List<String>): String {
+        val reasons = failed.map { outbox.row(it)?.lastError }
+        return when {
+            reasons.any(MediaLocationRefusal::isReason) -> MediaLocationRefusal.REASON
+            reasons.any(MediaLoss::isReason) -> MediaLoss.REASON
+            else -> "Prerequisite(s) failed: ${failed.joinToString()}"
         }
+    }
 
     /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
     private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
