@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="slide_rail_delete_confirm_title">¿Eliminar esta escena?</string>
+    <string name="slide_rail_delete_confirm_action">Eliminar</string>
+    <string name="slide_rail_delete_cancel">Cancelar</string>
+</resources>

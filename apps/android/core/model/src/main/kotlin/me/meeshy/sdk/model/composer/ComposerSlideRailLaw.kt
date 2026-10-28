@@ -21,11 +21,6 @@ enum class ComposerSceneAddition {
     }
 }
 
-/** Deleting a scene destroys its content: it asks first only when there is something to lose. */
-object ComposerSlideDeletion {
-    fun needsConfirmation(holdsMatter: Boolean): Boolean = holdsMatter
-}
-
 /** The haptic cadence of a tile dragged along the rail: one tick each time it crosses into another slot. */
 object ComposerSlideDrag {
     fun ticks(previousTarget: Int, target: Int): Boolean = previousTarget != target

@@ -32,12 +32,6 @@ class ComposerSlideRailLawTest {
     }
 
     @Test
-    fun `removing a scene asks first only when it holds something`() {
-        assertThat(ComposerSlideDeletion.needsConfirmation(holdsMatter = true)).isTrue()
-        assertThat(ComposerSlideDeletion.needsConfirmation(holdsMatter = false)).isFalse()
-    }
-
-    @Test
     fun `a drag ticks once per slot crossed and not before`() {
         assertThat(ComposerSlideDrag.ticks(previousTarget = 1, target = 1)).isFalse()
         assertThat(ComposerSlideDrag.ticks(previousTarget = 1, target = 2)).isTrue()
