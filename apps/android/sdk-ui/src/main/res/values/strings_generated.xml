@@ -175,6 +175,9 @@
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Trim</string>
     <string name="settings_info_button_label">Learn more about %s</string>
+    <string name="slide_rail_delete_cancel">Cancel</string>
+    <string name="slide_rail_delete_confirm_action">Delete</string>
+    <string name="slide_rail_delete_confirm_title">Delete this scene?</string>
     <string name="sticker_sheet_close">Close</string>
     <string name="sticker_sheet_favorites_empty">Long-press a decoration to pin it here.</string>
     <string name="sticker_sheet_instants_lieu">Places</string>

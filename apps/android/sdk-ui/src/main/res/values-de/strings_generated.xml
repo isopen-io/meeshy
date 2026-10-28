@@ -175,6 +175,9 @@
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Kürzen</string>
     <string name="settings_info_button_label">Mehr über %s erfahren</string>
+    <string name="slide_rail_delete_cancel">Abbrechen</string>
+    <string name="slide_rail_delete_confirm_action">Löschen</string>
+    <string name="slide_rail_delete_confirm_title">Diese Szene löschen?</string>
     <string name="sticker_sheet_close">Schließen</string>
     <string name="sticker_sheet_favorites_empty">Halte eine Dekoration gedrückt, um sie hier anzuheften.</string>
     <string name="sticker_sheet_instants_lieu">Orte</string>

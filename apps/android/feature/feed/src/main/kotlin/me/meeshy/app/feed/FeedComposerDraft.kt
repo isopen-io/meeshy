@@ -43,6 +43,8 @@ data class FeedPostPublishRequest(
     val mediaCaption: Map<String, String> = emptyMap(),
     /** The scene's background (hex without `#`), `null` for a post without a scene — published as its `storyEffects`. */
     val background: String? = null,
+    /** The attached media as the composer holds them — what a post of several photos turns into one scene each (#13612). */
+    val media: List<UploadedMedia> = emptyList(),
 )
 
 /**
@@ -232,6 +234,7 @@ data class FeedComposerDraft(
             mediaAlt = mediaAlt.filterKeys { it in mediaIds },
             mediaCaption = if (postType == PostType.POST) mediaCaption.filterKeys { it in mediaIds } else emptyMap(),
             background = background,
+            media = media,
         )
     }
 

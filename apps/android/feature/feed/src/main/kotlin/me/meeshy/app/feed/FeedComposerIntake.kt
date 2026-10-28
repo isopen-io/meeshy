@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaUploadImageSize
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.UploadedMedia
@@ -107,7 +108,10 @@ internal fun rememberFeedComposerIntake(
                 when {
                     MediaLocationRefusal.isCode(result.error.code) -> reportError(locationRefusedMessage)
                     enqueue == null -> reportError(result.error.message ?: unusableMessage)
-                    else -> state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index)) })
+                    else -> {
+                        val sizes = withContext(Dispatchers.IO) { items.map(MediaUploadImageSize::of) }
+                        state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index), sizes[index]) })
+                    }
                 }
             }
         }

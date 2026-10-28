@@ -178,6 +178,9 @@
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Recortar</string>
     <string name="settings_info_button_label">Más información sobre %s</string>
+    <string name="slide_rail_delete_cancel">Cancelar</string>
+    <string name="slide_rail_delete_confirm_action">Eliminar</string>
+    <string name="slide_rail_delete_confirm_title">¿Eliminar esta escena?</string>
     <string name="sticker_sheet_close">Cerrar</string>
     <string name="sticker_sheet_favorites_empty">Mantén pulsada una decoración para fijarla aquí.</string>
     <string name="sticker_sheet_instants_lieu">Lugares</string>
