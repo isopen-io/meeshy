@@ -53,6 +53,7 @@ class StoryRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
+    fence: me.meeshy.sdk.session.AccountFence? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -60,6 +61,7 @@ class StoryRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         storyApi = storyApi,
         clock = SystemCacheClock,
+        fence = fence,
     )
 
     /**
@@ -85,7 +87,7 @@ class StoryRepository @Inject constructor(
      * published story on success). The next revalidation stays authoritative.
      */
     suspend fun adoptPublished(story: ApiPost) {
-        cacheSource.upsertLocal(story)
+        cacheSource.upsertLocal(story, cacheSource.ticket())
     }
 
     /**
@@ -97,8 +99,9 @@ class StoryRepository @Inject constructor(
      * whether the cache changed.
      */
     suspend fun adoptAnnounced(story: ApiPost): Boolean {
+        val ticket = cacheSource.ticket()
         if (cacheSource.findLocal(story.id) != null) return false
-        cacheSource.upsertLocal(story)
+        cacheSource.upsertLocal(story, ticket)
         return true
     }
 
@@ -109,7 +112,7 @@ class StoryRepository @Inject constructor(
      * for the Room-backed tray. Port of iOS `StoryViewModel.storyDeleted → purgeDeadStories`.
      */
     suspend fun removeCachedStory(storyId: String) {
-        cacheSource.deleteLocal(storyId)
+        cacheSource.deleteLocal(storyId, cacheSource.ticket())
     }
 
     /**
@@ -126,10 +129,11 @@ class StoryRepository @Inject constructor(
         engagementReset: Boolean,
         currentUserId: String?,
     ): Boolean {
+        val ticket = cacheSource.ticket()
         val previous = cacheSource.findLocal(updated.id) ?: return false
         val isOwnStory = currentUserId != null && updated.author?.id == currentUserId
         val merged = StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory) ?: return false
-        cacheSource.upsertLocal(merged)
+        cacheSource.upsertLocal(merged, ticket)
         return true
     }
 
@@ -202,9 +206,10 @@ class StoryRepository @Inject constructor(
     }
 
     private suspend fun markViewedLocally(storyId: String) {
+        val ticket = cacheSource.ticket()
         val cached = cacheSource.findLocal(storyId) ?: return
         if (cached.isViewedByMe == true) return
-        cacheSource.upsertLocal(cached.copy(isViewedByMe = true))
+        cacheSource.upsertLocal(cached.copy(isViewedByMe = true), ticket)
     }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =

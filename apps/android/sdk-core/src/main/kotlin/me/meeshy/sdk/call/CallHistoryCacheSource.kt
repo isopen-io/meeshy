@@ -19,6 +19,9 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CallHistoryApi
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.util.isoToEpochMillis
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 
 /** Thrown when a call-history revalidation fails; carries the API error message. */
 internal class CallHistorySyncException(message: String) : Exception(message)
@@ -36,6 +39,7 @@ internal class CallHistoryCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val callHistoryApi: CallHistoryApi,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<CallRecord>> {
 
     override fun observe(): Flow<List<CallRecord>?> =
@@ -64,11 +68,13 @@ internal class CallHistoryCacheSource(
      * UNKNOWN completeness (#5190) — what was seen is upserted, nothing is pruned.
      */
     override suspend fun revalidate() {
+        val ticket = fence?.ticket()
         when (val result = pagedApiCall { callHistoryApi.history(null, HISTORY_PAGE_SIZE, FILTER_ALL, null, null) }) {
             is NetworkResult.Success -> persist(
                 records = result.data.data,
                 completeness = result.data.pagination?.let { if (it.hasMore) Window.PARTIAL else Window.COMPLETE }
                     ?: Window.UNKNOWN,
+                ticket = ticket,
             )
             is NetworkResult.Failure -> throw CallHistorySyncException(result.error.message)
         }
@@ -87,7 +93,7 @@ internal class CallHistoryCacheSource(
 
     internal enum class Window { PARTIAL, COMPLETE, UNKNOWN }
 
-    private suspend fun persist(records: List<CallRecord>, completeness: Window) {
+    private suspend fun persist(records: List<CallRecord>, completeness: Window, ticket: AccountTicket?) {
         val now = clock.nowMillis()
         val fresh = records.filterNot { it.callId in suppressedIds }
         val rows = fresh.map { record ->
@@ -98,22 +104,31 @@ internal class CallHistoryCacheSource(
                 cachedAt = now,
             )
         }
-        database.withTransaction {
-            callHistoryDao.upsertAll(rows)
-            val windowStart = when (completeness) {
-                Window.COMPLETE -> Long.MIN_VALUE
-                Window.PARTIAL -> rows.minOfOrNull { it.startedAt }?.let { it + 1 }
-                Window.UNKNOWN -> null
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                callHistoryDao.upsertAll(rows)
+                val windowStart = when (completeness) {
+                    Window.COMPLETE -> Long.MIN_VALUE
+                    Window.PARTIAL -> rows.minOfOrNull { it.startedAt }?.let { it + 1 }
+                    Window.UNKNOWN -> null
+                }
+                if (windowStart != null) {
+                    val keep = records.mapTo(HashSet()) { it.callId }
+                    pruneIds(callHistoryDao.idsSince(windowStart).filterNot { it in keep })
+                }
+                callHistoryDao.deleteOlderThan(now - WINDOW_MILLIS)
+                pruneIds(callHistoryDao.idsBeyond(MAX_ROWS))
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
             }
-            if (windowStart != null) {
-                val keep = records.mapTo(HashSet()) { it.callId }
-                pruneIds(callHistoryDao.idsSince(windowStart).filterNot { it in keep })
-            }
-            callHistoryDao.deleteOlderThan(now - WINDOW_MILLIS)
-            pruneIds(callHistoryDao.idsBeyond(MAX_ROWS))
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
     }
+
+    /** Le compte auquel appartient un geste ou une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** Écrit [write] sous [ticket] : rien n'atterrit si le compte s'est fermé entre-temps. */
+    internal suspend fun <T> writeUnder(ticket: AccountTicket?, write: suspend () -> T): T? =
+        fence.commitOrWrite(ticket, write)
 
     private suspend fun pruneIds(ids: List<String>) {
         ids.chunked(DELETE_CHUNK_SIZE).forEach { callHistoryDao.deleteByIds(it) }

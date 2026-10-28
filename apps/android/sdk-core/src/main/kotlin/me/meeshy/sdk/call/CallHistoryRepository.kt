@@ -51,6 +51,7 @@ class CallHistoryRepository internal constructor(
     private val callHistoryDao: CallHistoryDao,
     syncMetaDao: SyncMetaDao,
     private val clock: CacheClock,
+    fence: me.meeshy.sdk.session.AccountFence? = null,
 ) {
     @Inject
     constructor(
@@ -58,7 +59,8 @@ class CallHistoryRepository internal constructor(
         database: MeeshyDatabase,
         callHistoryDao: CallHistoryDao,
         syncMetaDao: SyncMetaDao,
-    ) : this(callHistoryApi, database, callHistoryDao, syncMetaDao, SystemCacheClock)
+        fence: me.meeshy.sdk.session.AccountFence? = null,
+    ) : this(callHistoryApi, database, callHistoryDao, syncMetaDao, SystemCacheClock, fence)
 
     private val cacheSource = CallHistoryCacheSource(
         database = database,
@@ -66,6 +68,7 @@ class CallHistoryRepository internal constructor(
         syncMetaDao = syncMetaDao,
         callHistoryApi = callHistoryApi,
         clock = clock,
+        fence = fence,
     )
 
     private val memory = CallJournalMemoryCache()
@@ -156,6 +159,7 @@ class CallHistoryRepository internal constructor(
         callIds: List<String>,
         remote: suspend () -> NetworkResult<Unit>,
     ): NetworkResult<Unit> {
+        val ticket = cacheSource.ticket()
         val gone = callIds.toSet()
         val snapshot = database.withTransaction {
             val rows = callHistoryDao.all().filter { it.callId in gone }
@@ -168,10 +172,10 @@ class CallHistoryRepository internal constructor(
         val result = try {
             remote()
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { rollback(callIds, snapshot, memorySnapshot) }
+            withContext(NonCancellable) { rollback(callIds, snapshot, memorySnapshot, ticket) }
             throw e
         }
-        if (result is NetworkResult.Failure) rollback(callIds, snapshot, memorySnapshot)
+        if (result is NetworkResult.Failure) rollback(callIds, snapshot, memorySnapshot, ticket)
         return result
     }
 
@@ -179,9 +183,10 @@ class CallHistoryRepository internal constructor(
         callIds: List<String>,
         rows: List<CallHistoryEntity>,
         memorySnapshot: Map<String, CallJournalMemoryEntry>,
+        ticket: me.meeshy.sdk.session.AccountTicket?,
     ) {
         cacheSource.unsuppress(callIds)
-        callHistoryDao.upsertAll(rows)
+        cacheSource.writeUnder(ticket) { callHistoryDao.upsertAll(rows) }
         memory.restore(memorySnapshot)
     }
 
