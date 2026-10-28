@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.composer
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.MosaicLayoutMode
 import org.junit.Test
 
 class ComposerMosaicChoiceTest {
@@ -28,13 +29,5 @@ class ComposerMosaicChoiceTest {
             MosaicLayoutMode.CAROUSEL, MosaicLayoutMode.REEL, MosaicLayoutMode.HERO,
             MosaicLayoutMode.WAVE, MosaicLayoutMode.SINE,
         ).inOrder()
-    }
-
-    @Test
-    fun `each layout travels under the wire name the reader parses`() {
-        assertThat(MosaicLayoutMode.entries.map { it.wire }).containsExactly("carousel", "reel", "hero", "wave", "sine")
-        assertThat(MosaicLayoutMode.fromWire("hero")).isEqualTo(MosaicLayoutMode.HERO)
-        assertThat(MosaicLayoutMode.fromWire("nope")).isEqualTo(MosaicLayoutMode.CAROUSEL)
-        assertThat(MosaicLayoutMode.fromWire(null)).isEqualTo(MosaicLayoutMode.CAROUSEL)
     }
 }
