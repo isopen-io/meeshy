@@ -257,6 +257,42 @@ class PostDetailViewModelTest {
     }
 
     @Test
+    fun `the detail strip leaves out the language read and marks the secondary one, like iOS`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        // Rang 2 (es) : la puce marquee est celle du panneau ouvert, jamais celle du texte lu (en).
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+
+        vm.state.test {
+            val before = awaitItem()
+            assertThat(before.detailLanguageStrip.map { it.code }).doesNotContain("en")
+            assertThat(before.detailLanguageStrip.map { it.code }).containsAtLeast("fr", "es")
+            assertThat(before.detailLanguageStrip.none { it.isActive }).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.onFlagTap("es")
+        vm.state.test {
+            val after = awaitItem()
+            assertThat(after.post?.content).isEqualTo("Hello")
+            assertThat(after.detailLanguageStrip.single { it.isActive }.code).isEqualTo("es")
+            assertThat(after.secondaryTranslation?.code).isEqualTo("es")
+        }
+    }
+
+    @Test
+    fun `the detail strip offers no content-less language - those are asked from the explorer`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.detailLanguageStrip.map { it.code }).doesNotContain("de")
+            assertThat(s.post?.languageExplorer?.missing).contains("de")
+        }
+    }
+
+    @Test
     fun `a second tap on the same translation closes the secondary panel`() = runTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
 
