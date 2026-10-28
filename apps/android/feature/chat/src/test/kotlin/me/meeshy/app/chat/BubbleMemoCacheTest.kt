@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
 import org.junit.Test
@@ -142,5 +143,18 @@ class BubbleMemoCacheTest {
         val second = buildArgs(memo, a)
 
         assertThat(second).isEqualTo(first)
+    }
+
+    @Test
+    fun `a send refused for a file's location says so on its failed bubble, a plain failure does not`() {
+        val me = MeeshyUser(id = "me", username = "me")
+        val refused = message("r", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = MediaLocationRefusal.REASON)
+        val plain = message("p", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = "Transient delivery failure")
+        val sending = message("s", senderId = "me").copy(sendState = LocalSendState.SENDING, lastError = MediaLocationRefusal.REASON)
+        val memo = BubbleMemoCache()
+
+        assertThat(buildArgs(memo, refused, currentUser = me).isLocationRefused).isTrue()
+        assertThat(buildArgs(memo, plain, currentUser = me).isLocationRefused).isFalse()
+        assertThat(buildArgs(memo, sending, currentUser = me).isLocationRefused).isFalse()
     }
 }

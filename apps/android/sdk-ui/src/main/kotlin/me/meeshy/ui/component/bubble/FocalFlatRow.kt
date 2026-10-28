@@ -257,7 +257,7 @@ private fun FlatStandardBody(
                 }
             }
             if (content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed) {
-                FlatFailedRetry(onRetry = callbacks.onRetry)
+                FlatFailedRetry(isLocationRefused = content.isLocationRefused, onRetry = callbacks.onRetry)
             }
             // En focus, la bande du cadre remplace la ligne basse, qui garde sa place.
             Box(Modifier.graphicsLayer { alpha = if (focused) 0f else 1f }) {
@@ -496,8 +496,11 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
 
 /** L'envoi échoué : une bande orange compacte sous le contenu, au retrait de colonne (iOS). */
 @Composable
-private fun FlatFailedRetry(onRetry: (() -> Unit)?) {
-    val label = stringResource(R.string.bubble_failed_retry)
+private fun FlatFailedRetry(isLocationRefused: Boolean, onRetry: (() -> Unit)?) {
+    val label = BubbleFailedTap.label(isLocationRefused)
+    if (isLocationRefused) {
+        BubbleLocationRefusalCaption(color = MeeshyTheme.tokens.textSecondary, modifier = Modifier.padding(start = FlatRowMetrics.indent))
+    }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -508,7 +511,7 @@ private fun FlatFailedRetry(onRetry: (() -> Unit)?) {
             .let { base -> if (onRetry == null) base else base.clickable(onClickLabel = label, onClick = onRetry) }
             .semantics { contentDescription = label },
     ) {
-        Icon(imageVector = MeeshyIcons.Refresh, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(16.dp))
+        Icon(imageVector = BubbleFailedTap.icon(isLocationRefused), contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(16.dp))
     }
 }
 

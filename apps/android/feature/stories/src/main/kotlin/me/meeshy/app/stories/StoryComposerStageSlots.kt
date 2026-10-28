@@ -164,8 +164,11 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 isError = !state.draft.isWithinLimit,
                 supportingText = {
                     Text(
-                        text = state.errorMessage
-                            ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
+                        text = when (val error = state.errorMessage) {
+                            null -> stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining)
+                            StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+                            else -> error
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End,
                     )

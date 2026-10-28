@@ -81,11 +81,12 @@ private fun UnsentRuptureText(item: UnsentPublication, rupture: PublicationRuptu
     )
 }
 
-private fun MediaFate.isBroken(): Boolean = this == MediaFate.LOST || this == MediaFate.REFUSED
+private fun MediaFate.isBroken(): Boolean = this == MediaFate.LOST || this == MediaFate.REFUSED || this == MediaFate.LOCATION_REFUSED
 
 private fun MediaFate.labelRes(): Int = when (this) {
     MediaFate.UPLOADED -> R.string.feed_unsent_media_uploaded
     MediaFate.WAITING -> R.string.feed_unsent_media_waiting
     MediaFate.REFUSED -> R.string.feed_unsent_media_refused
     MediaFate.LOST -> R.string.feed_unsent_media_lost
+    MediaFate.LOCATION_REFUSED -> R.string.feed_unsent_media_location_refused
 }

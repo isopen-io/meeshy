@@ -2,6 +2,7 @@ package me.meeshy.sdk.publication
 
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.media.MediaFate
 import me.meeshy.sdk.model.media.MediaUploadProgress
@@ -111,6 +112,7 @@ public object UnsentPublications {
             upload == null -> MediaFate.LOST
             upload.stateEnum != OutboxState.EXHAUSTED -> MediaFate.WAITING
             upload.lastError == MediaUploadSender.REASON_BLOB_GONE -> MediaFate.LOST
+            MediaLocationRefusal.isReason(upload.lastError) -> MediaFate.LOCATION_REFUSED
             else -> MediaFate.REFUSED
         }
         return UnsentMedia(this, fate, progress[this] ?: MediaUploadProgress.Idle)

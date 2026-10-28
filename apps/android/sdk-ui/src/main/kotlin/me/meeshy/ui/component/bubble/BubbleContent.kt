@@ -121,6 +121,8 @@ public data class BubbleContent(
     val replyToIsMe: Boolean = false,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
+    /** True when a failed send was refused because a file's location cannot be removed (#13550): told, and removed on tap. */
+    val isLocationRefused: Boolean = false,
     /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     /**

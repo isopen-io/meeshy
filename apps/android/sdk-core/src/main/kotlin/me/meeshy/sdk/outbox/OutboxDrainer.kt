@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
 
 /** Result of delivering one outbox mutation over the network. */
 public sealed interface SendResult {
@@ -113,8 +114,9 @@ public class OutboxDrainer(
                         val failed = prerequisites.filterIndexed { i, _ ->
                             states[i] == OutboxState.EXHAUSTED
                         }
-                        outbox.markExhausted(row.cmid, "Prerequisite(s) failed: ${failed.joinToString()}")
-                        onExhausted(row)
+                        val reason = cascadeReason(failed)
+                        outbox.markExhausted(row.cmid, reason)
+                        onExhausted(row.copy(lastError = reason))
                         exhausted++
                         continue
                     }
@@ -174,6 +176,17 @@ public class OutboxDrainer(
         }
         return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
     }
+
+    /**
+     * Ce que dit un dépendant dont un prérequis a échoué : un média refusé pour son lieu (#13550) se transmet tel quel — la
+     * bulle, la publication non envoyée le disent, et ne proposent pas un nouvel essai voué au même refus ; sinon, la liste.
+     */
+    private suspend fun cascadeReason(failed: List<String>): String =
+        if (failed.any { MediaLocationRefusal.isReason(outbox.row(it)?.lastError) }) {
+            MediaLocationRefusal.REASON
+        } else {
+            "Prerequisite(s) failed: ${failed.joinToString()}"
+        }
 
     private fun blocked(delivered: Int, exhausted: Int) = DrainReport(
         delivered,

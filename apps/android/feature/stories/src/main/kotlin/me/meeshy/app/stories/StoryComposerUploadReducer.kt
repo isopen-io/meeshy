@@ -39,4 +39,13 @@ internal object StoryComposerUploadReducer {
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
         state.copy(isUploadingMedia = false, uploadingMedia = emptyList())
+
+    /**
+     * A pick whose location cannot be removed (#13550) is NOT kept behind a placeholder: the same bytes would be refused on
+     * every retry. The pick is dropped and [LOCATION_REFUSED] tells the author to choose another file.
+     */
+    fun locationRefused(state: StoryComposerUiState): StoryComposerUiState = settled(state).copy(errorMessage = LOCATION_REFUSED)
+
+    /** The [StoryComposerUiState.errorMessage] key the screen renders as its localized refusal. */
+    const val LOCATION_REFUSED: String = "media-location-not-removable"
 }
