@@ -8,6 +8,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.security.InMemorySecureStore
+import me.meeshy.sdk.net.EncryptedTokenStore
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.net.TokenStore
@@ -82,6 +84,26 @@ class AuthRepositoryAccountSwitchFenceTest {
         assertThat(store.ownerAtJwtWrite.filter { it.first == "jwt-B" }.map { it.second }).doesNotContain("A")
         assertThat(store.userId).isEqualTo("B")
         assertThat(store.jwt).isEqualTo("jwt-B")
+    }
+
+    @Test
+    fun `B adopte par-dessus A lit son NOUVEAU jeton, meme si un ancien dort au coffre, et A garde le sien`() = runTest {
+        val api = mockk<AuthApi>()
+        val secure = InMemorySecureStore().apply { put("jwt", "jwt-B-ancien", "B") }
+        val store = EncryptedTokenStore(secure)
+        val transition = SessionTransitionFlags()
+        val sessions = SessionRepository(api, store, transition)
+        val fence = AccountFence(SessionOutboxOwnerSource(sessions, store), transition)
+        val repository = AuthRepository(api, store, sessions, object : SessionTeardown {
+            override suspend fun wipe() = Unit
+        }, SyncSeqTracker(), fence)
+        repository.adoptSession(session("A"))
+
+        repository.adoptSession(session("B"))
+
+        assertThat(store.userId).isEqualTo("B")
+        assertThat(store.jwt).isEqualTo("jwt-B")
+        assertThat(secure.get("jwt", "A")).isEqualTo("jwt-A")
     }
 
     @Test
