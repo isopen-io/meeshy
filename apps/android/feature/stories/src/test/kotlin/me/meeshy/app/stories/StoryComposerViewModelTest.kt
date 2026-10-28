@@ -529,11 +529,10 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `framing is not projected when the designated background is not the framed media`() = runTest {
+    fun `le cadrage suit le fond designe, celui que le plateau peint et que le geste cadre`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
-        // The canvas frames the FIRST slide media (m1); designate the SECOND (m2) as background.
         vm.onToggleSlideBackgroundMedia("m2")
         vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
         val request = slot<CreateStoryRequest>()
@@ -543,9 +542,30 @@ class StoryComposerViewModelTest {
 
         val obj = request.captured.storyEffects?.mediaObjects?.single()
         assertThat(obj?.postMediaId).isEqualTo("m2")
-        assertThat(obj?.x).isEqualTo(0.5)
-        assertThat(obj?.y).isEqualTo(0.5)
-        assertThat(obj?.scale).isEqualTo(1.0)
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+    }
+
+    @Test
+    fun `un fond designe encore en attente publie son objet avec son cadrage et sa boucle sous le cmid`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("up-1")
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "story-cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.postMediaId).isEqualTo("up-1")
+        assertThat(obj?.mediaURL).isNull()
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(request.captured.mediaIds).containsExactly("up-1")
     }
 
     @Test

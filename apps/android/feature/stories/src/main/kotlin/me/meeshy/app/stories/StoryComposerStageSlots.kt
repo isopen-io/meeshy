@@ -1,6 +1,5 @@
 package me.meeshy.app.stories
 
-import me.meeshy.sdk.media.previewModel
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -51,8 +50,7 @@ internal fun StoryComposerScene(
     Box(modifier) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: state.selectedSlidePending.firstOrNull()?.item?.previewModel,
+                backgroundModel = state.selectedSlideBackdropModel,
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },

@@ -138,6 +138,24 @@ class PublishMediaWriteBackTest {
         )
 
     @Test
+    fun `un fond encore en attente garde son cadrage, sa boucle et sa duree a la greffe de l identifiant`() {
+        val pending = StoryMediaObject(
+            id = "upload-cmid", postMediaId = "upload-cmid", mediaURL = null, mediaType = "video",
+            x = 0.7, y = 0.4, scale = 2.5, isBackground = true, loop = false,
+        )
+        val request = requestOf(StoryEffects(mediaObjects = listOf(pending)), listOf("upload-cmid"))
+
+        val adopted = graftedRequest(request).storyEffects?.mediaObjects?.single()
+
+        assertThat(adopted?.postMediaId).isEqualTo("real-99")
+        assertThat(adopted?.isBackground).isTrue()
+        assertThat(adopted?.loop).isFalse()
+        assertThat(adopted?.x).isEqualTo(0.7)
+        assertThat(adopted?.y).isEqualTo(0.4)
+        assertThat(adopted?.scale).isEqualTo(2.5)
+    }
+
+    @Test
     fun `grafting the id also makes the canvas designate the real media`() {
         val request = requestOf(StoryEffects(mediaObjects = listOf(background("upload-cmid"))), listOf("upload-cmid"))
 

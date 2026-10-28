@@ -1,7 +1,5 @@
 package me.meeshy.app.stories
 
-import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 
 /** Le fond média qu'une slide publie : le média désigné et son cadrage (le filtre de la scène voyage sur les effets). */
 internal object StoryPublishBackground {
@@ -9,37 +7,33 @@ internal object StoryPublishBackground {
     /**
      * Resolves a [slide]'s designated background media to the [StoryBackgroundMedia] the
      * wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
-     * nothing is designated or the id has no uploaded media yet (a still-pending offline
-     * upload has no server URL to point the reader's background layer at, so it publishes
-     * as a plain flat-media slide until the upload lands) — never a broken object. Carries
+     * nothing is designated or the id names no media of the slide. A designated media still waiting on its
+     * offline upload publishes its object anyway, URL-less and under its placeholder `cmid` (#13605): the
+     * framing and the loop travel with the outbox row and the write-back swaps in the real id. Carries
      * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video) and
-     * the [resolveBackgroundFraming] pan/zoom (honoured for a framed image or video alike).
+     * the canvas pan/zoom — the plateau paints the designated media, so the gesture framed it (honoured for a framed image or video alike).
      */
     fun resolve(slide: StorySlide, state: StoryComposerUiState): StoryBackgroundMedia? {
-        val attachments = state.attachments
-        val media = slide.backgroundMediaId?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
+        val designated = slide.backgroundMediaId?.takeIf { it in slide.mediaIds } ?: return null
+        val framing = slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
+        state.attachments.firstOrNull { it.id == designated }?.let { media ->
+            return StoryBackgroundMedia(
+                mediaId = media.id,
+                url = media.url,
+                mimeType = media.mimeType,
+                durationSeconds = media.durationMs?.let { it / 1000.0 },
+                loop = slide.backgroundLoop,
+                framing = framing,
+            )
+        }
+        val pending = state.pendingUploads.firstOrNull { it.cmid == designated } ?: return null
         return StoryBackgroundMedia(
-            mediaId = media.id,
-            url = media.url,
-            mimeType = media.mimeType,
-            durationSeconds = media.durationMs?.let { it / 1000.0 },
+            mediaId = pending.cmid,
+            url = null,
+            mimeType = pending.item.mimeType,
+            durationSeconds = null,
             loop = slide.backgroundLoop,
-            framing = resolveBackgroundFraming(slide, media, state),
+            framing = framing,
         )
-    }
-
-    /**
-     * Projects the slide's canvas pan/zoom onto the wire's normalised framing — but only when
-     * the designated background is the media the canvas actually frames. The composer canvas
-     * renders (and the pan/zoom gesture reframes) the slide's **first** resolved attachment;
-     * if the author designated a *different* attachment as the background, that gesture never
-     * framed it, so its framing stays [StoryBackgroundFraming.IDENTITY] rather than borrowing a
-     * pan the author applied to another attachment. Applies to an image or a video background
-     * identically — each client's reader honours the framing on both.
-     */
-    private fun resolveBackgroundFraming(slide: StorySlide, media: UploadedMedia, state: StoryComposerUiState): StoryBackgroundFraming {
-        val framedMediaId = slide.mediaIds.firstOrNull { id -> state.attachments.any { it.id == id } }
-        if (media.id != framedMediaId) return StoryBackgroundFraming.IDENTITY
-        return slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
     }
 }
