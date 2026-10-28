@@ -219,6 +219,12 @@ private fun ShareContentZone(model: ShareSheetModel) {
             style = MaterialTheme.typography.labelMedium,
             color = MeeshyTheme.tokens.textSecondary,
         )
+        model.notices.forEach { notice ->
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+                Icon(MeeshyIcons.Error, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(16.dp))
+                Text(text = notice, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+            }
+        }
         model.contentLines.forEach { line ->
             Text(
                 text = line,

@@ -334,6 +334,9 @@
     <string name="share_caption_hint">Nachricht hinzufügen…</string>
     <string name="share_close">Schließen</string>
     <string name="share_content_messages_kept">Was gesendet wird · %1$d von %2$d Nachrichten</string>
+    <string name="share_content_over_budget">Nicht kopierte Dateien: %1$d. Ein Teilen umfasst höchstens %2$d Dateien und %3$s.</string>
+    <string name="share_content_refused_source">Diese App hat nur einen Dateipfad übergeben, den Meeshy nicht öffnet. Teile die Datei selbst oder sichere sie zuerst in Fotos oder Dateien.</string>
+    <string name="share_content_unprepared">Einige Dateien konnten nicht vorbereitet werden. Lade sie zuerst herunter und versuche es erneut.</string>
     <string name="share_copied">Kopiert</string>
     <string name="share_detail_direct">Unterhaltung</string>
     <string name="share_detail_friend">Freund · noch keine Unterhaltung</string>

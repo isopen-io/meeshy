@@ -44,7 +44,8 @@ fun AppShareSheetHost(
 
 /**
  * Le partage entrant (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`, #13476) : [items] sont les fichiers déjà copiés
- * dans le cache privé, [text] le texte ou le lien joint. Même feuille, mêmes destinataires, plusieurs en un envoi.
+ * dans le cache privé, [text] le texte ou le lien joint, [notices] ce que le partage a laissé derrière lui (#13585).
+ * Même feuille, mêmes destinataires, plusieurs en un envoi.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,9 +57,10 @@ fun IncomingShareSheetHost(
     modifier: Modifier = Modifier,
     accentColor: Color = MeeshyPalette.Indigo500,
     onEditInStudio: (() -> Unit)? = null,
+    notices: List<String> = emptyList(),
 ) {
     val viewModel: AppShareSheetViewModel = hiltViewModel()
-    LaunchedEffect(text, items) { viewModel.bindIncoming(text, items) }
+    LaunchedEffect(text, items, notices) { viewModel.bindIncoming(text, items, notices) }
     ShareSheetSurface(viewModel, onDismiss, onOpenConversation, accentColor, modifier, onEditInStudio)
 }
 
