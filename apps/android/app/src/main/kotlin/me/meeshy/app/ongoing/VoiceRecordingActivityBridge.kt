@@ -12,8 +12,8 @@ import javax.inject.Singleton
 
 /**
  * Le pont entre l'enregistreur du composeur et la notification « enregistrement en cours » :
- * l'écran PUBLIE le début de sa prise (puis la retire) et reçoit le bouton « Arrêter » de la
- * notification. Aucun moteur audio ici — l'écran reste le seul à toucher le micro.
+ * l'écran PUBLIE le début de sa prise (puis la retire) et reçoit les boutons « Arrêter » et
+ * « Annuler » de la notification. Aucun moteur audio ici — l'écran reste le seul à toucher le micro.
  */
 @Singleton
 internal class VoiceRecordingActivityBridge @Inject constructor() : VoiceRecordingHost {
@@ -24,7 +24,20 @@ internal class VoiceRecordingActivityBridge @Inject constructor() : VoiceRecordi
     /** Le début de la prise en cours (epoch ms), ou `null` quand le micro est fermé. */
     val startedAt: StateFlow<Long?> = current.asStateFlow()
 
+    private val cancels = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    @Volatile
+    private var keptAlive = false
+
     override val stopRequests: Flow<Unit> get() = stops
+
+    override val cancelRequests: Flow<Unit> get() = cancels
+
+    override val keepsRecordingInBackground: Boolean get() = keptAlive
+
+    /** Posé par la notification : le service de premier plan tient (ou ne tient plus) le micro. */
+    fun setKeepsRecordingInBackground(value: Boolean) {
+        keptAlive = value
+    }
 
     override fun publish(startedAtEpochMs: Long) {
         current.value = startedAtEpochMs
@@ -37,5 +50,10 @@ internal class VoiceRecordingActivityBridge @Inject constructor() : VoiceRecordi
     /** Le bouton « Arrêter » de la notification. */
     fun requestStop() {
         stops.tryEmit(Unit)
+    }
+
+    /** Le bouton « Annuler » de la notification. */
+    fun requestCancel() {
+        cancels.tryEmit(Unit)
     }
 }

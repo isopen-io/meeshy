@@ -13,4 +13,5 @@
     <string name="outbox_activity_remaining">%1$d restantes</string>
     <string name="voice_recording_activity_title">Gravação de voz</string>
     <string name="voice_recording_activity_stop">Parar</string>
+    <string name="voice_recording_activity_cancel">Cancelar</string>
 </resources>

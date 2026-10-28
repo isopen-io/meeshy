@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.ongoing.VoiceRecordingBackgroundLaw
 import me.meeshy.ui.component.recording.LocalVoiceRecordingHost
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
@@ -38,8 +39,8 @@ internal class ComposerVoiceHandle(
 )
 
 /**
- * Le cycle de vie complet de l'enregistrement (permission micro, prise, métronome, arrêt en
- * arrière-plan), sorti de `ChatComposer` pour que la barre ne soit qu'un assemblage. Une prise
+ * Le cycle de vie complet de l'enregistrement (permission micro, prise, métronome, sortie
+ * de l'écran : la prise continue si le service de premier plan la tient, sinon elle est posée dans le tiroir), sorti de `ChatComposer` pour que la barre ne soit qu'un assemblage. Une prise
  * terminée rejoint le plateau par copie hors du fil principal (iOS `stopRecordingToAttachment`).
  */
 @Composable
@@ -81,6 +82,12 @@ internal fun rememberComposerVoice(
         deliver(take)
     }
 
+    fun cancelTake() {
+        capture.cancel()
+        recording = capture.session
+        haptics.light()
+    }
+
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) start()
     }
@@ -94,11 +101,15 @@ internal fun rememberComposerVoice(
     LaunchedEffect(recordingHost) {
         recordingHost.stopRequests.collect { if (capture.session.isRecording) finishTake() }
     }
+    LaunchedEffect(recordingHost) {
+        recordingHost.cancelRequests.collect { if (capture.session.isRecording) cancelTake() }
+    }
     LaunchedEffect(recording.isRecording) {
         if (!recording.isRecording && publishedTake.getAndSet(false)) recordingHost.retire()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (capture.session.isRecording) {
+        val leaving = VoiceRecordingBackgroundLaw.Input(capture.session.isRecording, recordingHost.keepsRecordingInBackground)
+        if (VoiceRecordingBackgroundLaw.onAppLeft(leaving) == VoiceRecordingBackgroundLaw.Decision.AbandonToTray) {
             deliver(capture.abandon())
             recording = capture.session
         }
@@ -118,11 +129,7 @@ internal fun rememberComposerVoice(
                 PackageManager.PERMISSION_GRANTED
             if (granted) start() else permission.launch(Manifest.permission.RECORD_AUDIO)
         },
-        cancel = {
-            capture.cancel()
-            recording = capture.session
-            haptics.light()
-        },
+        cancel = ::cancelTake,
         finish = ::finishTake,
     )
 }

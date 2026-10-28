@@ -225,6 +225,12 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Garde le micro d'un vocal en cours quand l'app quitte l'écran (#13441) : « Arrêter » / « Annuler » dans la notification. -->
+        <service
+            android:name=".ongoing.VoiceRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- FCM Push -->
         <service
             android:name=".push.MeeshyFcmService"
