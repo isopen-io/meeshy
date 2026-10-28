@@ -82,6 +82,8 @@ data class FeedPostPresentation(
     val distanceMeters: Double? = null,
     /** The author's layout (#6514), already resolved — the carousel when the post declares none. */
     val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
+    /** L'explorateur de langues du post (iOS `PostTranslationSheet`), `null` sans traduction. */
+    val languageExplorer: PostLanguageExplorer? = null,
 ) {
     /** Carrousel pour un post, diaporama horizontal pour un reel (iOS `PostMediaPresentation.default`). */
     val mediaPresentation: PostMediaPresentation
@@ -165,6 +167,7 @@ object FeedPostBuilder {
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
             layout = post.storyEffects.resolvedLayout,
+            languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
         )
     }
 

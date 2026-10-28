@@ -72,7 +72,17 @@
     <string name="feed_repost_story">Storia</string>
     <string name="feed_reposts">Ricondivisioni</string>
     <string name="feed_retry">Riprova</string>
+    <string name="feed_secondary_translation_a11y">Traduzione in %1$s: %2$s</string>
     <string name="feed_translated">Traduzione disponibile</string>
+    <string name="feed_translation_available">Traduzioni disponibili</string>
+    <string name="feed_translation_close">Chiudi</string>
+    <string name="feed_translation_confidence_a11y">Affidabilità della traduzione %s</string>
+    <string name="feed_translation_original">Originale</string>
+    <string name="feed_translation_other_languages">Altre lingue</string>
+    <string name="feed_translation_title">Lingue</string>
+    <string name="feed_translation_translate">Traduci</string>
+    <string name="feed_translations_badge">Traduzioni</string>
+    <string name="feed_translations_badge_hint">Mostra le lingue disponibili</string>
     <string name="feed_unknown_author">Sconosciuto</string>
     <string name="feed_unlike">Non mi piace più</string>
     <string name="hashtag_results_empty">Nessun post con #%s</string>

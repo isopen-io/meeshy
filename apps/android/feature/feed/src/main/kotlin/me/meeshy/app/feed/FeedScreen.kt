@@ -164,6 +164,8 @@ fun FeedScreen(
                             onLike = { viewModel.toggleLike(post.id) },
                             onBookmark = { viewModel.toggleBookmark(post.id) },
                             onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
+                            onSelectLanguage = { code -> viewModel.onPostLanguageSelected(post.id, code) },
+                            translatingCodes = state.translatingCodesOf(post.id),
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
                             onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },

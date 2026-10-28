@@ -487,6 +487,38 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `picking a language in the explorer shows it on the card and marks that row active`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Hola")
+        assertThat(card.languageExplorer?.translations?.first { it.isActive }?.code).isEqualTo("es")
+    }
+
+    @Test
+    fun `picking the language already shown keeps it instead of reverting to the default`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+        vm.onPostLanguageSelected("1", "es")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `picking the original from the explorer shows the original text`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "fr")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Bonjour")
+        assertThat(card.languageExplorer?.originalIsActive).isTrue()
+    }
+
+    @Test
     fun `onPostFlagTap on an unknown post is inert`() = runTest {
         val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.post.translation.title", "androidName": "feed_translation_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.original", "androidName": "feed_translation_original", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.available", "androidName": "feed_translation_available", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.other_languages", "androidName": "feed_translation_other_languages", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.translate", "androidName": "feed_translation_translate", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.confidence.a11y", "androidName": "feed_translation_confidence_a11y", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.close", "androidName": "feed_translation_close", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.translations", "androidName": "feed_translations_badge", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.translations.hint", "androidName": "feed_translations_badge_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.secondary_translation", "androidName": "feed_secondary_translation_a11y", "status": "adopted" }
+      ]
+    }
+  }
+}
