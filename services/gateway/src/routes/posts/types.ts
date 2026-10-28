@@ -248,9 +248,6 @@ export const StoryEffectsSchema = z.object({
   }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` })
   .superRefine(enforceStoryLimits);
 
-/** Création : en plus, 1000 caractères par texte (une story stockée reste modifiable au-delà). */
-export const StoryEffectsCreateSchema = StoryEffectsSchema.superRefine(enforceStoryTextLengthOnCreate);
-
 /**
  * Une personne que le post NOMME sans que son texte le dise.
  *
@@ -294,7 +291,7 @@ export const CreatePostSchema = z.object({
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
-  storyEffects: StoryEffectsCreateSchema.optional(),
+  storyEffects: StoryEffectsSchema.optional(),
   // Opt-in AUTEUR : autorise l'extraction de la bande-son des VIDÉOS du post
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
@@ -385,6 +382,12 @@ export const CreatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
   .refine(hasAnyContentCarrier, {
     message: 'A post must carry something: content, media, audio, a mood, a repost, or story effects',
+  })
+  // 1000 caractères par texte à la CRÉATION (#13590) — sauf une republication, qui recopie le texte STOCKÉ de sa
+  // source (`StoryComposerViewModel(reposting:)`) : une story stockée reste publiable telle qu'elle est.
+  .superRefine((data, ctx) => {
+    if (data.repostOfId?.trim() || !data.storyEffects) return;
+    enforceStoryTextLengthOnCreate(data.storyEffects, ctx);
   });
 
 /**

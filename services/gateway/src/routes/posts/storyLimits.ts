@@ -29,6 +29,7 @@ const isBag = (v: unknown): v is Bag => typeof v === 'object' && v !== null && !
 const bags = (v: unknown): Bag[] => (Array.isArray(v) ? v.filter(isBag) : []);
 const codeOf = (family: Family) => `STORY_LIMIT_${family.toUpperCase()}` as StoryLimitCode;
 const mediaFamily = (mediaType: unknown): Family => (mediaType === 'video' ? 'videos' : 'images');
+const isBackgroundPayload = (o: Bag): boolean => isBag(o.payload) && o.payload.isBackground === true;
 
 const tally = (families: Family[]): Record<Family, number> =>
   families.reduce<Record<Family, number>>(
@@ -39,11 +40,12 @@ const tally = (families: Family[]): Record<Family, number> =>
 const v1Families = (effects: Bag): Family[] => [
   ...bags(effects.stickerObjects).map((): Family => 'stickers'),
   ...bags(effects.textObjects).map((): Family => 'texts'),
-  ...bags(effects.audioPlayerObjects).map((): Family => 'audios'),
+  ...bags(effects.audioPlayerObjects).filter((a) => a.isBackground !== true).map((): Family => 'audios'),
   ...bags(effects.mediaObjects).filter((m) => m.isBackground !== true).map((m) => mediaFamily(m.mediaType)),
 ];
 
 const v3ObjectFamily = (o: Bag): Family | null => {
+  if (isBackgroundPayload(o)) return null;
   if (o.kind === 'sticker') return 'stickers';
   if (o.kind === 'text') return 'texts';
   if (o.kind === 'audio') return 'audios';
@@ -64,7 +66,8 @@ const durationExceeded = (effects: Bag): boolean => {
   return [num(effects.slideDuration), num(effects.timelineDuration), sceneTotal].some((d) => d > STORY_TOTAL_SECONDS_MAX);
 };
 
-const lengthOf = (v: unknown): number => (typeof v === 'string' ? Array.from(v).length : 0);
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const lengthOf = (v: unknown): number => (typeof v === 'string' ? Array.from(graphemes.segment(v)).length : 0);
 
 const createTextTooLong = (effects: Bag): boolean => {
   const v1 = bags(effects.textObjects).some((t) => lengthOf(t.text) > STORY_TEXT_CREATE_MAX || lengthOf(t.content) > STORY_TEXT_CREATE_MAX);
