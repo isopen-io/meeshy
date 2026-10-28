@@ -183,6 +183,19 @@ class PublicationOutboxTest {
     }
 
     @Test
+    fun `reopening a failed post gives back the captions of its media under the ids they received`() = runTest {
+        val upload = uploads.enqueue(photo, TusUploadContext.POST)
+        val parked = draft(pending(upload)).copy(mediaCaption = mapOf(upload to "Au marché"))
+        val cmid = publications.enqueuePost(CreatePostRequest(mediaIds = listOf(upload)), parked)
+        outbox.rewriteDependents(upload) { it.replace(upload, "media-real") }
+        outbox.markExhausted(cmid, "Post refused: HTTP 422")
+
+        val reopened = publications.reopenPost(cmid)
+
+        assertThat(reopened?.mediaCaption).containsExactly("media-real", "Au marché")
+    }
+
+    @Test
     fun `a post still on its way does not reopen`() = runTest {
         val cmid = publications.enqueuePost(CreatePostRequest(content = "en route"), draft())
 

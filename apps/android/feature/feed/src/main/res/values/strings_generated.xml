@@ -16,6 +16,7 @@
     <string name="feed_composer_background">Background color</string>
     <string name="feed_composer_background_swatch">Color %1$s of %2$s</string>
     <string name="feed_composer_cancel">Cancel</string>
+    <string name="feed_composer_caption_placeholder">Add a caption</string>
     <string name="feed_composer_language_search">Search a language</string>
     <string name="feed_composer_language_title">Post language</string>
     <string name="feed_composer_open_label">Share something</string>
@@ -25,6 +26,9 @@
     <string name="feed_composer_placeholder">What\'s on your mind?</string>
     <string name="feed_composer_publish">Publish</string>
     <string name="feed_composer_record_voice">Record audio</string>
+    <string name="feed_composer_slide_rail">Publication scenes</string>
+    <string name="feed_composer_slide_rail_delete">Delete scene %1$d</string>
+    <string name="feed_composer_slide_rail_position">Scene %1$d of %2$d</string>
     <string name="feed_composer_socle_audience">Audience</string>
     <string name="feed_composer_take_photo">Take a photo</string>
     <string name="feed_composer_title">New post</string>

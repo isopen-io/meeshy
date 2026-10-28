@@ -20,6 +20,8 @@ data class PostComposerDraftSnapshot(
     val location: SharedPlace? = null,
     val language: String? = null,
     val mediaAlt: Map<String, String> = emptyMap(),
+    /** The caption of each media (`PostMedia.caption`), keyed like [mediaAlt] — a third text, distinct from the post's content and from the alt. */
+    val mediaCaption: Map<String, String> = emptyMap(),
     /** The scene's background colour (hex without `#`), absent for a post without a scene. */
     val background: String? = null,
     val updatedAtMillis: Long = 0L,

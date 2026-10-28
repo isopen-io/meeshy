@@ -16,6 +16,7 @@
     <string name="feed_composer_background">لون الخلفية</string>
     <string name="feed_composer_background_swatch">اللون %1$s من %2$s</string>
     <string name="feed_composer_cancel">إلغاء</string>
+    <string name="feed_composer_caption_placeholder">إضافة تعليق توضيحي</string>
     <string name="feed_composer_language_search">البحث عن لغة</string>
     <string name="feed_composer_language_title">لغة المنشور</string>
     <string name="feed_composer_open_label">شارِك شيئًا</string>
@@ -25,6 +26,9 @@
     <string name="feed_composer_placeholder">بماذا تفكّر؟</string>
     <string name="feed_composer_publish">نشر</string>
     <string name="feed_composer_record_voice">تسجيل مقطع صوتي</string>
+    <string name="feed_composer_slide_rail">مشاهد المنشور</string>
+    <string name="feed_composer_slide_rail_delete">حذف المشهد %1$d</string>
+    <string name="feed_composer_slide_rail_position">المشهد %1$d من %2$d</string>
     <string name="feed_composer_socle_audience">الجمهور</string>
     <string name="feed_composer_take_photo">التقاط صورة</string>
     <string name="feed_composer_title">منشور جديد</string>

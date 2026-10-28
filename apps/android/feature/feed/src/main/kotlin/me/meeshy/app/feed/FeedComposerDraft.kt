@@ -35,6 +35,11 @@ data class FeedPostPublishRequest(
      * typed nothing" (never sent as `mediaAlt: {}` — see [FeedViewModel]).
      */
     val mediaAlt: Map<String, String> = emptyMap(),
+    /**
+     * The caption of each media (`PostMedia.caption`, gateway `CreatePostSchema.mediaCaption`) — same key contract as
+     * [mediaAlt], a distinct content from the post's [content] and from the alt. Empty for a reel, whose text is its content.
+     */
+    val mediaCaption: Map<String, String> = emptyMap(),
     /** The scene's background (hex without `#`), `null` for a post without a scene — published as its `storyEffects`. */
     val background: String? = null,
 )
@@ -95,6 +100,8 @@ data class FeedComposerDraft(
     val location: SharedPlace? = null,
     val language: String = ComposerLanguage.DEFAULT,
     val mediaAlt: Map<String, String> = emptyMap(),
+    /** The caption of each media (`PostMedia.caption`) — what the text of a slide MEANS in a post (iOS `ComposerSlideTextRole.caption`). */
+    val mediaCaption: Map<String, String> = emptyMap(),
     /** The scene's background colour, hex without `#` — the scene is born when it is chosen (iOS `documentBackground`). */
     val background: String? = null,
 ) {
@@ -154,7 +161,7 @@ data class FeedComposerDraft(
      * must never resurface on a later, unrelated media id.
      */
     fun withoutMedia(id: String): FeedComposerDraft =
-        copy(media = media.filterNot { it.id == id }, mediaAlt = mediaAlt - id)
+        copy(media = media.filterNot { it.id == id }, mediaAlt = mediaAlt - id, mediaCaption = mediaCaption - id)
 
     /**
      * Sets (or clears, via a blank [text]) the accessibility description for the
@@ -164,6 +171,14 @@ data class FeedComposerDraft(
      */
     fun withAlt(mediaId: String, text: String): FeedComposerDraft =
         copy(mediaAlt = if (text.isBlank()) mediaAlt - mediaId else mediaAlt + (mediaId to text))
+
+    /**
+     * Writes the caption of the media [mediaId], or removes it (a blank [text]: a blank key would publish an empty legend —
+     * iOS `ComposerSlideTextRole.applyCaption`). A non-blank text is kept verbatim and cut at the gateway bound, which would
+     * otherwise refuse the whole post.
+     */
+    fun withCaption(mediaId: String, text: String): FeedComposerDraft =
+        copy(mediaCaption = if (text.isBlank()) mediaCaption - mediaId else mediaCaption + (mediaId to text.take(MEDIA_CAPTION_MAX_LENGTH)))
 
     /**
      * Sets the author's override of the reel default (mirrors iOS
@@ -214,6 +229,7 @@ data class FeedComposerDraft(
             location = location,
             language = language,
             mediaAlt = mediaAlt.filterKeys { it in mediaIds },
+            mediaCaption = if (postType == PostType.POST) mediaCaption.filterKeys { it in mediaIds } else emptyMap(),
             background = background,
         )
     }
@@ -221,6 +237,9 @@ data class FeedComposerDraft(
     companion object {
         /** Parity with the story composer's own ≤10 media-per-item rule. */
         const val MAX_MEDIA: Int = 10
+
+        /** Gateway cap on `CreatePostSchema.mediaCaption` values — the same bound as the alt. */
+        const val MEDIA_CAPTION_MAX_LENGTH: Int = 1000
 
         private val HEX_COLOR = Regex("[0-9A-F]{6}")
     }
