@@ -134,7 +134,7 @@ class StoryComposerViewModel @Inject constructor(
                             ),
                         ),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
-                ).mirrorDraftToSelection()
+                ).withAudiencePurged().mirrorDraftToSelection()
             }
             resetHistory()
         }
