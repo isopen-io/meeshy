@@ -246,6 +246,34 @@ class MessageSendCoordinatorTest {
     }
 
     @Test
+    fun `a forwarded piece travels on the request, and a retry from the bubble keeps ONLY that piece`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic(
+            "c1", "", "fr", sender,
+            forwardedFromId = "src-msg", forwardedFromConversationId = "src",
+            forwardedAttachmentIds = listOf("att-2", " ", "att-2"),
+        )
+
+        assertThat(harness.queuedRequest().forwardedAttachmentIds).containsExactly("att-2")
+
+        harness.outbox.markSucceeded(cid)
+        coordinator.markSendFailed(cid)
+        coordinator.retrySend(cid)
+
+        val retried = harness.queuedRequest()
+        assertThat(retried.forwardedFromId).isEqualTo("src-msg")
+        assertThat(retried.forwardedAttachmentIds).containsExactly("att-2")
+    }
+
+    @Test
+    fun `a whole-message forward carries no piece list, so the gateway copies the whole lot`() = runHarnessTest { harness ->
+        val cid = coordinator(harness).sendOptimistic("c1", "salut", "fr", sender, forwardedFromId = "src-msg")
+
+        assertThat(harness.queuedRequest().forwardedAttachmentIds).isNull()
+        assertThat(harness.cachedMessage(cid).metadata).isNull()
+    }
+
+    @Test
     fun `retrying a bubble that is not cached does nothing`() = runHarnessTest { harness ->
         coordinator(harness).retrySend("cid_ghost")
 

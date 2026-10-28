@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ContentExitLaw
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.contentExitSubject
+import me.meeshy.sdk.model.piece.PieceSealing
 
 /** Un message à poster dans UNE conversation de destination. */
 data class OutgoingShare(
@@ -14,6 +15,8 @@ data class OutgoingShare(
     val forwardedFromConversationId: String?,
     val effectFlags: Long,
     val ephemeralDuration: Int?,
+    /** Les seules pièces de [forwardedFromId] à recopier (#9914) ; nul ⇒ tout le lot. Une pièce seule part SANS le texte de son message. */
+    val forwardedAttachmentIds: List<String>? = null,
 )
 
 /** Ce que le partage va poster, ou pourquoi il ne poste rien. */
@@ -33,6 +36,8 @@ sealed interface ShareOutgoingResult {
  *   donc n'a aucun clair à copier — fail-closed, jamais le chiffré posé comme texte.
  * - La légende d'un transfert part en message à part, juste après la copie (D4), avec la
  *   protection de ce qu'elle légende.
+ * - Une PIÈCE seule part comme un transfert de son message, limité à elle (`forwardedAttachmentIds`) et sans le
+ *   texte du message ; scellée, chiffrée ou hors de son message, elle ne part jamais (échec fermé).
  * - Un texte, un lien ou une carte part comme UN message de texte (légende jointe).
  */
 object ShareOutgoingBuilder {
@@ -50,7 +55,7 @@ object ShareOutgoingBuilder {
             caption = caption,
             chosenDurationSeconds = chosenDurationSeconds,
         )
-        is ShareSubject.Piece -> ShareOutgoingResult.Refused(ShareFailure.GENERIC)
+        is ShareSubject.Piece -> piece(subject, caption, chosenDurationSeconds)
         is ShareSubject.Incoming -> {
             val text = subject.composedText(caption)
             when {
@@ -67,6 +72,29 @@ object ShareOutgoingBuilder {
                 ShareOutgoingResult.Ready(listOf(plainText(text, ContentExitLaw.CopyProtection(0L, false, null))))
             }
         }
+    }
+
+    private fun piece(subject: ShareSubject.Piece, caption: String, chosenDurationSeconds: Int?): ShareOutgoingResult {
+        val message = subject.message
+        val piece = message.attachments.firstOrNull { it.id == subject.attachmentId }
+            ?: return ShareOutgoingResult.Refused(ShareFailure.NOTHING_TO_SEND)
+        if (subject.conversationIsEncrypted || PieceSealing.withholds(piece, message, conversationIsEncrypted = false) ||
+            message.shareMessage().encrypted
+        ) {
+            return ShareOutgoingResult.Refused(ShareFailure.SEALED_SOURCE)
+        }
+        val chosen = message.shareMessage().exitSubject(listOf(piece.shareMedia))
+        val protection = ContentExitLaw.forwardedCopyProtection(
+            chosen, ContentExitLaw.CopyRequest(ephemeralDuration = chosenDurationSeconds?.toDouble()),
+        ) ?: return ShareOutgoingResult.Refused(ShareFailure.NOTHING_TO_SEND)
+        val copy = OutgoingShare(
+            content = "", originalLanguage = message.originalLanguage, forwardedFromId = message.id,
+            forwardedFromConversationId = subject.sourceConversationId, effectFlags = protection.effectFlags,
+            ephemeralDuration = protection.ephemeralDuration, forwardedAttachmentIds = listOf(piece.id),
+        )
+        val trimmed = caption.trim()
+        if (trimmed.isEmpty()) return ShareOutgoingResult.Ready(listOf(copy))
+        return ShareOutgoingResult.Ready(listOf(copy, plainText(trimmed, captionProtection(listOf(protection)))))
     }
 
     private fun plainText(text: String, protection: ContentExitLaw.CopyProtection) = OutgoingShare(

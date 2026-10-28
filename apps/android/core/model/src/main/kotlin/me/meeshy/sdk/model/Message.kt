@@ -366,6 +366,11 @@ data class SendMessageRequest(
     val attachmentIds: List<String>? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    /**
+     * Les seules pièces de `forwardedFromId` que la passerelle recopie (#9914, #13596) ; absent ⇒ tout le lot.
+     * Une pièce étrangère au message source est refusée (`forwarded-attachment-not-in-source`).
+     */
+    val forwardedAttachmentIds: List<String>? = null,
     val effectFlags: Int? = null,
     val isBlurred: Boolean? = null,
     val isViewOnce: Boolean? = null,
