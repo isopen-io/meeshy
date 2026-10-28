@@ -69,4 +69,12 @@ class GuestSessionEndTest {
             assertThat(GuestSessionEnd.fromCode(it)).isNull()
         }
     }
+
+    @Test
+    fun `le rafraichissement lit le motif dans error quand la passerelle n ecrit aucun code`() {
+        assertThat(GuestSessionEnd.fromRefresh(410, code = "HTTP_410", error = "GUEST_ACCESS_REVOKED")).isEqualTo(GuestSessionEnd.ACCESS_REVOKED)
+        assertThat(GuestSessionEnd.fromRefresh(410, code = "HTTP_410", error = "CONVERSATION_CLOSED")).isEqualTo(GuestSessionEnd.LINK_EXPIRED)
+        assertThat(GuestSessionEnd.fromRefresh(401, code = "HTTP_401", error = "LINK_EXPIRED")).isNull()
+        assertThat(GuestSessionEnd.fromRefresh(410, code = "HTTP_410", error = "Le lien a expire")).isNull()
+    }
 }

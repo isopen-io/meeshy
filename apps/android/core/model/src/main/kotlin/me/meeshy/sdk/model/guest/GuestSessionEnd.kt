@@ -32,12 +32,15 @@ enum class GuestSessionEnd(val code: String, val httpStatus: Int) {
          * rend `410 LINK_EXPIRED` / `LINK_DEACTIVATED` / `CONVERSATION_CLOSED` — le lien ou la conversation de CETTE session.
          * Ces codes ne se lisent QUE sur cette réponse, jamais globalement ([from], l'intercepteur) : la jonction
          * `POST /links/:key/members` d'un AUTRE lien rend les mêmes 410 sous le jeton de l'invité courant, qu'ils ne
-         * visent pas.
+         * visent pas. Comme [from], le motif se cherche dans `code` PUIS dans `error` : `sendError(reply, 410, 'LINK_EXPIRED')`
+         * le pose dans `error` et n'écrit aucune clé `code`.
          */
-        fun fromRefresh(statusCode: Int?, code: String?): GuestSessionEnd? = when {
-            statusCode != 410 -> null
-            code == ACCESS_REVOKED.code -> ACCESS_REVOKED
-            code in REFRESH_LINK_GONE -> LINK_EXPIRED
+        fun fromRefresh(statusCode: Int?, code: String?, error: String? = null): GuestSessionEnd? =
+            if (statusCode != 410) null else refreshEnd(code) ?: refreshEnd(error)
+
+        private fun refreshEnd(reason: String?): GuestSessionEnd? = when (reason) {
+            ACCESS_REVOKED.code -> ACCESS_REVOKED
+            in REFRESH_LINK_GONE -> LINK_EXPIRED
             else -> null
         }
 

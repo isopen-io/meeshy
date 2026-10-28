@@ -73,7 +73,7 @@ class AnonymousSessionRefresher @Inject constructor(
     suspend fun heldSessionEnd(): GuestSessionEndSignal? {
         val token = store.load()?.sessionToken ?: return null
         val failure = refresh() as? NetworkResult.Failure ?: return null
-        val end = GuestSessionEnd.fromRefresh(failure.error.httpStatus, failure.error.code) ?: return null
+        val end = GuestSessionEnd.fromRefresh(failure.error.httpStatus, failure.error.code, error = failure.error.message) ?: return null
         return GuestSessionEndSignal(end, refusedToken = token)
     }
 
