@@ -2,7 +2,9 @@ package me.meeshy.app.chat
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update as updateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -28,6 +30,11 @@ internal class ChatFileDownloadController(
 
     private var downloadJob: Job? = null
 
+    private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Les pièces-fichiers déjà reçues pendant la session : leur rangée dit « prêt » (#13492). */
+    val downloadedIds: StateFlow<Set<String>> = _downloadedIds
+
     /**
      * Attachments already downloaded this session, by [ApiMessageAttachment.id] — a completed
      * transfer's terminal [FileAttachmentDownloadState.Completed] (the reusable `localUri`).
@@ -52,6 +59,24 @@ internal class ChatFileDownloadController(
         start(messageId, attachmentId, openWhenDone = true)
     }
 
+    /**
+     * Le toucher d'une RANGÉE du fil (#13492, miroir du badge d'iOS) : sur la pièce qui se télécharge il l'annule ; sur
+     * toute autre (à télécharger, prête, en échec) il télécharge puis ouvre dans l'app.
+     */
+    fun tap(messageId: String, attachmentId: String?) {
+        val active = state.value.fileDownload
+        if (attachmentId != null && active?.attachmentId == attachmentId && active.state is FileAttachmentDownloadState.InProgress) {
+            dismiss()
+            return
+        }
+        start(messageId, attachmentId, openWhenDone = true)
+    }
+
+    /** « Enregistrer » une pièce (#13494) : même circuit, même loi de sortie ; elle n'est ni ouverte ni partagée. */
+    fun save(messageId: String, attachmentId: String?) {
+        start(messageId, attachmentId, openWhenDone = false, saveOnly = true)
+    }
+
     /** "Partager": same download, handed to a share sheet instead of opened. */
     fun share(messageId: String, attachmentId: String?) {
         start(messageId, attachmentId, openWhenDone = false)
@@ -63,12 +88,12 @@ internal class ChatFileDownloadController(
         state.update { it.copy(fileDownload = null) }
     }
 
-    private fun start(messageId: String, attachmentId: String?, openWhenDone: Boolean) {
+    private fun start(messageId: String, attachmentId: String?, openWhenDone: Boolean, saveOnly: Boolean = false) {
         val attachment = firstFileAttachment(messageId, attachmentId)
         val fileUrl = attachment?.fileUrl
         val fileName = attachment?.originalName ?: attachment?.fileName ?: messageId
         if (attachment == null || fileUrl.isNullOrBlank()) {
-            fail(messageId, attachment?.id.orEmpty(), fileName, FileAttachmentDownloadFailure.NotAvailable, openWhenDone)
+            fail(messageId, attachment?.id.orEmpty(), fileName, FileAttachmentDownloadFailure.NotAvailable, openWhenDone, saveOnly)
             return
         }
         // Un contenu qui disparaît ne sort pas de Meeshy (#9573) : ni ouvert, ni enregistré, ni partagé. Le porteur
@@ -76,7 +101,7 @@ internal class ChatFileDownloadController(
         val carrier = messages.value.firstOrNull { it.message.id == messageId }?.message
         if (carrier != null && !MediaHubRowExit.of(carrier, state.value.isEndToEnd).mayLeave) {
             downloadJob?.cancel()
-            fail(messageId, attachment.id, fileName, FileAttachmentDownloadFailure.Protected, openWhenDone)
+            fail(messageId, attachment.id, fileName, FileAttachmentDownloadFailure.Protected, openWhenDone, saveOnly)
             return
         }
         downloadJob?.cancel()
@@ -91,6 +116,7 @@ internal class ChatFileDownloadController(
                         fileName = fileName,
                         state = alreadyLocal,
                         openWhenDone = openWhenDone,
+                        saveOnly = saveOnly,
                     ),
                 )
             }
@@ -107,6 +133,7 @@ internal class ChatFileDownloadController(
                     fileName = fileName,
                     state = FileAttachmentDownloadState.InProgress(progressPercent = null),
                     openWhenDone = openWhenDone,
+                    saveOnly = saveOnly,
                 ),
             )
         }
@@ -114,6 +141,7 @@ internal class ChatFileDownloadController(
             downloader.download(resolvedUrl, fileName, mimeType).collect { downloadState ->
                 if (downloadState is FileAttachmentDownloadState.Completed) {
                     completedDownloads[attachment.id] = downloadState
+                    _downloadedIds.updateFlow { it + attachment.id }
                 }
                 state.update { current ->
                     val active = current.fileDownload
@@ -130,6 +158,7 @@ internal class ChatFileDownloadController(
         fileName: String,
         reason: FileAttachmentDownloadFailure,
         openWhenDone: Boolean,
+        saveOnly: Boolean = false,
     ) {
         state.update {
             it.copy(
@@ -139,6 +168,7 @@ internal class ChatFileDownloadController(
                     fileName = fileName,
                     state = FileAttachmentDownloadState.Failed(reason),
                     openWhenDone = openWhenDone,
+                    saveOnly = saveOnly,
                 ),
             )
         }

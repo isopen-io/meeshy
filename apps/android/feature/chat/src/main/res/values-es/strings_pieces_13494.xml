@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_piece_saved">Guardado en Descargas</string>
+    <string name="piece_action_save">Guardar</string>
+    <string name="piece_action_delete">Eliminar</string>
+</resources>

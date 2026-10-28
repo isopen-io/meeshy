@@ -158,4 +158,85 @@ class ChatFileDownloadControllerTest {
             .isEqualTo(FileAttachmentDownloadFailure.Protected)
         verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
     }
+
+    @Test
+    fun `a finished download is remembered as ready for the row badge`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"))))
+        every { r.downloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.Completed(localUri = "content://dl/1", mimeType = "application/pdf"),
+        )
+
+        r.controller.open("m1", attachmentId = "a1")
+        advanceUntilIdle()
+
+        assertThat(r.controller.downloadedIds.value).containsExactly("a1")
+    }
+
+    @Test
+    fun `a tap on the row whose download is running cancels it, a tap elsewhere starts its own`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"), attachment("a2", "text/plain"))))
+        r.controller.tap("m1", attachmentId = "a1")
+        assertThat(r.download?.attachmentId).isEqualTo("a1")
+
+        r.controller.tap("m1", attachmentId = "a2")
+        assertThat(r.download?.attachmentId).isEqualTo("a2")
+
+        r.controller.tap("m1", attachmentId = "a2")
+        assertThat(r.download).isNull()
+    }
+
+    @Test
+    fun `a tap on a failed row retries instead of dismissing`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"))))
+        every { r.downloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NetworkError),
+        )
+        r.controller.tap("m1", attachmentId = "a1")
+        advanceUntilIdle()
+        assertThat(r.download?.state).isInstanceOf(FileAttachmentDownloadState.Failed::class.java)
+
+        every { r.downloader.download(any(), any(), any()) } returns emptyFlow()
+        r.controller.tap("m1", attachmentId = "a1")
+
+        assertThat(r.download?.state).isEqualTo(FileAttachmentDownloadState.InProgress(progressPercent = null))
+    }
+
+    @Test
+    fun `saving a piece downloads it without opening or sharing it`() = runTest {
+        val r = rig(listOf(message(attachment("v1", "video/mp4", name = "clip.mp4"))))
+
+        r.controller.save("m1", attachmentId = "v1")
+
+        assertThat(r.download?.saveOnly).isTrue()
+        assertThat(r.download?.openWhenDone).isFalse()
+        assertThat(r.download?.fileName).isEqualTo("clip.mp4")
+    }
+
+    @Test
+    fun `saving a protected piece is refused and nothing is downloaded`() = runTest {
+        val blurred = ApiMessageAttachment(
+            id = "p1", fileName = "p.png", originalName = "p.png", mimeType = "image/png", fileUrl = "https://cdn/p1", isBlurred = true,
+        )
+        val r = rig(listOf(message(blurred)))
+
+        r.controller.save("m1", attachmentId = "p1")
+
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end blob is never downloaded, by tap nor by save`() = runTest {
+        val blob = ApiMessageAttachment(
+            id = "b1", fileName = "e2ee.bin", mimeType = "application/octet-stream", fileUrl = "https://cdn/b1",
+            isEncrypted = true, encryptionMode = "e2ee",
+        )
+        val r = rig(listOf(message(blob)))
+
+        r.controller.tap("m1", attachmentId = "b1")
+        r.controller.save("m1", attachmentId = "b1")
+
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.NotAvailable)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+    }
 }

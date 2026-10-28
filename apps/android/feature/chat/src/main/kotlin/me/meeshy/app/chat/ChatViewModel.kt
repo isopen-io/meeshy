@@ -697,6 +697,16 @@ class ChatViewModel @Inject constructor(
 
     /** "Partager" on a FILE attachment — same download, but the caller hands the
      * completed file to a share sheet instead of opening it. */
+    /** Les pièces-fichiers reçues pendant la session (badge « prêt » des rangées, #13492). */
+    val downloadedFileIds: StateFlow<Set<String>> get() = fileDownload.downloadedIds
+
+    /** Le toucher d'une rangée de fichier du fil : télécharger puis ouvrir, annuler, ou retenter (#13492). */
+    fun onFileAttachmentTap(messageId: String, attachmentId: String? = null) =
+        fileDownload.tap(messageId, attachmentId)
+
+    /** « Enregistrer » une pièce seule (#13494). */
+    fun onPieceSave(messageId: String, attachmentId: String) = fileDownload.save(messageId, attachmentId)
+
     fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
         fileDownload.share(messageId, attachmentId)
 
