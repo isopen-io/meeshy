@@ -120,6 +120,7 @@ import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.theme.hexColor
 
 /** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
@@ -171,6 +172,7 @@ internal fun StoryForegroundLayer(
                 model = media.url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
                 modifier = layerModifier,
             )
         }

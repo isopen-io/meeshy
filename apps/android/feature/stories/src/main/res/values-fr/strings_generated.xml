@@ -38,6 +38,7 @@
     <string name="composer_chip_style_typewriter">MACHINE</string>
     <string name="composer_column_media_alt_text">Décrire</string>
     <string name="composer_column_media_filter">Filtres</string>
+    <string name="composer_column_media_trim">Rogner</string>
     <string name="composer_column_text_frame">Cadrage du texte</string>
     <string name="composer_column_text_language">Langue du texte</string>
     <string name="composer_column_text_plan">TIMELINE</string>

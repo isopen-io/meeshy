@@ -41,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.StorySourceWindow
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +76,9 @@ import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import me.meeshy.ui.component.audio.AudioTrackSurface
+
+/** Le délai après lequel la fenêtre d'un son rogné est reprise par le lecteur du composeur. */
+private const val SOUND_WINDOW_SETTLE_MS: Long = 300L
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -151,6 +157,14 @@ fun StoryComposerScreen(
         screenResumed = screenState.isAtLeast(Lifecycle.State.RESUMED),
         shelfOpen = showSoundShelf,
     )
+    // La fenêtre propre du son (#13601) se joue aussi en composant ; pendant le geste d'une poignée elle n'est reprise qu'une
+    // fois posée (un lecteur neuf par image du geste coûterait cher).
+    val liveWindow = StorySourceWindow.clippingMs(backgroundSound?.sourceStart, backgroundSound?.sourceEnd)
+        ?.takeIf { it.endMs != null }
+    val soundWindow by produceState(liveWindow, liveWindow) {
+        delay(SOUND_WINDOW_SETTLE_MS)
+        value = liveWindow
+    }
     backgroundSound?.let(viewModel::playableSoundUrl)?.let { url ->
         key(url) {
             AudioTrackSurface(
@@ -159,6 +173,8 @@ fun StoryComposerScreen(
                 rewindWhenInactive = false,
                 loop = true,
                 volume = backgroundSound.volume,
+                sourceStartMs = soundWindow?.startMs,
+                sourceEndMs = soundWindow?.endMs,
                 handleAudioFocus = true,
             )
         }

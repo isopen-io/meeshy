@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,12 +31,16 @@ import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
+import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.ui.component.media.MediaTrimContent
+import me.meeshy.ui.component.media.MediaTrimStrip
 import me.meeshy.ui.component.composer.rememberHostedTextField
 
 private val SECTION_PLAN_MAX_HEIGHT = 220.dp
 
 /**
- * Les options du MÉDIA touché, sous la scène : la section ouverte dans la colonne droite — le filtre de la scène, la
+ * Les options du MÉDIA touché, sous la scène : la section ouverte dans la colonne droite — le filtre PROPRE du média, la
  * description du média ou le plan. Une section chasse l'autre en fondu, sans saut de hauteur (iOS : le contenu change
  * sous la colonne).
  */
@@ -53,10 +58,10 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             else -> FilterRow(
-                selected = state.selectedSlideFilter,
-                intensity = state.selectedSlideFilterIntensity,
-                onSelect = viewModel::onSelectFilter,
-                onIntensityChange = viewModel::onFilterIntensityChange,
+                selected = state.mediaFilterOf(mediaId),
+                intensity = StoryFilterMatrix.DEFAULT_INTENSITY,
+                onSelect = { viewModel.onSelectMediaFilter(mediaId, it) },
+                onIntensityChange = null,
             )
         }
     }
@@ -85,6 +90,8 @@ internal fun SoundSectionContent(state: StoryComposerUiState, sound: StoryAudioP
     ) { open ->
         if (open == ComposerObjectEditorSection.Plan) {
             PlanSection(state, viewModel)
+        } else if (open == ComposerObjectEditorSection.Media(MediaEditTool.TRIM)) {
+            SoundTrimSection(state, sound, viewModel)
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TimingCycleButtons(
@@ -95,6 +102,24 @@ internal fun SoundSectionContent(state: StoryComposerUiState, sound: StoryAudioP
             }
         }
     }
+}
+
+/**
+ * La fenêtre propre du son dans sa source (iOS `MediaTrimStrip`) : la source ENTIÈRE avec son onde, deux poignées pour ce
+ * qu'on garde, l'écarté assombri. Chaque image du geste écrit les bornes (un seul cran d'historique par geste).
+ */
+@Composable
+private fun SoundTrimSection(state: StoryComposerUiState, sound: StoryAudioPlayerObject, viewModel: StoryComposerViewModel) {
+    val source = state.trimSourceOf(sound) ?: return
+    MediaTrimStrip(
+        content = MediaTrimContent.AUDIO,
+        sourceDuration = source,
+        bounds = SoundTrimLaw.window(sound, source),
+        accent = MaterialTheme.colorScheme.primary,
+        waveform = sound.waveformSamples,
+        onChange = { bounds -> viewModel.onSceneGesture("trim-${sound.id}") { StoryComposerSelectionReducer.soundTrimmed(it, sound.id, bounds) } },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

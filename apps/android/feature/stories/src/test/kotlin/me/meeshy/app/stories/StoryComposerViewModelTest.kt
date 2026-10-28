@@ -800,7 +800,7 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `removing the pending upload cancels its durable upload row and blob`() = runTest {
+    fun `removing the pending upload holds its durable row while undo can bring it back, then cancels it on leaving`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
@@ -808,11 +808,59 @@ class StoryComposerViewModelTest {
 
         vm.onRemoveMedia("up-1")
 
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+        leaveComposer(vm)
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
     }
 
     @Test
-    fun `removing one of several pending uploads keeps the rest and cancels only that durable row`() = runTest {
+    fun `undoing the removal of a pending media gives it back, enqueued once and never cancelled`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `redoing the removal of a pending media sets it aside again and undo finds it once more`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+        vm.onUndo()
+
+        vm.onRedo()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
+        vm.onUndo()
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `a removed pending media is cancelled once no reachable history step shows it`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+
+        repeat(60) { i -> vm.onSelectFilter(if (i % 2 == 0) StoryFilter.WARM else null) }
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing one of several pending uploads keeps the rest and, on leaving, cancels only that durable row`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
@@ -822,6 +870,7 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-2")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-2")
+        leaveComposer(vm)
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
         coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
     }
@@ -1373,16 +1422,19 @@ class StoryComposerViewModelTest {
         vm.onSelectSlide(vm.state.value.deck.slides[0].id)
         vm.onMediaPicked(listOf(item()))
         vm.onRemoveSlide(secondSlideId)
+        leaveComposer(vm)
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+        coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
+    }
+
+    private fun leaveComposer(vm: StoryComposerViewModel) {
         val store = androidx.lifecycle.ViewModelStore()
         androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = vm as T
         })[StoryComposerViewModel::class.java]
-
         store.clear()
-
-        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
-        coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
     }
 
     @Test

@@ -38,6 +38,7 @@
     <string name="composer_chip_style_typewriter">MÁQUINA</string>
     <string name="composer_column_media_alt_text">Descrever</string>
     <string name="composer_column_media_filter">Filtros</string>
+    <string name="composer_column_media_trim">Aparar</string>
     <string name="composer_column_text_frame">Moldura do texto</string>
     <string name="composer_column_text_language">Idioma do texto</string>
     <string name="composer_column_text_plan">LINHA DO TEMPO</string>

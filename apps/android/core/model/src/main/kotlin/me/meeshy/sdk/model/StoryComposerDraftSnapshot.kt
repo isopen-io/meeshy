@@ -161,6 +161,10 @@ data class StoryDraftSlideSnapshot(
     val backdrop: String? = null,
     val opening: String? = null,
     val closing: String? = null,
+    /** Le filtre propre de chaque média (identifiant -> jeton du fil) ; une valeur inconnue se lit « aucun filtre ». */
+    val mediaFilters: Map<String, String> = emptyMap(),
+    /** La durée de source de chaque piste (identifiant -> secondes), pour que la fenêtre propre d'un son survive au brouillon. */
+    val soundSources: Map<String, Float> = emptyMap(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a

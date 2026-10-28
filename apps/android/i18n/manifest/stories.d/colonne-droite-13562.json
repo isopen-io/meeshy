@@ -17,6 +17,12 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.trim",
+          "androidName": "composer_column_media_trim",
+          "status": "adopted"
+        },
+        {
           "catalog": "ui",
           "iosKey": "story.composer.editSlideBackground",
           "androidName": "story_composer_edit_slide_background",

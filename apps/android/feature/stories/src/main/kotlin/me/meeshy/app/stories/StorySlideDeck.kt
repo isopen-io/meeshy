@@ -48,6 +48,10 @@ data class StorySlide(
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
     val frame: SceneFrame = SceneFrame(),
+    /** Le filtre PROPRE de chaque média de la slide (par identifiant), à pleine force : celui de la scène reste `filter`. */
+    val mediaFilters: Map<String, StoryFilter> = emptyMap(),
+    /** La durée de SOURCE de chaque piste (identifiant -> secondes), retenue à l'emprunt : le Temps remplace `duration`, pas elle. */
+    val soundSources: Map<String, Float> = emptyMap(),
 )
 
 /**
@@ -189,6 +193,7 @@ data class StorySlideDeck(
                 val clearsBackground = slide.backgroundMediaId == mediaId
                 slide.copy(
                     mediaIds = slide.mediaIds - mediaId,
+                    mediaFilters = slide.mediaFilters - mediaId,
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
                 )
@@ -435,6 +440,19 @@ data class StorySlideDeck(
     fun setSelectedFilter(filter: StoryFilter?): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filter = filter) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Pose (ou retire, `null`) le filtre PROPRE du média [mediaId] de la slide qui le porte : la scène, les autres
+     * médias et la sélection ne bougent pas. Inerte pour un média qu'aucune slide ne porte.
+     */
+    fun setMediaFilter(mediaId: String, filter: StoryFilter?): StorySlideDeck {
+        if (slides.none { mediaId in it.mediaIds }) return this
+        val next = slides.map { slide ->
+            if (mediaId !in slide.mediaIds) slide
+            else slide.copy(mediaFilters = if (filter == null) slide.mediaFilters - mediaId else slide.mediaFilters + (mediaId to filter))
+        }
         return copy(slides = next)
     }
 
