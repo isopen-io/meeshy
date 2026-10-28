@@ -26,6 +26,15 @@
     <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %s. Aguardando a resposta.</string>
     <string name="profile_conversations_interactionsDisabled">Interações desativadas</string>
     <string name="profile_conversations_noShared">Sem conversas em comum</string>
+    <string name="profile_decor_banner_section">Banner</string>
+    <string name="profile_decor_done">Concluído</string>
+    <string name="profile_decor_error">Não foi possível salvar esta escolha. Tente novamente.</string>
+    <string name="profile_decor_frame_section">Moldura do banner</string>
+    <string name="profile_decor_image">Imagem</string>
+    <string name="profile_decor_image_hides_designs">Sua imagem de capa aparece na frente dos fundos.</string>
+    <string name="profile_decor_image_hint">Escolher uma imagem de capa</string>
+    <string name="profile_decor_none">Nenhum</string>
+    <string name="profile_decor_ring_section">Contorno do avatar</string>
     <string name="profile_decor_subtitle">Visíveis para todos no seu perfil</string>
     <string name="profile_decor_title">Contorno e banner</string>
     <string name="profile_detail_country">País</string>
