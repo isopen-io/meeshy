@@ -146,4 +146,24 @@ class AnonymousSessionRefresherTest {
         assertThat(AnonymousSessionRefresher(api, InMemoryAnonymousSessionStore(context())).heldSessionEnd()).isNull()
         assertThat(AnonymousSessionRefresher(mockk(), InMemoryAnonymousSessionStore()).heldSessionEnd()).isNull()
     }
+
+    private suspend fun endOfGatewayBody(status: Int, body: String): me.meeshy.sdk.net.GuestSessionEndSignal? {
+        val api = mockk<AnonymousApi>()
+        coEvery { api.refresh(any()) } throws retrofit2.HttpException(
+            retrofit2.Response.error<Any>(status, body.toResponseBody("application/json".toMediaType())),
+        )
+        return AnonymousSessionRefresher(api, InMemoryAnonymousSessionStore(context())).heldSessionEnd()
+    }
+
+    /** Le corps EXACT de `sendError(reply, 410, 'LINK_EXPIRED', { message })` (routes/anonymous.ts) : aucune clé `code`, le motif est dans `error`. */
+    @Test
+    fun `le 410 tel que la passerelle l ecrit - motif dans error, sans code - termine la session detenue`() = runTest {
+        fun gateway(error: String) = """{"success":false,"error":"$error","message":"Le lien a expire"}"""
+        assertThat(endOfGatewayBody(410, gateway("GUEST_ACCESS_REVOKED"))?.end).isEqualTo(me.meeshy.sdk.model.guest.GuestSessionEnd.ACCESS_REVOKED)
+        assertThat(endOfGatewayBody(410, gateway("LINK_EXPIRED"))?.end).isEqualTo(me.meeshy.sdk.model.guest.GuestSessionEnd.LINK_EXPIRED)
+        assertThat(endOfGatewayBody(410, gateway("LINK_DEACTIVATED"))?.refusedToken).isEqualTo("guest-token")
+        assertThat(endOfGatewayBody(410, gateway("CONVERSATION_CLOSED"))?.refusedToken).isEqualTo("guest-token")
+        assertThat(endOfGatewayBody(401, """{"success":false,"error":"Session invalide ou expiree","code":"SESSION_INVALID"}""")).isNull()
+        assertThat(endOfGatewayBody(503, "<html>bad gateway</html>")).isNull()
+    }
 }
