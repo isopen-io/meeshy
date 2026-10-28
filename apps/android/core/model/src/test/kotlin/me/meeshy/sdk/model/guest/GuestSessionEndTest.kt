@@ -45,4 +45,28 @@ class GuestSessionEndTest {
         assertThat(GuestSessionEnd.fromSocketPayload("boom")).isNull()
         assertThat(GuestSessionEnd.fromSocketPayload("")).isNull()
     }
+
+    @Test
+    fun `la reponse du rafraichissement de la session detenue lit les quatre 410 qui la terminent`() {
+        assertThat(GuestSessionEnd.fromRefresh(410, "GUEST_ACCESS_REVOKED")).isEqualTo(GuestSessionEnd.ACCESS_REVOKED)
+        assertThat(GuestSessionEnd.fromRefresh(410, "LINK_EXPIRED")).isEqualTo(GuestSessionEnd.LINK_EXPIRED)
+        assertThat(GuestSessionEnd.fromRefresh(410, "LINK_DEACTIVATED")).isEqualTo(GuestSessionEnd.LINK_EXPIRED)
+        assertThat(GuestSessionEnd.fromRefresh(410, "CONVERSATION_CLOSED")).isEqualTo(GuestSessionEnd.LINK_EXPIRED)
+    }
+
+    @Test
+    fun `le rafraichissement ne lit ni un autre statut ni un autre code`() {
+        assertThat(GuestSessionEnd.fromRefresh(401, "LINK_EXPIRED")).isNull()
+        assertThat(GuestSessionEnd.fromRefresh(403, "LINK_EXPIRED")).isNull()
+        assertThat(GuestSessionEnd.fromRefresh(410, "SOMETHING_ELSE")).isNull()
+        assertThat(GuestSessionEnd.fromRefresh(null, "LINK_EXPIRED")).isNull()
+    }
+
+    @Test
+    fun `la lecture globale ne lit JAMAIS ces codes - la jonction d un autre lien les rend aussi`() {
+        listOf("LINK_EXPIRED", "LINK_DEACTIVATED", "CONVERSATION_CLOSED").forEach {
+            assertThat(GuestSessionEnd.from(410, code = it, error = null)).isNull()
+            assertThat(GuestSessionEnd.fromCode(it)).isNull()
+        }
+    }
 }

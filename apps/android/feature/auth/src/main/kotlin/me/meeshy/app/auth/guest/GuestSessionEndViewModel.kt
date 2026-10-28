@@ -15,6 +15,7 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.net.GuestSessionEndNotifier
 import me.meeshy.sdk.net.GuestSessionEndSignal
+import me.meeshy.sdk.session.AnonymousSessionRefresher
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.SocketServerError
 
@@ -27,12 +28,16 @@ data class GuestSessionEnded(val end: GuestSessionEnd, val sequence: Int)
  * `endGuestSession` + `GuestSessionEndedView`). Un refus socket vise le jeton presente au handshake de SA socket, jamais
  * la session ouverte depuis. Un refus que la purge ecarte (session deja quittee, compte inscrit) ne
  * montre rien.
+ *
+ * Au démarrage à froid avec une session d'invité détenue, un rafraîchissement part ([verifyHeldSession]) : un accès retiré
+ * ou un lien échu pendant que l'app était fermée se dit tout de suite, pas au premier refus (#13529).
  */
 @HiltViewModel
 class GuestSessionEndViewModel internal constructor(
     ends: Flow<GuestSessionEndSignal>,
     socketErrors: Flow<SocketServerError>,
     private val purge: suspend (refusedToken: String?) -> Boolean,
+    private val verifyHeldSession: suspend () -> GuestSessionEndSignal? = { null },
 ) : ViewModel() {
 
     @Inject
@@ -40,7 +45,13 @@ class GuestSessionEndViewModel internal constructor(
         notifier: GuestSessionEndNotifier,
         socket: SocketManager,
         authRepository: AuthRepository,
-    ) : this(notifier.ends, socket.serverErrors, authRepository::endGuestSession)
+        refresher: AnonymousSessionRefresher,
+    ) : this(
+        ends = notifier.ends,
+        socketErrors = socket.serverErrors,
+        purge = authRepository::endGuestSession,
+        verifyHeldSession = { if (authRepository.hasAccountSession) null else refresher.heldSessionEnd() },
+    )
 
     private val _ended = MutableStateFlow<GuestSessionEnded?>(null)
     val ended: StateFlow<GuestSessionEnded?> = _ended.asStateFlow()
@@ -53,10 +64,13 @@ class GuestSessionEndViewModel internal constructor(
             GuestSessionEnd.fromSocketPayload(error.payload)?.let { GuestSessionEndSignal(it, refusedToken = token) }
         }
         viewModelScope.launch {
-            merge(ends, fromSocket).collect { signal ->
-                if (purge(signal.refusedToken)) _ended.value = GuestSessionEnded(signal.end, ++sequence)
-            }
+            merge(ends, fromSocket).collect(::settle)
         }
+        viewModelScope.launch { verifyHeldSession()?.let { settle(it) } }
+    }
+
+    private suspend fun settle(signal: GuestSessionEndSignal) {
+        if (purge(signal.refusedToken)) _ended.value = GuestSessionEnded(signal.end, ++sequence)
     }
 
     /** « Retour a l'accueil », ou un nouveau lien ouvert : l'ecran se referme. */

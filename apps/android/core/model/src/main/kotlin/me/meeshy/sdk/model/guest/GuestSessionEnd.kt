@@ -27,6 +27,22 @@ enum class GuestSessionEnd(val code: String, val httpStatus: Int) {
         fun from(statusCode: Int, code: String?, error: String?): GuestSessionEnd? =
             (fromCode(code) ?: fromCode(error))?.takeIf { it.httpStatus == statusCode }
 
+        /**
+         * La réponse de `POST /anonymous/refresh` sur la session DÉTENUE : en plus des deux refus ci-dessus, la passerelle y
+         * rend `410 LINK_EXPIRED` / `LINK_DEACTIVATED` / `CONVERSATION_CLOSED` — le lien ou la conversation de CETTE session.
+         * Ces codes ne se lisent QUE sur cette réponse, jamais globalement ([from], l'intercepteur) : la jonction
+         * `POST /links/:key/members` d'un AUTRE lien rend les mêmes 410 sous le jeton de l'invité courant, qu'ils ne
+         * visent pas.
+         */
+        fun fromRefresh(statusCode: Int?, code: String?): GuestSessionEnd? = when {
+            statusCode != 410 -> null
+            code == ACCESS_REVOKED.code -> ACCESS_REVOKED
+            code in REFRESH_LINK_GONE -> LINK_EXPIRED
+            else -> null
+        }
+
+        private val REFRESH_LINK_GONE = setOf("LINK_EXPIRED", "LINK_DEACTIVATED", "CONVERSATION_CLOSED")
+
         /** Le refus lu dans la charge d'un evenement socket `error` (`{ message, code }`), tel que sa serialisation JSON. */
         fun fromSocketPayload(raw: String): GuestSessionEnd? {
             val payload = runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return null

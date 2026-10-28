@@ -76,4 +76,11 @@ class GuestSessionEndInterceptorTest {
         val store = InMemoryTokenStore().apply { sessionToken = "guest-2" }
         assertThat(run(403, """{"code":"SHARE_LINK_EXPIRED"}""", store, sentToken = "guest-1")).isEmpty()
     }
+
+    @Test
+    fun `la jonction d un autre lien qui rend 410 LINK_EXPIRED ne termine pas la session courante`() {
+        listOf("LINK_EXPIRED", "LINK_DEACTIVATED", "CONVERSATION_CLOSED").forEach {
+            assertThat(run(410, """{"success":false,"code":"$it"}""", guestStore())).isEmpty()
+        }
+    }
 }
