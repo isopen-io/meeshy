@@ -33,6 +33,10 @@
     <string name="audio_editor_use">Utiliser l\'audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position dans le vocal</string>
+    <string name="audio_split_handle_end">Fin de la coupe</string>
+    <string name="audio_split_handle_start">Début de la coupe</string>
+    <string name="audio_trim_handle_end">Fin de la sélection</string>
+    <string name="audio_trim_handle_start">Début de la sélection</string>
     <string name="avatar_a11y_mood">humeur %s</string>
     <string name="bubble_story_citation_answer">réponse à sa story</string>
     <string name="bubble_story_citation_open_hint">Ouvre la story citée</string>

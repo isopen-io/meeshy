@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -15,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -22,7 +25,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import me.meeshy.sdk.model.audioedit.AudioEditorBarRole
 import me.meeshy.sdk.model.audioedit.AudioEditorSelection
 import me.meeshy.sdk.model.audioedit.AudioEditorWaveformGrab
@@ -64,68 +69,110 @@ fun AudioEditorWaveform(
 
     val cachedBars = remember(levels) { BarCache(levels) }
 
-    Canvas(
-        modifier
-            .fillMaxSize()
-            .semantics {
-                contentDescription = label
-                progressBarRangeInfo = ProgressBarRangeInfo(currentProgress().toFloat(), 0f..1f)
-                setProgress { target -> scrub(target.toDouble()); scrubEnded(); true }
-            }
-            .pointerInput(handleSlopPx) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    val width = size.width.toFloat().coerceAtLeast(1f)
-                    val sel = currentSelection()
-                    val grab = AudioEditorWaveformLaw.grab(
-                        fraction = (down.position.x / width).toDouble().coerceIn(0.0, 1.0),
-                        start = sel?.start,
-                        end = sel?.end,
-                        slop = (handleSlopPx / width).toDouble(),
-                    )
-                    fun dispatch(x: Float) {
-                        val fraction = (x / width).toDouble().coerceIn(0.0, 1.0)
-                        when (grab) {
-                            AudioEditorWaveformGrab.SELECTION_START -> moveStart(fraction)
-                            AudioEditorWaveformGrab.SELECTION_END -> moveEnd(fraction)
-                            AudioEditorWaveformGrab.SCRUB -> scrub(fraction)
-                        }
-                    }
-                    dispatch(down.position.x)
-                    drag(down.id) { change ->
-                        change.consume()
-                        dispatch(change.position.x)
-                    }
-                    if (grab == AudioEditorWaveformGrab.SCRUB) scrubEnded()
+    Box(modifier.fillMaxSize()) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = label
+                    progressBarRangeInfo = ProgressBarRangeInfo(currentProgress().toFloat(), 0f..1f)
+                    setProgress { target -> scrub(target.toDouble()); scrubEnded(); true }
                 }
-            },
-    ) {
-        val barCount = ((size.width + gapPx) / (barWidthPx + gapPx)).toInt().coerceAtLeast(1)
-        val bars = cachedBars.forCount(barCount)
-        val sel = currentSelection()
-        val played = currentProgress()
-        val step = size.width / barCount
-        val width = (step - gapPx).coerceAtLeast(1f)
-        bars.forEachIndexed { index, level ->
-            val position = if (barCount > 1) index.toDouble() / (barCount - 1) else 0.0
-            val role = AudioEditorWaveformLaw.role(position, played, sel)
-            val height = (level * size.height * BAR_FILL).coerceAtLeast(MIN_BAR_PX)
-            drawRoundRect(
-                color = colorFor(role, accent, tokens.textPrimary, tokens.error),
-                topLeft = Offset(index * step, (size.height - height) / 2f),
-                size = Size(width, height),
-                cornerRadius = CornerRadius(CORNER_PX),
+                .pointerInput(handleSlopPx) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val width = size.width.toFloat().coerceAtLeast(1f)
+                        val sel = currentSelection()
+                        val grab = AudioEditorWaveformLaw.grab(
+                            fraction = (down.position.x / width).toDouble().coerceIn(0.0, 1.0),
+                            start = sel?.start,
+                            end = sel?.end,
+                            slop = (handleSlopPx / width).toDouble(),
+                        )
+                        fun dispatch(x: Float) {
+                            val fraction = (x / width).toDouble().coerceIn(0.0, 1.0)
+                            when (grab) {
+                                AudioEditorWaveformGrab.SELECTION_START -> moveStart(fraction)
+                                AudioEditorWaveformGrab.SELECTION_END -> moveEnd(fraction)
+                                AudioEditorWaveformGrab.SCRUB -> scrub(fraction)
+                            }
+                        }
+                        dispatch(down.position.x)
+                        drag(down.id) { change ->
+                            change.consume()
+                            dispatch(change.position.x)
+                        }
+                        if (grab == AudioEditorWaveformGrab.SCRUB) scrubEnded()
+                    }
+                },
+        ) {
+            val barCount = ((size.width + gapPx) / (barWidthPx + gapPx)).toInt().coerceAtLeast(1)
+            val bars = cachedBars.forCount(barCount)
+            val sel = currentSelection()
+            val played = currentProgress()
+            val step = size.width / barCount
+            val width = (step - gapPx).coerceAtLeast(1f)
+            bars.forEachIndexed { index, level ->
+                val position = if (barCount > 1) index.toDouble() / (barCount - 1) else 0.0
+                val role = AudioEditorWaveformLaw.role(position, played, sel)
+                val height = (level * size.height * BAR_FILL).coerceAtLeast(MIN_BAR_PX)
+                drawRoundRect(
+                    color = colorFor(role, accent, tokens.textPrimary, tokens.error),
+                    topLeft = Offset(index * step, (size.height - height) / 2f),
+                    size = Size(width, height),
+                    cornerRadius = CornerRadius(CORNER_PX),
+                )
+            }
+            sel?.let { drawHandles(it, if (it.isRemoval) tokens.error else accent) }
+            drawLine(
+                color = Color.White,
+                start = Offset((played * size.width).toFloat(), 0f),
+                end = Offset((played * size.width).toFloat(), size.height),
+                strokeWidth = PLAYHEAD_PX,
             )
         }
-        sel?.let { drawHandles(it, if (it.isRemoval) tokens.error else accent) }
-        drawLine(
-            color = Color.White,
-            start = Offset((played * size.width).toFloat(), 0f),
-            end = Offset((played * size.width).toFloat(), size.height),
-            strokeWidth = PLAYHEAD_PX,
-        )
+        selection()?.let { sel ->
+            HandleAccessibility(sel.start, handleLabel(start = true, removal = sel.isRemoval)) { moveStart(it) }
+            HandleAccessibility(sel.end, handleLabel(start = false, removal = sel.isRemoval)) { moveEnd(it) }
+        }
     }
 }
+
+/**
+ * La poignée telle que TalkBack la voit — miroir de l'`accessibilityAdjustableAction` des poignées iOS : un nœud
+ * de 44 dp centré sur la poignée, nommé, qui annonce sa position et se règle au centième (glisser haut / bas).
+ * Il ne porte aucun geste : le doigt reste servi par la forme d'onde dessous.
+ */
+@Composable
+private fun HandleAccessibility(fraction: Double, label: String, onMove: (Double) -> Unit) {
+    val slopPx = with(LocalDensity.current) { HANDLE_SLOP.roundToPx() }
+    val clamped = fraction.coerceIn(0.0, 1.0)
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(Constraints.fixed(slopPx, constraints.maxHeight))
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    placeable.place((clamped * constraints.maxWidth - slopPx / 2.0).roundToInt(), 0)
+                }
+            }
+            .semantics {
+                contentDescription = label
+                progressBarRangeInfo = ProgressBarRangeInfo(clamped.toFloat(), 0f..1f, steps = ADJUST_STEPS)
+                setProgress { target -> onMove(target.toDouble().coerceIn(0.0, 1.0)); true }
+            },
+    )
+}
+
+@Composable
+private fun handleLabel(start: Boolean, removal: Boolean): String = stringResource(
+    when {
+        removal && start -> R.string.audio_split_handle_start
+        removal -> R.string.audio_split_handle_end
+        start -> R.string.audio_trim_handle_start
+        else -> R.string.audio_trim_handle_end
+    },
+)
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHandles(selection: AudioEditorSelection, tint: Color) {
     listOf(selection.start, selection.end).forEach { fraction ->
@@ -166,3 +213,6 @@ private const val CORNER_PX = 3f
 private const val PLAYHEAD_PX = 4f
 private const val HANDLE_LINE_PX = 6f
 private const val HANDLE_KNOB_PX = 14f
+
+/** 99 crans entre 0 et 1 : TalkBack règle une poignée au centième, comme `MeeshyAdjustStep` (iOS). */
+private const val ADJUST_STEPS = 99
