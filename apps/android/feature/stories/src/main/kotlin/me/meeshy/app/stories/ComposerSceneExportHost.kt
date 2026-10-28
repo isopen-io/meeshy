@@ -31,7 +31,11 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntries
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
+import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.composer.scene.SceneExportState
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 
 /**
  * L'export de la scène vu de l'écran : la capture de ce que l'auteur VOIT (passe `FULL`, ou les objets seuls sur un fond
@@ -71,6 +75,8 @@ internal fun rememberSceneExportHost(state: StoryComposerUiState, viewModel: Sto
         }
     }
     ExportProgressDialog(fraction = exportState.veilFraction, onCancel = exportViewModel::cancel)
+    val permissions = rememberPermissionFlow()
+    PermissionFlowHost(permissions)
 
     return SceneExportHost(
         capture = SceneCapture(layer, pass),
@@ -79,6 +85,10 @@ internal fun rememberSceneExportHost(state: StoryComposerUiState, viewModel: Sto
         startExport = { entry ->
             val sources = SceneExportSources.from(state, viewModel::playableSoundUrl)
             scope.launch {
+                // Android 8–9 : l'album s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
+                if (entry.destination == SceneExportDestination.GALLERY &&
+                    !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)
+                ) return@launch
                 viewModel.onDeselectTextElement()
                 viewModel.onDeselectSticker()
                 pass = if (sources.video != null) SceneCapturePass.OVERLAY_ONLY else SceneCapturePass.FULL

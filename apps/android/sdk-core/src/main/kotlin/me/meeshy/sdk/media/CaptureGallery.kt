@@ -23,8 +23,10 @@ public interface CaptureGallery {
 
 /**
  * [CaptureGallery] sur MediaStore, album « Meeshy ». Dès l'API 29 l'écriture dans l'album
- * de l'app n'exige aucune permission (stockage cloisonné) ; en deçà, elle exigerait
- * `WRITE_EXTERNAL_STORAGE`, que l'app ne demande pas : le refus est alors honnête (`false`).
+ * de l'app n'exige aucune permission (stockage cloisonné) ; en deçà (Android 8–9), le fichier
+ * public s'écrit sous `WRITE_EXTERNAL_STORAGE`, que l'appelant obtient d'abord par la porte
+ * unique (`PermissionNature.PHOTO_LIBRARY_ADD`) — sans elle le refus est honnête (`false`), et
+ * un échec ne laisse ni fichier ni entrée.
  */
 public class MediaStoreCaptureGallery(
     private val context: Context,
@@ -48,7 +50,7 @@ public class MediaStoreCaptureGallery(
         directory: String,
         body: (java.io.OutputStream) -> Unit,
     ): Boolean = withContext(io) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext writeLegacy(collection, displayName, mimeType, directory, body)
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
@@ -66,6 +68,27 @@ public class MediaStoreCaptureGallery(
         }
         val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
         runCatching { resolver.update(uri, done, null, null) }.isSuccess
+    }
+
+    @Suppress("DEPRECATION")
+    private fun writeLegacy(
+        collection: android.net.Uri,
+        displayName: String,
+        mimeType: String,
+        directory: String,
+        body: (java.io.OutputStream) -> Unit,
+    ): Boolean {
+        val file = File(File(Environment.getExternalStoragePublicDirectory(directory), ALBUM), displayName)
+        return runCatching {
+            file.parentFile?.mkdirs()
+            file.outputStream().use(body)
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(MediaStore.MediaColumns.DATA, file.absolutePath)
+            }
+            checkNotNull(context.contentResolver.insert(collection, values))
+        }.onFailure { file.delete() }.isSuccess
     }
 
     private companion object {
