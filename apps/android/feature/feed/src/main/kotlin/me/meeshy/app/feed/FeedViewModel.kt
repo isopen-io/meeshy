@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -660,6 +661,7 @@ class FeedViewModel @Inject constructor(
         language: String? = null,
         mediaAlt: Map<String, String> = emptyMap(),
         draft: PostComposerDraftSnapshot? = null,
+        background: String? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -675,6 +677,7 @@ class FeedViewModel @Inject constructor(
                         originalLanguage = language,
                         location = location,
                         mediaAlt = mediaAlt.ifEmpty { null },
+                        storyEffects = background?.let { StoryEffects(background = it) },
                     ),
                     draft,
                 )
