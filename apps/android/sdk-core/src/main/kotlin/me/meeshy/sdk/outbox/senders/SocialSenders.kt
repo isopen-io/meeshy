@@ -56,6 +56,19 @@ public class PublishStoryHandler @Inject constructor(
         }
 }
 
+/**
+ * Un j'aime, un favori ou leur retrait que le serveur dit DÉJÀ appliqué est un succès idempotent (#13588) : la passerelle
+ * rend 410 `MUTATION_RESULT_GONE` pour le rejeu d'un j'aime dont elle a oublié le résultat (« ton geste a bien eu
+ * lieu »), et 409 ne peut dire ici que « déjà dans l'état demandé ». Les classer échec ferait réessayer jusqu'à
+ * l'épuisement, puis DÉFAIRE une valeur que le serveur a confirmée.
+ */
+internal fun NetworkResult<*>.toToggleSendResult(): SendResult = when {
+    this is NetworkResult.Failure && error.httpStatus in ALREADY_APPLIED_STATUSES -> SendResult.Success
+    else -> toSendResult()
+}
+
+private val ALREADY_APPLIED_STATUSES = setOf(409, 410)
+
 /** `LIKE_POST`: likes the post; an exhausted like rolls the optimistic flip back to unliked. */
 public class LikePostHandler @Inject constructor(
     private val postApi: PostApi,
@@ -63,7 +76,7 @@ public class LikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.like(row.targetId) }.toSendResult()
+        apiCall { postApi.like(row.targetId) }.toToggleSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackLike(row.targetId, liked = false)
@@ -77,7 +90,7 @@ public class UnlikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.unlike(row.targetId) }.toSendResult()
+        apiCall { postApi.unlike(row.targetId) }.toToggleSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackLike(row.targetId, liked = true)
@@ -91,7 +104,7 @@ public class BookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.bookmark(row.targetId) }.toSendResult()
+        apiCall { postApi.bookmark(row.targetId) }.toToggleSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackBookmark(row.targetId, bookmarked = false)
@@ -105,7 +118,7 @@ public class UnbookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.removeBookmark(row.targetId) }.toSendResult()
+        apiCall { postApi.removeBookmark(row.targetId) }.toToggleSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackBookmark(row.targetId, bookmarked = true)
