@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.TextEditTool
+import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
@@ -149,8 +150,7 @@ internal fun TextStyleToolbar(
                 CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
             }
             if (shows(ComposerObjectEditorSection.Timing)) {
-                CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
-                CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
+                TimingCycleButtons(element.timing, onCycleStart, onCycleDuration)
             }
             if (section == null) {
                 CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
@@ -178,6 +178,13 @@ internal fun TextStyleToolbar(
             }
         }
     }
+}
+
+/** La section Temps d'un objet (texte ou sticker, iOS `ComposerObjectEditorRail`) : son départ, puis sa durée. */
+@Composable
+internal fun TimingCycleButtons(timing: StoryElementTiming, onCycleStart: () -> Unit, onCycleDuration: () -> Unit) {
+    CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, timing.hasStart, onCycleStart)
+    CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, timing.isTimed, onCycleDuration)
 }
 
 /** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
