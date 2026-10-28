@@ -63,4 +63,15 @@ class SceneExportStateTest {
         assertThat(SceneExportState.Running(0.25f, SceneExportDestination.SHARE).veilFraction).isEqualTo(0.25f)
         assertThat(SceneExportState.Ready("x", SceneExportDestination.SHARE).veilFraction).isNull()
     }
+
+    @Test
+    fun `la sauvegarde en galerie se dit puis l ecran rend le repos`() {
+        val running = SceneExportState.Running(1f, SceneExportDestination.GALLERY)
+        val saved = SceneExportReducer.saved(running)
+        assertThat(saved).isEqualTo(SceneExportState.Saved)
+        assertThat(SceneExportReducer.acknowledged(saved)).isEqualTo(SceneExportState.Idle)
+        assertThat(SceneExportReducer.acknowledged(SceneExportState.Failed)).isEqualTo(SceneExportState.Idle)
+        assertThat(SceneExportReducer.acknowledged(running)).isSameInstanceAs(running)
+        assertThat(SceneExportReducer.saved(SceneExportState.Idle)).isEqualTo(SceneExportState.Idle)
+    }
 }

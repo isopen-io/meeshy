@@ -15,6 +15,7 @@ public sealed interface SceneExportState {
     public data object Idle : SceneExportState
     public data class Running(val fraction: Float, val destination: SceneExportDestination) : SceneExportState
     public data class Ready(val path: String, val destination: SceneExportDestination) : SceneExportState
+    public data object Saved : SceneExportState
     public data object Failed : SceneExportState
 
     public val isExporting: Boolean get() = this is Running
@@ -40,6 +41,14 @@ public object SceneExportReducer {
 
     public fun failed(state: SceneExportState): SceneExportState =
         if (state is SceneExportState.Running) SceneExportState.Failed else state
+
+    /** La copie en galerie est faite : le temporaire n'a plus de lecteur. */
+    public fun saved(state: SceneExportState): SceneExportState =
+        if (state is SceneExportState.Running) SceneExportState.Saved else state
+
+    /** L'écran a dit le résultat (toast) : retour au repos, jamais avant. */
+    public fun acknowledged(state: SceneExportState): SceneExportState =
+        if (state is SceneExportState.Saved || state is SceneExportState.Failed) SceneExportState.Idle else state
 
     public fun cancel(state: SceneExportState): SceneExportState = SceneExportState.Idle
 
