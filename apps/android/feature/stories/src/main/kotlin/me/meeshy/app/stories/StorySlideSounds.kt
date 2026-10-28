@@ -12,7 +12,7 @@ val StorySlideDeck.hasSounds: Boolean get() = slides.any { it.audio.isNotEmpty()
  * Inerte — même instance — quand la scène a atteint son plafond de pistes.
  */
 fun StorySlideDeck.borrowSoundOnSelected(sound: ApiSound): StorySlideDeck =
-    when (val placed = ComposerSoundPlacement.borrow(selectedSlide.audio, sound)) {
+    when (val placed = ComposerSoundPlacement.borrow(selectedSlide.audio, sound, selectedSlide.mediaIds.size)) {
         SoundPlacement.Refused -> this
         is SoundPlacement.Placed -> withSelectedAudio(placed.audios)
     }

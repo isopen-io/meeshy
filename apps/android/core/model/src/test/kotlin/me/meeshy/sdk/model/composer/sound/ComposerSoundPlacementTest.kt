@@ -53,6 +53,27 @@ class ComposerSoundPlacementTest {
     }
 
     @Test
+    fun `a scene full of visual media refuses a sound`() {
+        assertThat(ComposerSoundPlacement.canBorrow(emptyList(), visualMedia = 10)).isFalse()
+        assertThat(ComposerSoundPlacement.borrow(emptyList(), sound("s1"), visualMedia = 10)).isEqualTo(SoundPlacement.Refused)
+        assertThat(ComposerSoundPlacement.canBorrow(emptyList(), visualMedia = 9)).isTrue()
+    }
+
+    @Test
+    fun `six visual media and five sounds exceed ten so the sixth sound is refused`() {
+        val five = (1..5).map { recording("r$it", background = false) }
+        assertThat(ComposerSoundPlacement.canBorrow(five.take(4), visualMedia = 6)).isFalse()
+        assertThat(ComposerSoundPlacement.canBorrow(five.take(3), visualMedia = 6)).isTrue()
+    }
+
+    @Test
+    fun `a borrowed background is replaced even on a scene at the ten cap`() {
+        val borrowed = (ComposerSoundPlacement.borrow(emptyList(), sound("s0")) as SoundPlacement.Placed).audios
+        assertThat(ComposerSoundPlacement.canBorrow(borrowed, visualMedia = 9)).isTrue()
+        assertThat(ComposerSoundPlacement.borrow(borrowed, sound("s1"), visualMedia = 9)).isInstanceOf(SoundPlacement.Placed::class.java)
+    }
+
+    @Test
     fun `removing and muting target a track by id and leave the others`() {
         val audios = listOf(recording("a"), recording("b", background = false))
         assertThat(ComposerSoundPlacement.remove(audios, "a").map { it.id }).containsExactly("b")

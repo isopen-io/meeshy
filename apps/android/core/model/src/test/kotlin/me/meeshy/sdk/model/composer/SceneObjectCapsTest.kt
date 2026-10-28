@@ -73,4 +73,13 @@ class SceneObjectCapsTest {
         val lists = SceneLists(stickers = (1..30).map { sticker("s$it") })
         assertThat(refused(SceneObjectCaps.Entry.STICKER, lists)).isEqualTo(SceneObjectCaps.Reason.STICKER_FULL)
     }
+
+    @Test
+    fun `les medias et les sons se comptent ensemble contre les dix`() {
+        assertThat(SceneObjectCaps.remainingMediaSlots(visualMedia = 10, audios = 0)).isEqualTo(0)
+        assertThat(SceneObjectCaps.remainingMediaSlots(visualMedia = 6, audios = 3)).isEqualTo(1)
+        assertThat(SceneObjectCaps.remainingMediaSlots(visualMedia = 9, audios = 5)).isEqualTo(0)
+        assertThat(SceneObjectCaps.canAddMedia(visualMedia = 10, audios = 0)).isFalse()
+        assertThat(SceneObjectCaps.canAddMedia(visualMedia = 5, audios = 4)).isTrue()
+    }
 }
