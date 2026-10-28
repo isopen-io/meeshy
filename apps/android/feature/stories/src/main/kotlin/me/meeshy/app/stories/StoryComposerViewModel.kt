@@ -417,14 +417,15 @@ class StoryComposerViewModel @Inject constructor(
     /**
      * Removes the slide [id] (inert on the last remaining slide / unknown id) and reclaims
      * its media: dropped from the preview pools, and each offline-pending upload among them
-     * is cancelled so a discarded slide never leaves an orphaned `UPLOAD_MEDIA` row.
+     * is cancelled so a discarded slide never leaves an orphaned `UPLOAD_MEDIA` row. A media
+     * another slide still shows (a duplicate shares its original's ids) is never reclaimed.
      */
     fun onRemoveSlide(id: String) {
         val before = _state.value.deck
         val removed = before.slides.firstOrNull { it.id == id } ?: return
         val after = before.removeSlide(id)
         if (after === before) return
-        val droppedMedia = removed.mediaIds.toSet()
+        val droppedMedia = removed.mediaIds.toSet() - after.slides.flatMap(StorySlide::mediaIds).toSet()
         val pendingToCancel = _state.value.pendingUploads
             .filter { it.cmid in droppedMedia }
             .map(PendingMediaUpload::cmid)
