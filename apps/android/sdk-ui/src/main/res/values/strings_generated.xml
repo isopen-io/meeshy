@@ -1,5 +1,37 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Playback position</string>
+    <string name="audio_editor_apply">Apply changes</string>
+    <string name="audio_editor_close">Close</string>
+    <string name="audio_editor_error_generic">Editing failed.</string>
+    <string name="audio_editor_error_load">Couldn\'t load this audio.</string>
+    <string name="audio_editor_fade_in">Fade in</string>
+    <string name="audio_editor_fade_out">Fade out</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simple</string>
+    <string name="audio_editor_op_fade">Fade</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Section removed</string>
+    <string name="audio_editor_op_speed">Speed</string>
+    <string name="audio_editor_op_trim">Trimmed</string>
+    <string name="audio_editor_pause">Pause</string>
+    <string name="audio_editor_play">Play</string>
+    <string name="audio_editor_preparing">Preparing audio…</string>
+    <string name="audio_editor_processing">Processing…</string>
+    <string name="audio_editor_redo">Redo</string>
+    <string name="audio_editor_reset">Reset</string>
+    <string name="audio_editor_split_hint">Select the section to remove.</string>
+    <string name="audio_editor_tool_fade">Fade</string>
+    <string name="audio_editor_tool_speed">Speed</string>
+    <string name="audio_editor_tool_split">Cut</string>
+    <string name="audio_editor_tool_transcribe">Transcribe</string>
+    <string name="audio_editor_tool_trim">Trim</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Drag the handles to keep a portion.</string>
+    <string name="audio_editor_undo">Undo</string>
+    <string name="audio_editor_use">Use audio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
     <string name="avatar_a11y_mood">mood %s</string>
     <string name="bubble_story_citation_answer">reply to their story</string>

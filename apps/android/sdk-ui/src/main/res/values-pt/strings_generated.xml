@@ -1,5 +1,37 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Posição de reprodução</string>
+    <string name="audio_editor_apply">Aplicar as alterações</string>
+    <string name="audio_editor_close">Fechar</string>
+    <string name="audio_editor_error_generic">A edição falhou.</string>
+    <string name="audio_editor_error_load">Não foi possível carregar este áudio.</string>
+    <string name="audio_editor_fade_in">Fade in</string>
+    <string name="audio_editor_fade_out">Fade out</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simples</string>
+    <string name="audio_editor_op_fade">Fade</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Trecho removido</string>
+    <string name="audio_editor_op_speed">Velocidade</string>
+    <string name="audio_editor_op_trim">Cortado</string>
+    <string name="audio_editor_pause">Pausar</string>
+    <string name="audio_editor_play">Reproduzir</string>
+    <string name="audio_editor_preparing">Preparando o áudio…</string>
+    <string name="audio_editor_processing">Processando…</string>
+    <string name="audio_editor_redo">Refazer</string>
+    <string name="audio_editor_reset">Redefinir</string>
+    <string name="audio_editor_split_hint">Selecione o trecho a remover.</string>
+    <string name="audio_editor_tool_fade">Fade</string>
+    <string name="audio_editor_tool_speed">Velocidade</string>
+    <string name="audio_editor_tool_split">Cortar</string>
+    <string name="audio_editor_tool_transcribe">Transcrever</string>
+    <string name="audio_editor_tool_trim">Aparar</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Arraste as alças para manter um trecho.</string>
+    <string name="audio_editor_undo">Desfazer</string>
+    <string name="audio_editor_use">Usar o áudio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Posição na mensagem de voz</string>
     <string name="avatar_a11y_mood">humor %s</string>
     <string name="bubble_story_citation_answer">resposta ao story</string>

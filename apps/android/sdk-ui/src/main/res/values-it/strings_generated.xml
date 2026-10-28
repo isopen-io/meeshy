@@ -1,5 +1,37 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Posizione di riproduzione</string>
+    <string name="audio_editor_apply">Applica le modifiche</string>
+    <string name="audio_editor_close">Chiudi</string>
+    <string name="audio_editor_error_generic">La modifica non è riuscita.</string>
+    <string name="audio_editor_error_load">Impossibile caricare questo audio.</string>
+    <string name="audio_editor_fade_in">Dissolvenza in entrata</string>
+    <string name="audio_editor_fade_out">Dissolvenza in uscita</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Semplice</string>
+    <string name="audio_editor_op_fade">Dissolvenza</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Originale</string>
+    <string name="audio_editor_op_removerange">Sezione tagliata</string>
+    <string name="audio_editor_op_speed">Velocità</string>
+    <string name="audio_editor_op_trim">Ritagliato</string>
+    <string name="audio_editor_pause">Pausa</string>
+    <string name="audio_editor_play">Riproduci</string>
+    <string name="audio_editor_preparing">Preparazione dell\'audio…</string>
+    <string name="audio_editor_processing">Elaborazione…</string>
+    <string name="audio_editor_redo">Ripristina</string>
+    <string name="audio_editor_reset">Reimposta</string>
+    <string name="audio_editor_split_hint">Seleziona la sezione da eliminare.</string>
+    <string name="audio_editor_tool_fade">Dissolvenza</string>
+    <string name="audio_editor_tool_speed">Velocità</string>
+    <string name="audio_editor_tool_split">Taglia</string>
+    <string name="audio_editor_tool_transcribe">Trascrivi</string>
+    <string name="audio_editor_tool_trim">Ritaglia</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Trascina le maniglie per conservare una porzione.</string>
+    <string name="audio_editor_undo">Annulla</string>
+    <string name="audio_editor_use">Usa l\'audio</string>
+    <string name="audio_editor_volume_normal">Normale</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="avatar_a11y_mood">umore %s</string>
     <string name="bubble_story_citation_answer">risposta alla sua storia</string>
