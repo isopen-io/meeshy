@@ -108,6 +108,19 @@ object Routes {
                 "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}"
             }
         }
+
+    /** Le lien de partage d'un reel (`/reel/{id}`, l'adresse que la passerelle grave) : ouvre les reels sur ce post. */
+    val REEL_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).map { host -> "https://$host/reel/{seed}" }
+
+    /**
+     * Le lien d'une story (`/story/{id}`, `/stories/{id}`) : une story est un post du meme espace d'identifiants, donc
+     * l'ouverture connectee est le detail du post — comme iOS quand la story a expire ou n'est pas dans le plateau.
+     */
+    val STORY_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).flatMap { host ->
+            listOf("story", "stories").map { segment -> "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}" }
+        }
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val CONTACTS_DISCOVER = "contacts/discover"

@@ -32,6 +32,9 @@ import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
+import me.meeshy.app.navigation.VisitorContentPresenter
+import me.meeshy.app.navigation.VisitorLinkGate
+import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.app.navigation.WarmDeepLink
 import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
@@ -92,6 +95,13 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var launchProof: LaunchIntentProof
 
+    /** Un lien reçu SANS session s'ouvre en lecture seule (#13464) : la carte invite à se connecter, le lien attend. */
+    @Inject
+    lateinit var visitorContent: VisitorContentPresenter
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
     private var launchRoute by mutableStateOf<String?>(null)
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
@@ -113,6 +123,7 @@ class MainActivity : ComponentActivity() {
         InboundIntentGate.admit(intent, launchProof::admits)
         val restored = savedInstanceState != null
         launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
+        if (!restored) divertVisitorLink(intent, atLaunch = true)
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
@@ -203,6 +214,19 @@ class MainActivity : ComponentActivity() {
         launchRoute = launchRouteOf(intent)
         callLink = callLinkOf(intent)
         warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
+        divertVisitorLink(intent, atLaunch = false)
+    }
+
+    /**
+     * Un lien de publication, de réel ou de story reçu sans session montre son contenu public (iOS `VisitorContentPresenter`).
+     * Le lien reste EN ATTENTE (`warmDeepLink`, que la racine ne rejoue qu'une fois connectée) et, au démarrage à froid,
+     * l'adresse est retirée de l'intent pour que le NavHost n'ouvre pas l'écran connecté d'un visiteur.
+     */
+    private fun divertVisitorLink(intent: Intent, atLaunch: Boolean) {
+        val request = VisitorLinkGate.divert(intent, signedIn = authRepository.isAuthenticated) ?: return
+        warmDeepLink = intent.data
+        if (atLaunch) intent.data = null
+        visitorContent.present(request)
     }
 
     /**

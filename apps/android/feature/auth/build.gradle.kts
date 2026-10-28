@@ -40,6 +40,7 @@ dependencies {
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
     implementation(project(":core:common"))
+    implementation(libs.coil.compose)
     implementation(libs.work.runtime)
 
     implementation(libs.androidx.core.ktx)
