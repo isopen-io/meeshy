@@ -54,33 +54,33 @@ class CallSocialSignalManager internal constructor(
     private val liveFrame = CallLiveFrameSocket(controls)
     private val preview = CallPreviewSocket(socketManager)
 
-    private val _participantInvited = SocketInboundRoute.subject<CallParticipantInvited>(16)
+    private val _participantInvited = SocketInboundRoute.subject<CallParticipantInvited>()
     val participantInvited: SharedFlow<CallParticipantInvited> = _participantInvited.exposed()
 
-    private val _inviteSettled = SocketInboundRoute.subject<CallInviteSettled>(16)
+    private val _inviteSettled = SocketInboundRoute.subject<CallInviteSettled>()
 
     /** Refus ou expiration d'une invitation ; [CallInviteSettled.outcome] les distingue. */
     val inviteSettled: SharedFlow<CallInviteSettled> = _inviteSettled.exposed()
 
-    private val _mutedByModerator = SocketInboundRoute.subject<CallMutedByModerator>(16)
+    private val _mutedByModerator = SocketInboundRoute.subject<CallMutedByModerator>()
     val mutedByModerator: SharedFlow<CallMutedByModerator> = _mutedByModerator.exposed()
 
-    private val _reactions = SocketInboundRoute.subject<CallReactionReceived>(64)
+    private val _reactions = SocketInboundRoute.subject<CallReactionReceived>()
     val reactionReceived: SharedFlow<CallReactionReceived> = _reactions.exposed()
 
-    private val _recordingEvents = SocketInboundRoute.subject<CallRecordingSocketEvent>(16)
+    private val _recordingEvents = SocketInboundRoute.subject<CallRecordingSocketEvent>()
     val recordingEvents: SharedFlow<CallRecordingSocketEvent> = _recordingEvents.exposed()
 
-    private val _frameSelected = SocketInboundRoute.subject<CallLiveFrameSelected>(16)
+    private val _frameSelected = SocketInboundRoute.subject<CallLiveFrameSelected>()
     val frameSelected: SharedFlow<CallLiveFrameSelected> = _frameSelected.exposed()
 
-    private val _previewRequested = SocketInboundRoute.subject<CallPreviewRequested>(16)
+    private val _previewRequested = SocketInboundRoute.subject<CallPreviewRequested>()
     val previewRequested: SharedFlow<CallPreviewRequested> = _previewRequested.exposed()
 
-    private val _previewSignals = SocketInboundRoute.subject<CallSignalEnvelope>(128)
+    private val _previewSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
     val previewSignals: SharedFlow<CallSignalEnvelope> = _previewSignals.exposed()
 
-    private val _transcriptionActive = SocketInboundRoute.subject<CallTranscriptionActive>(16)
+    private val _transcriptionActive = SocketInboundRoute.subject<CallTranscriptionActive>()
     val transcriptionActive: SharedFlow<CallTranscriptionActive> = _transcriptionActive.exposed()
 
     fun attach() {

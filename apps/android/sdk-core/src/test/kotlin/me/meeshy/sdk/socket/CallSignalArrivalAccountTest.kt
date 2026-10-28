@@ -6,6 +6,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -73,14 +76,30 @@ class CallSignalArrivalAccountTest {
     }
 
     @Test
-    fun `a burst beyond the old buffer is delivered whole to a slow collector`(): Unit = runBlocking {
+    fun `a burst far beyond the old buffer of 128 reaches a slow collector whole and in order`(): Unit = runBlocking {
         val wiring = Wiring(ticket("A"))
+        val burst = 400
         val seen = async(start = CoroutineStart.UNDISPATCHED) {
-            withTimeout(5_000) { wiring.calls.incomingSignals.take(100).toList() }
+            withTimeout(30_000) { wiring.calls.incomingSignals.onEach { delay(1) }.take(burst).toList() }
         }
-        repeat(100) {
+        repeat(burst) {
             wiring.fire("call:signal", """{"callId":"c1","signal":{"type":"ice-candidate","candidate":"c$it"}}""")
         }
-        assertThat(seen.await()).hasSize(100)
+
+        val candidates = seen.await().map { it.signal.candidate }
+        assertThat(candidates).containsExactlyElementsIn((0 until burst).map { "c$it" }).inOrder()
+    }
+
+    @Test
+    fun `an incoming offer of the current account rings`(): Unit = runBlocking {
+        val wiring = Wiring(ticket("A"))
+        val rang = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(5_000) { wiring.calls.incomingOffers.arrivals().first() }
+        }
+        wiring.fire("call:initiated", """{"callId":"c1","type":"audio","initiator":{"userId":"u9","username":"al"}}""")
+
+        val arrived = rang.await()
+        assertThat(arrived.value.callId).isEqualTo("c1")
+        assertThat(arrived.ticket?.ownerId).isEqualTo("A")
     }
 }

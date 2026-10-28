@@ -25,11 +25,12 @@ internal object ArrivalStamp {
     fun current(): AccountTicket? = current.get()
 
     inline fun <R> under(ticket: AccountTicket?, block: () -> R): R {
+        val previous = current()
         set(ticket)
         try {
             return block()
         } finally {
-            set(null)
+            set(previous)
         }
     }
 

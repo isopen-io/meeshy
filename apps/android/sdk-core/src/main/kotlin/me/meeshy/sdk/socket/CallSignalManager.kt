@@ -69,7 +69,7 @@ class CallSignalManager internal constructor(
 
     private fun arrivalTicket(): AccountTicket? = runCatching(ticket).getOrNull()
 
-    private val _events = SocketInboundRoute.subject<CallEvent>(64)
+    private val _events = SocketInboundRoute.subject<CallEvent>()
     val events: SharedFlow<CallEvent> = _events.exposed()
 
     /**
@@ -79,7 +79,7 @@ class CallSignalManager internal constructor(
      * arriving while a call is already active can be surfaced as a call-waiting
      * banner (and rejected / answered by its own id). Hot, no replay — like [events].
      */
-    private val _incomingOffers = SocketInboundRoute.subject<WaitingCall>(16)
+    private val _incomingOffers = SocketInboundRoute.subject<WaitingCall>()
     val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.exposed()
 
     /**
@@ -95,7 +95,7 @@ class CallSignalManager internal constructor(
      * own end reduces it) and merely dismiss the banner when the waiting call ends.
      * Hot, no replay — like [events].
      */
-    private val _endedCalls = SocketInboundRoute.subject<CallEndedSignal>(16)
+    private val _endedCalls = SocketInboundRoute.subject<CallEndedSignal>()
     val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.exposed()
 
     /**
@@ -106,7 +106,7 @@ class CallSignalManager internal constructor(
      * parallel stream carries it so the app-side WebRTC coordinator can apply
      * remote descriptions and add candidates. Hot, no replay — like [events].
      */
-    private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>(128)
+    private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
     val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
 
     /**
@@ -115,7 +115,7 @@ class CallSignalManager internal constructor(
      * `call:initiated` frame carries none — requests them on accept and configures
      * the WebRTC engine once they land here. Hot, no replay.
      */
-    private val _iceServersRefreshed = SocketInboundRoute.subject<List<SocketIceServer>>(8)
+    private val _iceServersRefreshed = SocketInboundRoute.subject<List<SocketIceServer>>()
     val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.exposed()
 
     /**
@@ -124,7 +124,7 @@ class CallSignalManager internal constructor(
      * FSM-facing [events]; the consumer prunes the leaver's media by identity.
      * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
      */
-    private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>(16)
+    private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
     val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
     /**
@@ -132,7 +132,7 @@ class CallSignalManager internal constructor(
      * (`call:quality-alert`). Drives the transient "your contact's connection is
      * unstable" indicator — iOS `isRemoteQualityDegraded` parity. Hot, no replay.
      */
-    private val _qualityAlerts = SocketInboundRoute.subject<CallQualityAlertPayload>(16)
+    private val _qualityAlerts = SocketInboundRoute.subject<CallQualityAlertPayload>()
     val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.exposed()
 
     /**
@@ -140,7 +140,7 @@ class CallSignalManager internal constructor(
      * (`call:screen-capture-alert`). Drives the privacy warning banner — iOS
      * `isRemoteScreenCapturing` parity. Hot, no replay.
      */
-    private val _screenCaptureAlerts = SocketInboundRoute.subject<CallScreenCaptureAlertPayload>(16)
+    private val _screenCaptureAlerts = SocketInboundRoute.subject<CallScreenCaptureAlertPayload>()
     val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.exposed()
 
     /**
@@ -149,7 +149,7 @@ class CallSignalManager internal constructor(
      * the original `text`). Dense during speech — buffered like [incomingSignals].
      * Hot, no replay.
      */
-    private val _translatedSegments = SocketInboundRoute.subject<CallTranslatedSegmentPayload>(128)
+    private val _translatedSegments = SocketInboundRoute.subject<CallTranslatedSegmentPayload>()
     val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.exposed()
 
     /**
@@ -158,7 +158,7 @@ class CallSignalManager internal constructor(
      * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
      * parity. Hot, no replay.
      */
-    private val _mediaToggles = SocketInboundRoute.subject<CallMediaTogglePayload>(16)
+    private val _mediaToggles = SocketInboundRoute.subject<CallMediaTogglePayload>()
     val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.exposed()
 
     fun attach() {

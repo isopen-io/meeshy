@@ -1,6 +1,5 @@
 package me.meeshy.sdk.socket
 
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -25,10 +24,6 @@ class SocketInboundRoute internal constructor(
 
         /** Le sujet d'un flux d'événements : sans perte tant qu'il y a un abonné, sans bloquer l'émetteur. */
         fun <T> subject(): RouteSubject<T> = RouteSubject()
-
-        /** Un sujet à tampon BORNÉ, pour la signalisation d'appel dont les capacités sont héritées (#13588). */
-        fun <T> subject(buffer: Int): RouteSubject<T> =
-            RouteSubject(MutableSharedFlow(replay = 0, extraBufferCapacity = buffer))
 
         /** Décode la charge en [T] puis la remet à [deliver], sur la voie série. */
         fun <T> decoding(
