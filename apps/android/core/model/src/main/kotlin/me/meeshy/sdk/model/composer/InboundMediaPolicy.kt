@@ -19,8 +19,8 @@ sealed interface InboundMediaVerdict {
  *   `file:///data/data/me.meeshy.app/…` fait lire à Meeshy ses propres secrets), ni une URI de nos propres fournisseurs
  *   (un intent forgé ferait relire par Meeshy, avec ses droits, ce qu'il a lui-même exposé), ni un `android.resource`.
  * - Le TYPE : lu dans les OCTETS. Le type déclaré par l'expéditeur n'est qu'un indice ; il ne sert qu'à refuser un
- *   désaccord (un « image/png » qui est une vidéo), jamais à admettre. Un format qu'on ne reconnaît pas est refusé
- *   (fail-closed) : ni SVG (script), ni HTML, ni archive.
+ *   désaccord (un « image/png » qui est une vidéo), jamais à admettre. Un format inconnu est refusé (fail-closed) : ni SVG (script), ni HTML,
+ *   ni archive — ni l'AVIF, que le retrait des métadonnées ne saurait pas réécrire : mieux vaut le refuser ici qu'à la publication.
  * - La TAILLE : bornée au plafond d'envoi, vérifiée sur ce qui a été LU, pas sur ce que l'expéditeur annonce.
  */
 object InboundMediaPolicy {
@@ -63,7 +63,7 @@ object InboundMediaPolicy {
     }
 
     private fun brand(major: String): Identity? = when {
-        major in IMAGE_BRANDS -> Identity(InboundMediaKind.IMAGE, if (major.startsWith("avi")) "image/avif" else "image/heic", if (major.startsWith("avi")) "avif" else "heic")
+        major in IMAGE_BRANDS -> Identity(InboundMediaKind.IMAGE, "image/heic", "heic")
         major == "qt  " -> Identity(InboundMediaKind.VIDEO, "video/quicktime", "mov")
         major.startsWith("3g") -> Identity(InboundMediaKind.VIDEO, "video/3gpp", "3gp")
         major in VIDEO_BRANDS -> Identity(InboundMediaKind.VIDEO, "video/mp4", "mp4")
@@ -84,6 +84,6 @@ object InboundMediaPolicy {
     private fun ByteArray.startsWith(vararg expected: Int) = at(0, *expected)
 
     private const val FTYP_END = 12
-    private val IMAGE_BRANDS = setOf("heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis")
+    private val IMAGE_BRANDS = setOf("heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1")
     private val VIDEO_BRANDS = setOf("isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ", "M4VH", "M4VP", "dash", "MSNV", "f4v ")
 }
