@@ -125,7 +125,10 @@ data class StorySlideDeck(
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int
-        get() = (MAX_MEDIA_PER_SLIDE - selectedSlide.mediaIds.size).coerceAtLeast(0)
+        get() = SceneObjectCaps.remainingMediaSlots(selectedSlide.mediaIds.size, selectedSlide.audio.size)
+
+    /** La slide sélectionnée peut porter un média de plus : dix médias ET sons en tout (iOS `canAddMedia`). */
+    val selectedCanAddMedia: Boolean get() = selectedRemainingMediaSlots > 0
 
     /** Free text-element slots left on the **selected** slide; never negative. */
     val selectedRemainingTextSlots: Int
@@ -145,7 +148,7 @@ data class StorySlideDeck(
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
     /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
-    fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
+    fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size + it.audio.size <= MAX_MEDIA_PER_SLIDE }
 
     /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
     fun isWithinTextElementLimit(): Boolean = slides.all { it.elements.size <= MAX_TEXT_ELEMENTS_PER_SLIDE }
@@ -161,7 +164,7 @@ data class StorySlideDeck(
      */
     fun addMediaToSelected(mediaId: String): StorySlideDeck {
         val selected = selectedSlide
-        if (mediaId in selected.mediaIds || selected.mediaIds.size >= MAX_MEDIA_PER_SLIDE) return this
+        if (mediaId in selected.mediaIds || !selectedCanAddMedia) return this
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
             if (i == index) slide.copy(mediaIds = slide.mediaIds + mediaId) else slide

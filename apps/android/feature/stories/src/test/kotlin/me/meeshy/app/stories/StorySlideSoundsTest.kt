@@ -97,4 +97,26 @@ class StorySlideSoundsTest {
         assertThat(stateWith(fourPlusBackground).canBorrowSound).isFalse()
         assertThat(stateWith(fourPlusBackground).selectedSlideBackgroundSound!!.id).isEqualTo("bg")
     }
+
+    @Test
+    fun `media and sounds count together against the ten cap on both gates`() {
+        fun deckWith(media: Int, sounds: Int) = StorySlideDeck(
+            slides = listOf(
+                StorySlide(
+                    id = "a",
+                    mediaIds = (1..media).map { "m$it" },
+                    audio = (1..sounds).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) },
+                ),
+            ),
+            selectedId = "a",
+        )
+        val imagesFull = deckWith(media = 10, sounds = 0)
+        assertThat(StoryComposerUiState(deck = imagesFull).canBorrowSound).isFalse()
+        assertThat(imagesFull.borrowSoundOnSelected(shelfSound)).isSameInstanceAs(imagesFull)
+        val soundsAndImages = deckWith(media = 5, sounds = 5)
+        assertThat(soundsAndImages.selectedCanAddMedia).isFalse()
+        assertThat(soundsAndImages.addMediaToSelected("new")).isSameInstanceAs(soundsAndImages)
+        assertThat(deckWith(media = 6, sounds = 3).selectedRemainingMediaSlots).isEqualTo(1)
+        assertThat(deckWith(media = 6, sounds = 3).addMediaToSelected("new").selectedSlide.mediaIds).hasSize(7)
+    }
 }
