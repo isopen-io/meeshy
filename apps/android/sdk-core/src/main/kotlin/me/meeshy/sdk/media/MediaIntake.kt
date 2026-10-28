@@ -26,7 +26,7 @@ public object MediaIntake {
 
     public fun directory(cacheDir: File): File = File(cacheDir, DIRECTORY)
 
-    /** Copie [input] en flux ; `null` si le flux ne se lit pas ou dépasse [maxBytes] (rien ne reste sur le disque). */
+    /** Copie [input] en flux ; `null` si le flux ne se lit pas (erreur d'E/S ou exception d'un fournisseur) ou dépasse [maxBytes] (rien ne reste sur le disque). */
     public fun copy(
         input: InputStream,
         cacheDir: File,
@@ -42,6 +42,8 @@ public object MediaIntake {
         val kept = try {
             target.outputStream().use { out -> copyBounded(input, out, maxBytes) }
         } catch (_: IOException) {
+            false
+        } catch (_: RuntimeException) {
             false
         }
         if (!kept) {
