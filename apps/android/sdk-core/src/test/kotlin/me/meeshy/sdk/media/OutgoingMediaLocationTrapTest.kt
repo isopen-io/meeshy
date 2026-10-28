@@ -158,12 +158,15 @@ class OutgoingMediaLocationTrapTest {
     }
 
     @Test
-    fun `un fichier quelconque porteur d une signature de lieu ne part pas, sans signature il part tel quel`() = runTest {
-        val clean = ascii("%PDF-1.7\n1 0 obj << /Title (Facture) >> endobj\n")
-        val located = ascii("%PDF-1.7\n<x:xmpmeta><exif:GPSLatitude>48,51N</exif:GPSLatitude></x:xmpmeta>")
+    fun `un document part tel quel — PDF avec paquet XMP, CSV avec coordonnée, texte, archive (#13591)`() = runTest {
+        val pdf = ascii("%PDF-1.7\n<x:xmpmeta><exif:GPSLatitude>48,51N</exif:GPSLatitude></x:xmpmeta>")
+        val csv = ascii("ville,position\nParis,$place\n")
+        val zip = byteArrayOf(0x50, 0x4B, 3, 4) + ascii("<x:xmpmeta>$place")
 
-        assertThat(sent(clean, "application/pdf")).isEqualTo(clean)
-        assertRefused(located, "application/pdf")
+        assertThat(sent(pdf, "application/pdf")).isEqualTo(pdf)
+        assertThat(sent(csv, "text/csv")).isEqualTo(csv)
+        assertThat(sent(csv, "application/octet-stream")).isEqualTo(csv)
+        assertThat(sent(zip, "application/zip")).isEqualTo(zip)
     }
 
     @Test
