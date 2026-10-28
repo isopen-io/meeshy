@@ -64,6 +64,26 @@ describe('storyEffects — mediaURL du fond complété depuis la pièce désign�
     expect(effects.mediaObjects[0]).not.toHaveProperty('mediaURL');
   });
 
+  it('une pièce d\'AUTRUI listée dans mediaIds et désignée comme fond ne prête pas son adresse', async () => {
+    const rows = [
+      { id: SECOND, fileUrl: SECOND_URL, uploaderId: AUTHOR, postId: null, commentId: null },
+      { id: STRANGER, fileUrl: 'https://cdn.example/private-of-someone-else.jpg', uploaderId: '0b0b0b0b0b0b0b0b0b0b0b02', postId: null, commentId: null },
+    ];
+    const isFree = (row: (typeof rows)[number]) => row.postId === null && row.commentId === null;
+    const matches = (row: (typeof rows)[number], clause: Record<string, unknown>) => {
+      if ('uploaderId' in clause) return isFree(row) && row.uploaderId === clause.uploaderId;
+      if ('postId' in clause) return row.postId === clause.postId;
+      return true;
+    };
+    prisma.postMedia.findMany.mockImplementation(async (args: { where: { id?: { in: string[] }; OR?: Record<string, unknown>[] } }) =>
+      rows
+        .filter((row) => (args.where.id?.in ?? []).includes(row.id))
+        .filter((row) => (args.where.OR ?? []).some((clause) => matches(row, clause)))
+        .map(({ id, fileUrl }) => ({ id, fileUrl })));
+    const effects = await created(STRANGER, [FIRST, STRANGER]);
+    expect(effects.mediaObjects[0]).not.toHaveProperty('mediaURL');
+  });
+
   it('à l\'édition, la pièce déjà portée par le post fournit son adresse', async () => {
     prisma.post.findFirst.mockResolvedValue(makePost({
       id: 'story-1', authorId: AUTHOR, type: PostType.STORY, media: [{ id: SECOND, mimeType: 'image/jpeg', duration: null }],
