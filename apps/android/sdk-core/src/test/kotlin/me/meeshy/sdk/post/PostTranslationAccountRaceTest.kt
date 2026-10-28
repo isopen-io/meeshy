@@ -89,4 +89,40 @@ class PostTranslationAccountRaceTest {
         assertThat(cached.isLikedByMe).isTrue()
         assertThat(cached.translations!!["es"]!!.text).isEqualTo("Hola")
     }
+
+    @Test
+    fun `an optimistic like tapped while the translator works survives the translation`() = runTest {
+        coEvery { api.getFeed(any(), any()) } returns feedOf(liked = false)
+        repository.refresh()
+        val answer = CompletableDeferred<ApiResponse<TranslateResponse>>()
+        coEvery { translationApi.translate(any()) } coAnswers { answer.await() }
+        val stored = async { repository.requestOnDemandTranslation("p1", "es") }
+        runCurrent()
+
+        assertThat(repository.toggleLike("p1")).isTrue()
+        answer.complete(ApiResponse(success = true, data = TranslateResponse(translatedText = "Hola")))
+
+        assertThat(stored.await()).isTrue()
+        val cached = repository.cachedPost("p1")!!
+        assertThat(cached.isLikedByMe).isTrue()
+        assertThat(cached.translations!!["es"]!!.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a translation of the text the author has since edited is not grafted onto the edited post`() = runTest {
+        coEvery { api.getFeed(any(), any()) } returns feedOf(liked = false)
+        repository.refresh()
+        val answer = CompletableDeferred<ApiResponse<TranslateResponse>>()
+        coEvery { translationApi.translate(any()) } coAnswers { answer.await() }
+        val stored = async { repository.requestOnDemandTranslation("p1", "es") }
+        runCurrent()
+
+        assertThat(repository.applyPostUpdate(ApiPost(id = "p1", content = "Bonsoir", originalLanguage = "fr"))).isTrue()
+        answer.complete(ApiResponse(success = true, data = TranslateResponse(translatedText = "Hola")))
+
+        assertThat(stored.await()).isFalse()
+        val cached = repository.cachedPost("p1")!!
+        assertThat(cached.content).isEqualTo("Bonsoir")
+        assertThat(cached.translations?.get("es")).isNull()
+    }
 }
