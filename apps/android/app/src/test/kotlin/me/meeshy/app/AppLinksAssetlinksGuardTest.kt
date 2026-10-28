@@ -55,6 +55,39 @@ class AppLinksAssetlinksGuardTest {
     @Test
     fun `api hosts are not verified app links`() {
         assertThat(autoVerifyLinks().map { it.host }.toSet()).containsExactly("meeshy.me", "www.meeshy.me")
+        assertThat(exactPathLinks().map { it.host }.toSet()).containsExactly("meeshy.me", "www.meeshy.me")
+    }
+
+    private fun exactPathLinks(): List<Link> =
+        Regex("<intent-filter android:autoVerify=\"true\">(.*?)</intent-filter>", RegexOption.DOT_MATCHES_ALL)
+            .findAll(manifest.replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")).flatMap { filter ->
+                Regex("android:host=\"([^\"]+)\" android:path=\"([^\"]+)\"").findAll(filter.groupValues[1])
+                    .map { Link(it.groupValues[1], it.groupValues[2]) }
+            }.toList()
+
+    // #13465 : les e-mails de reinitialisation / verification s'ouvrent dans l'app. Chemins EXACTS — la forme que
+    // LaunchRouter lit — jamais un prefixe : un lien d'e-mail que l'app ne lit pas (revocation, suppression de compte)
+    // serait avale sans rien afficher au lieu d'aller au navigateur.
+    @Test
+    fun `reset and verification email links are verified by exact path on both hosts`() {
+        val paths = listOf(
+            "/reset-password", "/auth/reset-password", "/auth/verify-email",
+            "/auth/email-link/reset-password", "/auth/email-link/verify-email", "/auth/email-link/magic-link",
+        )
+        listOf("meeshy.me", "www.meeshy.me").forEach { host ->
+            assertThat(exactPathLinks().filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
+        }
+    }
+
+    @Test
+    fun `no prefix claim reaches an email link the app does not read`() {
+        val unread = listOf(
+            "/auth/email-link", "/auth/revoke-sessions", "/account/deletion", "/settings/verify-email-change",
+            "/auth/reset-password/", "/reset-password/",
+        )
+        val prefixes = autoVerifyLinks().map { it.path }
+        unread.forEach { path -> assertThat(prefixes.any { path.startsWith(it) && it != "/auth/magic-link" }).isFalse() }
+        assertThat(exactPathLinks().map { it.path }).containsNoneIn(unread)
     }
 
     @Test

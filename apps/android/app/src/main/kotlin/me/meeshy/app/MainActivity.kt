@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        launchRoute = launchRouteOf(intent)
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
@@ -129,6 +129,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * La route de lancement d'un intent. Un lien d'e-mail a jeton (connexion, adresse, mot de passe) porte son
+     * secret dans l'adresse de l'intent : la route le recueille, et l'intent est VIDE de son adresse aussitot, pour
+     * que ni une restauration de l'activite ni une relecture ne rejoue un jeton a usage unique.
+     */
+    private fun launchRouteOf(intent: Intent): String? {
+        val route = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        if (LaunchRouter.opensWithoutSession(route)) intent.data = null
+        return route
     }
 
     private fun enterCallPictureInPicture(): Boolean {
@@ -168,7 +179,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        launchRoute = launchRouteOf(intent)
         warmDeepLink = if (launchRoute == null) WarmDeepLink.replayable(intent) else null
     }
 

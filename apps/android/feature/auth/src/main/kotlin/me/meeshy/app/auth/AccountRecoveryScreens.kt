@@ -186,7 +186,7 @@ fun MagicLinkScreen(
 }
 
 @Composable
-private fun RecoveryScaffold(
+internal fun RecoveryScaffold(
     title: String,
     onBack: () -> Unit,
     content: @Composable () -> Unit,

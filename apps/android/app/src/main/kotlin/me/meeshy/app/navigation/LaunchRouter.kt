@@ -124,8 +124,10 @@ object LaunchRouter {
      * n'envoie jamais au serveur ; la requete (`?token=`) reste lue pour les e-mails
      * partis avant, et le jeton historique ecrit dans le chemin aussi.
      *
-     * `verify-email` et `reset-password` sont reconnus par la loi mais n'ont pas encore
-     * de destination ici : ils ne donnent aucune route (l'e-mail s'ouvre au navigateur).
+     * `verify-email` (jeton ET adresse, tous deux requis) mene a la preuve de l'adresse, et
+     * `reset-password` (`/reset-password`, `/auth/reset-password` et l'alias `/auth/email-link/…`)
+     * a « Nouveau mot de passe » : meme forme exacte, memes refus, meme jeton laisse encode.
+     * Sans son secret, un de ces liens n'ouvre rien.
      *
      * Le token reste ENCODE tel quel dans la route produite : l'argument de
      * navigation le decode une seule fois a l'arrivee — le decoder ici le ferait
@@ -133,10 +135,29 @@ object LaunchRouter {
      */
     fun routeForDeepLink(dataUri: String?): String? {
         if (dataUri == null || !MEESHY_ORIGIN.containsMatchIn(dataUri)) return null
-        val form = EmailLinkSecret.exactForm(dataUri) as? EmailLinkSecret.Form.MagicLink ?: return null
-        val token = form.pathToken ?: linkSecret(name = "token", uri = dataUri) ?: return null
-        return "auth/magic-link?token=$token"
+        return when (val form = EmailLinkSecret.exactForm(dataUri)) {
+            is EmailLinkSecret.Form.MagicLink ->
+                (form.pathToken ?: linkSecret(name = "token", uri = dataUri))?.let { "auth/magic-link?token=$it" }
+            EmailLinkSecret.Form.ResetPassword ->
+                linkSecret(name = "token", uri = dataUri)?.let(Routes::resetPassword)
+            EmailLinkSecret.Form.VerifyEmail -> {
+                val token = linkSecret(name = "token", uri = dataUri) ?: return null
+                val email = linkSecret(name = "email", uri = dataUri) ?: return null
+                Routes.verifyEmailLink(token = token, email = email)
+            }
+            null -> null
+        }
     }
+
+    /**
+     * Cette destination de lancement s'ouvre-t-elle HORS session ? Seuls les liens d'e-mail a jeton : c'est
+     * precisement eux qui ouvrent une session (connexion, adresse prouvee) ou choisissent un mot de passe.
+     * Tout le reste (chat, appel) attend l'authentification.
+     */
+    fun opensWithoutSession(route: String?): Boolean =
+        route != null && EMAIL_LINK_ROUTE_PREFIXES.any { route.startsWith(it) }
+
+    private val EMAIL_LINK_ROUTE_PREFIXES = listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
 
     /** Le secret d'un lien d'e-mail : le fragment prime, la requete reste lue. Jamais decode ici. */
     private fun linkSecret(name: String, uri: String): String? {
