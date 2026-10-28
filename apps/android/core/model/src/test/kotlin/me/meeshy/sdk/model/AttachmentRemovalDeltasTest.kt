@@ -17,7 +17,7 @@ class AttachmentRemovalDeltasTest {
 
     @Test
     fun `the piece leaves a message that keeps its text`() {
-        val result = AttachmentRemovalDeltas.message(message("légende", piece("a"), piece("b")), "a", at)
+        val result = AttachmentRemovalDeltas.message(message("légende", piece("a"), piece("b")), "c1", "a", at)
 
         assertThat(result.attachments.map { it.id }).containsExactly("b")
         assertThat(result.content).isEqualTo("légende")
@@ -26,7 +26,7 @@ class AttachmentRemovalDeltasTest {
 
     @Test
     fun `a message left with neither text nor piece becomes a tombstone like a local deletion`() {
-        val result = AttachmentRemovalDeltas.message(message("  ", piece("a")), "a", at)
+        val result = AttachmentRemovalDeltas.message(message("  ", piece("a")), "c1", "a", at)
 
         assertThat(result.attachments).isEmpty()
         assertThat(result.content).isEmpty()
@@ -35,7 +35,7 @@ class AttachmentRemovalDeltasTest {
 
     @Test
     fun `the last piece of a captioned message leaves the caption alone`() {
-        val result = AttachmentRemovalDeltas.message(message("légende", piece("a")), "a", at)
+        val result = AttachmentRemovalDeltas.message(message("légende", piece("a")), "c1", "a", at)
 
         assertThat(result.attachments).isEmpty()
         assertThat(result.deletedAt).isNull()
@@ -45,7 +45,7 @@ class AttachmentRemovalDeltasTest {
     fun `a piece already gone is the same instance, so nothing is written twice`() {
         val gone = message("x", piece("b"))
 
-        assertThat(AttachmentRemovalDeltas.message(gone, "a", at)).isSameInstanceAs(gone)
+        assertThat(AttachmentRemovalDeltas.message(gone, "c1", "a", at)).isSameInstanceAs(gone)
     }
 
     private fun conversation(last: ApiConversationLastMessage?) = ApiConversation(
@@ -125,5 +125,62 @@ class AttachmentRemovalDeltasTest {
         assertThat(after.lastMessage?.content).isEqualTo("légende")
         assertThat(after.lastMessageTranslations).isNotNull()
         assertThat(after.lastMessage?.attachmentSummary).isNull()
+    }
+
+    @Test
+    fun `an event naming another conversation than the message's leaves the message untouched`() {
+        val elsewhere = message("", piece("a")).copy(conversationId = "c2")
+
+        assertThat(AttachmentRemovalDeltas.message(elsewhere, "c1", "a", at)).isSameInstanceAs(elsewhere)
+    }
+
+    private fun emptiedRowWith(previous: ApiMessage): ApiConversation =
+        AttachmentRemovalDeltas.preview(conversation(last("", piece("a"))), "m1", "a", previous)
+
+    private fun previousMessage(content: String = "avant") =
+        ApiMessage(id = "m0", conversationId = "c1", senderId = "u2", content = content, originalLanguage = "fr")
+
+    @Test
+    fun `a sealed end-to-end previous message takes the row as encrypted, never as its placeholder text`() {
+        val sealed = previousMessage(EndToEndRegime.CONTENT_PLACEHOLDER).copy(isEncrypted = true, encryptionMode = "e2ee")
+
+        assertThat(emptiedRowWith(sealed).lastMessage?.isEncrypted).isTrue()
+    }
+
+    @Test
+    fun `a previous message protected only by its effect flags stays protected on the row`() {
+        val viewOnce = previousMessage().copy(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt())
+        val blurred = previousMessage().copy(effectFlags = MessageEffectFlags.BLURRED.toInt())
+
+        assertThat(emptiedRowWith(viewOnce).lastMessage?.isViewOnce).isTrue()
+        assertThat(emptiedRowWith(blurred).lastMessage?.isBlurred).isTrue()
+    }
+
+    private val french = ApiTextTranslation(targetLanguage = "en", translatedContent = "before")
+
+    @Test
+    fun `the previous message brings its translations to the row, so the reader keeps his language`() {
+        val after = emptiedRowWith(previousMessage().copy(translations = listOf(french)))
+
+        assertThat(after.lastMessageTranslations).containsExactly("en", "before")
+    }
+
+    @Test
+    fun `a protected or cryptogram translation never travels to the row`() {
+        val viewOnce = previousMessage().copy(isViewOnce = true, translations = listOf(french))
+        val cryptogram = previousMessage().copy(translations = listOf(french.copy(isEncrypted = true)))
+
+        assertThat(emptiedRowWith(viewOnce).lastMessageTranslations).isNull()
+        assertThat(emptiedRowWith(cryptogram).lastMessageTranslations).isNull()
+    }
+
+    @Test
+    fun `a previous location or media message keeps what the row needs to name it`() {
+        val place = SharedPlace(latitude = 1.0, longitude = 2.0)
+        val located = emptiedRowWith(previousMessage("").copy(location = place)).lastMessage!!
+        val photo = emptiedRowWith(previousMessage("").copy(attachments = listOf(piece("p")))).lastMessage!!
+
+        assertThat(located.location).isEqualTo(place)
+        assertThat(photo.attachmentSummary).isEqualTo(LastMessageAttachmentSummary(count = 1, kinds = mapOf("image" to 1), totalSize = 10))
     }
 }

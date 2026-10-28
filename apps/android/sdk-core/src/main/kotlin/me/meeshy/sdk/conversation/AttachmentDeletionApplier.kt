@@ -44,7 +44,7 @@ class AttachmentDeletionApplier internal constructor(
         val deletedAt = Instant.ofEpochMilli(clock.nowMillis()).toString()
         var tombstoned = false
         updater.update(ticket, event.messageId, requireSynced = false) { message ->
-            AttachmentRemovalDeltas.message(message, event.attachmentId, deletedAt).also {
+            AttachmentRemovalDeltas.message(message, event.conversationId, event.attachmentId, deletedAt).also {
                 tombstoned = it !== message && it.deletedAt != null && message.deletedAt == null
             }
         }
