@@ -44,20 +44,20 @@ class StoryMediaUploaderTest {
     @Test
     fun `upload delegates to the repository tagged with the STORY context`() = runTest {
         val items = listOf(item("a.jpg"), item("b.jpg"))
-        coEvery { tusUploadRepository.uploadAll(items, TusUploadContext.STORY) } returns
+        coEvery { tusUploadRepository.uploadAll(items, TusUploadContext.STORY, any()) } returns
             NetworkResult.Success(listOf(uploaded("a"), uploaded("b")))
 
         val result = uploader().upload(items)
 
         assertThat(result).isEqualTo(NetworkResult.Success(listOf(uploaded("a"), uploaded("b"))))
-        coVerify(exactly = 1) { tusUploadRepository.uploadAll(items, TusUploadContext.STORY) }
+        coVerify(exactly = 1) { tusUploadRepository.uploadAll(items, TusUploadContext.STORY, any()) }
     }
 
     @Test
     fun `upload propagates a repository failure unchanged`() = runTest {
         val items = listOf(item())
         val failure = NetworkResult.Failure(ApiError("offline"))
-        coEvery { tusUploadRepository.uploadAll(items, TusUploadContext.STORY) } returns failure
+        coEvery { tusUploadRepository.uploadAll(items, TusUploadContext.STORY, any()) } returns failure
 
         assertThat(uploader().upload(items)).isEqualTo(failure)
     }

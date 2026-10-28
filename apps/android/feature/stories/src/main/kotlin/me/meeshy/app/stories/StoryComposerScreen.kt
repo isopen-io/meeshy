@@ -424,6 +424,7 @@ fun StoryComposerScreen(
                             canAddText = state.deck.selectedCanAddTextElement,
                             canAddSticker = state.deck.selectedCanAddSticker,
                             isUploadingMedia = state.isUploadingMedia,
+                            uploadingMedia = state.uploadingMedia,
                             isMediaFull = state.draft.isMediaFull,
                             mediaCount = state.draft.mediaIds.size,
                             hasMedia = state.draft.hasMedia,
