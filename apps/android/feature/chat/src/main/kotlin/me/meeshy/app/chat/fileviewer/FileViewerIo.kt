@@ -8,7 +8,10 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -57,10 +60,12 @@ internal class PdfPages private constructor(
     private val renderer: PdfRenderer,
 ) {
     private val lock = Mutex()
+    private var closed = false
     val pageCount: Int = renderer.pageCount
 
     suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
         lock.withLock {
+            if (closed) return@withLock null
             runCatching {
                 renderer.openPage(index).use { page ->
                     val width = widthPx.coerceIn(MIN_WIDTH_PX, MAX_WIDTH_PX)
@@ -74,12 +79,23 @@ internal class PdfPages private constructor(
         }
     }
 
+    /**
+     * Ferme le document APRÈS la page en cours de rendu (le moteur refuse de se fermer sur une page ouverte), sans
+     * bloquer le fil principal qui ferme la feuille.
+     */
     fun close() {
-        runCatching { renderer.close() }
-        runCatching { descriptor.close() }
+        closer.launch {
+            lock.withLock {
+                if (closed) return@withLock
+                closed = true
+                runCatching { renderer.close() }
+                runCatching { descriptor.close() }
+            }
+        }
     }
 
     companion object {
+        private val closer = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private const val MIN_WIDTH_PX = 200
         private const val MAX_WIDTH_PX = 1080
         private const val MAX_HEIGHT_PX = 3200
