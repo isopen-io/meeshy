@@ -2,14 +2,19 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.scene.SceneLookMatrix
-import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.MediaEditTool
 import org.junit.Test
 
-/** #13598 : le filtre d'un média touché ne colore que ce média, et voyage sur son objet. */
+/**
+ * #13598 : comme iOS (`ComposerMediaControls` : `objectId: isBackground ? nil : media.id`), le filtre du média de FOND
+ * est celui de la slide, avec son intensité. Un autre média n'est ni peint par le plateau ni publié comme objet par le
+ * composeur Android : lui proposer un filtre serait proposer un effet perdu à la publication.
+ */
 class StoryMediaFilterTest {
+    private val filterSection = ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
+
     private fun media(id: String) =
         UploadedMedia(id = id, url = "https://cdn/$id", mimeType = "image/jpeg", fileSize = 1, width = 10, height = 10, durationMs = null, thumbnailUrl = null)
 
@@ -19,66 +24,46 @@ class StoryMediaFilterTest {
     }
 
     @Test
-    fun `choisir un filtre sur un media ne touche ni la scene ni les autres medias`() {
-        val next = StoryComposerBackgroundReducer.mediaFilterSelected(state("a", "b").let { it.copy(deck = it.deck.setSelectedFilter(StoryFilter.WARM)) }, "a", StoryFilter.BW)
-        val slide = next.deck.selectedSlide
-        assertThat(slide.mediaFilters).containsExactly("a", StoryFilter.BW)
-        assertThat(slide.filter).isEqualTo(StoryFilter.WARM)
-        assertThat(next.mediaFilterOf("b")).isNull()
+    fun `le media que le plateau peint offre le filtre de la scene`() {
+        assertThat(state("a", "b").mediaSectionsFor("a")).contains(filterSection)
     }
 
     @Test
-    fun `retirer le filtre d un media l efface, un media inconnu est inerte`() {
-        val withFilter = StoryComposerBackgroundReducer.mediaFilterSelected(state("a"), "a", StoryFilter.BW)
-        assertThat(StoryComposerBackgroundReducer.mediaFilterSelected(withFilter, "a", null).deck.selectedSlide.mediaFilters).isEmpty()
-        assertThat(StoryComposerBackgroundReducer.mediaFilterSelected(withFilter, "zzz", StoryFilter.WARM)).isEqualTo(withFilter)
+    fun `un media que ni le plateau ni la publication ne montrent n offre aucun filtre`() {
+        val sections = state("a", "b").mediaSectionsFor("b")
+        assertThat(sections).doesNotContain(filterSection)
+        assertThat(sections).isNotEmpty()
     }
 
     @Test
-    fun `supprimer un media emporte son filtre`() {
-        val deck = state("a").deck.setMediaFilter("a", StoryFilter.COOL).removeMedia("a")
-        assertThat(deck.selectedSlide.mediaFilters).isEmpty()
+    fun `le fond designe offre le filtre de la scene, il est celui que le lecteur colore`() {
+        val base = state("a", "b")
+        val designated = StoryComposerBackgroundReducer.backgroundMediaToggled(base, "b")
+        assertThat(designated.mediaSectionsFor("b")).contains(filterSection)
     }
 
     @Test
-    fun `le plateau peint le filtre de la scene puis celui du media montre`() {
-        val base = state("a", "b").let { it.copy(deck = it.deck.setSelectedFilter(StoryFilter.WARM)) }
-        assertThat(base.canvasFilterMatrix).isEqualTo(base.selectedSlideFilterMatrix)
-        val filtered = base.copy(deck = base.deck.setMediaFilter("a", StoryFilter.BW))
-        assertThat(filtered.canvasFilterMatrix).isEqualTo(
-            SceneLookMatrix.compose(filtered.selectedSlideFilterMatrix, StoryFilterMatrix.effectiveMatrix(StoryFilter.BW, 1f)),
-        )
-        val other = base.copy(deck = base.deck.setMediaFilter("b", StoryFilter.BW))
-        assertThat(other.canvasFilterMatrix).isEqualTo(base.selectedSlideFilterMatrix)
+    fun `la section ouverte d un media sans filtre ne retombe jamais sur le filtre`() {
+        val base = state("a", "b")
+        val selected = StoryComposerSelectionReducer.mediaSelected(base, "b").copy(openObjectSection = filterSection)
+        assertThat(selected.openMediaSection).isNotEqualTo(filterSection)
     }
 
     @Test
-    fun `le filtre d un media voyage sur son objet et celui de la scene reste sur les effets`() {
+    fun `choisir le filtre du media de fond pose le filtre de la scene, que le plateau peint`() {
+        val next = StoryComposerBackgroundReducer.filterSelected(state("a"), StoryFilter.BW)
+        assertThat(next.deck.selectedSlide.filter).isEqualTo(StoryFilter.BW)
+        assertThat(next.selectedSlideFilter).isEqualTo(StoryFilter.BW)
+    }
+
+    @Test
+    fun `le fond publie ne porte aucun filtre d objet, celui de la scene voyage sur les effets comme iOS`() {
         val request = StoryComposerDraft(
             mediaIds = listOf("m1"),
             filter = StoryFilter.WARM,
-            backgroundMedia = StoryBackgroundMedia("m1", "https://cdn/m1.jpg", "image/jpeg", null, filter = StoryFilter.BW),
-        ).toCreateStoryRequest("en")
-        assertThat(request.storyEffects?.filter).isEqualTo("warm")
-        assertThat(request.storyEffects?.mediaObjects?.single()?.filter).isEqualTo("bw")
-    }
-
-    @Test
-    fun `un media sans filtre propre ne publie aucun filtre d objet`() {
-        val request = StoryComposerDraft(
-            mediaIds = listOf("m1"),
             backgroundMedia = StoryBackgroundMedia("m1", "https://cdn/m1.jpg", "image/jpeg", null),
         ).toCreateStoryRequest("en")
+        assertThat(request.storyEffects?.filter).isEqualTo("warm")
         assertThat(request.storyEffects?.mediaObjects?.single()?.filter).isNull()
-    }
-
-    @Test
-    fun `le brouillon durable garde le filtre du media et ignore un jeton inconnu`() {
-        val deck = state("a").deck.setMediaFilter("a", StoryFilter.CHROME)
-        val snapshot = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "now")
-        assertThat(snapshot.slides.single().mediaFilters).containsExactly("a", "chrome")
-        assertThat(snapshot.toDeck()?.selectedSlide?.mediaFilters).containsExactly("a", StoryFilter.CHROME)
-        val hostile = snapshot.copy(slides = snapshot.slides.map { it.copy(mediaFilters = mapOf("a" to "inconnu", "fantome" to "bw")) })
-        assertThat(hostile.toDeck()?.selectedSlide?.mediaFilters).isEmpty()
     }
 }

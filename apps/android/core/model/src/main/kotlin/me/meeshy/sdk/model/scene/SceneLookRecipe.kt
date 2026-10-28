@@ -55,20 +55,19 @@ data class SceneLookRecipe(
             effects.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } }
 
         /**
-         * Le look du FOND de ces effets : le filtre de slide, le filtre propre du média de fond s'il en porte un
-         * (posé APRÈS celui de la scène, sans intensité, comme iOS pour un objet), puis les réglages du média.
+         * Le look du FOND de ces effets : le filtre de slide, puis les réglages du média de fond. Un filtre d'objet posé sur
+         * le fond n'y entre pas, comme iOS (`StoryBackgroundLook` ne peint que `effects.filter`) : une même story se lit
+         * pareil sur les deux clients.
          */
         fun forEffects(effects: StoryEffects?): SceneLookRecipe {
             if (effects == null) return NEUTRAL
             val background = effects.mediaObjects.orEmpty().firstOrNull { it.isBackground }
-            val scene = forStory(
+            return forStory(
                 filter = filterOf(effects),
                 intensity = (effects.filterIntensity ?: 1.0).toFloat(),
                 adjustments = background?.adjustments,
                 isVideo = background?.mediaType == "video",
             )
-            val own = background?.parsedFilter ?: return scene
-            return scene.copy(filterMatrix = SceneLookMatrix.compose(scene.filterMatrix, StoryFilterMatrix.effectiveMatrix(own, 1f)))
         }
 
         /** Le look d'UN média posé : SON filtre (à pleine force) puis ses réglages — jamais le filtre de la scène. */

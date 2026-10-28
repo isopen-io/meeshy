@@ -32,7 +32,6 @@ import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
-import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.ui.component.media.MediaTrimContent
 import me.meeshy.ui.component.media.MediaTrimStrip
 import me.meeshy.ui.component.composer.rememberHostedTextField
@@ -40,7 +39,7 @@ import me.meeshy.ui.component.composer.rememberHostedTextField
 private val SECTION_PLAN_MAX_HEIGHT = 220.dp
 
 /**
- * Les options du MÉDIA touché, sous la scène : la section ouverte dans la colonne droite — le filtre PROPRE du média, la
+ * Les options du MÉDIA touché, sous la scène : la section ouverte dans la colonne droite — le filtre de la scène (média de fond), la
  * description du média ou le plan. Une section chasse l'autre en fondu, sans saut de hauteur (iOS : le contenu change
  * sous la colonne).
  */
@@ -58,10 +57,10 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             else -> FilterRow(
-                selected = state.mediaFilterOf(mediaId),
-                intensity = StoryFilterMatrix.DEFAULT_INTENSITY,
-                onSelect = { viewModel.onSelectMediaFilter(mediaId, it) },
-                onIntensityChange = null,
+                selected = state.selectedSlideFilter,
+                intensity = state.selectedSlideFilterIntensity,
+                onSelect = viewModel::onSelectFilter,
+                onIntensityChange = viewModel::onFilterIntensityChange,
             )
         }
     }

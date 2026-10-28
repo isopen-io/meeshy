@@ -56,7 +56,7 @@ internal fun StoryComposerScene(
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },
-                colorMatrix = state.canvasFilterMatrix,
+                colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
                 sceneMenu = state.sceneContextMenu,

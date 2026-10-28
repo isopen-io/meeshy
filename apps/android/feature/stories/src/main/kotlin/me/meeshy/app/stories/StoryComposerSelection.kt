@@ -13,9 +13,9 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
  * Les sections de l'éditeur d'un MÉDIA que ce meuble sert : `ComposerObjectEditorRail.entries(MEDIA)` restreint à celles
- * dont l'effet est câblé (loi 4 — aucun bouton inerte). Le filtre est celui du MÉDIA (la scène garde le sien dans l'effet Visuel),
- * le texte alternatif celui du média, le plan la frise des pistes. Ajustements, effets, rognage et actions attendent
- * leur moteur ; un média n'a pas de fenêtre de temps propre.
+ * dont l'effet est câblé (loi 4 — aucun bouton inerte). Le filtre est celui de la SCÈNE, servi au seul média de fond
+ * ([mediaSectionsFor]), comme iOS ; le texte alternatif est celui du média, le plan la frise des pistes. Ajustements,
+ * effets, rognage et actions attendent leur moteur ; un média n'a pas de fenêtre de temps propre.
  */
 internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
@@ -44,8 +44,21 @@ internal val StoryComposerUiState.selectedMedia: String?
 internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
     get() = selectedSoundId?.let { id -> deck.selectedSlide.audio.firstOrNull { it.id == id } }
 
+/**
+ * Les sections que le média [id] sert. iOS donne au média de FOND le filtre de la slide (`objectId: isBackground ? nil`) ;
+ * ici le fond est celui que le plateau peint (le premier média) ou celui que la publication désigne. Un autre média n'est
+ * ni peint ni publié comme objet par le composeur Android (#11608) : un filtre sur lui serait perdu, il n'est pas proposé.
+ */
+internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
+    val isSceneMedia = id == selectedSlideAttachments.firstOrNull()?.id || id == deck.selectedSlideBackgroundMediaId
+    return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
+}
+
 internal val StoryComposerUiState.openMediaSection: ComposerObjectEditorSection
-    get() = openObjectSection?.takeIf { it in ServedMediaSections } ?: ServedMediaSections.first()
+    get() {
+        val served = selectedMedia?.let(::mediaSectionsFor) ?: ServedMediaSections
+        return openObjectSection?.takeIf { it in served } ?: served.first()
+    }
 
 internal val StoryComposerUiState.openSoundSection: ComposerObjectEditorSection
     get() = servedSoundSections.let { served -> openObjectSection?.takeIf { it in served } ?: served.first() }
