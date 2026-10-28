@@ -122,7 +122,8 @@ public suspend fun TusApi.patchChunk(
 
 /**
  * `HEAD` on a stored session folded into a [TusServerProbe]: the server's own offset, [TusServerProbe.Gone]
- * for a session it forgot (`404`/`410`), and a failure for anything else (offline, `5xx`) — the caller
+ * for a session it forgot (`404`/`410`) or that is not the caller's to resume (`403`: the checkpoint was
+ * written under another account on this device — retrying it would fail forever), and a failure for anything else (offline, `5xx`) — the caller
  * cannot decide to resume or restart without knowing, so it surfaces the failure and retries later.
  */
 public suspend fun TusApi.probeSession(location: String, tusResumable: String): NetworkResult<TusServerProbe> =
@@ -130,7 +131,7 @@ public suspend fun TusApi.probeSession(location: String, tusResumable: String): 
         val response = headUpload(location, tusResumable)
         val offset = response.headers()["Upload-Offset"]?.toLongOrNull()
         when {
-            response.code() == HTTP_NOT_FOUND || response.code() == HTTP_GONE -> NetworkResult.Success(TusServerProbe.Gone)
+            response.code() in UNRESUMABLE_SESSION_CODES -> NetworkResult.Success(TusServerProbe.Gone)
             response.isSuccessful && offset != null -> NetworkResult.Success(TusServerProbe.Offset(offset))
             else -> NetworkResult.Failure(
                 ApiError(
@@ -144,5 +145,4 @@ public suspend fun TusApi.probeSession(location: String, tusResumable: String): 
         NetworkResult.Failure(ioApiError(e))
     }
 
-private const val HTTP_NOT_FOUND = 404
-private const val HTTP_GONE = 410
+private val UNRESUMABLE_SESSION_CODES = setOf(403, 404, 410)

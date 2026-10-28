@@ -27,15 +27,16 @@ class TusUploadRepositoryTest {
 
     private val api: TusApi = mockk(relaxed = true)
     private val checkpoints: TusUploadCheckpointDao = mockk(relaxed = true)
+    private val apiBaseUrl = "https://gate/api/v1/"
 
     // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
     // (with the specific matching key) before calling repository() — see the resume tests below.
-    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined))
+    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl))
 
     private fun item(name: String = "story.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
 
-    private fun locationResponse(location: String = "https://staging.meeshy.me/api/v1/uploads/abc123") =
+    private fun locationResponse(location: String = "https://gate/api/v1/uploads/abc123") =
         Response.success(Unit, Headers.headersOf("Location", location))
 
     private fun errorResponse(code: Int) =
@@ -115,7 +116,7 @@ class TusUploadRepositoryTest {
     @Test
     fun `patches at the Location returned by create, offset zero, with the whole body`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns
-            locationResponse(location = "https://staging.meeshy.me/api/v1/uploads/xyz")
+            locationResponse(location = "https://gate/api/v1/uploads/xyz")
         val location = slot<String>()
         val offset = slot<Long>()
         val body = slot<okhttp3.RequestBody>()
@@ -124,7 +125,7 @@ class TusUploadRepositoryTest {
 
         repository().upload(item(), TusUploadContext.STORY)
 
-        assertThat(location.captured).isEqualTo("https://staging.meeshy.me/api/v1/uploads/xyz")
+        assertThat(location.captured).isEqualTo("https://gate/api/v1/uploads/xyz")
         assertThat(offset.captured).isEqualTo(0L)
         assertThat(body.captured.contentType().toString()).isEqualTo("application/offset+octet-stream")
     }
@@ -527,5 +528,46 @@ class TusUploadRepositoryTest {
 
         assertThat(seen.first()).isEqualTo(20L to 25L)
         assertThat(seen.last()).isEqualTo(25L to 25L)
+    }
+
+    @Test
+    fun `a session the server says is not ours (another account on this device) is dropped and the upload starts over`() = runTest {
+        val key = storedCheckpoint()
+        coEvery { api.headUpload(any(), any()) } returns errorResponse(403)
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/mine")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify { checkpoints.delete(key) }
+        coVerify(exactly = 1) { api.createUpload(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a stored session on another host is never contacted with the token and the upload starts over`() = runTest {
+        val key = storedCheckpoint(location = "https://staging.example/api/v1/uploads/resume-me")
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://gate/uploads/mine")
+        coEvery { api.uploadChunk(any(), any(), any(), any()) } returns chunkResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
+
+        repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        coVerify(exactly = 0) { api.headUpload(any(), any()) }
+        coVerify(exactly = 0) { api.uploadChunk(match { it.contains("staging.example") }, any(), any(), any()) }
+        coVerify { checkpoints.delete(key) }
+    }
+
+    @Test
+    fun `a session address on another host returned by create is refused before any byte or token leaves`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse(location = "https://evil.example/api/v1/uploads/x")
+
+        val result = repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { checkpoints.upsert(any()) }
     }
 }
