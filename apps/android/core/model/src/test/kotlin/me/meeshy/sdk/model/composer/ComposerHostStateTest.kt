@@ -102,4 +102,25 @@ class ComposerHostStateTest {
         assertThat(open(ComposerOrigin.FeedComposer).withText("x").hasContent).isTrue()
         assertThat(open(ComposerOrigin.FeedComposer).withScene(true).hasContent).isTrue()
     }
+    @Test
+    fun `a post switched to story with media says its media stay behind`() {
+        val post = open(ComposerOrigin.FeedComposer).withMedia(listOf(photo))
+        assertThat(post.leavesMediaBehindOn(STORY)).isTrue()
+        assertThat(open(ComposerOrigin.FeedComposer).withText("salut").leavesMediaBehindOn(STORY)).isFalse()
+    }
+
+    @Test
+    fun `a story with a scene switched to post says its scene stays behind`() {
+        val story = open(ComposerOrigin.StoryTray).withScene(true)
+        assertThat(story.leavesMediaBehindOn(POST)).isTrue()
+        assertThat(open(ComposerOrigin.StoryTray).withText("salut").leavesMediaBehindOn(POST)).isFalse()
+    }
+
+    @Test
+    fun `post to reel keeps the same surface, and a refused or identical format leaves nothing behind`() {
+        val reelPost = open(ComposerOrigin.FeedComposer).withMedia(listOf(video))
+        assertThat(reelPost.leavesMediaBehindOn(REEL)).isFalse()
+        assertThat(reelPost.leavesMediaBehindOn(POST)).isFalse()
+        assertThat(open(ComposerOrigin.MoodChip).withText("x").leavesMediaBehindOn(STORY)).isFalse()
+    }
 }

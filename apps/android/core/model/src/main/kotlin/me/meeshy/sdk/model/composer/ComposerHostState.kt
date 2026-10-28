@@ -66,6 +66,21 @@ data class ComposerHostState(
             )
         }
 
+    /**
+     * Until the media follow a format switch (#13426 follow-up), each surface keeps its own: the post's media
+     * stay in the post sheet, the scene stays on the story. A switch that leaves something behind must SAY so
+     * — never a silent disappearance. Text always follows; a mood carries nothing but text.
+     */
+    fun leavesMediaBehindOn(format: ComposerFormat): Boolean {
+        val from = selectedFormat
+        if (format == from || format !in offeredFormats) return false
+        return when (from) {
+            ComposerFormat.POST, ComposerFormat.REEL -> format == ComposerFormat.STORY && media.isNotEmpty()
+            ComposerFormat.STORY -> format != ComposerFormat.STORY && hasScene
+            ComposerFormat.STATUS -> false
+        }
+    }
+
     /** Only a choosable format can be chosen; anything else leaves the state untouched. */
     fun choose(format: ComposerFormat): ComposerHostState =
         if (format in offeredFormats) copy(chosen = format) else this
