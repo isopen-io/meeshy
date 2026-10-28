@@ -138,6 +138,21 @@ internal fun NavGraphBuilder.feedNavGraph(
                 nullable = true
                 defaultValue = null
             },
+            navArgument(ComposerHostRoute.ID_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+            navArgument(ComposerHostRoute.SUB_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+            navArgument(ComposerHostRoute.SEED_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
         ),
     ) { entry ->
         // The feed's entry, when it is under the host: its ViewModels are SHARED, never re-created.
