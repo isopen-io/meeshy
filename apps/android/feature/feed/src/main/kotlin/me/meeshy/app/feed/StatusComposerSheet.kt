@@ -14,7 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +42,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerRailPlan
+import me.meeshy.sdk.model.composer.PublicationControl
+import me.meeshy.ui.component.MeeshyPrimaryButton
+import me.meeshy.ui.component.composer.ComposerPlateau
+import me.meeshy.ui.component.composer.ComposerRailButton
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -67,7 +80,11 @@ fun StatusComposerSheet(
     // Autosave (#13430): every change reaches the durable draft, so a closed sheet or a killed app loses nothing.
     LaunchedEffect(draft) { onDraftChange(draft) }
 
-    ModalBottomSheet(
+    if (LocalOnComposerPlateau.current) {
+        MoodPlateau(draft = draft, onChange = { draft = it }, onClose = onDismiss, formatSlot = formatSlot) {
+            draft.publishRequest()?.let(onPublish)
+        }
+    } else ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
@@ -117,6 +134,89 @@ fun StatusComposerSheet(
             )
         }
     }
+}
+
+// MARK: - Plateau
+
+/**
+ * The mood ON the plateau: a text-only card has no canvas, so no left rail (nothing is PLACED); the audience — the one
+ * thing that structures a mood's publication — stands in the right corridor, the emoji grid and the sentence on the card.
+ */
+@Composable
+private fun MoodPlateau(
+    draft: StatusComposerDraft,
+    onChange: (StatusComposerDraft) -> Unit,
+    onClose: () -> Unit,
+    formatSlot: (@Composable () -> Unit)?,
+    onPublish: () -> Unit,
+) {
+    ComposerPlateau(
+        onDismiss = onClose,
+        topCorridor = {
+            ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.status_composer_close), onClose)
+            formatSlot?.invoke()
+            Spacer(Modifier.weight(1f))
+        },
+        trailingRail = {
+            ComposerRailPlan.publicationControls(ComposerFormat.STATUS).forEach { control ->
+                if (control == PublicationControl.AUDIENCE) MoodAudienceDoor(draft.visibility) { onChange(draft.withVisibility(it)) }
+            }
+        },
+        socle = {
+            MeeshyPrimaryButton(
+                text = stringResource(R.string.status_composer_publish),
+                onClick = onPublish,
+                enabled = draft.canPublish,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()).padding(MeeshySpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        ) {
+            draft.viaUsername?.takeIf { draft.isRepublish }?.let { via ->
+                Text(
+                    text = stringResource(R.string.status_composer_republishing, via),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MeeshyPalette.Indigo400,
+                )
+            }
+            Text(
+                text = stringResource(R.string.status_composer_mood_question),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            EmojiGrid(selected = draft.selectedEmoji, onToggle = { onChange(draft.toggleEmoji(it)) })
+            TextInput(draft = draft, onTextChange = { onChange(draft.withText(it)) })
+        }
+    }
+}
+
+@Composable
+private fun MoodAudienceDoor(selected: StatusVisibility, onSelect: (StatusVisibility) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ComposerRailButton(moodAudienceGlyph(selected), visibilityLabel(selected), { open = true }, active = open)
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            StatusVisibility.entries.forEach { visibility ->
+                DropdownMenuItem(
+                    text = { Text(visibilityLabel(visibility)) },
+                    onClick = { open = false; onSelect(visibility) },
+                    leadingIcon = { Icon(moodAudienceGlyph(visibility), contentDescription = null) },
+                )
+            }
+        }
+    }
+}
+
+private fun moodAudienceGlyph(visibility: StatusVisibility) = when (visibility) {
+    StatusVisibility.PUBLIC -> MeeshyIcons.Public
+    StatusVisibility.COMMUNITY -> MeeshyIcons.Groups
+    StatusVisibility.FRIENDS -> MeeshyIcons.Group
+    StatusVisibility.PRIVATE -> MeeshyIcons.Lock
 }
 
 // MARK: - Header
