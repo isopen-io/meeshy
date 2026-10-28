@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_publish_block_caption",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_text",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_texts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_stickers",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_sounds",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_block_duration",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
