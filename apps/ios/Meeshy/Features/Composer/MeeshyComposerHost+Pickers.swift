@@ -201,7 +201,8 @@ extension MeeshyComposerHost {
         guard case .packItem(_, let item) = choice else { return }
         Task {
             guard let loaded = await StickerPackItemImages.load(item) else { return }
-            beginInlineEdit(SceneStickerPose.posePackSticker(loaded, on: viewModel))
+            guard let id = SceneStickerPose.posePackSticker(loaded, on: viewModel) else { return }
+            beginInlineEdit(id)
             HapticFeedback.light()
         }
     }

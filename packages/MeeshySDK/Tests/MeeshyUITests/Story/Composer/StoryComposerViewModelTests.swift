@@ -411,8 +411,8 @@ final class StoryComposerViewModelTests: XCTestCase {
 
         vm.currentSlideDuration = 9_999
 
-        XCTAssertEqual(vm.currentSlideDuration, 600, accuracy: 0.001,
-                       "the setter must clamp to the 600s upper bound")
+        XCTAssertEqual(vm.currentSlideDuration, StoryComposerLimits.maxStoryDurationSeconds, accuracy: 0.001,
+                       "the setter must clamp to the two-hour story ceiling (#13590)")
     }
 
     // MARK: - addAudioObject (lieu of attachAudioTrack / removeAudioTrack)

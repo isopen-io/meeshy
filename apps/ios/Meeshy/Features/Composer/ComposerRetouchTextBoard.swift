@@ -12,8 +12,8 @@ import MeeshyUI
 /// Les décisions de la planche, pures.
 nonisolated enum ComposerRetouchTextRule {
 
-    /// Le plafond du composer : cinq textes.
-    static let cap = 5
+    /// Le plafond du composer : une seule source, `StoryComposerLimits` (#13590).
+    static let cap = StoryComposerLimits.maxTextsPerScene
 
     enum Entry: Equatable {
         /// L'outil est montré sans texte : on en pose un neuf et la saisie s'ouvre.

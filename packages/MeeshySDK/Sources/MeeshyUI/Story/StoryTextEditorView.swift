@@ -409,7 +409,8 @@ public struct StoryTextEditorView: View {
     // MARK: - Bindings
 
     private var contentBinding: Binding<String> {
-        Binding(get: { textObject.text }, set: { textObject.text = $0 })
+        Binding(get: { textObject.text },
+                set: { textObject.text = StoryComposerLimits.clampedText($0) })
     }
 
     private var sizeBinding: Binding<CGFloat> {

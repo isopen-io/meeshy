@@ -60,18 +60,19 @@ final class ComposerRetouchTextBoardTests: XCTestCase {
         XCTAssertEqual(planche.texts.count, 1)
     }
 
-    func test_tapBackground_outsideTyping_addsATextUpToFive() throws {
+    func test_tapBackground_outsideTyping_addsATextUpToTheSharedCap() throws {
         let planche = ComposerRetouchTextBoard()
+        let plafond = StoryComposerLimits.maxTextsPerScene
         planche.begin()
-        for rang in 1 ... 5 {
+        for rang in 1 ... plafond {
             try ecrire("t\(rang)", in: planche)
             planche.endTyping()
             planche.tapBackground()
         }
-        XCTAssertEqual(planche.texts.filter { !$0.text.isEmpty }.count, 5, "cinq textes, comme le composer")
+        XCTAssertEqual(planche.texts.filter { !$0.text.isEmpty }.count, plafond, "le plafond partagé (#13590)")
         planche.endTyping()
         planche.tapBackground()
-        XCTAssertEqual(planche.texts.count, 5, "au plafond, rien de plus")
+        XCTAssertEqual(planche.texts.count, plafond, "au plafond, rien de plus")
     }
 
     func test_anEmptyText_isRemoved_whenTheTypingEnds() {

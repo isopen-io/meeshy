@@ -760,6 +760,7 @@ struct MeeshyComposerHost: View {
             }
         }
         if let repris { composer.adoptDraft(id: repris) }
+        ComposerLimitFeedback.attach(to: composer)
         _viewModel = StateObject(wrappedValue: composer)
 
         // `openingFormat` est la table, SAUF si un geste a nommé un

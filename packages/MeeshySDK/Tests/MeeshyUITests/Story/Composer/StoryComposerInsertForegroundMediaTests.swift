@@ -75,7 +75,7 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
     func test_insertForegroundImage_onASlideAtTheMediaCap_returnsNil() {
         let sut = makeSUT()
         let slideId = sut.currentSlide.id
-        for index in 0..<10 {
+        for index in 0..<StoryComposerLimits.maxImagesPerScene {
             _ = sut.insertForegroundImage(
                 makeImage(), fileURL: nil, intoSlideId: slideId, objectId: "cap-\(index)")
         }
@@ -117,9 +117,10 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
     func test_insertForegroundVideo_atTheMediaCap_returnsNilAndLeavesNoProvisionalEntry() {
         let sut = makeSUT()
         let slideId = sut.currentSlide.id
-        for index in 0..<10 {
-            _ = sut.insertForegroundImage(
-                makeImage(), fileURL: nil, intoSlideId: slideId, objectId: "cap-\(index)")
+        for index in 0..<StoryComposerLimits.maxVideosPerScene {
+            _ = sut.insertForegroundVideo(
+                url: URL(fileURLWithPath: "/tmp/cap-\(index).mp4"), thumbnail: makeImage(),
+                aspectRatio: 1, duration: 1, intoSlideId: slideId, objectId: "cap-\(index)")
         }
 
         let refused = sut.insertForegroundVideo(

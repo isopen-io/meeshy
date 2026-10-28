@@ -64,16 +64,16 @@ enum SceneStickerPose {
     static func pose(_ choice: StickerSheetChoice, on viewModel: StoryComposerViewModel) -> String? {
         switch choice {
         case .emoji(let emoji):
-            return viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale).id
+            return viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)?.id
         case .library(let item):
             return viewModel.addSticker(image: item.thumbnail,
                                         provider: StoryStickerLibraryItem.provider,
                                         scale: StorySticker.posedScale,
-                                        animatedData: item.animatedData).id
+                                        animatedData: item.animatedData)?.id
         case .template(let gabarit, let emplacements):
             // L'échelle vient du GABARIT : `posedScale` ferait déborder un
             // cartouche qui mesure déjà son contenu.
-            return viewModel.addSticker(template: gabarit, slots: emplacements).id
+            return viewModel.addSticker(template: gabarit, slots: emplacements)?.id
         case .locationTemplate(let lieu, let gabarit):
             // Un lieu décoré reste un `StoryLocationObject` : lui seul porte
             // les coordonnées que la plateforme LIT.
@@ -82,10 +82,10 @@ enum SceneStickerPose {
             return poseMee(mee, on: viewModel)
         case .instant(let instant, let slots):
             guard let image = instant.stillImage(slots: slots) else {
-                return viewModel.addSticker(emoji: instant.emoji, scale: StorySticker.posedScale).id
+                return viewModel.addSticker(emoji: instant.emoji, scale: StorySticker.posedScale)?.id
             }
             return viewModel.addSticker(image: image, provider: meeProvider,
-                                        scale: StorySticker.posedScale).id
+                                        scale: StorySticker.posedScale)?.id
         case .packItem:
             return nil
         }
@@ -93,20 +93,20 @@ enum SceneStickerPose {
 
     @discardableResult
     static func posePackSticker(_ loaded: StickerPackItemImages.Loaded,
-                                on viewModel: StoryComposerViewModel) -> String {
+                                on viewModel: StoryComposerViewModel) -> String? {
         viewModel.addSticker(image: loaded.image, provider: packProvider,
                              scale: StorySticker.posedScale,
-                             animatedData: loaded.isAnimated ? loaded.data : nil).id
+                             animatedData: loaded.isAnimated ? loaded.data : nil)?.id
     }
 
-    private static func poseMee(_ mee: MeeSticker, on viewModel: StoryComposerViewModel) -> String {
+    private static func poseMee(_ mee: MeeSticker, on viewModel: StoryComposerViewModel) -> String? {
         guard let still = MeeStickerCatalog.stillImage(mee) else {
-            return viewModel.addSticker(emoji: mee.emoji, scale: StorySticker.posedScale).id
+            return viewModel.addSticker(emoji: mee.emoji, scale: StorySticker.posedScale)?.id
         }
         // Les octets animés partent tels quels dans la story publiée : un PNG
         // animé, que les trois clients lisent — jamais le `.lottie` (#10639).
         let film = MeeStickerCatalog.animatedImageData(for: mee)
         return viewModel.addSticker(image: still, provider: meeProvider,
-                                    scale: StorySticker.posedScale, animatedData: film).id
+                                    scale: StorySticker.posedScale, animatedData: film)?.id
     }
 }
