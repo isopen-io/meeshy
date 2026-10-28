@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import java.io.File
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -86,7 +87,7 @@ private const val FAILURE_TOAST_MS = 4_000L
 internal fun ComposerRecentMedia(
     canCapture: Boolean,
     accentColor: Color,
-    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
     modifier: Modifier = Modifier,
     onPickUri: ((Uri) -> Unit)? = null,
     onEdit: ((PickedAttachment) -> Unit)? = null,
@@ -94,7 +95,7 @@ internal fun ComposerRecentMedia(
     if (!canCapture) return
     RecentMediaGrid(
         accentColor = accentColor,
-        onPick = { _, picked -> onPickFile(picked.bytes, picked.fileName, picked.mimeType) },
+        onPick = { _, picked -> onPickFile(picked.file, picked.fileName, picked.mimeType) },
         modifier = modifier,
         onEdit = onEdit,
         onPickUri = onPickUri?.let { stage -> { _: RecentMediaItem?, uri: Uri -> stage(uri) } },

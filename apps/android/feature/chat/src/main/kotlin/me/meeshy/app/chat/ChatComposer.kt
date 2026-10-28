@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.media.MediaIntake
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,7 +77,7 @@ internal fun ChatComposer(
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
-    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
     hasPendingAttachments: Boolean = false,
     onPickUris: ((List<Uri>) -> Unit)? = null,
     editingOriginalText: String? = null,
@@ -114,7 +116,7 @@ internal fun ChatComposer(
         if (onPickUris != null) return@rememberLauncherForActivityResult onPickUris(uris)
         ioScope.launch {
             val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
-            onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+            onPickFile(picked.file, picked.fileName, picked.mimeType)
         }
     }
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
@@ -180,7 +182,7 @@ internal fun ChatComposer(
     }
     var retouch by remember { mutableStateOf<ChatRetouchPending?>(null) }
     suspend fun deliverCapture(file: ChatRetouchedFile) {
-        val stage = onStageCapturedUris ?: return onPickFile(file.bytes, file.fileName, file.mimeType)
+        val stage = onStageCapturedUris ?: return onPickFile(context.writeRetouchedCaptureFile(file), file.fileName, file.mimeType)
         val uri = context.writeRetouchedCapture(file)
         stage(listOf(uri))
         withContext(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }
@@ -191,8 +193,8 @@ internal fun ChatComposer(
         if (stage != null) {
             stage(listOf(context.captureUri(file)))
         } else {
-            withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull() }?.let { bytes ->
-                onPickFile(bytes, file.name, ChatRetouchDelivery.VIDEO_MIME)
+            withContext(Dispatchers.IO) { MediaIntake.adopt(file, context.cacheDir, file.name, ChatRetouchDelivery.VIDEO_MIME) }?.let { item ->
+                (item.source as? MediaUploadSource.OnDisk)?.let { onPickFile(it.file, file.name, ChatRetouchDelivery.VIDEO_MIME) }
             }
         }
         withContext(Dispatchers.IO) { pending.discard() }
@@ -202,12 +204,13 @@ internal fun ChatComposer(
         val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
         val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
         val video = if (isVideo) ChatVideoRetouchPending.of(context, uri, System.currentTimeMillis()) else null
+        if (video != null || pending != null || stage != null) picked?.file?.delete()
         when {
             video != null -> videoRetouch = video
             pending != null -> retouch = pending
             stage != null -> stage(listOf(uri))
             else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
-                onPickFile(file.bytes, file.fileName, file.mimeType)
+                onPickFile(file.file, file.fileName, file.mimeType)
             }
         }
     }
@@ -474,11 +477,11 @@ internal fun ChatComposer(
                                         val now = System.currentTimeMillis()
                                         val opened = when {
                                             picked.mimeType?.startsWith("video") == true ->
-                                                ChatVideoRetouchPending.of(context, picked.bytes, now)?.also { videoRetouch = it }
+                                                ChatVideoRetouchPending.of(context, picked.file, now)?.also { videoRetouch = it }
                                             else -> withContext(Dispatchers.Default) { ChatRetouchPending.of(picked.bytes, picked.fileName, picked.mimeType) }
                                                 ?.also { retouch = it }
                                         }
-                                        if (opened == null) onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+                                        if (opened == null) onPickFile(picked.file, picked.fileName, picked.mimeType) else picked.file.delete()
                                     }
                                 },
                             )
@@ -510,7 +513,7 @@ internal fun ChatComposer(
                 } else {
                     ioScope.launch {
                         val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
-                        onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+                        onPickFile(picked.file, picked.fileName, picked.mimeType)
                     }
                 }
             },

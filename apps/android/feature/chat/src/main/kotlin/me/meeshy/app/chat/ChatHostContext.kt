@@ -211,7 +211,7 @@ internal class ChatHostActions(
     val removeClipboardContent: () -> Unit,
     val setPendingPlace: (me.meeshy.sdk.model.SharedPlace) -> Unit,
     val clearPendingPlace: () -> Unit,
-    val pickFile: (ByteArray, String, String?) -> Unit,
+    val pickFile: (java.io.File, String, String?) -> Unit,
     val removePendingAttachment: (String) -> Unit,
     val stagePendingUris: (List<Uri>) -> Unit,
     val dismissImageViewer: () -> Unit,

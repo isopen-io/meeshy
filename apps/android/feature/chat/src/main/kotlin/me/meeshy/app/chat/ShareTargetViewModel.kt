@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import java.io.File
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
@@ -15,6 +16,7 @@ import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
@@ -105,20 +107,24 @@ class ShareTargetViewModel @Inject constructor(
 
     /**
      * Binds a shared image/video (lot 2) — call once, right after launch, alongside [load].
-     * [bytes] already read from the inbound `ACTION_SEND` content Uri; empty bytes are a no-op
+     * [file] already copied, in a stream, from the inbound `ACTION_SEND` content Uri; an empty file is a no-op
      * (a stream that failed to open). Mirrors [ChatViewModel.sendFileAttachment]'s own
      * mime-resolution: a meaningful [declaredMimeType] wins, otherwise it is inferred from
      * [fileName]'s extension.
      */
-    fun loadAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
-        if (bytes.isEmpty()) return
+    fun loadAttachment(file: File, fileName: String, declaredMimeType: String?) {
+        if (file.length() == 0L) {
+            file.delete()
+            return
+        }
         val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-        sharedAttachment = MediaUploadItem(
-            bytes = bytes,
-            fileName = safeName,
-            mimeType = MimeTypeResolver.resolve(declaredMimeType, safeName),
-        )
+        sharedAttachment = MediaUploadItem.onDisk(file, safeName, MimeTypeResolver.resolve(declaredMimeType, safeName))
         _state.update { it.copy(previewAttachmentName = safeName) }
+    }
+
+    /** La copie du média reçu, en clair dans le cache privé, ne survit pas à l'écran de partage. */
+    override fun onCleared() {
+        sharedAttachment?.let(MediaIntake::release)
     }
 
     /**
@@ -185,7 +191,7 @@ class ShareTargetViewModel @Inject constructor(
                                 fileName = attachment.fileName,
                                 originalName = attachment.fileName,
                                 mimeType = attachment.mimeType,
-                                fileSize = attachment.bytes.size,
+                                fileSize = attachment.sizeBytes.toInt(),
                             ),
                         ),
                     )
