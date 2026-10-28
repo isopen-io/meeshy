@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.app.composer.inbound.ComposerSeedStore
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.sdk.model.composer.postsItsOwnMatter
 import me.meeshy.app.feed.PostComposerFacts
@@ -93,8 +92,6 @@ class ComposerHostViewModel @Inject constructor(
     }
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
-
-    fun chooseLayout(mode: MosaicLayoutMode) = _state.update { it.chooseLayout(mode) }
 
     fun onStoryFacts(facts: StoryComposerFacts) = _state.update {
         it.withText(facts.text).withScene(facts.hasScene)

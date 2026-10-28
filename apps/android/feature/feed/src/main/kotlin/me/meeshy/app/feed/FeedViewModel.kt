@@ -27,7 +27,6 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
@@ -655,7 +654,6 @@ class FeedViewModel @Inject constructor(
         mediaCaption: Map<String, String> = emptyMap(),
         draft: PostComposerDraftSnapshot? = null,
         background: String? = null,
-        layout: MosaicLayoutMode? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -672,7 +670,7 @@ class FeedViewModel @Inject constructor(
                         location = location,
                         mediaAlt = mediaAlt.ifEmpty { null },
                         mediaCaption = mediaCaption.ifEmpty { null },
-                        storyEffects = StoryEffects(background = background, layout = layout).takeIf { background != null || layout != null },
+                        storyEffects = background?.let { StoryEffects(background = it) },
                     ),
                     draft,
                 )

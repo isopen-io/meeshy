@@ -54,14 +54,7 @@ fun ComposerHostScreen(
     }
     val onCarryApplied: (Int, Int) -> Unit = { token, lost -> if (viewModel.onCarryApplied(token, lost)) sayMediaStayBehind() }
     val formatMenu: @Composable () -> Unit = {
-        ComposerFormatMenu(
-            selected = state.selectedFormat,
-            verdicts = state.verdicts,
-            onChoose = choose,
-            layouts = state.layoutChoices,
-            armedLayout = state.layout,
-            onChooseLayout = viewModel::chooseLayout,
-        )
+        ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
     }
     val hostedSelection = remember(viewModel) { HostedSelection(initial = { viewModel.selection }, onChange = viewModel::onSelection) }
     CompositionLocalProvider(LocalHostedSelection provides hostedSelection) { when (state.selectedFormat) {
@@ -85,7 +78,6 @@ fun ComposerHostScreen(
             onMediaError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
             formatSlot = formatMenu,
             governingType = state.chosen?.postType,
-            layout = state.layout,
             offerReel = state.offersReelForPost,
             onFormatChosen = viewModel::choose,
             raiseKeyboard = keyboardOwed,
