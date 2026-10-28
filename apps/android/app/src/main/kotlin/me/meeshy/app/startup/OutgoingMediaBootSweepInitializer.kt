@@ -1,5 +1,7 @@
 package me.meeshy.app.startup
 
+import android.os.Process
+import android.os.SystemClock
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -15,14 +17,18 @@ import timber.log.Timber
 
 /**
  * Au démarrage, les blobs orphelins et les copies nettoyées en clair laissés par un processus tué en plein envoi quittent
- * le disque (#13555). L'heure de démarrage est relevée ICI, sur le fil principal : tout fichier plus récent appartient au
- * processus courant et reste. Le balayage part sur IO et ne bloque jamais le démarrage.
+ * le disque (#13555). L'heure retenue est celle du démarrage du PROCESSUS, pas celle où cet initialiseur passe : un envoi
+ * lancé avant lui (un worker, un autre initialiseur lent) a écrit après, et reste. Le balayage part sur IO et ne bloque jamais le démarrage.
  */
 class OutgoingMediaBootSweepInitializer @Inject constructor(
     private val sweep: OutgoingMediaBootSweep,
 ) : AppInitializer {
     override fun initialize() {
-        val startedAt = System.currentTimeMillis()
+        val startedAt = OutgoingMediaBootSweep.processStartedAt(
+            wallNowMillis = System.currentTimeMillis(),
+            uptimeNowMillis = SystemClock.uptimeMillis(),
+            processStartUptimeMillis = Process.getStartUptimeMillis(),
+        )
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { sweep.sweep(startedAt) }.onFailure { Timber.w(it, "Outgoing media boot sweep failed") }
         }
