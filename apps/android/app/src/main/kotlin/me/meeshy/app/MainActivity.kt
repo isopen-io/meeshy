@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
+import me.meeshy.app.navigation.InboundIntentGate
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
@@ -104,8 +105,11 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        launchRoute = launchRouteOf(intent)
-        callLink = callLinkOf(intent)
+        InboundIntentGate.admit(intent)
+        val restored = savedInstanceState != null
+        launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
+        // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
+        callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
@@ -189,6 +193,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        InboundIntentGate.admit(intent)
         setIntent(intent)
         launchRoute = launchRouteOf(intent)
         callLink = callLinkOf(intent)
