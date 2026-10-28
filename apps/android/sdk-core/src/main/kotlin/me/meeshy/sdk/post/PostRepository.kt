@@ -653,12 +653,20 @@ class PostRepository @Inject constructor(
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
         val ticket = fence?.currentTicket()
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = translatePost(post, targetLanguage) ?: return false
-        // La copie `post` est celle du compte qui a tapé : écrite après la purge, elle porterait ses « j'aime » chez B (#13577).
-        return fence.commitOrWrite(ticket) {
-            _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-            true
-        } ?: false
+        val target = targetLanguage.trim()
+        val translated = translateSource(post.content, post.originalLanguage, target) ?: return false
+        // Fusionné sur la ligne COURANTE au moment d'écrire : un « j'aime » posé pendant la traduction survit, et la copie
+        // du compte qui a tapé n'est jamais écrite après la purge (#13577, #13580).
+        return fence.commitOrWrite(ticket) { foldIntoCache(postId) { PostTranslationMerge.mergeTranslation(it, target, translated) } }
+            ?: false
+    }
+
+    /** Remplace dans le fil la ligne [postId] COURANTE par [merge] de cette ligne ; `false` : ligne absente ou fusion sans effet. */
+    private fun foldIntoCache(postId: String, merge: (ApiPost) -> ApiPost?): Boolean {
+        val current = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val merged = merge(current) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
     }
 
     /**
@@ -670,14 +678,13 @@ class PostRepository @Inject constructor(
      *
      * Returns `true` only when the cache actually changed. Inert (`false`, nothing stored)
      * when the post is not in the cache or the merge is a no-op (blank language, blank text,
-     * or the identical entry already present).
+     * or the identical entry already present). Written under the account the event ARRIVED
+     * under ([me.meeshy.sdk.socket.collectArrived]): `false` too once that account closed (#13580).
      */
-    fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean {
-        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = PostTranslationMerge.mergeTranslation(post, language, entry) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
-    }
+    suspend fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) {
+            foldIntoCache(postId) { PostTranslationMerge.mergeTranslation(it, language, entry) }
+        } ?: false
 
     /**
      * Realtime media caption translation (Prisme, push side, #6280): the gateway
@@ -692,18 +699,15 @@ class PostRepository @Inject constructor(
      * media isn't modeled on Android yet), or the merge is a no-op (blank language,
      * blank text, unknown [mediaId], or the identical entry already present).
      */
-    fun applyMediaCaptionTranslationUpdate(
+    suspend fun applyMediaCaptionTranslationUpdate(
         postId: String,
         mediaId: String,
         commentId: String?,
         language: String,
         entry: ApiMediaCaptionTranslationEntry,
-    ): Boolean {
-        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = MediaCaptionTranslationMerge.merge(post, mediaId, commentId, language, entry) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
-    }
+    ): Boolean = fence.commitOrWrite(fence?.currentTicket()) {
+        foldIntoCache(postId) { MediaCaptionTranslationMerge.merge(it, mediaId, commentId, language, entry) }
+    } ?: false
 
     /**
      * A post this device published through the outbox (#13417) joins the head of the feed
@@ -729,12 +733,8 @@ class PostRepository @Inject constructor(
      * when the post is not in the cache, or the merge is a no-op (a re-broadcast, or an
      * edit that changed nothing the reader can see).
      */
-    fun applyPostUpdate(updated: ApiPost): Boolean {
-        val previous = _feedCache.value?.firstOrNull { it.id == updated.id } ?: return false
-        val merged = PostUpdateMerge.merge(previous, updated) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == updated.id) merged else it }
-        return true
-    }
+    suspend fun applyPostUpdate(updated: ApiPost): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(updated.id) { PostUpdateMerge.merge(it, updated) } } ?: false
 
     /**
      * On-demand translation for a post the caller already holds (the post-detail

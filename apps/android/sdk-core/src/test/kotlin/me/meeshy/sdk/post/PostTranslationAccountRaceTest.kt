@@ -70,4 +70,23 @@ class PostTranslationAccountRaceTest {
         assertThat(repository.requestOnDemandTranslation("p1", "es")).isTrue()
         assertThat(repository.cachedPost("p1")!!.translations!!["es"]!!.text).isEqualTo("Hola")
     }
+
+    @Test
+    fun `a like set while the translator works survives the translation`() = runTest {
+        coEvery { api.getFeed(any(), any()) } returns feedOf(liked = false)
+        repository.refresh()
+        val answer = CompletableDeferred<ApiResponse<TranslateResponse>>()
+        coEvery { translationApi.translate(any()) } coAnswers { answer.await() }
+        val stored = async { repository.requestOnDemandTranslation("p1", "es") }
+        runCurrent()
+
+        coEvery { api.getFeed(any(), any()) } returns feedOf(liked = true)
+        repository.refresh()
+        answer.complete(ApiResponse(success = true, data = TranslateResponse(translatedText = "Hola")))
+
+        assertThat(stored.await()).isTrue()
+        val cached = repository.cachedPost("p1")!!
+        assertThat(cached.isLikedByMe).isTrue()
+        assertThat(cached.translations!!["es"]!!.text).isEqualTo("Hola")
+    }
 }
