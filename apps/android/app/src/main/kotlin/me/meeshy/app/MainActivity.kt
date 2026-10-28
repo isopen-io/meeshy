@@ -112,6 +112,9 @@ class MainActivity : ComponentActivity() {
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
     private var warmDeepLink by mutableStateOf<Uri?>(null)
 
+    /** Le lien en attente est celui qu'un VISITEUR a ouvert : il attend un compte, une session d'invité ne le rejoue pas. */
+    private var warmDeepLinkAwaitsAccount by mutableStateOf(false)
+
     /** Un lien d'appel (`meeshy://call`) : une DEMANDE que [MeeshyApp] présente en confirmation, jamais un appel. */
     private var callLink by mutableStateOf<CallLinkRequest?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
@@ -152,7 +155,11 @@ class MainActivity : ComponentActivity() {
                                 launchRoute = launchRoute,
                                 onLaunchRouteConsumed = { launchRoute = null },
                                 warmDeepLink = warmDeepLink,
-                                onWarmDeepLinkHandled = { warmDeepLink = null },
+                                warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
+                                onWarmDeepLinkHandled = {
+                                    warmDeepLink = null
+                                    warmDeepLinkAwaitsAccount = false
+                                },
                                 callLink = callLink,
                                 onCallLinkHandled = { callLink = null },
                             )
@@ -219,6 +226,7 @@ class MainActivity : ComponentActivity() {
         launchRoute = launchRouteOf(intent)
         callLink = callLinkOf(intent)
         warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
+        warmDeepLinkAwaitsAccount = false
         divertVisitorLink(intent, atLaunch = false)
     }
 
@@ -230,6 +238,7 @@ class MainActivity : ComponentActivity() {
     private fun divertVisitorLink(intent: Intent, atLaunch: Boolean) {
         val request = VisitorLinkGate.divert(intent, signedIn = authRepository.isAuthenticated) ?: return
         warmDeepLink = intent.data
+        warmDeepLinkAwaitsAccount = true
         if (atLaunch) intent.data = null
         visitorContent.present(request)
     }

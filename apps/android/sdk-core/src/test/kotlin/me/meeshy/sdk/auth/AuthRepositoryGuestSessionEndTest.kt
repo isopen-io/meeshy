@@ -64,4 +64,14 @@ class AuthRepositoryGuestSessionEndTest {
         assertThat(store.jwt).isEqualTo("jwt")
         assertThat(teardown.wipes).isEqualTo(0)
     }
+
+    @Test
+    fun `une session d invite est authentifiee sans etre un compte`() {
+        val (guest, _, _) = scenario(jwt = null, sessionToken = "guest-1")
+        val (account, _, _) = scenario(jwt = "jwt", sessionToken = null)
+
+        assertThat(guest.isAuthenticated).isTrue()
+        assertThat(guest.hasAccountSession).isFalse()
+        assertThat(account.hasAccountSession).isTrue()
+    }
 }
