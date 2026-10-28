@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.exitOffer
+import me.meeshy.sdk.model.piece.PieceSealing
 import me.meeshy.sdk.model.share.OutgoingShare
 import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.model.share.ShareDestination
@@ -59,7 +60,7 @@ internal class ChatForwardController(
      */
     private val alreadyPosted = mutableMapOf<Pair<String, String>, Int>()
 
-    private fun shareKey(sourceId: String, target: String) = sourceId to target
+    private fun shareKey(shareId: String, target: String) = shareId to target
 
     private companion object {
         /** Refusals the plan states in « Ce qui part » (and the builder never posts). */
@@ -109,6 +110,29 @@ internal class ChatForwardController(
     }
 
     /**
+     * Opens the share sheet for ONE piece of [messageId] (#13596): the gateway copies only [attachmentId]
+     * (`forwardedAttachmentIds`), without the text of its message. A sealed piece, a piece the message does
+     * not carry, or a message the exit law keeps, shows the refusal card instead of recipients.
+     */
+    fun openPiece(messageId: String, attachmentId: String) {
+        val refusal = pieceRefusalFor(messageId, attachmentId)
+        val sending = inFlight.filter { it.first == "$messageId#$attachmentId" }.map { it.second }
+        state.update {
+            it.copy(
+                actionMessageId = null,
+                forward = ForwardUiState(
+                    sourceMessageId = messageId,
+                    pieceAttachmentId = attachmentId,
+                    refusal = refusal,
+                    deliveries = sending.associateWith { ShareDelivery.Sending },
+                ),
+            )
+        }
+        updateForward { replan(it) }
+        recomputeTargets()
+    }
+
+    /**
      * The gateway refused the forward (`FORWARD_REFUSAL_CODES`): the same "does not leave
      * Meeshy" card as a local refusal, never a recipient list. An unknown code changes nothing.
      */
@@ -129,6 +153,18 @@ internal class ChatForwardController(
         return ForwardRefusalReason.local(message.exitOffer(conversationIsEncrypted = state.value.isEndToEnd))
     }
 
+    /** What keeps the piece [attachmentId] of [messageId] from leaving, or `null`. Fail-closed on sealing. */
+    private fun pieceRefusalFor(messageId: String, attachmentId: String): ForwardRefusalReason? {
+        val message = messages.value.firstOrNull { it.message.id == messageId }?.message
+            ?: return ForwardRefusalReason.SOURCE_UNAVAILABLE
+        refusalFor(messageId)?.let { return it }
+        val piece = message.attachments.firstOrNull { it.id == attachmentId }
+            ?: return ForwardRefusalReason.ATTACHMENT_NOT_IN_SOURCE
+        return ForwardRefusalReason.ENCRYPTED_SOURCE.takeIf {
+            PieceSealing.withholds(piece, message, conversationIsEncrypted = state.value.isEndToEnd)
+        }
+    }
+
     fun onQueryChange(query: String) {
         state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
         recomputeTargets()
@@ -147,8 +183,13 @@ internal class ChatForwardController(
             .mapNotNull { id -> synced.firstOrNull { it.id == id && it.deletedAt.isNullOrBlank() } }
     }
 
-    private fun subject(forward: ForwardUiState) =
-        ShareSubject.Messages(sources(forward), conversationId, conversationIsEncrypted = state.value.isEndToEnd)
+    private fun subject(forward: ForwardUiState): ShareSubject {
+        val encrypted = state.value.isEndToEnd
+        val pieceId = forward.pieceAttachmentId
+        val source = sources(forward)
+        if (pieceId != null && source.isNotEmpty()) return ShareSubject.Piece(source.first(), pieceId, conversationId, encrypted)
+        return ShareSubject.Messages(source, conversationId, conversationIsEncrypted = encrypted)
+    }
 
     private fun replan(forward: ForwardUiState): ForwardUiState {
         val destinations = forward.selectedConversationIds.map { ShareDestination("conv:$it") }
@@ -187,8 +228,11 @@ internal class ChatForwardController(
     fun sendSelection() {
         val forward = state.value.forward ?: return
         if (forward.refusal != null || forward.plan?.canSend != true) return
-        val sourceId = forward.sourceMessageId
-        refusalFor(sourceId)?.let { reason ->
+        val sourceId = forward.shareId
+        val reopened = forward.pieceAttachmentId
+            ?.let { pieceRefusalFor(forward.sourceMessageId, it) }
+            ?: refusalFor(forward.sourceMessageId)
+        reopened?.let { reason ->
             updateForward { it.copy(refusal = reason, targets = emptyList()) }
             return
         }
@@ -226,6 +270,7 @@ internal class ChatForwardController(
                 sender = user,
                 forwardedFromId = post.forwardedFromId,
                 forwardedFromConversationId = post.forwardedFromConversationId,
+                forwardedAttachmentIds = post.forwardedAttachmentIds,
                 effects = MessageEffects(flags = post.effectFlags, ephemeralDuration = post.ephemeralDuration),
             )
             alreadyPosted[key] = (alreadyPosted[key] ?: 0) + 1
@@ -239,7 +284,7 @@ internal class ChatForwardController(
     }
 
     private fun markDelivery(sourceId: String, target: String, delivery: ShareDelivery) = updateForward { forward ->
-        if (forward.sourceMessageId != sourceId) return@updateForward forward
+        if (forward.shareId != sourceId) return@updateForward forward
         forward.copy(deliveries = forward.deliveries + (target to delivery))
     }
 

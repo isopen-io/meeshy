@@ -3,8 +3,10 @@ package me.meeshy.app.chat.piece
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageExitOffer
+import me.meeshy.sdk.model.ObjectIdGuard
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.piece.MessagePieceTarget
+import me.meeshy.sdk.model.piece.PieceDeletion
 
 /** Une page de l'aperçu d'une pièce : une tuile du message, à son ratio. [url] est nulle pour une pièce protégée (aucun pixel chargé). */
 @Immutable
@@ -15,6 +17,8 @@ internal data class PiecePage(
     val isVideo: Boolean,
     val isProtected: Boolean,
     val alt: String?,
+    /** Les emojis que CE lecteur a déjà posés sur la pièce — la bande de réactions les marque. */
+    val ownReactions: Set<String> = emptySet(),
 )
 
 /**
@@ -27,7 +31,29 @@ internal data class PieceCapabilities(
     val canCopy: Boolean = false,
     val canDelete: Boolean = false,
     val canReact: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * Ce que cet appareil SAIT faire d'une pièce de [message], lu par le menu avec la loi (#13596). Une action dont
+         * l'effet n'existe pas reste fausse — jamais grisée :
+         *
+         * - transférer : un message accusé, vivant, en clair — la passerelle recopie la pièce choisie ;
+         * - réagir : le droit d'écrire, sur un message accusé et vivant (la passerelle n'accepte pas une bulle locale) ;
+         * - supprimer : SON message accusé, vivant, hors conversation chiffrée (`DELETE /attachments/:id`) ;
+         * - copier : jamais — iOS n'offre pas de « Copier » sur une pièce seule, et aucune URI de presse-papiers sûre
+         *   n'existe pour un fichier téléchargé.
+         */
+        fun of(message: ApiMessage, viewerId: String?, viewerMayWrite: Boolean, conversationIsEndToEnd: Boolean): PieceCapabilities {
+            val acknowledged = !ObjectIdGuard.isLocalId(message.id) && message.deletedAt.isNullOrBlank()
+            return PieceCapabilities(
+                canForward = acknowledged && !conversationIsEndToEnd,
+                canCopy = false,
+                canDelete = PieceDeletion.mayDelete(message, viewerId, conversationIsEndToEnd),
+                canReact = acknowledged && viewerMayWrite && !conversationIsEndToEnd,
+            )
+        }
+    }
+}
 
 /**
  * **L'aperçu d'UNE pièce** (directive porteur 2026-10-10, miroir de `MessagePieceOverlay`, iOS) : les tuiles du message,
@@ -81,6 +107,7 @@ internal data class PieceOverlayModel(
                     isVideo = piece.mimeType?.startsWith("video/") == true,
                     isProtected = protected,
                     alt = piece.alt?.takeIf { it.isNotBlank() },
+                    ownReactions = piece.currentUserReactions.orEmpty().toSet(),
                 )
             }
             val start = pages.indexOfFirst { it.attachmentId == attachmentId }.coerceAtLeast(0)
