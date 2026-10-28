@@ -11,6 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import me.meeshy.sdk.model.AttachmentDeletedEvent
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
 import me.meeshy.sdk.model.AttachmentReadyEvent
 import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
@@ -141,6 +142,7 @@ class ConversationSocketEventsManager internal constructor(
         route<AttachmentReactionUpdateEvent>(SocketEventNames.ATTACHMENT_REACTION_REMOVED) { it },
         route<AttachmentStatusUpdatedEvent>(SocketEventNames.ATTACHMENT_STATUS_UPDATED) { it },
         route<AttachmentReadyEvent>(SocketEventNames.ATTACHMENT_READY) { it },
+        route<AttachmentDeletedEvent>(SocketEventNames.ATTACHMENT_DELETED) { it },
         route<AudioTranslationEvent>(SocketEventNames.AUDIO_TRANSLATIONS_PROGRESSIVE) {
             AudioTranslationStage(it, completed = false)
         },

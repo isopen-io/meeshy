@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
+import me.meeshy.sdk.model.AttachmentDeletedEvent
 import me.meeshy.sdk.model.AttachmentReadyEvent
 import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
 import me.meeshy.sdk.model.AudioTranslationFailedEvent
@@ -108,7 +109,7 @@ class MessageSocketManagerChatEventsTest {
             "message:countdown-started", "message:hidden-for-me", "message:restored-for-me",
             "message:consumed", "message:view-once-purged", "message:cited-post-withdrawn",
             "message:pending-delivered", "attachment:reaction-added", "attachment:reaction-removed",
-            "attachment-status:updated", "attachment:ready", "audio:translations-progressive",
+            "attachment-status:updated", "attachment:ready", "attachment:deleted", "audio:translations-progressive",
             "audio:translations-completed", "translation:failed", "audio:translation-failed",
             "audio:transcription-failed", "conversation:joined", "conversation:left",
             "conversation:join-error", "conversation:stats", "participant:rights-updated",
@@ -297,6 +298,17 @@ class MessageSocketManagerChatEventsTest {
             transport.fire("message:countdown-started", """{"conversationId":"c1"}""")
             transport.fire("message:view-once-purged", """{"messageId":"m1","conversationId":"c1"}""")
             assertThat(awaitItem()).isEqualTo(MessageViewOncePurgedEvent("m1", "c1"))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an attachment deleted frame decodes, and one missing an identifier is dropped`() = runTest {
+        val (transport, manager) = rig()
+        manager.events.test {
+            transport.fire("attachment:deleted", """{"conversationId":"c1","messageId":"m1"}""")
+            transport.fire("attachment:deleted", """{"conversationId":"c1","messageId":"m1","attachmentId":"a1"}""")
+            assertThat(awaitItem()).isEqualTo(AttachmentDeletedEvent("a1", "m1", "c1"))
             cancelAndIgnoreRemainingEvents()
         }
     }
