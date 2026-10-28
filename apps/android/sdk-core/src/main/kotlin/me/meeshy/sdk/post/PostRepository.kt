@@ -1,5 +1,6 @@
 package me.meeshy.sdk.post
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,7 +89,18 @@ class PostRepository @Inject constructor(
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
 
     // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
+    @Volatile
     private var feedCursor: String? = null
+
+    /**
+     * Ce que le geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), par post (#13588) : un retour
+     * arrière ne défait que cette valeur-là. Un écho serveur (`post:updated`, rafraîchissement) qui réécrit le compteur
+     * entre le geste et l'échec la confirme ; une ligne sans trace vient du serveur. Les deux : rien à défaire.
+     */
+    private class OptimisticFlip(val state: Boolean, val count: Int)
+
+    private val likeFlips = ConcurrentHashMap<String, OptimisticFlip>()
+    private val bookmarkFlips = ConcurrentHashMap<String, OptimisticFlip>()
     private val _feedHasMore = MutableStateFlow(true)
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
@@ -165,6 +177,7 @@ class PostRepository @Inject constructor(
             it.copy(isLikedByMe = !wasLiked, likeCount = adjustedCount(it.likeCount, wasLiked))
         }.orClosed() ?: return false
         val wasLiked = before.isLikedByMe == true
+        likeFlips[postId] = OptimisticFlip(!wasLiked, adjustedCount(before.likeCount, wasLiked))
 
         outboxRepository.enqueue(
             OutboxMutation(
@@ -183,6 +196,8 @@ class PostRepository @Inject constructor(
         _feedSyncedAt.value = null
         feedCursor = null
         _feedHasMore.value = true
+        likeFlips.clear()
+        bookmarkFlips.clear()
     }
 
     /** The post as the feed cache holds it, or `null` when it is not there. */
@@ -195,7 +210,9 @@ class PostRepository @Inject constructor(
      * outbox mutation, and mirrors the feed cache when the post sits there and differs.
      */
     suspend fun setLiked(postId: String, liked: Boolean) {
-        rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }
+        rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }?.before?.let {
+            likeFlips[postId] = OptimisticFlip(liked, adjustedCount(it.likeCount, wasSet = !liked))
+        }
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
@@ -208,7 +225,9 @@ class PostRepository @Inject constructor(
 
     /** The bookmark analogue of [setLiked]. */
     suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
-        rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }
+        rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }?.before?.let {
+            bookmarkFlips[postId] = OptimisticFlip(bookmarked, adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
+        }
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
@@ -227,15 +246,18 @@ class PostRepository @Inject constructor(
      * recomputed as the exact inverse of the delta [toggleLike]'s [applyLike]
      * applied, via the same [adjustedCount] law. A no-op once the post has left
      * the feed cache, **or once the cache no longer carries the optimistic value
-     * this rollback was meant to undo** — a realtime reconciliation
+     * this rollback was meant to undo** (state AND count as the gesture wrote them, #13588) — a realtime reconciliation
      * (`revalidateFeed`, `post:liked`) between the tap and the `EXHAUSTED` verdict
      * already replaced the optimistic count with the server's own, and applying
      * the delta a second time would double-count or flip a like the server
      * actually accepted.
      */
     suspend fun rollbackLike(postId: String, liked: Boolean) {
+        val flip = likeFlips.remove(postId)
         rewriteRow(fence?.currentTicket(), postId) {
-            if ((it.isLikedByMe == true) != !liked) null else likeRow(it, liked)
+            val untouched = flip != null && flip.state == !liked &&
+                (it.isLikedByMe == true) == !liked && (it.likeCount ?: 0) == flip.count
+            if (untouched) likeRow(it, liked) else null
         }
     }
 
@@ -296,6 +318,7 @@ class PostRepository @Inject constructor(
             it.copy(isBookmarkedByMe = !wasBookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasBookmarked))
         }.orClosed() ?: return false
         val wasBookmarked = before.isBookmarkedByMe == true
+        bookmarkFlips[postId] = OptimisticFlip(!wasBookmarked, adjustedCount(before.bookmarkCount, wasBookmarked))
 
         outboxRepository.enqueue(
             OutboxMutation(
@@ -318,8 +341,11 @@ class PostRepository @Inject constructor(
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
     suspend fun rollbackBookmark(postId: String, bookmarked: Boolean) {
+        val flip = bookmarkFlips.remove(postId)
         rewriteRow(fence?.currentTicket(), postId) {
-            if ((it.isBookmarkedByMe == true) != !bookmarked) null else bookmarkRow(it, bookmarked)
+            val untouched = flip != null && flip.state == !bookmarked &&
+                (it.isBookmarkedByMe == true) == !bookmarked && (it.bookmarkCount ?: 0) == flip.count
+            if (untouched) bookmarkRow(it, bookmarked) else null
         }
     }
 

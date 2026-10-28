@@ -19,6 +19,9 @@ import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.Test
 import java.io.IOException
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 
 class SocialSendersTest {
 
@@ -145,6 +148,37 @@ class SocialSendersTest {
         coEvery { postApi.like("p1") } throws IOException("offline")
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
         coVerify(exactly = 0) { postRepository.rollbackLike(any(), any()) }
+    }
+
+    private fun refusal(status: Int) = HttpException(Response.error<Unit>(status, "{}".toResponseBody()))
+
+    @Test
+    fun `a like the server says it already applied is a success, never a failure that rolls the like back`() = runTest {
+        val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1")
+        val handler = LikePostHandler(postApi, postRepository)
+
+        listOf(409, 410).forEach { status ->
+            coEvery { postApi.like("p1") } throws refusal(status)
+            assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        }
+        coEvery { postApi.like("p1") } throws refusal(500)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+    }
+
+    @Test
+    fun `unlike, bookmark and unbookmark already in the asked state are successes too`() = runTest {
+        val unlike = outboxRow(OutboxKind.UNLIKE_POST, targetId = "p1")
+        val bookmark = outboxRow(OutboxKind.BOOKMARK_POST, targetId = "p1")
+        val unbookmark = outboxRow(OutboxKind.UNBOOKMARK_POST, targetId = "p1")
+
+        listOf(409, 410).forEach { status ->
+            coEvery { postApi.unlike("p1") } throws refusal(status)
+            coEvery { postApi.bookmark("p1") } throws refusal(status)
+            coEvery { postApi.removeBookmark("p1") } throws refusal(status)
+            assertThat(UnlikePostHandler(postApi, postRepository).send(unlike)).isEqualTo(SendResult.Success)
+            assertThat(BookmarkPostHandler(postApi, postRepository).send(bookmark)).isEqualTo(SendResult.Success)
+            assertThat(UnbookmarkPostHandler(postApi, postRepository).send(unbookmark)).isEqualTo(SendResult.Success)
+        }
     }
 
     @Test
