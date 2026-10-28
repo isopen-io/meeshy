@@ -13,10 +13,19 @@ final class ComposerLimitFeedbackTests: XCTestCase {
         }
     }
 
-    func test_attach_aRefusedSticker_reachesTheViewModelHook() {
-        let composer = StoryComposerViewModel()
-        ComposerLimitFeedback.attach(to: composer)
+    func test_attached_aRefusedSticker_reachesTheViewModelHook() {
+        let composer = ComposerLimitFeedback.attached(to: StoryComposerViewModel())
         XCTAssertNotNil(composer.onLimitReached)
+    }
+
+    func test_attached_typingPastTheCapOnTheScene_saysTheBound() {
+        ComposerLimitFeedback.attached(to: StoryComposerViewModel())
+        FeedbackToastManager.shared.currentToast = nil
+
+        NotificationCenter.default.post(name: StoryInlineTextLengthGate.limitReached, object: nil)
+
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message,
+                       ComposerLimitFeedback.message(for: .textLength))
     }
 
     func test_composerRetouchTextRule_capIsTheSharedTextLimit() {

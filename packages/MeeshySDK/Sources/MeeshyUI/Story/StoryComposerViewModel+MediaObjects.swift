@@ -24,12 +24,7 @@ extension StoryComposerViewModel {
         // honour it — without this guard, the new media object would be appended to
         // whichever slide happened to be active when the async task resolved.
         guard let targetSlideIndex = slideIndex(pinnedTo: toSlideId) else { return nil }
-        // Le plafond se lit sur la scène CIBLE, par famille (#13590).
-        let family: StoryComposerLimit = kind == .video ? .video : .image
-        guard Self.canAdd(family, to: slides[targetSlideIndex].effects) else {
-            refuse(family)
-            return nil
-        }
+        guard admits(kind == .video ? .video : .image, in: slides[targetSlideIndex].effects) else { return nil }
 
         // La slide CIBLE, pas la courante : ce site peut poser sur une autre
         // slide, et cascader d'après les objets de la mauvaise donnerait un
@@ -154,7 +149,7 @@ extension StoryComposerViewModel {
         // « L'import de l'image de fond impose le cadre et forme du Canvas » : dès
         // que la forme réelle du fond est connue (mesure asset après import, ou
         // recadrage), le ratio du canvas suit — paysage → 16:9, sinon 9:16.
-        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
+        effects.canvasAspectRatio = StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects)
         slides[targetIndex].effects = effects
         // Miroir dans le side-cache si d'autres surfaces le lisent.
         mediaAspectRatios[id] = CGFloat(aspectRatio)

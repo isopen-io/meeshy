@@ -410,7 +410,7 @@ public struct StoryTextEditorView: View {
 
     private var contentBinding: Binding<String> {
         Binding(get: { textObject.text },
-                set: { textObject.text = StoryComposerLimits.clampedText($0) })
+                set: { textObject.text = StoryInlineTextLengthGate.clamped($0) })
     }
 
     private var sizeBinding: Binding<CGFloat> {

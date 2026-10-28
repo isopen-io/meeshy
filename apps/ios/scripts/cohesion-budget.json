@@ -388,9 +388,9 @@
     "MeeshySDK::OfflineQueue": 2975,
     "MeeshyUI::AudioPlayerView": 1532,
     "MeeshyUI::StickerPickerView": 1604,
-    "MeeshyUI::StoryCanvasUIView": 6684,
+    "MeeshyUI::StoryCanvasUIView": 6672,
     "MeeshyUI::StoryComposerView": 4156,
-    "MeeshyUI::StoryComposerViewModel": 4502,
+    "MeeshyUI::StoryComposerViewModel": 4481,
     "MeeshyUI::TimelineViewModel": 1615,
     "MeeshyUI::UserProfileSheet": 1617
   }
