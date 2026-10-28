@@ -84,6 +84,7 @@ class ChatHostsSmokeTest {
         openReport = { _ -> },
         dismissMessageActions = { },
         dismissFileDownload = { },
+        retryFileDownload = { },
         selectReportReason = { _ -> },
         onReportDetailsChange = { _ -> },
         submitReport = { },
