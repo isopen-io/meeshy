@@ -180,6 +180,7 @@ fun PostDetailScreen(
                         post = state.post!!,
                         isReposted = state.isReposted,
                         secondaryTranslation = state.secondaryTranslation,
+                        detailLanguageStrip = state.detailLanguageStrip,
                         translatingCodes = state.translatingLanguages,
                         onFlagTap = viewModel::onFlagTap,
                         onSelectLanguage = viewModel::onLanguageSelected,
@@ -215,6 +216,7 @@ private fun PostDetailContent(
     post: FeedPostPresentation,
     isReposted: Boolean,
     secondaryTranslation: PostSecondaryTranslation?,
+    detailLanguageStrip: List<LanguageChip>,
     translatingCodes: Set<String>,
     onFlagTap: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
@@ -306,10 +308,10 @@ private fun PostDetailContent(
 
                 PostSecondaryTranslationPanel(secondaryTranslation)
 
-                if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {
+                if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
                     Spacer(Modifier.height(MeeshySpacing.sm))
                     DetailLanguageStrip(
-                        chips = post.languageStrip,
+                        chips = detailLanguageStrip,
                         onChipTap = onFlagTap,
                         onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
                     )

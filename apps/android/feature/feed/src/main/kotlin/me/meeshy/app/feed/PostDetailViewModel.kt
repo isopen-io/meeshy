@@ -29,6 +29,7 @@ import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -79,6 +80,8 @@ data class PostDetailUiState(
     val isReposted: Boolean = false,
     /** The inline secondary translation under the post text (iOS `PostDetailSecondaryTranslationPanel`). */
     val secondaryTranslation: PostSecondaryTranslation? = null,
+    /** The detail's flag strip (iOS `buildAvailableFlags`): without the language read, marking the secondary one. */
+    val detailLanguageStrip: List<LanguageChip> = emptyList(),
 )
 
 @HiltViewModel
@@ -588,6 +591,7 @@ class PostDetailViewModel @Inject constructor(
             )
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null
+        val displayedCode = post?.let { FeedPostBuilder.resolveActiveCode(it, prefs, active) }
         return PostDetailUiState(
             post = projected,
             isLoading = st.isLoading,
@@ -601,9 +605,10 @@ class PostDetailViewModel @Inject constructor(
                 PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
             isReposted = st.isReposted,
-            secondaryTranslation = post?.let {
-                PostSecondaryTranslation.of(it, st.secondaryCode, FeedPostBuilder.resolveActiveCode(it, prefs, active))
-            },
+            secondaryTranslation = post?.let { PostSecondaryTranslation.of(it, st.secondaryCode, displayedCode) },
+            detailLanguageStrip = projected?.let {
+                PostDetailLanguageStrip.of(it.languageStrip, displayedCode, post?.originalLanguage, st.secondaryCode)
+            }.orEmpty(),
         )
     }
 

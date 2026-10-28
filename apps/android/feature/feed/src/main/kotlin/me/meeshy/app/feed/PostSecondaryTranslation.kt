@@ -5,6 +5,7 @@ import me.meeshy.sdk.lang.LanguageCodeNormalizer
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
+import me.meeshy.ui.component.bubble.LanguageChip
 
 /**
  * La traduction SECONDAIRE du détail d'un post (iOS `PostDetailSecondaryTranslationPanel`) : un
@@ -37,4 +38,29 @@ data class PostSecondaryTranslation(
             return PostSecondaryTranslation(code = code, info = LanguageData.info(code), content = content)
         }
     }
+}
+
+/**
+ * La bande de drapeaux du DÉTAIL d'un post (iOS `PostDetailView.buildAvailableFlags`) : l'original
+ * et les langues du lecteur qui ont un contenu, SANS la langue déjà lue (c'est le texte au-dessus),
+ * et la puce marquée est celle du panneau secondaire ouvert — jamais celle du texte principal.
+ */
+object PostDetailLanguageStrip {
+
+    fun of(
+        strip: List<LanguageChip>,
+        displayedCode: String?,
+        originalCode: String?,
+        secondaryCode: String?,
+    ): List<LanguageChip> {
+        val displayed = (displayedCode ?: originalCode).canonical()
+        val secondary = secondaryCode.canonical()
+        return strip
+            .filterNot { it.isTranslatable }
+            .filterNot { displayed != null && it.code.canonical() == displayed }
+            .map { it.copy(isActive = secondary != null && it.code.canonical() == secondary) }
+    }
+
+    private fun String?.canonical(): String? =
+        this?.takeIf { it.isNotBlank() }?.let(LanguageCodeNormalizer::normalizeForDedup)
 }
