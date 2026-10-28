@@ -26,7 +26,7 @@ class OutgoingMediaAllowListTrapTest {
     private val place = "+48.8566+002.3522/"
 
     private suspend fun result(bytes: ByteArray, mime: String) =
-        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitize(MediaUploadItem(bytes, "clip", mime))
+        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitizeOnBothPaths(bytes, "clip", mime)
 
     private suspend fun sent(bytes: ByteArray, mime: String): ByteArray {
         val outcome = result(bytes, mime)

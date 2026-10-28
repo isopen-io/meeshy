@@ -29,7 +29,7 @@ class OutgoingMediaLocationTest {
         requireNotNull(javaClass.classLoader?.getResourceAsStream("media-location/$name")) { name }.use { it.readBytes() }
 
     private suspend fun result(bytes: ByteArray, mime: String, keepsLocation: Boolean = false) =
-        sanitizer(keepsLocation).sanitize(MediaUploadItem(bytes, "clip", mime))
+        sanitizer(keepsLocation).sanitizeOnBothPaths(bytes, "clip", mime)
 
     private suspend fun sent(bytes: ByteArray, mime: String, keepsLocation: Boolean = false) =
         (result(bytes, mime, keepsLocation) as NetworkResult.Success).data.bytes

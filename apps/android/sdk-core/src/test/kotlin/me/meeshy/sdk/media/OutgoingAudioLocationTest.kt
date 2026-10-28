@@ -32,7 +32,7 @@ class OutgoingAudioLocationTest {
     private val texts = listOf("+48.8566", "Chez moi", "Tour Eiffel")
 
     private suspend fun result(bytes: ByteArray, mime: String) =
-        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitize(MediaUploadItem(bytes, "clip", mime))
+        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitizeOnBothPaths(bytes, "clip", mime)
 
     private suspend fun sent(bytes: ByteArray, mime: String): ByteArray {
         val outcome = result(bytes, mime)
