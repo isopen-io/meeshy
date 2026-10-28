@@ -40,11 +40,16 @@ const participants: Record<string, { userId: string | null }> = {
   [OTHER_PARTICIPANT_ID]: { userId: OTHER_USER_ID },
 };
 
-const buildHarness = async (role = 'USER') => {
+type IoMode = 'present' | 'absent' | 'throwing';
+
+const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
   const emitted: Array<{ room: string; event: string; payload: unknown }> = [];
   const io = {
     to: (room: string) => ({
-      emit: (event: string, payload: unknown) => { emitted.push({ room, event, payload }); },
+      emit: (event: string, payload: unknown) => {
+        if (ioMode === 'throwing') throw new Error('adapter down');
+        emitted.push({ room, event, payload });
+      },
     }),
   };
   const prisma = {
@@ -58,7 +63,7 @@ const buildHarness = async (role = 'USER') => {
   } as any;
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
-  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io }) });
+  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => (ioMode === 'absent' ? undefined : io) }) });
   const authOptional = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role },
@@ -139,10 +144,13 @@ describe('DELETE /attachments/:id — diffusion', () => {
     await app.close();
   });
 
-  it('reste 200 quand aucune diffusion n\'est disponible', async () => {
+  it.each<IoMode>(['absent', 'throwing'])('reste 200 et supprime quand la diffusion est %s', async (ioMode) => {
+    mockDeleteAttachment.mockClear();
     mockGetAttachment.mockResolvedValueOnce(attachmentOf(USER_ID));
-    const { app } = await buildHarness();
+    const { app, emitted } = await buildHarness('USER', ioMode);
     expect((await remove(app)).statusCode).toBe(200);
+    expect(mockDeleteAttachment).toHaveBeenCalledWith(ATTACHMENT_ID);
+    expect(emitted).toEqual([]);
     await app.close();
   });
 });
