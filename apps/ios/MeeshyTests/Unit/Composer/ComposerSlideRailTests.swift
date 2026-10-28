@@ -109,6 +109,65 @@ final class ComposerSlideRailTests: XCTestCase {
         XCTAssertTrue(code[tuile.lowerBound...].contains(".contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))"))
     }
 
+    // MARK: - La corbeille demande toujours confirmation (#13617)
+
+    /// **Toucher la corbeille ne supprime RIEN** : il ouvre la confirmation de
+    /// la scène visée, même vide.
+    func test_demanderLaSuppression_ouvreLaConfirmation_sansSupprimer() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 2)
+        XCTAssertTrue(invite.isPresented)
+        XCTAssertEqual(invite.pendingIndex, 2)
+    }
+
+    /// **Annuler ne change rien** : la confirmation se ferme, aucun index n'est rendu.
+    func test_annuler_ferme_etNeSupprimeRien() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 1).cancelled()
+        XCTAssertFalse(invite.isPresented)
+        XCTAssertNil(invite.pendingIndex)
+        XCTAssertNil(invite.confirmedIndex(sceneCount: 3))
+    }
+
+    /// **Confirmer rend l'index à retirer** — celui-là, une fois.
+    func test_confirmer_rendLIndexVise() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 1)
+        XCTAssertEqual(invite.confirmedIndex(sceneCount: 3), 1)
+        XCTAssertNil(invite.cancelled().confirmedIndex(sceneCount: 3))
+    }
+
+    /// Une scène retirée entre-temps (index hors rail) ne supprime pas la voisine.
+    func test_confirmer_surUnIndexDevenuHorsRail_neSupprimeRien() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 2)
+        XCTAssertNil(invite.confirmedIndex(sceneCount: 2))
+    }
+
+    /// **Aucun chemin ne rappelle `onDelete` sans passer par la confirmation** :
+    /// la corbeille arme l'invite, seule la confirmation appelle `onDelete`.
+    func test_laCorbeille_nAppelleJamaisOnDeleteDirectement() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        let compact = code.filter { !$0.isWhitespace }
+        XCTAssertFalse(compact.contains("Button{onDelete(index)}"),
+                       "la corbeille ne supprime plus sans confirmation")
+        XCTAssertTrue(compact.contains(".confirmationDialog("))
+        XCTAssertTrue(compact.contains("role:.destructive"))
+        XCTAssertEqual(compact.components(separatedBy: "onDelete?(").count - 1
+                       + compact.components(separatedBy: "onDelete(").count - 1, 1,
+                       "un seul site d'appel : la confirmation")
+    }
+
+    @MainActor
+    func test_laConfirmation_aSesTroisLibelles() {
+        for (texte, cle) in [(ComposerSlideRailCopy.deleteConfirmTitle, "composer.slide.rail.deleteConfirm.title"),
+                             (ComposerSlideRailCopy.deleteConfirmAction, "composer.slide.rail.deleteConfirm.action"),
+                             (ComposerSlideRailCopy.deleteCancel, "composer.slide.rail.deleteConfirm.cancel")] {
+            XCTAssertFalse(texte.isEmpty)
+            XCTAssertNotEqual(texte, cle, "clé résolue par le catalogue")
+        }
+    }
+
     // MARK: - La tuile EST la vignette de la scène (#5009 + #5037)
 
     /// **Une scène existe, sa vignette se voit** (#5037 : « dès qu'une scène

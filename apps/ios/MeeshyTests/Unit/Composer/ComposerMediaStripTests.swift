@@ -98,10 +98,11 @@ final class ComposerMediaStripTests: XCTestCase {
         XCTAssertTrue(
             // #9126 : la croix est OPTIONNELLE — le meuble la retire quand il retouche
             // pour la conversation, où une scène est une pièce du message. Quand elle est
-            // fournie, la vignette la peint et la touche retire.
+            // fournie, la vignette la peint et la touche demande confirmation avant de retirer.
             rail.contains("letonDelete:((Int)->Void)?")
                 && rail.contains("ifletonDelete,")
-                && rail.contains("Button{onDelete(index)}"),
+                && rail.contains("Button{deletion=deletion.asking(index:index)}")
+                && rail.contains("onDelete?(cible)"),
             "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "
                 + "2026-09-06 a fait rétablir après qu'un lot l'eut perdue."
         )
