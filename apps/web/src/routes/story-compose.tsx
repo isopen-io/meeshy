@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
+import { playPattern } from '@/lib/view/haptics';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -33,6 +35,7 @@ import {
   studioPublishablePageCount,
   studioSnapshotOf,
   withAddedPage,
+  studioTextRefusal,
   withAddedText,
   withCurrentPage,
   withPage,
@@ -175,6 +178,9 @@ const StudioFloorLayer = lazy(() => import('@/routes/story-compose-floor').then(
 
 /** Le Cadre d'un fond qu'on n'a pas encore réglé — le contrat (#8414). */
 const DEFAULT_FRAME: StoryFrame = { fitMode: 'fit', backdrop: 'blur' };
+
+/** Le retour d'un geste REFUSÉ par un plafond : deux touches courtes (#13590). */
+const REFUSAL_HAPTIC = [20, 40, 20] as const;
 
 export type StoryStudioDeps = {
   readonly api: ConversationsDeps;
@@ -483,6 +489,11 @@ function StoryStudio({
     if (target === undefined) return;
     edit((current) => withText(current, target, value), `text:${target}`);
     reportComposeText(value);
+    // Le champ s'arrête à la borne (`maxLength`) : l'auteur doit savoir POURQUOI.
+    if (Array.from(value).length >= STORY_LIMITS.maxTextCharacters) {
+      setPlaceRefusal({ reason: 'text-length' });
+      playPattern(REFUSAL_HAPTIC);
+    } else setPlaceRefusal((current) => (current?.reason === 'text-length' ? null : current));
   }
 
   /**
@@ -743,6 +754,11 @@ function StoryStudio({
   /** « T+ » et l'invite sans texte (#8515) — pose un texte (entré à la tête
    * sur une scène animée) ET ouvre sa saisie : on tape aussitôt. */
   const addTextAndWrite = () => {
+    if (studioTextRefusal(latestDraft.current) !== null) {
+      setPlaceRefusal({ reason: 'text-max' });
+      playPattern(REFUSAL_HAPTIC);
+      return;
+    }
     const id = currentStudioPage(withAddedText(latestDraft.current, language)).selected;
     edit((current) => {
       const added = withAddedText(current, language);
