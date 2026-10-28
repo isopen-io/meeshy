@@ -1,0 +1,67 @@
+package me.meeshy.sdk.model
+
+import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Test
+
+class PostStoryEffectsWireSerializerTest {
+
+    @Serializable
+    private data class Body(@Serializable(with = PostStoryEffectsWireSerializer::class) val storyEffects: StoryEffects? = null)
+
+    private val json = Json { encodeDefaults = false; explicitNulls = false; ignoreUnknownKeys = true }
+
+    private fun wire(effects: StoryEffects?): JsonObject =
+        json.parseToJsonElement(json.encodeToString(Body(effects))).jsonObject
+
+    @Test
+    fun `a background alone is published as the v3 document iOS publishes`() {
+        val document = wire(StoryEffects(background = "302B63"))["storyEffects"]!!.jsonObject
+
+        assertThat(document["v"]!!.jsonPrimitive.int).isEqualTo(3)
+        val scene = document["scenes"]!!.jsonArray.single().jsonObject
+        val bg = scene["objects"]!!.jsonArray.single().jsonObject
+        assertThat(bg["id"]!!.jsonPrimitive.content).isEqualTo("bg")
+        assertThat(bg["plane"]!!.jsonPrimitive.content).isEqualTo("bg")
+        assertThat(bg["payload"]!!.jsonObject["background"]!!.jsonPrimitive.content).isEqualTo("302B63")
+        assertThat(document.keys).doesNotContain("background")
+    }
+
+    @Test
+    fun `the v3 document is what the migration of the same effects gives, not a second reading of it`() {
+        val effects = StoryEffects(background = "FF2E63")
+
+        assertThat(wire(effects)["storyEffects"]).isEqualTo(CanvasV3Migration.wireDocument(effects))
+    }
+
+    @Test
+    fun `read back, the document gives the post its colour again`() {
+        val text = json.encodeToString(Body(StoryEffects(background = "08D9D6")))
+
+        assertThat(json.decodeFromString<Body>(text).storyEffects?.background).isEqualTo("08D9D6")
+    }
+
+    @Test
+    fun `an effect set that is more than a background keeps its v1 wire, nothing is lost in translation`() {
+        val effects = StoryEffects(background = "302B63", textObjects = listOf(StoryTextObject(id = "t", text = "x", x = 0.5, y = 0.5)))
+
+        val document = wire(effects)["storyEffects"]!!.jsonObject
+
+        assertThat(document.keys).doesNotContain("v")
+        assertThat(document["background"]).isEqualTo(JsonPrimitive("302B63"))
+    }
+
+    @Test
+    fun `no effects, no key, and an empty set stays the empty object`() {
+        assertThat(wire(null).keys).isEmpty()
+        assertThat(wire(StoryEffects())["storyEffects"]).isEqualTo(JsonObject(emptyMap()))
+    }
+}
