@@ -17,8 +17,8 @@ import org.junit.Test
  */
 class PushMessageDispatcherTest {
 
-    private class Fixture(observers: Set<PushObserver> = emptySet()) {
-        val session: SessionRepository = mockk { every { currentUserId } returns "me" }
+    private class Fixture(observers: Set<PushObserver> = emptySet(), sessionUserId: String? = "me") {
+        val session: SessionRepository = mockk { every { currentUserId } returns sessionUserId }
         val tokenStore = InMemoryTokenStore(jwt = "jwt").apply { userId = "me" }
         val callPresenter: IncomingCallNotificationPresenter = mockk(relaxed = true)
         val revocationHandler: RevocationPushHandler = mockk { every { handle(any()) } answers {
@@ -231,11 +231,34 @@ class PushMessageDispatcherTest {
     }
 
     @Test
-    fun `une session ouverte dont le compte n'est pas encore relu ne perd pas ses pushes`() {
+    fun `sans compte persiste, l'identite de la session courante juge le push`() {
         val fixture = Fixture()
         fixture.tokenStore.userId = null
 
         fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c2", "recipientUserId" to "user-a"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une identite introuvable ne laisse passer aucun push qui nomme un destinataire`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)), sessionUserId = null)
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+        assertThat(log).isEmpty()
+    }
+
+    @Test
+    fun `une identite introuvable garde l'ancien chemin pour un push qui ne nomme personne`() {
+        val fixture = Fixture(sessionUserId = null)
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1"))
 
         verify(exactly = 1) { fixture.messagePresenter.present(any()) }
     }
