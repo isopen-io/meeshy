@@ -21,6 +21,10 @@ public data class BubbleFile(
     val url: String? = null,
     val isVideo: Boolean = false,
     val isContactCard: Boolean = false,
+    /** Chiffrée de bout en bout (#13493) : une rangée scellée, sans nom, sans adresse, qui ne se télécharge jamais. */
+    val isSealed: Boolean = false,
+    /** Déjà sur l'appareil (envoi local `file://` / `content://`) : aucun badge de téléchargement (#13492). */
+    val isOnDevice: Boolean = false,
 )
 
 /**

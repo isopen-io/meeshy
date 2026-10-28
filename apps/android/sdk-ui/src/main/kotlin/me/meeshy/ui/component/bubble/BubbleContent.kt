@@ -133,6 +133,11 @@ public data class BubbleContent(
      */
     val isEndToEndSealed: Boolean = false,
     /**
+     * Les pièces d'un message scellé (#13493) : une rangée « chiffrée » par pièce, sans nom ni adresse — la bulle ne
+     * dit pas ce qu'elle ne peut pas lire, mais ne se présente jamais comme un document téléchargeable.
+     */
+    val sealedPieceIds: List<String> = emptyList(),
+    /**
      * Shown, this message holds the send of its thread (#13099): end-to-end encrypted, or
      * encrypted with no mode or an unknown one — `EndToEndRegimeMemory.messageHoldsSend`.
      */

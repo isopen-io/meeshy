@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Scarica</string>
+    <string name="bubble_file_downloading">Download in corso %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">Download in corso…</string>
+    <string name="bubble_file_ready">Pronto da aprire</string>
+    <string name="bubble_file_download_failed">Download non riuscito — tocca per riprovare</string>
+    <string name="bubble_piece_sealed">Allegato crittografato</string>
+    <string name="bubble_piece_sealed_a11y">Allegato crittografato end-to-end — non si apre su questo dispositivo</string>
+    <string name="bubble_file_cancel">Annulla il download</string>
+</resources>
