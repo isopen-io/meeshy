@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,8 +60,11 @@ fun StatusComposerSheet(
     onPublish: (StatusPublishRequest) -> Unit,
     onDismiss: () -> Unit,
     initialDraft: StatusComposerDraft = StatusComposerDraft(),
+    onDraftChange: (StatusComposerDraft) -> Unit = {},
 ) {
     var draft by remember { mutableStateOf(initialDraft) }
+    // Autosave (#13430): every change reaches the durable draft, so a closed sheet or a killed app loses nothing.
+    LaunchedEffect(draft) { onDraftChange(draft) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
