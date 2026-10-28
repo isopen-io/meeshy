@@ -105,8 +105,8 @@ internal object BoundedHeapProbe {
 
     private fun stream(media: File, outbox: File): Int {
         val files = MediaBlobFiles(outbox) { StreamingSeal.ephemeral() }
-        files.write("big", MediaUploadItem.onDisk(media, "a.mp4", "video/mp4").source)
-        val queued = MediaUploadItem(files.source("big") ?: return 1, "a.mp4", "video/mp4")
+        files.write("big", MediaUploadItem.onDisk(media, "a.mp4", "video/mp4").source, ownerId = null)
+        val queued = MediaUploadItem(files.source("big", ownerId = null) ?: return 1, "a.mp4", "video/mp4")
         var sent = 0L
         val counting = object : okio.Sink by blackholeSink() {
             override fun write(source: Buffer, byteCount: Long) {

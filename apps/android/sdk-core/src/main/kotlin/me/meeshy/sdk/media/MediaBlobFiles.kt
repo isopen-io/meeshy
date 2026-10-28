@@ -14,7 +14,9 @@ import java.security.MessageDigest
  * 200 MB video is queued, kept and sent through a bounded buffer instead of a row read whole into memory.
  *
  * - The file name is a digest of the `cmid` — no caller string ever becomes a path.
- * - Each file is bound to its `cmid` (associated data): a file moved under another `cmid` does not open.
+ * - Each file is bound to its `cmid` AND to the account that queued it (associated data, #13555): a file moved under
+ *   another `cmid`, or opened for another account, does not open. A file sealed before the account was bound (`v1`,
+ *   `cmid` only) still opens, so an upload queued by the previous build is not lost; its row's author guard still holds.
  * - A file is written beside its final name then renamed: a crash never leaves a half-written blob under a real name.
  */
 internal class MediaBlobFiles(
@@ -23,13 +25,13 @@ internal class MediaBlobFiles(
 ) {
     private val seal by lazy(LazyThreadSafetyMode.SYNCHRONIZED, seal)
 
-    /** Seals [source] under [cmid], replacing any previous blob for it. */
-    fun write(cmid: String, source: MediaUploadSource) {
+    /** Seals [source] under [cmid] for [ownerId]'s account, replacing any previous blob for it. */
+    fun write(cmid: String, source: MediaUploadSource, ownerId: String?) {
         directory.mkdirs()
         val target = fileOf(cmid)
         val part = File(directory, target.name + PART_SUFFIX)
         try {
-            seal.sealing(SyncedOutput(FileOutputStream(part)), associatedData(cmid)).use { sealed ->
+            seal.sealing(SyncedOutput(FileOutputStream(part)), associatedData(cmid, ownerId)).use { sealed ->
                 source.open().use { input -> input.copyTo(sealed, COPY_BUFFER_BYTES) }
             }
             check(part.renameTo(target)) { "The sealed blob could not take its name" }
@@ -38,12 +40,15 @@ internal class MediaBlobFiles(
         }
     }
 
-    /** The plaintext of [cmid]'s blob, streamed; `null` when no file is held or it does not open (lost key, altered, moved). */
-    fun source(cmid: String): MediaUploadSource? {
+    /**
+     * The plaintext of [cmid]'s blob for [ownerId]'s account, streamed; `null` when no file is held or it does not open
+     * (lost key, altered, moved, another account's). Opening reads and authenticates the first segment.
+     */
+    fun source(cmid: String, ownerId: String?): MediaUploadSource? {
         val file = fileOf(cmid).takeIf { it.isFile } ?: return null
-        val associated = associatedData(cmid)
-        val size = runCatching { seal.openSeekable(file, associated).use { it.size() } }.getOrNull() ?: return null
-        return Sealed(file, associated, size)
+        return listOf(associatedData(cmid, ownerId), legacyAssociatedData(cmid)).firstNotNullOfOrNull { associated ->
+            runCatching { seal.openSeekable(file, associated).use { it.size() } }.getOrNull()?.let { Sealed(file, associated, it) }
+        }
     }
 
     fun exists(cmid: String): Boolean = fileOf(cmid).isFile
@@ -55,6 +60,17 @@ internal class MediaBlobFiles(
     /** Every blob, whatever its `cmid` — the account boundary. */
     fun clear() {
         directory.listFiles().orEmpty().forEach { it.delete() }
+    }
+
+    /**
+     * The boot sweep (#13555): a half-written file, or a sealed file no [held] `cmid` names, left by a process that died
+     * between the file and its row — only when written before [before], so a write of the running process is never touched.
+     */
+    fun sweep(held: Set<String>, before: Long) {
+        val named = held.mapTo(HashSet()) { fileOf(it).name }
+        directory.listFiles().orEmpty()
+            .filter { it.lastModified() < before && it.name !in named }
+            .forEach { it.delete() }
     }
 
     private fun fileOf(cmid: String): File = File(directory, digest(cmid) + BLOB_SUFFIX)
@@ -88,9 +104,13 @@ internal class MediaBlobFiles(
         const val BLOB_SUFFIX = ".blob"
         const val PART_SUFFIX = ".part"
         const val COPY_BUFFER_BYTES = 64 * 1024
-        const val DOMAIN = "meeshy.media-blob.v1:"
+        const val LEGACY_DOMAIN = "meeshy.media-blob.v1:"
+        const val DOMAIN = "meeshy.media-blob.v2:"
 
-        fun associatedData(cmid: String): ByteArray = (DOMAIN + cmid).toByteArray(Charsets.UTF_8)
+        fun associatedData(cmid: String, ownerId: String?): ByteArray =
+            (DOMAIN + ownerId.orEmpty().length + ":" + ownerId.orEmpty() + ":" + cmid).toByteArray(Charsets.UTF_8)
+
+        fun legacyAssociatedData(cmid: String): ByteArray = (LEGACY_DOMAIN + cmid).toByteArray(Charsets.UTF_8)
 
         fun digest(cmid: String): String =
             MessageDigest.getInstance("SHA-256").digest(cmid.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

@@ -2,6 +2,8 @@ package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 
 /** Result of delivering one outbox mutation over the network. */
 public sealed interface SendResult {
@@ -84,6 +86,12 @@ public class OutboxDrainer(
     private val now: () -> Long = System::currentTimeMillis,
     /** #12956 — never lets a plaintext row leave for a conversation this device knows end-to-end. */
     private val plaintextAdmission: OutboxPlaintextAdmission = OutboxPlaintextAdmission.AdmitAll,
+    /**
+     * #13555 — when set, the account a row is judged and SENT under is the fence's: the send runs inside
+     * [AccountFence.guard], so closing the account cancels it before the next account can sign in, and its outcome is
+     * never written once that account has closed.
+     */
+    private val fence: AccountFence? = null,
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -92,8 +100,9 @@ public class OutboxDrainer(
 
         for (row in pending) {
             val kind = row.kindEnum ?: continue
-            if (currentOwner != null) {
-                when (OutboxAuthorGuard.verdict(row.ownerId, currentOwner.invoke())) {
+            val ticket = fence?.ticket()
+            if (ticket != null || currentOwner != null) {
+                when (OutboxAuthorGuard.verdict(row.ownerId, ticket?.ownerId ?: currentOwner?.invoke())) {
                     AuthorVerdict.SEND -> Unit
                     AuthorVerdict.WAIT -> continue
                     AuthorVerdict.EXHAUST_NO_AUTHOR -> {
@@ -136,8 +145,7 @@ public class OutboxDrainer(
                 exhausted++
                 continue
             }
-            outbox.markInflight(row.cmid)
-            when (val result = sender.send(row)) {
+            when (val result = sendUnder(ticket, sender, row) ?: return blocked(delivered, exhausted)) {
                 SendResult.Success -> {
                     outbox.markSucceeded(row.cmid)
                     delivered++
@@ -187,6 +195,17 @@ public class OutboxDrainer(
         } else {
             "Prerequisite(s) failed: ${failed.joinToString()}"
         }
+
+    /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
+    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
+        val send: suspend () -> SendResult = {
+            outbox.markInflight(row.cmid)
+            sender.send(row)
+        }
+        val fence = fence
+        if (fence == null || ticket == null) return send()
+        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) }
+    }
 
     private fun blocked(delivered: Int, exhausted: Int) = DrainReport(
         delivered,

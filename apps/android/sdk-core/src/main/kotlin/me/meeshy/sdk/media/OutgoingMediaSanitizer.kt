@@ -99,6 +99,11 @@ public class OutgoingMediaSanitizer internal constructor(
         scratch.listFiles().orEmpty().forEach { it.delete() }
     }
 
+    /** Le balayage du démarrage (#13555) : les copies d'un processus mort, écrites avant [before], quittent le disque. */
+    internal fun clearScratchBefore(before: Long) {
+        scratch.listFiles().orEmpty().filter { it.lastModified() < before }.forEach { it.delete() }
+    }
+
     private fun sweepScratch() {
         scratch.listFiles().orEmpty().filter { now() - it.lastModified() > SCRATCH_TTL_MS }.forEach { it.delete() }
     }

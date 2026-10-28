@@ -7,12 +7,17 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import me.meeshy.core.crypto.primitives.StreamingSeal
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.entity.MediaBlobEntity
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
 import timber.log.Timber
 import java.io.File
@@ -40,25 +45,46 @@ class MediaBlobStore internal constructor(
     private val mediaBlobDao: MediaBlobDao,
     private val files: MediaBlobFiles,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val fence: AccountFence? = null,
 ) : PerAccountCache {
 
     @Inject
-    constructor(mediaBlobDao: MediaBlobDao, @ApplicationContext context: Context) :
-        this(mediaBlobDao, MediaBlobFiles(File(context.noBackupFilesDir, DIRECTORY)) { keystoreSeal(context) })
+    constructor(mediaBlobDao: MediaBlobDao, @ApplicationContext context: Context, fence: AccountFence) :
+        this(mediaBlobDao, MediaBlobFiles(File(context.noBackupFilesDir, DIRECTORY)) { keystoreSeal(context) }, Dispatchers.IO, fence)
 
-    /** Persists [item]'s octets under [cmid], replacing any previous blob for it. */
-    suspend fun put(cmid: String, item: MediaUploadItem) {
-        withContext(io) { files.write(cmid, item.source) }
-        mediaBlobDao.upsert(
-            MediaBlobEntity(cmid = cmid, bytes = EMPTY, fileName = item.fileName, mimeType = item.mimeType, createdAt = now()),
-        )
+    /**
+     * Persists [item]'s octets under [cmid] for the account of [ticket] (the account the user acted under, taken when
+     * the write began), replacing any previous blob for it. The sealed file is bound to that account; its row is only
+     * written while that account is still signed in (#13555) — otherwise the file just written leaves the disk and
+     * [AccountClosedException] is thrown: a blob never outlives, nor changes, its account.
+     */
+    suspend fun put(cmid: String, item: MediaUploadItem, ticket: AccountTicket? = ticket()) {
+        try {
+            withContext(io) { files.write(cmid, item.source, ticket?.ownerId) }
+        } catch (failure: Exception) {
+            if (failure is CancellationException || ticket == null || fence?.isCurrent(ticket) != false) throw failure
+            withContext(NonCancellable + io) { files.delete(cmid) }
+            throw AccountClosedException()
+        }
+        val row = MediaBlobEntity(cmid = cmid, bytes = EMPTY, fileName = item.fileName, mimeType = item.mimeType, createdAt = now())
+        if (fence == null || ticket == null) {
+            mediaBlobDao.upsert(row)
+            return
+        }
+        fence.commit(ticket) { mediaBlobDao.upsert(row) } ?: run {
+            withContext(NonCancellable + io) { files.delete(cmid) }
+            throw AccountClosedException()
+        }
     }
 
-    /** The stored upload for [cmid], or `null` when no blob is held for it (or its sealed file no longer opens). */
-    suspend fun get(cmid: String): MediaUploadItem? {
+    /**
+     * The stored upload for [cmid] as [ownerId]'s account queued it, or `null` when no blob is held for it, its sealed
+     * file no longer opens, or it was queued by another account.
+     */
+    suspend fun get(cmid: String, ownerId: String? = currentOwner()): MediaUploadItem? {
         val row = mediaBlobDao.find(cmid) ?: return null
         if (row.bytes.isNotEmpty()) return MediaUploadItem(bytes = row.bytes, fileName = row.fileName, mimeType = row.mimeType)
-        val source = withContext(io) { files.source(cmid) } ?: return null
+        val source = withContext(io) { files.source(cmid, ownerId) } ?: return null
         return MediaUploadItem(source = source, fileName = row.fileName, mimeType = row.mimeType)
     }
 
@@ -67,6 +93,15 @@ class MediaBlobStore internal constructor(
      * availability probe over many queued uploads (the story draft restore reconciler) costs a boolean per id.
      */
     suspend fun has(cmid: String): Boolean = mediaBlobDao.exists(cmid)
+
+    /** The account a write begun now belongs to (#13555) — `null` when this store is not fenced. */
+    fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** The boot sweep (#13555): sealed files no row names, and half-written ones, left by a process that died before [before]. */
+    suspend fun sweepOrphans(before: Long) {
+        val held = mediaBlobDao.cmids().toSet()
+        withContext(io) { files.sweep(held, before) }
+    }
 
     /** Drops the blob for [cmid] (delivered, or its chain abandoned). No-op if absent. */
     suspend fun remove(cmid: String) {
@@ -80,6 +115,8 @@ class MediaBlobStore internal constructor(
     }
 
     private fun now(): Long = System.currentTimeMillis()
+
+    private fun currentOwner(): String? = ticket()?.ownerId
 
     internal companion object {
         const val DIRECTORY = "media-outbox"
