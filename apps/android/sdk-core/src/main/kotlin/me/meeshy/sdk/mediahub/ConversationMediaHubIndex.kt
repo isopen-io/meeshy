@@ -22,7 +22,7 @@ data class MediaHubIndexEntry(val carriers: List<ApiMessage>, val isComplete: Bo
  */
 @Singleton
 class ConversationMediaHubIndex @Inject constructor(
-    private val fence: AccountFence? = null,
+    private val fence: AccountFence?,
 ) : PerAccountCache {
     private val entries = ConcurrentHashMap<String, MediaHubIndexEntry>()
 
