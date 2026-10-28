@@ -342,8 +342,20 @@ internal fun ChatListHost(
                     }
                 }
             },
+            onForward = { attachmentId -> actions.openForwardPiece(overlay.messageId, attachmentId) },
+            onDelete = { attachmentId -> actions.onPieceDelete(overlay.messageId, attachmentId) },
+            quickReactions = state.quickReactions,
+            onReact = { attachmentId, emoji -> actions.onPieceReact(overlay.messageId, attachmentId, emoji) },
             onDismiss = { pieceOverlay = null },
         )
+    }
+    val pieceRemoveFailed = stringResource(R.string.piece_remove_failed)
+    LaunchedEffect(actions.pieceFailures) {
+        actions.pieceFailures.collect { failure ->
+            when (failure) {
+                PieceFailure.REMOVE -> Toast.makeText(selectionContext, pieceRemoveFailed, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     openedPlace?.let { opened ->
         LocationFullscreen(

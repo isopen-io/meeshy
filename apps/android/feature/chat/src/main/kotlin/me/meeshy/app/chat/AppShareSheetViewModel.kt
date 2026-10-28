@@ -315,6 +315,7 @@ internal class AppShareSheetViewModel @Inject constructor(
                 sender = user,
                 forwardedFromId = post.forwardedFromId,
                 forwardedFromConversationId = post.forwardedFromConversationId,
+                forwardedAttachmentIds = post.forwardedAttachmentIds,
                 effects = MessageEffects(flags = post.effectFlags, ephemeralDuration = post.ephemeralDuration),
             )
         }

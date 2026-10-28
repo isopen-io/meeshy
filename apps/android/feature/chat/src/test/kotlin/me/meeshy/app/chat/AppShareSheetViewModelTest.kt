@@ -26,6 +26,8 @@ import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.MeeshyUser
@@ -148,6 +150,37 @@ class AppShareSheetViewModelTest {
         }
         assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Sent)
         assertThat(h.model().firstServed?.conversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun one_piece_leaves_alone_naming_only_that_piece_and_never_a_sealed_one() = runTest(dispatcher) {
+        val photo = { id: String, sealed: Boolean? -> ApiMessageAttachment(id = id, mimeType = "image/jpeg", isEncrypted = sealed) }
+        val carrier = ApiMessage(
+            id = "m1", conversationId = "src", content = "le texte", originalLanguage = "fr",
+            attachments = listOf(photo("a", null), photo("b", null)),
+        )
+        val h = harness()
+        h.vm.bind(ShareSubject.Piece(carrier, "b", "src"))
+        advanceUntilIdle()
+        h.vm.toggle(h.model().sections.recents.first())
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1", content = "", originalLanguage = any(), sender = me, forwardedFromId = "m1",
+                forwardedFromConversationId = "src", effects = any(), forwardedAttachmentIds = listOf("b"),
+            )
+        }
+
+        val sealed = harness()
+        sealed.vm.bind(ShareSubject.Piece(carrier.copy(attachments = listOf(photo("a", true))), "a", "src"))
+        advanceUntilIdle()
+        sealed.vm.toggle(sealed.model().sections.recents.first())
+        sealed.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { sealed.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

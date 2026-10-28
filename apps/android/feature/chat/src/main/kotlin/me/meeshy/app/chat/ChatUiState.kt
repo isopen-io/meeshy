@@ -219,6 +219,8 @@ data class ChatUiState(
  */
 data class ForwardUiState(
     val sourceMessageId: String,
+    /** Set when the sheet shares ONE piece of [sourceMessageId] (#13596): only that piece leaves, without the message text. */
+    val pieceAttachmentId: String? = null,
     /** The rest of a multi-selection forward (#13294), in thread order; they travel with the source. */
     val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
@@ -235,7 +237,10 @@ data class ForwardUiState(
     val chosenDurationSeconds: Int? = null,
     /** Per recipient: sending, sent, queued or failed — the optimistic row state. */
     val deliveries: Map<String, me.meeshy.sdk.model.share.ShareDelivery> = emptyMap(),
-)
+) {
+    /** The identity of what leaves: the message, or the one piece of it — two pieces of a message are two shares. */
+    val shareId: String get() = pieceAttachmentId?.let { "$sourceMessageId#$it" } ?: sourceMessageId
+}
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {
     override val id: String = messageId

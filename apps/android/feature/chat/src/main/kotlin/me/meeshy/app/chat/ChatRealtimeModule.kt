@@ -18,4 +18,8 @@ abstract class ChatRealtimeModule {
     @Binds
     @IntoSet
     abstract fun resync(impl: ChatResyncController): ChatController
+
+    @Binds
+    @IntoSet
+    abstract fun pieces(impl: ChatPieceController): ChatController
 }
