@@ -177,7 +177,7 @@ fun ChatScreen(
 
 /**
  * The bytes + display name + declared content-type read back from a picked content Uri.
- * Shared with [me.meeshy.app.chat.ShareTargetScreen] (an inbound `ACTION_SEND` attachment is
+ * Shared with [me.meeshy.app.chat.IncomingShareScreen] (an inbound `ACTION_SEND` attachment is
  * read through the exact same content-Uri glue as a locally picked one).
  */
 internal data class PickedAttachment(
