@@ -1,0 +1,108 @@
+/**
+ * #13590 — plafonds LARGES d'une story (décision porteur 2026-10-28) : 50 stickers / images / textes / audios /
+ * vidéos posés par scène, 2 h au total, 1000 caractères par texte À LA CRÉATION seulement. Le refus reste
+ * 400 VALIDATION_ERROR et nomme la borne (`STORY_LIMIT_*`).
+ */
+import { CreatePostSchema, StoryEffectsSchema, UpdatePostSchema } from '../../../../routes/posts/types';
+import { storyLimitFromIssues } from '../../../../routes/posts/storyLimits';
+
+const obj = (kind: string, i: number, payload: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
+  id: `${kind}-${i}`, kind, anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: i,
+  transform: { scale: 1, rotation: 0, opacity: 1 }, payload, ...extra,
+});
+const many = (n: number, make: (i: number) => unknown) => Array.from({ length: n }, (_, i) => make(i));
+const canvas = (objects: unknown[], scene: Record<string, unknown> = {}) => ({ v: 3, scenes: [{ id: 's1', objects, ...scene }] });
+const limitOf = (effects: unknown, schema: typeof StoryEffectsSchema = StoryEffectsSchema) => {
+  const r = schema.safeParse(effects);
+  return r.success ? null : storyLimitFromIssues(r.error.issues);
+};
+
+describe('nombre d\'objets par famille et par scène', () => {
+  const families: Array<[string, string, (i: number) => unknown]> = [
+    ['STORY_LIMIT_STICKERS', 'sticker', (i) => obj('sticker', i)],
+    ['STORY_LIMIT_TEXTS', 'text', (i) => obj('text', i, { text: 'a' })],
+    ['STORY_LIMIT_AUDIOS', 'audio', (i) => obj('audio', i)],
+    ['STORY_LIMIT_IMAGES', 'image', (i) => obj('media', i, { mediaType: 'image' })],
+    ['STORY_LIMIT_VIDEOS', 'video', (i) => obj('media', i, { mediaType: 'video' })],
+  ];
+
+  it.each(families)('v3 : 50 %s acceptés, 51 refusés sous %s', (code, _name, make) => {
+    expect(limitOf(canvas(many(50, make)))).toBeNull();
+    expect(limitOf(canvas(many(51, make)))).toEqual({ code, max: 50 });
+  });
+
+  it('v3 : les plafonds sont par scène, pas par story', () => {
+    const scene = (id: string) => ({ id, objects: many(50, (i) => obj('sticker', i)) });
+    expect(limitOf({ v: 3, scenes: [scene('a'), scene('b')] })).toBeNull();
+  });
+
+  it('v3 : un fond (plane bg) ne compte pas comme image posée', () => {
+    const bg = many(5, (i) => obj('media', i, { mediaType: 'image' }, { plane: 'bg' }));
+    expect(limitOf(canvas([...bg, ...many(50, (i) => obj('media', 10 + i, { mediaType: 'image' }))]))).toBeNull();
+  });
+
+  it('v1 : 50 stickers acceptés (l\'ancien plafond de 32 disparaît), 51 refusés', () => {
+    expect(limitOf({ stickerObjects: many(50, (i) => ({ id: `s${i}`, emoji: '😀' })) })).toBeNull();
+    expect(limitOf({ stickerObjects: many(51, (i) => ({ id: `s${i}`, emoji: '😀' })) })).toEqual({ code: 'STORY_LIMIT_STICKERS', max: 50 });
+  });
+
+  it('v1 : images et vidéos se comptent séparément dans mediaObjects, le fond exclu', () => {
+    const images = many(50, (i) => ({ id: `i${i}`, mediaType: 'image' }));
+    const videos = many(50, (i) => ({ id: `v${i}`, mediaType: 'video' }));
+    expect(limitOf({ mediaObjects: [...images, ...videos, { id: 'bg', mediaType: 'image', isBackground: true }] })).toBeNull();
+    expect(limitOf({ mediaObjects: [...images, { id: 'x', mediaType: 'image' }] })).toEqual({ code: 'STORY_LIMIT_IMAGES', max: 50 });
+    expect(limitOf({ mediaObjects: [...videos, { id: 'x', mediaType: 'video' }] })).toEqual({ code: 'STORY_LIMIT_VIDEOS', max: 50 });
+  });
+
+  it('v1 : textes et audios', () => {
+    expect(limitOf({ textObjects: many(51, (i) => ({ id: `t${i}`, text: 'a' })) })).toEqual({ code: 'STORY_LIMIT_TEXTS', max: 50 });
+    expect(limitOf({ audioPlayerObjects: many(51, (i) => ({ id: `a${i}` })) })).toEqual({ code: 'STORY_LIMIT_AUDIOS', max: 50 });
+  });
+});
+
+describe('durée totale ≤ 2 h', () => {
+  it('refuse une durée de slide ou de timeline au-dessus de 7200 s', () => {
+    expect(limitOf({ slideDuration: 7200 })).toBeNull();
+    expect(limitOf({ slideDuration: 7201 })).toEqual({ code: 'STORY_LIMIT_DURATION', max: 7200 });
+    expect(limitOf({ timelineDuration: 7201 })).toEqual({ code: 'STORY_LIMIT_DURATION', max: 7200 });
+  });
+
+  it('additionne les scènes : 10 × 720 s passent, 10 × 721 s non', () => {
+    const scenes = (d: number) => ({ v: 3, scenes: many(10, (i) => ({ id: `s${i}`, objects: [], timelineDuration: d })) });
+    expect(limitOf(scenes(720))).toBeNull();
+    expect(limitOf(scenes(721))).toEqual({ code: 'STORY_LIMIT_DURATION', max: 7200 });
+  });
+});
+
+describe('1000 caractères : création seulement', () => {
+  const longText = (n: number) => canvas([obj('text', 0, { text: 'a'.repeat(n) })]);
+
+  it('la création refuse un texte de 1001 caractères (v3 et v1) et accepte 1000', () => {
+    const create = (storyEffects: unknown) => CreatePostSchema.safeParse({ type: 'STORY', storyEffects });
+    expect(create(longText(1000)).success).toBe(true);
+    const refused = create(longText(1001));
+    expect(refused.success).toBe(false);
+    if (!refused.success) expect(storyLimitFromIssues(refused.error.issues)).toEqual({ code: 'STORY_LIMIT_TEXT_LENGTH', max: 1000 });
+    expect(create({ textObjects: [{ id: 't', text: 'a'.repeat(1001) }] }).success).toBe(false);
+  });
+
+  it('la mise à jour d\'un contenu stocké de 1800 caractères reste acceptée', () => {
+    expect(UpdatePostSchema.safeParse({ storyEffects: longText(1800) }).success).toBe(true);
+    expect(UpdatePostSchema.safeParse({ storyEffects: { textObjects: [{ id: 't', text: 'a'.repeat(1800) }] } }).success).toBe(true);
+  });
+
+  it('une traduction écrite par le serveur n\'est bornée par aucun plafond de caractères', () => {
+    const translated = canvas([obj('text', 0, { text: 'a'.repeat(900), translations: { fr: 'b'.repeat(3000) } })]);
+    expect(CreatePostSchema.safeParse({ type: 'STORY', storyEffects: translated }).success).toBe(true);
+    const v1 = { textObjects: [{ id: 't', text: 'a', translations: { fr: 'b'.repeat(3000) } }] };
+    expect(UpdatePostSchema.safeParse({ storyEffects: v1 }).success).toBe(true);
+  });
+});
+
+describe('le format d\'erreur ne change pas', () => {
+  it('un refus sans borne nommée ne rend aucune limite', () => {
+    const r = StoryEffectsSchema.safeParse({ slideDuration: -1 });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(storyLimitFromIssues(r.error.issues)).toBeNull();
+  });
+});
