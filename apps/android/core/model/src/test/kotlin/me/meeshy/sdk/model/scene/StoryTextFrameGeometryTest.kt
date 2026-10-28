@@ -126,4 +126,32 @@ class StoryTextFrameGeometryTest {
         val prims = StoryTextFrameGeometry.primitives(StoryTextFrameShape.CLOUD, 40.0, 100.0)
         assertThat(prims).containsExactly(Primitive.Oval(0.0, 0.0, 40.0, 52.0))
     }
+
+    @Test
+    fun `the cloud thought bubbles fall down-left in the thought band, as iOS framePath computes them`() {
+        val ovals = StoryTextFrameGeometry.primitives(StoryTextFrameShape.CLOUD, 292.0, 216.0).filterIsInstance<Primitive.Oval>()
+        val (large, small) = ovals.takeLast(2)
+        assertThat(large.left).isWithin(1e-9).of(46.4)
+        assertThat(large.top).isWithin(1e-9).of(161.76)
+        assertThat(large.width).isWithin(1e-9).of(31.2)
+        assertThat(small.left).isWithin(1e-9).of(32.1)
+        assertThat(small.top).isWithin(1e-9).of(189.84)
+        assertThat(small.width).isWithin(1e-9).of(18.2)
+    }
+
+    @Test
+    fun `the widest text a box can hold inverts the metrics, so the box never outgrows its room`() {
+        fun widest(shape: StoryTextFrameShape, room: Double) =
+            StoryTextFrameGeometry.maxTextWidth(shape, room, oGlyphWidth = 20.0, paddingScale = 1.0)
+        assertThat(widest(StoryTextFrameShape.ROUNDED, 240.0)).isEqualTo(200.0)
+        assertThat(widest(StoryTextFrameShape.SPEECH, 240.0)).isEqualTo(200.0)
+        assertThat(widest(StoryTextFrameShape.CLOUD, 292.0)).isEqualTo(200.0)
+        assertThat(widest(StoryTextFrameShape.DIAMOND, 400.0)).isEqualTo(200.0)
+        assertThat(widest(StoryTextFrameShape.DIAMOND, 50.0)).isEqualTo(10.0)
+        assertThat(widest(StoryTextFrameShape.CLOUD, 10.0)).isEqualTo(0.0)
+        listOf(StoryTextFrameShape.ROUNDED, StoryTextFrameShape.DIAMOND, StoryTextFrameShape.CLOUD).forEach { shape ->
+            val w = widest(shape, 333.0)
+            assertThat(StoryTextFrameGeometry.metrics(shape, true, w, 10.0, 20.0).boundsWidth).isAtMost(334.0)
+        }
+    }
 }

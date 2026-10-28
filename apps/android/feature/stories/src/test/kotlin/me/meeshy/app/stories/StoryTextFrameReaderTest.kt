@@ -43,4 +43,28 @@ class StoryTextFrameReaderTest {
         assertThat(view.framePxPerDesign(canvasWidthPx = 540f)).isEqualTo(1f)
         assertThat(view.fontPx(540f)).isEqualTo(view.fontSize.toFloat())
     }
+
+    @Test
+    fun `a hostile published scale reads as the scene object bounds, NaN zero or negative as identity`() {
+        fun pxPerDesign(scale: Double) = project(StoryTextObject(id = "t", text = "x", scale = scale)).framePxPerDesign(1080f)
+        assertThat(pxPerDesign(Double.NaN)).isEqualTo(1f)
+        assertThat(pxPerDesign(Double.POSITIVE_INFINITY)).isEqualTo(1f)
+        assertThat(pxPerDesign(-2.0)).isEqualTo(1f)
+        assertThat(pxPerDesign(1e30)).isEqualTo(4f)
+        assertThat(pxPerDesign(0.01)).isWithin(1e-6f).of(0.3f)
+        val huge = project(StoryTextObject(id = "t", text = "x", scale = 1e30, borderWidth = 2.0))
+        assertThat(huge.fontPx(1080f)).isEqualTo(64f * 4f)
+        assertThat(huge.outlinePx(1080f)).isEqualTo(8f)
+    }
+
+    @Test
+    fun `a hostile ring or padding is bounded at the projection like the composer sliders`() {
+        val view = project(StoryTextObject(id = "t", text = "x", frameBorderWidth = 1e9, framePaddingScale = 1e9))
+        assertThat(view.frame.borderWidth).isEqualTo(StoryTextFrame.MAX_BORDER)
+        assertThat(view.frame.paddingScale).isEqualTo(StoryTextFrame.MAX_PADDING)
+        val nan = project(StoryTextObject(id = "t", text = "x", framePaddingScale = Double.NaN, frameBorderWidth = Double.POSITIVE_INFINITY))
+        assertThat(nan.frame.paddingScale).isEqualTo(StoryTextFrame.DEFAULT_PADDING)
+        assertThat(nan.frame.borderWidth).isEqualTo(0f)
+        assertThat(project(StoryTextObject(id = "t", text = "x", framePaddingScale = -4.0)).frame.paddingScale).isEqualTo(0f)
+    }
 }

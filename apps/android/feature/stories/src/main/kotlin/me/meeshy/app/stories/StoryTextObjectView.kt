@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
@@ -56,13 +57,16 @@ data class StoryTextObjectView(
     val frame: StoryTextFrame = StoryTextFrame(),
 ) {
     /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's own scale — the frame's unit. */
-    fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(scale, canvasWidthPx)
+    fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(renderScale, canvasWidthPx)
+
+    /** The scale a published (untrusted) text renders at: the scene object bounds, NaN, zero or negative as identity. */
+    private val renderScale: Double get() = SceneObjectScalePolicy.clamped(scale)
 
     /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
-    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), scale, canvasWidthPx)
+    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), renderScale, canvasWidthPx)
 
     /** The glyph size in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
-    fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, scale, canvasWidthPx)
+    fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, renderScale, canvasWidthPx)
 
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -196,8 +200,10 @@ object StoryTextObjectProjection {
             ),
             frame = StoryTextFrame(
                 shape = StoryTextFrameShape.fromWire(textObject.frameShape),
-                paddingScale = textObject.framePaddingScale?.toFloat() ?: StoryTextFrame.DEFAULT_PADDING,
-                borderWidth = textObject.frameBorderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                paddingScale = textObject.framePaddingScale?.toFloat()?.takeIf { it.isFinite() }
+                    ?.coerceIn(0f, StoryTextFrame.MAX_PADDING) ?: StoryTextFrame.DEFAULT_PADDING,
+                borderWidth = textObject.frameBorderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f }
+                    ?.coerceAtMost(StoryTextFrame.MAX_BORDER) ?: 0f,
                 borderColor = textObject.frameBorderColor,
             ),
         )
