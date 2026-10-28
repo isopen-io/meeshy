@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.piece.PieceSealing
 import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -54,7 +55,7 @@ internal object BubbleAttachmentBuilder {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
             .map { attachment ->
-                val sealed = attachment.isEncrypted == true
+                val sealed = PieceSealing.isSealed(attachment)
                 BubbleFile(
                     attachmentId = attachment.id,
                     name = if (sealed) null else attachment.originalName ?: attachment.fileName,

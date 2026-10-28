@@ -88,3 +88,39 @@ class BubbleSealedPiecesTest {
         assertThat(files.map { it.isOnDevice }).containsExactly(true, false).inOrder()
     }
 }
+
+class BubbleProtectedPiecesTest {
+    private val prefs = object : LanguageResolver.ContentLanguagePreferences {
+        override val systemLanguage: String? = "fr"
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private fun pdf(viewOnce: Boolean? = null) = ApiMessageAttachment(
+        id = "d", mimeType = "application/pdf", originalName = "x.pdf", fileName = "x.pdf", fileUrl = "/files/x.pdf", isViewOnce = viewOnce,
+    )
+
+    private fun build(piece: ApiMessageAttachment, viewOnce: Boolean? = null) = BubbleContentBuilder.build(
+        ApiMessage(id = "m", conversationId = "c", senderId = "o", content = "", attachments = listOf(piece), isViewOnce = viewOnce),
+        currentUserId = "me", preferences = prefs,
+    ).files.single()
+
+    @Test
+    fun `un fichier a vue unique est protege et son badge n'offre rien`() {
+        val file = build(pdf(viewOnce = true))
+        assertThat(file.isProtected).isTrue()
+        assertThat(BubbleFileTransfers.None.badgeOf(file)).isEqualTo(me.meeshy.sdk.model.piece.PieceBadge.None)
+    }
+
+    @Test
+    fun `un fichier d'un message a vue unique est protege aussi`() {
+        assertThat(build(pdf(), viewOnce = true).isProtected).isTrue()
+    }
+
+    @Test
+    fun `un fichier ordinaire propose son telechargement`() {
+        val file = build(pdf())
+        assertThat(file.isProtected).isFalse()
+        assertThat(BubbleFileTransfers.None.badgeOf(file)).isInstanceOf(me.meeshy.sdk.model.piece.PieceBadge.Idle::class.java)
+    }
+}

@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.piece.MessagePieceTarget
 import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
@@ -100,7 +101,10 @@ public object BubbleContentBuilder {
         val messagePlace = message.location
             ?.takeUnless { isDeleted || isEndToEndSealed }
             ?.let { BubbleLocation.fromPlace(message.id, it) }
-        val files = attachments.files
+        // Une pièce qui disparaît (vue unique, floue, éphémère) ou que la loi de sortie retient ne s'ouvre ni ne se
+        // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
+        val protectedIds = message.attachments.filter { MessagePieceTarget.isProtected(it, message) }.mapTo(HashSet()) { it.id }
+        val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
         val text = when {
             isDeleted || isEndToEndSealed -> ""
             activeIsOriginal -> message.content

@@ -158,6 +158,7 @@ private fun fileAttachmentDownloadLabel(download: FileAttachmentDownloadUiState)
         FileAttachmentDownloadFailure.Expired -> stringResource(R.string.chat_file_download_expired)
         FileAttachmentDownloadFailure.NotAvailable -> stringResource(R.string.chat_file_download_not_available)
         FileAttachmentDownloadFailure.Protected -> stringResource(R.string.chat_exit_blocked_title)
+        FileAttachmentDownloadFailure.SaveFailed -> stringResource(R.string.chat_file_save_failed)
         FileAttachmentDownloadFailure.NetworkError -> stringResource(R.string.chat_file_download_failed_network)
         FileAttachmentDownloadFailure.ServerError -> stringResource(R.string.chat_file_download_failed_server)
     }

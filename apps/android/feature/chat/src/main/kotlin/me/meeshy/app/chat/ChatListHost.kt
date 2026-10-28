@@ -45,6 +45,9 @@ import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.app.chat.piece.MessagePieceOverlay
 import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
+import me.meeshy.ui.component.permission.rememberPermissionFlow
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.app.chat.river.RiverPaneState
 import me.meeshy.app.chat.river.RiverScreen
@@ -323,13 +326,22 @@ internal fun ChatListHost(
             }
     }
 
+    val storageAccess = rememberPermissionFlow()
+    PermissionFlowHost(storageAccess)
     pieceOverlay?.let { overlay ->
         MessagePieceOverlay(
             model = overlay,
             accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
             onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
-            onSave = { attachmentId -> actions.onPieceSave(overlay.messageId, attachmentId) },
+            onSave = { attachmentId ->
+                // Dès l'API 29 la porte ne demande rien ; en 26–28 elle obtient WRITE_EXTERNAL_STORAGE avant d'écrire.
+                scope.launch {
+                    if (storageAccess.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = true)) {
+                        actions.onPieceSave(overlay.messageId, attachmentId)
+                    }
+                }
+            },
             onDismiss = { pieceOverlay = null },
         )
     }

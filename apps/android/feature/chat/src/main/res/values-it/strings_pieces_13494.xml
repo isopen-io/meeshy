@@ -3,4 +3,5 @@
     <string name="chat_piece_saved">Salvato in Download</string>
     <string name="piece_action_save">Salva</string>
     <string name="piece_action_delete">Elimina</string>
+    <string name="chat_file_save_failed">Impossibile salvare il file in Download.</string>
 </resources>

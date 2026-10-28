@@ -25,6 +25,8 @@ public data class BubbleFile(
     val isSealed: Boolean = false,
     /** Déjà sur l'appareil (envoi local `file://` / `content://`) : aucun badge de téléchargement (#13492). */
     val isOnDevice: Boolean = false,
+    /** À vue unique, floutée, éphémère ou retenue par la loi de sortie : la rangée n'offre ni badge ni appui (#13492). */
+    val isProtected: Boolean = false,
 )
 
 /**

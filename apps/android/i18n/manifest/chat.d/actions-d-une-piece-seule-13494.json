@@ -9,6 +9,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "chat_file_save_failed",
+          "status": "android-only"
+        },
+        {
           "androidName": "piece_action_save",
           "status": "android-only"
         },
