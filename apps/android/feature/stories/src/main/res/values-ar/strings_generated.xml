@@ -109,6 +109,7 @@
     <string name="my_stories_tab_published">المنشورة</string>
     <string name="my_stories_title">قصصي</string>
     <string name="my_stories_viewers">قائمة المشاهدات</string>
+    <string name="share_story_text">🔗 قصة %1$s: %2$s</string>
     <string name="stories_action_delete">حذف</string>
     <string name="stories_action_react">تفاعل</string>
     <string name="stories_action_report">إبلاغ</string>

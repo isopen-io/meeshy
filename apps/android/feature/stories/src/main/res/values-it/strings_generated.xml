@@ -109,6 +109,7 @@
     <string name="my_stories_tab_published">Pubblicate</string>
     <string name="my_stories_title">Le mie storie</string>
     <string name="my_stories_viewers">Elenco delle visualizzazioni</string>
+    <string name="share_story_text">🔗 Storia di %1$s: %2$s</string>
     <string name="stories_action_delete">Elimina</string>
     <string name="stories_action_react">Reagisci</string>
     <string name="stories_action_report">Segnala</string>
