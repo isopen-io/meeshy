@@ -16,6 +16,8 @@ public class SceneExportJob(
     /** Les fichiers audio, par identifiant de son de la recette. */
     public val soundFiles: Map<String, File>,
     public val output: File,
+    /** Libère ce que le job tient (le calque peint) : appelé une fois le moteur arrêté, réussi, échoué ou annulé. */
+    public val release: () -> Unit = {},
 )
 
 /** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction bakée à mesure. */

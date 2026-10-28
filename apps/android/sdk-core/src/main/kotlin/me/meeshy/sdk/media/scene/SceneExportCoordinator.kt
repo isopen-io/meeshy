@@ -57,8 +57,10 @@ public class SceneExportCoordinator(
         val output = File(tempDirectory, SceneExportPlan.fileName(stamp))
         val workDirectory = File(tempDirectory, "work-$stamp")
         var kept = false
+        var job: SceneExportJob? = null
         try {
-            runner.run(prepare(output, workDirectory)) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
+            job = prepare(output, workDirectory)
+            runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
             kept = deliver(destination, output)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -66,6 +68,7 @@ public class SceneExportCoordinator(
             mutableState.update(SceneExportReducer::failed)
         } finally {
             withContext(NonCancellable) {
+                job?.release?.invoke()
                 workDirectory.deleteRecursively()
                 if (!kept) output.delete()
             }
