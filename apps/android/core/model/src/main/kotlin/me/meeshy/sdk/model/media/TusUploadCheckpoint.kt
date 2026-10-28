@@ -61,4 +61,33 @@ public object TusResumePlanner {
         if (existingUploadedBytes >= totalBytes) return TusResumeDecision.Fresh
         return TusResumeDecision.Resume(location = existingLocation, resumeOffsetBytes = existingUploadedBytes)
     }
+
+    /**
+     * Reconciles a stored session with what the gateway reports for it — the half of tus resume the
+     * local checkpoint alone cannot do (#13429). The checkpoint only knows the last PATCH this device saw
+     * acknowledged; the gateway knows what it really holds. Resuming from the checkpoint against a session
+     * the gateway forgot failed on every retry (the stale row was never cleared), and resuming at a stale
+     * offset after a lost acknowledgement earned a `409` forever.
+     */
+    public fun reconcile(location: String, probe: TusServerProbe, totalBytes: Long): TusResumeDecision =
+        when (probe) {
+            TusServerProbe.Gone -> TusResumeDecision.Fresh
+            is TusServerProbe.Offset ->
+                // A session complete server-side has lost its finish answer (the attachment): the only way
+                // back to a media id is a fresh session.
+                if (probe.bytes < 0L || probe.bytes >= totalBytes) {
+                    TusResumeDecision.Fresh
+                } else {
+                    TusResumeDecision.Resume(location = location, resumeOffsetBytes = probe.bytes)
+                }
+        }
+}
+
+/** What the gateway answered to a `HEAD` on a stored session: its real offset, or that it forgot the session. */
+public sealed interface TusServerProbe {
+    /** The session lives and has received exactly [bytes] bytes. */
+    public data class Offset(val bytes: Long) : TusServerProbe
+
+    /** `404`/`410`: the session expired or was swept — the checkpoint points at nothing. */
+    public data object Gone : TusServerProbe
 }
