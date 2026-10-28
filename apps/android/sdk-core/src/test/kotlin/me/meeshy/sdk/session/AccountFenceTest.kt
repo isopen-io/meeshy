@@ -7,6 +7,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import org.junit.Test
 
@@ -105,5 +106,88 @@ class AccountFenceTest {
 
         assertThat(fence.guard(fence.ticket()) { "delivered" }).isEqualTo("delivered")
         assertThat(fence.commit(fence.ticket()) { "written" }).isEqualTo("written")
+    }
+
+    @Test
+    fun `a write nested in another write commits instead of waiting on itself`() = runTest {
+        val fence = AccountFence(Owner("A"))
+        val ticket = fence.ticket()
+
+        val outcome = fence.commit(ticket) { fence.commit(ticket) { "inner" } }
+
+        assertThat(outcome).isEqualTo("inner")
+    }
+
+    @Test
+    fun `two writes of the same account land side by side, neither queues behind the other`() = runTest {
+        val fence = AccountFence(Owner("A"))
+        val slow = CompletableDeferred<Unit>()
+        val order = mutableListOf<String>()
+
+        val first = launch { fence.commit(fence.ticket()) { slow.await(); order += "slow" } }
+        runCurrent()
+        fence.commit(fence.ticket()) { order += "fast" }
+        slow.complete(Unit)
+        first.join()
+
+        assertThat(order).containsExactly("fast", "slow").inOrder()
+    }
+
+    @Test
+    fun `a write begun while the wipe runs lands after it, never inside it`() = runTest {
+        val owner = Owner("A")
+        val fence = AccountFence(owner)
+        val order = mutableListOf<String>()
+        val wiping = CompletableDeferred<Unit>()
+
+        val closing = launch { fence.close { owner.id = null; order += "wipe-start"; wiping.await(); order += "wipe-end" } }
+        runCurrent()
+        val writing = launch { fence.commit(fence.ticket()) { order += "write" } }
+        runCurrent()
+        assertThat(order).containsExactly("wipe-start")
+
+        wiping.complete(Unit)
+        closing.join()
+        writing.join()
+        assertThat(order).containsExactly("wipe-start", "wipe-end", "write").inOrder()
+    }
+
+    @Test
+    fun `a session that ends, even for the same account id, retires the tickets taken under it`() = runTest {
+        val transition = SessionTransitionFlags()
+        val fence = AccountFence(Owner("A"), transition)
+        val ticket = fence.ticket()
+
+        transition.bumpGeneration()
+
+        assertThat(fence.isCurrent(ticket)).isFalse()
+        assertThat(fence.commit(ticket) { "written" }).isNull()
+        assertThat(fence.commit(fence.ticket()) { "written" }).isEqualTo("written")
+    }
+
+    @Test
+    fun `revoking for a new owner cancels the send in flight without a wipe`() = runTest {
+        val owner = Owner("A")
+        val fence = AccountFence(owner)
+        val ticket = fence.ticket()
+        var chunksAfterSwitch = 0
+        val switched = CompletableDeferred<Unit>()
+
+        val sending = async {
+            fence.guard(ticket) {
+                switched.await()
+                chunksAfterSwitch += 1
+                "delivered"
+            }
+        }
+        runCurrent()
+        owner.id = "B"
+        fence.revoke()
+        switched.complete(Unit)
+
+        val outcome: Any? = sending.await()
+        assertThat(outcome).isNull()
+        assertThat(chunksAfterSwitch).isEqualTo(0)
+        assertThat(fence.guard(fence.ticket()) { "delivered" }).isEqualTo("delivered")
     }
 }

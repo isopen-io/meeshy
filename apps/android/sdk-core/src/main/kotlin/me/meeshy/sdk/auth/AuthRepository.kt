@@ -27,6 +27,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -41,6 +42,7 @@ class AuthRepository @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val sessionTeardown: SessionTeardown,
     private val syncSeqTracker: SyncSeqTracker,
+    private val fence: AccountFence? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -449,6 +451,10 @@ class AuthRepository @Inject constructor(
     }
 
     private fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        // #13558 : un compte posé par-dessus un autre, sans purge, retire d'abord les envois en vol du compte remplacé —
+        // leur prochaine requête partirait sinon sous les jetons du compte adopté.
+        val replaced = sessionRepository.currentUserId ?: tokenStore.userId
+        if (replaced != null && replaced != session.user.id) fence?.revoke()
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
         sessionRepository.adopt(session.user, origin)
