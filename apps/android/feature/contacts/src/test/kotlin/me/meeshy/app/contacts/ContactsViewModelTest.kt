@@ -397,10 +397,10 @@ class ContactsViewModelTest {
         viewModel(received = listOf(request("r1")), sent = listOf(request("s1")))
 
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") }, any())
         }
         coVerify {
-            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s1") })
+            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s1") }, any())
         }
     }
 
@@ -413,7 +413,7 @@ class ContactsViewModelTest {
 
         assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r2")
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r2") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r2") }, any())
         }
     }
 
@@ -425,7 +425,7 @@ class ContactsViewModelTest {
         vm.acceptRequest("r1")
 
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") }, any())
         }
     }
 
@@ -438,7 +438,7 @@ class ContactsViewModelTest {
 
         assertThat(vm.state.value.sentRequests.map { it.id }).containsExactly("s2")
         coVerify {
-            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s2") })
+            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s2") }, any())
         }
     }
 }

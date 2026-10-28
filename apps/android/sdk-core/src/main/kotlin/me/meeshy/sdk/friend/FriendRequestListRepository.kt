@@ -12,6 +12,9 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,17 +44,21 @@ class FriendRequestListRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val friendRequestDao: FriendRequestDao,
     private val syncMetaDao: SyncMetaDao,
+    private val fence: AccountFence? = null,
 ) {
+
+    /** Le compte auquel appartient une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    fun ticket(): AccountTicket? = fence?.ticket()
 
     suspend fun cachedReceived(): List<FriendRequest>? = cachedSnapshot(DIRECTION_RECEIVED, RESOURCE_KEY_RECEIVED)
 
     suspend fun cachedSent(): List<FriendRequest>? = cachedSnapshot(DIRECTION_SENT, RESOURCE_KEY_SENT)
 
-    suspend fun persistReceived(requests: List<FriendRequest>) =
-        persist(DIRECTION_RECEIVED, RESOURCE_KEY_RECEIVED, requests)
+    suspend fun persistReceived(requests: List<FriendRequest>, ticket: AccountTicket?) =
+        persist(DIRECTION_RECEIVED, RESOURCE_KEY_RECEIVED, requests, ticket)
 
-    suspend fun persistSent(requests: List<FriendRequest>) =
-        persist(DIRECTION_SENT, RESOURCE_KEY_SENT, requests)
+    suspend fun persistSent(requests: List<FriendRequest>, ticket: AccountTicket?) =
+        persist(DIRECTION_SENT, RESOURCE_KEY_SENT, requests, ticket)
 
     /** Expires both rosters' freshness (the rows stay for the cold-start paint). */
     suspend fun invalidate() {
@@ -66,7 +73,7 @@ class FriendRequestListRepository @Inject constructor(
         return rows.map { MeeshyApi.json.decodeFromString<FriendRequest>(it.payload) }
     }
 
-    private suspend fun persist(direction: String, resourceKey: String, requests: List<FriendRequest>) {
+    private suspend fun persist(direction: String, resourceKey: String, requests: List<FriendRequest>, ticket: AccountTicket?) {
         val now = SystemCacheClock.nowMillis()
         val rows = requests.mapIndexed { index, request ->
             FriendRequestEntity(
@@ -77,14 +84,16 @@ class FriendRequestListRepository @Inject constructor(
                 cachedAt = now,
             )
         }
-        database.withTransaction {
-            if (rows.isEmpty()) {
-                friendRequestDao.clear(direction)
-            } else {
-                friendRequestDao.upsertAll(rows)
-                friendRequestDao.deleteNotIn(direction, rows.map { it.id })
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                if (rows.isEmpty()) {
+                    friendRequestDao.clear(direction)
+                } else {
+                    friendRequestDao.upsertAll(rows)
+                    friendRequestDao.deleteNotIn(direction, rows.map { it.id })
+                }
+                syncMetaDao.upsert(SyncMetaEntity(resourceKey, now))
             }
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now))
         }
     }
 
