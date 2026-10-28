@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
 /**
  * Les plafonds LARGES d'une story (décision porteur 2026-10-28, #13590) : assez hauts pour ne refuser aucun
@@ -7,7 +8,7 @@ import { z } from 'zod';
  * Le refus reste un 400 `VALIDATION_ERROR` ; la borne dépassée voyage à côté, à la racine de l'enveloppe
  * (`storyLimit` = l'un des `STORY_LIMIT_*` ci-dessous, `limit` = le maximum), pour que les clients l'expliquent.
  * Codes stables : STORY_LIMIT_STICKERS · _IMAGES · _TEXTS · _AUDIOS · _VIDEOS (par scène) · _DURATION (secondes,
- * durée totale de la story) · _TEXT_LENGTH (caractères, création seulement).
+ * durée totale de la story) · _TEXT_LENGTH (caractères, création seulement) · _MEDIA (`mediaIds` d'un post STORY, création et édition).
  *
  * Le plafond de texte ne s'applique qu'à la CRÉATION : une story déjà stockée reste modifiable, et les
  * traductions, écrites par le serveur, ne sont jamais bornées par lui.
@@ -15,10 +16,16 @@ import { z } from 'zod';
 export const STORY_OBJECTS_PER_FAMILY_MAX = 50;
 export const STORY_TOTAL_SECONDS_MAX = 7200;
 export const STORY_TEXT_CREATE_MAX = 1000;
+/**
+ * `mediaIds` d'un post STORY : les familles qui consomment un média téléversé (images, vidéos, sons, stickers),
+ * 50 chacune. Les composeurs publient un post par scène avec TOUS ces médias dans `mediaIds` ; les autres types
+ * de post gardent `MAX_POST_MEDIA`. Dérivé de la borne par famille : une seule source.
+ */
+export const STORY_MEDIA_IDS_MAX = 4 * STORY_OBJECTS_PER_FAMILY_MAX;
 
 export type StoryLimitCode =
   | 'STORY_LIMIT_STICKERS' | 'STORY_LIMIT_IMAGES' | 'STORY_LIMIT_TEXTS' | 'STORY_LIMIT_AUDIOS'
-  | 'STORY_LIMIT_VIDEOS' | 'STORY_LIMIT_DURATION' | 'STORY_LIMIT_TEXT_LENGTH';
+  | 'STORY_LIMIT_VIDEOS' | 'STORY_LIMIT_DURATION' | 'STORY_LIMIT_TEXT_LENGTH' | 'STORY_LIMIT_MEDIA';
 
 export type StoryLimit = { code: StoryLimitCode; max: number };
 
@@ -120,4 +127,22 @@ export const storyLimitFromIssues = (issues: ReadonlyArray<object>): StoryLimit 
     .map((i) => (i as { params?: unknown }).params)
     .find((p): p is { storyLimit: StoryLimitCode; limit: number } => isBag(p) && typeof p.storyLimit === 'string');
   return named ? { code: named.storyLimit, max: named.limit } : null;
+};
+
+/** Le plafond de `mediaIds` selon le type du post : une story porte les médias de sa scène, les autres types dix. */
+export const mediaIdsMaxFor = (type: string | undefined): number =>
+  type === 'STORY' ? STORY_MEDIA_IDS_MAX : MAX_POST_MEDIA;
+
+/** `mediaIds` à la création : borne selon le type ; une story nomme `STORY_LIMIT_MEDIA`. */
+export const enforceMediaIdsOnCreate = (data: { type?: string; mediaIds?: readonly string[] }, ctx: z.RefinementCtx): void => {
+  const count = data.mediaIds?.length ?? 0;
+  const max = mediaIdsMaxFor(data.type);
+  if (count <= max) return;
+  if (data.type === 'STORY') return flag(ctx, 'STORY_LIMIT_MEDIA', max);
+  ctx.addIssue({ code: 'too_big', origin: 'array', maximum: max, inclusive: true, path: ['mediaIds'], message: `mediaIds: at most ${max}` });
+};
+
+/** `mediaIds` à l'édition : le type du post n'est pas dans le corps, le plafond le plus large est tenu ici, la route resserre pour les non-stories. */
+export const enforceMediaIdsOnUpdate = (data: { mediaIds?: readonly string[] }, ctx: z.RefinementCtx): void => {
+  if ((data.mediaIds?.length ?? 0) > STORY_MEDIA_IDS_MAX) flag(ctx, 'STORY_LIMIT_MEDIA', STORY_MEDIA_IDS_MAX);
 };

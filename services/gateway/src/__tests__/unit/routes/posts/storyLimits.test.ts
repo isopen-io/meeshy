@@ -4,6 +4,7 @@
  * 400 VALIDATION_ERROR et nomme la borne (`STORY_LIMIT_*`).
  */
 import { CreatePostSchema, StoryEffectsSchema, UpdatePostSchema } from '../../../../routes/posts/types';
+import { inBatches } from '../../../../services/posts/inBatches';
 import { storyLimitFromIssues } from '../../../../routes/posts/storyLimits';
 
 const obj = (kind: string, i: number, payload: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
@@ -163,5 +164,41 @@ describe('audit #13590 — le drapeau de fond, posé par le client, n\'ouvre auc
   it('v1 : un seul fond et un seul son de fond exemptés, les suivants comptent', () => {
     expect(limitOf({ mediaObjects: many(60, (i) => ({ id: `m${i}`, mediaType: 'image', isBackground: true })) })).toEqual({ code: 'STORY_LIMIT_IMAGES', max: 50 });
     expect(limitOf({ audioPlayerObjects: many(60, (i) => ({ id: `a${i}`, isBackground: true })) })).toEqual({ code: 'STORY_LIMIT_AUDIOS', max: 50 });
+  });
+});
+
+describe('mediaIds d\'un post : 200 pour une STORY, dix pour le reste', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => i.toString(16).padStart(24, '0'));
+  const create = (type: string, n: number) => {
+    const r = CreatePostSchema.safeParse({ type, mediaIds: ids(n) });
+    return r.success ? null : (storyLimitFromIssues(r.error.issues) ?? 'refused');
+  };
+
+  it('une story accepte 6 images + 5 sons (11 médias) et jusqu\'à 200', () => {
+    expect(create('STORY', 11)).toBeNull();
+    expect(create('STORY', 200)).toBeNull();
+  });
+
+  it('une story à 201 médias nomme STORY_LIMIT_MEDIA', () => {
+    expect(create('STORY', 201)).toEqual({ code: 'STORY_LIMIT_MEDIA', max: 200 });
+  });
+
+  it.each(['POST', 'REEL', 'STATUS'])('un %s garde dix médias', (type) => {
+    expect(create(type, 10)).toBeNull();
+    expect(create(type, 11)).toBe('refused');
+  });
+
+  it('l\'édition accepte 200 médias au schéma et nomme STORY_LIMIT_MEDIA au-delà', () => {
+    expect(UpdatePostSchema.safeParse({ mediaIds: ids(200) }).success).toBe(true);
+    const r = UpdatePostSchema.safeParse({ mediaIds: ids(201) });
+    expect(r.success ? null : storyLimitFromIssues(r.error.issues)).toEqual({ code: 'STORY_LIMIT_MEDIA', max: 200 });
+  });
+
+  it('inBatches borne la concurrence à dix écritures simultanées', async () => {
+    let running = 0;
+    let peak = 0;
+    const task = async () => { running += 1; peak = Math.max(peak, running); await Promise.resolve(); running -= 1; };
+    await inBatches(Array.from({ length: 200 }, () => task));
+    expect(peak).toBe(10);
   });
 });

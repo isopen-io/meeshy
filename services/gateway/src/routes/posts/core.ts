@@ -17,7 +17,7 @@ import {
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
-import { storyLimitFromIssues } from './storyLimits';
+import { mediaIdsMaxFor, storyLimitFromIssues } from './storyLimits';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
@@ -673,6 +673,15 @@ export function registerCoreRoutes(
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
         return;
+      }
+
+      // Au-delà de dix médias, seul un post STORY est admis : le type est celui du post STOCKÉ, le corps ne le porte pas.
+      if ((parsed.data.mediaIds?.length ?? 0) > mediaIdsMaxFor(undefined)) {
+        const stored = await prisma.post.findUnique({ where: { id: postId }, select: { type: true } });
+        const max = mediaIdsMaxFor(stored?.type);
+        if (stored && parsed.data.mediaIds!.length > max) {
+          return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR', details: { limit: max } });
+        }
       }
 
       // #10315 — une publication mise hors ligne par la modération ne se
