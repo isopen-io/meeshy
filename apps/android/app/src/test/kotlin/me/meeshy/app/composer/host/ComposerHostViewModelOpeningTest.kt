@@ -15,8 +15,10 @@ import java.security.SecureRandom
 class ComposerHostViewModelOpeningTest {
     @get:Rule val folder = TemporaryFolder()
 
-    private fun viewModel(origin: String?) = ComposerHostViewModel(
-        SavedStateHandle(listOfNotNull(origin?.let { ComposerHostRoute.ORIGIN_ARG to it }).toMap()),
+    private fun handle(origin: String?) = SavedStateHandle(listOfNotNull(origin?.let { ComposerHostRoute.ORIGIN_ARG to it }).toMap())
+
+    private fun viewModel(origin: String?, saved: SavedStateHandle = handle(origin)) = ComposerHostViewModel(
+        saved,
         ComposerSeedStore(File(folder.root, "inbound").also { it.mkdirs() }, System::currentTimeMillis, SecureRandom()),
     )
 
@@ -32,5 +34,13 @@ class ComposerHostViewModelOpeningTest {
     fun `the story tray and the mood door raise no keyboard`() {
         assertThat(viewModel("story").keyboardOwed.value).isFalse()
         assertThat(viewModel("mood").keyboardOwed.value).isFalse()
+    }
+
+    @Test
+    fun `a composer restored after process death does not raise the keyboard it already raised`() {
+        val saved = handle("feed")
+        viewModel("feed", saved).onKeyboardRaised()
+        val restored = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })
+        assertThat(viewModel("feed", restored).keyboardOwed.value).isFalse()
     }
 }

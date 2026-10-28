@@ -31,7 +31,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ComposerHostViewModel @Inject constructor(
-    saved: SavedStateHandle,
+    private val saved: SavedStateHandle,
     private val seeds: ComposerSeedStore,
 ) : ViewModel() {
     val door: ComposerHostRoute.Door = ComposerHostRoute.door(
@@ -47,13 +47,16 @@ class ComposerHostViewModel @Inject constructor(
     /** La porte pose elle-même la matière : le brouillon enregistré ne se restaure pas par-dessus (iOS `seededByDoor`). */
     val seededByDoor: Boolean = door.origin.postsItsOwnMatter
 
-    private val _keyboardOwed = MutableStateFlow(ComposerProfile.of(door.origin).opensWith.focusesContentOnAppear)
-
-    /** La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le clavier, UNE fois — jamais rejoué à une bascule de format. */
-    val keyboardOwed: StateFlow<Boolean> = _keyboardOwed.asStateFlow()
+    /**
+     * La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le
+     * clavier, UNE fois — ni une bascule de format, ni une rotation, ni la restauration après la mort du processus ne le
+     * rejouent (la dette payée vit dans le [SavedStateHandle]).
+     */
+    val keyboardOwed: StateFlow<Boolean> =
+        saved.getStateFlow(KEYBOARD_OWED_KEY, ComposerProfile.of(door.origin).opensWith.focusesContentOnAppear)
 
     fun onKeyboardRaised() {
-        _keyboardOwed.value = false
+        saved[KEYBOARD_OWED_KEY] = false
     }
 
     private val _seed = MutableStateFlow<SeedState>(if (door.origin === ComposerOrigin.Share) SeedState.Loading else SeedState.None)
@@ -97,6 +100,10 @@ class ComposerHostViewModel @Inject constructor(
     }
 
     fun onMoodFacts(text: String, emoji: String?) = _state.update { it.withText(text).withMoodEmoji(emoji) }
+
+    private companion object {
+        const val KEYBOARD_OWED_KEY = "composer.keyboardOwed"
+    }
 }
 
 /** Où en est la matière que la porte pose : à venir, prête, rien (pas de graine ou déjà prise), ou perdue (périmée, déjà reprise : rien à composer). */
