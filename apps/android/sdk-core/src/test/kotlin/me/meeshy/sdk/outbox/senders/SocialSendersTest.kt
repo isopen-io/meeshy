@@ -147,7 +147,7 @@ class SocialSendersTest {
 
         coEvery { postApi.like("p1") } throws IOException("offline")
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
-        coVerify(exactly = 0) { postRepository.rollbackLike(any(), any()) }
+        coVerify(exactly = 0) { postRepository.rollbackLike(any(), any(), any()) }
     }
 
     private fun refusal(status: Int) = HttpException(Response.error<Unit>(status, "{}".toResponseBody()))
@@ -215,5 +215,51 @@ class SocialSendersTest {
 
         coEvery { postApi.removeBookmark("p1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+    }
+
+    @Test
+    fun `a definitive refusal of a like, unlike, bookmark or unbookmark fails at once instead of being retried to exhaustion`() = runTest {
+        listOf(400, 403, 404, 422).forEach { status ->
+            coEvery { postApi.like("p1") } throws refusal(status)
+            coEvery { postApi.unlike("p1") } throws refusal(status)
+            coEvery { postApi.bookmark("p1") } throws refusal(status)
+            coEvery { postApi.removeBookmark("p1") } throws refusal(status)
+
+            listOf(
+                LikePostHandler(postApi, postRepository) to OutboxKind.LIKE_POST,
+                UnlikePostHandler(postApi, postRepository) to OutboxKind.UNLIKE_POST,
+                BookmarkPostHandler(postApi, postRepository) to OutboxKind.BOOKMARK_POST,
+                UnbookmarkPostHandler(postApi, postRepository) to OutboxKind.UNBOOKMARK_POST,
+            ).forEach { (handler, kind) ->
+                assertThat(handler.send(outboxRow(kind, targetId = "p1"))).isInstanceOf(SendResult.PermanentFailure::class.java)
+            }
+        }
+    }
+
+    @Test
+    fun `a rate limit, a server error, an expired session and a network error stay transient`() = runTest {
+        val handler = LikePostHandler(postApi, postRepository)
+        val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1")
+
+        listOf(401, 408, 429, 500, 502, 503).forEach { status ->
+            coEvery { postApi.like("p1") } throws refusal(status)
+            assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        }
+        coEvery { postApi.like("p1") } throws IOException("offline")
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+    }
+
+    @Test
+    fun `a delivered gesture settles its own trace, a failed one does not`() = runTest {
+        val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1", cmid = "c-7")
+        val handler = LikePostHandler(postApi, postRepository)
+
+        coEvery { postApi.like("p1") } throws refusal(404)
+        handler.send(row)
+        verify(exactly = 0) { postRepository.settleGesture(any()) }
+
+        coEvery { postApi.like("p1") } returns accepted(Unit)
+        handler.send(row)
+        verify(exactly = 1) { postRepository.settleGesture("c-7") }
     }
 }
