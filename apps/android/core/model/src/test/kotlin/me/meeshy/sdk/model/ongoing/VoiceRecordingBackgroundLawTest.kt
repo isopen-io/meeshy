@@ -23,4 +23,22 @@ class VoiceRecordingBackgroundLawTest {
     fun `a take the system would silence is handed to the tray instead of lost`() {
         assertThat(leave(recording = true, keptAlive = false)).isEqualTo(VoiceRecordingBackgroundLaw.Decision.AbandonToTray)
     }
+
+    @Test
+    fun `a service lost while the app is on screen lets the take go on, leaving will tray it`() {
+        assertThat(VoiceRecordingBackgroundLaw.onServiceLost(isRecording = true, appVisible = true))
+            .isEqualTo(VoiceRecordingBackgroundLaw.Decision.KeepRecording)
+    }
+
+    @Test
+    fun `a service lost once the app has left stops the take into the tray`() {
+        assertThat(VoiceRecordingBackgroundLaw.onServiceLost(isRecording = true, appVisible = false))
+            .isEqualTo(VoiceRecordingBackgroundLaw.Decision.AbandonToTray)
+    }
+
+    @Test
+    fun `a service lost with no take touches nothing`() {
+        assertThat(VoiceRecordingBackgroundLaw.onServiceLost(isRecording = false, appVisible = false))
+            .isEqualTo(VoiceRecordingBackgroundLaw.Decision.Nothing)
+    }
 }

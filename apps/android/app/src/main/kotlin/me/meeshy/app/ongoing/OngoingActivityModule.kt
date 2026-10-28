@@ -37,18 +37,18 @@ internal class ProcessForegroundState @Inject constructor() {
     private val state = MutableStateFlow(false)
     val isForeground: StateFlow<Boolean> = state.asStateFlow()
 
+    fun onVisibilityChanged(visible: Boolean) {
+        state.value = visible
+    }
+
     fun install() {
         val lifecycle = ProcessLifecycleOwner.get().lifecycle
         state.value = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
-                override fun onStart(owner: LifecycleOwner) {
-                    state.value = true
-                }
+                override fun onStart(owner: LifecycleOwner) = onVisibilityChanged(true)
 
-                override fun onStop(owner: LifecycleOwner) {
-                    state.value = false
-                }
+                override fun onStop(owner: LifecycleOwner) = onVisibilityChanged(false)
             },
         )
     }

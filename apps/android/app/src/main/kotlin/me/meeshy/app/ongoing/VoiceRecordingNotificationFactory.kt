@@ -37,6 +37,23 @@ internal object VoiceRecordingNotificationFactory {
             .setPublicVersion(publicVersion(context))
             .build()
 
+    /** L'avis d'une prise que le système a cessé de tenir en arrière-plan : arrêtée, elle attend dans le composeur. */
+    fun keptInTray(context: Context): Notification =
+        NotificationCompat.Builder(context, NotificationChannelIds.CHANNEL_ONGOING)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle(context.getString(R.string.voice_recording_activity_title))
+            .setContentText(context.getString(R.string.voice_recording_activity_kept_in_tray))
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .setTimeoutAfter(KEPT_IN_TRAY_TIMEOUT_MS)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setLocalOnly(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion(context))
+            .build()
+
+    private const val KEPT_IN_TRAY_TIMEOUT_MS = 30 * 60 * 1000L
+
     private fun button(context: Context, action: String, slot: Int): PendingIntent = PendingIntent.getBroadcast(
         context,
         VoiceRecordingOngoingNotifications.NOTIFICATION_ID + slot,
