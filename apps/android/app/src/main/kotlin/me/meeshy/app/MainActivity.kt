@@ -39,6 +39,7 @@ import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
+import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.sdk.net.MeeshyConfig
@@ -89,6 +90,9 @@ class MainActivity : ComponentActivity() {
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
     private var warmDeepLink by mutableStateOf<Uri?>(null)
+
+    /** Un lien d'appel (`meeshy://call`) : une DEMANDE que [MeeshyApp] présente en confirmation, jamais un appel. */
+    private var callLink by mutableStateOf<CallLinkRequest?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
 
@@ -101,6 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         launchRoute = launchRouteOf(intent)
+        callLink = CallLinkRequest.parse(intent.dataString)
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
@@ -123,6 +128,8 @@ class MainActivity : ComponentActivity() {
                                 onLaunchRouteConsumed = { launchRoute = null },
                                 warmDeepLink = warmDeepLink,
                                 onWarmDeepLinkHandled = { warmDeepLink = null },
+                                callLink = callLink,
+                                onCallLinkHandled = { callLink = null },
                             )
                         }
                     }
@@ -180,7 +187,8 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         launchRoute = launchRouteOf(intent)
-        warmDeepLink = if (launchRoute == null) WarmDeepLink.replayable(intent) else null
+        callLink = CallLinkRequest.parse(intent.dataString)
+        warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
     }
 
     /**
