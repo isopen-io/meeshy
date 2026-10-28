@@ -75,4 +75,5 @@
     <string name="nearby_location_unavailable">Localização indisponível — verifique suas configurações de localização e tente novamente</string>
     <string name="nearby_distance_meters">a %1$d m</string>
     <string name="nearby_distance_km">a %1$.1f km</string>
+    <string name="status_composer_emoji_too_long">Este emoji é longo demais para um status — escolha outro.</string>
 </resources>

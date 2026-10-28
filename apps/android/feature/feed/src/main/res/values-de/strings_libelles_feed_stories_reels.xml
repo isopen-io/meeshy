@@ -72,4 +72,5 @@
         <item quantity="one">Du kannst bis zu %1$d Element anhängen</item>
         <item quantity="other">Du kannst bis zu %1$d Elemente anhängen</item>
     </plurals>
+    <string name="status_composer_emoji_too_long">Dieses Emoji ist zu lang für einen Status – wähle ein anderes.</string>
 </resources>
