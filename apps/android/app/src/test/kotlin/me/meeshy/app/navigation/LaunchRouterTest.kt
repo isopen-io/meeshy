@@ -323,6 +323,36 @@ class LaunchRouterTest {
         assertThat(LaunchRouter.opensWithoutSession(null)).isFalse()
     }
 
+    // #13465 — après la mort du processus, le système rend à l'activité restaurée l'intent ORIGINAL (son adresse
+    // intacte : `intent.data = null` n'a vidé que la copie locale). Une route à jeton relue là rejouerait le lien.
+    @Test
+    fun `a restored activity never replays an email link token, a fresh launch does`() {
+        val reset = "auth/reset-password?token=a"
+
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/magic-link?token=a", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/verify-email?token=a&email=b", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = false)).isEqualTo(reset)
+        assertThat(LaunchRouter.onCreateRoute("conversations", restored = true)).isEqualTo("conversations")
+    }
+
+    @Test
+    fun `every email link the manifest claims is a link the router reads - none is swallowed`() {
+        val manifest = java.io.File("src/main/AndroidManifest.xml").readText()
+            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+        val claimed = Regex("android:host=\"([^\"]+)\" android:(?:path|pathPrefix)=\"([^\"]+)\"").findAll(manifest)
+            .map { it.groupValues[1] to it.groupValues[2] }
+            .filter { (_, path) -> me.meeshy.sdk.model.link.EmailLinkSecret.pathCarriesSecret(path) }
+            .toList()
+
+        assertThat(claimed).isNotEmpty()
+        assertThat(routeOf("https://www.meeshy.me.evil.example/reset-password#token=t")).isNull()
+        assertThat(routeOf("https://wwwmeeshy.me/reset-password#token=t")).isNull()
+        claimed.forEach { (host, path) ->
+            com.google.common.truth.Truth.assertWithMessage("https://$host$path").that(routeOf("https://$host$path#token=t&email=a%40b.co")).isNotNull()
+        }
+    }
+
     @Test
     fun `a magic link without any secret never routes`() {
         assertThat(routeOf("https://meeshy.me/auth/magic-link")).isNull()

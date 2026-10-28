@@ -104,9 +104,11 @@ object LaunchRouter {
             )
         }
 
-    /** Seule origine dont un lien d'e-mail ouvre une session : l'origine https du lien du MAIL (App Link verifie).
-     *  Le port par defaut est admis ; un hote qui ne fait que commencer comme `meeshy.me` ne l'est pas. */
-    private val MEESHY_ORIGIN = Regex("^https://meeshy\\.me(?::443)?(?=[/?#]|\\z)", RegexOption.IGNORE_CASE)
+    /** Seules origines dont un lien d'e-mail ouvre une session : `meeshy.me` et `www.meeshy.me`, les deux hotes que le
+     *  manifeste revendique (App Link verifie) — comme `DeepLinkRouter.meeshyHosts` d'iOS. Un hote revendique mais non lu
+     *  avalait le lien sans rien afficher (#13465). Le port par defaut est admis ; un hote qui ne fait que commencer comme
+     *  `meeshy.me` ne l'est pas. */
+    private val MEESHY_ORIGIN = Regex("^https://(?:www\\.)?meeshy\\.me(?::443)?(?=[/?#]|\\z)", RegexOption.IGNORE_CASE)
 
     /**
      * Traduit l'URI d'un intent VIEW en route interne, ou `null` si l'URI ne nous
@@ -157,7 +159,14 @@ object LaunchRouter {
     fun opensWithoutSession(route: String?): Boolean =
         route != null && EMAIL_LINK_ROUTE_PREFIXES.any { route.startsWith(it) }
 
-    private val EMAIL_LINK_ROUTE_PREFIXES = listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
+    /**
+     * La route de lancement lue dans `onCreate`. Une activité RESTAURÉE (mort du processus) reçoit du système l'intent
+     * ORIGINAL, adresse intacte : vider `intent.data` n'avait vidé que la copie locale. Une route à jeton d'e-mail relue
+     * là rejouerait un lien déjà présenté ; elle est donc ignorée — la pile restaurée montre déjà son écran.
+     */
+    fun onCreateRoute(route: String?, restored: Boolean): String? = route.takeUnless { restored && opensWithoutSession(it) }
+
+    private val EMAIL_LINK_ROUTE_PREFIXES =listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
 
     /** Le secret d'un lien d'e-mail : le fragment prime, la requete reste lue. Jamais decode ici. */
     private fun linkSecret(name: String, uri: String): String? {
