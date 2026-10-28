@@ -78,4 +78,6 @@ dependencies {
     // deliberately — production code here never touches retrofit2 types directly,
     // routing through NetworkResult/createSession — so this stays test-scoped only.
     testImplementation(libs.retrofit)
+    // Test-only: SceneAssetFetcherTest serves a media file over a local socket.
+    testImplementation(libs.okhttp.mockwebserver)
 }

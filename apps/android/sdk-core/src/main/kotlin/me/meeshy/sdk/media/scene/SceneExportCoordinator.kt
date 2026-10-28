@@ -41,29 +41,40 @@ public class SceneExportCoordinator(
     private var running: Job? = null
 
     /**
-     * Bake la scène : [prepare] résout les fichiers et peint le calque (hors du fil principal) pour le [File] de sortie.
-     * Un export en vol rend l'appel sans effet.
+     * Bake la scène : [prepare] résout les fichiers et peint le calque (hors du fil principal) pour le [File] de sortie ;
+     * ses fichiers de travail vivent dans `workDirectory`, effacé quoi qu'il arrive. Un export en vol rend l'appel sans effet.
      */
-    public fun export(destination: SceneExportDestination, prepare: suspend (output: File) -> SceneExportJob) {
+    public fun export(destination: SceneExportDestination, prepare: suspend (output: File, workDirectory: File) -> SceneExportJob) {
         if (state.value is SceneExportState.Running) return
         mutableState.value = SceneExportReducer.start(state.value, destination)
         running = scope.launch(dispatcher) { bake(destination, prepare) }
     }
 
-    private suspend fun bake(destination: SceneExportDestination, prepare: suspend (File) -> SceneExportJob) {
+    private suspend fun bake(destination: SceneExportDestination, prepare: suspend (File, File) -> SceneExportJob) {
+        sweepStale()
         tempDirectory.mkdirs()
-        val output = File(tempDirectory, SceneExportPlan.fileName(nowMillis()))
+        val stamp = nowMillis()
+        val output = File(tempDirectory, SceneExportPlan.fileName(stamp))
+        val workDirectory = File(tempDirectory, "work-$stamp")
         var kept = false
         try {
-            runner.run(prepare(output)) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
+            runner.run(prepare(output, workDirectory)) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
             kept = deliver(destination, output)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
             mutableState.update(SceneExportReducer::failed)
         } finally {
-            if (!kept) withContext(NonCancellable) { output.delete() }
+            withContext(NonCancellable) {
+                workDirectory.deleteRecursively()
+                if (!kept) output.delete()
+            }
         }
+    }
+
+    /** Ce qu'un export précédent a laissé (fichier remis à une autre appli, session tuée) : un seul bake à la fois, donc plus de lecteur. */
+    private fun sweepStale() {
+        tempDirectory.listFiles()?.forEach { it.deleteRecursively() }
     }
 
     /** `true` quand le fichier doit survivre (partage : la feuille le lit PENDANT sa présentation). */
@@ -91,6 +102,14 @@ public class SceneExportCoordinator(
     public fun finishSharing() {
         discardReadyFile()
         mutableState.value = SceneExportState.Idle
+    }
+
+    /**
+     * Le fichier est parti vers une autre appli (feuille de partage système) : on ne peut pas savoir quand elle l'aura lu,
+     * donc il n'est PAS effacé ici — le prochain export balaie le dossier.
+     */
+    public fun handedOver() {
+        mutableState.update { if (it is SceneExportState.Ready) SceneExportState.Idle else it }
     }
 
     /** Le toast (enregistré / échec) a été dit. */
