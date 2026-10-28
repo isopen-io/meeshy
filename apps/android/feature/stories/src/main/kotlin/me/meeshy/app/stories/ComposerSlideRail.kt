@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -32,6 +34,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,8 +87,10 @@ private const val DRAG_LIFT_SCALE = 1.1f
  * One tile per scene (iOS `ComposerSlideRail`): the thumbnail of its scene, the current one ringed in the brand colour, a
  * tap to switch, the bin on the current tile only. A long press lifts a tile (with a haptic) and a horizontal drag carries it
  * across the others, which step aside; each slot crossed ticks, the drop commits. Deleting a scene that holds something asks
- * first. Out of cap, (+) and duplicate SAY why they do nothing — a greyed button explains nothing ([rememberGuardedAddition]).
- * The ten tiles fit the narrowest phone, so the row never scrolls and never competes with the drag.
+ * first. A long press released without crossing a slot opens the tile's menu — Duplicate, Delete — where iOS puts them
+ * (the context menu of its slide strip). Out of cap, (+) and duplicate SAY why they do nothing — a greyed button explains
+ * nothing ([rememberGuardedAddition]). The ten tiles fit the narrowest phone, so the row never scrolls and never competes
+ * with the drag.
  */
 @Composable
 internal fun ComposerSlideRail(
@@ -111,6 +116,7 @@ internal fun ComposerSlideRail(
     var dragPx by remember { mutableFloatStateOf(0f) }
     var lastTarget by remember { mutableIntStateOf(NO_DRAG) }
     var pendingRemoval by remember { mutableStateOf<String?>(null) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
     val target = if (dragFrom == NO_DRAG) NO_DRAG else SlideReorderResolver.targetIndex(dragFrom, dragPx * if (rtl) -1f else 1f, slotPx, deck.size)
     LaunchedEffect(target) {
         if (dragFrom != NO_DRAG && ComposerSlideDrag.ticks(lastTarget, target)) haptics.selection()
@@ -124,6 +130,10 @@ internal fun ComposerSlideRail(
     ) {
         deck.slides.forEachIndexed { index, slide ->
             val shift = slotShift(index, dragFrom, target, slotPx, rtl)
+            val requestRemoval: (String) -> Unit = { id ->
+                val holds = deck.slides.firstOrNull { it.id == id }?.holdsMatter() == true
+                if (ComposerSlideDeletion.needsConfirmation(holds)) pendingRemoval = id else onRemove(id)
+            }
             SlideTile(
                 slide = slide,
                 index = index,
@@ -136,23 +146,20 @@ internal fun ComposerSlideRail(
                 dragPx = dragPx,
                 shift = shift,
                 onSelect = onSelect,
-                onDelete = { id ->
-                    val holds = deck.slides.firstOrNull { it.id == id }?.holdsMatter() == true
-                    if (ComposerSlideDeletion.needsConfirmation(holds)) pendingRemoval = id else onRemove(id)
-                },
+                onDelete = requestRemoval,
                 onMove = onMove,
+                onDuplicate = { id -> onSelect(id); onDuplicate() },
+                menuOpen = menuFor == slide.id,
+                onMenuDismiss = { menuFor = null },
                 onDragStart = { dragFrom = index; dragPx = 0f; lastTarget = index; haptics.medium() },
                 onDrag = { dragPx += it },
                 onDragEnd = {
                     val to = target
                     dragFrom = NO_DRAG; dragPx = 0f
-                    if (to != NO_DRAG && to != index) onMove(slide.id, to)
+                    if (to != NO_DRAG && to != index) onMove(slide.id, to) else menuFor = slide.id
                 },
                 onDragCancel = { dragFrom = NO_DRAG; dragPx = 0f },
             )
-        }
-        IconButton(onClick = onDuplicate) {
-            Icon(MeeshyIcons.Copy, contentDescription = stringResource(R.string.stories_composer_duplicate_slide))
         }
         if (showsAdd) IconButton(onClick = onAdd) {
             Icon(MeeshyIcons.Add, contentDescription = stringResource(R.string.stories_composer_add_slide))
@@ -222,17 +229,26 @@ private fun SlideTile(
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
     onMove: (String, Int) -> Unit,
+    onDuplicate: (String) -> Unit,
+    menuOpen: Boolean,
+    onMenuDismiss: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
 ) {
+    val dragStart by rememberUpdatedState(onDragStart)
+    val dragBy by rememberUpdatedState(onDrag)
+    val dragEnd by rememberUpdatedState(onDragEnd)
+    val dragCancel by rememberUpdatedState(onDragCancel)
     val isCurrent = index == currentIndex
     val navigates = ComposerHeaderTiles.tilesNavigate(count)
     val animatedShift by animateFloatAsState(targetValue = shift, label = "slideTileShift")
     val position = stringResource(R.string.composer_slide_rail_position, index + 1, count)
     val moveBefore = stringResource(R.string.stories_composer_slide_move_earlier)
     val moveAfter = stringResource(R.string.stories_composer_slide_move_later)
+    val duplicateLabel = stringResource(R.string.stories_composer_duplicate_slide)
+    val removeLabel = stringResource(R.string.stories_composer_remove_slide)
     val ring = if (isCurrent) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.25f)
     Box(
         modifier = Modifier
@@ -249,12 +265,12 @@ private fun SlideTile(
                 .size(width = tileWidth, height = TILE_HEIGHT_DP.dp)
                 .clip(RoundedCornerShape(MeeshyRadius.xxs))
                 .border(if (isCurrent) 1.5.dp else 0.5.dp, ring, RoundedCornerShape(MeeshyRadius.xxs))
-                .pointerInput(slide.id, index, count) {
+                .pointerInput(slide.id) {
                     detectDragGesturesAfterLongPress(
-                        onDragStart = { onDragStart() },
-                        onDrag = { change, amount -> change.consume(); onDrag(amount.x) },
-                        onDragEnd = onDragEnd,
-                        onDragCancel = onDragCancel,
+                        onDragStart = { dragStart() },
+                        onDrag = { change, amount -> change.consume(); dragBy(amount.x) },
+                        onDragEnd = { dragEnd() },
+                        onDragCancel = { dragCancel() },
                     )
                 }
                 .clickable(enabled = navigates, role = Role.Button) { onSelect(slide.id) }
@@ -265,10 +281,24 @@ private fun SlideTile(
                     customActions = buildList {
                         if (index > 0) add(CustomAccessibilityAction(moveBefore) { onMove(slide.id, index - 1); true })
                         if (index < count - 1) add(CustomAccessibilityAction(moveAfter) { onMove(slide.id, index + 1); true })
+                        add(CustomAccessibilityAction(duplicateLabel) { onDuplicate(slide.id); true })
+                        if (count > 1) add(CustomAccessibilityAction(removeLabel) { onDelete(slide.id); true })
                     }
                 },
         ) {
             SlideThumbnail(spec = spec, backgroundModel = backgroundModel, modifier = Modifier.fillMaxSize())
+            DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
+                DropdownMenuItem(
+                    text = { Text(duplicateLabel) },
+                    leadingIcon = { Icon(MeeshyIcons.Copy, contentDescription = null) },
+                    onClick = { onMenuDismiss(); onDuplicate(slide.id) },
+                )
+                if (count > 1) DropdownMenuItem(
+                    text = { Text(removeLabel) },
+                    leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null) },
+                    onClick = { onMenuDismiss(); onDelete(slide.id) },
+                )
+            }
         }
         if (ComposerHeaderTiles.showsDelete(sceneIndex = index, currentIndex = currentIndex, sceneCount = count)) {
             val label = stringResource(R.string.composer_slide_rail_delete, index + 1)
