@@ -3,6 +3,10 @@ package me.meeshy.sdk.game
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.MeeshyNotificationType
 import me.meeshy.sdk.model.NotificationMetadata
@@ -30,13 +34,16 @@ class EngagementRevealCoordinatorTest {
         val coordinator: EngagementRevealCoordinator,
         val prefs: InMemoryGameDevicePrefsStore,
         val memory: InMemoryEngagementRevealMemory,
+        val account: MutableStateFlow<MeeshyUser?>,
     )
 
     private fun scenario(userId: String? = "me", hidden: Boolean = false, memory: InMemoryEngagementRevealMemory = InMemoryEngagementRevealMemory()): Scenario {
+        val account = MutableStateFlow(userId?.let { MeeshyUser(id = it, username = it) })
         val session = mockk<SessionRepository>()
-        every { session.currentUserId } returns userId
+        every { session.currentUserId } answers { account.value?.id }
+        every { session.currentUser } returns account
         val prefs = InMemoryGameDevicePrefsStore(GameDevicePrefs(hidden = hidden))
-        return Scenario(EngagementRevealCoordinator(prefs, session, memory), prefs, memory)
+        return Scenario(EngagementRevealCoordinator(prefs, session, memory), prefs, memory, account)
     }
 
     private val firstVoice = EngagementReveal.Achievement(EngagementAchievementKey.FIRST_VOICE)
@@ -160,5 +167,39 @@ class EngagementRevealCoordinatorTest {
         val queue = s.coordinator.queue.value
         assertThat(1 + queue.waiting.size).isEqualTo(3)
         assertThat(s.memory.hasCelebrated("me", "achievement:achievement.all_content_types")).isFalse()
+    }
+
+    @Test
+    fun `the celebration of one account is never shown to the next one, and does not block its own`() = runTest {
+        val s = scenario(userId = "me")
+        s.coordinator.onLive(notification())
+
+        s.account.value = MeeshyUser(id = "you", username = "you")
+        assertThat(s.coordinator.showing.first()).isNull()
+
+        s.coordinator.onLive(notification(id = "n-you"))
+        assertThat(s.coordinator.showing.first()).isEqualTo(firstVoice)
+        assertThat(s.coordinator.queue.value.waiting).isEmpty()
+    }
+
+    @Test
+    fun `signing out takes the celebration off the screen`() = runTest {
+        val s = scenario()
+        s.coordinator.onLive(notification())
+
+        s.account.value = null
+
+        assertThat(s.coordinator.showing.first()).isNull()
+    }
+
+    @Test
+    fun `hiding the game takes a pending celebration off the screen`() = runTest {
+        val s = scenario()
+        s.coordinator.onLive(notification())
+        assertThat(s.coordinator.showing.first()).isEqualTo(firstVoice)
+
+        s.prefs.set(hidden = true)
+
+        assertThat(s.coordinator.showing.first()).isNull()
     }
 }
