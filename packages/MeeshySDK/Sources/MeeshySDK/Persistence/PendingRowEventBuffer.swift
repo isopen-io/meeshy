@@ -18,14 +18,22 @@ struct PendingEdit: Sendable {
     var authorship: EditAuthorship = .untouched
 }
 
+/// Une pièce retirée (`attachment:deleted`) avant que son message n'ait atteint la base.
+struct PendingAttachmentRemoval: Sendable {
+    let attachmentId: String
+    let conversationId: String
+    let removedAt: Date
+}
+
 typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?
 
 /// Ce qui attend une ligne, dans l'ordre où cela se rejoue : la
-/// modification, les réactions, puis la suppression, qui l'emporte.
+/// modification, les réactions, les pièces retirées, puis la suppression, qui l'emporte.
 struct PendingRowEvents: Sendable {
     let rememberedAt: Date
     var edit: PendingEdit?
     var reactions: [PendingReactionChange] = []
+    var attachmentRemovals: [PendingAttachmentRemoval] = []
     var tombstone: PendingTombstone?
 }
 
