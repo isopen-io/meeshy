@@ -18,6 +18,9 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a stories revalidation fails; carries the API error message. */
@@ -36,6 +39,7 @@ internal class StoryCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val storyApi: StoryApi,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<ApiPost>> {
 
     override fun observe(): Flow<List<ApiPost>?> =
@@ -82,6 +86,7 @@ internal class StoryCacheSource(
      * a beat longer.
      */
     override suspend fun revalidate() {
+        val ticket = ticket()
         val collected = mutableListOf<ApiPost>()
         var cursor: String? = null
         var isComplete = false
@@ -101,7 +106,7 @@ internal class StoryCacheSource(
             }
         }
 
-        persist(collected, prune = isComplete)
+        persist(collected, prune = isComplete, ticket)
     }
 
     /**
@@ -110,9 +115,12 @@ internal class StoryCacheSource(
      * tray repaints. An unknown id is an inert 0-row delete: Room emits nothing, so an
      * over-broadcast deletion for a story the viewer never cached causes no repaint.
      */
-    suspend fun deleteLocal(storyId: String) {
-        storyDao.deleteById(storyId)
+    suspend fun deleteLocal(storyId: String, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) { storyDao.deleteById(storyId) }
     }
+
+    /** Le compte auquel appartient un événement ou une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
     /**
      * Reads a single cached story by id (decoded), or `null` if it is not cached. The
@@ -127,8 +135,8 @@ internal class StoryCacheSource(
      * from it so the Room-backed [observe] stream re-emits with the edit in place. Does
      * not touch `sync_meta`: a realtime fold is not a full revalidation.
      */
-    suspend fun upsertLocal(story: ApiPost) {
-        storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis())))
+    suspend fun upsertLocal(story: ApiPost, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) { storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis()))) }
     }
 
     private fun ApiPost.toEntity(cachedAt: Long): StoryEntity =
@@ -144,16 +152,18 @@ internal class StoryCacheSource(
      * soit arrivée au serveur ne regriserait pas l'anneau à l'envers (vue monotone, comme
      * [me.meeshy.sdk.model.StoryUpdateMerge]).
      */
-    private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
+    private suspend fun persist(stories: List<ApiPost>, prune: Boolean, ticket: AccountTicket?) {
         val now = clock.nowMillis()
         val seenHere = readLocal().filter { it.isViewedByMe == true }.mapTo(HashSet()) { it.id }
         val rows = stories
             .map { if (it.id in seenHere && it.isViewedByMe != true) it.copy(isViewedByMe = true) else it }
             .map { it.toEntity(now) }
-        database.withTransaction {
-            storyDao.upsertAll(rows)
-            if (prune) storyDao.deleteNotIn(rows.map { it.id })
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                storyDao.upsertAll(rows)
+                if (prune) storyDao.deleteNotIn(rows.map { it.id })
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
+            }
         }
     }
 

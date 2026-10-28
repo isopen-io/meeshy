@@ -47,7 +47,7 @@ class StatusBarCacheRepositoryTest {
     fun `persistBar then cachedBar round-trips the feed in order`() = runTest {
         val repo = repository()
 
-        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar)
+        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar, null)
 
         assertThat(repo.cachedBar(StatusFeedMode.FRIENDS)).containsExactlyElementsIn(friendsBar).inOrder()
     }
@@ -56,7 +56,7 @@ class StatusBarCacheRepositoryTest {
     fun `cachedBar is keyed per mode - the friends bar never leaks into discover`() = runTest {
         val repo = repository()
 
-        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar)
+        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar, null)
 
         assertThat(repo.cachedBar(StatusFeedMode.FRIENDS)).containsExactlyElementsIn(friendsBar).inOrder()
         assertThat(repo.cachedBar(StatusFeedMode.DISCOVER)).isNull()
@@ -67,8 +67,8 @@ class StatusBarCacheRepositoryTest {
         val repo = repository()
         val discoverBar = listOf(entry("x", "🔥"))
 
-        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar)
-        repo.persistBar(StatusFeedMode.DISCOVER, discoverBar)
+        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar, null)
+        repo.persistBar(StatusFeedMode.DISCOVER, discoverBar, null)
 
         assertThat(repo.cachedBar(StatusFeedMode.FRIENDS)).containsExactlyElementsIn(friendsBar).inOrder()
         assertThat(repo.cachedBar(StatusFeedMode.DISCOVER)).containsExactlyElementsIn(discoverBar).inOrder()
@@ -78,9 +78,9 @@ class StatusBarCacheRepositoryTest {
     fun `persistBar overwrites the previous bar for the same mode - newest wins`() = runTest {
         val repo = repository()
 
-        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar)
+        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar, null)
         val newer = listOf(entry("c", "🥳"))
-        repo.persistBar(StatusFeedMode.FRIENDS, newer)
+        repo.persistBar(StatusFeedMode.FRIENDS, newer, null)
 
         assertThat(repo.cachedBar(StatusFeedMode.FRIENDS)).containsExactlyElementsIn(newer).inOrder()
     }
@@ -89,7 +89,7 @@ class StatusBarCacheRepositoryTest {
     fun `an empty persisted bar reads back as synced-empty, not cold`() = runTest {
         val repo = repository()
 
-        repo.persistBar(StatusFeedMode.FRIENDS, emptyList())
+        repo.persistBar(StatusFeedMode.FRIENDS, emptyList(), null)
 
         // synced-but-empty: a real "no moods" feed, distinct from the cold `null`.
         assertThat(repo.cachedBar(StatusFeedMode.FRIENDS)).isEqualTo(emptyList<StatusEntry>())
@@ -99,8 +99,8 @@ class StatusBarCacheRepositoryTest {
     fun `invalidate drops the persisted bar for that mode only`() = runTest {
         val repo = repository()
         val discoverBar = listOf(entry("x"))
-        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar)
-        repo.persistBar(StatusFeedMode.DISCOVER, discoverBar)
+        repo.persistBar(StatusFeedMode.FRIENDS, friendsBar, null)
+        repo.persistBar(StatusFeedMode.DISCOVER, discoverBar, null)
 
         repo.invalidate(StatusFeedMode.FRIENDS)
 
@@ -136,7 +136,7 @@ class StatusBarCacheRepositoryTest {
             viaUsername = "bob",
         )
 
-        repo.persistBar(StatusFeedMode.DISCOVER, listOf(rich))
+        repo.persistBar(StatusFeedMode.DISCOVER, listOf(rich), null)
 
         assertThat(repo.cachedBar(StatusFeedMode.DISCOVER)).containsExactly(rich)
     }

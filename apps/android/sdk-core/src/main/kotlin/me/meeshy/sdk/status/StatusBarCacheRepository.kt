@@ -8,6 +8,9 @@ import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,7 +36,11 @@ import javax.inject.Singleton
 @Singleton
 class StatusBarCacheRepository @Inject constructor(
     private val dao: StatusBarCacheDao,
+    private val fence: AccountFence? = null,
 ) {
+
+    /** Le compte auquel appartient une requête ou un geste qui part MAINTENANT (#13560) ; `null` sans garde. */
+    fun ticket(): AccountTicket? = fence?.ticket()
 
     /** Last-persisted bar for [mode], or `null` when never cached / undecodable. */
     suspend fun cachedBar(mode: StatusFeedMode): List<StatusEntry>? {
@@ -42,14 +49,16 @@ class StatusBarCacheRepository @Inject constructor(
     }
 
     /** Write the network bar for [mode] through to Room for the next cold paint. */
-    suspend fun persistBar(mode: StatusFeedMode, statuses: List<StatusEntry>) {
-        dao.upsert(
-            StatusBarCacheEntity(
-                cacheKey = barKey(mode),
-                payload = MeeshyApi.json.encodeToString(statuses),
-                cachedAt = SystemCacheClock.nowMillis(),
-            ),
-        )
+    suspend fun persistBar(mode: StatusFeedMode, statuses: List<StatusEntry>, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            dao.upsert(
+                StatusBarCacheEntity(
+                    cacheKey = barKey(mode),
+                    payload = MeeshyApi.json.encodeToString(statuses),
+                    cachedAt = SystemCacheClock.nowMillis(),
+                ),
+            )
+        }
     }
 
     /** Drop the persisted bar for [mode] so the next cold launch is cold (iOS `invalidate`). */
