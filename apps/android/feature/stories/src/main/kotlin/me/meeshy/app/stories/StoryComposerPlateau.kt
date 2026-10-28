@@ -27,7 +27,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerRailDoor
-import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailBadge
@@ -92,31 +91,7 @@ internal fun StoryComposerPlateau(
                 )
             }
         },
-        trailingRail = {
-            state.selectedObjectControllers?.takeIf { !state.isDrawingActive }?.let { controllers ->
-                controllers.actions.forEach { action ->
-                    ComposerRailButton(
-                        icon = action.icon(),
-                        label = stringResource(action.labelRes()),
-                        onClick = { viewModel.onObjectController(controllers.ref, action) },
-                    )
-                }
-                ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.composer_rail_object_exit), {
-                    viewModel.onDeselectTextElement()
-                    viewModel.onDeselectSticker()
-                })
-            }
-            Spacer(Modifier.weight(1f))
-            ComposerRailButton(
-                icon = MeeshyIcons.ScheduleFilled,
-                label = stringResource(R.string.story_tool_timeline),
-                onClick = { viewModel.onBandToolTap(StoryToolMode.TIMELINE) },
-                enabled = !state.isDrawingActive,
-                active = state.band.activeTool == StoryToolMode.TIMELINE,
-            )
-            ComposerRailButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), viewModel::onUndo, enabled = state.canUndo)
-            ComposerRailButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), viewModel::onRedo, enabled = state.canRedo)
-        },
+        trailingRail = { StoryTrailingColumn(state, viewModel) },
         socle = {
             PlateauAudienceChip(state.draft.visibility, state.draft.visibilityUserIds.size, onOpenAudience)
             MeeshyPrimaryButton(

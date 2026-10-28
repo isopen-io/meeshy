@@ -181,38 +181,48 @@ fun StoryDrawingToolbar(
     onUndo: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Sur le plateau, la colonne droite range l'historique et la sortie : la rangée ne montre que le réglage déplié. */
+    control: DrawingControl? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconButton(onClick = onUndo, enabled = canUndo) {
-            Icon(Icons.Filled.Undo, contentDescription = stringResource(R.string.stories_composer_draw_undo))
-        }
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            StoryDrawingPalette.colors.forEach { colorHex ->
-                DrawSwatch(
-                    colorHex = colorHex,
-                    selected = colorHex.equals(activeColorHex, ignoreCase = true),
-                    onClick = { onColorSelected(colorHex) },
-                )
+        if (control == null) {
+            IconButton(onClick = onUndo, enabled = canUndo) {
+                Icon(Icons.Filled.Undo, contentDescription = stringResource(R.string.stories_composer_draw_undo))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            StoryDrawingPalette.widths.forEach { width ->
-                DrawWidthDot(
-                    widthDesign = width,
-                    selected = width == activeWidthDesign,
-                    onClick = { onWidthSelected(width) },
-                )
+        if (control == null || control == DrawingControl.COLOR) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                StoryDrawingPalette.colors.forEach { colorHex ->
+                    DrawSwatch(
+                        colorHex = colorHex,
+                        selected = colorHex.equals(activeColorHex, ignoreCase = true),
+                        onClick = { onColorSelected(colorHex) },
+                    )
+                }
             }
         }
-        IconButton(onClick = onDone) {
-            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.stories_composer_draw_done))
+        if (control == null || control == DrawingControl.WIDTH) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                StoryDrawingPalette.widths.forEach { width ->
+                    DrawWidthDot(
+                        widthDesign = width,
+                        selected = width == activeWidthDesign,
+                        onClick = { onWidthSelected(width) },
+                    )
+                }
+            }
+        }
+        if (control == null) {
+            IconButton(onClick = onDone) {
+                Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.stories_composer_draw_done))
+            }
         }
     }
 }

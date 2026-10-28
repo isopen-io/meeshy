@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import androidx.compose.foundation.layout.ColumnScope
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.component.composer.rememberHostedTextField
 
 /** The scene of the story composer: the canvas and the long-press menu of its background media. */
@@ -104,6 +105,7 @@ internal fun StoryComposerScene(
 @Composable
 internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
         val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
+        val onPlateau = LocalOnComposerPlateau.current
         state.sceneInspector?.let { inspector ->
             if (!state.isDrawingActive) {
                 SceneInspectorRow(
@@ -121,6 +123,7 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 onWidthSelected = viewModel::onDrawWidthSelected,
                 onUndo = viewModel::onDrawUndo,
                 onDone = viewModel::onExitDrawingMode,
+                control = state.openDrawingControl.takeIf { onPlateau },
             )
         } else if (editedText != null) {
             TextStyleToolbar(
@@ -137,7 +140,8 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
                 onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
                 onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
-                onDone = viewModel::onDeselectTextElement,
+                onDone = if (onPlateau) null else viewModel::onDeselectTextElement,
+                section = state.openTextSection.takeIf { onPlateau },
             )
         } else {
             // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun

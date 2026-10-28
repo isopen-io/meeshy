@@ -47,6 +47,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.TextEditTool
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
@@ -95,7 +97,15 @@ internal fun TextStyleToolbar(
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
     onDone: (() -> Unit)? = null,
+    /** Sur le plateau, la colonne droite range les sections : la rangée ne montre que celle qui est ouverte, sans doublon. */
+    section: ComposerObjectEditorSection? = null,
 ) {
+    fun shows(group: ComposerObjectEditorSection?) = section == null || section == group
+    val style = ComposerObjectEditorSection.Tool(TextEditTool.STYLE)
+    val effect = ComposerObjectEditorSection.Tool(TextEditTool.EFFECT)
+    val color = ComposerObjectEditorSection.Tool(TextEditTool.COLOR)
+    val align = ComposerObjectEditorSection.Tool(TextEditTool.ALIGN)
+    val background = ComposerObjectEditorSection.Tool(TextEditTool.BACKGROUND)
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -104,40 +114,56 @@ internal fun TextStyleToolbar(
                 .weight(1f)
                 .horizontalScroll(rememberScrollState()),
         ) {
-            StoryTextStyle.entries.forEach { style ->
-                FilterChip(
-                    selected = element.style == style,
-                    onClick = { onStyle(style) },
-                    label = { Text(stringResource(style.labelRes())) },
-                )
+            if (shows(style)) {
+                StoryTextStyle.entries.forEach { textStyle ->
+                    FilterChip(
+                        selected = element.style == textStyle,
+                        onClick = { onStyle(textStyle) },
+                        label = { Text(stringResource(textStyle.labelRes())) },
+                    )
+                }
             }
-            AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
-            AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
-            AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
-            CycleButton(Icons.Filled.FormatSize, R.string.stories_composer_size, element.size != StoryTextSize.DEFAULT, onCycleSize)
-            CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
-            STORY_TEXT_COLORS.forEach { hex ->
-                ColorSwatch(hex = hex, selected = element.color.equals(hex, ignoreCase = true), onClick = { onColor(hex) })
+            if (shows(align)) {
+                AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
+                AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
+                AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
             }
-            StoryTextBackgroundPresets.all.forEach { preset ->
-                BackgroundSwatch(background = preset, selected = element.background == preset, onClick = { onBackground(preset) })
+            if (shows(style)) {
+                CycleButton(Icons.Filled.FormatSize, R.string.stories_composer_size, element.size != StoryTextSize.DEFAULT, onCycleSize)
+                CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
             }
-            CycleButton(Icons.AutoMirrored.Filled.Login, R.string.stories_composer_fade_in, element.fade.hasFadeIn, onCycleFadeIn)
-            CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
-            CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
-            CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
-            CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
-            ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
-                onReorder(StoryZOrder.TO_BACK)
+            if (shows(color)) {
+                STORY_TEXT_COLORS.forEach { hex ->
+                    ColorSwatch(hex = hex, selected = element.color.equals(hex, ignoreCase = true), onClick = { onColor(hex) })
+                }
             }
-            ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
-                onReorder(StoryZOrder.BACKWARD)
+            if (shows(background)) {
+                StoryTextBackgroundPresets.all.forEach { preset ->
+                    BackgroundSwatch(background = preset, selected = element.background == preset, onClick = { onBackground(preset) })
+                }
             }
-            ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
-                onReorder(StoryZOrder.FORWARD)
+            if (shows(effect)) {
+                CycleButton(Icons.AutoMirrored.Filled.Login, R.string.stories_composer_fade_in, element.fade.hasFadeIn, onCycleFadeIn)
+                CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
             }
-            ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
-                onReorder(StoryZOrder.TO_FRONT)
+            if (shows(ComposerObjectEditorSection.Timing)) {
+                CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
+                CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
+            }
+            if (section == null) {
+                CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
+                ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
+                    onReorder(StoryZOrder.TO_BACK)
+                }
+                ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
+                    onReorder(StoryZOrder.BACKWARD)
+                }
+                ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
+                    onReorder(StoryZOrder.FORWARD)
+                }
+                ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
+                    onReorder(StoryZOrder.TO_FRONT)
+                }
             }
         }
         if (onDone != null) {
