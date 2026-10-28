@@ -36,16 +36,27 @@ object StorySlideDuration {
     /** Extra seconds granted per word beyond [LONG_TEXT_THRESHOLD_WORDS] (1s per 6 words). */
     const val LONG_TEXT_SECONDS_PER_WORD: Double = 1.0 / 6.0
 
-    /** The effective duration in seconds for a slide carrying [effects] (`null` → default). */
+    /**
+     * Ceiling of a content-derived duration — the gateway's bound on every time field (`max(86400)`).
+     * A story published by a third party can carry `1e308`; the slide must still advance.
+     */
+    const val MAX_CONTENT_SECONDS: Double = 86_400.0
+
+    /**
+     * The effective duration in seconds for a slide carrying [effects] (`null` → default). A pinned
+     * duration is bounded to what the composer can write ([StoryDurationPin.MAX_SECONDS]); a content-derived
+     * one to [MAX_CONTENT_SECONDS]; non-finite values never reach the countdown.
+     */
     fun computeSeconds(effects: StoryEffects?): Double {
         if (effects == null) return DEFAULT_STATIC_SECONDS
         val pinned = effects.timelineDuration
-        if (pinned != null && pinned > 0.0) return pinned
-        return contentDerivedSeconds(
+        if (pinned != null && pinned > 0.0) return pinned.coerceAtMost(StoryDurationPin.MAX_SECONDS)
+        val derived = contentDerivedSeconds(
             mediaObjects = effects.mediaObjects,
             audioPlayerObjects = effects.audioPlayerObjects,
             textObjects = effects.textObjects,
         )
+        return if (derived.isNaN()) DEFAULT_STATIC_SECONDS else derived.coerceAtMost(MAX_CONTENT_SECONDS)
     }
 
     /** The effective duration in whole milliseconds, for the countdown tween. */
@@ -64,10 +75,12 @@ object StorySlideDuration {
         val bgVideoDur = mediaObjects
             ?.firstOrNull { it.isBackground && it.mediaType.equals("video", ignoreCase = true) }
             ?.duration
+            ?.takeIf { it.isFinite() }
         val bgAudioDur = audioPlayerObjects
             ?.firstOrNull { it.isBackground == true }
             ?.duration
             ?.toDouble()
+            ?.takeIf { it.isFinite() }
 
         val totalWords = textObjects.sumOf { obj -> obj.text.split(" ").count { it.isNotEmpty() } }
         val textDur =
@@ -79,8 +92,10 @@ object StorySlideDuration {
 
         val mediaWindows = mediaObjects.orEmpty()
             .mapNotNull { media -> media.duration?.let { (media.startTime ?: 0.0) + it } }
+            .filter { it.isFinite() }
         val audioWindows = audioPlayerObjects.orEmpty()
             .mapNotNull { audio -> audio.duration?.let { (audio.startTime?.toDouble() ?: 0.0) + it.toDouble() } }
+            .filter { it.isFinite() }
         val longestData = (mediaWindows + audioWindows).maxOrNull() ?: 0.0
 
         val target = maxOf(textDur, DEFAULT_STATIC_SECONDS, longestData)
