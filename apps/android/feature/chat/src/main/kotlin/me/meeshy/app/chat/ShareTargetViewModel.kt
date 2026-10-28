@@ -19,6 +19,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
@@ -54,7 +55,7 @@ data class ShareTargetUiState(
  * process/session as the rest of the app — no App Group, no separate offline relay needed:
  * [MessageRepository.sendOptimistic] already durably queues through the existing outbox on
  * failure, and a shared image/video enqueues through the same [MediaUploadQueue] the chat
- * composer's own attachment picker uses ([ChatViewModel.sendFileAttachment]) — no TUS pipeline
+ * composer's own tray sends through ([ChatComposerController]) — no TUS pipeline
  * involved, message attachments never went through TUS on either platform (that pipeline is
  * post/story/status/comment media only).
  *
@@ -108,7 +109,7 @@ class ShareTargetViewModel @Inject constructor(
     /**
      * Binds a shared image/video (lot 2) — call once, right after launch, alongside [load].
      * [file] already copied, in a stream, from the inbound `ACTION_SEND` content Uri; an empty file is a no-op
-     * (a stream that failed to open). Mirrors [ChatViewModel.sendFileAttachment]'s own
+     * (a stream that failed to open). Mirrors the chat tray's own
      * mime-resolution: a meaningful [declaredMimeType] wins, otherwise it is inferred from
      * [fileName]'s extension.
      */
@@ -118,6 +119,7 @@ class ShareTargetViewModel @Inject constructor(
             return
         }
         val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
+        sharedAttachment?.takeIf { (it.source as? MediaUploadSource.OnDisk)?.file != file }?.let(MediaIntake::release)
         sharedAttachment = MediaUploadItem.onDisk(file, safeName, MimeTypeResolver.resolve(declaredMimeType, safeName))
         _state.update { it.copy(previewAttachmentName = safeName) }
     }
