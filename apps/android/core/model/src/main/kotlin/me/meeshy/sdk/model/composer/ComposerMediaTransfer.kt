@@ -4,8 +4,11 @@ import me.meeshy.sdk.model.ClientIdFormat
 import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.UploadedMedia
 
-/** Un média déjà téléversé (id serveur) et sa description : ce qui voyage d'un format à l'autre, sans re-téléversement. */
-data class CarriedMedia(val media: UploadedMedia, val alt: String? = null)
+/**
+ * Un média déjà téléversé (id serveur), son texte alternatif et sa légende (`PostMedia.caption`) : ce qui voyage d'un
+ * format à l'autre, sans re-téléversement. L'alt et la légende sont deux contenus distincts, jamais confondus.
+ */
+data class CarriedMedia(val media: UploadedMedia, val alt: String? = null, val caption: String? = null)
 
 /**
  * Ce que la bascule demande à la surface d'ARRIVÉE : les médias à poser, ceux à retirer (déjà portés puis retirés
@@ -18,8 +21,9 @@ data class MediaTransferPlan(
     val alts: Map<String, String>,
     val leftBehind: Int,
     val synced: Set<String>,
+    val captions: Map<String, String> = emptyMap(),
 ) {
-    val isEmpty: Boolean get() = add.isEmpty() && remove.isEmpty() && alts.isEmpty()
+    val isEmpty: Boolean get() = add.isEmpty() && remove.isEmpty() && alts.isEmpty() && captions.isEmpty()
 }
 
 /**
@@ -47,18 +51,20 @@ object ComposerMediaTransfer {
         val add = missing.take(freed.coerceAtLeast(0))
         val present = kept + add.map { it.media.id }
         val synced = sourceIds.intersect(present)
-        val alts = distinct
-            .filter { it.media.id in present && !it.alt.isNullOrBlank() }
-            .associate { it.media.id to requireNotNull(it.alt) }
+        val travelling = distinct.filter { it.media.id in present }
         return MediaTransferPlan(
             add = add,
             remove = remove,
-            alts = alts,
+            alts = travelling.describedBy(CarriedMedia::alt),
             leftBehind = missing.size - add.size + offline.size + sourceLeftBehind,
             synced = synced,
+            captions = travelling.describedBy(CarriedMedia::caption),
         )
     }
 }
+
+private fun List<CarriedMedia>.describedBy(text: (CarriedMedia) -> String?): Map<String, String> =
+    mapNotNull { item -> text(item)?.takeIf { it.isNotBlank() }?.let { item.media.id to it } }.toMap()
 
 /**
  * L'audience suit la bascule : la story sait dire toutes celles d'un post ; un post ne sait dire ni COMMUNITY, ni

@@ -32,6 +32,21 @@ class FeedComposerCarryTest {
     }
 
     @Test
+    fun `a carried caption becomes the caption of its post media and the post hands it back`() {
+        val incoming = ComposerCarry(
+            ComposerCarry.Side.POST,
+            ComposerMediaTransfer.plan(listOf(CarriedMedia(media("a"), alt = "chat", caption = "Au marché")), emptyList(), emptySet(), room = 10),
+            audience = null,
+            token = 1,
+        )
+        val draft = FeedComposerDraft(text = "le post").withCarry(incoming).draft
+        assertThat(draft.mediaCaption).containsExactly("a", "Au marché")
+        assertThat(draft.mediaAlt).containsExactly("a", "chat")
+        assertThat(draft.text).isEqualTo("le post")
+        assertThat(draft.carriedMedia().single()).isEqualTo(CarriedMedia(media("a"), alt = "chat", caption = "Au marché"))
+    }
+
+    @Test
     fun `a media removed on the scene leaves the post and takes its alt along`() {
         val base = FeedComposerDraft().withMedia(listOf(media("a"), media("own"))).withAlt("a", "chat")
         val draft = base.withCarry(carry(remove = setOf("a"))).draft
