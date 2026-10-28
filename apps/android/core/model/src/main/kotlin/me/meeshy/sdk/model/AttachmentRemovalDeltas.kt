@@ -11,9 +11,11 @@ object AttachmentRemovalDeltas {
 
     /**
      * La pièce quitte le message. Plus ni texte ni pièce : la bulle devient une pierre tombale, comme la suppression
-     * locale d'un message ([ConversationEventDeltas.deleted]).
+     * locale d'un message ([ConversationEventDeltas.deleted]). Un événement qui annonce une AUTRE conversation que
+     * celle du message ne touche à rien : la charge doit être cohérente avant d'effacer.
      */
-    fun message(message: ApiMessage, attachmentId: String, deletedAtIso: String): ApiMessage {
+    fun message(message: ApiMessage, conversationId: String, attachmentId: String, deletedAtIso: String): ApiMessage {
+        if (message.conversationId != conversationId) return message
         if (message.attachments.none { it.id == attachmentId }) return message
         val remaining = message.attachments.filterNot { it.id == attachmentId }
         val stripped = message.copy(attachments = remaining)
@@ -49,27 +51,48 @@ object AttachmentRemovalDeltas {
         )
     }
 
-    private fun ApiConversation.replacingLast(previous: ApiMessage): ApiConversation = copy(
-        lastMessage = ApiConversationLastMessage(
-            id = previous.id,
-            content = previous.content,
-            senderId = previous.senderId,
-            senderName = previous.sender?.displayName,
-            messageType = previous.messageType,
-            originalLanguage = previous.originalLanguage,
-            createdAt = previous.createdAt,
-            isBlurred = previous.isBlurred ?: false,
-            isViewOnce = previous.isViewOnce ?: false,
-            expiresAt = previous.expiresAt,
-            attachments = previous.attachments,
-            count = ApiMessageCount(attachments = previous.attachments.size),
-            effectFlags = previous.effectFlags,
-            ephemeralDuration = previous.ephemeralDuration,
-            isForwarded = previous.forwardedFromId != null,
-        ),
-        lastMessageTranslations = null,
-        lastMessageOriginalLanguage = previous.originalLanguage,
-    )
+    /**
+     * Le message précédent reprend la ligne avec ce qui la QUALIFIE (chiffré, vue unique, flouté — drapeaux d'effet
+     * compris —, lieu, résumé des pièces) et ses traductions, pour que le lecteur la lise dans sa langue. Un message
+     * protégé n'emporte aucune traduction : seule son étiquette part sur la ligne.
+     */
+    private fun ApiConversation.replacingLast(previous: ApiMessage): ApiConversation {
+        val effects = previous.effects
+        val blurred = effects.has(MessageEffectFlags.BLURRED)
+        val viewOnce = effects.has(MessageEffectFlags.VIEW_ONCE)
+        val sealed = previous.isEndToEndSealed
+        val protected = sealed || blurred || viewOnce
+        return copy(
+            lastMessage = ApiConversationLastMessage(
+                id = previous.id,
+                content = previous.content,
+                senderId = previous.senderId,
+                senderName = previous.sender?.displayName,
+                messageType = previous.messageType,
+                originalLanguage = previous.originalLanguage,
+                createdAt = previous.createdAt,
+                isBlurred = blurred,
+                isViewOnce = viewOnce,
+                expiresAt = previous.expiresAt,
+                attachments = previous.attachments,
+                count = ApiMessageCount(attachments = previous.attachments.size),
+                location = previous.location,
+                effectFlags = previous.effectFlags,
+                ephemeralDuration = previous.ephemeralDuration,
+                isEncrypted = sealed.takeIf { it },
+                isForwarded = previous.forwardedFromId != null,
+                attachmentSummary = summaryOf(previous.attachments),
+            ),
+            lastMessageTranslations = if (protected) null else translationsOf(previous),
+            lastMessageOriginalLanguage = previous.originalLanguage,
+        )
+    }
+
+    private fun translationsOf(message: ApiMessage): Map<String, String>? =
+        message.translations
+            .filter { it.isEncrypted != true && it.translatedContent.isNotBlank() }
+            .associate { it.targetLanguage to it.translatedContent }
+            .takeIf { it.isNotEmpty() }
 
     private fun summaryOf(pieces: List<ApiMessageAttachment>): LastMessageAttachmentSummary? =
         pieces.takeIf { it.isNotEmpty() }?.let {
