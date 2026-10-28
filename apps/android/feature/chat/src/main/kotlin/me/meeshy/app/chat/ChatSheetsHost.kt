@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,6 +35,7 @@ import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
 import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
+import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -101,11 +103,16 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         val nowMillis = System.currentTimeMillis()
         val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
         bubbleFrames[actionTarget.messageId]?.let { frame ->
-            MessageOverlayPreviewHero(
-                frame = frame,
-                content = actionTarget,
-                accentColor = accentColor,
-            )
+            val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) {
+                bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds)
+            }
+            CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+                MessageOverlayPreviewHero(
+                    frame = frame,
+                    content = actionTarget,
+                    accentColor = accentColor,
+                )
+            }
         }
         MessageActionsSheet(
             bubble = actionTarget,

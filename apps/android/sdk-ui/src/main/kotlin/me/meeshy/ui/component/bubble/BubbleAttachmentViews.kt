@@ -39,7 +39,7 @@ internal fun BubbleAttachmentSections(
         BubbleFileRow(
             file = file,
             onColor = onColor,
-            onClick = callbacks.onFileClick?.takeIf { !file.isSealed && !file.url.isNullOrBlank() }
+            onClick = callbacks.onFileClick?.takeIf { !file.isSealed && !file.isProtected && !file.url.isNullOrBlank() }
                 ?.let { { it(file) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )

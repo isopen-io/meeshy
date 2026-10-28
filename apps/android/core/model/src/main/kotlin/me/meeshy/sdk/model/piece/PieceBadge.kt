@@ -19,7 +19,7 @@ sealed interface PieceBadge {
     /** Chiffrée de bout en bout : ne s'ouvre pas ici. */
     data object Sealed : PieceBadge
 
-    /** Rien à proposer : pas encore d'adresse (envoi en cours) ou déjà sur l'appareil. */
+    /** Rien à proposer : pas encore d'adresse (envoi en cours), déjà sur l'appareil, ou pièce retenue (vue unique, floutée, éphémère). */
     data object None : PieceBadge
 
     data class Idle(val sizeBytes: Int?) : PieceBadge
@@ -38,8 +38,10 @@ sealed interface PieceBadge {
             transfer: PieceTransfer?,
             isReady: Boolean,
             sizeBytes: Int?,
+            isProtected: Boolean = false,
         ): PieceBadge = when {
             isSealed -> Sealed
+            isProtected -> None
             !hasUrl || isOnDevice -> None
             transfer is PieceTransfer.InProgress -> Downloading(transfer.percent?.coerceIn(0, 100))
             transfer is PieceTransfer.Failed -> Failed

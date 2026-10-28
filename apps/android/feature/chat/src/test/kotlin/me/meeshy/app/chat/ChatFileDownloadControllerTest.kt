@@ -41,10 +41,11 @@ class ChatFileDownloadControllerTest {
         val download: FileAttachmentDownloadUiState? get() = flow.value.fileDownload
     }
 
-    private fun TestScope.rig(loaded: List<LocalMessage>): Rig {
-        val flow = MutableStateFlow(ChatUiState(conversationId = "c1"))
+    private fun TestScope.rig(loaded: List<LocalMessage>, encryptionMode: String? = null): Rig {
+        val flow = MutableStateFlow(ChatUiState(conversationId = "c1", encryptionMode = encryptionMode))
         val downloader = mockk<FileAttachmentDownloader>()
         every { downloader.download(any(), any(), any()) } returns emptyFlow()
+        every { downloader.save(any(), any(), any()) } returns emptyFlow()
         val controller = ChatFileDownloadController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -236,8 +237,87 @@ class ChatFileDownloadControllerTest {
         r.controller.tap("m1", attachmentId = "b1")
         r.controller.save("m1", attachmentId = "b1")
 
-        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.NotAvailable)
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
         verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+        verify(exactly = 0) { r.downloader.save(any(), any(), any()) }
+    }
+
+    private fun refusedEverywhere(r: Rig, attachmentId: String?) {
+        r.controller.open("m1", attachmentId)
+        r.controller.tap("m1", attachmentId)
+        r.controller.share("m1", attachmentId)
+        r.controller.save("m1", attachmentId)
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+        verify(exactly = 0) { r.downloader.save(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a piece marked encrypted is sealed even without the e2ee mode, by every path`() = runTest {
+        val sealed = ApiMessageAttachment(id = "s1", fileName = "s.pdf", mimeType = "application/pdf", fileUrl = "https://cdn/s1", isEncrypted = true)
+        refusedEverywhere(rig(listOf(message(sealed))), "s1")
+    }
+
+    @Test
+    fun `a sealed message keeps its ordinary-looking piece, by every path`() = runTest {
+        val m = LocalMessage(
+            ApiMessage(
+                id = "m1", conversationId = "c1", senderId = "o", content = "[Encrypted]", isEncrypted = true, encryptionMode = "e2ee",
+                attachments = listOf(attachment("a1", "application/pdf")),
+            ),
+        )
+        refusedEverywhere(rig(listOf(m)), null)
+    }
+
+    @Test
+    fun `in an end-to-end conversation a piece whose information is missing is refused, never reported as merely unavailable`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"))), encryptionMode = "e2ee")
+
+        r.controller.open("ghost", attachmentId = "a1")
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
+        r.controller.openProvided("ghost", attachment("h1", "application/pdf"))
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a sealed hub piece is refused too`() = runTest {
+        val r = rig(emptyList())
+        r.controller.openProvided("m9", ApiMessageAttachment(id = "h1", fileName = "h.pdf", mimeType = "application/pdf", fileUrl = "https://cdn/h1", isEncrypted = true))
+        assertThat((r.download?.state as FileAttachmentDownloadState.Failed).reason).isEqualTo(FileAttachmentDownloadFailure.Protected)
+        verify(exactly = 0) { r.downloader.download(any(), any(), any()) }
+    }
+
+    @Test
+    fun `saving goes through the saver, never the cache downloader, and a file opened earlier is not a saved file`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf", name = "contrat.pdf"))))
+        val opened = FileAttachmentDownloadState.Completed(localUri = "content://dl/cache", mimeType = "application/pdf")
+        val saved = FileAttachmentDownloadState.Completed(localUri = "content://media/downloads/7", mimeType = "application/pdf")
+        every { r.downloader.download(any(), any(), any()) } returns flowOf(opened)
+        every { r.downloader.save(any(), any(), any()) } returns flowOf(saved)
+        r.controller.open("m1", "a1")
+        advanceUntilIdle()
+
+        r.controller.save("m1", "a1")
+        advanceUntilIdle()
+
+        assertThat(r.download?.state).isEqualTo(saved)
+        verify(exactly = 1) { r.downloader.save("https://cdn/a1", "contrat.pdf", "application/pdf") }
+        r.controller.save("m1", "a1")
+        verify(exactly = 1) { r.downloader.save(any(), any(), any()) }
+        assertThat(r.controller.downloadedIds.value).containsExactly("a1")
+    }
+
+    @Test
+    fun `a save that fails is reported as failed, not as saved`() = runTest {
+        val r = rig(listOf(message(attachment("a1", "application/pdf"))))
+        every { r.downloader.save(any(), any(), any()) } returns flowOf(FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.SaveFailed))
+
+        r.controller.save("m1", "a1")
+        advanceUntilIdle()
+
+        assertThat(r.download?.state).isEqualTo(FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.SaveFailed))
+        assertThat(r.controller.downloadedIds.value).isEmpty()
     }
 
     @Test

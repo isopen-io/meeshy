@@ -147,3 +147,18 @@ class MessagePieceTargetTest {
         assertThat(MessagePieceTarget.offersReaction(menu(isProtected = true))).isFalse()
     }
 }
+
+class MessagePieceTargetSealedTest {
+    @Test
+    fun `un blob e2ee sans drapeau chiffre est protege et un message scelle n'ouvre aucun apercu`() {
+        val blob = ApiMessageAttachment(id = "a", mimeType = "image/png", fileUrl = "https://cdn/a", encryptionMode = "e2ee")
+        val m = ApiMessage(id = "m", conversationId = "c", senderId = "u", content = "", attachments = listOf(blob))
+        assertThat(MessagePieceTarget.isProtected(blob, m)).isTrue()
+        assertThat(MessagePieceTarget.piece("a", m)).isNull()
+        val sealedMessage = ApiMessage(
+            id = "m2", conversationId = "c", senderId = "u", content = "[Encrypted]", isEncrypted = true, encryptionMode = "e2ee",
+            attachments = listOf(ApiMessageAttachment(id = "b", mimeType = "image/png", fileUrl = "https://cdn/b")),
+        )
+        assertThat(MessagePieceTarget.messageIsProtected(sealedMessage)).isTrue()
+    }
+}

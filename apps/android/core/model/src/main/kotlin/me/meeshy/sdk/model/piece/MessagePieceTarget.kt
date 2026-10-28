@@ -39,6 +39,7 @@ object MessagePieceTarget {
         !message.exitOffer().offers(MessageExit.SAVE) ||
             message.isViewOnce == true ||
             message.isBlurred == true ||
+            PieceSealing.messageIsSealed(message) ||
             message.attachments.any { isProtectedPiece(it) }
 
     /** Une pièce se montre-t-elle en clair ? Non dès qu'elle, ou son message, est à vue unique, floutée ou chiffrée. */
@@ -46,7 +47,7 @@ object MessagePieceTarget {
         isProtectedPiece(piece) || messageIsProtected(message)
 
     private fun isProtectedPiece(piece: ApiMessageAttachment): Boolean =
-        piece.isViewOnce == true || piece.isBlurred == true || piece.isEncrypted == true ||
+        piece.isViewOnce == true || piece.isBlurred == true || PieceSealing.isSealed(piece) ||
             ((piece.effectFlags ?: 0L) != 0L)
 
     fun index(attachmentId: String, message: ApiMessage): Int? =

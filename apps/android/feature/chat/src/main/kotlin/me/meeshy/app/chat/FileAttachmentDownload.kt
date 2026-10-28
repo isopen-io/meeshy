@@ -50,6 +50,8 @@ enum class FileAttachmentDownloadFailure {
     NotAvailable,
     /** The piece disappears (view-once, flame, blur) or sits in an encrypted conversation: it never leaves Meeshy. */
     Protected,
+    /** « Enregistrer » n'a pas pu écrire dans les Téléchargements (permission refusée, stockage plein ou indisponible). */
+    SaveFailed,
 }
 
 /**

@@ -20,6 +20,7 @@ public data class BubbleFileTransfers(
         isSealed = file.isSealed,
         hasUrl = !file.url.isNullOrBlank(),
         isOnDevice = file.isOnDevice,
+        isProtected = file.isProtected,
         transfer = active.takeIf { activeAttachmentId == file.attachmentId },
         isReady = file.attachmentId in readyAttachmentIds,
         sizeBytes = file.sizeBytes,

@@ -59,3 +59,13 @@ class PieceBadgeTest {
         assertThat(badge(sizeBytes = null)).isEqualTo(PieceBadge.Idle(null))
     }
 }
+
+class PieceBadgeProtectedTest {
+    @Test
+    fun `une piece retenue n'affiche aucun badge de telechargement, quoi que disent l'adresse et le transfert`() {
+        val badge = PieceBadge.of(
+            isSealed = false, hasUrl = true, isOnDevice = false, transfer = PieceTransfer.Failed, isReady = false, sizeBytes = 10, isProtected = true,
+        )
+        org.junit.Assert.assertEquals(PieceBadge.None, badge)
+    }
+}

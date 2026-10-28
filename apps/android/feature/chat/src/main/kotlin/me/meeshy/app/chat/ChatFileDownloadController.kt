@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.update as updateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
-import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.mediahub.MediaHubRowExit
+import me.meeshy.sdk.model.piece.PieceSealing
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -40,6 +40,9 @@ internal class ChatFileDownloadController(
      * transfer's terminal [FileAttachmentDownloadState.Completed] (the reusable `localUri`).
      */
     private val completedDownloads = mutableMapOf<String, FileAttachmentDownloadState.Completed>()
+
+    /** Les pièces ENREGISTRÉES dans les Téléchargements cette session : un fichier du cache d'ouverture n'est pas un fichier enregistré. */
+    private val savedDownloads = mutableMapOf<String, FileAttachmentDownloadState.Completed>()
 
     /**
      * Les pièces d'un porteur que le fil n'a pas chargé (le hub « Médias, liens et documents » remonte tout
@@ -102,21 +105,24 @@ internal class ChatFileDownloadController(
         val attachment = firstFileAttachment(messageId, attachmentId)
         val fileUrl = attachment?.fileUrl
         val fileName = attachment?.originalName ?: attachment?.fileName ?: messageId
+        // Un contenu qui disparaît ne sort pas de Meeshy (#9573) : ni ouvert, ni enregistré, ni partagé. Une pièce
+        // scellée (chiffrée, blob e2ee, message scellé) ou d'une conversation chiffrée dont l'information manque est
+        // retenue par la MÊME règle que la bulle (#13493) : échec fermé.
+        val carrier = messages.value.firstOrNull { it.message.id == messageId }?.message
+        val withheld = PieceSealing.withholds(attachment, carrier, state.value.isEndToEnd) ||
+            (carrier != null && !MediaHubRowExit.of(carrier, state.value.isEndToEnd).mayLeave)
+        if (withheld) {
+            downloadJob?.cancel()
+            fail(messageId, attachment?.id.orEmpty(), fileName, FileAttachmentDownloadFailure.Protected, openWhenDone, saveOnly)
+            return
+        }
         if (attachment == null || fileUrl.isNullOrBlank()) {
             fail(messageId, attachment?.id.orEmpty(), fileName, FileAttachmentDownloadFailure.NotAvailable, openWhenDone, saveOnly)
             return
         }
-        // Un contenu qui disparaît ne sort pas de Meeshy (#9573) : ni ouvert, ni enregistré, ni partagé. Le porteur
-        // inconnu du fil (pièce amenée par le hub) a déjà passé le portillon du hub.
-        val carrier = messages.value.firstOrNull { it.message.id == messageId }?.message
-        if (carrier != null && !MediaHubRowExit.of(carrier, state.value.isEndToEnd).mayLeave) {
-            downloadJob?.cancel()
-            fail(messageId, attachment.id, fileName, FileAttachmentDownloadFailure.Protected, openWhenDone, saveOnly)
-            return
-        }
         downloadJob?.cancel()
 
-        val alreadyLocal = completedDownloads[attachment.id]
+        val alreadyLocal = if (saveOnly) savedDownloads[attachment.id] else completedDownloads[attachment.id]
         if (alreadyLocal != null) {
             state.update {
                 it.copy(
@@ -148,10 +154,15 @@ internal class ChatFileDownloadController(
             )
         }
         downloadJob = scope.launch {
-            downloader.download(resolvedUrl, fileName, mimeType).collect { downloadState ->
+            val transfer = if (saveOnly) downloader.save(resolvedUrl, fileName, mimeType) else downloader.download(resolvedUrl, fileName, mimeType)
+            transfer.collect { downloadState ->
                 if (downloadState is FileAttachmentDownloadState.Completed) {
-                    completedDownloads[attachment.id] = downloadState
-                    _downloadedIds.updateFlow { it + attachment.id }
+                    if (saveOnly) {
+                        savedDownloads[attachment.id] = downloadState
+                    } else {
+                        completedDownloads[attachment.id] = downloadState
+                        _downloadedIds.updateFlow { it + attachment.id }
+                    }
                 }
                 state.update { current ->
                     val active = current.fileDownload
@@ -191,14 +202,9 @@ internal class ChatFileDownloadController(
      * non-image/location/audio attachment, preserving the sheet's existing behaviour.
      */
     private fun firstFileAttachment(messageId: String, attachmentId: String?): ApiMessageAttachment? {
-        // #13106 — un blob chiffré de bout en bout ne se télécharge jamais : l'Android natif ne l'ouvre pas.
-        val attachments = messages.value.firstOrNull { it.message.id == messageId }
-            ?.message?.attachments
-            ?.filterNot { it.isEndToEndBlob }
-            ?: return attachmentId?.let(provided::get)?.takeUnless { it.isEndToEndBlob }
-        if (attachmentId != null) {
-            return attachments.firstOrNull { it.id == attachmentId } ?: provided[attachmentId]?.takeUnless { it.isEndToEndBlob }
-        }
+        val attachments = messages.value.firstOrNull { it.message.id == messageId }?.message?.attachments
+            ?: return attachmentId?.let(provided::get)
+        if (attachmentId != null) return attachments.firstOrNull { it.id == attachmentId } ?: provided[attachmentId]
         return attachments.firstOrNull { !it.isImage && !it.isLocation && !it.isAudio }
     }
 
