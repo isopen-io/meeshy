@@ -72,6 +72,13 @@ class OutgoingMediaBootSweepTest {
         assertThat(freshOrphan.exists()).isTrue()
     }
 
+    @Test
+    fun `what a sweep spares is dated from the PROCESS start, not from whenever the initializer happens to run`() {
+        val startedAt = OutgoingMediaBootSweep.processStartedAt(wallNowMillis = 1_000_000L, uptimeNowMillis = 50_000L, processStartUptimeMillis = 42_000L)
+
+        assertThat(startedAt).isEqualTo(992_000L)
+    }
+
     private companion object {
         const val MINUTE = 60_000L
         const val HOUR = 60 * MINUTE

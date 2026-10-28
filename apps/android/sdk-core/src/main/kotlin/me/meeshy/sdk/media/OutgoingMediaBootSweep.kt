@@ -23,5 +23,12 @@ public class OutgoingMediaBootSweep @Inject constructor(
 
     public companion object {
         public const val CLOCK_MARGIN_MS: Long = 2_000L
+
+        /**
+         * The wall-clock instant the PROCESS started, read from its uptime: every file this process writes is younger,
+         * however long the other initializers (or a worker started before them) took to reach the sweep.
+         */
+        public fun processStartedAt(wallNowMillis: Long, uptimeNowMillis: Long, processStartUptimeMillis: Long): Long =
+            wallNowMillis - (uptimeNowMillis - processStartUptimeMillis).coerceAtLeast(0L)
     }
 }

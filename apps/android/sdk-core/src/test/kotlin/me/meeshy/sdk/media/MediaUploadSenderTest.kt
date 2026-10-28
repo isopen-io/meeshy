@@ -34,13 +34,34 @@ class MediaUploadSenderTest {
         assertThat(uploadCalls).isEqualTo(0)
     }
 
+    private fun unreadable(): NetworkResult<List<UploadedMedia>> =
+        NetworkResult.Failure(ApiError(OutgoingMediaSanitizer.UNREADABLE_MESSAGE, code = OutgoingMediaSanitizer.UNREADABLE_CODE))
+
+    /** Held bytes whose first segment opens and whose rest no longer reads (altered, truncated). */
+    private fun brokenItem() = MediaUploadItem(
+        source = object : MediaUploadSource {
+            override val size: Long = 10_000
+            override fun open(offset: Long): java.io.InputStream = object : java.io.InputStream() {
+                private var read = 0
+                override fun read(): Int = if (read++ < 100) 1 else throw java.io.IOException("segment does not authenticate")
+            }
+        },
+        fileName = "clip.mp4",
+        mimeType = "video/mp4",
+    )
+
     @Test
     fun `held bytes that can no longer be read are lost, not retried`() = runTest {
-        val result = MediaUploadSender.send(item()) {
-            NetworkResult.Failure(ApiError(OutgoingMediaSanitizer.UNREADABLE_MESSAGE, code = OutgoingMediaSanitizer.UNREADABLE_CODE))
-        }
+        val result = MediaUploadSender.send(brokenItem()) { unreadable() }
 
         assertThat(result).isEqualTo(SendResult.PermanentFailure(MediaLoss.REASON))
+    }
+
+    @Test
+    fun `a cleaning that fails while the held bytes still read whole (disk full) is retried, never declared lost`() = runTest {
+        val result = MediaUploadSender.send(item()) { unreadable() }
+
+        assertThat(result).isEqualTo(SendResult.TransientFailure)
     }
 
     @Test

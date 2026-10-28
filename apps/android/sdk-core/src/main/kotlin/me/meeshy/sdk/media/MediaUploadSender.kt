@@ -1,5 +1,7 @@
 package me.meeshy.sdk.media
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.SendResult
@@ -21,9 +23,10 @@ import me.meeshy.sdk.outbox.SendResult
  *   ([OutgoingMediaSanitizer.REFUSED_CODE], [OutgoingMediaSanitizer.MEDIA_REFUSED_CODE]) →
  *   [SendResult.PermanentFailure]: the same bytes are refused on every retry, so the row is
  *   failed at once instead of being replayed until the attempts run out (#13543).
- * - the held bytes **no longer read** ([OutgoingMediaSanitizer.UNREADABLE_CODE]: altered, or sealed under a key lost
- *   with the process) → [SendResult.PermanentFailure] with the same reason as a gone blob ([MediaLoss], #13554): a
- *   retry would read the same unreadable file.
+ * - the held bytes **no longer read** ([OutgoingMediaSanitizer.UNREADABLE_CODE] AND a whole read of them fails: altered,
+ *   or sealed under a key lost with the process) → [SendResult.PermanentFailure] with the same reason as a gone blob
+ *   ([MediaLoss], #13554): a retry would read the same unreadable file. The same code with bytes that still read whole
+ *   (the cleaned copy could not be written: disk full) is a [SendResult.TransientFailure].
  * - the upload **fails transiently** (offline, 5xx) → [SendResult.TransientFailure]:
  *   the lane stops and WorkManager retries with the bytes still durably held.
  * - the upload **succeeds but yields no usable media** → [SendResult.PermanentFailure]:
@@ -47,7 +50,8 @@ object MediaUploadSender {
         return when (val result = upload(item)) {
             is NetworkResult.Failure -> when (result.error.code) {
                 in LOCATION_REFUSALS -> SendResult.PermanentFailure(REASON_LOCATION_NOT_REMOVABLE)
-                OutgoingMediaSanitizer.UNREADABLE_CODE -> SendResult.PermanentFailure(REASON_BLOB_GONE)
+                OutgoingMediaSanitizer.UNREADABLE_CODE ->
+                    if (readsWhole(item)) SendResult.TransientFailure else SendResult.PermanentFailure(REASON_BLOB_GONE)
                 else -> SendResult.TransientFailure
             }
             is NetworkResult.Success -> {
@@ -60,6 +64,28 @@ object MediaUploadSender {
             }
         }
     }
+
+    /**
+     * Whether every octet of [item] still reads (#13554): a sealed blob authenticates each segment as it is read, so a
+     * whole read is the only proof it is intact — its first segment opening is not. The cleaning reports the same
+     * [OutgoingMediaSanitizer.UNREADABLE_CODE] when its OWN copy cannot be written (disk full): bytes that still read
+     * are then retried, never declared lost and dropped.
+     */
+    private suspend fun readsWhole(item: MediaUploadItem): Boolean = withContext(Dispatchers.IO) {
+        try {
+            item.source.open().use { input ->
+                val buffer = ByteArray(READ_BUFFER_BYTES)
+                while (input.read(buffer) >= 0) Unit
+            }
+            true
+        } catch (failure: java.io.IOException) {
+            false
+        } catch (failure: java.security.GeneralSecurityException) {
+            false
+        }
+    }
+
+    private const val READ_BUFFER_BYTES = 64 * 1024
 
     const val REASON_BLOB_GONE: String = "Upload bytes are no longer available"
     const val REASON_NO_MEDIA: String = "Upload returned no usable media"
