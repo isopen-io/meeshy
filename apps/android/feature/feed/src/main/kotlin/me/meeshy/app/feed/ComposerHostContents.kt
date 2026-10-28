@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.composer.ComposerFormat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.StoryVisibility
@@ -47,6 +48,7 @@ fun PostComposerContent(
     onMediaError: (String) -> Unit,
     formatSlot: @Composable () -> Unit,
     governingType: PostType? = null,
+    layout: MosaicLayoutMode? = null,
     offerReel: Boolean = false,
     onFormatChosen: (ComposerFormat) -> Unit = {},
     raiseKeyboard: Boolean = false,
@@ -69,6 +71,8 @@ fun PostComposerContent(
             mediaAlt = request.mediaAlt,
             mediaCaption = request.mediaCaption,
             background = request.background,
+            media = request.media,
+            layout = layout,
             draft = draft.toSnapshot(System.currentTimeMillis()),
         )
         onClose()

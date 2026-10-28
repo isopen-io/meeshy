@@ -37,6 +37,7 @@ public object CanvasV3Migration {
     private const val BAND_BOTTOM_Y = 0.92
 
     private val wireJson = Json { encodeDefaults = false; explicitNulls = false }
+    private val documentJson = Json { encodeDefaults = true; explicitNulls = false }
     private val readJson = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false; coerceInputValues = true }
 
     private val ENVELOPE = setOf(
@@ -442,16 +443,44 @@ public object CanvasV3Migration {
         effects: StoryEffects,
         carrierAspect: Double? = null,
         content: String? = null,
-    ): JsonObject {
+    ): JsonObject = convertDocument(listOf(blobOf(effects, carrierAspect)), content, effects.layout)
+
+    /**
+     * Le document d'une publication de [slides] (une scène par slide, [layout] pour tout le document) : miroir de
+     * `CanvasV3(migrating: slides.map(\.effects), layout:)` (iOS), la forme que `ComposerStoryCanvas.publishedSlide` remet.
+     */
+    public fun wireDocument(slides: List<StoryEffects>, layout: MosaicLayoutMode?): JsonObject =
+        convertDocument(slides.map { blobOf(it, null) }, null, layout)
+
+    /** Le document typé de [wireDocument] pour [slides] — ce que l'adoption des médias réécrit avant l'envoi. */
+    public fun migrate(slides: List<StoryEffects>, layout: MosaicLayoutMode?): CanvasV3 =
+        readJson.decodeFromJsonElement(CanvasV3.serializer(), wireDocument(slides, layout))
+
+    /** Le document typé [canvas] tel qu'il PART sur le fil : `v` compris, les clés absentes omises, comme iOS. */
+    public fun encodeDocument(canvas: CanvasV3): JsonObject =
+        documentJson.encodeToJsonElement(CanvasV3.serializer(), canvas) as JsonObject
+
+    private fun blobOf(effects: StoryEffects, carrierAspect: Double?): JsonObject {
         val encoded = wireJson.encodeToJsonElement(StoryEffects.serializer(), effects) as? JsonObject
             ?: JsonObject(emptyMap())
-        val blob = JsonObject(
+        return JsonObject(
             buildMap<String, JsonElement> {
-                putAll(stripKeyframeIds(JsonObject(encoded - "layout")))
+                putAll(withMediaTypes(stripKeyframeIds(JsonObject(encoded - "layout"))))
                 if (carrierAspect != null) put("canvasAspectRatio", JsonPrimitive(carrierAspect))
             },
         )
-        return convertDocument(listOf(blob), content, effects.layout)
+    }
+
+    /**
+     * Le modèle Android omet `mediaType` quand il vaut son défaut (« image ») ; iOS l'écrit toujours, et le lecteur d'un
+     * objet média le lit pour choisir entre photo et vidéo.
+     */
+    private fun withMediaTypes(blob: JsonObject): JsonObject {
+        val list = blob["mediaObjects"] as? JsonArray ?: return blob
+        val typed = list.map { item ->
+            if (item is JsonObject && item["mediaType"] == null) item.replacing("mediaType", JsonPrimitive("image")) else item
+        }
+        return blob.replacing("mediaObjects", JsonArray(typed))
     }
 
     /** `StoryKeyframe.id` est synthétisé à la lecture : le fil n'en a jamais porté. */
