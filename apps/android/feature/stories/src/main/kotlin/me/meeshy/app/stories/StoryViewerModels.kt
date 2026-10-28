@@ -16,6 +16,8 @@ import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
@@ -119,12 +121,26 @@ data class StoryForegroundMediaView(
         }
         val opacityBase = fadeEnvelope ?: base.opacity
         return copy(
-            x = base.x,
-            y = base.y,
-            scale = base.scale,
-            opacity = opacityBase * transitionOpacity,
+            x = SceneObjectNumbers.position(base.x),
+            y = SceneObjectNumbers.position(base.y),
+            scale = SceneObjectScalePolicy.clamped(base.scale),
+            opacity = SceneObjectNumbers.opacity(opacityBase * transitionOpacity),
         )
     }
+
+    /** Les nombres d'un média publié par un TIERS, bornés une fois à la projection, comme ceux d'un texte (#13581). */
+    fun bounded(): StoryForegroundMediaView = copy(
+        x = SceneObjectNumbers.position(x),
+        y = SceneObjectNumbers.position(y),
+        scale = SceneObjectScalePolicy.clamped(scale),
+        aspectRatio = SceneObjectNumbers.aspectRatio(aspectRatio),
+        opacity = SceneObjectNumbers.opacity(opacity),
+        startTime = SceneObjectNumbers.seconds(startTime),
+        duration = SceneObjectNumbers.seconds(duration),
+        fadeIn = SceneObjectNumbers.seconds(fadeIn),
+        fadeOut = SceneObjectNumbers.seconds(fadeOut),
+        keyframes = SceneObjectNumbers.capped(keyframes).map(SceneObjectNumbers::keyframe),
+    )
 }
 
 /**

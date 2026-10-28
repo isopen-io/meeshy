@@ -87,4 +87,31 @@ class SceneObjectNumbersTest {
         val ok = StoryKeyframe(time = 1.5f, x = 0.2)
         assertThat(SceneObjectNumbers.keyframe(ok)).isEqualTo(ok)
     }
+
+    @Test
+    fun `un ratio de media hostile reste dans les bornes de la passerelle`() {
+        hostile.forEach {
+            val r = SceneObjectNumbers.aspectRatio(it)
+            assertThat(r).isAtLeast(SceneObjectNumbers.MIN_ASPECT_RATIO)
+            assertThat(r).isAtMost(SceneObjectNumbers.MAX_ASPECT_RATIO)
+        }
+        assertThat(SceneObjectNumbers.aspectRatio(0.5625)).isEqualTo(0.5625)
+    }
+
+    @Test
+    fun `une epaisseur de trait hostile est finie et bornee a la scene`() {
+        hostile.forEach {
+            val w = SceneObjectNumbers.strokeWidth(it)
+            assertThat(w).isAtLeast(0.0)
+            assertThat(w).isAtMost(1080.0)
+        }
+        assertThat(SceneObjectNumbers.strokeWidth(12.0)).isEqualTo(12.0)
+    }
+
+    @Test
+    fun `une famille d objets est plafonnee et une liste legitime traverse`() {
+        val legit = List(32) { it }
+        assertThat(SceneObjectNumbers.capped(legit)).isSameInstanceAs(legit)
+        assertThat(SceneObjectNumbers.capped(List(10_000) { it })).hasSize(SceneObjectNumbers.MAX_OBJECTS_PER_FAMILY)
+    }
 }
