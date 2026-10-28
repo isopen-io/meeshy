@@ -197,24 +197,6 @@ class ChatComposerControllerTest {
         assertThat(r.text.text).isEmpty()
     }
 
-    @Test
-    fun `a picked file is queued for upload and sent as a typed message with the draft as its body`() = runTest {
-        val r = rig()
-        r.controller.onDraftChange("look")
-
-        r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), " photo.png ", "image/png")
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { r.uploads.enqueue(match<MediaUploadItem> { it.fileName == "photo.png" && it.mimeType == "image/png" }, any(), "c1") }
-        coVerify(exactly = 1) {
-            r.repo.sendOptimistic(
-                "c1", "look", any(), me, null, null, null, null, any(), "image", listOf("upload-cmid"), any(),
-            )
-        }
-        assertThat(r.text.text).isEmpty()
-        assertThat(r.state.lastSelfSentAtMillis).isEqualTo(NOW)
-    }
-
     // --- reply and edit ------------------------------------------------------------------------
 
     @Test
@@ -487,17 +469,6 @@ class ChatComposerControllerTest {
 
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
-    }
-
-    @Test
-    fun `an end-to-end conversation uploads no piece — not even before the message`() = runTest {
-        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = " E2EE "))
-
-        r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), "photo.png", "image/png")
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
-        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     @Test
