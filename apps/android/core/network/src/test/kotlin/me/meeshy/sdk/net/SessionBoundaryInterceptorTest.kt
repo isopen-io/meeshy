@@ -2,6 +2,7 @@ package me.meeshy.sdk.net
 
 import com.google.common.truth.Truth.assertThat
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
@@ -80,5 +81,28 @@ class SessionBoundaryInterceptorTest {
         flags.bumpGeneration()
         val response = SessionBoundaryInterceptor(flags).intercept(chain(onProceed = {}))
         assertThat(response.code).isEqualTo(200)
+    }
+
+    @Test
+    fun `un corps encore en route quand la session finit n est plus lu`() {
+        val flags = SessionTransitionFlags()
+        val response = SessionBoundaryInterceptor(flags).intercept(
+            chain(onProceed = {}, body = """{"data":[{"id":"conversation-de-A"}]}""".toResponseBody(null)),
+        )
+
+        flags.bumpGeneration()
+
+        assertThrows(SessionEndedDuringRequestException::class.java) { response.body!!.string() }
+    }
+
+    @Test
+    fun `un corps lu sous la session qui l a demande garde sa taille et son type`() {
+        val flags = SessionTransitionFlags()
+        val json = "application/json; charset=utf-8".toMediaType()
+        val response = SessionBoundaryInterceptor(flags).intercept(chain(onProceed = {}, body = "{}".toResponseBody(json)))
+
+        assertThat(response.body!!.contentType()).isEqualTo(json)
+        assertThat(response.body!!.contentLength()).isEqualTo(2L)
+        assertThat(response.body!!.string()).isEqualTo("{}")
     }
 }
