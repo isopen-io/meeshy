@@ -32,7 +32,8 @@ import me.meeshy.sdk.net.NetworkResult
  * Une vidéo ou un son (#13543, #13490) suit la même loi, au même réglage : MP4/MOV/3GP/M4A ([IsoMediaMetadataScrubber]) et
  * WebM ([MatroskaMetadataScrubber]) perdent leurs métadonnées sans réencodage ni déplacement d'octet, la sortie se revérifie
  * (stabilité + aucune signature de lieu, [MediaLocationSignatures]) ; un conteneur illisible ou inconnu ÉCHOUE
- * ([MEDIA_REFUSED_CODE]). Un fichier qui n'est ni une image ni un média passe inchangé.
+ * ([MEDIA_REFUSED_CODE]). Un fichier qui n'est ni une image ni un média connu ne part inchangé que s'il ne porte aucune
+ * signature de lieu ; sinon, il est refusé aussi.
  */
 @Singleton
 public class OutgoingMediaSanitizer @Inject constructor(
@@ -43,11 +44,17 @@ public class OutgoingMediaSanitizer @Inject constructor(
         if (location.keepsLocation.value) return@withContext NetworkResult.Success(item)
         val format = ImageSourceFormat.sniff(item.bytes)
         when (val container = mediaContainer(item, format)) {
-            null -> image(item, format)?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
-            else -> media(item, container)?.let { NetworkResult.Success(it) }
-                ?: NetworkResult.Failure(ApiError(MEDIA_REFUSED_MESSAGE, code = MEDIA_REFUSED_CODE))
+            null -> when {
+                format != ImageSourceFormat.UNKNOWN || mayBeAnImage(item) ->
+                    image(item, format)?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
+                MediaLocationSignatures.foundIn(item.bytes) -> mediaRefused()
+                else -> NetworkResult.Success(item)
+            }
+            else -> media(item, container)?.let { NetworkResult.Success(it) } ?: mediaRefused()
         }
     }
+
+    private fun mediaRefused(): NetworkResult<MediaUploadItem> = NetworkResult.Failure(ApiError(MEDIA_REFUSED_MESSAGE, code = MEDIA_REFUSED_CODE))
 
     private fun image(item: MediaUploadItem, format: ImageSourceFormat): MediaUploadItem? = when (format) {
         ImageSourceFormat.JPEG -> verifiedJpeg(item) ?: asJpeg(item)
@@ -55,7 +62,7 @@ public class OutgoingMediaSanitizer @Inject constructor(
         ImageSourceFormat.WEBP -> verified(item, ImageMetadataScrubber::webp) ?: asJpeg(item)
         ImageSourceFormat.GIF -> verified(item, ImageMetadataScrubber::gif)
         ImageSourceFormat.HEIC -> asJpeg(item)
-        ImageSourceFormat.UNKNOWN -> if (mayBeAnImage(item)) asJpeg(item) else item
+        ImageSourceFormat.UNKNOWN -> asJpeg(item)
     }
 
     private enum class MediaContainer(val scrub: (ByteArray) -> ByteArray?) {
@@ -65,18 +72,32 @@ public class OutgoingMediaSanitizer @Inject constructor(
     }
 
     /**
-     * Une vidéo ou un son (#13543, #13490) : ISO (MP4, MOV, 3GP, M4A) et Matroska (WebM) se réécrivent sans réencodage ;
-     * tout autre fichier qui se DÉCLARE `video/…` ou `audio/…` (AVI, MP3, OGG…) est refusé — on ne sait pas prouver
-     * qu'il ne porte pas de lieu. `null` : ce n'est pas un média, le chemin des images en décide.
+     * Une vidéo ou un son (#13543, #13490), reconnu par ses OCTETS quel que soit le type déclaré : ISO (MP4, MOV, 3GP, M4A)
+     * et Matroska (WebM) se réécrivent sans réencodage ; un conteneur reconnu qu'on ne sait pas réécrire (RIFF AVI/WAVE,
+     * ID3, Ogg, FLAC, AIFF, CAF, AMR, MPEG-TS), et tout fichier qui se DÉCLARE `video/…` ou `audio/…`, est refusé — on ne
+     * sait pas prouver qu'il ne porte pas de lieu. `null` : ce n'est pas un média connu ; une image suit son chemin, tout
+     * autre fichier ne part que s'il ne porte aucune signature de lieu.
      */
     private fun mediaContainer(item: MediaUploadItem, format: ImageSourceFormat): MediaContainer? = when {
         format == ImageSourceFormat.HEIC -> MediaContainer.ISO.takeIf { isClearlyNotAnImage(item) }
         format != ImageSourceFormat.UNKNOWN -> null
         MatroskaMetadataScrubber.looksLikeMatroska(item.bytes) -> MediaContainer.MATROSKA
         IsoMediaMetadataScrubber.looksLikeIsoMedia(item.bytes) -> MediaContainer.ISO
+        isUncleanableMedia(item.bytes) -> MediaContainer.UNSUPPORTED
         item.mimeType.startsWith("video/", ignoreCase = true) || item.mimeType.startsWith("audio/", ignoreCase = true) -> MediaContainer.UNSUPPORTED
         else -> null
     }
+
+    private fun isUncleanableMedia(bytes: ByteArray): Boolean =
+        UNCLEANABLE_MAGICS.any { bytes.startsWith(it) } || isIsoBoxHeader(bytes) || isTransportStream(bytes)
+
+    private fun ByteArray.startsWith(prefix: ByteArray): Boolean = size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
+
+    private fun isIsoBoxHeader(bytes: ByteArray): Boolean =
+        bytes.size >= 8 && String(bytes, 4, 4, Charsets.ISO_8859_1) in ISO_BOX_TYPES
+
+    private fun isTransportStream(bytes: ByteArray): Boolean =
+        bytes.size > TS_PACKET * 2 && (0..2).all { bytes[it * TS_PACKET] == TS_SYNC }
 
     /** Réécrit, puis revérifie la sortie : stable au second passage et sans aucune signature de lieu, sinon `null`. */
     private fun media(item: MediaUploadItem, container: MediaContainer): MediaUploadItem? {
@@ -167,5 +188,9 @@ public class OutgoingMediaSanitizer @Inject constructor(
             "3gp4", "3gp5", "3gp6", "3g2a", "dash",
         )
         private val HEIF_BRANDS = setOf("heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis")
+        private val UNCLEANABLE_MAGICS = listOf("RIFF", "ID3", "OggS", "fLaC", "FORM", "caff", "#!AMR", ".snd").map { it.toByteArray(Charsets.ISO_8859_1) }
+        private val ISO_BOX_TYPES = setOf("ftyp", "moov", "mdat", "moof", "styp", "sidx", "uuid", "free", "skip", "wide", "pnot", "meta")
+        private const val TS_PACKET = 188
+        private const val TS_SYNC: Byte = 0x47
     }
 }
