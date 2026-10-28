@@ -58,13 +58,18 @@ class FileAttachmentDownloader @Inject constructor(
             emit(FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NetworkError))
             return@flow
         }
-        while (true) {
-            val next = queryOnce(downloadId, mimeType)
-            emit(next)
-            if (next is FileAttachmentDownloadState.Completed || next is FileAttachmentDownloadState.Failed) {
-                return@flow
+        var settled = false
+        try {
+            while (!settled) {
+                val next = queryOnce(downloadId, mimeType)
+                emit(next)
+                settled = next is FileAttachmentDownloadState.Completed || next is FileAttachmentDownloadState.Failed
+                if (!settled) delay(POLL_INTERVAL_MS)
             }
-            delay(POLL_INTERVAL_MS)
+        } finally {
+            // Annuler la collecte (« Annuler le téléchargement », #13492) retire aussi la requête du système : sans cela
+            // il finirait seul, écrirait le fichier et posterait sa notification de fin, titrée du nom du fichier.
+            if (!settled) runCatching { downloadManager.remove(downloadId) }
         }
     }
 
