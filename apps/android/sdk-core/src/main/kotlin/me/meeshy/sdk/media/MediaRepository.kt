@@ -51,14 +51,19 @@ class MediaRepository @Inject constructor(
 ) {
     suspend fun upload(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
-        val clean = items.map { item ->
-            when (val result = sanitizer.sanitizeSource(item)) {
-                is NetworkResult.Failure -> return result
-                is NetworkResult.Success -> result.data
+        val clean = mutableListOf<Pair<MediaUploadItem, MediaUploadItem>>()
+        try {
+            items.forEach { item ->
+                when (val result = sanitizer.sanitize(item)) {
+                    is NetworkResult.Failure -> return result
+                    is NetworkResult.Success -> clean += result.data to item
+                }
             }
+            val parts = clean.map { (sent, _) -> MediaUpload.formPart(sent) }
+            return apiCall { mediaApi.upload(parts) }
+                .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
+        } finally {
+            clean.forEach { (sent, original) -> sanitizer.release(sent, original) }
         }
-        val parts = clean.map { MediaUpload.formPart(it) }
-        return apiCall { mediaApi.upload(parts) }
-            .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
     }
 }

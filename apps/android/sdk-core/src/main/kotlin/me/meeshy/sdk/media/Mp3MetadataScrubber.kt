@@ -9,6 +9,9 @@ package me.meeshy.sdk.media
  * fin. Les trames restent octet pour octet — l'en-tête Xing/Info/VBRI, qui vit dans la première, compris. Une trame tronquée
  * en toute fin est coupée. Tout le reste rend `null` : une étiquette qui déborde, aucune trame, un débit libre, des octets
  * inconnus entre ou après les trames — l'appelant refuse l'envoi.
+ *
+ * Le son se parcourt trame par trame par position ([MediaBytes], #13551) et le plan ([MediaPlan]) est la plage gardée : un
+ * MP3 de 200 Mo se nettoie sans qu'aucun tableau de sa taille n'existe.
  */
 internal object Mp3MetadataScrubber {
     private val BITRATES_V1 = arrayOf(
@@ -24,43 +27,42 @@ internal object Mp3MetadataScrubber {
     private val SAMPLE_RATES = mapOf(3 to intArrayOf(44100, 48000, 32000), 2 to intArrayOf(22050, 24000, 16000), 0 to intArrayOf(11025, 12000, 8000))
 
     /** Un MP3 : une étiquette ID3v2 en tête, ou deux trames MPEG valides qui se suivent dès le premier octet. */
-    fun looksLikeMp3(src: ByteArray): Boolean =
-        AudioTrailingTags.startsWithId3v2(src, 0) || frameLength(src, 0)?.let { frameLength(src, it) != null } == true
+    fun looksLikeMp3(media: MediaBytes): Boolean =
+        AudioTrailingTags.startsWithId3v2(media, 0) || frameLength(media, 0)?.let { frameLength(media, it.toLong()) != null } == true
 
-    /** Les trames seules — le MÊME tableau s'il n'y avait aucune étiquette — ou `null` si le fichier ne se lit pas. */
-    fun scrub(src: ByteArray): ByteArray? {
-        val start = leadingTagsEnd(src) ?: return null
-        val (framesEnd, count) = walkFrames(src, start)
+    /** La plage des trames seules — l'identité s'il n'y avait aucune étiquette — ou `null` si le fichier ne se lit pas. */
+    fun plan(media: MediaBytes): MediaPlan? {
+        val start = leadingTagsEnd(media) ?: return null
+        val (framesEnd, count) = walkFrames(media, start)
         if (count == 0) return null
-        if (!onlyTrailingTags(src, framesEnd)) return null
-        if (start == 0 && framesEnd == src.size) return src
-        return src.copyOfRange(start, framesEnd)
+        if (!onlyTrailingTags(media, framesEnd)) return null
+        return MediaPlan(listOf(MediaPlan.Piece.Source(start, framesEnd)))
     }
 
-    private fun leadingTagsEnd(src: ByteArray): Int? {
-        var at = 0
-        while (AudioTrailingTags.startsWithId3v2(src, at)) at = AudioTrailingTags.id3v2End(src, at) ?: return null
-        while (at < src.size && src[at].toInt() == 0) at++
+    private fun leadingTagsEnd(media: MediaBytes): Long? {
+        var at = 0L
+        while (AudioTrailingTags.startsWithId3v2(media, at)) at = AudioTrailingTags.id3v2End(media, at) ?: return null
+        while (at < media.size && media.byteAt(at) == 0) at++
         return at
     }
 
-    private fun walkFrames(src: ByteArray, start: Int): Pair<Int, Int> {
+    private fun walkFrames(media: MediaBytes, start: Long): Pair<Long, Int> {
         var at = start
         var count = 0
         while (true) {
-            val length = frameLength(src, at) ?: return at to count
-            if (at + length > src.size) return at to count
+            val length = frameLength(media, at) ?: return at to count
+            if (at + length > media.size) return at to count
             at += length
             count++
         }
     }
 
     /** La longueur de la trame MPEG audio qui commence à [at], ou `null` si ce n'en est pas une (débit libre compris). */
-    private fun frameLength(src: ByteArray, at: Int): Int? {
-        if (at + 4 > src.size) return null
-        val b1 = src[at + 1].toInt() and 0xFF
-        val b2 = src[at + 2].toInt() and 0xFF
-        if ((src[at].toInt() and 0xFF) != 0xFF || (b1 and 0xE0) != 0xE0) return null
+    private fun frameLength(media: MediaBytes, at: Long): Int? {
+        if (at + 4 > media.size) return null
+        val b1 = media.byteAt(at + 1)
+        val b2 = media.byteAt(at + 2)
+        if (media.byteAt(at) != 0xFF || (b1 and 0xE0) != 0xE0) return null
         val version = (b1 shr 3) and 3
         val layer = (b1 shr 1) and 3
         val bitrateIndex = b2 shr 4
@@ -78,14 +80,14 @@ internal object Mp3MetadataScrubber {
     }
 
     /** Après la dernière trame : rien, une trame tronquée, ou une suite d'étiquettes connues qui couvre tout. */
-    private fun onlyTrailingTags(src: ByteArray, from: Int): Boolean {
+    private fun onlyTrailingTags(media: MediaBytes, from: Long): Boolean {
         var at = from
-        while (at < src.size) {
-            at = AudioTrailingTags.tagEnd(src, at) ?: return isTruncatedFinalFrame(src, at)
+        while (at < media.size) {
+            at = AudioTrailingTags.tagEnd(media, at) ?: return isTruncatedFinalFrame(media, at)
         }
         return true
     }
 
-    private fun isTruncatedFinalFrame(src: ByteArray, at: Int): Boolean =
-        frameLength(src, at)?.let { at + it > src.size } == true
+    private fun isTruncatedFinalFrame(media: MediaBytes, at: Long): Boolean =
+        frameLength(media, at)?.let { at + it > media.size } == true
 }

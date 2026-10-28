@@ -31,7 +31,7 @@ class OutgoingMediaLocationTrapTest {
     private val place = "+48.8566+002.3522/"
 
     private suspend fun result(bytes: ByteArray, mime: String) =
-        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitize(MediaUploadItem(bytes, "clip", mime))
+        OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(false), Dispatchers.Unconfined).sanitizeOnBothPaths(bytes, "clip", mime)
 
     private suspend fun sent(bytes: ByteArray, mime: String) = (result(bytes, mime) as NetworkResult.Success).data.bytes
 

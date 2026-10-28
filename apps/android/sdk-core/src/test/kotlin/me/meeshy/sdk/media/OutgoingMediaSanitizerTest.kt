@@ -30,7 +30,7 @@ class OutgoingMediaSanitizerTest {
     private fun item(bytes: ByteArray, name: String = "photo.jpg", mime: String = "image/jpeg") = MediaUploadItem(bytes, name, mime)
 
     private suspend fun clean(bytes: ByteArray, keepsLocation: Boolean = false, name: String = "photo.jpg", mime: String = "image/jpeg") =
-        (sanitizer(keepsLocation).sanitize(item(bytes, name, mime)) as NetworkResult.Success).data
+        (sanitizer(keepsLocation).sanitizeOnBothPaths(bytes, name, mime) as NetworkResult.Success).data
 
     private fun pixels(): ByteArray {
         val bitmap = Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.RED) }

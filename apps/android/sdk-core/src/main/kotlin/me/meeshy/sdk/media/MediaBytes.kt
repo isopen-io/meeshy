@@ -23,13 +23,33 @@ internal interface MediaBytes {
 internal fun MediaBytes.bytes(at: Long, count: Int): ByteArray = ByteArray(count).also { read(at, it) }
 
 /** Big-endian unsigned 32-bit value at [at]. */
-internal fun MediaBytes.u32At(at: Long): Long = bytes(at, 4).fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xFF) }
+internal fun MediaBytes.u32At(at: Long): Long = uintAt(at, 4)
 
 /** Big-endian signed 32-bit value at [at]. */
 internal fun MediaBytes.i32At(at: Long): Int = u32At(at).toInt()
 
 /** Big-endian 64-bit value at [at]. */
-internal fun MediaBytes.i64At(at: Long): Long = bytes(at, 8).fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xFF) }
+internal fun MediaBytes.i64At(at: Long): Long = uintAt(at, 8)
+
+/** Big-endian unsigned value of [count] (≤ 8) octets at [at]; [EOFException] past the end. */
+internal fun MediaBytes.uintAt(at: Long, count: Int): Long {
+    if (at < 0 || at + count > size) throw EOFException("read $at+$count past $size")
+    var value = 0L
+    for (i in 0 until count) value = (value shl 8) or byteAt(at + i).toLong()
+    return value
+}
+
+/** Little-endian unsigned 32-bit value at [at]. */
+internal fun MediaBytes.u32LeAt(at: Long): Long {
+    if (at < 0 || at + 4 > size) throw EOFException("read $at+4 past $size")
+    var value = 0L
+    for (i in 3 downTo 0) value = (value shl 8) or byteAt(at + i).toLong()
+    return value
+}
+
+/** Whether the octets at [at] are exactly [prefix] (false when they run past the end). */
+internal fun MediaBytes.startsWithAt(at: Long, prefix: ByteArray): Boolean =
+    at >= 0 && at + prefix.size <= size && prefix.indices.all { byteAt(at + it) == (prefix[it].toInt() and 0xFF) }
 
 /** [count] octets at [at] read as ISO-8859-1 — a four-character box type, a codec id. */
 internal fun MediaBytes.ascii(at: Long, count: Int): String = String(bytes(at, count), Charsets.ISO_8859_1)
@@ -74,10 +94,13 @@ internal class SourceMediaBytes(private val source: MediaUploadSource) : MediaBy
 
     private val blocks = ArrayDeque<Block>()
 
+    private var last: Block? = null
+
     override fun byteAt(at: Long): Int {
         if (at < 0 || at >= size) return -1
-        val block = block(at / BLOCK_BYTES)
-        return block.data[(at % BLOCK_BYTES).toInt()].toInt() and 0xFF
+        val index = at / BLOCK_BYTES
+        val hot = last?.takeIf { it.index == index } ?: block(index).also { last = it }
+        return hot.data[(at - index * BLOCK_BYTES).toInt()].toInt() and 0xFF
     }
 
     override fun read(at: Long, target: ByteArray, offset: Int, length: Int) {
@@ -103,7 +126,7 @@ internal class SourceMediaBytes(private val source: MediaUploadSource) : MediaBy
         }
         val start = index * BLOCK_BYTES
         val length = minOf(BLOCK_BYTES.toLong(), size - start).toInt()
-        val data = if (blocks.size >= CACHED_BLOCKS) blocks.removeLast().data else ByteArray(BLOCK_BYTES)
+        val data = if (blocks.size >= CACHED_BLOCKS) blocks.removeLast().also { if (last === it) last = null }.data else ByteArray(BLOCK_BYTES)
         source.open(start).use { input ->
             var done = 0
             while (done < length) {

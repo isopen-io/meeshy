@@ -12,6 +12,9 @@ package me.meeshy.sdk.media
  * `MasteringMetadata`, `Projection`, `Audio` ; nom, langue, nom de codec, `BlockAdditionMapping`, tout élément inconnu : `Void`) ; toute AUTRE piste (sous-titres, métadonnées, complex, boutons — #13543, revue de sécurité) devient `Void`, et
  * tout bloc dont la piste n'est pas admise — déclarée ou non — aussi, comme chaque `BlockAdditions`. Un `Cluster` de taille inconnue (enregistrement en direct) se
  * parcourt jusqu'au prochain élément de premier niveau. Tout ce qui ne se lit pas rend `null` : l'appelant refuse l'envoi.
+ *
+ * Le fichier se parcourt PAR SES EN-TÊTES ([MediaBytes], [EbmlElements], #13551) et le plan ([MediaPlan]) s'applique en
+ * flux : un WebM de 200 Mo se nettoie sans qu'aucun tableau de sa taille n'existe.
  */
 internal object MatroskaMetadataScrubber {
     private const val EBML = 0x1A45DFA3L
@@ -62,66 +65,59 @@ internal object MatroskaMetadataScrubber {
     private val CLUSTER_KEPT = setOf(0xE7L, 0x5854L, 0xA7L, 0xABL, CRC32)
     private val BLOCK_GROUP_KEPT = setOf(BLOCK, 0x9BL, 0xFAL, 0xFBL, 0xA4L, 0x75A2L, 0x8EL, CRC32)
 
-    private class Element(val id: Long, val offset: Int, val dataStart: Int, val end: Int, val unknownSize: Boolean)
+    fun looksLikeMatroska(media: MediaBytes): Boolean = media.startsWithAt(0, MAGIC)
 
-    private class Unreadable : Exception()
+    private val MAGIC = byteArrayOf(0x1A, 0x45, 0xDF.toByte(), 0xA3.toByte())
 
-    fun looksLikeMatroska(src: ByteArray): Boolean =
-        src.size >= 4 && (src[0].toInt() and 0xFF) == 0x1A && (src[1].toInt() and 0xFF) == 0x45 &&
-            (src[2].toInt() and 0xFF) == 0xDF && (src[3].toInt() and 0xFF) == 0xA3
-
-    /** Les octets sans `Tags`, `Attachments` ni titre — le MÊME tableau s'il n'y avait rien à retirer — ou `null` s'ils sont illisibles. */
-    fun scrub(src: ByteArray): ByteArray? {
-        val voids = runCatching { plan(src) }.getOrNull() ?: return null
-        val changes = voids.filter { !it.isVoidOf(src) }
-        if (changes.isEmpty()) return src
-        val out = src.copyOf()
-        changes.forEach { it.writeVoidInto(out) }
-        return out
+    /** Le plan qui vide `Tags`, `Attachments`, titres et champs non techniques — l'identité s'il n'y a rien — ou `null` s'il est illisible. */
+    fun plan(media: MediaBytes): MediaPlan? {
+        val voids = runCatching { voidsOf(media) }.getOrNull() ?: return null
+        val edits = voids.filterNot { it.isVoidOf(media) }.flatMap { MediaEdit.ebmlVoid(it.offset, it.end) }
+        return MediaPlan.edited(media.size, edits)
     }
 
-    private fun plan(src: ByteArray): List<Element> {
-        val first = read(src, 0, src.size)
-        if (first.id != EBML || first.unknownSize) throw Unreadable()
-        val voids = mutableListOf<Element>()
+    private fun voidsOf(media: MediaBytes): List<EbmlElement> {
+        val first = EbmlElements.read(media, 0, media.size)
+        if (first.id != EBML || first.unknownSize) throw UnreadableMediaException("no EBML header")
+        val voids = mutableListOf<EbmlElement>()
         var at = first.end
-        while (at < src.size) {
-            val element = read(src, at, src.size)
+        while (at < media.size) {
+            val element = EbmlElements.read(media, at, media.size)
             when (element.id) {
-                SEGMENT -> voids += segment(src, element)
+                SEGMENT -> voids += segment(media, element)
                 VOID -> voids += element
-                else -> throw Unreadable()
+                else -> throw UnreadableMediaException("top-level ${element.id.toString(16)}")
             }
             at = element.end
         }
         return voids
     }
 
-    private fun segment(src: ByteArray, segment: Element): List<Element> {
-        val elements = mutableListOf<Element>()
+    private fun segment(media: MediaBytes, segment: EbmlElement): List<EbmlElement> {
+        val elements = mutableListOf<EbmlElement>()
         var at = segment.dataStart
         while (at < segment.end) {
-            val element = read(src, at, segment.end)
-            val end = if (element.unknownSize) unknownClusterEnd(src, element, segment.end) else element.end
-            if (element.id !in SEGMENT_KEPT && element.id !in DROPPED && element.id != INFO && element.id != TRACKS) throw Unreadable()
-            elements += if (element.unknownSize) Element(element.id, element.offset, element.dataStart, end, unknownSize = true) else element
+            val element = EbmlElements.read(media, at, segment.end)
+            val end = if (element.unknownSize) unknownClusterEnd(media, element, segment.end) else element.end
+            if (element.id !in SEGMENT_KEPT && element.id !in DROPPED && element.id != INFO && element.id != TRACKS) throw UnreadableMediaException("segment child")
+            elements += if (element.unknownSize) EbmlElement(element.id, element.offset, element.dataStart, end, unknownSize = true) else element
             at = end
         }
-        val tracks = elements.filter { it.id == TRACKS }.map { tracks(src, it) }
+        val tracks = elements.filter { it.id == TRACKS }.map { tracks(media, it) }
         val numbers = tracks.flatMap { it.declared }
-        if (numbers.size != numbers.toSet().size) throw Unreadable()
+        if (numbers.size != numbers.toSet().size) throw UnreadableMediaException("track declared twice")
         val admitted = tracks.flatMap { it.admitted }.toSet()
         return tracks.flatMap { it.voids } + elements.flatMap { element ->
             when (element.id) {
                 in DROPPED, VOID -> listOf(element)
-                INFO -> children(src, element).filter { it.id !in INFO_KEPT }
-                CLUSTER -> cluster(src, element, admitted)
+                INFO -> EbmlElements.children(media, element).filter { it.id !in INFO_KEPT }
+                CLUSTER -> cluster(media, element, admitted)
                 else -> emptyList()
             }
         }
     }
 
-    private class TrackPlan(val voids: List<Element>, val declared: List<Long>, val admitted: List<Long>)
+    private class TrackPlan(val voids: List<EbmlElement>, val declared: List<Long>, val admitted: List<Long>)
 
     /**
      * Seules les pistes VIDÉO (`V_…`) et AUDIO (`A_…`) sont ADMISES, et un bloc ne reste que si sa piste l'est : une piste de
@@ -130,130 +126,86 @@ internal object MatroskaMetadataScrubber {
      * refuser. Dans une piste admise ne restent que ses champs TECHNIQUES ([TRACK], liste blanche par conteneur) : tout autre devient `Void`. Une piste
      * dont le contenu est encodé (`ContentEncodings` : compression, chiffrement) ne se vérifie pas : refusée.
      */
-    private fun tracks(src: ByteArray, tracks: Element): TrackPlan {
-        val voids = mutableListOf<Element>()
+    private fun tracks(media: MediaBytes, tracks: EbmlElement): TrackPlan {
+        val voids = mutableListOf<EbmlElement>()
         val declared = mutableListOf<Long>()
         val admitted = mutableListOf<Long>()
-        children(src, tracks).forEach { entry ->
+        EbmlElements.children(media, tracks).forEach { entry ->
             when (entry.id) {
                 TRACK_ENTRY -> {
-                    val fields = children(src, entry)
-                    if (fields.any { it.id == CONTENT_ENCODINGS }) throw Unreadable()
-                    val number = fields.singleOrNull { it.id == TRACK_NUMBER }?.let { uint(src, it) } ?: throw Unreadable()
-                    val type = fields.singleOrNull { it.id == TRACK_TYPE }?.let { uint(src, it) } ?: throw Unreadable()
-                    val codec = fields.singleOrNull { it.id == CODEC_ID }?.let { String(src, it.dataStart, it.end - it.dataStart, Charsets.ISO_8859_1) }.orEmpty()
+                    val fields = EbmlElements.children(media, entry)
+                    if (fields.any { it.id == CONTENT_ENCODINGS }) throw UnreadableMediaException("encoded track")
+                    val number = fields.singleOrNull { it.id == TRACK_NUMBER }?.let { EbmlElements.uint(media, it) } ?: throw UnreadableMediaException("track number")
+                    val type = fields.singleOrNull { it.id == TRACK_TYPE }?.let { EbmlElements.uint(media, it) } ?: throw UnreadableMediaException("track type")
+                    val codec = fields.singleOrNull { it.id == CODEC_ID }?.let { codecOf(media, it) }.orEmpty()
                     declared += number
                     if ((type == TYPE_VIDEO && codec.startsWith("V_")) || (type == TYPE_AUDIO && codec.startsWith("A_"))) {
                         admitted += number
-                        voids += allowListed(src, fields, TRACK)
+                        voids += allowListed(media, fields, TRACK)
                     } else {
                         voids += entry
                     }
                 }
                 VOID -> voids += entry
                 CRC32 -> Unit
-                else -> throw Unreadable()
+                else -> throw UnreadableMediaException("tracks child")
             }
         }
         return TrackPlan(voids, declared, admitted)
     }
 
+    /** Un identifiant de codec : seul son préfixe compte (`V_`, `A_`), lu sans jamais charger un champ démesuré. */
+    private fun codecOf(media: MediaBytes, element: EbmlElement): String =
+        media.ascii(element.dataStart, minOf(element.end - element.dataStart, CODEC_PREFIX).toInt())
+
+    private const val CODEC_PREFIX = 2L
+
     /** Ce qui n'est pas un champ technique connu du conteneur devient `Void`, à chaque niveau (Video, Colour, Audio…). */
-    private fun allowListed(src: ByteArray, fields: List<Element>, schema: Schema): List<Element> = fields.flatMap { field ->
+    private fun allowListed(media: MediaBytes, fields: List<EbmlElement>, schema: Schema): List<EbmlElement> = fields.flatMap { field ->
         val nested = schema.containers[field.id]
         when {
-            nested != null -> allowListed(src, children(src, field), nested)
+            nested != null -> allowListed(media, EbmlElements.children(media, field), nested)
             field.id in schema.leaves -> emptyList()
             else -> listOf(field)
         }
     }
 
     /** Un bloc d'une piste non admise devient `Void`, un `BlockAdditions` aussi, tout enfant de cluster inconnu aussi. */
-    private fun cluster(src: ByteArray, cluster: Element, admitted: Set<Long>): List<Element> = children(src, cluster).flatMap { child ->
+    private fun cluster(media: MediaBytes, cluster: EbmlElement, admitted: Set<Long>): List<EbmlElement> = EbmlElements.children(media, cluster).flatMap { child ->
         when (child.id) {
-            SIMPLE_BLOCK -> if (blockTrack(src, child) in admitted) emptyList() else listOf(child)
-            BLOCK_GROUP -> blockGroup(src, child, admitted)
+            SIMPLE_BLOCK -> if (blockTrack(media, child) in admitted) emptyList() else listOf(child)
+            BLOCK_GROUP -> blockGroup(media, child, admitted)
             VOID -> listOf(child)
             in CLUSTER_KEPT -> emptyList()
             else -> listOf(child)
         }
     }
 
-    private fun blockGroup(src: ByteArray, group: Element, admitted: Set<Long>): List<Element> {
-        val fields = children(src, group)
-        val block = fields.singleOrNull { it.id == BLOCK } ?: throw Unreadable()
-        if (blockTrack(src, block) !in admitted) return listOf(group)
+    private fun blockGroup(media: MediaBytes, group: EbmlElement, admitted: Set<Long>): List<EbmlElement> {
+        val fields = EbmlElements.children(media, group)
+        val block = fields.singleOrNull { it.id == BLOCK } ?: throw UnreadableMediaException("block group without one block")
+        if (blockTrack(media, block) !in admitted) return listOf(group)
         return fields.filter { it.id !in BLOCK_GROUP_KEPT }
     }
 
-    private fun blockTrack(src: ByteArray, block: Element): Long {
-        val (track, length) = vint(src, block.dataStart, keepMarker = false)
-        if (block.dataStart + length > block.end) throw Unreadable()
+    private fun blockTrack(media: MediaBytes, block: EbmlElement): Long {
+        val (track, length) = EbmlElements.vint(media, block.dataStart, keepMarker = false)
+        if (block.dataStart + length > block.end) throw UnreadableMediaException("block track")
         return track
     }
 
-    private fun uint(src: ByteArray, element: Element): Long {
-        if (element.end - element.dataStart > 8) throw Unreadable()
-        return (element.dataStart until element.end).fold(0L) { acc, i -> (acc shl 8) or (src[i].toLong() and 0xFF) }
-    }
-
-    private fun children(src: ByteArray, parent: Element): List<Element> {
-        val found = mutableListOf<Element>()
-        var at = parent.dataStart
-        while (at < parent.end) {
-            val element = read(src, at, parent.end)
-            if (element.unknownSize) throw Unreadable()
-            found += element
-            at = element.end
-        }
-        return found
-    }
-
-    private fun unknownClusterEnd(src: ByteArray, cluster: Element, limit: Int): Int {
-        if (cluster.id != CLUSTER) throw Unreadable()
+    private fun unknownClusterEnd(media: MediaBytes, cluster: EbmlElement, limit: Long): Long {
+        if (cluster.id != CLUSTER) throw UnreadableMediaException("unknown size outside a cluster")
         var at = cluster.dataStart
         while (at < limit) {
-            val (id, _) = vint(src, at, keepMarker = true)
+            val (id, _) = EbmlElements.vint(media, at, keepMarker = true)
             if (id in LEVEL_ONE) return at
-            val element = read(src, at, limit)
-            if (element.unknownSize) throw Unreadable()
+            val element = EbmlElements.read(media, at, limit)
+            if (element.unknownSize) throw UnreadableMediaException("nested unknown size")
             at = element.end
         }
         return limit
     }
 
-    private fun Element.isVoidOf(src: ByteArray): Boolean =
-        id == VOID && (dataStart until end).all { src[it].toInt() == 0 }
-
-    /** Réécrit l'élément en `Void` de même longueur totale : 0xEC, une taille sur `L` octets, puis des zéros. */
-    private fun Element.writeVoidInto(out: ByteArray) {
-        val total = end - offset
-        val sizeLength = minOf(8, total - 1)
-        val payload = (total - 1 - sizeLength).toLong()
-        out[offset] = VOID.toByte()
-        (0 until sizeLength).forEach { i -> out[offset + 1 + i] = (payload ushr (8 * (sizeLength - 1 - i))).toByte() }
-        out[offset + 1] = (out[offset + 1].toInt() or (0x80 ushr (sizeLength - 1))).toByte()
-        out.fill(0, offset + 1 + sizeLength, end)
-    }
-
-    private fun read(src: ByteArray, at: Int, limit: Int): Element {
-        val (id, idLength) = vint(src, at, keepMarker = true)
-        if (idLength > 4) throw Unreadable()
-        val (size, sizeLength) = vint(src, at + idLength, keepMarker = false)
-        val dataStart = at + idLength + sizeLength
-        val unknown = size == (1L shl (7 * sizeLength)) - 1
-        val end = if (unknown) limit.toLong() else dataStart + size
-        if (dataStart > limit || end > limit) throw Unreadable()
-        return Element(id, at, dataStart, end.toInt(), unknown)
-    }
-
-    private fun vint(src: ByteArray, at: Int, keepMarker: Boolean): Pair<Long, Int> {
-        if (at >= src.size) throw Unreadable()
-        val first = src[at].toInt() and 0xFF
-        val length = Integer.numberOfLeadingZeros(first) - 23
-        if (first == 0 || length > 8 || at + length > src.size) throw Unreadable()
-        val raw = (0 until length).fold(0L) { acc, i -> (acc shl 8) or (src[at + i].toLong() and 0xFF) }
-        val value = if (keepMarker) raw else raw and ((1L shl (7 * length)) - 1)
-        return value to length
-    }
+    private fun EbmlElement.isVoidOf(media: MediaBytes): Boolean = id == VOID && media.isZero(dataStart, end)
 }

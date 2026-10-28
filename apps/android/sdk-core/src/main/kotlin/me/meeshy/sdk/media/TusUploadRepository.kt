@@ -72,10 +72,23 @@ public class TusUploadRepository @Inject constructor(
         chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
         onProgress: (sent: Long, total: Long) -> Unit = { _, _ -> },
     ): NetworkResult<List<UploadedMedia>> {
-        val outgoing = when (val result = sanitizer.sanitizeSource(item)) {
+        val outgoing = when (val result = sanitizer.sanitize(item)) {
             is NetworkResult.Failure -> return result
             is NetworkResult.Success -> result.data
         }
+        return try {
+            send(outgoing, context, chunkSizeBytes, onProgress)
+        } finally {
+            sanitizer.release(outgoing, item)
+        }
+    }
+
+    private suspend fun send(
+        outgoing: MediaUploadItem,
+        context: TusUploadContext,
+        chunkSizeBytes: Long,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): NetworkResult<List<UploadedMedia>> {
         val fileName = MediaUpload.fileName(outgoing.fileName)
         val mimeType = MediaUpload.mimeType(outgoing.mimeType)
         val totalBytes = outgoing.sizeBytes

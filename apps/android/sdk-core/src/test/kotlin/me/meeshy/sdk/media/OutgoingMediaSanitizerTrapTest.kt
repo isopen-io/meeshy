@@ -27,7 +27,7 @@ class OutgoingMediaSanitizerTrapTest {
     private val sanitizer = OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), Dispatchers.Unconfined)
 
     private suspend fun sent(bytes: ByteArray, name: String = "photo.jpg", mime: String = "image/jpeg") =
-        (sanitizer.sanitize(MediaUploadItem(bytes, name, mime)) as NetworkResult.Success).data.bytes
+        (sanitizer.sanitizeOnBothPaths(bytes, name, mime) as NetworkResult.Success).data.bytes
 
     private fun ascii(text: String) = text.toByteArray(Charsets.ISO_8859_1)
 

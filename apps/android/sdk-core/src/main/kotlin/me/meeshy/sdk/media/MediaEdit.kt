@@ -52,26 +52,43 @@ internal sealed interface MediaEdit {
 internal object MediaRewrite {
     private const val COPY_BUFFER_BYTES = 64 * 1024
 
-    /**
-     * Writes the first [length] octets of [source] to [target], then applies [edits] there IN PLACE; the file is synced
-     * before this returns. [target] is replaced if it exists. An edit outside `[0, length)` is a programming error.
-     */
+    /** Writes the first [length] octets of [source] to [target] with [edits] applied — [write] of [MediaPlan.edited]. */
     fun copyEdited(source: MediaUploadSource, target: File, edits: List<MediaEdit>, length: Long = source.size) {
         require(length in 0..source.size) { "length $length outside 0..${source.size}" }
+        write(source, target, MediaPlan.edited(length, edits))
+    }
+
+    /**
+     * Streams [plan] applied to [source] into [target] (replaced if it exists) and syncs it. Each source range passes
+     * through one [COPY_BUFFER_BYTES] buffer; the edits that touch it are applied to the buffer in their PLAN order, so
+     * overlapping edits end exactly as [MediaPlan.render] leaves them.
+     */
+    fun write(source: MediaUploadSource, target: File, plan: MediaPlan) {
+        val ordered = plan.edits.withIndex().sortedBy { it.value.start }
+        var next = 0
+        val active = mutableListOf<IndexedValue<MediaEdit>>()
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
         FileOutputStream(target).use { out ->
-            source.open().use { input ->
-                val buffer = ByteArray(COPY_BUFFER_BYTES)
-                var remaining = length
-                while (remaining > 0) {
-                    val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                    if (read < 0) throw java.io.EOFException("source ended with $remaining of $length octets to copy")
-                    out.write(buffer, 0, read)
-                    remaining -= read
+            plan.pieces.forEach { piece ->
+                when (piece) {
+                    is MediaPlan.Piece.Literal -> out.write(piece.bytes)
+                    is MediaPlan.Piece.Source -> source.open(piece.from).use { input ->
+                        var at = piece.from
+                        while (at < piece.to) {
+                            val count = input.read(buffer, 0, minOf(buffer.size.toLong(), piece.to - at).toInt())
+                            if (count < 0) throw java.io.EOFException("source ended at $at, ${piece.to} planned")
+                            while (next < ordered.size && ordered[next].value.start < at + count) active += ordered[next++]
+                            active.removeAll { it.value.end <= at }
+                            active.sortedBy { it.index }.forEach { it.value.applyTo(buffer, at, count) }
+                            out.write(buffer, 0, count)
+                            at += count
+                        }
+                    }
                 }
             }
             out.flush()
+            out.fd.sync()
         }
-        applyInPlace(target, edits)
     }
 
     /** Applies [edits] to [file] in place and syncs it. */
@@ -101,4 +118,85 @@ internal object MediaRewrite {
             raf.fd.sync()
         }
     }
+}
+
+/**
+ * What a scrubber decides for a whole media (#13551): the output is the concatenation of [pieces] — ranges of the SOURCE,
+ * in ascending order, or a few literal octets (a rebuilt envelope header) — after [edits] (source coordinates, applied in
+ * order) have been made to the source. The SAME plan renders to an array ([render]) or streams to a file
+ * ([MediaRewrite.write]): one decision, two backends, no twin.
+ */
+internal class MediaPlan(val pieces: List<Piece>, val edits: List<MediaEdit> = emptyList()) {
+    sealed interface Piece {
+        class Source(val from: Long, val to: Long) : Piece
+        class Literal(val bytes: ByteArray) : Piece
+    }
+
+    init {
+        val ranges = pieces.filterIsInstance<Piece.Source>()
+        require(ranges.all { it.from <= it.to } && ranges.zipWithNext().all { (a, b) -> a.to <= b.from }) { "source pieces must ascend" }
+    }
+
+    val length: Long get() = pieces.sumOf { piece -> if (piece is Piece.Source) piece.to - piece.from else (piece as Piece.Literal).bytes.size.toLong() }
+
+    /** Whether the plan gives back [media] octet for octet — nothing to write, the original leaves as it is. */
+    fun isIdentity(media: MediaBytes): Boolean {
+        val whole = pieces.singleOrNull() as? Piece.Source ?: return media.size == 0L && pieces.isEmpty()
+        return whole.from == 0L && whole.to == media.size && edits.none { it.changes(media) }
+    }
+
+    /** The output as an array — for a media already in memory. The SAME [src] when the plan is the identity. */
+    fun render(src: ByteArray): ByteArray {
+        if (isIdentity(ArrayMediaBytes(src))) return src
+        val edited = if (edits.isEmpty()) src else src.copyOf().also { copy -> edits.forEach { it.applyTo(copy, 0L, copy.size) } }
+        val out = ByteArray(length.toInt())
+        var at = 0
+        pieces.forEach { piece ->
+            when (piece) {
+                is Piece.Source -> {
+                    edited.copyInto(out, at, piece.from.toInt(), piece.to.toInt())
+                    at += (piece.to - piece.from).toInt()
+                }
+                is Piece.Literal -> {
+                    piece.bytes.copyInto(out, at)
+                    at += piece.bytes.size
+                }
+            }
+        }
+        return out
+    }
+
+    companion object {
+        fun identity(size: Long): MediaPlan = MediaPlan(listOf(Piece.Source(0, size)))
+
+        /** The source cut at [length], with [edits] — the shape of every same-length scrubber. */
+        fun edited(length: Long, edits: List<MediaEdit>): MediaPlan = MediaPlan(listOf(Piece.Source(0, length)), edits)
+    }
+}
+
+/** Applies the part of this edit that falls in the source window `[windowStart, windowStart + count)` held by [buffer]. */
+internal fun MediaEdit.applyTo(buffer: ByteArray, windowStart: Long, count: Int) {
+    val windowEnd = windowStart + count
+    when (this) {
+        is MediaEdit.Overwrite -> {
+            val from = maxOf(at, windowStart)
+            val to = minOf(at + bytes.size, windowEnd)
+            if (from < to) bytes.copyInto(buffer, (from - windowStart).toInt(), (from - at).toInt(), (to - at).toInt())
+        }
+        is MediaEdit.Zero -> {
+            val from = maxOf(this.from, windowStart)
+            val to = minOf(this.to, windowEnd)
+            if (from < to) buffer.fill(0, (from - windowStart).toInt(), (to - windowStart).toInt())
+        }
+    }
+}
+
+internal val MediaEdit.start: Long get() = when (this) {
+    is MediaEdit.Overwrite -> at
+    is MediaEdit.Zero -> from
+}
+
+internal val MediaEdit.end: Long get() = when (this) {
+    is MediaEdit.Overwrite -> at + bytes.size
+    is MediaEdit.Zero -> to
 }
