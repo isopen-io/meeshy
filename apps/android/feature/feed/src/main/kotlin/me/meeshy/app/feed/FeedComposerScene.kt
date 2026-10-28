@@ -9,6 +9,15 @@ internal object PostSceneLaw {
 
     /** Taps on the colour already painted take the scene away; any other colour paints (or repaints) it. */
     fun pick(current: String?, tapped: String): String? = tapped.takeUnless { it == current }
+
+    /** A swatch is named by its rank — « Colour 3 of 17 » (iOS `BackgroundColorPalette.positionLabel`). */
+    fun swatchRank(index: Int): Pair<Int, Int> = (index + 1) to swatches.size
+
+    /** Under a scene the text is the compact description (iOS `sceneDescriptionField`); alone, the long body. */
+    fun contentMinLines(showsScene: Boolean): Int = if (showsScene) SCENE_DESCRIPTION_LINES else DOCUMENT_BODY_LINES
+
+    private const val SCENE_DESCRIPTION_LINES = 2
+    private const val DOCUMENT_BODY_LINES = 6
 }
 
 private const val CONTENT_FOCUS_FRAMES = 3

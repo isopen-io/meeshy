@@ -13,6 +13,8 @@
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_comments">التعليقات</string>
     <string name="feed_composer_attach_file">إرفاق ملف</string>
+    <string name="feed_composer_background">لون الخلفية</string>
+    <string name="feed_composer_background_swatch">اللون %1$s من %2$s</string>
     <string name="feed_composer_cancel">إلغاء</string>
     <string name="feed_composer_language_search">البحث عن لغة</string>
     <string name="feed_composer_language_title">لغة المنشور</string>

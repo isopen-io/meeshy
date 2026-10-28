@@ -10,8 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,16 +37,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import java.text.NumberFormat
+import me.meeshy.feature.feed.R
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
 private val SCENE_MAX_HEIGHT = 360.dp
 private val SWATCH_SIZE = 32.dp
+private val SWATCH_TARGET = 48.dp
 private const val SCENE_RATIO = 9f / 16f
 private val SceneIn = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
     expandVertically(spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow), Alignment.Top)
@@ -111,23 +115,34 @@ private fun PostScene(background: String?, modifier: Modifier) {
 
 @Composable
 private fun BackgroundSwatches(selected: String?, onPick: (String) -> Unit, modifier: Modifier) {
+    val numbers = remember { NumberFormat.getIntegerInstance() }
     Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        modifier = modifier
+            .horizontalScroll(rememberScrollState())
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PostSceneLaw.swatches.forEach { hex ->
+        PostSceneLaw.swatches.forEachIndexed { index, hex ->
             val chosen = hex == selected
+            val (rank, total) = PostSceneLaw.swatchRank(index)
+            val label = stringResource(R.string.feed_composer_background_swatch, numbers.format(rank), numbers.format(total))
+            // The target is not the drawing: a 48 dp cell answers, the 32 dp disc inside it is what is seen.
             Box(
                 modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .size(SWATCH_SIZE)
-                    .clip(CircleShape)
-                    .background(hexColor(hex))
-                    .border(if (chosen) 3.dp else 1.dp, if (chosen) Color.White else Color.White.copy(alpha = 0.35f), CircleShape)
-                    .semantics { this.selected = chosen }
-                    .clickable(role = Role.RadioButton) { onPick(hex) },
-            )
+                    .size(SWATCH_TARGET)
+                    .selectable(selected = chosen, role = Role.RadioButton) { onPick(hex) }
+                    .semantics { contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(SWATCH_SIZE)
+                        .clip(CircleShape)
+                        .background(hexColor(hex))
+                        .border(if (chosen) 3.dp else 1.dp, if (chosen) Color.White else Color.White.copy(alpha = 0.35f), CircleShape),
+                )
+            }
         }
     }
 }

@@ -285,8 +285,9 @@ private fun FeedComposerModal(
     raiseKeyboard: Boolean,
     onKeyboardRaised: () -> Unit,
 ) {
-    val contentFocus = rememberContentFocus(raiseKeyboard, onKeyboardRaised)
     ModalBottomSheet(onDismissRequest = actions.onClose, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
+        // Inside the sheet: the focus and the keyboard controller are those of the sheet's own window.
+        val contentFocus = rememberContentFocus(raiseKeyboard, onKeyboardRaised)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -303,6 +304,8 @@ private fun FeedComposerModal(
             ComposerLanguagePill(code = draft.language, onClick = actions.onLanguage)
             FeedVisibilityRow(selected = draft.visibility, onSelect = actions.onVisibility)
             if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
+            // A restored draft may carry a scene: the sheet shows what will be published (no palette here, as iOS's sheet).
+            if (draft.showsScene) PostSceneBlock(background = draft.background, paletteOpen = false, onPick = actions.onBackground)
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = actions.onText,
