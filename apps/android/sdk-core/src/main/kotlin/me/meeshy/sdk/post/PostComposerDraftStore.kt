@@ -4,7 +4,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -25,6 +29,9 @@ import me.meeshy.sdk.session.PerAccountCache
 public interface PostComposerDraftStore : PerAccountCache {
     public suspend fun loadEditing(): PostComposerDraftSnapshot?
 
+    /** The editing draft, live: what « Reprendre votre brouillon » shows at the head of the feed. */
+    public fun observeEditing(): Flow<PostComposerDraftSnapshot?>
+
     public suspend fun saveEditing(snapshot: PostComposerDraftSnapshot)
 
     public suspend fun clearEditing()
@@ -42,24 +49,27 @@ public interface PostComposerDraftStore : PerAccountCache {
 
 /** Volatile [PostComposerDraftStore] — for tests and previews. */
 public class InMemoryPostComposerDraftStore(
-    private var editing: PostComposerDraftSnapshot? = null,
+    editing: PostComposerDraftSnapshot? = null,
     parked: Map<String, PostComposerDraftSnapshot> = emptyMap(),
 ) : PostComposerDraftStore {
+    private val editingState = MutableStateFlow(editing)
     private var parkedDrafts: Map<String, PostComposerDraftSnapshot> = parked
 
-    override suspend fun loadEditing(): PostComposerDraftSnapshot? = editing
+    override suspend fun loadEditing(): PostComposerDraftSnapshot? = editingState.value
+
+    override fun observeEditing(): Flow<PostComposerDraftSnapshot?> = editingState
 
     override suspend fun saveEditing(snapshot: PostComposerDraftSnapshot) {
-        editing = snapshot
+        editingState.value = snapshot
     }
 
     override suspend fun clearEditing() {
-        editing = null
+        editingState.value = null
     }
 
     override suspend fun park(cmid: String, snapshot: PostComposerDraftSnapshot) {
         parkedDrafts = parkedDrafts + (cmid to snapshot)
-        editing = null
+        editingState.value = null
     }
 
     override suspend fun parked(cmid: String): PostComposerDraftSnapshot? = parkedDrafts[cmid]
@@ -71,7 +81,7 @@ public class InMemoryPostComposerDraftStore(
     }
 
     override suspend fun clear() {
-        editing = null
+        editingState.value = null
         parkedDrafts = emptyMap()
     }
 }
@@ -87,6 +97,9 @@ public class DataStorePostComposerDraftStore(
 
     override suspend fun loadEditing(): PostComposerDraftSnapshot? =
         decodeDraft(dataStore.data.first()[EDITING])
+
+    override fun observeEditing(): Flow<PostComposerDraftSnapshot?> =
+        dataStore.data.map { decodeDraft(it[EDITING]) }.distinctUntilChanged()
 
     override suspend fun saveEditing(snapshot: PostComposerDraftSnapshot) {
         dataStore.edit { it[EDITING] = json.encodeToString(PostComposerDraftSnapshot.serializer(), snapshot) }

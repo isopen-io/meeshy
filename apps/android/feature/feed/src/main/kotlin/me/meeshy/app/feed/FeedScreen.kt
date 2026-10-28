@@ -49,6 +49,7 @@ fun FeedScreen(
     onOpenNearby: () -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
     onOpenHashtag: (String) -> Unit = {},
+    onResumeStoryDraft: () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -103,6 +104,11 @@ fun FeedScreen(
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
             FeedComposerPlaceholder(
                 onClick = { scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() } },
+            )
+            // « Reprendre votre brouillon » (#13430): the drafts this account left, at the head of the feed.
+            DraftResumeSection(
+                onResumePost = { scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() } },
+                onResumeStory = onResumeStoryDraft,
             )
             // « Publications non envoyées » (#13417): visible only while the device holds a
             // publication the server has not confirmed; « Rouvrir » opens the composer on it.
