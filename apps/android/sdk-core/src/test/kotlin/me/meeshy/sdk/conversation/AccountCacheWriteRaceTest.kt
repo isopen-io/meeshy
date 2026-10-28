@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.withTimeout
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.SearchIndexDao
@@ -182,33 +184,53 @@ class AccountCacheWriteRaceTest {
 
     @Test
     fun `a socket window of A still open when A signs out is dropped, the next account's window lands`(): Unit = runBlocking {
-        val received = MutableSharedFlow<ApiMessage>()
+        val received = MutableSharedFlow<ApiMessage>(extraBufferCapacity = 8)
         val socket: MessageSocketManager = mockk { every { messageReceived } returns received }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scheduler = TestCoroutineScheduler()
+        val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
         val binding = IncomingMessageIngestBinding(
             socket = socket,
             pipeline = MessageIngestPipeline(db),
             clock = clock,
             signal = ConversationRefreshSignal(),
             scope = scope,
-            windowMillis = 300L,
+            windowMillis = WINDOW_MILLIS,
             fence = fence,
         )
         try {
             binding.attach()
-            withTimeout(10_000) { received.subscriptionCount.first { it > 0 } }
-            received.emit(ApiMessage(id = "socket-de-A", conversationId = "c1", content = "pour A"))
+            scheduler.runCurrent()
+            received.tryEmit(ApiMessage(id = "socket-de-A", conversationId = "c1", content = "pour A"))
+            scheduler.runCurrent()
+
             signOutThenSignInAsB()
-            delay(600L)
+            scheduler.advanceTimeBy(WINDOW_MILLIS + 1)
+            scheduler.runCurrent()
 
-            assertThat(db.messageDao().listForConversation("c1")).isEmpty()
+            received.tryEmit(ApiMessage(id = "socket-de-B", conversationId = "c2", content = "pour B"))
+            scheduler.runCurrent()
+            scheduler.advanceTimeBy(WINDOW_MILLIS + 1)
+            pumpUntil(scheduler) { db.messageDao().listForConversation("c2").isNotEmpty() }
 
-            received.emit(ApiMessage(id = "socket-de-B", conversationId = "c2", content = "pour B"))
-            withTimeout(10_000) { while (db.messageDao().listForConversation("c2").isEmpty()) delay(20L) }
             assertThat(db.messageDao().listForConversation("c1")).isEmpty()
         } finally {
             binding.detach()
             scope.cancel()
         }
+    }
+
+    /** Room runs its writes on its own executor and resumes on the test dispatcher: pump that dispatcher until [done]. */
+    private suspend fun pumpUntil(scheduler: TestCoroutineScheduler, done: suspend () -> Boolean) {
+        withTimeout(10_000) {
+            while (true) {
+                scheduler.runCurrent()
+                if (done()) return@withTimeout
+                delay(5L)
+            }
+        }
+    }
+
+    private companion object {
+        const val WINDOW_MILLIS = 300L
     }
 }
