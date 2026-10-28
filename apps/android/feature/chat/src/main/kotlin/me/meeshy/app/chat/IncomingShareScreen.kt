@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
-import android.net.Uri
+import android.content.Context
+import android.text.format.Formatter
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -8,9 +10,10 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.feature.chat.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.AttachmentMessageType
-import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 import me.meeshy.sdk.model.share.ShareLimits
 
 /**
@@ -20,13 +23,14 @@ import me.meeshy.sdk.model.share.ShareLimits
  *
  * Les fichiers sont copiés EN FLUX dans le cache privé, hors du fil principal, avant que la feuille s'ouvre :
  * un envoi ne part jamais avec une pièce encore en cours de copie. Une pièce illisible (droit révoqué, plafond
- * d'octets dépassé) est écartée ; rien à envoyer du tout ferme le partage. Au plus [ShareLimits.MAX_FILES]
+ * d'octets dépassé) est écartée, et ce qui est écarté est DIT, une raison par sorte comme l'extension iOS
+ * ([IncomingShortfall]) : dans la feuille, ou en message bref quand il ne reste rien à envoyer. Au plus [ShareLimits.MAX_FILES]
  * fichiers par envoi.
  */
 @Composable
 fun IncomingShareScreen(
     sharedText: String?,
-    sharedUris: List<Uri>,
+    selection: IncomingShareSelection,
     sharedMimeType: String?,
     onFinished: () -> Unit,
     onOpenConversation: (conversationId: String) -> Unit,
@@ -34,26 +38,28 @@ fun IncomingShareScreen(
     onEditInStudio: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val prepared by produceState<List<MediaUploadItem>?>(initialValue = null, sharedUris) {
+    val prepared by produceState<IncomingPrepared?>(initialValue = null, selection) {
         value = withContext(Dispatchers.IO) {
-            sharedUris.take(ShareLimits.MAX_FILES).mapNotNull { uri ->
-                val picked = readPickedAttachment(context, uri)
-                if (picked == null || picked.file.length() == 0L) {
-                    picked?.file?.delete()
-                    return@mapNotNull null
-                }
-                MediaUploadItem.onDisk(picked.file, picked.fileName.trim().ifBlank { "attachment" }, MimeTypeResolver.resolve(picked.mimeType ?: sharedMimeType, picked.fileName))
-            }
+            val reads = selection.admitted.map { readIncomingAttachment(context, it, sharedMimeType) }
+            IncomingPrepared(
+                items = reads.filterIsInstance<IncomingRead.Copied>().map { it.item },
+                notices = IncomingShortfall.of(reads, selection).map { incomingShortfallText(context, it) },
+            )
         }
     }
-    val items = prepared ?: return
+    val ready = prepared ?: return
+    val items = ready.items
     if (items.isEmpty() && sharedText.isNullOrBlank()) {
-        LaunchedEffect(Unit) { onFinished() }
+        LaunchedEffect(Unit) {
+            ready.notices.forEach { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+            onFinished()
+        }
         return
     }
     IncomingShareSheetHost(
         text = sharedText,
         items = items,
+        notices = ready.notices,
         onDismiss = onFinished,
         onOpenConversation = onOpenConversation,
         onEditInStudio = onEditInStudio.takeIf { studioCanEdit(items) },
@@ -70,3 +76,25 @@ internal fun studioCanEdit(items: List<MediaUploadItem>): Boolean =
         val type = AttachmentMessageType.forMime(it.mimeType)
         type == AttachmentMessageType.IMAGE || type == AttachmentMessageType.VIDEO
     }
+
+private data class IncomingPrepared(val items: List<MediaUploadItem>, val notices: List<String>)
+
+/** Le texte de ce que le partage laisse derrière lui — les clés de l'extension iOS (`ShareSheetCopy.shortfall`). */
+internal fun incomingShortfallText(context: Context, shortfall: IncomingShortfall): String = when (shortfall) {
+    IncomingShortfall.RefusedSource -> context.getString(R.string.share_content_refused_source)
+    IncomingShortfall.Unprepared -> context.getString(R.string.share_content_unprepared)
+    is IncomingShortfall.OverBudget -> context.getString(
+        R.string.share_content_over_budget,
+        shortfall.uncopied,
+        ShareLimits.MAX_FILES,
+        Formatter.formatShortFileSize(context, binaryBytesAsDecimal(ShareLimits.MAX_TOTAL_BYTES)),
+    )
+    is IncomingShortfall.TooLarge -> context.getString(
+        R.string.chat_tray_too_large,
+        shortfall.fileNames.joinToString(", "),
+        ComposerAttachmentLimits.MAX_UPLOAD_MEGABYTES,
+    )
+}
+
+/** iOS affiche le plafond en unités binaires (« 5 Go ») ; le formateur Android compte en unités décimales. */
+private fun binaryBytesAsDecimal(bytes: Long): Long = bytes / (1L shl 30) * 1_000_000_000L

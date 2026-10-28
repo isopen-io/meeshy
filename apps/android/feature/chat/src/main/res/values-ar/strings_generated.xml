@@ -338,6 +338,9 @@
     <string name="share_caption_hint">أضف رسالة…</string>
     <string name="share_close">إغلاق</string>
     <string name="share_content_messages_kept">ما سيُرسَل · %1$d من %2$d رسائل</string>
+    <string name="share_content_over_budget">ملفات لم تُنسخ: %1$d. تحمل المشاركة %2$d ملفًا و%3$s على الأكثر.</string>
+    <string name="share_content_refused_source">لم يسلّم هذا التطبيق سوى مسار ملف، ولا يفتحه Meeshy. شارك الملف نفسه، أو احفظه أولًا في الصور أو الملفات.</string>
+    <string name="share_content_unprepared">تعذّر تجهيز بعض الملفات. نزّلها أولًا ثم أعد المحاولة.</string>
     <string name="share_copied">تم النسخ</string>
     <string name="share_detail_direct">محادثة</string>
     <string name="share_detail_friend">صديق · لا توجد محادثة بعد</string>

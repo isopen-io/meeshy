@@ -311,6 +311,18 @@ class AppShareSheetViewModelTest {
     }
 
     @Test
+    fun what_an_incoming_share_left_behind_is_said_in_the_sheet_and_forgotten_when_it_closes() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.bindIncoming(null, listOf(file("a.pdf", "application/pdf")), notices = listOf("enorme.mov dépasse 50 Mo"))
+        advanceUntilIdle()
+
+        assertThat(h.model().notices).containsExactly("enorme.mov dépasse 50 Mo")
+
+        h.vm.reset()
+        assertThat(h.vm.state.value.notices).isEmpty()
+    }
+
+    @Test
     fun an_incoming_share_with_nothing_cannot_be_sent() = runTest(dispatcher) {
         val h = harness()
         h.vm.bindIncoming(null, emptyList())

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.refused-source",
+          "androidName": "share_content_refused_source",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.unprepared",
+          "androidName": "share_content_unprepared",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.over-budget",
+          "androidName": "share_content_over_budget",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
