@@ -182,6 +182,8 @@ fun FeedComposerSheet(
         FeedComposerModal(
             draft = draft,
             attachedMedia = state.attachedMedia,
+            currentMediaId = PostSlideLaw.current(draft.mediaIds, state.selectedMediaId),
+            format = if (governingType == PostType.REEL) ComposerFormat.REEL else ComposerFormat.POST,
             isUploading = state.isUploading,
             isCapturingLocation = intake.location.isCapturing,
             voice = voice,
@@ -286,6 +288,8 @@ private fun rememberPostComposerActions(
 private fun FeedComposerModal(
     draft: FeedComposerDraft,
     attachedMedia: List<UploadedMedia>,
+    currentMediaId: String?,
+    format: ComposerFormat,
     isUploading: Boolean,
     isCapturingLocation: Boolean,
     voice: VoiceRecordingSession,
@@ -316,6 +320,11 @@ private fun FeedComposerModal(
             if (showReelToggle) ReelTypeToggle(forcePlainPost = draft.forcePlainPost, onToggle = actions.onToggleReel)
             // A restored draft may carry a scene: the sheet shows what will be published (no palette here, as iOS's sheet).
             if (draft.showsScene) PostSceneBlock(background = draft.background, paletteOpen = false, onPick = actions.onBackground)
+            // The slide rail and the caption of the current media, as on the plateau (iOS sheet = same document surface).
+            PostSlideRail(media = attachedMedia, currentId = currentMediaId, onSelect = actions.onSelectMedia, onRemove = actions.onRemoveMedia)
+            PostSlideLaw.captionMedia(format, currentMediaId)?.let { mediaId ->
+                PostCaptionField(mediaId = mediaId, value = draft.mediaCaption[mediaId].orEmpty(), onChange = actions.onCaption)
+            }
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = actions.onText,

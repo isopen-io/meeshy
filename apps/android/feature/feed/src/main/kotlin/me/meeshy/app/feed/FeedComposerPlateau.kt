@@ -21,9 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -185,15 +183,7 @@ private fun PostCard(
             // The text of a slide is the caption of ITS media (iOS ComposerSlideTextRole.caption): one field per media, keyed so
             // switching slides shows the caption of the one now current. Distinct from the post's content below and from the alt.
             captionMedia?.let { mediaId ->
-                key(mediaId) {
-                    OutlinedTextField(
-                        value = draft.mediaCaption[mediaId].orEmpty(),
-                        onValueChange = { actions.onCaption(mediaId, it) },
-                        modifier = Modifier.fillMaxWidth().animateContentSize(),
-                        label = { Text(stringResource(R.string.feed_composer_caption_placeholder)) },
-                        minLines = 2,
-                    )
-                }
+                PostCaptionField(mediaId = mediaId, value = draft.mediaCaption[mediaId].orEmpty(), onChange = actions.onCaption)
             }
             val field = rememberHostedTextField(draft.text, actions.onText)
             OutlinedTextField(
