@@ -18,7 +18,9 @@ import me.meeshy.sdk.model.AvatarBannerUpload
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.ImageUploadValidation
 import me.meeshy.sdk.model.ImageUploadValidator
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
@@ -50,7 +52,9 @@ data class AvatarBannerUploadUiState(
  * ([MediaRepository]) → optimistically paint the returned URL onto the session
  * (ARCHITECTURE.md §4) → confirm with the avatar/banner PATCH ([UserRepository]) →
  * adopt the server's canonical identity, or roll the session back to the snapshot
- * on failure. A single-flight guard drops a second pick while one is in flight, and
+ * on failure. Every adoption runs under the account TICKET taken at the pick ([AccountFence.commit], #13568): a
+ * logout or another account adopted while the upload or the confirm is in flight never re-adopts the identity of the
+ * account that left (`adopt` would rewrite `currentUser` and the persisted `tokenStore.userId`). A single-flight guard drops a second pick while one is in flight, and
  * `viewModelScope` work rethrows [CancellationException] so a torn-down scope never
  * leaves a spurious error.
  */
@@ -59,6 +63,7 @@ class AvatarBannerUploadViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val userRepository: UserRepository,
     private val sessionRepository: SessionRepository,
+    private val fence: AccountFence,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AvatarBannerUploadUiState())
@@ -79,8 +84,10 @@ class AvatarBannerUploadViewModel @Inject constructor(
         }
 
         val snapshot = sessionRepository.currentUser.value
+        val ticket = fence.ticket()
         _state.update { it.copy(uploading = target, error = null) }
         viewModelScope.launch {
+            suspend fun adoptUnderTicket(user: MeeshyUser) = fence.commit(ticket) { sessionRepository.adopt(user) }
             try {
                 val uploaded = when (val result = mediaRepository.upload(listOf(item))) {
                     is NetworkResult.Success -> result.data
@@ -89,25 +96,21 @@ class AvatarBannerUploadViewModel @Inject constructor(
                 val url = AvatarBannerUpload.firstUploadedUrl(uploaded)
                     ?: return@launch fail(ImageUploadError.UPLOAD_FAILED)
 
-                if (snapshot != null) {
-                    sessionRepository.adopt(AvatarBannerApply.apply(snapshot, target, url))
-                }
+                if (snapshot != null) adoptUnderTicket(AvatarBannerApply.apply(snapshot, target, url))
                 when (val confirm = confirm(target, url)) {
                     is NetworkResult.Success -> {
-                        sessionRepository.adopt(
-                            ProfileSnapshot.mergingServerUser(confirm.data, sessionRepository.currentUser.value),
-                        )
+                        adoptUnderTicket(ProfileSnapshot.mergingServerUser(confirm.data, sessionRepository.currentUser.value))
                         _state.update { it.copy(uploading = null) }
                     }
                     is NetworkResult.Failure -> {
-                        snapshot?.let(sessionRepository::adopt)
+                        snapshot?.let { adoptUnderTicket(it) }
                         fail(ImageUploadError.UPDATE_FAILED)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                snapshot?.let(sessionRepository::adopt)
+                snapshot?.let { adoptUnderTicket(it) }
                 fail(ImageUploadError.UPDATE_FAILED)
             } finally {
                 MediaIntake.release(item)
