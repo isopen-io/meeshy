@@ -247,6 +247,7 @@ rectangle.stack
 rectangle.stack.badge.plus
 repeat
 scissors
+scribble.variable
 shield
 shield.checkered
 shield.fill

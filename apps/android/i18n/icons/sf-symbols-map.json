@@ -1495,6 +1495,12 @@
    "reason": "Icons.Filled.ContentCut"
   },
   {
+   "symbol": "scribble.variable",
+   "status": "mapped",
+   "role": "Scribble",
+   "reason": "Icons.Filled.Gesture — le tracé libre de la porte Dessin (iOS ComposerRailDoor.drawing), jamais un crayon générique"
+  },
+  {
    "symbol": "shield",
    "status": "mapped",
    "role": "Shield",
@@ -2701,6 +2707,10 @@
    "directional": false
   },
   "ScheduleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Scribble": {
    "origin": "material",
    "directional": false
   },

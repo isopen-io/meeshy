@@ -94,6 +94,7 @@ import androidx.compose.material.icons.filled.FormatQuote as FiFormatQuote
 import androidx.compose.material.icons.filled.Forum as FiForum
 import androidx.compose.material.icons.filled.Forward10 as FiForward10
 import androidx.compose.material.icons.filled.Forward5 as FiForward5
+import androidx.compose.material.icons.filled.Gesture as FiGesture
 import androidx.compose.material.icons.filled.GppMaybe as FiGppMaybe
 import androidx.compose.material.icons.filled.FiberManualRecord as FiFiberManualRecord
 import androidx.compose.material.icons.filled.GraphicEq as FiGraphicEq
@@ -470,6 +471,7 @@ public object MeeshyIcons {
     public val Replay5: ImageVector get() = Icons.Filled.FiReplay5
     public val Schedule: ImageVector get() = Icons.Outlined.OuSchedule
     public val ScheduleFilled: ImageVector get() = Icons.Filled.FiSchedule
+    public val Scribble: ImageVector get() = Icons.Filled.FiGesture
     public val Search: ImageVector get() = Icons.Filled.FiSearch
     public val Security: ImageVector get() = Icons.Filled.FiSecurity
     public val SelectAll: ImageVector get() = Icons.Filled.FiSelectAll
