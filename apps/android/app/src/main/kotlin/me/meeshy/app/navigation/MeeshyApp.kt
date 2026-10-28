@@ -45,6 +45,7 @@ import me.meeshy.app.startup.AppExtensionsViewModel
 import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.ui.component.chrome.FloatingChromeReserveState
 import me.meeshy.ui.component.chrome.LocalFloatingChromeReserve
@@ -67,6 +68,8 @@ fun MeeshyApp(
     onLaunchRouteConsumed: () -> Unit = {},
     warmDeepLink: Uri? = null,
     onWarmDeepLinkHandled: () -> Unit = {},
+    callLink: CallLinkRequest? = null,
+    onCallLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     SheetReturnEffect(navController)
@@ -247,6 +250,13 @@ fun MeeshyApp(
         AppOverlayStack(extensions.overlays, navController)
 
         EngagementRevealHost(navController)
+
+        CallLinkHost(
+            request = callLink,
+            isAuthenticated = authState.isAuthenticated,
+            onHandled = onCallLinkHandled,
+            navController = navController,
+        )
 
         ArrivalCelebrationHost()
 

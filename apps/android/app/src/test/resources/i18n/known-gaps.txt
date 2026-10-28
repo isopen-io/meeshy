@@ -1648,6 +1648,8 @@ bare-specifier :feature:auth en email_gate_sent
 bare-specifier :feature:auth en world_entry_enter
 bare-specifier :feature:auth en world_entry_language_greeting
 bare-specifier :feature:auth en link_switch_message_unknown_current
+bare-specifier :app en call_link_confirm_audio
+bare-specifier :app en call_link_confirm_video
 bare-specifier :feature:chat en message_detail_edits_previous_one
 bare-specifier :feature:chat en message_detail_edits_previous_other
 bare-specifier :feature:chat en message_detail_edits_version_n
