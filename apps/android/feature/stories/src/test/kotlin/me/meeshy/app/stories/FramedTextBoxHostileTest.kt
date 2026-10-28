@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.getBoundsInRoot
@@ -13,6 +14,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StorySticker
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrame
@@ -74,5 +78,46 @@ class FramedTextBoxHostileTest {
         }
         compose.waitForIdle()
         compose.onNodeWithTag("layer").assertExists()
+    }
+
+    @Test
+    fun `a hostile font size and numbers play in the reader without throwing and stay bounded`() {
+        val shown = mutableStateOf<StoryTextObjectView?>(null)
+        compose.setContent {
+            Box(Modifier.size(360.dp, 640.dp)) {
+                shown.value?.let { StoryTextObjectLayer(textObject = it, playheadSeconds = 0.5f, modifier = Modifier.testTag("layer")) }
+            }
+        }
+        val sizes = listOf(Double.NaN, Double.POSITIVE_INFINITY, 1e30, -5.0, 0.0)
+        sizes.forEach { size ->
+            val view = StoryTextObjectProjection.project(
+                StoryTextObject(
+                    id = "t", text = "Bonjour", fontSize = size, x = size, y = size, rotation = size, scale = size,
+                    startTime = size, duration = size, fadeIn = size, fadeOut = size,
+                    keyframes = listOf(StoryKeyframe(time = Float.NaN, x = size, y = size, scale = size, opacity = size)),
+                ),
+                preferredLanguages = emptyList(),
+            )
+            assertThat(view.fontSize.isFinite()).isTrue()
+            assertThat(view.fontPx(1080f).isFinite()).isTrue()
+            assertThat(view.fontPx(1080f)).isAtMost(600f * 4f + 0.5f)
+            shown.value = view
+            compose.waitForIdle()
+            compose.onNodeWithTag("layer").assertExists()
+        }
+    }
+
+    @Test
+    fun `a hostile sticker projects to finite bounded numbers`() {
+        val hostile = Double.NaN
+        val effects = StoryEffects(
+            stickerObjects = listOf(
+                StorySticker(id = "s", emoji = "🔥", x = hostile, y = 1e30, scale = hostile, rotation = hostile, baseSize = 1e30, startTime = hostile, duration = -1.0, fadeIn = hostile),
+            ),
+        )
+        val sticker = StorySceneObjectsProjection.stickers(effects) { null }.single()
+        listOf(sticker.x, sticker.y, sticker.rotation, sticker.sideFraction, sticker.startTime, sticker.duration, sticker.fadeIn)
+            .forEach { assertThat(it.isFinite()).isTrue() }
+        assertThat(sticker.sideFraction).isAtMost(4.0)
     }
 }
