@@ -455,7 +455,7 @@ class AuthRepository @Inject constructor(
         // leur prochaine requête partirait sinon sous les jetons du compte adopté.
         // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
         // pendant une fenêtre où un push de A serait jugé destiné au compte connecté. Sans identité, le temps de
-        // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B et adopte les jetons écrits.
+        // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B, puis les jetons s'écrivent sous B.
         val replaced = sessionRepository.currentUserId ?: tokenStore.userId
         if (replaced != null && replaced != session.user.id) {
             fence?.revoke()
@@ -464,6 +464,10 @@ class AuthRepository @Inject constructor(
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
         sessionRepository.adopt(session.user, origin)
+        // L'adoption ne recopie pas un jeton sur l'emplacement d'un compte qui en garde déjà un (compte enregistré) :
+        // les jetons de CETTE session s'y réécrivent, sans quoi l'ancien serait lu.
+        tokenStore.jwt = session.token
+        tokenStore.sessionToken = session.sessionToken
     }
 
     private companion object {
