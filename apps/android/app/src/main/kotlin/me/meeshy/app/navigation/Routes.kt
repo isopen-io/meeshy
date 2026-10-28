@@ -18,6 +18,17 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot-password"
     const val MAGIC_LINK = "magic-link"
     const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
+
+    /**
+     * « Nouveau mot de passe » (iOS `MeeshyNewPasswordView`), ouvert par le lien de l'e-mail de reinitialisation.
+     * Le jeton voyage dans l'argument, encode, et le ViewModel l'efface de l'etat sauvegarde des qu'il l'a lu.
+     */
+    const val RESET_PASSWORD = "auth/reset-password?token={token}"
+    fun resetPassword(encodedToken: String): String = "auth/reset-password?token=$encodedToken"
+
+    /** La preuve de l'adresse par le lien de l'e-mail : jeton ET adresse (encodes), meme ecran que le lien de connexion. */
+    const val VERIFY_EMAIL_LINK = "auth/verify-email?token={token}&email={email}"
+    fun verifyEmailLink(token: String, email: String): String = "auth/verify-email?token=$token&email=$email"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
 

@@ -120,11 +120,10 @@ fun MeeshyApp(
     // recomposition never re-navigates. An unauthenticated launch defers until
     // sign-in resolves (the route survives in Activity state across the login gate).
     LaunchedEffect(launchRoute, authState.isAuthenticated) {
-        // La validation d'un magic link est la SEULE destination de lancement
-        // legitime hors session : c'est precisement elle qui en ouvre une. Tout le
-        // reste (chat, appel) attend l'authentification.
-        val isMagicLink = launchRoute?.startsWith("auth/magic-link") == true
-        if (launchRoute != null && (authState.isAuthenticated || isMagicLink)) {
+        // Les liens d'e-mail a jeton (connexion, adresse prouvee, nouveau mot de passe) sont les SEULES
+        // destinations de lancement legitimes hors session : ce sont eux qui en ouvrent une ou qui
+        // choisissent le mot de passe. Tout le reste (chat, appel) attend l'authentification.
+        if (launchRoute != null && (authState.isAuthenticated || LaunchRouter.opensWithoutSession(launchRoute))) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }

@@ -97,6 +97,28 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" android:host="profile" />
             </intent-filter>
+            <!-- App Links : les liens des e-mails de reinitialisation du mot de passe et de verification de l'adresse
+                 (LaunchRouter.routeForDeepLink, EmailLinkSecret.exactForm). EXACTS (android:path) et jamais en prefixe :
+                 le prefixe `/auth/email-link` revendiquerait aussi les liens d'e-mail que l'app ne lit pas (revocation de
+                 sessions, suppression de compte…), qui seraient avales sans rien afficher au lieu d'aller au navigateur.
+                 `/auth/magic-link` est deja revendique plus haut ; seul son alias est ajoute ici. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/verify-email" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/verify-email" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/email-link/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/email-link/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/email-link/verify-email" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/email-link/verify-email" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/email-link/magic-link" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/email-link/magic-link" />
+            </intent-filter>
             <!-- App Link : le lien de partage de profil (https://meeshy.me/u/{username},
                  me.meeshy.sdk.model.ProfileShareLink) ouvre l'app directement. meeshy://u/{username}
                  n'a pas besoin de son propre filtre : le filtre scheme-only ci-dessus (sans host)

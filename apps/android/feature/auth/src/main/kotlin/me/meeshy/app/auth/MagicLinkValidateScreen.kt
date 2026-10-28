@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +63,10 @@ fun MagicLinkValidateScreen(
             isBusy = state.isConfirming,
             onAnswer = viewModel::answerConfirmation,
         )
+    }
+
+    state.replacement?.let { question ->
+        AccountReplacementDialog(question = question, onAnswer = viewModel::answerReplacement)
     }
 
     MeeshyBackground {
@@ -126,4 +131,22 @@ fun MagicLinkValidateScreen(
             }
         }
     }
+}
+
+/**
+ * « Ouvrir un autre compte ? » (iOS `AccountReplacementAlert`) : le lien ouvre un AUTRE compte que celui qui est
+ * ouvert. Il nomme les deux comptes et met « Annuler » en avant (bouton plein) ; fermer l'alerte sans bouton vaut « non ».
+ */
+@Composable
+private fun AccountReplacementDialog(question: AccountReplacementQuestion, onAnswer: (accepted: Boolean) -> Unit) {
+    val message = question.currentLabel
+        ?.let { stringResource(R.string.link_switch_message, question.incomingLabel, it) }
+        ?: stringResource(R.string.link_switch_message_unknown_current, question.incomingLabel)
+    AlertDialog(
+        onDismissRequest = { onAnswer(false) },
+        title = { Text(stringResource(R.string.link_switch_title)) },
+        text = { Text(message) },
+        confirmButton = { TextButton(onClick = { onAnswer(false) }) { Text(stringResource(R.string.link_signin_cancel)) } },
+        dismissButton = { TextButton(onClick = { onAnswer(true) }) { Text(stringResource(R.string.link_switch_confirm)) } },
+    )
 }

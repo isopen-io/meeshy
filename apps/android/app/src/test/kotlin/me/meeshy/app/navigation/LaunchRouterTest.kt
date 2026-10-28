@@ -269,11 +269,58 @@ class LaunchRouterTest {
     }
 
     @Test
-    fun `verification and reset links have no destination here and never route`() {
-        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co")).isNull()
-        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co")).isNull()
-        assertThat(routeOf("https://meeshy.me/reset-password#token=r")).isNull()
-        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r")).isNull()
+    fun `the reset link written in the mails routes to the new password screen with its fragment token`() {
+        assertThat(routeOf("https://meeshy.me/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r%2B1"))
+            .isEqualTo("auth/reset-password?token=r%2B1")
+    }
+
+    @Test
+    fun `a reset link still carrying its token in the query is read for mails sent before`() {
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old")).isEqualTo("auth/reset-password?token=old")
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old#token=new")).isEqualTo("auth/reset-password?token=new")
+    }
+
+    @Test
+    fun `the verification link routes with its token and its address`() {
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+    }
+
+    @Test
+    fun `a reset or verification link without its secret opens nothing`() {
+        assertThat(routeOf("https://meeshy.me/reset-password")).isNull()
+        assertThat(routeOf("https://meeshy.me/reset-password#token=")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#email=a%40b.co")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=")).isNull()
+    }
+
+    @Test
+    fun `every variant of a reset or verification link is refused`() {
+        listOf(
+            "http://meeshy.me/reset-password#token=r",
+            "https://meeshy.me:8443/reset-password#token=r",
+            "https://evil.example/reset-password#token=r",
+            "https://meeshy.me/reset-password/extra#token=r",
+            "https://meeshy.me/Reset-Password#token=r",
+            "https://meeshy.me//reset-password#token=r",
+            "https://meeshy.me/auth/reset-password/#token=r",
+            "https://meeshy.me/auth/verify-email/x#token=t&email=a%40b.co",
+            "https://meeshy.me/settings/verify-email-change#token=t",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `only the sign-in and password links open before any session`() {
+        assertThat(LaunchRouter.opensWithoutSession("auth/magic-link?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/reset-password?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/verify-email?token=a&email=b")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("conversations")).isFalse()
+        assertThat(LaunchRouter.opensWithoutSession(null)).isFalse()
     }
 
     @Test

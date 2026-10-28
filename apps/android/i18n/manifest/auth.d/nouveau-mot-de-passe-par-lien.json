@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.newPasswordTitle",
+          "androidName": "newpw_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.newPassword",
+          "androidName": "newpw_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.confirmPassword",
+          "androidName": "newpw_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.passwordMismatch",
+          "androidName": "newpw_mismatch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.code",
+          "androidName": "newpw_code",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.code.lead",
+          "androidName": "newpw_code_lead",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.reset",
+          "androidName": "newpw_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.resetSuccess",
+          "androidName": "newpw_saved",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.login",
+          "androidName": "newpw_signin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.exhausted.title",
+          "androidName": "newpw_exhausted_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.exhausted.text",
+          "androidName": "newpw_exhausted_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.invalidLink.title",
+          "androidName": "newpw_dead_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.invalidLink.text",
+          "androidName": "newpw_dead_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.invalidLink.action",
+          "androidName": "newpw_dead_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.codeRequired",
+          "androidName": "newpw_err_code_required",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.codeInvalid",
+          "androidName": "newpw_err_code_invalid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.weak",
+          "androidName": "newpw_err_weak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.reused",
+          "androidName": "newpw_err_reused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.locked",
+          "androidName": "newpw_err_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.rateLimited",
+          "androidName": "newpw_err_rate_limited",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.error.offline",
+          "androidName": "newpw_err_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.resetError",
+          "androidName": "newpw_err_failed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
