@@ -119,8 +119,8 @@ class ExhaustionHandlersTest {
         LikePostHandler(mockk<PostApi>(), postRepository).onExhausted(outboxRow(OutboxKind.LIKE_POST, targetId = "p1"))
         UnlikePostHandler(mockk<PostApi>(), postRepository).onExhausted(outboxRow(OutboxKind.UNLIKE_POST, targetId = "p2"))
 
-        verify(exactly = 1) { postRepository.rollbackLike("p1", liked = false) }
-        verify(exactly = 1) { postRepository.rollbackLike("p2", liked = true) }
+        coVerify(exactly = 1) { postRepository.rollbackLike("p1", liked = false) }
+        coVerify(exactly = 1) { postRepository.rollbackLike("p2", liked = true) }
     }
 
     @Test
@@ -130,8 +130,8 @@ class ExhaustionHandlersTest {
         UnbookmarkPostHandler(mockk<PostApi>(), postRepository)
             .onExhausted(outboxRow(OutboxKind.UNBOOKMARK_POST, targetId = "p2"))
 
-        verify(exactly = 1) { postRepository.rollbackBookmark("p1", bookmarked = false) }
-        verify(exactly = 1) { postRepository.rollbackBookmark("p2", bookmarked = true) }
+        coVerify(exactly = 1) { postRepository.rollbackBookmark("p1", bookmarked = false) }
+        coVerify(exactly = 1) { postRepository.rollbackBookmark("p2", bookmarked = true) }
     }
 
     @Test
