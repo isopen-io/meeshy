@@ -33,6 +33,10 @@
     <string name="audio_editor_use">Use audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
+    <string name="audio_split_handle_end">Cut end</string>
+    <string name="audio_split_handle_start">Cut start</string>
+    <string name="audio_trim_handle_end">Selection end</string>
+    <string name="audio_trim_handle_start">Selection start</string>
     <string name="avatar_a11y_mood">mood %s</string>
     <string name="bubble_contact_card_shared">Shared contact</string>
     <string name="bubble_story_citation_answer">reply to their story</string>

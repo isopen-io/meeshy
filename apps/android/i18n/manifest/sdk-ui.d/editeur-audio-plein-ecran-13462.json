@@ -195,6 +195,30 @@
           "iosKey": "audio.editor.tool.transcribe",
           "androidName": "audio_editor_tool_transcribe",
           "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.trim.handle.start",
+          "androidName": "audio_trim_handle_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.trim.handle.end",
+          "androidName": "audio_trim_handle_end",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.split.handle.start",
+          "androidName": "audio_split_handle_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.split.handle.end",
+          "androidName": "audio_split_handle_end",
+          "status": "adopted"
         }
       ]
     }

@@ -33,6 +33,10 @@
     <string name="audio_editor_use">استخدام الصوت</string>
     <string name="audio_editor_volume_normal">عادي</string>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
+    <string name="audio_split_handle_end">نهاية القص</string>
+    <string name="audio_split_handle_start">بداية القص</string>
+    <string name="audio_trim_handle_end">نهاية التحديد</string>
+    <string name="audio_trim_handle_start">بداية التحديد</string>
     <string name="avatar_a11y_mood">المزاج %s</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
     <string name="bubble_story_citation_answer">رد على القصة</string>
