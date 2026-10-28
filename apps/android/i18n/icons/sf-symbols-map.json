@@ -320,6 +320,12 @@
    "reason": "Icons.Filled.PhotoFilter"
   },
   {
+   "symbol": "captions.bubble",
+   "status": "mapped",
+   "role": "Subtitles",
+   "reason": "Icons.Filled.Subtitles (outil Transcrire de l'éditeur audio, #13462)"
+  },
+  {
    "symbol": "cellularbars",
    "status": "mapped",
    "role": "SignalCellular",
@@ -1459,6 +1465,12 @@
    "reason": "Icons.AutoMirrored.Filled.Logout (rôle directionnel, miroité en RTL)"
   },
   {
+   "symbol": "rectangle.split.2x1",
+   "status": "mapped",
+   "role": "VerticalSplit",
+   "reason": "Icons.Filled.VerticalSplit (outil Couper de l'éditeur audio, #13462)"
+  },
+  {
    "symbol": "rectangle.stack",
    "status": "mapped",
    "role": "Layers",
@@ -1565,6 +1577,12 @@
    "status": "mapped",
    "role": "VolumeUp",
    "reason": "Icons.AutoMirrored.Filled.VolumeUp (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "speedometer",
+   "status": "mapped",
+   "role": "Speed",
+   "reason": "Icons.Filled.Speed (outil Vitesse de l'éditeur audio, #13462)"
   },
   {
    "symbol": "square",
@@ -2774,6 +2792,10 @@
    "origin": "material",
    "directional": false
   },
+  "Speed": {
+   "origin": "material",
+   "directional": false
+  },
   "Star": {
    "origin": "material",
    "directional": false
@@ -2787,6 +2809,10 @@
    "directional": false
   },
   "StopCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "Subtitles": {
    "origin": "material",
    "directional": false
   },
@@ -2883,6 +2909,10 @@
    "directional": false
   },
   "VerifiedUser": {
+   "origin": "material",
+   "directional": false
+  },
+  "VerticalSplit": {
    "origin": "material",
    "directional": false
   },
