@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -179,7 +179,10 @@ fun PostDetailScreen(
                     else -> PostDetailContent(
                         post = state.post!!,
                         isReposted = state.isReposted,
+                        secondaryTranslation = state.secondaryTranslation,
+                        translatingCodes = state.translatingLanguages,
                         onFlagTap = viewModel::onFlagTap,
+                        onSelectLanguage = viewModel::onLanguageSelected,
                         onOpenPost = onOpenPost,
                         onOpenProfile = onOpenProfile,
                         onOpenHashtag = onOpenHashtag,
@@ -211,7 +214,10 @@ fun PostDetailScreen(
 private fun PostDetailContent(
     post: FeedPostPresentation,
     isReposted: Boolean,
+    secondaryTranslation: PostSecondaryTranslation?,
+    translatingCodes: Set<String>,
     onFlagTap: (String) -> Unit,
+    onSelectLanguage: (String) -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenProfile: ((String) -> Unit)?,
     onOpenHashtag: (String) -> Unit,
@@ -226,6 +232,15 @@ private fun PostDetailContent(
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
+    var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
+    post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
+        PostTranslationSheet(
+            explorer = explorer,
+            translating = translatingCodes,
+            onSelectLanguage = onSelectLanguage,
+            onDismiss = { explorerOpen = false },
+        )
+    }
     gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(
         modifier = Modifier
@@ -289,9 +304,15 @@ private fun PostDetailContent(
                     }
                 }
 
-                if (post.languageStrip.isNotEmpty()) {
+                PostSecondaryTranslationPanel(secondaryTranslation)
+
+                if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {
                     Spacer(Modifier.height(MeeshySpacing.sm))
-                    DetailLanguageStrip(chips = post.languageStrip, onChipTap = onFlagTap)
+                    DetailLanguageStrip(
+                        chips = post.languageStrip,
+                        onChipTap = onFlagTap,
+                        onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
+                    )
                 }
 
                 if (post.images.isNotEmpty()) {
@@ -557,17 +578,13 @@ private fun DetailRepostStat(
 private fun DetailLanguageStrip(
     chips: List<LanguageChip>,
     onChipTap: (String) -> Unit,
+    onOpenExplorer: (() -> Unit)? = null,
 ) {
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = Icons.Filled.Translate,
-            contentDescription = stringResource(R.string.feed_translated),
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
+        PostTranslationsBadge(onOpenExplorer)
         chips.forEach { chip ->
             val info = chip.info
             val accent = info?.colorHex

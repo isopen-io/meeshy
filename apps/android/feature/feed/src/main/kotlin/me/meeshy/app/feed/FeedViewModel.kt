@@ -88,6 +88,12 @@ data class FeedUiState(
     val quoteComposer: QuoteComposerState? = null,
 )
 
+/** Language codes of [postId] whose on-demand translation is in flight (keys are `postId|language`). */
+fun FeedUiState.translatingCodesOf(postId: String): Set<String> =
+    translatingLanguages.mapNotNullTo(mutableSetOf()) { key ->
+        key.substringAfter('|', "").takeIf { it.isNotEmpty() && key.substringBefore('|') == postId }
+    }
+
 /**
  * State of the open quote-repost composer: the source post being quoted (author +
  * a content preview so the sheet renders the embed) and the commentary draft.
@@ -347,6 +353,29 @@ class FeedViewModel @Inject constructor(
             is LanguageFlagTapResolver.Result.RequestTranslation ->
                 requestOnDemandTranslation(postId, result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * Pick in the post's language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`):
+     * the chosen language becomes the card's text. Unlike a flag chip, picking the language already
+     * read never reverts to the default — it is simply the current one.
+     */
+    fun onPostLanguageSelected(postId: String, code: String) {
+        val post = latestPosts.firstOrNull { it.id == postId } ?: return
+        val preferences = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = FeedPostBuilder.resolveActiveCode(post, preferences, activeLanguageOverride.value[postId]),
+            originalLanguage = post.originalLanguage,
+            translations = post.translations.toTranslationRows(),
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate ->
+                activeLanguageOverride.update { it + (postId to result.code) }
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(postId, result.targetLanguage)
+            LanguageFlagTapResolver.Result.Revert, LanguageFlagTapResolver.Result.None -> Unit
         }
     }
 

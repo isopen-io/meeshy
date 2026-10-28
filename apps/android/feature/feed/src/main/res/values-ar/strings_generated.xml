@@ -78,7 +78,17 @@
     <string name="feed_repost_story">قصة</string>
     <string name="feed_reposts">إعادات النشر</string>
     <string name="feed_retry">إعادة المحاولة</string>
+    <string name="feed_secondary_translation_a11y">الترجمة إلى %1$s: %2$s</string>
     <string name="feed_translated">الترجمة متاحة</string>
+    <string name="feed_translation_available">الترجمات المتاحة</string>
+    <string name="feed_translation_close">إغلاق</string>
+    <string name="feed_translation_confidence_a11y">دقة الترجمة %s</string>
+    <string name="feed_translation_original">الأصل</string>
+    <string name="feed_translation_other_languages">لغات أخرى</string>
+    <string name="feed_translation_title">اللغات</string>
+    <string name="feed_translation_translate">ترجمة</string>
+    <string name="feed_translations_badge">الترجمات</string>
+    <string name="feed_translations_badge_hint">يعرض اللغات المتاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%s</string>
