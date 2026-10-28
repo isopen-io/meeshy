@@ -23,7 +23,8 @@ class GuestSessionEndViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private class Fixture(purges: Boolean) {
+    private class Fixture(purges: Boolean, held: GuestSessionEndSignal? = null) {
+        var verifications = 0
         val signals = MutableSharedFlow<GuestSessionEndSignal>(extraBufferCapacity = 4)
         val socketErrors = MutableSharedFlow<SocketServerError>(extraBufferCapacity = 4)
         val purgedTokens = mutableListOf<String?>()
@@ -31,6 +32,7 @@ class GuestSessionEndViewModelTest {
             ends = signals,
             socketErrors = socketErrors,
             purge = { token -> purgedTokens += token; purges },
+            verifyHeldSession = { verifications += 1; held },
         )
     }
 
@@ -90,6 +92,24 @@ class GuestSessionEndViewModelTest {
         f.signals.emit(GuestSessionEndSignal(GuestSessionEnd.LINK_EXPIRED, null))
         runCurrent()
         f.viewModel.dismiss()
+        assertThat(f.viewModel.ended.value).isNull()
+    }
+
+    @Test
+    fun `au demarrage a froid la session detenue est verifiee et une revocation en son absence est dite`() = runTest(dispatcher) {
+        val f = Fixture(purges = true, held = GuestSessionEndSignal(GuestSessionEnd.ACCESS_REVOKED, "guest-1"))
+        runCurrent()
+        assertThat(f.verifications).isEqualTo(1)
+        assertThat(f.purgedTokens).containsExactly("guest-1")
+        assertThat(f.viewModel.ended.value?.end).isEqualTo(GuestSessionEnd.ACCESS_REVOKED)
+    }
+
+    @Test
+    fun `une session detenue toujours valide ne montre rien`() = runTest(dispatcher) {
+        val f = Fixture(purges = true, held = null)
+        runCurrent()
+        assertThat(f.verifications).isEqualTo(1)
+        assertThat(f.purgedTokens).isEmpty()
         assertThat(f.viewModel.ended.value).isNull()
     }
 }
