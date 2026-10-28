@@ -15,9 +15,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
@@ -97,18 +101,34 @@ class EngagementRevealCoordinator @Inject constructor(
     private val mutableQueue = MutableStateFlow(EngagementRevealQueue())
     val queue: StateFlow<EngagementRevealQueue> = mutableQueue.asStateFlow()
 
+    /** Le compte à qui la file appartient : les paliers d'un compte ne se montrent jamais à un autre. */
+    private val owner = MutableStateFlow<String?>(null)
+
+    /**
+     * La célébration à l'ÉCRAN : celle de la file, seulement pour le compte qui l'a reçue et tant que le jeu n'est pas
+     * masqué — une déconnexion, un changement de compte ou « Jeu masqué » la retirent aussitôt.
+     */
+    val showing: Flow<EngagementReveal?> = combine(
+        mutableQueue,
+        owner,
+        session.currentUser.map { it?.id }.distinctUntilChanged(),
+        prefs.prefs,
+    ) { queue, ownerId, userId, devicePrefs ->
+        queue.current?.takeIf { userId != null && userId == ownerId && !devicePrefs.hidden }
+    }.distinctUntilChanged()
+
     fun onTapped(notification: ApiNotification) {
         val reveal = revealOf(notification) ?: return
         val userId = session.currentUserId ?: return
         if (prefs.current().hidden) return
-        if (enqueue(reveal)) memory.markCelebrated(userId, reveal.id)
+        if (enqueue(userId, reveal)) memory.markCelebrated(userId, reveal.id)
     }
 
     fun onLive(notification: ApiNotification) {
         val reveal = revealOf(notification)?.takeIf { it.celebratesUnprompted } ?: return
         val userId = session.currentUserId ?: return
         if (prefs.current().hidden || memory.hasCelebrated(userId, reveal.id)) return
-        if (enqueue(reveal)) memory.markCelebrated(userId, reveal.id)
+        if (enqueue(userId, reveal)) memory.markCelebrated(userId, reveal.id)
     }
 
     /** La célébration courante est refermée : la suivante prend sa place. */
@@ -120,7 +140,13 @@ class EngagementRevealCoordinator @Inject constructor(
     private fun revealOf(notification: ApiNotification): EngagementReveal? =
         EngagementReveal.from(notification.notificationType, notification.metadata)
 
-    private fun enqueue(reveal: EngagementReveal): Boolean {
+    /** Un autre compte que celui de la file : la file de l'ancien compte part avec lui, suspension comprise. */
+    @Synchronized
+    private fun enqueue(userId: String, reveal: EngagementReveal): Boolean {
+        if (owner.value != userId) {
+            mutableQueue.update { EngagementRevealQueue(isSuspended = it.isSuspended) }
+            owner.value = userId
+        }
         var accepted = false
         mutableQueue.update { before ->
             val after = before.enqueue(reveal)

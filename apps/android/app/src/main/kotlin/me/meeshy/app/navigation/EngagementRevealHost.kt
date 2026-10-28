@@ -2,23 +2,29 @@ package me.meeshy.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import me.meeshy.app.game.reveal.AchievementRevealScreen
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.sdk.game.EngagementRevealCoordinator
-import me.meeshy.sdk.model.game.engagement.EngagementRevealQueue
+import me.meeshy.sdk.model.game.engagement.EngagementReveal
 
 @HiltViewModel
 class EngagementRevealHostViewModel @Inject constructor(
     private val coordinator: EngagementRevealCoordinator,
 ) : ViewModel() {
-    val queue: StateFlow<EngagementRevealQueue> = coordinator.queue
+    /** La célébration à l'écran — rien hors du compte qui l'a reçue, rien sous « Jeu masqué ». */
+    val current: StateFlow<EngagementReveal?> =
+        coordinator.showing.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** L'UNIQUE chemin qui fait avancer la file : la fermeture, qu'elle vienne du voile, du retour ou d'un bouton. */
     fun finish() = coordinator.finish()
@@ -32,14 +38,17 @@ class EngagementRevealHostViewModel @Inject constructor(
  */
 @Composable
 fun EngagementRevealHost(navController: NavHostController, viewModel: EngagementRevealHostViewModel = hiltViewModel()) {
-    val queue by viewModel.queue.collectAsStateWithLifecycle()
-    val current = queue.current ?: return
-    AchievementRevealScreen(
-        reveal = current,
-        onContinue = viewModel::finish,
-        onSeeProgression = {
-            navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true }
-            viewModel.finish()
-        },
-    )
+    val shown by viewModel.current.collectAsStateWithLifecycle()
+    val current = shown ?: return
+    // Une célébration par palier : le suivant de la file repart de zéro (entrée, halo, haptique), jamais de l'état final du précédent.
+    key(current) {
+        AchievementRevealScreen(
+            reveal = current,
+            onContinue = viewModel::finish,
+            onSeeProgression = {
+                navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true }
+                viewModel.finish()
+            },
+        )
+    }
 }

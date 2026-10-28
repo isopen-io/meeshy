@@ -31,7 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -161,8 +161,10 @@ private fun RevealCard(plan: EngagementRevealPlan, appeared: () -> Float, halo: 
             }
             .clip(RoundedCornerShape(MeeshyRadius.xl))
             .background(Brush.verticalGradient(listOf(MeeshyPalette.Indigo900, MeeshyPalette.Indigo950)))
-            .drawBehind {
-                drawRect(Brush.radialGradient(listOf(tint.copy(alpha = 0.32f), Color.Transparent), center = Offset(size.width / 2, 0f), radius = GLOW_RADIUS.dp.toPx()), alpha = appeared() * (0.7f + 0.3f * halo()))
+            .drawWithCache {
+                // Le dégradé ne dépend que de la taille : construit une fois, seule l'opacité suit l'animation.
+                val glow = Brush.radialGradient(listOf(tint.copy(alpha = 0.32f), Color.Transparent), center = Offset(size.width / 2, 0f), radius = GLOW_RADIUS.dp.toPx())
+                onDrawBehind { drawRect(glow, alpha = appeared() * (0.7f + 0.3f * halo())) }
             }
             .padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg, top = MeeshySpacing.xl, bottom = MeeshySpacing.lg)
             .semantics(mergeDescendants = true) { contentDescription = spoken },
