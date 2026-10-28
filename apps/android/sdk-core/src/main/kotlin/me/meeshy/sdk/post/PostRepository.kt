@@ -93,9 +93,10 @@ class PostRepository @Inject constructor(
     private var feedCursor: String? = null
 
     /**
-     * Ce que le geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), par post (#13588) : un retour
-     * arrière ne défait que cette valeur-là. Un écho serveur (`post:updated`, rafraîchissement) qui réécrit le compteur
-     * entre le geste et l'échec la confirme ; une ligne sans trace vient du serveur. Les deux : rien à défaire.
+     * Ce que le geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), par post (#13588). Une ligne
+     * relue du serveur (rafraîchissement du fil) porte l'état du lecteur et efface la trace : rien à défaire. Un écho
+     * `post:updated` n'est pas personnalisé : il réécrit le compteur, jamais l'état du lecteur — le retour arrière rend
+     * alors l'état d'avant le geste et garde le compteur servi.
      */
     private class OptimisticFlip(val state: Boolean, val count: Int)
 
@@ -245,19 +246,20 @@ class PostRepository @Inject constructor(
      * revert TO (the state before the mutation was enqueued); the count is
      * recomputed as the exact inverse of the delta [toggleLike]'s [applyLike]
      * applied, via the same [adjustedCount] law. A no-op once the post has left
-     * the feed cache, **or once the cache no longer carries the optimistic value
-     * this rollback was meant to undo** (state AND count as the gesture wrote them, #13588) — a realtime reconciliation
-     * (`revalidateFeed`, `post:liked`) between the tap and the `EXHAUSTED` verdict
-     * already replaced the optimistic count with the server's own, and applying
-     * the delta a second time would double-count or flip a like the server
-     * actually accepted.
+     * the feed cache, once a refresh replaced the row with the server's own, or once
+     * the row no longer carries the optimistic state this rollback was meant to undo.
+     * When an unpersonalized echo (`post:updated`) rewrote the count in between, the
+     * state is reverted and the served count is kept: applying the delta to it would
+     * double-count (#13588).
      */
     suspend fun rollbackLike(postId: String, liked: Boolean) {
-        val flip = likeFlips.remove(postId)
+        val flip = likeFlips.remove(postId)?.takeIf { it.state == !liked } ?: return
         rewriteRow(fence?.currentTicket(), postId) {
-            val untouched = flip != null && flip.state == !liked &&
-                (it.isLikedByMe == true) == !liked && (it.likeCount ?: 0) == flip.count
-            if (untouched) likeRow(it, liked) else null
+            when {
+                (it.isLikedByMe == true) != flip.state -> null
+                (it.likeCount ?: 0) == flip.count -> likeRow(it, liked)
+                else -> it.copy(isLikedByMe = liked)
+            }
         }
     }
 
@@ -341,11 +343,13 @@ class PostRepository @Inject constructor(
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
     suspend fun rollbackBookmark(postId: String, bookmarked: Boolean) {
-        val flip = bookmarkFlips.remove(postId)
+        val flip = bookmarkFlips.remove(postId)?.takeIf { it.state == !bookmarked } ?: return
         rewriteRow(fence?.currentTicket(), postId) {
-            val untouched = flip != null && flip.state == !bookmarked &&
-                (it.isBookmarkedByMe == true) == !bookmarked && (it.bookmarkCount ?: 0) == flip.count
-            if (untouched) bookmarkRow(it, bookmarked) else null
+            when {
+                (it.isBookmarkedByMe == true) != flip.state -> null
+                (it.bookmarkCount ?: 0) == flip.count -> bookmarkRow(it, bookmarked)
+                else -> it.copy(isBookmarkedByMe = bookmarked)
+            }
         }
     }
 
@@ -399,6 +403,7 @@ class PostRepository @Inject constructor(
                     }
                     fence.commitOrWrite(ticket) {
                         _feedCache.value = page
+                        page.forEach { likeFlips.remove(it.id); bookmarkFlips.remove(it.id) }
                         _feedSyncedAt.value = clock.nowMillis()
                         feedCursor = response.pagination?.nextCursor
                         _feedHasMore.value = response.pagination?.hasMore ?: false
