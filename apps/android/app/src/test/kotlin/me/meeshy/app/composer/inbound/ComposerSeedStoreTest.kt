@@ -86,4 +86,14 @@ class ComposerSeedStoreTest {
         val token = store.stash(List(ComposerSeedStore.MAX_ITEMS + 5) { jpeg(it) })!!
         assertThat(store.take(token)).hasSize(ComposerSeedStore.MAX_ITEMS)
     }
+
+    @Test
+    fun `signing out leaves no received media on the disk`() = kotlinx.coroutines.test.runTest {
+        val store = store()
+        val first = store.stash(listOf(jpeg()))!!
+        store.stash(listOf(jpeg(2)))
+        ComposerSeedTeardown(store).clear()
+        assertThat(store.holds(first)).isFalse()
+        assertThat(File(folder.root, "inbound").listFiles()).isEmpty()
+    }
 }

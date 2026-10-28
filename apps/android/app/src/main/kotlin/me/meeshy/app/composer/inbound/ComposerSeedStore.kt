@@ -67,6 +67,11 @@ class ComposerSeedStore internal constructor(
         directoryOf(token)?.deleteRecursively()
     }
 
+    /** Efface TOUT dépôt : la déconnexion ou le changement de compte ne laisse rien du média reçu par le compte quitté ([ComposerSeedTeardown]). */
+    fun clearAll() {
+        root.listFiles().orEmpty().forEach { it.deleteRecursively() }
+    }
+
     /** Efface tout dépôt plus vieux que [TTL_MS] : un partage qu'aucun hôte n'a repris (processus tué) ne reste pas sur le disque. */
     fun purgeExpired() {
         root.listFiles().orEmpty().filter { now() - it.lastModified() > TTL_MS }.forEach { it.deleteRecursively() }
