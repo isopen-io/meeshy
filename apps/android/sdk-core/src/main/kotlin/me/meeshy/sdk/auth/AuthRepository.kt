@@ -392,7 +392,7 @@ class AuthRepository @Inject constructor(
     /**
      * La passerelle a TERMINE la session d'un invite de lien (lien echu, acces retire) : l'appareil est purge comme apres
      * une deconnexion — jetons, caches, brouillons, file d'envoi, session invitee persistee — et rien ne part vers une
-     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` = la courante) :
+     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` ne vise rien) :
      * le refus tardif d'une session quittee ne purge pas celle ouverte depuis, et un compte inscrit n'est jamais touche.
      * Rend `true` quand la purge a eu lieu.
      */

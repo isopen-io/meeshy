@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -17,6 +16,7 @@ import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.net.GuestSessionEndNotifier
 import me.meeshy.sdk.net.GuestSessionEndSignal
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.socket.SocketServerError
 
 /** La fin d'une session d'invite, avec un compteur : deux fins successives de meme cause restent deux evenements. */
 data class GuestSessionEnded(val end: GuestSessionEnd, val sequence: Int)
@@ -24,13 +24,14 @@ data class GuestSessionEnded(val end: GuestSessionEnd, val sequence: Int)
 /**
  * Ecoute les refus qui terminent la session d'un invite de lien — REST (intercepteur) et socket (`error`) — purge l'appareil
  * en entier ([AuthRepository.endGuestSession]) puis expose [ended], que la racine presente a la place du fil (iOS
- * `endGuestSession` + `GuestSessionEndedView`). Un refus que la purge ecarte (session deja quittee, compte inscrit) ne
+ * `endGuestSession` + `GuestSessionEndedView`). Un refus socket vise le jeton presente au handshake de SA socket, jamais
+ * la session ouverte depuis. Un refus que la purge ecarte (session deja quittee, compte inscrit) ne
  * montre rien.
  */
 @HiltViewModel
 class GuestSessionEndViewModel internal constructor(
     ends: Flow<GuestSessionEndSignal>,
-    socketErrors: Flow<String>,
+    socketErrors: Flow<SocketServerError>,
     private val purge: suspend (refusedToken: String?) -> Boolean,
 ) : ViewModel() {
 
@@ -39,7 +40,7 @@ class GuestSessionEndViewModel internal constructor(
         notifier: GuestSessionEndNotifier,
         socket: SocketManager,
         authRepository: AuthRepository,
-    ) : this(notifier.ends, socket.socketErrors, authRepository::endGuestSession)
+    ) : this(notifier.ends, socket.serverErrors, authRepository::endGuestSession)
 
     private val _ended = MutableStateFlow<GuestSessionEnded?>(null)
     val ended: StateFlow<GuestSessionEnded?> = _ended.asStateFlow()
@@ -47,8 +48,10 @@ class GuestSessionEndViewModel internal constructor(
     private var sequence = 0
 
     init {
-        val fromSocket = socketErrors.mapNotNull { GuestSessionEnd.fromSocketPayload(it) }
-            .map { GuestSessionEndSignal(it, refusedToken = null) }
+        val fromSocket = socketErrors.mapNotNull { error ->
+            val token = error.guestSessionToken ?: return@mapNotNull null
+            GuestSessionEnd.fromSocketPayload(error.payload)?.let { GuestSessionEndSignal(it, refusedToken = token) }
+        }
         viewModelScope.launch {
             merge(ends, fromSocket).collect { signal ->
                 if (purge(signal.refusedToken)) _ended.value = GuestSessionEnded(signal.end, ++sequence)

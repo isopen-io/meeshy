@@ -33,7 +33,7 @@ class GuestSessionEndTest {
     fun `la fin vise la session refusee et jamais une session ouverte depuis`() {
         assertThat(GuestSessionEnd.targets(currentToken = "a", refusedToken = "a")).isTrue()
         assertThat(GuestSessionEnd.targets(currentToken = "b", refusedToken = "a")).isFalse()
-        assertThat(GuestSessionEnd.targets(currentToken = "a", refusedToken = null)).isTrue()
+        assertThat(GuestSessionEnd.targets(currentToken = "a", refusedToken = null)).isFalse()
         assertThat(GuestSessionEnd.targets(currentToken = null, refusedToken = null)).isFalse()
     }
 
