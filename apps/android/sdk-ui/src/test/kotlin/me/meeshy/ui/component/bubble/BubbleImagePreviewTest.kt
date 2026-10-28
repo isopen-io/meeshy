@@ -183,4 +183,27 @@ class BubbleImagePreviewTest {
     fun `a message without attachments is untouched`() {
         assertThat(build().images).isEmpty()
     }
+    @Test
+    fun `les reactions d'une piece se lisent sur sa tuile, les plus posees d'abord, avec le total`() {
+        val image = build(photo().copy(reactionSummary = mapOf("😂" to 1, "👍" to 2, "❤️" to 1, "🔥" to 1))).images.single()
+
+        // À égalité, l'ordre est celui des emojis : la bande ne saute pas d'un rendu à l'autre.
+        assertThat(image.reactionLabel).isEqualTo("👍❤️🔥 5")
+    }
+
+    @Test
+    fun `une seule reaction n'affiche que son emoji, aucune reaction aucune etiquette`() {
+        assertThat(build(photo().copy(reactionSummary = mapOf("👍" to 1))).images.single().reactionLabel).isEqualTo("👍")
+        assertThat(build(photo().copy(reactionSummary = mapOf("👍" to 0))).images.single().reactionLabel).isNull()
+        assertThat(build(photo()).images.single().reactionLabel).isNull()
+    }
+
+    @Test
+    fun `une piece protegee ou un message floute ne montre aucune reaction`() {
+        val reactions = mapOf("👍" to 2)
+
+        assertThat(build(photo().copy(reactionSummary = reactions, isBlurred = true)).images.single().reactionLabel).isNull()
+        assertThat(build(photo().copy(reactionSummary = reactions, isViewOnce = true)).images.single().reactionLabel).isNull()
+        assertThat(build(photo().copy(reactionSummary = reactions), effectFlags = MessageEffectFlags.BLURRED.toInt()).images.single().reactionLabel).isNull()
+    }
 }

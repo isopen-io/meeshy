@@ -29,6 +29,7 @@ internal object BubbleAttachmentBuilder {
 
     /** Largeur (dp) de la case d'une image SEULE dans la bulle — celle de `BubbleImageGrid`. */
     private const val SOLO_IMAGE_WIDTH_DP = 252
+    private const val MAX_TILE_EMOJIS = 3
 
     /** Largeur (dp) d'une case de la grille de 2 à 4 images — celle de `BubbleImageGrid`. */
     private const val GRID_IMAGE_CELL_WIDTH_DP = 124
@@ -123,8 +124,23 @@ internal object BubbleAttachmentBuilder {
                     width = attachment.width,
                     height = attachment.height,
                     alt = attachment.alt?.trim()?.ifBlank { null },
+                    reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
                 )
             }
+    }
+
+    /** Une pièce à vue unique, floutée ou à effets ne montre rien d'elle, réactions comprises. */
+    private fun ApiMessageAttachment.showsItsContent(): Boolean =
+        isViewOnce != true && isBlurred != true && (effectFlags ?: 0L) == 0L && isEncrypted != true
+
+    /** Les trois emojis les plus posés, puis le total s'il dépasse un : « 👍❤️ 3 » ; `null` sans réaction. */
+    internal fun tileReactionLabel(summary: Map<String, Int>?): String? {
+        val posted = summary.orEmpty().entries.filter { it.value > 0 }
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        if (posted.isEmpty()) return null
+        val total = posted.sumOf { it.value }
+        val emojis = posted.take(MAX_TILE_EMOJIS).joinToString("") { it.key }
+        return if (total > 1) "$emojis $total" else emojis
     }
 
     /**
