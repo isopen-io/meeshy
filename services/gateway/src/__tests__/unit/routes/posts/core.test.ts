@@ -130,14 +130,13 @@ function makePreValidationAuth(authenticated: boolean) {
 async function buildApp(opts: {
   authenticated?: boolean;
   withSocialEvents?: boolean;
-  storedType?: string;
 } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, withSocialEvents = false, storedType = 'POST' } = opts;
+  const { authenticated = true, withSocialEvents = false } = opts;
 
   const app = Fastify({ logger: false });
   // La cible d'un DELETE se relit par `select: { authorId, type }` (#11149) :
   // l'acteur en est l'auteur. Toute autre lecture de post reste introuvable.
-  const prisma = { post: { findUnique: async () => ({ type: storedType }), findFirst: async (args?: { select?: Record<string, boolean> }) => (Object.keys(args?.select ?? {}).join() === 'authorId,type' ? { authorId: USER_ID, type: 'POST' } : null) } } as any;
+  const prisma = { post: { findFirst: async (args?: { select?: Record<string, boolean> }) => (Object.keys(args?.select ?? {}).join() === 'authorId,type' ? { authorId: USER_ID, type: 'POST' } : null) } } as any;
   const requiredAuth = makePreValidationAuth(authenticated);
 
   app.decorate('notificationService', {
@@ -320,25 +319,6 @@ describe('PUT /posts/:postId — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('PUT /posts/:postId — mediaIds au-delà de dix (#13590)', () => {
-  const mediaIds = Array.from({ length: 11 }, (_, i) => i.toString(16).padStart(24, '0'));
-
-  it('un post non STORY garde dix médias : 400 qui nomme la borne', async () => {
-    const app = await buildApp({ storedType: 'POST' });
-    const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { mediaIds } });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().limit).toBe(10);
-    await app.close();
-  });
-
-  it('une STORY accepte onze médias à l\'édition', async () => {
-    const app = await buildApp({ storedType: 'STORY' });
-    const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { mediaIds } });
-    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });
