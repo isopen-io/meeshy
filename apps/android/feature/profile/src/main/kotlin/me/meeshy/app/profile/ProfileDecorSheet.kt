@@ -82,6 +82,10 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.meeshyText
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val RING_TILE_WIDTH = 84.dp
 private val RING_AVATAR = 56.dp
@@ -162,8 +166,10 @@ private fun DecorHeader(onDone: () -> Unit) {
 @Composable
 private fun rememberBannerPicker(uploadViewModel: AvatarBannerUploadViewModel): () -> Unit {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.readMediaUploadItem(it) }?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) } }
     }
     return { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
