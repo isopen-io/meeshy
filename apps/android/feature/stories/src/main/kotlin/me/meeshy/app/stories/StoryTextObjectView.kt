@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrame
@@ -112,10 +113,10 @@ data class StoryTextObjectView(
 
         val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
         return copy(
-            x = base.x,
-            y = base.y,
-            scale = base.scale,
-            opacity = fadeEnvelope ?: base.opacity,
+            x = SceneObjectNumbers.position(base.x),
+            y = SceneObjectNumbers.position(base.y),
+            scale = SceneObjectScalePolicy.clamped(base.scale),
+            opacity = SceneObjectNumbers.opacity(fadeEnvelope ?: base.opacity),
         )
     }
 }
@@ -179,18 +180,18 @@ object StoryTextObjectProjection {
         StoryTextObjectView(
             id = textObject.id,
             text = resolveText(textObject, preferredLanguages, overrideLanguage),
-            x = textObject.x,
-            y = textObject.y,
+            x = SceneObjectNumbers.position(textObject.x),
+            y = SceneObjectNumbers.position(textObject.y),
             scale = textObject.scale,
-            rotation = textObject.rotation,
-            fontSize = textObject.fontSize,
+            rotation = SceneObjectNumbers.rotation(textObject.rotation),
+            fontSize = SceneObjectNumbers.fontSize(textObject.fontSize),
             colorHex = textObject.textColor,
             align = textObject.textAlign,
-            startTime = textObject.startTime ?: 0.0,
-            duration = textObject.duration ?: 0.0,
-            fadeIn = textObject.fadeIn ?: 0.0,
-            fadeOut = textObject.fadeOut ?: 0.0,
-            keyframes = textObject.keyframes.orEmpty(),
+            startTime = SceneObjectNumbers.seconds(textObject.startTime ?: 0.0),
+            duration = SceneObjectNumbers.seconds(textObject.duration ?: 0.0),
+            fadeIn = SceneObjectNumbers.seconds(textObject.fadeIn ?: 0.0),
+            fadeOut = SceneObjectNumbers.seconds(textObject.fadeOut ?: 0.0),
+            keyframes = textObject.keyframes.orEmpty().map(SceneObjectNumbers::keyframe),
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
             effect = StoryTextEffect.fromWire(textObject.textEffect),
             style = StoryTextStyle.fromWire(textObject.textStyle),
