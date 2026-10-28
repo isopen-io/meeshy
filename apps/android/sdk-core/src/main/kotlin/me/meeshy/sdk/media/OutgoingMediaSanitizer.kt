@@ -64,10 +64,19 @@ public class OutgoingMediaSanitizer internal constructor(
     internal suspend fun sanitize(item: MediaUploadItem): NetworkResult<MediaUploadItem> = withContext(dispatcher) {
         if (location.keepsLocation.value) return@withContext NetworkResult.Success(item)
         sweepScratch()
+        try {
+            scrubbed(item)
+        } catch (failure: java.io.IOException) {
+            NetworkResult.Failure(ApiError(UNREADABLE_MESSAGE, code = UNREADABLE_CODE))
+        }
+    }
+
+    /** Une lecture qui échoue (fichier balayé, blob scellé altéré) est un échec DIT ([UNREADABLE_CODE]), jamais une exception qui remonte. */
+    private fun scrubbed(item: MediaUploadItem): NetworkResult<MediaUploadItem> {
         val media = item.mediaBytes()
         val head = media.bytes(0, minOf(media.size, HEAD_BYTES.toLong()).toInt())
         val format = ImageSourceFormat.sniff(head)
-        when (val container = mediaContainer(item, media, head, format)) {
+        return when (val container = mediaContainer(item, media, head, format)) {
             null -> when {
                 format != ImageSourceFormat.UNKNOWN || mayBeAnImage(item, head) ->
                     image(item.loaded(), format)?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
@@ -83,6 +92,11 @@ public class OutgoingMediaSanitizer internal constructor(
         if (sent === original) return
         val file = (sent.source as? MediaUploadSource.OnDisk)?.file ?: return
         if (file.parentFile?.canonicalFile == scratch.canonicalFile) file.delete()
+    }
+
+    /** La frontière de compte : toute copie nettoyée laissée par un envoi interrompu quitte le disque ([OutgoingMediaScratchTeardown]). */
+    internal fun clearScratch() {
+        scratch.listFiles().orEmpty().forEach { it.delete() }
     }
 
     private fun sweepScratch() {
@@ -257,6 +271,8 @@ public class OutgoingMediaSanitizer internal constructor(
         const val REFUSED_MESSAGE: String = "The photo's location could not be removed, so it was not sent."
         const val MEDIA_REFUSED_CODE: String = "MEDIA_LOCATION_NOT_REMOVABLE"
         const val MEDIA_REFUSED_MESSAGE: String = "The location of this video or audio could not be removed, so it was not sent."
+        const val UNREADABLE_CODE: String = "MEDIA_UNREADABLE"
+        const val UNREADABLE_MESSAGE: String = "This file could not be read, so it was not sent."
         private val MEDIA_BRANDS = setOf(
             "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "mp4x", "avc1", "qt  ", "M4V ", "M4A ", "M4B ", "M4P ",
             "3gp4", "3gp5", "3gp6", "3g2a", "dash",
