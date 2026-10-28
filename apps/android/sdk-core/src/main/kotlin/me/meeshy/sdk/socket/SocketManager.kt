@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.socket.SocketConnectOutcome
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.Renewal
 import me.meeshy.sdk.net.SessionRefresher
+import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.net.TokenStore
 import org.json.JSONObject
 import timber.log.Timber
@@ -61,6 +62,7 @@ class SocketManager internal constructor(
     ioDispatcher: CoroutineDispatcher,
     private val nowEpochSeconds: () -> Double,
     private val callGate: CallActivityGate,
+    private val transition: SessionTransitionFlags = SessionTransitionFlags(),
 ) {
     @Inject
     constructor(
@@ -71,10 +73,12 @@ class SocketManager internal constructor(
         refresher: SessionRefresher,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
         callGate: CallActivityGate,
+        transition: SessionTransitionFlags,
     ) : this(
         config, tokenStore, factory, clientIdentity, refresher, ioDispatcher,
         { System.currentTimeMillis() / 1000.0 },
         callGate,
+        transition,
     )
 
     internal constructor(
@@ -94,6 +98,13 @@ class SocketManager internal constructor(
     private val lock = Any()
 
     private var _socket: RealtimeSocket? = null
+
+    /** The session ([SessionTransitionFlags.generation]) the current socket was opened under (#13558). */
+    @Volatile
+    private var openedUnder: Long = 0L
+
+    @Volatile
+    private var staleReopenScheduled = false
     private var refreshJob: Job? = null
     private val registered = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
 
@@ -144,11 +155,13 @@ class SocketManager internal constructor(
         val auth = SocketAuthPayload.of(decision, clientIdentity.identity()) ?: return SocketConnectOutcome.NOT_ARMED
         _connectionState.value = SocketConnectionState.CONNECTING
         val socket = factory.create(config.socketUrl, auth)
+        openedUnder = transition.generation
+        staleReopenScheduled = false
         val presented = (decision as? SocketConnectDecision.ConnectRegistered)?.jwt
         presentedToken = presented
         _socket = socket
         installLifecycleListeners(socket, presented, (decision as? SocketConnectDecision.ConnectGuest)?.sessionToken)
-        registered.forEach { (event, callback) -> socket.on(event, callback) }
+        registered.forEach { (event, callback) -> socket.on(event, boundToSession(socket, callback)) }
         socket.connect()
         return SocketConnectOutcome.ARMED
     }
@@ -257,8 +270,33 @@ class SocketManager internal constructor(
     fun on(event: String, callback: (Array<Any>) -> Unit) {
         synchronized(lock) {
             registered += event to callback
-            _socket?.on(event, callback)
+            _socket?.let { socket -> socket.on(event, boundToSession(socket, callback)) }
         }
+    }
+
+    /**
+     * #13558 : a socket opened under a session that has since ended (logout whose disconnect a call deferred, an account
+     * adopted over a live one) never hands its events on — they belong to the account that left. The first stale event
+     * reopens the transport under the current credentials (deferred to the call's end like any rotation).
+     */
+    private fun boundToSession(socket: RealtimeSocket, callback: (Array<Any>) -> Unit): (Array<Any>) -> Unit {
+        val generation = openedUnder
+        return { args ->
+            if (transition.generation == generation) {
+                callback(args)
+            } else {
+                reopenStale(socket)
+            }
+        }
+    }
+
+    private fun reopenStale(socket: RealtimeSocket) {
+        synchronized(lock) {
+            if (_socket !== socket || staleReopenScheduled) return
+            staleReopenScheduled = true
+        }
+        Timber.w("Socket: session terminee, evenement jete et socket rouverte")
+        scope.launch { reconnectWithToken() }
     }
 
     fun emit(event: String, data: JSONObject) {
