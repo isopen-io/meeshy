@@ -7,10 +7,10 @@ package me.meeshy.sdk.media
  * mis à zéro — aucune position (SeekHead, Cues) ne bouge. Liste BLANCHE au niveau du segment : `SeekHead`, `Info`, `Tracks`,
  * `Cues`, `Cluster`, `Void`, `CRC-32` restent ; `Tags` (où un enregistreur pose `LOCATION`), `Attachments`, `Chapters` (texte
  * libre) deviennent `Void` ; un élément de premier niveau INCONNU fait refuser le fichier. Dans `Info` ne restent que
- * l'échelle de temps, la durée et l'identifiant du segment (titre, nom de fichier, date, applications : `Void`) ; dans
- * chaque piste vidéo ou audio, `Name`, `Language`, `CodecName` et `BlockAdditionMapping` deviennent `Void` ; toute AUTRE piste
- * (sous-titres, métadonnées, complex, boutons — #13543, revue de sécurité) devient `Void` avec chacun de ses blocs, et un
- * `BlockAdditions` aussi. Un `Cluster` de taille inconnue (enregistrement en direct) se
+ * l'échelle de temps, la durée et l'identifiant du segment (titre, nom de fichier, date, applications : `Void`) ; seules
+ * les pistes vidéo et audio sont admises, réduites à leurs champs techniques (nom, langue, nom de codec, `BlockAdditionMapping`
+ * : `Void`) ; toute AUTRE piste (sous-titres, métadonnées, complex, boutons — #13543, revue de sécurité) devient `Void`, et
+ * tout bloc dont la piste n'est pas admise — déclarée ou non — aussi, comme chaque `BlockAdditions`. Un `Cluster` de taille inconnue (enregistrement en direct) se
  * parcourt jusqu'au prochain élément de premier niveau. Tout ce qui ne se lit pas rend `null` : l'appelant refuse l'envoi.
  */
 internal object MatroskaMetadataScrubber {
@@ -26,12 +26,14 @@ internal object MatroskaMetadataScrubber {
     private val DROPPED = setOf(0x1254C367L, 0x1941A469L, 0x1043A770L)
     private val LEVEL_ONE = SEGMENT_KEPT + DROPPED + setOf(INFO, TRACKS)
     private val INFO_KEPT = setOf(0x2AD7B1L, 0x4489L, 0x73A4L, CRC32)
-    private val TRACK_TEXT = setOf(0x536EL, 0x22B59CL, 0x22B59DL, 0x258688L)
     private const val TRACK_NUMBER = 0xD7L
     private const val TRACK_TYPE = 0x83L
     private const val CODEC_ID = 0x86L
     private const val CONTENT_ENCODINGS = 0x6D80L
-    private const val BLOCK_ADDITION_MAPPING = 0x41E4L
+    private val TRACK_KEPT = setOf(
+        0xD7L, 0x73C5L, 0x83L, 0xB9L, 0x88L, 0x55AAL, 0x9CL, 0x6DE7L, 0x6DF8L, 0x23E383L, 0x234E7AL, 0x23314FL, 0x55EEL,
+        0x86L, 0x63A2L, 0x56AAL, 0x56BBL, 0xAAL, 0xE0L, 0xE1L, CRC32,
+    )
     private const val TYPE_VIDEO = 1L
     private const val TYPE_AUDIO = 2L
     private const val SIMPLE_BLOCK = 0xA3L
@@ -86,41 +88,46 @@ internal object MatroskaMetadataScrubber {
             at = end
         }
         val tracks = elements.filter { it.id == TRACKS }.map { tracks(src, it) }
-        val dropped = tracks.flatMap { it.droppedNumbers }.toSet()
+        val numbers = tracks.flatMap { it.declared }
+        if (numbers.size != numbers.toSet().size) throw Unreadable()
+        val admitted = tracks.flatMap { it.admitted }.toSet()
         return tracks.flatMap { it.voids } + elements.flatMap { element ->
             when (element.id) {
                 in DROPPED, VOID -> listOf(element)
                 INFO -> children(src, element).filter { it.id !in INFO_KEPT }
-                CLUSTER -> cluster(src, element, dropped)
+                CLUSTER -> cluster(src, element, admitted)
                 else -> emptyList()
             }
         }
     }
 
-    private class TrackPlan(val voids: List<Element>, val droppedNumbers: List<Long>)
+    private class TrackPlan(val voids: List<Element>, val declared: List<Long>, val admitted: List<Long>)
 
     /**
-     * Seules les pistes VIDÉO (`V_…`) et AUDIO (`A_…`) restent : une piste de sous-titres, de métadonnées, « complex », de
-     * boutons ou de logo — du texte libre où une application écrit sa télémétrie — devient `Void` avec tous ses blocs. Une piste
+     * Seules les pistes VIDÉO (`V_…`) et AUDIO (`A_…`) sont ADMISES, et un bloc ne reste que si sa piste l'est : une piste de
+     * sous-titres, de métadonnées, « complex », de boutons ou de logo — du texte libre où une application écrit sa télémétrie —
+     * devient `Void`, et tout bloc d'une piste non admise aussi, qu'elle soit déclarée ou non. Un numéro déclaré deux fois fait
+     * refuser. Dans une piste admise ne restent que ses champs TECHNIQUES ([TRACK_KEPT]) : tout autre devient `Void`. Une piste
      * dont le contenu est encodé (`ContentEncodings` : compression, chiffrement) ne se vérifie pas : refusée.
      */
     private fun tracks(src: ByteArray, tracks: Element): TrackPlan {
         val voids = mutableListOf<Element>()
-        val dropped = mutableListOf<Long>()
+        val declared = mutableListOf<Long>()
+        val admitted = mutableListOf<Long>()
         children(src, tracks).forEach { entry ->
             when (entry.id) {
                 TRACK_ENTRY -> {
                     val fields = children(src, entry)
                     if (fields.any { it.id == CONTENT_ENCODINGS }) throw Unreadable()
-                    val number = fields.firstOrNull { it.id == TRACK_NUMBER }?.let { uint(src, it) } ?: throw Unreadable()
-                    val type = fields.firstOrNull { it.id == TRACK_TYPE }?.let { uint(src, it) } ?: throw Unreadable()
-                    val codec = fields.firstOrNull { it.id == CODEC_ID }?.let { String(src, it.dataStart, it.end - it.dataStart, Charsets.ISO_8859_1) }.orEmpty()
-                    val admitted = (type == TYPE_VIDEO && codec.startsWith("V_")) || (type == TYPE_AUDIO && codec.startsWith("A_"))
-                    if (admitted) {
-                        voids += fields.filter { it.id in TRACK_TEXT || it.id == BLOCK_ADDITION_MAPPING || it.id == VOID }
+                    val number = fields.singleOrNull { it.id == TRACK_NUMBER }?.let { uint(src, it) } ?: throw Unreadable()
+                    val type = fields.singleOrNull { it.id == TRACK_TYPE }?.let { uint(src, it) } ?: throw Unreadable()
+                    val codec = fields.singleOrNull { it.id == CODEC_ID }?.let { String(src, it.dataStart, it.end - it.dataStart, Charsets.ISO_8859_1) }.orEmpty()
+                    declared += number
+                    if ((type == TYPE_VIDEO && codec.startsWith("V_")) || (type == TYPE_AUDIO && codec.startsWith("A_"))) {
+                        admitted += number
+                        voids += fields.filter { it.id !in TRACK_KEPT }
                     } else {
                         voids += entry
-                        dropped += number
                     }
                 }
                 VOID -> voids += entry
@@ -128,24 +135,24 @@ internal object MatroskaMetadataScrubber {
                 else -> throw Unreadable()
             }
         }
-        return TrackPlan(voids, dropped)
+        return TrackPlan(voids, declared, admitted)
     }
 
-    /** Un bloc d'une piste retirée devient `Void`, un `BlockAdditions` aussi, tout enfant de cluster inconnu aussi. */
-    private fun cluster(src: ByteArray, cluster: Element, dropped: Set<Long>): List<Element> = children(src, cluster).flatMap { child ->
+    /** Un bloc d'une piste non admise devient `Void`, un `BlockAdditions` aussi, tout enfant de cluster inconnu aussi. */
+    private fun cluster(src: ByteArray, cluster: Element, admitted: Set<Long>): List<Element> = children(src, cluster).flatMap { child ->
         when (child.id) {
-            SIMPLE_BLOCK -> if (blockTrack(src, child) in dropped) listOf(child) else emptyList()
-            BLOCK_GROUP -> blockGroup(src, child, dropped)
+            SIMPLE_BLOCK -> if (blockTrack(src, child) in admitted) emptyList() else listOf(child)
+            BLOCK_GROUP -> blockGroup(src, child, admitted)
             VOID -> listOf(child)
             in CLUSTER_KEPT -> emptyList()
             else -> listOf(child)
         }
     }
 
-    private fun blockGroup(src: ByteArray, group: Element, dropped: Set<Long>): List<Element> {
+    private fun blockGroup(src: ByteArray, group: Element, admitted: Set<Long>): List<Element> {
         val fields = children(src, group)
-        val block = fields.firstOrNull { it.id == BLOCK } ?: throw Unreadable()
-        if (blockTrack(src, block) in dropped) return listOf(group)
+        val block = fields.singleOrNull { it.id == BLOCK } ?: throw Unreadable()
+        if (blockTrack(src, block) !in admitted) return listOf(group)
         return fields.filter { it.id !in BLOCK_GROUP_KEPT }
     }
 

@@ -11,17 +11,6 @@ package me.meeshy.sdk.media
  * inconnus entre ou après les trames — l'appelant refuse l'envoi.
  */
 internal object Mp3MetadataScrubber {
-    private const val ID3V1_SIZE = 128
-    private const val APE_FOOTER_SIZE = 32
-
-    private val ID3 = "ID3".toByteArray(Charsets.ISO_8859_1)
-    private val ID3_FOOTER = "3DI".toByteArray(Charsets.ISO_8859_1)
-    private val TAG = "TAG".toByteArray(Charsets.ISO_8859_1)
-    private val APE = "APETAGEX".toByteArray(Charsets.ISO_8859_1)
-    private val LYRICS_BEGIN = "LYRICSBEGIN".toByteArray(Charsets.ISO_8859_1)
-    private val LYRICS_END = "LYRICSEND".toByteArray(Charsets.ISO_8859_1)
-    private val LYRICS_200 = "LYRICS200".toByteArray(Charsets.ISO_8859_1)
-
     private val BITRATES_V1 = arrayOf(
         intArrayOf(0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448),
         intArrayOf(0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384),
@@ -36,7 +25,7 @@ internal object Mp3MetadataScrubber {
 
     /** Un MP3 : une étiquette ID3v2 en tête, ou deux trames MPEG valides qui se suivent dès le premier octet. */
     fun looksLikeMp3(src: ByteArray): Boolean =
-        src.startsWithAt(0, ID3) || frameLength(src, 0)?.let { frameLength(src, it) != null } == true
+        AudioTrailingTags.startsWithId3v2(src, 0) || frameLength(src, 0)?.let { frameLength(src, it) != null } == true
 
     /** Les trames seules — le MÊME tableau s'il n'y avait aucune étiquette — ou `null` si le fichier ne se lit pas. */
     fun scrub(src: ByteArray): ByteArray? {
@@ -50,25 +39,9 @@ internal object Mp3MetadataScrubber {
 
     private fun leadingTagsEnd(src: ByteArray): Int? {
         var at = 0
-        while (src.startsWithAt(at, ID3)) at = id3v2End(src, at) ?: return null
+        while (AudioTrailingTags.startsWithId3v2(src, at)) at = AudioTrailingTags.id3v2End(src, at) ?: return null
         while (at < src.size && src[at].toInt() == 0) at++
         return at
-    }
-
-    private fun id3v2End(src: ByteArray, at: Int): Int? {
-        if (at + 10 > src.size) return null
-        val version = src[at + 3].toInt() and 0xFF
-        if (version !in 2..4) return null
-        val size = synchsafe(src, at + 6) ?: return null
-        val footer = if (version == 4 && (src[at + 5].toInt() and 0x10) != 0) 10 else 0
-        val end = at.toLong() + 10 + size + footer
-        return if (end <= src.size) end.toInt() else null
-    }
-
-    private fun synchsafe(src: ByteArray, at: Int): Int? {
-        val bytes = (0 until 4).map { src[at + it].toInt() and 0xFF }
-        if (bytes.any { it >= 0x80 }) return null
-        return bytes.fold(0) { acc, b -> (acc shl 7) or b }
     }
 
     private fun walkFrames(src: ByteArray, start: Int): Pair<Int, Int> {
@@ -108,45 +81,11 @@ internal object Mp3MetadataScrubber {
     private fun onlyTrailingTags(src: ByteArray, from: Int): Boolean {
         var at = from
         while (at < src.size) {
-            at = trailingTagEnd(src, at) ?: return isTruncatedFinalFrame(src, at)
+            at = AudioTrailingTags.tagEnd(src, at) ?: return isTruncatedFinalFrame(src, at)
         }
         return true
     }
 
     private fun isTruncatedFinalFrame(src: ByteArray, at: Int): Boolean =
         frameLength(src, at)?.let { at + it > src.size } == true
-
-    private fun trailingTagEnd(src: ByteArray, at: Int): Int? = when {
-        src.startsWithAt(at, APE) -> apeEnd(src, at)
-        src.startsWithAt(at, LYRICS_BEGIN) -> lyricsEnd(src, at)
-        src.startsWithAt(at, TAG) -> (at + ID3V1_SIZE).takeIf { it <= src.size }
-        src.startsWithAt(at, ID3) -> id3v2End(src, at)
-        src.startsWithAt(at, ID3_FOOTER) -> (at + 10).takeIf { it <= src.size }
-        else -> null
-    }
-
-    private fun apeEnd(src: ByteArray, at: Int): Int? {
-        if (at + APE_FOOTER_SIZE > src.size) return null
-        val size = le32(src, at + 12)
-        val flags = le32(src, at + 20)
-        val isHeader = (flags and 0x20000000L) != 0L
-        val end = at.toLong() + size + if (isHeader) APE_FOOTER_SIZE else 0
-        return if (size >= APE_FOOTER_SIZE && end <= src.size) end.toInt() else null
-    }
-
-    private fun lyricsEnd(src: ByteArray, at: Int): Int? {
-        val v2 = (at until src.size - LYRICS_200.size + 1).firstOrNull { src.startsWithAt(it, LYRICS_200) }
-        if (v2 != null && v2 - 6 >= at) {
-            val size = String(src, v2 - 6, 6, Charsets.ISO_8859_1).toIntOrNull()
-            if (size == v2 - 6 - at) return v2 + LYRICS_200.size
-        }
-        val v1 = (at until src.size - LYRICS_END.size + 1).firstOrNull { src.startsWithAt(it, LYRICS_END) } ?: return null
-        return v1 + LYRICS_END.size
-    }
-
-    private fun le32(src: ByteArray, at: Int): Long =
-        (0 until 4).fold(0L) { acc, i -> acc or ((src[at + i].toLong() and 0xFF) shl (8 * i)) }
-
-    private fun ByteArray.startsWithAt(at: Int, prefix: ByteArray): Boolean =
-        at >= 0 && at + prefix.size <= size && prefix.indices.all { this[at + it] == prefix[it] }
 }
