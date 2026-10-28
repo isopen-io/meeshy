@@ -106,3 +106,32 @@ describe('le format d\'erreur ne change pas', () => {
     if (!r.success) expect(storyLimitFromIssues(r.error.issues)).toBeNull();
   });
 });
+
+describe('audit #13590 — ce que les composeurs écrivent vraiment', () => {
+  it('v3 : le fond tel qu\'iOS l\'écrit (plane content + payload.isBackground) ne compte pas comme image posée', () => {
+    const iosBackground = obj('media', 99, { mediaType: 'image', isBackground: true });
+    expect(limitOf(canvas([iosBackground, ...many(50, (i) => obj('media', i, { mediaType: 'image' }))]))).toBeNull();
+  });
+
+  it('un son de fond ne compte pas comme son posé (v3 payload.isBackground, v1 audioPlayerObjects.isBackground)', () => {
+    const v3Bg = obj('audio', 99, { isBackground: true });
+    expect(limitOf(canvas([v3Bg, ...many(50, (i) => obj('audio', i))]))).toBeNull();
+    const v1 = [{ id: 'bg', isBackground: true }, ...many(50, (i) => ({ id: `a${i}` }))];
+    expect(limitOf({ audioPlayerObjects: v1 })).toBeNull();
+  });
+
+  it('1000 caractères se comptent comme l\'auteur les voit : 1000 emojis composés passent', () => {
+    const family = '👨‍👩‍👧‍👦';
+    const create = (text: string) => CreatePostSchema.safeParse({ type: 'STORY', storyEffects: canvas([obj('text', 0, { text })]) });
+    expect(create(family.repeat(1000)).success).toBe(true);
+    expect(create(family.repeat(1001)).success).toBe(false);
+  });
+
+  it('une republication recopie le texte stocké de sa source : elle n\'est pas refusée pour sa longueur', () => {
+    const storedText = canvas([obj('text', 0, { text: 'a'.repeat(1800) })]);
+    expect(CreatePostSchema.safeParse({ type: 'STORY', repostOfId: 'aaaaaaaaaaaaaaaaaaaaaaaa', storyEffects: storedText }).success).toBe(true);
+    const r = CreatePostSchema.safeParse({ type: 'STORY', storyEffects: storedText });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(storyLimitFromIssues(r.error.issues)).toEqual({ code: 'STORY_LIMIT_TEXT_LENGTH', max: 1000 });
+  });
+});

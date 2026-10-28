@@ -249,6 +249,17 @@ describe('posts routes — error response format', () => {
     expect(body.error).toBe('Invalid request');
   });
 
+  it('core: un plafond de story dépassé nomme sa borne à la racine du 400 (POST /posts, #13590)', async () => {
+    const stickers = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}`, emoji: '😀' }));
+    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'STORY', storyEffects: { stickerObjects: stickers } } });
+    expect(resp.statusCode).toBe(400);
+    const body = resp.json() as ErrorBody & { code?: string; storyLimit?: string; limit?: number };
+    assertErrorShape(body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.storyLimit).toBe('STORY_LIMIT_STICKERS');
+    expect(body.limit).toBe(50);
+  });
+
   it('core: should return structured error on 404 for unknown post (GET /posts/:postId)', async () => {
     // Forme ObjectId VALIDE mais inconnue (#6853) : le fixture historique
     // (`nonexistent123456789012`, 23 caractères non-hex) est désormais rejeté
