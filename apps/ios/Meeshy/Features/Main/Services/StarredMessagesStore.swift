@@ -218,7 +218,7 @@ extension StarredMessagesStore {
         case let .edited(messageId, content, _, _, _):
             await MainActor.run { (store ?? .shared).updatePreview(messageId: messageId, contentPreview: content) }
         case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened, .citedPostWithdrawn,
-             .senderRepainted:
+             .attachmentRemoved, .senderRepainted:
             return
         }
     }

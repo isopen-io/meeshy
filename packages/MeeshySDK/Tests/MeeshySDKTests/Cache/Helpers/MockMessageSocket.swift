@@ -25,6 +25,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
+    let attachmentDeleted = PassthroughSubject<AttachmentDeletedEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()

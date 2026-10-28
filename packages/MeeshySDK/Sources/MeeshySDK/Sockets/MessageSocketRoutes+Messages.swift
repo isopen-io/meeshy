@@ -27,6 +27,7 @@ extension MessageSocketRoutes {
             m.route(.readStatusUpdated, ReadStatusUpdateEvent.self) { $0.readStatusUpdated.send($1) },
             m.route(.attachmentStatusUpdated, AttachmentStatusUpdatedEvent.self) { $0.attachmentStatusUpdated.send($1) },
             m.route(.messagePendingDelivered, PendingMessagesDeliveredEvent.self) { $0.pendingMessagesDelivered.send($1) },
+            m.route(.attachmentDeleted, AttachmentDeletedEvent.self) { $0.attachmentDeleted.send($1) },
             m.route(.messageAttachmentUpdated, AttachmentUpdatedEvent.self) { $0.attachmentUpdated.send($1) },
         ]
     }

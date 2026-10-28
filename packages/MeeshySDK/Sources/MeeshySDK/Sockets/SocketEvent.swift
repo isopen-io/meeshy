@@ -1,5 +1,6 @@
 public enum SocketEvent: String, CaseIterable, Sendable {
     case attachmentStatusUpdated = "attachment-status:updated"
+    case attachmentDeleted = "attachment:deleted"
     case attachmentReactionAdd = "attachment:reaction-add"
     case attachmentReactionAdded = "attachment:reaction-added"
     case attachmentReactionRemove = "attachment:reaction-remove"
