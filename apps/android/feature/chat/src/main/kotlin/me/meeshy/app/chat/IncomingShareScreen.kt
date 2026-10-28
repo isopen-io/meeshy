@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.share.ShareLimits
 
@@ -55,7 +56,17 @@ fun IncomingShareScreen(
         items = items,
         onDismiss = onFinished,
         onOpenConversation = onOpenConversation,
-        onEditInStudio = onEditInStudio.takeIf { items.isNotEmpty() },
+        onEditInStudio = onEditInStudio.takeIf { studioCanEdit(items) },
     )
 }
 
+
+/**
+ * Le studio retouche des photos et des vidéos : un document (PDF, tableur…) n'y entre pas, et une sélection qui en
+ * contient un ne propose pas « Modifier dans le studio » (le document serait écarté en silence) — elle part comme fichiers (#13585).
+ */
+internal fun studioCanEdit(items: List<MediaUploadItem>): Boolean =
+    items.isNotEmpty() && items.all {
+        val type = AttachmentMessageType.forMime(it.mimeType)
+        type == AttachmentMessageType.IMAGE || type == AttachmentMessageType.VIDEO
+    }

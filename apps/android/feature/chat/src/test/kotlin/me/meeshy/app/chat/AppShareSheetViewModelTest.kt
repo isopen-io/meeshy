@@ -287,6 +287,30 @@ class AppShareSheetViewModelTest {
     }
 
     @Test
+    fun a_mixed_selection_of_photo_video_and_document_leaves_one_typed_message_each_and_the_document_stays_a_file() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.bindIncoming(null, listOf(file("a.jpg", "image/jpeg"), file("b.mp4", "video/mp4"), file("contrat.pdf", "application/pdf"), file("notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "video", attachmentUploadCmids = any(), attachments = any()) }
+        coVerify(exactly = 2) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "file", attachmentUploadCmids = any(), attachments = match { it.single().mimeType in setOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") && it.single().fileName?.contains('.') == true }) }
+        assertThat(h.model().deliveries.values).containsExactly(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun a_document_in_the_selection_keeps_the_studio_offer_away_but_photos_and_videos_keep_it() {
+        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("b.mp4", "video/mp4")))).isTrue()
+        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("c.pdf", "application/pdf")))).isFalse()
+        assertThat(studioCanEdit(listOf(file("c.pdf", "application/pdf")))).isFalse()
+        assertThat(studioCanEdit(emptyList())).isFalse()
+    }
+
+    @Test
     fun an_incoming_share_with_nothing_cannot_be_sent() = runTest(dispatcher) {
         val h = harness()
         h.vm.bindIncoming(null, emptyList())
