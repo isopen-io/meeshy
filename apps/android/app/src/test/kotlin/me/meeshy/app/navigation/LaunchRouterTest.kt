@@ -336,6 +336,20 @@ class LaunchRouterTest {
         assertThat(LaunchRouter.onCreateRoute("conversations", restored = true)).isEqualTo("conversations")
     }
 
+    // #13504 — une activité RECRÉÉE (changement de thème, de langue, de densité, mort du processus) relit l'intent
+    // ORIGINAL, preuve d'appel intacte. Le bouton « Répondre » relu là faisait redécrocher, micro ouvert, un appel de
+    // groupe que l'utilisateur avait quitté et qui durait encore : la demande d'appel a déjà été présentée.
+    @Test
+    fun `a recreated activity never replays a call launch, answered or ringing`() {
+        val answer = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = true)
+        val ringing = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = false)
+
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(ringing, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = false)).isEqualTo(answer)
+        assertThat(LaunchRouter.onCreateRoute(Routes.chat("conv-1"), restored = true)).isEqualTo(Routes.chat("conv-1"))
+    }
+
     @Test
     fun `every email link the manifest claims is a link the router reads - none is swallowed`() {
         val manifest = java.io.File("src/main/AndroidManifest.xml").readText()

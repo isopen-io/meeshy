@@ -39,6 +39,11 @@ object CallRoute {
             "&$INCOMING_ARG={$INCOMING_ARG}" +
             "&$ANSWER_ARG={$ANSWER_ARG}"
 
+    /** Une route qui mène à l'écran d'appel, quels que soient ses arguments. */
+    fun isCallRoute(route: String?): Boolean = route == CALL_PATH || route?.startsWith("$CALL_PATH?") == true
+
+    private const val CALL_PATH = "call"
+
     /**
      * Build the concrete route for an outgoing call placed from a chat. The
      * conversation id and the free-text peer name are percent-encoded so a value
