@@ -38,6 +38,7 @@
     <string name="composer_chip_style_typewriter">آلة كاتبة</string>
     <string name="composer_column_media_alt_text">وصف</string>
     <string name="composer_column_media_filter">فلاتر</string>
+    <string name="composer_column_media_trim">اقتصاص</string>
     <string name="composer_column_text_frame">إطار النص</string>
     <string name="composer_column_text_language">لغة النص</string>
     <string name="composer_column_text_plan">الخط الزمني</string>

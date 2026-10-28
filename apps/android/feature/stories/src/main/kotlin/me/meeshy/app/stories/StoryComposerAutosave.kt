@@ -4,6 +4,8 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftAnnotations
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
+import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.scene.wireValue
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
@@ -172,6 +174,8 @@ fun StorySlideDeck.toDraftSnapshot(
             backdrop = it.frame.backdrop,
             opening = it.frame.opening?.let(SceneFrame::wire),
             closing = it.frame.closing?.let(SceneFrame::wire),
+            mediaFilters = it.mediaFilters.mapValues { (_, filter) -> filter.wireValue() },
+            soundSources = it.soundSources,
         )
     },
     selectedId = selectedId,
@@ -212,6 +216,10 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 backgroundMediaId = it.backgroundMediaId,
                 backgroundLoop = it.backgroundLoop,
                 audio = it.audio,
+                soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
+                mediaFilters = it.mediaFilters.mapNotNull { (id, token) ->
+                    StoryFilter.entries.firstOrNull { f -> f.wireValue() == token }?.let { id to it }
+                }.toMap().filterKeys { id -> id in it.mediaIds },
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

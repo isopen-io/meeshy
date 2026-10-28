@@ -45,7 +45,7 @@ private val StoryComposerUiState.servedSections: List<ComposerObjectEditorSectio
         isEditingTextElement -> ServedTextSections
         selectedSticker != null -> ServedStickerSections
         selectedMedia != null -> ServedMediaSections
-        selectedSound != null -> ServedSoundSections
+        selectedSound != null -> servedSoundSections
         else -> emptyList()
     }
 

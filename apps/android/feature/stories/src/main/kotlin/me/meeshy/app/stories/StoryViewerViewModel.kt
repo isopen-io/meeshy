@@ -831,6 +831,7 @@ class StoryViewerViewModel @Inject constructor(
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
             sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
+            lookRecipe = SceneLookRecipe.forMedia(this),
         ).bounded()
     }
 

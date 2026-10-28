@@ -52,6 +52,8 @@ data class StoryForegroundMediaView(
      * qu'il y est.
      */
     val sourceWindow: StorySourceWindowMs? = null,
+    /** Le look PROPRE de ce média (son filtre, ses réglages) : il ne colore que lui, jamais la scène. */
+    val lookRecipe: me.meeshy.sdk.model.scene.SceneLookRecipe = me.meeshy.sdk.model.scene.SceneLookRecipe.NEUTRAL,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`

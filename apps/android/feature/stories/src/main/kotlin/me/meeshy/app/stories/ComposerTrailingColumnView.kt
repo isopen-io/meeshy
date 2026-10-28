@@ -173,6 +173,7 @@ private fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     is ComposerObjectEditorSection.Media -> when (tool) {
         MediaEditTool.FILTER -> MeeshyIcons.PhotoFilter
         MediaEditTool.ALT_TEXT -> MeeshyIcons.TextFields
+        MediaEditTool.TRIM -> MeeshyIcons.Cut
         else -> MeeshyIcons.Layers
     }
     ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
@@ -199,6 +200,7 @@ private fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
     is ComposerObjectEditorSection.Media -> when (tool) {
         MediaEditTool.FILTER -> R.string.composer_column_media_filter
         MediaEditTool.ALT_TEXT -> R.string.composer_column_media_alt_text
+        MediaEditTool.TRIM -> R.string.composer_column_media_trim
         else -> R.string.composer_column_text_plan
     }
 }

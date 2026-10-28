@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.scene.wireValue
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 
@@ -26,6 +28,8 @@ data class StoryBackgroundMedia(
     val durationSeconds: Double?,
     val loop: Boolean = true,
     val framing: StoryBackgroundFraming = StoryBackgroundFraming.IDENTITY,
+    /** Le filtre PROPRE de ce média (#13598) : il voyage sur l'objet, à côté de celui de la scène qui reste sur les effets. */
+    val filter: StoryFilter? = null,
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
@@ -65,5 +69,6 @@ data class StoryBackgroundMedia(
             loop = if (isVideo) loop else true,
             intrinsicDuration = publishableDuration?.takeIf { isVideo },
             duration = publishableDuration?.takeIf { isVideo },
+            filter = filter?.wireValue(),
         )
 }

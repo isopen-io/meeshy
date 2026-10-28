@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.scene
 import me.meeshy.sdk.model.ImageAdjustments as WireAdjustments
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.imageedit.ImageEditState
 import me.meeshy.sdk.model.imageedit.ImageEffect
 import me.meeshy.sdk.model.imageedit.ImageFilter
@@ -53,17 +54,26 @@ data class SceneLookRecipe(
         fun filterOf(effects: StoryEffects): StoryFilter? =
             effects.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } }
 
-        /** Le look du FOND de ces effets : le filtre de slide, puis les réglages du média de fond. */
+        /**
+         * Le look du FOND de ces effets : le filtre de slide, le filtre propre du média de fond s'il en porte un
+         * (posé APRÈS celui de la scène, sans intensité, comme iOS pour un objet), puis les réglages du média.
+         */
         fun forEffects(effects: StoryEffects?): SceneLookRecipe {
             if (effects == null) return NEUTRAL
             val background = effects.mediaObjects.orEmpty().firstOrNull { it.isBackground }
-            return forStory(
+            val scene = forStory(
                 filter = filterOf(effects),
                 intensity = (effects.filterIntensity ?: 1.0).toFloat(),
                 adjustments = background?.adjustments,
                 isVideo = background?.mediaType == "video",
             )
+            val own = background?.parsedFilter ?: return scene
+            return scene.copy(filterMatrix = SceneLookMatrix.compose(scene.filterMatrix, StoryFilterMatrix.effectiveMatrix(own, 1f)))
         }
+
+        /** Le look d'UN média posé : SON filtre (à pleine force) puis ses réglages — jamais le filtre de la scène. */
+        fun forMedia(media: StoryMediaObject): SceneLookRecipe =
+            forStory(media.parsedFilter, 1f, media.adjustments, media.mediaType == "video")
 
         /** Le look complet d'un état d'éditeur d'image (filtre, réglages, effet). */
         fun forEdit(state: ImageEditState): SceneLookRecipe {

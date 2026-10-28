@@ -193,7 +193,7 @@ internal fun FilterRow(
     selected: StoryFilter?,
     intensity: Float,
     onSelect: (StoryFilter?) -> Unit,
-    onIntensityChange: (Float) -> Unit,
+    onIntensityChange: ((Float) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -219,7 +219,7 @@ internal fun FilterRow(
                 )
             }
         }
-        if (selected != null) {
+        if (selected != null && onIntensityChange != null) {
             val intensityLabel = stringResource(R.string.stories_composer_filter_intensity)
             Slider(
                 value = intensity,

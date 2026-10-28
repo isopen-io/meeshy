@@ -15,6 +15,10 @@ internal object StoryComposerBackgroundReducer {
     fun filterSelected(state: StoryComposerUiState, filter: StoryFilter?): StoryComposerUiState =
         state.withDeckTransform { it.setSelectedFilter(filter) }
 
+    /** Le filtre du média touché : porté par ce média seul, la scène et ses autres médias gardent leur regard. */
+    fun mediaFilterSelected(state: StoryComposerUiState, mediaId: String, filter: StoryFilter?): StoryComposerUiState =
+        state.withDeckTransform { it.setMediaFilter(mediaId, filter) }
+
     fun filterIntensityChanged(state: StoryComposerUiState, intensity: Float): StoryComposerUiState =
         state.withDeckTransform { it.setSelectedFilterIntensity(intensity) }
 

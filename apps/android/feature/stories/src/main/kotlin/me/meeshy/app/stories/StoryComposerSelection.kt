@@ -7,20 +7,34 @@ import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffects
+import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
+import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
  * Les sections de l'éditeur d'un MÉDIA que ce meuble sert : `ComposerObjectEditorRail.entries(MEDIA)` restreint à celles
- * dont l'effet est câblé (loi 4 — aucun bouton inerte). Le filtre est celui de la scène (la slide rend un seul regard),
+ * dont l'effet est câblé (loi 4 — aucun bouton inerte). Le filtre est celui du MÉDIA (la scène garde le sien dans l'effet Visuel),
  * le texte alternatif celui du média, le plan la frise des pistes. Ajustements, effets, rognage et actions attendent
  * leur moteur ; un média n'a pas de fenêtre de temps propre.
  */
 internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
 
-/** Les sections d'un SON : son départ et sa durée, puis le plan. Le rognage d'une piste attend son éditeur. */
-internal val ServedSoundSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.AUDIO)
-    .filter { it != ComposerObjectEditorSection.Media(MediaEditTool.TRIM) }
+/** Les sections d'un SON sans source rognable (aucune adresse ou durée inconnue) : son départ et sa durée, puis le plan. */
+internal val ServedSoundSections: List<ComposerObjectEditorSection> =
+    ComposerObjectEditorRail.entries(ComposerObjectKind.AUDIO, hasTrimmableSource = false)
+
+/** Celles d'un son dont on connaît la source (#13601) : sa fenêtre propre d'abord, comme iOS. */
+internal val ServedTrimmableSoundSections: List<ComposerObjectEditorSection> =
+    ComposerObjectEditorRail.entries(ComposerObjectKind.AUDIO)
+
+/** La durée de SOURCE de la piste touchée, `null` si elle n'est pas rognable. */
+internal fun StoryComposerUiState.trimSourceOf(sound: StoryAudioPlayerObject): Double? =
+    SoundTrimLaw.sourceSeconds(sound, deck.selectedSlide.soundSources[sound.id]).takeIf { SoundTrimLaw.isTrimmable(sound, deck.selectedSlide.soundSources[sound.id]) }
+
+/** Les sections que la piste touchée sert : le rognage seulement si sa source est connue. */
+internal val StoryComposerUiState.servedSoundSections: List<ComposerObjectEditorSection>
+    get() = selectedSound?.let { if (trimSourceOf(it) != null) ServedTrimmableSoundSections else ServedSoundSections } ?: ServedSoundSections
 
 /** Le média touché, s'il vit encore sur la slide sélectionnée (jamais un identifiant périmé). */
 internal val StoryComposerUiState.selectedMedia: String?
@@ -34,7 +48,7 @@ internal val StoryComposerUiState.openMediaSection: ComposerObjectEditorSection
     get() = openObjectSection?.takeIf { it in ServedMediaSections } ?: ServedMediaSections.first()
 
 internal val StoryComposerUiState.openSoundSection: ComposerObjectEditorSection
-    get() = openObjectSection?.takeIf { it in ServedSoundSections } ?: ServedSoundSections.first()
+    get() = servedSoundSections.let { served -> openObjectSection?.takeIf { it in served } ?: served.first() }
 
 /** Les effets de la scène servis par son fond (aucun fond média, aucun effet — loi 4). */
 internal val StoryComposerUiState.servedSceneEffects: List<ComposerSceneEffect>
@@ -93,6 +107,17 @@ internal object StoryComposerSelectionReducer {
     /** Le départ du son avance d'un cran, comme celui d'un texte ou d'un sticker ; la durée est intacte. */
     fun soundStartCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
         state.withSoundTiming(id) { it.cycledStart() }
+
+    /**
+     * La fenêtre propre du son [id] dans sa source (#13601) : bornes ramenées dans la source par la loi, durée occupée
+     * recalculée, durée de source retenue pour que la bande reste juste une fois la fenêtre posée.
+     */
+    fun soundTrimmed(state: StoryComposerUiState, id: String, bounds: MediaTrimBounds): StoryComposerUiState {
+        val sound = state.deck.selectedSlide.audio.firstOrNull { it.id == id } ?: return state
+        val source = state.trimSourceOf(sound) ?: return state
+        val deck = state.deck.withSelectedSoundSource(id, source.toFloat())
+        return state.copy(deck = deck.updateSelectedSound(id) { SoundTrimLaw.trimmed(it, bounds, source) })
+    }
 
     fun soundDurationCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
         state.withSoundTiming(id) { it.cycledDuration() }

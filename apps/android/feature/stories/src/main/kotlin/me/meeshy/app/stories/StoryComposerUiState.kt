@@ -224,6 +224,19 @@ data class StoryComposerUiState(
     val selectedSlideFilterMatrix: StoryColorMatrix
         get() = StoryFilterMatrix.effectiveMatrix(selectedSlideFilter, selectedSlideFilterIntensity)
 
+    /** Le filtre PROPRE d'un média de la slide sélectionnée, `null` s'il n'en porte pas. */
+    fun mediaFilterOf(mediaId: String): StoryFilter? = deck.selectedSlide.mediaFilters[mediaId]
+
+    /**
+     * Ce que le plateau peint : le filtre de la scène, puis celui du média qu'il montre (le premier de la slide),
+     * à pleine force. Sans filtre propre, c'est exactement la matrice de la scène.
+     */
+    val canvasFilterMatrix: StoryColorMatrix
+        get() {
+            val own = selectedSlideAttachments.firstOrNull()?.let { mediaFilterOf(it.id) } ?: return selectedSlideFilterMatrix
+            return me.meeshy.sdk.model.scene.SceneLookMatrix.compose(selectedSlideFilterMatrix, StoryFilterMatrix.effectiveMatrix(own, 1f))
+        }
+
     /**
      * The text element currently being edited — the [selectedTextElementId] resolved
      * against the **selected** slide. Null when nothing is being edited (caption mode)
