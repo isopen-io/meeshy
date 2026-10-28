@@ -1,0 +1,9 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_link_confirm_audio">Appeler %s en audio ?</string>
+    <string name="call_link_confirm_call">Appeler</string>
+    <string name="call_link_confirm_cancel">Annuler</string>
+    <string name="call_link_confirm_video">Appeler %s en vidéo ?</string>
+    <string name="call_link_refused_blocked">Vous avez bloqué ce contact</string>
+    <string name="call_link_refused_unknown">Ce contact est introuvable</string>
+</resources>
