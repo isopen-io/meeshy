@@ -184,10 +184,11 @@ public class TusUploadRepository @Inject constructor(
     public suspend fun uploadAll(
         items: List<MediaUploadItem>,
         context: TusUploadContext,
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
     ): NetworkResult<List<UploadedMedia>> {
         val uploaded = mutableListOf<UploadedMedia>()
-        for (item in items) {
-            when (val result = upload(item, context)) {
+        for ((index, item) in items.withIndex()) {
+            when (val result = upload(item, context) { sent, total -> onProgress(index, sent, total) }) {
                 is NetworkResult.Success -> uploaded += result.data
                 is NetworkResult.Failure -> return result
             }
