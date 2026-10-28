@@ -31,24 +31,13 @@ val StoryComposerUiState.sceneContextMenu: SceneObjectContextMenu?
         elementMenuId?.takeIf { id -> slide.elements.any { it.id == id } }?.let { id ->
             return SceneObjectContextMenu(
                 SceneObjectRef(ComposerObjectKind.TEXT, id),
-                SceneObjectMenu.offered(
-                    SceneObjectMenu.Subject(
-                        sharesPlaneWithAnother = slide.elements.size > 1,
-                        hasEditor = true,
-                        canDuplicate = deck.selectedCanAddTextElement,
-                    ),
-                ),
+                SceneObjectMenu.offered(textSubject()),
             )
         }
         return stickerMenuId?.takeIf { id -> slide.stickers.any { it.id == id } }?.let { id ->
             SceneObjectContextMenu(
                 SceneObjectRef(ComposerObjectKind.STICKER, id),
-                SceneObjectMenu.offered(
-                    SceneObjectMenu.Subject(
-                        sharesPlaneWithAnother = slide.stickers.size > 1,
-                        canDuplicate = deck.selectedCanAddSticker,
-                    ),
-                ),
+                SceneObjectMenu.offered(stickerSubject()),
             )
         }
     }
@@ -96,3 +85,31 @@ val StoryComposerUiState.sceneTracks: List<Plan2DTrack>
 /** Les pistes dont la fenêtre se règle à la main : un texte, un sticker — le son et le fond se lisent seulement. */
 val StoryComposerUiState.sceneEditableTrackIds: Set<String>
     get() = deck.selectedSlide.let { slide -> slide.elements.map { it.id } + slide.stickers.map { it.id } }.toSet()
+
+private fun StoryComposerUiState.textSubject() = SceneObjectMenu.Subject(
+    sharesPlaneWithAnother = deck.selectedSlide.elements.size > 1,
+    hasEditor = true,
+    canDuplicate = deck.selectedCanAddTextElement,
+)
+
+private fun StoryComposerUiState.stickerSubject() = SceneObjectMenu.Subject(
+    sharesPlaneWithAnother = deck.selectedSlide.stickers.size > 1,
+    canDuplicate = deck.selectedCanAddSticker,
+)
+
+private val controllerActions = listOf(
+    SceneObjectMenu.Action.DUPLICATE, SceneObjectMenu.Action.BRING_FORWARD,
+    SceneObjectMenu.Action.SEND_BACKWARD, SceneObjectMenu.Action.DELETE,
+)
+
+/**
+ * Les contrôleurs de l'objet SÉLECTIONNÉ (empilement, dupliquer, supprimer) : ce que la loi [SceneObjectMenu] lui sert,
+ * restreint aux actions de dimension — éditer et rogner ont leurs propres chemins. Ils vivent dans la colonne de droite
+ * du plateau (iOS `ComposerTrailingRail`), jamais sur la scène.
+ */
+val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
+    get() {
+        val ref = selectedSceneObject ?: return null
+        val subject = if (ref.kind == ComposerObjectKind.TEXT) textSubject() else stickerSubject()
+        return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in controllerActions })
+    }
