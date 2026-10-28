@@ -760,9 +760,12 @@ class StoryViewerViewModel @Inject constructor(
     /**
      * Resolves the slide's single background layer. `storyEffects.mediaObjects`
      * (the modern, RAW-publish wire shape) is authoritative when present: the
-     * object flagged `isBackground` carries its own `mediaURL` + kind, so no
-     * cross-referencing against the flat `media[]` list is needed. Legacy
-     * stories without `storyEffects.mediaObjects` fall back to the flat list,
+     * object flagged `isBackground` is read at its own `mediaURL`, else at the
+     * story piece its `postMediaId` names (#13605 : un fond publié depuis la file
+     * hors ligne n'a pas d'adresse, seulement l'identifiant que la greffe lui a
+     * donné — iOS et le web le lisent de même). An object that names a piece the
+     * story does not carry never lends its framing, loop or window to another one.
+     * Legacy stories without `storyEffects.mediaObjects` fall back to the flat list,
      * preferring a VIDEO item over an IMAGE one — critically, a video's own
      * `.url` is only ever assigned to [BackgroundMedia.videoUrl], never to
      * [BackgroundMedia.imageUrl] (the historical bug: Coil can't decode a video
@@ -770,34 +773,35 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun StoryItem.resolveBackgroundMedia(): BackgroundMedia {
         val backgroundObject = storyEffects?.mediaObjects?.firstOrNull { it.isBackground }
+        val designatedId = backgroundObject?.postMediaId?.takeIf { it.isNotBlank() }
+        val ownUrl = backgroundObject?.mediaURL ?: designatedId?.let { id -> media.firstOrNull { it.id == id }?.url }
+        val governing = backgroundObject?.takeIf { ownUrl != null || designatedId == null }
         val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
             ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
 
-        val isVideo = backgroundObject?.mediaType == "video" ||
-            (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
-        val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
-            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        val isVideo = governing?.let { it.mediaType == "video" } ?: (fallbackMedia?.type == FeedMediaType.VIDEO)
+        val resolvedUrl = (ownUrl ?: fallbackMedia?.url)?.let { resolveMediaUrl(it, config.apiBaseUrl) }
 
         if (isVideo) {
             // The framing rides only on a modern `isBackground` object whose OWN
-            // mediaURL produced the resolved url; a legacy/flat fallback video never
-            // carries one, so it stays a plain aspect-fill (IDENTITY). The viewer
-            // applies the projection to the player surface via `graphicsLayer`, the
-            // exact mirror of the image branch (iOS's "zoom inside the background").
-            val videoTransform = backgroundObject
-                ?.takeIf { it.mediaURL != null && resolvedUrl != null }
+            // address (its mediaURL, or the piece it names) produced the resolved url;
+            // a legacy/flat fallback video never carries one, so it stays a plain
+            // aspect-fill (IDENTITY). The viewer applies the projection to the player
+            // surface via `graphicsLayer`, the exact mirror of the image branch.
+            val videoTransform = governing
+                ?.takeIf { ownUrl != null && resolvedUrl != null }
                 ?.let { StoryBackgroundObjectTransform.from(it) }
                 ?: StoryBackgroundObjectTransform.IDENTITY
             return BackgroundMedia(
                 imageUrl = null,
                 videoUrl = resolvedUrl,
-                loop = backgroundObject?.loop ?: true,
+                loop = governing?.loop ?: true,
                 transform = videoTransform,
                 // La fenêtre ne vient QUE d'un objet moderne : un fond hérité
                 // (plat, sans objet) n'a jamais porté de bornes, et lui en
                 // fabriquer une serait inventer une coupe.
                 window = StorySourceWindow.clippingMs(
-                    backgroundObject?.sourceStart, backgroundObject?.sourceEnd,
+                    governing?.sourceStart, governing?.sourceEnd,
                 ),
             )
         }
@@ -805,7 +809,7 @@ class StoryViewerViewModel @Inject constructor(
             ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         // The framing rides only on a modern `isBackground` object; a legacy/flat
         // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
-        val transform = backgroundObject
+        val transform = governing
             ?.takeIf { imageUrl == resolvedUrl && resolvedUrl != null }
             ?.let { StoryBackgroundObjectTransform.from(it) }
             ?: StoryBackgroundObjectTransform.IDENTITY
