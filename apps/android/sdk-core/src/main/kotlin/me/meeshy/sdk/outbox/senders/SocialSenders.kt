@@ -57,18 +57,26 @@ public class PublishStoryHandler @Inject constructor(
 }
 
 /**
- * Un j'aime, un favori ou leur retrait que le serveur dit DÉJÀ acquis est un succès idempotent (#13588). Seul
- * `POST /posts/:id/like` rend 409 aujourd'hui (`REACTION_LIMIT_REACHED` : cinq réactions déjà posées, donc le post est
- * déjà aimé côté serveur, `isLikedByMe` valant « au moins une réaction »). 410 `MUTATION_RESULT_GONE` n'est servi par
- * aucune de ces quatre routes (j'aime et retrait déclarent `replayCost: 'converges'`, le rejeu est rejoué) ; il est
- * accepté pour qu'une passerelle qui le servirait ne fasse pas réessayer jusqu'à l'épuisement, puis DÉFAIRE le geste.
+ * Ce que la file d'envoi d'un j'aime, d'un favori ou de leur retrait fait de la réponse de la passerelle (#13588, #13594).
+ * - 409 / 410 : le serveur dit DÉJÀ acquis le geste, succès idempotent. Seul `POST /posts/:id/like` rend 409
+ *   (`REACTION_LIMIT_REACHED` : cinq réactions déjà posées, donc le post est déjà aimé côté serveur). 410
+ *   `MUTATION_RESULT_GONE` n'est servi par aucune des quatre routes (`replayCost: 'converges'`), il est accepté par
+ *   prudence.
+ * - 400 / 403 / 404 / 422 : refus DÉFINITIF (post supprimé, privé ou bloqué : `POST_NOT_FOUND` ; emoji invalide ; accès
+ *   refusé). Le réessayer ne changera rien : échec immédiat, le geste est défait tout de suite.
+ * - tout le reste (401 le temps d'un renouvellement de session, 408, 429, 5xx, réseau) : transitoire, réessayé.
  */
-internal fun NetworkResult<*>.toToggleSendResult(): SendResult = when {
-    this is NetworkResult.Failure && error.httpStatus in ALREADY_APPLIED_STATUSES -> SendResult.Success
-    else -> toSendResult()
+internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
+    val status = (this as? NetworkResult.Failure)?.error?.httpStatus
+    return when (status) {
+        in ALREADY_APPLIED_STATUSES -> SendResult.Success
+        in DEFINITIVE_REFUSALS -> SendResult.PermanentFailure("Refused: HTTP $status")
+        else -> toSendResult()
+    }
 }
 
 private val ALREADY_APPLIED_STATUSES = setOf(409, 410)
+private val DEFINITIVE_REFUSALS = setOf(400, 403, 404, 422)
 
 /** `LIKE_POST`: likes the post; an exhausted like rolls the optimistic flip back to unliked. */
 public class LikePostHandler @Inject constructor(
@@ -77,10 +85,10 @@ public class LikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.like(row.targetId) }.toToggleSendResult()
+        apiCall { postApi.like(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = false)
+        postRepository.rollbackLike(row.targetId, liked = false, cmid = row.cmid)
     }
 }
 
@@ -91,10 +99,10 @@ public class UnlikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.unlike(row.targetId) }.toToggleSendResult()
+        apiCall { postApi.unlike(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = true)
+        postRepository.rollbackLike(row.targetId, liked = true, cmid = row.cmid)
     }
 }
 
@@ -105,10 +113,10 @@ public class BookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.bookmark(row.targetId) }.toToggleSendResult()
+        apiCall { postApi.bookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = false)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = false, cmid = row.cmid)
     }
 }
 
@@ -119,10 +127,10 @@ public class UnbookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.removeBookmark(row.targetId) }.toToggleSendResult()
+        apiCall { postApi.removeBookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = true)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = true, cmid = row.cmid)
     }
 }
 

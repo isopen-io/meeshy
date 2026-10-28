@@ -1,6 +1,5 @@
 package me.meeshy.sdk.post
 
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,15 +92,14 @@ class PostRepository @Inject constructor(
     private var feedCursor: String? = null
 
     /**
-     * Ce que le geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), par post (#13588). Une ligne
+     * Ce que chaque geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), UNE trace par ligne de la
+     * file d'envoi (#13594, [GestureTraces]) — #13588 n'en gardait qu'une par post. Une ligne
      * relue du serveur (rafraîchissement du fil) porte l'état du lecteur et efface la trace : rien à défaire. Un écho
      * `post:updated` n'est pas personnalisé : il réécrit le compteur, jamais l'état du lecteur — le retour arrière rend
      * alors l'état d'avant le geste et garde le compteur servi.
      */
-    private class OptimisticFlip(val state: Boolean, val count: Int)
-
-    private val likeFlips = ConcurrentHashMap<String, OptimisticFlip>()
-    private val bookmarkFlips = ConcurrentHashMap<String, OptimisticFlip>()
+    private val likeFlips = GestureTraces()
+    private val bookmarkFlips = GestureTraces()
     private val _feedHasMore = MutableStateFlow(true)
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
@@ -178,15 +176,18 @@ class PostRepository @Inject constructor(
             it.copy(isLikedByMe = !wasLiked, likeCount = adjustedCount(it.likeCount, wasLiked))
         }.orClosed() ?: return false
         val wasLiked = before.isLikedByMe == true
-        likeFlips[postId] = OptimisticFlip(!wasLiked, adjustedCount(before.likeCount, wasLiked))
-
-        outboxRepository.enqueue(
+        enqueueTraced(
+            likeFlips,
+            postId,
             OutboxMutation(
                 kind = if (wasLiked) OutboxKind.UNLIKE_POST else OutboxKind.LIKE_POST,
                 lane = OutboxLanes.SOCIAL,
                 targetId = postId,
                 payload = "",
             ),
+            revertTo = wasLiked,
+            state = !wasLiked,
+            count = adjustedCount(before.likeCount, wasLiked),
         )
         return true
     }
@@ -211,32 +212,28 @@ class PostRepository @Inject constructor(
      * outbox mutation, and mirrors the feed cache when the post sits there and differs.
      */
     suspend fun setLiked(postId: String, liked: Boolean) {
-        rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }?.before?.let {
-            likeFlips[postId] = OptimisticFlip(liked, adjustedCount(it.likeCount, wasSet = !liked))
-        }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
-                lane = OutboxLanes.SOCIAL,
-                targetId = postId,
-                payload = "",
-            ),
+        val flipped = rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }?.before
+        val mutation = OutboxMutation(
+            kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
+            lane = OutboxLanes.SOCIAL,
+            targetId = postId,
+            payload = "",
         )
+        if (flipped == null) outboxRepository.enqueue(mutation)
+        else enqueueTraced(likeFlips, postId, mutation, !liked, liked, adjustedCount(flipped.likeCount, wasSet = !liked))
     }
 
     /** The bookmark analogue of [setLiked]. */
     suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
-        rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }?.before?.let {
-            bookmarkFlips[postId] = OptimisticFlip(bookmarked, adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
-        }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
-                lane = OutboxLanes.SOCIAL,
-                targetId = postId,
-                payload = "",
-            ),
+        val flipped = rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }?.before
+        val mutation = OutboxMutation(
+            kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
+            lane = OutboxLanes.SOCIAL,
+            targetId = postId,
+            payload = "",
         )
+        if (flipped == null) outboxRepository.enqueue(mutation)
+        else enqueueTraced(bookmarkFlips, postId, mutation, !bookmarked, bookmarked, adjustedCount(flipped.bookmarkCount, wasSet = !bookmarked))
     }
 
     /**
@@ -252,15 +249,40 @@ class PostRepository @Inject constructor(
      * state is reverted and the served count is kept: applying the delta to it would
      * double-count (#13588).
      */
-    suspend fun rollbackLike(postId: String, liked: Boolean) {
-        val flip = likeFlips.remove(postId)?.takeIf { it.state == !liked } ?: return
+    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null) {
+        val refusal = likeFlips.take(postId, cmid, liked)?.takeUnless { it.overridden } ?: return
+        val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
             when {
                 (it.isLikedByMe == true) != flip.state -> null
-                (it.likeCount ?: 0) == flip.count -> likeRow(it, liked)
-                else -> it.copy(isLikedByMe = liked)
+                (it.likeCount ?: 0) == flip.count -> likeRow(it, flip.revertTo)
+                else -> it.copy(isLikedByMe = flip.revertTo)
             }
         }
+    }
+
+    /** La ligne [cmid] est livrée : la trace de son geste n'a plus de retour arrière à porter. */
+    fun settleGesture(cmid: String) {
+        likeFlips.discard(cmid)
+        bookmarkFlips.discard(cmid)
+    }
+
+    /**
+     * Pose la trace du geste sous le `cmid` de SA ligne, puis la met en file. Une mutation que la file annule par son
+     * contraire ne crée aucune ligne : sa trace sort avec elle, et celles des lignes que la file vient de retirer (annulées
+     * ou remplacées) aussi — une trace orpheline ferait croire à un geste plus récent qui ne partira jamais.
+     */
+    private suspend fun enqueueTraced(
+        traces: GestureTraces,
+        postId: String,
+        mutation: OutboxMutation,
+        revertTo: Boolean,
+        state: Boolean,
+        count: Int,
+    ) {
+        traces.record(mutation.cmid, postId, revertTo, state, count)
+        if (outboxRepository.enqueue(mutation) == null) traces.discard(mutation.cmid)
+        traces.cmidsOf(postId).filter { it != mutation.cmid && outboxRepository.stateOf(it) == null }.forEach(traces::discard)
     }
 
     private fun likeRow(row: ApiPost, liked: Boolean): ApiPost? =
@@ -320,15 +342,18 @@ class PostRepository @Inject constructor(
             it.copy(isBookmarkedByMe = !wasBookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasBookmarked))
         }.orClosed() ?: return false
         val wasBookmarked = before.isBookmarkedByMe == true
-        bookmarkFlips[postId] = OptimisticFlip(!wasBookmarked, adjustedCount(before.bookmarkCount, wasBookmarked))
-
-        outboxRepository.enqueue(
+        enqueueTraced(
+            bookmarkFlips,
+            postId,
             OutboxMutation(
                 kind = if (wasBookmarked) OutboxKind.UNBOOKMARK_POST else OutboxKind.BOOKMARK_POST,
                 lane = OutboxLanes.SOCIAL,
                 targetId = postId,
                 payload = "",
             ),
+            revertTo = wasBookmarked,
+            state = !wasBookmarked,
+            count = adjustedCount(before.bookmarkCount, wasBookmarked),
         )
         return true
     }
@@ -342,13 +367,14 @@ class PostRepository @Inject constructor(
      * state). [bookmarked] is the value to revert TO; the count is recomputed as
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
-    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean) {
-        val flip = bookmarkFlips.remove(postId)?.takeIf { it.state == !bookmarked } ?: return
+    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null) {
+        val refusal = bookmarkFlips.take(postId, cmid, bookmarked)?.takeUnless { it.overridden } ?: return
+        val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
             when {
                 (it.isBookmarkedByMe == true) != flip.state -> null
-                (it.bookmarkCount ?: 0) == flip.count -> bookmarkRow(it, bookmarked)
-                else -> it.copy(isBookmarkedByMe = bookmarked)
+                (it.bookmarkCount ?: 0) == flip.count -> bookmarkRow(it, flip.revertTo)
+                else -> it.copy(isBookmarkedByMe = flip.revertTo)
             }
         }
     }
@@ -403,7 +429,7 @@ class PostRepository @Inject constructor(
                     }
                     fence.commitOrWrite(ticket) {
                         _feedCache.value = page
-                        page.forEach { likeFlips.remove(it.id); bookmarkFlips.remove(it.id) }
+                        page.forEach { likeFlips.forgetPost(it.id); bookmarkFlips.forgetPost(it.id) }
                         _feedSyncedAt.value = clock.nowMillis()
                         feedCursor = response.pagination?.nextCursor
                         _feedHasMore.value = response.pagination?.hasMore ?: false
