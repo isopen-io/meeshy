@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.SceneEntryWindow
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /** Réducteurs de l'éditeur de scène : fenêtres d'objet, menu d'appui long des stickers, frise. */
@@ -51,6 +53,40 @@ internal object StoryComposerSceneReducer {
             slide.elements.any { it.id == id } -> StoryComposerTextReducer.selected(state, id)
             slide.stickers.any { it.id == id } -> StoryComposerStickerReducer.selected(state, id)
             else -> state
+        }
+    }
+
+    /**
+     * **Animé** (miroir de `toggleSceneAnimation` iOS, #8415) : allumer rend la scène animée ET ouvre sa frise, la tête
+     * à zéro ; éteindre referme la frise et rend la scène statique.
+     */
+    fun animationToggled(state: StoryComposerUiState): StoryComposerUiState =
+        if (state.sceneIsAnimated) {
+            state.copy(sceneIsAnimated = false, band = state.band.closeAnyPanel())
+        } else {
+            state.copy(
+                sceneIsAnimated = true,
+                band = state.band.swipeUpOnTool(StoryToolMode.TIMELINE),
+                playheadSeconds = 0f,
+            )
+        }
+
+    /**
+     * **Un objet posé sur une scène animée ENTRE À LA TÊTE** (miroir de `placeNewSceneObjectsAtPlayhead`), au plus tard à
+     * 80 % de la durée, et reste jusqu'à la fin. Statique, la scène garde ses objets sur toute la slide.
+     */
+    fun placedAtPlayhead(
+        state: StoryComposerUiState,
+        place: (StoryComposerUiState) -> StoryComposerUiState,
+    ): StoryComposerUiState {
+        val placed = place(state)
+        if (!state.sceneIsAnimated) return placed
+        val known = state.deck.selectedSlide.let { slide -> slide.elements.map { it.id } + slide.stickers.map { it.id } }.toSet()
+        val slide = placed.deck.selectedSlide
+        val fresh = (slide.elements.map { it.id } + slide.stickers.map { it.id }).filterNot { it in known }
+        val window = SceneEntryWindow.forNewObject(state.playheadSeconds.toDouble(), placed.deck.selectedSlideDurationSeconds)
+        return fresh.fold(placed) { acc, id ->
+            windowed(acc, id, window.start.toFloat(), window.duration.toFloat())
         }
     }
 }

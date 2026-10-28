@@ -93,6 +93,8 @@ data class StoryComposerUiState(
     val canvasHeightPx: Float = 0f,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
+    /** Le mode ANIMÉ de la scène : chaque objet a sa piste, un objet neuf entre à la tête de lecture. */
+    val sceneIsAnimated: Boolean = false,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
