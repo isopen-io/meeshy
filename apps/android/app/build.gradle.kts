@@ -90,7 +90,10 @@ android {
     splits {
         abi {
             // Le type debug garde son APK unique (installDebug, tests) : le découpage ne s'applique qu'aux tâches release.
-            isEnable = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+            // Un App Bundle refuse les APK multiples (issuetracker 402800800) : bundleRelease ne découpe jamais.
+            isEnable = gradle.startParameter.taskNames.let { tasks ->
+                tasks.any { it.contains("Release", ignoreCase = true) } && tasks.none { it.contains("bundle", ignoreCase = true) }
+            }
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
             isUniversalApk = true

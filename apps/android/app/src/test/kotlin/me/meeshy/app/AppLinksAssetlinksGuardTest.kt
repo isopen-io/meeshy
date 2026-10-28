@@ -112,12 +112,16 @@ class AppLinksAssetlinksGuardTest {
         assertThat(entry.second).isNotEmpty()
     }
 
-    // #13619 : la native a repris la fiche Play `me.meeshy.app` de la coque, avec sa clé de signature.
+    // #13619 : la native a repris la fiche Play `me.meeshy.app` de la coque. Une installation du store porte la clé
+    // Play App Signing (BB:7D:…), une construction locale la clé d'envoi (57:AC:…) : les deux ouvrent les liens.
     @Test
     fun `the app entries keep the store signing fingerprints`() {
         val t = targets()
         assertThat(t.getValue("me.meeshy.app").second)
-            .containsExactly("57:AC:19:83:D4:AE:A5:2F:99:09:E4:28:B5:8F:AC:7F:34:71:38:C9:E3:B7:74:4D:74:3E:4A:C2:65:83:5C:AA")
+            .containsExactly(
+                "BB:7D:40:F9:8B:B9:07:67:9E:4C:7C:48:6E:37:05:93:A6:AC:95:E6:5D:A9:30:9A:F9:92:3E:1F:AC:81:95:AD",
+                "57:AC:19:83:D4:AE:A5:2F:99:09:E4:28:B5:8F:AC:7F:34:71:38:C9:E3:B7:74:4D:74:3E:4A:C2:65:83:5C:AA",
+            )
         assertThat(t.getValue("me.meeshy.app.debug").second)
             .containsExactly("6B:E2:95:F8:20:33:A2:7E:33:37:13:D4:F4:9B:D2:D7:F5:B2:7D:DA:0D:D7:B7:0E:42:30:07:16:B9:33:D6:76")
         listOf("me.meeshy.app", "me.meeshy.app.debug").forEach {
