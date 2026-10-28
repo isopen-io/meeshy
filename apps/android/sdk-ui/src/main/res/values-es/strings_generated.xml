@@ -42,6 +42,7 @@
     <string name="bubble_story_citation_answer">respuesta a su historia</string>
     <string name="bubble_story_citation_open_hint">Abre la historia citada</string>
     <string name="bubble_story_citation_unavailable">Historia no disponible</string>
+    <string name="capture_microphone_denied">Micrófono denegado: el vídeo no tendrá sonido. Toca para abrir Ajustes</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Borrar búsqueda</string>
     <string name="common_close">Cerrar</string>

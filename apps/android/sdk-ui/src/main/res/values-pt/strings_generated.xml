@@ -42,6 +42,7 @@
     <string name="bubble_story_citation_answer">resposta ao story</string>
     <string name="bubble_story_citation_open_hint">Abre o story citado</string>
     <string name="bubble_story_citation_unavailable">Story indisponível</string>
+    <string name="capture_microphone_denied">Microfone negado — o vídeo ficará mudo. Toque para abrir os Ajustes</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Limpar pesquisa</string>
     <string name="common_close">Fechar</string>

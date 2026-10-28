@@ -36,6 +36,7 @@ class CaptureViewfinderContentTest {
         onDropSegment = { calls += "drop" },
         onValidate = { calls += "validate" },
         onDiscardAnswer = { calls += "discard:$it" },
+        onMicrophoneNoticeTap = { calls += "settings" },
     )
 
     private fun show(state: CaptureSessionState, display: CaptureViewfinderDisplay = CaptureViewfinderDisplay()) {
@@ -119,5 +120,21 @@ class CaptureViewfinderContentTest {
     fun `the camera unavailable notice replaces a silent black screen`() {
         show(CaptureSessionState(), CaptureViewfinderDisplay(unavailable = true))
         compose.onNodeWithText("The camera could not start").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a refused microphone says the video will be silent and opens Settings on tap`() {
+        show(CaptureSessionState(), CaptureViewfinderDisplay(microphoneDenied = true))
+
+        compose.onNodeWithText("Microphone denied — the video will be silent. Tap to open Settings").assertIsDisplayed().performClick()
+
+        assertThat(calls).containsExactly("settings")
+    }
+
+    @Test
+    fun `no notice while the microphone is not refused`() {
+        show(CaptureSessionState())
+
+        compose.onNodeWithText("Microphone denied — the video will be silent. Tap to open Settings").assertDoesNotExist()
     }
 }

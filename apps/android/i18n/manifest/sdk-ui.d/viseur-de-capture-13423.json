@@ -81,6 +81,12 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "camera.microphone.denied",
+          "androidName": "capture_microphone_denied",
+          "status": "adopted"
+        },
+        {
           "androidName": "capture_zoom_reset",
           "status": "android-only"
         },

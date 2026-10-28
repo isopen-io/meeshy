@@ -49,6 +49,7 @@ import me.meeshy.sdk.model.composer.capture.CaptureHaptic
 import me.meeshy.sdk.model.composer.capture.CaptureHold
 import me.meeshy.sdk.model.composer.capture.CaptureLensFacing
 import me.meeshy.sdk.model.composer.capture.CaptureLockSeal
+import me.meeshy.sdk.model.composer.capture.CaptureMicrophoneNoticeLaw
 import me.meeshy.sdk.model.composer.capture.CapturePoint
 import me.meeshy.sdk.model.composer.capture.CaptureSessionReducer
 import me.meeshy.sdk.model.composer.capture.CaptureSessionState
@@ -97,6 +98,9 @@ public fun CaptureViewfinder(
     var holdStartedAt by remember { mutableStateOf(0L) }
     var lockSealing by remember { mutableStateOf(false) }
     var lockProgress by remember { mutableStateOf(0f) }
+    var microphoneNotice by remember { mutableStateOf(CaptureMicrophoneNoticeLaw.State()) }
+    var microphoneDenied by remember { mutableStateOf(false) }
+    val pendingFilm = remember { arrayOfNulls<String>(1) }
 
     val dispatchHolder = remember { arrayOfNulls<(CaptureEvent) -> Unit>(1) }
     val dispatch: (CaptureEvent) -> Unit = { event -> dispatchHolder[0]?.invoke(event) }
@@ -122,14 +126,29 @@ public fun CaptureViewfinder(
         }
     }
 
+    fun abandonPendingFilm() {
+        val token = pendingFilm[0] ?: return
+        pendingFilm[0] = null
+        dispatch(CaptureEvent.RecordingCancelled(token))
+    }
+
     fun run(effect: CaptureEffect, current: CaptureSessionState) {
         when (effect) {
             is CaptureEffect.StartRecording -> {
                 engine.setTorch(CaptureFlash.torch(current.flash, current.facing))
-                engine.startRecording(effect.token, context.captureFile("video", ".mp4"))
+                pendingFilm[0] = effect.token
+                scope.launch {
+                    val granted = permissions.ensure(PermissionNature.MICROPHONE, announcesRefusal = false)
+                    val step = CaptureMicrophoneNoticeLaw.beforeFilm(microphoneNotice, granted)
+                    microphoneNotice = step.state
+                    if (step.announce) microphoneDenied = true
+                    if (pendingFilm[0] != effect.token) return@launch
+                    pendingFilm[0] = null
+                    engine.startRecording(effect.token, context.captureFile("video", ".mp4"))
+                }
             }
-            CaptureEffect.StopRecording -> { engine.stopRecording(); engine.setTorch(me.meeshy.sdk.model.composer.capture.CaptureTorchMode.OFF) }
-            CaptureEffect.CancelPendingRecording -> engine.cancelRecording()
+            CaptureEffect.StopRecording -> { abandonPendingFilm(); engine.stopRecording(); engine.setTorch(me.meeshy.sdk.model.composer.capture.CaptureTorchMode.OFF) }
+            CaptureEffect.CancelPendingRecording -> { abandonPendingFilm(); engine.cancelRecording() }
             is CaptureEffect.TakePhoto -> engine.takePhoto(effect.token, context.captureFile("photo", ".jpg"))
             is CaptureEffect.DeleteFile -> CaptureFileSweeper.delete(listOf(effect.path))
             is CaptureEffect.Deliver -> scope.launch { deliverVideo(context, effect, onDeliver) }
@@ -168,7 +187,6 @@ public fun CaptureViewfinder(
         val camera = permissions.ensure(PermissionNature.CAMERA)
         granted = camera
         if (camera) {
-            permissions.ensure(PermissionNature.MICROPHONE, announcesRefusal = false)
             engine.bind(CaptureLensFacing.BACK)
         }
     }
@@ -185,6 +203,11 @@ public fun CaptureViewfinder(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(microphoneDenied) {
+        if (!microphoneDenied) return@LaunchedEffect
+        delay(MICROPHONE_NOTICE_MS)
+        microphoneDenied = false
     }
     LaunchedEffect(state.flash, state.facing) {
         engine.setPhotoFlash(if (state.facing == CaptureLensFacing.BACK) state.flash else CaptureFlashMode.OFF)
@@ -235,6 +258,7 @@ public fun CaptureViewfinder(
         sceneGestures = sceneGestures,
         shutterGestures = shutterGestures,
         onViewSize = { viewSize = it },
+        onMicrophoneNoticeTap = { microphoneDenied = false; context.openAppSettings() },
         onFilmHandsFree = {
             if (allowsVideo) {
                 dispatch(CaptureEvent.HoldBegan)
@@ -263,6 +287,7 @@ public fun CaptureViewfinder(
                     lockProgress = lockProgress,
                     unavailable = unavailable,
                     reduceMotion = reduceMotion,
+                    microphoneDenied = microphoneDenied,
                 ),
                 actions = actions,
                 preview = { m -> engine.PreviewSurface(m) },
@@ -272,6 +297,7 @@ public fun CaptureViewfinder(
 }
 
 private const val DISMISS_DP = 120f
+private const val MICROPHONE_NOTICE_MS = 6_000L
 
 /**
  * Les fichiers d'une prise abandonnée se suppriment HORS de la portée du viseur : « Abandonner » ferme l'écran dans
