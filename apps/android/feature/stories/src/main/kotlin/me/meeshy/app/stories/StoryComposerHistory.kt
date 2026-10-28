@@ -49,6 +49,9 @@ internal class ComposerHistory private constructor(
             tip.deck.slides == snapshot.deck.slides
     }
 
+    /** Un média que l'une des étapes encore joignables par annuler/rétablir montre : le retirer ne l'abandonne pas encore. */
+    fun reaches(mediaId: String): Boolean = store.states.any { snapshot -> snapshot.deck.slides.any { mediaId in it.mediaIds } }
+
     fun undone(): Pair<ComposerHistory, ComposerSnapshot>? =
         store.undo()?.let { ComposerHistory(it.store, null) to it.state }
 
@@ -58,16 +61,23 @@ internal class ComposerHistory private constructor(
 
 /**
  * Remet l'état d'écran sur [snapshot] : sélections refermées, brouillon et planche de dessin
- * resynchronisés sur la diapo courante, et tout média que ni le répertoire ni les envois
+ * resynchronisés sur la diapo courante, les envois différés que la diapo rétablie montre rendus (ceux de la pile [buried]),
+ * et tout média que ni le répertoire ni les envois
  * différés ne connaissent plus (annulé entre-temps) retiré du deck plutôt que publié orphelin.
  */
-internal fun StoryComposerUiState.restoredTo(snapshot: ComposerSnapshot): StoryComposerUiState {
-    val known = snapshot.attachments.mapTo(mutableSetOf()) { it.id } + pendingUploads.map { it.cmid }
+internal fun StoryComposerUiState.restoredTo(
+    snapshot: ComposerSnapshot,
+    buried: List<PendingMediaUpload> = emptyList(),
+): StoryComposerUiState {
+    val pool = (pendingUploads + buried).distinctBy { it.cmid }
+    val known = snapshot.attachments.mapTo(mutableSetOf()) { it.id } + pool.map { it.cmid }
     val orphans = snapshot.deck.slides.flatMap { it.mediaIds }.filterNot { it in known }.toSet()
     val deck = orphans.fold(snapshot.deck) { acc, id -> acc.removeMedia(id) }
+    val shown = deck.slides.flatMapTo(mutableSetOf()) { it.mediaIds }
     return copy(
         deck = deck,
         attachments = snapshot.attachments,
+        pendingUploads = pool.filter { it.cmid in shown },
         selectedTextElementId = null,
         selectedStickerId = null,
         elementMenuId = null,

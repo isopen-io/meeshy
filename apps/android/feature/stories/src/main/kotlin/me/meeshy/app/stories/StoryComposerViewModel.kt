@@ -417,19 +417,14 @@ class StoryComposerViewModel @Inject constructor(
     /** Inserts a clone of the selected slide right after it and selects the clone. */
     fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
 
-    /**
-     * Removes the slide [id] (inert on the last remaining slide / unknown id) and reclaims
-     * its media: dropped from the preview pools, and each offline-pending upload among them
-     * is cancelled so a discarded slide never leaves an orphaned `UPLOAD_MEDIA` row. A media
-     * another slide still shows (a duplicate shares its original's ids) is never reclaimed.
-     */
+    /** Removes the slide [id] (inert on the last one); its media leave the pools, its pending uploads wait in [buried] (a duplicate's shared media stay). */
     fun onRemoveSlide(id: String) {
         val before = _state.value.deck
         val removed = before.slides.firstOrNull { it.id == id } ?: return
         val after = before.removeSlide(id)
         if (after === before) return
         val droppedMedia = removed.mediaIds.toSet() - after.slides.flatMap(StorySlide::mediaIds).toSet()
-        val pendingToCancel = _state.value.pendingUploads.filter { it.cmid in droppedMedia }.onEach { MediaIntake.release(it.item) }.map(PendingMediaUpload::cmid)
+        buried.bury(_state.value.pendingUploads.filter { it.cmid in droppedMedia })
         _state.update {
             it.copy(
                 deck = after,
@@ -438,7 +433,6 @@ class StoryComposerViewModel @Inject constructor(
             ).mirrorDraftToSelection()
         }
         record()
-        pendingToCancel.forEach { cancelDurableUpload(it) }
     }
 
     fun onMoveSlide(id: String, toIndex: Int) = applyDeck { it.move(id, toIndex) }
@@ -503,14 +497,25 @@ class StoryComposerViewModel @Inject constructor(
     fun onUndo() {
         val (next, snapshot) = history.undone() ?: return
         history = next
-        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+        restore(snapshot)
     }
 
     fun onRedo() {
         val (next, snapshot) = history.redone() ?: return
         history = next
-        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+        restore(snapshot)
     }
+
+    private val buried = BuriedUploads()
+
+    private fun restore(snapshot: ComposerSnapshot) {
+        val before = _state.value.pendingUploads
+        _state.update { it.restoredTo(snapshot, buried.held).withHistoryFlags() }
+        buried.settled(before, _state.value.pendingUploads)
+    }
+
+    private fun abandonUnreachableBuried() =
+        buried.abandoned(history::reaches).forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
 
     private fun StoryComposerUiState.withHistoryFlags(): StoryComposerUiState =
         copy(canUndo = history.canUndo, canRedo = history.canRedo)
@@ -518,6 +523,7 @@ class StoryComposerViewModel @Inject constructor(
     /** Empile le deck courant dans l'historique ; [gesture] = changement continu (un seul cran). */
     private fun record(gesture: String? = null) {
         history = history.recorded(_state.value.snapshot(), gesture)
+        abandonUnreachableBuried()
         if (_state.value.canUndo != history.canUndo || _state.value.canRedo != history.canRedo) {
             _state.update { it.withHistoryFlags() }
         }
@@ -526,6 +532,7 @@ class StoryComposerViewModel @Inject constructor(
     /** Repart d'un historique vierge sur l'état courant (brouillon restauré, publication). */
     private fun resetHistory() {
         history = ComposerHistory(_state.value.snapshot())
+        abandonUnreachableBuried()
         _state.update { it.withHistoryFlags() }
     }
 
@@ -585,12 +592,7 @@ class StoryComposerViewModel @Inject constructor(
         if (uploaded.isNotEmpty()) record()
     }
 
-    /**
-     * Any failed upload is queued durably (single pick or batch), a refusal included (#13417): the media
-     * stays on the device and the publication that carries it fails retryable instead of losing what the
-     * author picked. Each item is staged one at a time so partial progress survives a later failure; its
-     * blob and outbox row share the `cmid` that rides in the draft as a placeholder id.
-     */
+    /** Any failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
     private suspend fun queueDurably(items: List<MediaUploadItem>) {
         items.forEach { item ->
             val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
@@ -601,12 +603,8 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Removes an attached or pending media (and its id from the draft) before
-     * publishing. Removing an offline placeholder also **cancels** only that durable
-     * upload ([MediaUploadQueue.cancel]) — the other pending uploads are untouched —
-     * so no orphaned `UPLOAD_MEDIA` row keeps uploading bytes to a media the story
-     * will never reference. The UI clears instantly (optimistic); the durable cancel
-     * is best-effort — if it fails the stranded row simply exhausts harmlessly.
+     * Removes an attached or pending media before publishing. An offline placeholder also **cancels** only its own
+     * durable upload ([MediaUploadQueue.cancel], best-effort: a stranded row exhausts harmlessly); the UI clears at once.
      */
     fun onRemoveMedia(id: String) {
         val wasPending = _state.value.pendingUploads.firstOrNull { it.cmid == id }?.item?.also(MediaIntake::release) != null
@@ -780,7 +778,7 @@ class StoryComposerViewModel @Inject constructor(
     internal fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
 
     /** Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées. */
-    override fun onCleared() = _state.value.pendingUploads.forEach { MediaIntake.release(it.item) }
+    override fun onCleared() = (_state.value.pendingUploads + buried.held).forEach { MediaIntake.release(it.item) }
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"
