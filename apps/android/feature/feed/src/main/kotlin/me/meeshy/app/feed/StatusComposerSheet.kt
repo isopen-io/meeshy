@@ -61,6 +61,7 @@ fun StatusComposerSheet(
     onDismiss: () -> Unit,
     initialDraft: StatusComposerDraft = StatusComposerDraft(),
     onDraftChange: (StatusComposerDraft) -> Unit = {},
+    formatSlot: (@Composable () -> Unit)? = null,
 ) {
     var draft by remember { mutableStateOf(initialDraft) }
     // Autosave (#13430): every change reaches the durable draft, so a closed sheet or a killed app loses nothing.
@@ -77,6 +78,7 @@ fun StatusComposerSheet(
                 .padding(bottom = MeeshySpacing.xl),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
+            formatSlot?.invoke()
             Header(
                 canPublish = draft.canPublish,
                 onClose = onDismiss,

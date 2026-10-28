@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.auth.LanguageStepSelection
@@ -168,8 +169,14 @@ fun FeedComposerSheet(
     onDraftChange: (FeedComposerDraft) -> Unit = {},
     onQueueMedia: (suspend (MediaUploadItem) -> String)? = null,
     onRemoveMedia: (String) -> Unit = {},
+    formatSlot: (@Composable () -> Unit)? = null,
+    governingType: PostType? = null,
 ) {
     var draft by remember { mutableStateOf(initialDraft) }
+    // The host's format choice governs the type; the sheet's own reel toggle then has nothing to decide.
+    LaunchedEffect(governingType) {
+        governingType?.let { draft = draft.withForcePlainPost(it == PostType.POST) }
+    }
     var attachedMedia by remember { mutableStateOf(initialDraft.media) }
     // Autosave (#13417): every change reaches the durable draft, so a closed sheet or a killed
     // app reopens on what the author wrote.
@@ -363,6 +370,7 @@ fun FeedComposerSheet(
                 .padding(bottom = MeeshySpacing.xl),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
+            formatSlot?.invoke()
             FeedComposerHeader(
                 canPublish = draft.canPublish && !isUploadingMedia && !voice.session.isRecording,
                 onClose = onDismiss,
@@ -379,7 +387,7 @@ fun FeedComposerSheet(
                 onSelect = { visibility -> draft = draft.withVisibility(visibility) },
             )
 
-            if (draft.qualifiesAsReel) {
+            if (draft.qualifiesAsReel && governingType == null) {
                 ReelTypeToggle(
                     forcePlainPost = draft.forcePlainPost,
                     onToggle = { draft = draft.withForcePlainPost(!draft.forcePlainPost) },
