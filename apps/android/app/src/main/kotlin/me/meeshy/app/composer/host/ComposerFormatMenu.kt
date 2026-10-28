@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.app.R
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.FormatVerdict
+import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -48,6 +50,9 @@ fun ComposerFormatMenu(
     var open by rememberSaveable { mutableStateOf(false) }
     val hasMenu = verdicts.size > 1
     val hint = stringResource(R.string.composer_publish_menu_a11y_hint)
+    val onPlateau = LocalOnComposerPlateau.current
+    val ink = if (onPlateau) ComposerPlateauInk.primary else MeeshyTheme.tokens.textPrimary
+    val chevronInk = if (onPlateau) ComposerPlateauInk.secondary else MeeshyTheme.tokens.textSecondary
     Row(
         modifier = modifier
             .heightIn(min = 44.dp)
@@ -60,9 +65,9 @@ fun ComposerFormatMenu(
         Text(
             text = stringResource(ComposerFormatCopy.label(selected)),
             style = MaterialTheme.typography.titleMedium,
-            color = MeeshyTheme.tokens.textPrimary,
+            color = ink,
         )
-        if (hasMenu) Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
+        if (hasMenu) Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = chevronInk)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Text(
                 text = stringResource(R.string.composer_publish_menu_title),
