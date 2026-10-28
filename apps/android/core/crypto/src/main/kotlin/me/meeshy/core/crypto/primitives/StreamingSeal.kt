@@ -1,6 +1,8 @@
 package me.meeshy.core.crypto.primitives
 
 import android.content.Context
+import com.google.crypto.tink.BinaryKeysetReader
+import com.google.crypto.tink.CleartextKeysetHandle
 import com.google.crypto.tink.KeyTemplate
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.RegistryConfiguration
@@ -8,6 +10,7 @@ import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
+import com.google.crypto.tink.subtle.Hex
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -58,13 +61,34 @@ public class StreamingSeal private constructor(private val aead: StreamingAead) 
          */
         public fun androidKeystore(context: Context, keysetName: String, preferenceFile: String, masterKeyAlias: String): StreamingSeal {
             StreamingAeadConfig.register()
+            val preferences = context.getSharedPreferences(preferenceFile, Context.MODE_PRIVATE)
+            fun dropCleartextKeyset(): Boolean {
+                if (!isCleartextKeyset(preferences.getString(keysetName, null))) return false
+                preferences.edit().remove(keysetName).commit()
+                return true
+            }
+            dropCleartextKeyset()
             val manager = AndroidKeysetManager.Builder()
                 .withSharedPref(context, keysetName, preferenceFile)
                 .withKeyTemplate(KeyTemplate.createFrom(PARAMETERS))
                 .withMasterKeyUri("android-keystore://$masterKeyAlias")
                 .build()
-            if (!manager.isUsingKeystore) throw CryptoException("Keystore indisponible : aucune clé posée en clair")
+            if (dropCleartextKeyset() || !manager.isUsingKeystore) throw CryptoException("Keystore indisponible : aucune clé posée en clair")
             return of(manager.keysetHandle)
+        }
+
+        /**
+         * Le jeu de clés stocké se lit-il SANS la clé maîtresse ? Tink 1.15 l'écrit en clair quand le Keystore échoue à sa
+         * création (avant que [androidKeystore] ne refuse), puis, si le Keystore revient, le relit en clair en se déclarant
+         * « sous Keystore » ([AndroidKeysetManager.isUsingKeystore] = vrai) : sans ce contrôle, la file d'envoi scellerait sous
+         * une clé posée en clair dans les préférences.
+         */
+        internal fun isCleartextKeyset(hex: String?): Boolean {
+            if (hex == null) return false
+            return runCatching {
+                CleartextKeysetHandle.read(BinaryKeysetReader.withBytes(Hex.decode(hex)))
+                    .getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
+            }.isSuccess
         }
 
         /** Une clé neuve tenue en mémoire seulement : ce qu'elle scelle ne s'ouvre plus après la fin du processus. */
