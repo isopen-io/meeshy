@@ -62,4 +62,14 @@ class UnsentRuptureRuleTest {
         assertThat(UnsentRuptureRule.replaceByRecomposing(story)).isTrue()
         assertThat(UnsentRuptureRule.replaceByRecomposing(story.copy(kind = UnsentPublicationKind.POST))).isFalse()
     }
+
+    @Test
+    fun `a publication whose media is refused for its location is never offered a retry, only a replacement`() {
+        val refused = item(UnsentPublicationStatus.FAILED, media = media(MediaFate.LOCATION_REFUSED))
+        val rupture = UnsentRuptureRule.rupture(refused, offline = false)
+
+        assertThat(rupture.gesture).isEqualTo(RuptureGesture.REPLACE_MISSING)
+        assertThat(UnsentRuptureRule.showsRetry(refused, rupture)).isFalse()
+        assertThat(UnsentRuptureRule.speaks(refused, rupture)).isTrue()
+    }
 }

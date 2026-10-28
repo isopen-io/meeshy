@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.UploadedMedia
@@ -81,6 +82,7 @@ internal fun rememberFeedComposerIntake(
     )
     val unusableMessage by rememberUpdatedState(stringResource(R.string.feed_composer_media_unusable))
     val unavailableMessage by rememberUpdatedState(stringResource(R.string.feed_composer_location_unavailable))
+    val locationRefusedMessage by rememberUpdatedState(stringResource(R.string.feed_composer_media_location_refused))
 
     suspend fun uploadAndAttach(items: List<MediaUploadItem>, previews: List<String?> = emptyList()) {
         if (items.isEmpty()) return
@@ -90,10 +92,10 @@ internal fun rememberFeedComposerIntake(
                 if (result.data.isEmpty()) reportError(unusableMessage) else state.attach(result.data)
             is NetworkResult.Failure -> {
                 val enqueue = queue
-                if (enqueue == null) {
-                    reportError(result.error.message ?: unusableMessage)
-                } else {
-                    state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index)) })
+                when {
+                    MediaLocationRefusal.isCode(result.error.code) -> reportError(locationRefusedMessage)
+                    enqueue == null -> reportError(result.error.message ?: unusableMessage)
+                    else -> state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index)) })
                 }
             }
         }

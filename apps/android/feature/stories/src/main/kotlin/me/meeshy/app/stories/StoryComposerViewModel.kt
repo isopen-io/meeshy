@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostMentionInput
@@ -568,7 +569,8 @@ class StoryComposerViewModel @Inject constructor(
                 }
                 when (val result = mediaUploader.upload(accepted, onProgress)) {
                     is NetworkResult.Success -> applyUploaded(result.data)
-                    is NetworkResult.Failure -> queueDurably(accepted)
+                    is NetworkResult.Failure ->
+                        if (MediaLocationRefusal.isCode(result.error.code)) _state.update(StoryComposerUploadReducer::locationRefused) else queueDurably(accepted)
                 }
             } catch (e: CancellationException) {
                 throw e

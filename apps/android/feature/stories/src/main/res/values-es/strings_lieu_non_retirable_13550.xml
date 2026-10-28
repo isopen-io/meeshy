@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_composer_media_location_refused">No se pudo quitar la ubicación de este archivo, así que no se añadió. Elige otro archivo.</string>
+</resources>

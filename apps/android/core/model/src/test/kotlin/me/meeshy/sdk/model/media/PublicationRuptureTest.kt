@@ -70,4 +70,13 @@ class PublicationRuptureTest {
         assertThat(r.gesture).isEqualTo(RuptureGesture.RETRY)
         assertThat(r.intact).isEqualTo(0)
     }
+
+    @Test
+    fun `a media refused for its location is missing and replaced, never retried into the same refusal`() {
+        val r = rupture(MediaFate.UPLOADED, MediaFate.LOCATION_REFUSED)
+
+        assertThat(r.missing).isEqualTo(1)
+        assertThat(r.intact).isEqualTo(1)
+        assertThat(r.gesture).isEqualTo(RuptureGesture.REPLACE_MISSING)
+    }
 }

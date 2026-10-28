@@ -3,6 +3,7 @@ package me.meeshy.sdk.publication
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.media.MediaFate
 import me.meeshy.sdk.model.media.MediaUploadProgress
@@ -67,6 +68,18 @@ class UnsentPublicationsTest {
 
         assertThat(unsent.media.single().fate).isEqualTo(MediaFate.LOST)
         assertThat(unsent.status).isEqualTo(UnsentPublicationStatus.FAILED)
+    }
+
+    @Test
+    fun `an upload refused for its location is told apart from a plain refusal`() {
+        val rows = listOf(
+            post(photo, state = OutboxState.EXHAUSTED),
+            upload(photo, OutboxState.EXHAUSTED, error = MediaLocationRefusal.REASON),
+        )
+
+        val unsent = UnsentPublications.from(rows, ownerId = "me", progress = emptyMap()).single()
+
+        assertThat(unsent.media.single().fate).isEqualTo(MediaFate.LOCATION_REFUSED)
     }
 
     @Test
