@@ -120,6 +120,7 @@ class StoryComposerViewModel @Inject constructor(
             // later cold start never rebuilds the dead draft.
             if (!reconciled.snapshot.isWorthRestoring) {
                 draftStore.clear()
+                if (reconciled.hasLoss) _state.update { it.copy(errorMessage = MEDIA_RESTORE_LOST) }
                 return@launch
             }
             val deck = reconciled.snapshot.toDeck() ?: return@launch

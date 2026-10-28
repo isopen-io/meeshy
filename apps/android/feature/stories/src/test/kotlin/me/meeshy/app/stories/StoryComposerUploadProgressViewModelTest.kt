@@ -129,4 +129,21 @@ class StoryComposerUploadProgressViewModelTest {
 
         assertThat(vm.state.value.deck.slides.single().mediaIds).containsExactly(held)
     }
+
+    @Test
+    fun `a media-only draft whose media were all swept is not rebuilt, and the loss is said rather than silent`() = runTest {
+        val store = InMemoryStoryComposerDraftStore(
+            StoryComposerDraftSnapshot(
+                slides = listOf(StoryDraftSlideSnapshot(id = "s1", mediaIds = listOf("pm-old"))),
+                selectedId = "s1",
+                updatedAt = Instant.now().minusSeconds(30 * 3600).toString(),
+            ),
+        )
+        val vm = viewModel(store)
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.slides.flatMap { it.mediaIds }).isEmpty()
+        assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_RESTORE_LOST)
+    }
 }
