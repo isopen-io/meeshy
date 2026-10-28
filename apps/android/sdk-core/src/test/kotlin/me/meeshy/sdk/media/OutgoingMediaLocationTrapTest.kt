@@ -170,6 +170,18 @@ class OutgoingMediaLocationTrapTest {
     }
 
     @Test
+    fun `un MP4 à marque inventée ne part jamais intact, quel que soit le type déclaré (#13591)`() = runTest {
+        val ftyp = box("ftyp", ascii("zzzz") + ByteArray(4) + ascii("zzzz"))
+        val mp4 = ftyp + box("moov", box("udta", box("\u00A9xyz", ascii("$place"))) ) + box("mdat", ascii("FRAMES"))
+
+        listOf("application/octet-stream", "application/pdf", "text/plain").forEach { mime ->
+            val outcome = result(mp4, mime)
+            val safe = outcome is NetworkResult.Failure || !place.occursIn((outcome as NetworkResult.Success).data.bytes)
+            assertWithMessage(mime).that(safe).isTrue()
+        }
+    }
+
+    @Test
     fun `un refus de lieu est définitif — l envoi n est pas rejoué jusqu à épuisement`() = runTest {
         val refused = MediaUploadSender.send(MediaUploadItem(ByteArray(1), "clip", "video/mp4")) {
             NetworkResult.Failure(ApiError(OutgoingMediaSanitizer.MEDIA_REFUSED_MESSAGE, code = OutgoingMediaSanitizer.MEDIA_REFUSED_CODE))
