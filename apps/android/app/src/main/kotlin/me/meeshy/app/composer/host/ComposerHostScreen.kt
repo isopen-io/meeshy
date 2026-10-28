@@ -49,14 +49,14 @@ fun ComposerHostScreen(
         ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
     }
     when (state.selectedFormat) {
-        ComposerFormat.STORY -> StoryComposerContent(
+        ComposerFormat.STORY -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { StoryComposerContent(
             seedText = state.text,
             onFacts = viewModel::onStoryFacts,
             carry = state.carry,
             onCarryApplied = onCarryApplied,
             onClose = onClose,
             titleContent = formatMenu,
-        )
+        ) }
         ComposerFormat.POST, ComposerFormat.REEL -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { PostComposerContent(
             seedText = state.text,
             onFacts = viewModel::onPostFacts,
