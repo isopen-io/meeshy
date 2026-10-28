@@ -1,13 +1,25 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.ComposerRailGeometry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Entry
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn.Foot
 import me.meeshy.sdk.model.composer.ComposerTrailingColumn
@@ -24,8 +36,62 @@ import me.meeshy.ui.icons.MeeshyIcons
 @Composable
 internal fun ColumnScope.StoryTrailingColumn(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val focus = state.trailingFocus
-    ComposerTrailingColumn.options(focus).forEach { entry -> TrailingEntry(entry, state, viewModel) }
-    if (!ComposerTrailingColumn.footFollowsOptions(focus)) Spacer(Modifier.weight(1f))
+    val (exits, options) = ComposerTrailingColumn.options(focus).partition { it.isExit }
+    TrailingColumnFrame(
+        footFollowsOptions = ComposerTrailingColumn.footFollowsOptions(focus),
+        options = if (options.isEmpty()) null else ({ options.forEach { entry -> TrailingEntry(entry, state, viewModel) } }),
+        exit = { exits.forEach { entry -> TrailingEntry(entry, state, viewModel) } },
+        foot = { TrailingFoot(focus, state, viewModel) },
+    )
+}
+
+/**
+ * La géométrie de la colonne (iOS `ComposerTrailingRail.tiles`, `ViewThatFits`) : les options défilent quand elles
+ * dépassent la hauteur du couloir — un texte et ses actions dépassent un téléphone clavier levé —, le (x) et le pied, eux,
+ * ne défilent JAMAIS : la sortie reste visible quand on en a le plus besoin, et la place de « défaire » ne dépend pas du
+ * nombre d'options. Le défilement des options garde son reste : il ne tire jamais le plateau vers le bas.
+ */
+@Composable
+internal fun ColumnScope.TrailingColumnFrame(
+    footFollowsOptions: Boolean,
+    options: (@Composable ColumnScope.() -> Unit)?,
+    exit: @Composable ColumnScope.() -> Unit,
+    foot: @Composable ColumnScope.() -> Unit,
+) {
+    if (options == null) {
+        Spacer(Modifier.weight(1f))
+        foot()
+        return
+    }
+    val spacing = Arrangement.spacedBy(ComposerRailGeometry.FLOATING_ENTRY_SPACING.dp)
+    Column(
+        modifier = Modifier.weight(1f, fill = !footFollowsOptions),
+        verticalArrangement = spacing,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .nestedScroll(KeepsItsScroll)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = spacing,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = options,
+        )
+        exit()
+    }
+    foot()
+}
+
+/** Le reste d'un défilement des options s'arrête à la colonne : tirer au bout des options ne ferme pas le plateau. */
+private val KeepsItsScroll = object : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
+}
+
+@Composable
+private fun TrailingFoot(focus: ComposerTrailingColumn.Focus, state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     ComposerTrailingColumn.foot(focus, state.timeServed).forEach { foot ->
         when (foot) {
             Foot.TIME -> ComposerRailButton(
