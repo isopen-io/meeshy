@@ -2551,7 +2551,7 @@ describe('PushNotificationService', () => {
       const sentMsg = await sendCallPush(platform, { title: '', body: '', silent: true, data: { type: 'call_cancel', callId: 'call-1' } });
       expect(sentMsg?.notification).toBeUndefined();
       ringWindow[platform](sentMsg);
-      expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
+      expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1', recipientUserId: `user-${platform}` });
     });
 
     it.each(['android', 'web'] as const)('le ring %s part data-only avec title/body/actions localisés DANS data', async (platform) => {
@@ -2562,7 +2562,7 @@ describe('PushNotificationService', () => {
       });
       expect(sentMsg?.notification).toBeUndefined();
       expect(sentMsg?.data).toEqual({
-        type: 'call', callId: 'call-1', answerLabel: 'Répondre', declineLabel: 'Refuser', title: 'Alice vous appelle', body: 'Appel audio',
+        type: 'call', callId: 'call-1', answerLabel: 'Répondre', declineLabel: 'Refuser', title: 'Alice vous appelle', body: 'Appel audio', recipientUserId: `user-${platform}`,
       });
       ringWindow[platform](sentMsg);
     });
@@ -3195,7 +3195,7 @@ describe('PushNotificationService', () => {
 
       const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.notification).toBeUndefined();
-      expect(sentMsg?.data).toEqual(revocationPayload.data);
+      expect(sentMsg?.data).toEqual({ ...revocationPayload.data, recipientUserId: 'user-android' });
       expect(sentMsg?.android).toEqual({ priority: 'high', ttl: NOTIFICATION_REVOCATION_TTL_MS });
       // Ni le TTL de sonnerie (60 s, trop court pour un téléphone éteint la
       // nuit), ni l'absence de TTL (~4 semaines de rétention FCM).
@@ -3211,7 +3211,7 @@ describe('PushNotificationService', () => {
       const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.notification).toBeUndefined();
       expect(sentMsg?.webpush?.notification).toBeUndefined();
-      expect(sentMsg?.data).toEqual(revocationPayload.data);
+      expect(sentMsg?.data).toEqual({ ...revocationPayload.data, recipientUserId: 'user-web' });
     });
 
     it('FCM iOS : background silencieux — content-available seul, sans alert ni mutable-content', async () => {
@@ -3223,7 +3223,7 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.notification).toBeUndefined();
       expect(sentMsg?.apns?.headers).toEqual(expect.objectContaining({ 'apns-push-type': 'background', 'apns-priority': '5' }));
       expect(sentMsg?.apns?.payload?.aps).toEqual({ 'content-available': 1 });
-      expect(sentMsg?.data).toEqual(revocationPayload.data);
+      expect(sentMsg?.data).toEqual({ ...revocationPayload.data, recipientUserId: 'user-ios' });
     });
 
     it('contourne la fenêtre DND — même sans bypassDnd, c’est la CHARGE qui le classe en contrôle', async () => {

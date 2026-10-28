@@ -14,6 +14,7 @@ import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
 import { webPushFor } from './web-push-config';
 import { androidNotificationConfig } from './android-push-config';
+import { withRecipient } from './push-recipient';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -388,7 +389,7 @@ export class PushNotificationService {
           let result: PushResult;
 
           if (tokenRecord.type === 'fcm') {
-            result = await this.sendViaFCM(tokenRecord, effectivePayload);
+            result = await this.sendViaFCM(tokenRecord, withRecipient(effectivePayload, userId));
           } else if (tokenRecord.type === 'apns') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
