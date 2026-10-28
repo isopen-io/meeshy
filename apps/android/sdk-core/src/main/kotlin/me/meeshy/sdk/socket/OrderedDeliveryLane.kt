@@ -19,16 +19,22 @@ import timber.log.Timber
  * ordre, quels que soient les types. Rien n'est jamais perdu faute de place.
  *
  * Un travail qui lève est journalisé (jamais son contenu) et la voie continue.
+ *
+ * Chaque travail porte la session ([session]) sous laquelle il a été reçu : encore en file quand cette session finit
+ * (déconnexion, autre compte adopté), il est jeté au lieu d'écrire les données du compte parti sous le suivant (#13558).
  */
-class OrderedDeliveryLane(dispatcher: CoroutineDispatcher) {
+class OrderedDeliveryLane(dispatcher: CoroutineDispatcher, private val session: () -> Long = { 0L }) {
+    private class Stamped(val session: Long, val work: () -> Unit)
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val queue = Channel<() -> Unit>(Channel.UNLIMITED)
+    private val queue = Channel<Stamped>(Channel.UNLIMITED)
 
     init {
         scope.launch {
-            for (work in queue) {
+            for (stamped in queue) {
+                if (stamped.session != session()) continue
                 try {
-                    work()
+                    stamped.work()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
@@ -39,7 +45,7 @@ class OrderedDeliveryLane(dispatcher: CoroutineDispatcher) {
     }
 
     /** Met [work] en file ; rend `false` seulement si la voie est fermée. */
-    fun deliver(work: () -> Unit): Boolean = queue.trySend(work).isSuccess
+    fun deliver(work: () -> Unit): Boolean = queue.trySend(Stamped(session(), work)).isSuccess
 
     /** Ferme la voie : ce qui est en file est abandonné, la coroutine consommatrice est annulée. */
     fun close() {

@@ -2,6 +2,7 @@ package me.meeshy.sdk.socket
 
 import kotlinx.coroutines.CoroutineDispatcher
 import me.meeshy.core.common.DefaultDispatcher
+import me.meeshy.sdk.net.SessionTransitionFlags
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,14 +24,20 @@ fun interface SocketEventRegistrar {
 class SocketEventRouter internal constructor(
     private val registrar: SocketEventRegistrar,
     dispatcher: CoroutineDispatcher,
+    session: () -> Long = { 0L },
 ) {
     @Inject
     constructor(
         socketManager: SocketManager,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
-    ) : this(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, dispatcher)
+        transition: SessionTransitionFlags,
+    ) : this(
+        SocketEventRegistrar { event, callback -> socketManager.on(event, callback) },
+        dispatcher,
+        { transition.generation },
+    )
 
-    private val lane = OrderedDeliveryLane(dispatcher)
+    private val lane = OrderedDeliveryLane(dispatcher, session)
 
     fun install(routes: List<SocketInboundRoute>) {
         routes.forEach { route ->
