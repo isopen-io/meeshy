@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_media_lost">Nicht gesendet: Dieses Medium ist auf diesem Gerät nicht mehr verfügbar. Tippe, um es zu entfernen, und wähle es dann erneut aus.</string>
+</resources>

@@ -35,6 +35,15 @@ class MediaUploadSenderTest {
     }
 
     @Test
+    fun `held bytes that can no longer be read are lost, not retried`() = runTest {
+        val result = MediaUploadSender.send(item()) {
+            NetworkResult.Failure(ApiError(OutgoingMediaSanitizer.UNREADABLE_MESSAGE, code = OutgoingMediaSanitizer.UNREADABLE_CODE))
+        }
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(MediaLoss.REASON))
+    }
+
+    @Test
     fun `transport failure is a transient failure`() = runTest {
         val result = MediaUploadSender.send(item()) { NetworkResult.Failure(ApiError("offline")) }
 

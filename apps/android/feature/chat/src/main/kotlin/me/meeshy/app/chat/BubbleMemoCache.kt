@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
@@ -96,7 +97,10 @@ internal class BubbleMemoCache {
             recipientCount = recipientCount,
             showReadReceipts = showReadReceipts,
             isOffline = isOffline,
-        ).copy(isLocationRefused = isFailed && MediaLocationRefusal.isReason(local.lastError))
+        ).copy(
+            isLocationRefused = isFailed && MediaLocationRefusal.isReason(local.lastError),
+            isMediaLost = isFailed && MediaLoss.isReason(local.lastError),
+        )
         entries = entries + (messageId to (signature to built))
         return built
     }

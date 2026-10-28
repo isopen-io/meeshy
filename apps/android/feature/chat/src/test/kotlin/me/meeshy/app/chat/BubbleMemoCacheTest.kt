@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
 import org.junit.Test
@@ -156,5 +157,17 @@ class BubbleMemoCacheTest {
         assertThat(buildArgs(memo, refused, currentUser = me).isLocationRefused).isTrue()
         assertThat(buildArgs(memo, plain, currentUser = me).isLocationRefused).isFalse()
         assertThat(buildArgs(memo, sending, currentUser = me).isLocationRefused).isFalse()
+    }
+
+    @Test
+    fun `a send whose media was lost on the device says so on its failed bubble, never as a location refusal`() {
+        val me = MeeshyUser(id = "me", username = "me")
+        val lost = message("l", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = MediaLoss.REASON)
+        val plain = message("p", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = "Transient delivery failure")
+        val memo = BubbleMemoCache()
+
+        assertThat(buildArgs(memo, lost, currentUser = me).isMediaLost).isTrue()
+        assertThat(buildArgs(memo, lost, currentUser = me).isLocationRefused).isFalse()
+        assertThat(buildArgs(memo, plain, currentUser = me).isMediaLost).isFalse()
     }
 }

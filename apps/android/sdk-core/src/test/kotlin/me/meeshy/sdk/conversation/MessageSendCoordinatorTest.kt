@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import java.time.Instant
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -276,5 +277,19 @@ class MessageSendCoordinatorTest {
         assertThat(harness.database.messageDao().find(cid)).isNull()
         assertThat(harness.outbox.row(cid)).isNull()
         assertThat(harness.outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `a send whose media was lost on the device keeps that reason, and tapping it removes it — no loop`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+        harness.outbox.markExhausted(cid, MediaLoss.REASON)
+        coordinator.markSendFailed(cid, MediaLoss.REASON)
+
+        assertThat(harness.database.messageDao().find(cid)!!.lastError).isEqualTo(MediaLoss.REASON)
+        coordinator.retrySend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(harness.outbox.row(cid)).isNull()
     }
 }
