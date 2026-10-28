@@ -4,6 +4,7 @@ import {
   fillBackgroundMediaUrls,
   withBackgroundMediaUrls,
 } from '../storyBackgroundMediaUrl';
+import { claimableMediaWhere } from '../mediaOwnership';
 
 const OWN = '507f1f77bcf86cd799439011';
 const FOREIGN = '507f1f77bcf86cd799439022';
@@ -61,6 +62,7 @@ describe('withBackgroundMediaUrls', () => {
     expect(where.id).toEqual({ in: [OWN] });
     expect(where.OR).toHaveLength(2);
     expect(where.OR[0]).toEqual({ postId: '507f1f77bcf86cd7994390aa' });
+    expect(where.OR[1]).toEqual(claimableMediaWhere(OWN));
   });
 
   it('ne lit pas une pièce que la story ne réclame ni ne porte', async () => {
