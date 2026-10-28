@@ -197,6 +197,9 @@ data class FeedComposerDraft(
         return if (hex == null) copy(background = null) else if (normalised == null) this else copy(background = normalised)
     }
 
+    /** The blank document of the same author: audience and language are choices of the author, not of the document. */
+    fun cleared(): FeedComposerDraft = FeedComposerDraft(visibility = visibility, language = language)
+
     /** The payload to publish, or `null` when the draft is not yet publishable (see [canPublish]). */
     fun publishRequest(): FeedPostPublishRequest? {
         if (!canPublish) return null

@@ -19,6 +19,9 @@
     <string name="feed_composer_language_search">البحث عن لغة</string>
     <string name="feed_composer_language_title">لغة المنشور</string>
     <string name="feed_composer_open_label">شارِك شيئًا</string>
+    <string name="feed_composer_overflow_clear_all">مسح الكل</string>
+    <string name="feed_composer_overflow_menu">خيارات أخرى</string>
+    <string name="feed_composer_overflow_remove_background">إزالة الخلفية</string>
     <string name="feed_composer_placeholder">بماذا تفكّر؟</string>
     <string name="feed_composer_publish">نشر</string>
     <string name="feed_composer_record_voice">تسجيل مقطع صوتي</string>

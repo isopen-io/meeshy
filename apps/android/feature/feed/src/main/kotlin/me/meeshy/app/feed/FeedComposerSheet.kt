@@ -224,6 +224,7 @@ internal class PostComposerActions(
     val onAlt: (String, String) -> Unit,
     val onRemoveLocation: () -> Unit,
     val onBackground: (String) -> Unit,
+    val onOverflow: (PostOverflowEntry) -> Unit,
 )
 
 /**
@@ -265,7 +266,11 @@ private fun rememberPostComposerActions(
             },
             onAlt = { mediaId, text -> state.draft = state.draft.withAlt(mediaId, text) },
             onRemoveLocation = { state.draft = state.draft.withoutLocation() },
-            onBackground = { hex -> state.draft = state.draft.withBackground(PostSceneLaw.pick(state.draft.background, hex)) },
+            onBackground = { hex -> state.draft = state.draft.withBackground(hex) },
+            onOverflow = { entry ->
+                if (entry == PostOverflowEntry.CLEAR_ALL) state.attachedMedia.forEach { removeMedia(it.id) }
+                state.apply(entry)
+            },
         )
     }
 }

@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryBackgroundPalette
 import org.junit.Test
 
@@ -27,12 +28,53 @@ class FeedComposerSceneTest {
     }
 
     @Test
-    fun `tapping the colour already chosen takes the scene away, another colour repaints it`() {
+    fun `choosing the colour already painted keeps the scene, it is only taken away by the menu`() {
         val painted = FeedComposerDraft().withBackground("0F0C29")
 
-        assertThat(PostSceneLaw.pick(current = painted.background, tapped = "0F0C29")).isNull()
-        assertThat(PostSceneLaw.pick(current = painted.background, tapped = "FF2E63")).isEqualTo("FF2E63")
-        assertThat(PostSceneLaw.pick(current = null, tapped = "FF2E63")).isEqualTo("FF2E63")
+        assertThat(painted.withBackground("0F0C29")).isEqualTo(painted)
+        assertThat(painted.withBackground("FF2E63").background).isEqualTo("FF2E63")
+        assertThat(painted.withBackground(null).showsScene).isFalse()
+    }
+
+    @Test
+    fun `the overflow offers nothing on a blank composer, so the button does not exist`() {
+        assertThat(PostOverflowLaw.entries(FeedComposerDraft())).isEmpty()
+    }
+
+    @Test
+    fun `remove the background is offered only while there is one, and clear all closes the list`() {
+        assertThat(PostOverflowLaw.entries(FeedComposerDraft().withBackground("0F0C29")))
+            .containsExactly(PostOverflowEntry.REMOVE_BACKGROUND, PostOverflowEntry.CLEAR_ALL).inOrder()
+        assertThat(PostOverflowLaw.entries(FeedComposerDraft(text = "salut")))
+            .containsExactly(PostOverflowEntry.CLEAR_ALL)
+    }
+
+    @Test
+    fun `a place alone is something to clear, whitespace alone is not`() {
+        assertThat(PostOverflowLaw.entries(FeedComposerDraft(text = "  \n "))).isEmpty()
+        assertThat(PostOverflowLaw.entries(FeedComposerDraft().withLocation(SharedPlace(latitude = 1.0, longitude = 2.0))))
+            .containsExactly(PostOverflowEntry.CLEAR_ALL)
+    }
+
+    @Test
+    fun `remove the background takes the scene away and leaves the words`() {
+        val draft = FeedComposerDraft(text = "la vue").withBackground("08D9D6")
+
+        val after = PostOverflowLaw.perform(PostOverflowEntry.REMOVE_BACKGROUND, draft)
+
+        assertThat(after.showsScene).isFalse()
+        assertThat(after.text).isEqualTo("la vue")
+    }
+
+    @Test
+    fun `clear all empties the document but keeps the audience and the language`() {
+        val draft = FeedComposerDraft(text = "x", visibility = FeedPostVisibility.FRIENDS, language = "es", forcePlainPost = true)
+            .withBackground("08D9D6")
+            .withLocation(SharedPlace(latitude = 1.0, longitude = 2.0))
+
+        val after = PostOverflowLaw.perform(PostOverflowEntry.CLEAR_ALL, draft)
+
+        assertThat(after).isEqualTo(FeedComposerDraft(visibility = FeedPostVisibility.FRIENDS, language = "es"))
     }
 
     @Test
