@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.outbox.SessionOutboxOwnerSource
 import me.meeshy.sdk.session.AccountFence
@@ -52,6 +53,35 @@ class AuthRepositoryAccountSwitchFenceTest {
         val outcome: Any? = sending.await()
         assertThat(outcome).isNull()
         assertThat(chunksSentUnder).isEmpty()
+    }
+
+    private class RecordingTokenStore(private val inner: InMemoryTokenStore = InMemoryTokenStore()) : TokenStore by inner {
+        val ownerAtJwtWrite = mutableListOf<Pair<String?, String?>>()
+        override var jwt: String?
+            get() = inner.jwt
+            set(value) {
+                ownerAtJwtWrite += value to inner.userId
+                inner.jwt = value
+            }
+    }
+
+    @Test
+    fun `les jetons de B ne s'ecrivent jamais sous l'identite de A`() = runTest {
+        val api = mockk<AuthApi>()
+        val store = RecordingTokenStore()
+        val transition = SessionTransitionFlags()
+        val sessions = SessionRepository(api, store, transition)
+        val fence = AccountFence(SessionOutboxOwnerSource(sessions, store), transition)
+        val repository = AuthRepository(api, store, sessions, object : SessionTeardown {
+            override suspend fun wipe() = Unit
+        }, SyncSeqTracker(), fence)
+        repository.adoptSession(session("A"))
+
+        repository.adoptSession(session("B"))
+
+        assertThat(store.ownerAtJwtWrite.filter { it.first == "jwt-B" }.map { it.second }).doesNotContain("A")
+        assertThat(store.userId).isEqualTo("B")
+        assertThat(store.jwt).isEqualTo("jwt-B")
     }
 
     @Test
