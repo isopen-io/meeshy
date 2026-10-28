@@ -136,8 +136,12 @@
     <string name="status_bar_republish">Republier</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">via @%s</string>
+    <string name="status_composer_bare_add">Ajouter un mot</string>
+    <string name="status_composer_bare_publish">Publier quand même</string>
+    <string name="status_composer_bare_title">Publier ton humeur sans un petit mot ?</string>
     <string name="status_composer_close">Fermer</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">Autres emojis</string>
     <string name="status_composer_mood_question">Comment tu te sens ?</string>
     <string name="status_composer_publish">Publier</string>
     <string name="status_composer_title">Statut</string>

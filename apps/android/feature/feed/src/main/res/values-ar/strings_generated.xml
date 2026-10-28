@@ -148,8 +148,12 @@
     <string name="status_bar_republish">إعادة نشر</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
     <string name="status_bar_via">عبر @%s</string>
+    <string name="status_composer_bare_add">إضافة كلمة</string>
+    <string name="status_composer_bare_publish">النشر على أي حال</string>
+    <string name="status_composer_bare_title">هل تريد نشر مزاجك دون كلمة قصيرة؟</string>
     <string name="status_composer_close">إغلاق</string>
     <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_emoji_more">رموز تعبيرية أخرى</string>
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
     <string name="status_composer_title">الحالة</string>

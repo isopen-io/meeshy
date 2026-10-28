@@ -17,7 +17,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.delay
+import me.meeshy.ui.component.EmojiFullPicker
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -150,6 +157,19 @@ private fun MoodPlateau(
     formatSlot: (@Composable () -> Unit)?,
     onPublish: () -> Unit,
 ) {
+    var isAsking by remember { mutableStateOf(false) }
+    var isPicking by remember { mutableStateOf(false) }
+    val wordFocus = remember { FocusRequester() }
+    var refocus by remember { mutableStateOf(0) }
+    LaunchedEffect(refocus) { if (refocus > 0) { delay(WORD_REFOCUS_DELAY_MS); runCatching { wordFocus.requestFocus() } } }
+    if (isAsking) BareMoodDialog(
+        onAddWord = { isAsking = false; refocus++ },
+        onPublishAnyway = { isAsking = false; onPublish() },
+    )
+    if (isPicking) MoodEmojiSheet(
+        onPick = { onChange(draft.withPickedEmoji(it)); isPicking = false },
+        onDismiss = { isPicking = false },
+    )
     ComposerPlateau(
         onDismiss = onClose,
         topCorridor = {
@@ -158,7 +178,10 @@ private fun MoodPlateau(
             Spacer(Modifier.weight(1f))
             MeeshyPrimaryButton(
                 text = stringResource(R.string.status_composer_publish),
-                onClick = onPublish,
+                onClick = { when (draft.publishStep) {
+                    StatusBarePublish.Step.PUBLISH -> onPublish()
+                    StatusBarePublish.Step.ASK_FOR_A_WORD -> isAsking = true
+                } },
                 enabled = draft.canPublish,
                 modifier = Modifier.width(MOOD_PUBLISH_WIDTH),
             )
@@ -182,16 +205,44 @@ private fun MoodPlateau(
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
             )
-            EmojiGrid(selected = draft.selectedEmoji, onToggle = { onChange(draft.toggleEmoji(it)) })
+            EmojiGrid(selected = draft.selectedEmoji, onToggle = { onChange(draft.toggleEmoji(it)) }, onMore = { isPicking = true })
             if (ComposerRailPlan.publicationControls(ComposerFormat.STATUS)[PublicationControl.AUDIENCE] == PublicationControlPlace.SURFACE) {
                 VisibilityRow(selected = draft.visibility, onSelect = { onChange(draft.withVisibility(it)) })
             }
-            TextInput(draft = draft, onTextChange = { onChange(draft.withText(it)) })
+            TextInput(draft = draft, onTextChange = { onChange(draft.withText(it)) }, focusRequester = wordFocus)
         }
     }
 }
 
 private val MOOD_PUBLISH_WIDTH = 112.dp
+
+/** The alert must have finished leaving before the field takes the keyboard back (iOS `refocusDelay`, 350 ms). */
+private const val WORD_REFOCUS_DELAY_MS = 350L
+
+/** « Publier ton humeur sans un petit mot ? » — add a word, or publish anyway (iOS `ComposerMoodPublishGate`). */
+@Composable
+private fun BareMoodDialog(onAddWord: () -> Unit, onPublishAnyway: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onAddWord,
+        title = { Text(stringResource(R.string.status_composer_bare_title)) },
+        confirmButton = { TextButton(onClick = onAddWord) { Text(stringResource(R.string.status_composer_bare_add)) } },
+        dismissButton = { TextButton(onClick = onPublishAnyway) { Text(stringResource(R.string.status_composer_bare_publish)) } },
+    )
+}
+
+/** The full emoji picker (iOS `ComposerMoodEmojiSheet`): the offered moods stand in as quick reactions. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoodEmojiSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
+        EmojiFullPicker(
+            onSelect = onPick,
+            quickReactions = StatusComposerDraft.MOOD_OPTIONS,
+            title = stringResource(R.string.status_composer_emoji_more),
+            modifier = Modifier.navigationBarsPadding(),
+        )
+    }
+}
 
 // MARK: - Header
 
@@ -234,24 +285,43 @@ private fun Header(
 private fun EmojiGrid(
     selected: String?,
     onToggle: (String) -> Unit,
+    onMore: (() -> Unit)? = null,
 ) {
+    val cells = StatusComposerDraft.MOOD_OPTIONS + listOfNotNull(StatusBarePublish.customEmoji(selected, StatusComposerDraft.MOOD_OPTIONS))
+    val rows = cells.map<String, @Composable (Modifier) -> Unit> { emoji ->
+        { m -> EmojiButton(emoji = emoji, selected = emoji == selected, onClick = { onToggle(emoji) }, modifier = m) }
+    } + listOfNotNull<@Composable (Modifier) -> Unit>(onMore?.let { more -> { m -> MoreEmojiCell(more, m) } })
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        StatusComposerDraft.MOOD_OPTIONS.chunked(EMOJI_COLUMNS).forEach { row ->
+        rows.chunked(EMOJI_COLUMNS).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
-                row.forEach { emoji ->
-                    EmojiButton(
-                        emoji = emoji,
-                        selected = emoji == selected,
-                        onClick = { onToggle(emoji) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                row.forEach { cell -> cell(Modifier.weight(1f)) }
                 repeat(EMOJI_COLUMNS - row.size) { Box(Modifier.weight(1f)) }
             }
         }
+    }
+}
+
+/** The door to the full picker — a cell of the grid, same 56 dp (iOS `ComposerMoodMoreEmojiCell`). */
+@Composable
+private fun MoreEmojiCell(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.status_composer_emoji_more)
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.lg))
+            .background(MeeshyTheme.tokens.inputBackground)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(MeeshyIcons.Emoji, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
+        Icon(
+            MeeshyIcons.AddCircleFilled, contentDescription = null, tint = MeeshyPalette.Indigo400,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(MeeshySpacing.xs).size(16.dp),
+        )
     }
 }
 
@@ -327,12 +397,13 @@ private fun visibilityLabel(visibility: StatusVisibility): String = stringResour
 private fun TextInput(
     draft: StatusComposerDraft,
     onTextChange: (String) -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         OutlinedTextField(
             value = draft.text,
             onValueChange = onTextChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             placeholder = { Text(stringResource(R.string.status_composer_placeholder)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
