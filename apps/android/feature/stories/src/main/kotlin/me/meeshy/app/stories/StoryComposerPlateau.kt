@@ -80,6 +80,15 @@ internal fun StoryComposerPlateau(
             }
         },
         trailingRail = {
+            state.selectedObjectControllers?.takeIf { !state.isDrawingActive }?.let { controllers ->
+                controllers.actions.forEach { action ->
+                    ComposerRailButton(
+                        icon = action.icon(),
+                        label = stringResource(action.labelRes()),
+                        onClick = { viewModel.onObjectController(controllers.ref, action) },
+                    )
+                }
+            }
             ComposerRailButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), viewModel::onUndo, enabled = state.canUndo)
             ComposerRailButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), viewModel::onRedo, enabled = state.canRedo)
             ComposerRailButton(
