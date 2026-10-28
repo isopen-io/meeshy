@@ -1,7 +1,7 @@
 import Foundation
 
 /// **Les plafonds d'une story / d'une scène — UNE source de constantes**
-/// (décision porteur 2026-10-28, #13590).
+/// (décision porteur, #13590).
 ///
 /// Plafonds LARGES : assez hauts pour ne refuser aucun contenu réaliste, assez
 /// bas pour qu'une scène reste un document borné. Les nombres sont ceux de la
