@@ -16,12 +16,22 @@ import androidx.compose.runtime.produceState
 import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
+import me.meeshy.sdk.model.StoryVisibility
+import me.meeshy.sdk.model.composer.CarriedMedia
+import me.meeshy.sdk.model.composer.ComposerCarry
 
 /**
  * What the unified composer host needs to know about a post composition to let the format breathe —
  * the text and the media kinds, nothing the host would have to interpret.
  */
-data class PostComposerFacts(val text: String, val media: List<ReelComposition.MediaKind>)
+data class PostComposerFacts(
+    val text: String,
+    val media: List<CarriedMedia>,
+    val visibility: StoryVisibility,
+) {
+    val kinds: List<ReelComposition.MediaKind>
+        get() = media.map { ReelComposition.MediaKind(it.media.mimeType, it.media.durationMs) }
+}
 
 /**
  * The post / reel body of the ONE composer: the existing [FeedComposerSheet] mounted as a CONTENT of
@@ -39,8 +49,11 @@ fun PostComposerContent(
     governingType: PostType? = null,
     offerReel: Boolean = false,
     onFormatChosen: (ComposerFormat) -> Unit = {},
+    carry: ComposerCarry? = null,
+    onCarryApplied: (Int) -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
+    val carryAtMount = remember { carry }
     var pendingOffer by remember { mutableStateOf<FeedComposerDraft?>(null) }
     fun publish(draft: FeedComposerDraft) {
         val request = draft.publishRequest() ?: return
@@ -65,7 +78,9 @@ fun PostComposerContent(
     }
     val seed by produceState<FeedComposerDraft?>(null, viewModel) {
         val restored = viewModel.restorableDraft()
-        value = (restored ?: FeedComposerDraft()).let { if (seedText.isNotBlank() && seedText != it.text) it.withText(seedText) else it }
+        val base = (restored ?: FeedComposerDraft()).let { if (seedText.isNotBlank() && seedText != it.text) it.withText(seedText) else it }
+        value = carryAtMount?.takeIf { it.target == ComposerCarry.Side.POST }?.let { base.withCarry(it) } ?: base
+        carryAtMount?.let { onCarryApplied(it.token) }
     }
     val initial = seed ?: return
     FeedComposerSheet(
@@ -74,7 +89,7 @@ fun PostComposerContent(
         onDismiss = onClose,
         onDraftChange = { draft ->
             viewModel.persistComposerDraft(draft)
-            onFacts(PostComposerFacts(draft.text, draft.media.map { ReelComposition.MediaKind(it.mimeType, it.durationMs) }))
+            onFacts(PostComposerFacts(draft.text, draft.carriedMedia(), draft.visibility.storyVisibility()))
         },
         onQueueMedia = viewModel::queueMedia,
         onRemoveMedia = viewModel::discardQueuedMedia,

@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import me.meeshy.sdk.model.ReelComposition
+import me.meeshy.app.feed.PostComposerFacts
+import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
@@ -29,10 +30,17 @@ class ComposerHostViewModel @Inject constructor(
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 
-    fun onStoryFacts(text: String, hasScene: Boolean) = _state.update { it.withText(text).withScene(hasScene) }
+    fun onStoryFacts(facts: StoryComposerFacts) = _state.update {
+        it.withText(facts.text).withScene(facts.hasScene)
+            .withSceneDocument(facts.media, facts.pending, facts.room, facts.visibility)
+    }
 
-    fun onPostFacts(text: String, media: List<ReelComposition.MediaKind>) =
-        _state.update { it.withText(text).withMedia(media) }
+    fun onPostFacts(facts: PostComposerFacts) = _state.update {
+        it.withText(facts.text).withMedia(facts.kinds).withPostDocument(facts.media, facts.visibility)
+    }
+
+    /** The target surface took what the switch carried: it is never handed over twice. */
+    fun onCarryApplied(token: Int) = _state.update { it.carryApplied(token) }
 
     fun onMoodFacts(text: String, emoji: String?) = _state.update { it.withText(text).withMoodEmoji(emoji) }
 }

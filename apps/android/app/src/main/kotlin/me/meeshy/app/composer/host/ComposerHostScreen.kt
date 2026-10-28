@@ -40,10 +40,10 @@ fun ComposerHostScreen(
     val context = LocalContext.current
     val shared = feedOwner ?: checkNotNull(LocalViewModelStoreOwner.current)
     val choose: (ComposerFormat) -> Unit = { format ->
-        if (state.leavesMediaBehindOn(format)) {
+        viewModel.choose(format)
+        if ((viewModel.state.value.carry?.plan?.leftBehind ?: 0) > 0) {
             Toast.makeText(context, R.string.composer_format_media_stay_behind, Toast.LENGTH_LONG).show()
         }
-        viewModel.choose(format)
     }
     val formatMenu: @Composable () -> Unit = {
         ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
@@ -52,12 +52,16 @@ fun ComposerHostScreen(
         ComposerFormat.STORY -> StoryComposerContent(
             seedText = state.text,
             onFacts = viewModel::onStoryFacts,
+            carry = state.carry,
+            onCarryApplied = viewModel::onCarryApplied,
             onClose = onClose,
             titleContent = formatMenu,
         )
         ComposerFormat.POST, ComposerFormat.REEL -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { PostComposerContent(
             seedText = state.text,
-            onFacts = { facts -> viewModel.onPostFacts(facts.text, facts.media) },
+            onFacts = viewModel::onPostFacts,
+            carry = state.carry,
+            onCarryApplied = viewModel::onCarryApplied,
             onClose = onClose,
             onMediaError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
             formatSlot = formatMenu,

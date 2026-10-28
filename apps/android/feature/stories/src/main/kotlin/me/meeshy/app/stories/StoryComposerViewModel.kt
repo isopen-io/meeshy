@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -27,6 +28,7 @@ import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
+import me.meeshy.sdk.model.composer.ComposerCarry
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -91,6 +93,16 @@ class StoryComposerViewModel @Inject constructor(
     /** A repost door brings its own matter: the stored draft is not this session's until it restored or wrote it. */
     private var seededByDoor = false
     private var ownsStoredDraft = false
+    private var restoring: Job? = null
+
+    /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
+    fun onCarry(carry: ComposerCarry) {
+        viewModelScope.launch {
+            restoring?.join()
+            _state.update { StoryComposerCarryReducer.applied(it, carry) }
+            record()
+        }
+    }
 
     /**
      * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
@@ -99,7 +111,7 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onEnterComposer(seededByDoor: Boolean = false) {
         this.seededByDoor = seededByDoor
-        viewModelScope.launch {
+        restoring = viewModelScope.launch {
             draftConfirmation.settle()
             val stored = draftStore.load()
             val restored = StoryComposerAutosave.restore(
