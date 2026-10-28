@@ -26,6 +26,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerRailDoor
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailButton
@@ -48,6 +50,7 @@ internal fun StoryComposerPlateau(
     onClose: () -> Unit,
     titleContent: (@Composable () -> Unit)?,
     onOpenAudience: () -> Unit,
+    onOpenStickers: () -> Unit,
     panel: @Composable () -> Unit,
 ) {
     ComposerPlateau(
@@ -64,6 +67,18 @@ internal fun StoryComposerPlateau(
                 )
             }
         },
+        leadingRail = {
+            StoryPlateauDoors.leading.forEach { door ->
+                val tool = StoryPlateauDoors.toolFor(door)
+                ComposerRailButton(
+                    icon = door.glyph(),
+                    label = stringResource(door.labelRes()),
+                    onClick = { tool?.let(viewModel::onBandToolTap) ?: onOpenStickers() },
+                    enabled = !state.isDrawingActive,
+                    active = tool != null && state.band.activeTool == tool,
+                )
+            }
+        },
         trailingRail = {
             ComposerRailButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), viewModel::onUndo, enabled = state.canUndo)
             ComposerRailButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), viewModel::onRedo, enabled = state.canRedo)
@@ -72,6 +87,13 @@ internal fun StoryComposerPlateau(
                 stringResource(R.string.stories_composer_add_slide),
                 viewModel::onAddSlide,
                 enabled = state.deck.canAddSlide,
+            )
+            ComposerRailButton(
+                icon = MeeshyIcons.ScheduleFilled,
+                label = stringResource(R.string.story_tool_timeline),
+                onClick = { viewModel.onBandToolTap(StoryToolMode.TIMELINE) },
+                enabled = !state.isDrawingActive,
+                active = state.band.activeTool == StoryToolMode.TIMELINE,
             )
         },
         socle = {
@@ -91,6 +113,7 @@ internal fun StoryComposerPlateau(
             panel = panel,
             modifier = Modifier.padding(12.dp),
             showsAddSlide = false,
+            showsToolBand = false,
         )
     }
 }
@@ -119,4 +142,22 @@ private fun RowScope.PlateauAudienceChip(visibility: StoryVisibility, count: Int
         Icon(visibility.icon(), contentDescription = null, tint = ComposerPlateauInk.primary)
         Text(shown, style = MaterialTheme.typography.labelLarge, color = ComposerPlateauInk.primary, maxLines = 1)
     }
+}
+
+private fun ComposerRailDoor.glyph() = when (this) {
+    ComposerRailDoor.MEDIA -> MeeshyIcons.PhotoFilled
+    ComposerRailDoor.SOUND -> MeeshyIcons.MusicNote
+    ComposerRailDoor.TEXT -> MeeshyIcons.TextFields
+    ComposerRailDoor.BACKGROUND -> MeeshyIcons.Palette
+    ComposerRailDoor.DRAWING -> MeeshyIcons.EditFilled
+    else -> MeeshyIcons.EmojiFilled
+}
+
+private fun ComposerRailDoor.labelRes() = when (this) {
+    ComposerRailDoor.MEDIA -> R.string.story_tool_media
+    ComposerRailDoor.SOUND -> R.string.story_tool_audio
+    ComposerRailDoor.TEXT -> R.string.story_tool_text
+    ComposerRailDoor.BACKGROUND -> R.string.story_tool_texture
+    ComposerRailDoor.DRAWING -> R.string.story_tool_drawing
+    else -> R.string.stories_composer_add_sticker
 }
