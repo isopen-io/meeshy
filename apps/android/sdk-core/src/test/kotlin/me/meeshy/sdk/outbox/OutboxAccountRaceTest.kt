@@ -13,7 +13,10 @@ import kotlinx.coroutines.withTimeout
 import me.meeshy.core.crypto.primitives.StreamingSeal
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.conversation.MessageSendCoordinator
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
@@ -179,6 +182,31 @@ class OutboxAccountRaceTest {
 
         assertThat(sent).isEmpty()
         assertThat(outbox.observeAll().first()).isEmpty()
+    }
+
+    /**
+     * The message's account is the one signed in when the author SENT it, not when its row is written: the clock read
+     * that opens the send is the moment the account closes and B signs in (forced, never timed).
+     */
+    @Test
+    fun `a message sent by A whose account closes before it is queued leaves neither bubble nor row, and never leaves as B`(): Unit = runBlocking {
+        val closesOnFirstRead = object : CacheClock {
+            var closed = false
+            override fun nowMillis(): Long {
+                if (!closed) {
+                    closed = true
+                    runBlocking { signOutThenSignInAsB() }
+                }
+                return 1_700_000_000_000L
+            }
+        }
+        val sends = MessageSendCoordinator(db, db.messageDao(), outbox, closesOnFirstRead)
+
+        val outcome = runCatching { sends.sendOptimistic("c1", "rendez-vous à 8 h", "fr", MeeshyUser(id = "A", username = "a")) }
+
+        assertThat(outcome.exceptionOrNull()).isInstanceOf(AccountClosedException::class.java)
+        assertThat(outbox.observeAll().first()).isEmpty()
+        assertThat(db.messageDao().listForConversation("c1")).isEmpty()
     }
 
     @Test

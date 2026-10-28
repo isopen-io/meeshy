@@ -1,6 +1,8 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -23,6 +25,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountClosedException
 
 /**
  * The send lifecycle of one outgoing message (ARCHITECTURE.md §5): the optimistic `SENDING`
@@ -68,6 +71,7 @@ internal class MessageSendCoordinator(
         attachments: List<ApiMessageAttachment> = emptyList(),
         location: SharedPlace? = null,
     ): String {
+        val ticket = outboxRepository.ticket()
         val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
@@ -122,16 +126,22 @@ internal class MessageSendCoordinator(
         database.withTransaction {
             messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
         }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.SEND_MESSAGE,
-                lane = OutboxLanes.forMessage(conversationId),
-                targetId = conversationId,
-                payload = MeeshyApi.json.encodeToString(request),
-                dependsOn = placeholderIds.toSet(),
-                cmid = cid,
-            ),
-        )
+        try {
+            outboxRepository.enqueue(
+                OutboxMutation(
+                    kind = OutboxKind.SEND_MESSAGE,
+                    lane = OutboxLanes.forMessage(conversationId),
+                    targetId = conversationId,
+                    payload = MeeshyApi.json.encodeToString(request),
+                    dependsOn = placeholderIds.toSet(),
+                    cmid = cid,
+                ),
+                ticket,
+            )
+        } catch (closed: AccountClosedException) {
+            withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
+            throw closed
+        }
         return cid
     }
 
