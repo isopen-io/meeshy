@@ -39,12 +39,12 @@ fun ComposerHostScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val shared = feedOwner ?: checkNotNull(LocalViewModelStoreOwner.current)
+    val sayMediaStayBehind = { Toast.makeText(context, R.string.composer_format_media_stay_behind, Toast.LENGTH_LONG).show() }
     val choose: (ComposerFormat) -> Unit = { format ->
         viewModel.choose(format)
-        if ((viewModel.state.value.carry?.plan?.leftBehind ?: 0) > 0) {
-            Toast.makeText(context, R.string.composer_format_media_stay_behind, Toast.LENGTH_LONG).show()
-        }
+        if ((viewModel.state.value.carry?.plan?.leftBehind ?: 0) > 0) sayMediaStayBehind()
     }
+    val onCarryApplied: (Int, Int) -> Unit = { token, lost -> if (viewModel.onCarryApplied(token, lost)) sayMediaStayBehind() }
     val formatMenu: @Composable () -> Unit = {
         ComposerFormatMenu(state.selectedFormat, state.verdicts, choose)
     }
@@ -53,7 +53,7 @@ fun ComposerHostScreen(
             seedText = state.text,
             onFacts = viewModel::onStoryFacts,
             carry = state.carry,
-            onCarryApplied = viewModel::onCarryApplied,
+            onCarryApplied = onCarryApplied,
             onClose = onClose,
             titleContent = formatMenu,
         )
@@ -61,7 +61,7 @@ fun ComposerHostScreen(
             seedText = state.text,
             onFacts = viewModel::onPostFacts,
             carry = state.carry,
-            onCarryApplied = viewModel::onCarryApplied,
+            onCarryApplied = onCarryApplied,
             onClose = onClose,
             onMediaError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
             formatSlot = formatMenu,

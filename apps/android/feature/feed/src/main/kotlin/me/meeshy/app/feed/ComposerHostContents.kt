@@ -50,7 +50,7 @@ fun PostComposerContent(
     offerReel: Boolean = false,
     onFormatChosen: (ComposerFormat) -> Unit = {},
     carry: ComposerCarry? = null,
-    onCarryApplied: (Int) -> Unit = {},
+    onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val carryAtMount = remember { carry }
@@ -79,8 +79,10 @@ fun PostComposerContent(
     val seed by produceState<FeedComposerDraft?>(null, viewModel) {
         val restored = viewModel.restorableDraft()
         val base = (restored ?: FeedComposerDraft()).let { if (seedText.isNotBlank() && seedText != it.text) it.withText(seedText) else it }
-        value = carryAtMount?.takeIf { it.target == ComposerCarry.Side.POST }?.let { base.withCarry(it) } ?: base
-        carryAtMount?.let { onCarryApplied(it.token) }
+        val postCarry = carryAtMount?.takeIf { it.target == ComposerCarry.Side.POST }
+        val carried = postCarry?.let { base.withCarry(it) }
+        value = carried?.draft ?: base
+        postCarry?.let { onCarryApplied(it.token, carried?.lost ?: 0) }
     }
     val initial = seed ?: return
     FeedComposerSheet(

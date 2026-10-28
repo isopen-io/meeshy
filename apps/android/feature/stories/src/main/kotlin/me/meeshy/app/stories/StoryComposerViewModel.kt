@@ -96,12 +96,11 @@ class StoryComposerViewModel @Inject constructor(
     private var restoring: Job? = null
 
     /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
-    fun onCarry(carry: ComposerCarry) {
-        viewModelScope.launch {
-            restoring?.join()
-            _state.update { StoryComposerCarryReducer.applied(it, carry) }
-            record()
-        }
+    fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
+        restoring?.join()
+        _state.update { StoryComposerCarryReducer.applied(it, carry) }
+        record()
+        onApplied(StoryComposerCarryReducer.lost(_state.value, carry))
     }
 
     /**

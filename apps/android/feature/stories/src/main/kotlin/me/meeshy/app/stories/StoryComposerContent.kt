@@ -20,7 +20,7 @@ fun StoryComposerContent(
     seedText: String,
     onFacts: (StoryComposerFacts) -> Unit,
     carry: ComposerCarry? = null,
-    onCarryApplied: (Int) -> Unit = {},
+    onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     onClose: () -> Unit,
     titleContent: @Composable () -> Unit,
     viewModel: StoryComposerViewModel = hiltViewModel(),
@@ -36,7 +36,7 @@ fun StoryComposerContent(
         state.selectedSlideTextElements.isNotEmpty() || state.selectedSlideStickers.isNotEmpty() ||
         state.selectedSlideStrokes.isNotEmpty() || state.selectedSlideBackground != null
     LaunchedEffect(carry?.token) {
-        carry?.takeIf { it.target == ComposerCarry.Side.SCENE }?.let { viewModel.onCarry(it); onCarryApplied(it.token) }
+        carry?.takeIf { it.target == ComposerCarry.Side.SCENE }?.let { viewModel.onCarry(it) { lost -> onCarryApplied(it.token, lost) } }
     }
     LaunchedEffect(state.editorText, hasScene, state.carriedMedia, state.carriedPending, state.draft.visibility) {
         onFacts(

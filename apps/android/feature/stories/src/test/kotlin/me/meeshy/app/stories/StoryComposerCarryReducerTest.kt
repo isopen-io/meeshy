@@ -56,4 +56,14 @@ class StoryComposerCarryReducerTest {
         assertThat(twice.attachments).hasSize(1)
         assertThat(twice.deck.selectedSlide.mediaIds).containsExactly("a")
     }
+
+    @Test
+    fun `a slide fuller than the host knew takes what fits and the rest is counted, not attached`() {
+        val full = StoryComposerCarryReducer.applied(StoryComposerUiState(), carry((1..9).map { CarriedMedia(media("own$it")) }))
+        val incoming = carry(listOf(CarriedMedia(media("x")), CarriedMedia(media("y"))))
+        val next = StoryComposerCarryReducer.applied(full, incoming)
+        assertThat(next.deck.selectedSlide.mediaIds).hasSize(10)
+        assertThat(next.attachments.map { it.id }).doesNotContain("y")
+        assertThat(StoryComposerCarryReducer.lost(next, incoming)).isEqualTo(1)
+    }
 }
