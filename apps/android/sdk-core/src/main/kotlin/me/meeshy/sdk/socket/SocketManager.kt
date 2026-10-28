@@ -105,6 +105,10 @@ class SocketManager internal constructor(
 
     @Volatile
     private var staleReopenScheduled = false
+
+    /** A [disconnect] a call deferred: the session is over, nothing may replace it with a reopen (#13558). */
+    @Volatile
+    private var disconnectRequested = false
     private var refreshJob: Job? = null
     private val registered = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
 
@@ -231,10 +235,12 @@ class SocketManager internal constructor(
      * Pendant un appel actif la coupure est différée à sa fin ([CallActivityGate]).
      */
     fun disconnect() {
+        disconnectRequested = true
         callGate.runOrDefer { disconnectNow() }
     }
 
     private fun disconnectNow() = synchronized(lock) {
+        disconnectRequested = false
         closeTransport()
         registered.clear()
     }
@@ -242,12 +248,20 @@ class SocketManager internal constructor(
     /**
      * Referme puis rouvre avec le jeton courant, en gardant les écouteurs enregistrés. Pendant un
      * appel actif la rotation est différée à sa fin et rend l'issue courante (ARMED si ouverte).
+     * Une déconnexion demandée garde le dessus : la porte d'appel ne retient qu'UNE action, et une
+     * rotation qui la remplacerait garderait le registre de la session finie (#13558).
      */
     fun reconnectWithToken(): SocketConnectOutcome {
         var outcome: SocketConnectOutcome? = null
-        val ran = callGate.runOrDefer { outcome = reconnectNow() }
+        val ran = callGate.runOrDefer { outcome = rotateUnlessDisconnecting() }
         if (ran) return outcome ?: SocketConnectOutcome.NOT_ARMED
         return if (_socket != null) SocketConnectOutcome.ARMED else SocketConnectOutcome.NOT_ARMED
+    }
+
+    private fun rotateUnlessDisconnecting(): SocketConnectOutcome {
+        if (!disconnectRequested) return reconnectNow()
+        disconnectNow()
+        return SocketConnectOutcome.NOT_ARMED
     }
 
     private fun reconnectNow(): SocketConnectOutcome = synchronized(lock) {
@@ -292,7 +306,7 @@ class SocketManager internal constructor(
 
     private fun reopenStale(socket: RealtimeSocket) {
         synchronized(lock) {
-            if (_socket !== socket || staleReopenScheduled) return
+            if (_socket !== socket || staleReopenScheduled || disconnectRequested) return
             staleReopenScheduled = true
         }
         Timber.w("Socket: session terminee, evenement jete et socket rouverte")

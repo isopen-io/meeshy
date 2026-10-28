@@ -90,4 +90,48 @@ class SocketManagerSessionBoundaryTest {
         rig.factory.created.last().fire("message:new", "payload")
         assertThat(received).containsExactly("event")
     }
+
+    @Test
+    fun `l'evenement perime d'une socket gardee par un appel ne remplace pas la deconnexion differee`() {
+        val rig = Rig()
+        val received = mutableListOf<String>()
+        rig.manager.on("message:new") { received += "A" }
+        rig.manager.connect()
+        val socketOfA = rig.factory.created.single()
+        rig.gate.setActive(true)
+
+        rig.store.clear()
+        rig.transition.bumpGeneration()
+        rig.manager.disconnect()
+        socketOfA.fire("message:new", "payload")
+        rig.gate.setActive(false)
+
+        assertThat(socketOfA.disconnectCalls).isEqualTo(1)
+        rig.store.jwt = validJwt
+        rig.transition.bumpGeneration()
+        rig.manager.connect()
+        rig.manager.on("message:new") { received += "B" }
+        rig.factory.created.last().fire("message:new", "payload")
+        assertThat(received).containsExactly("B")
+    }
+
+    @Test
+    fun `une rotation demandee pendant l'appel apres la deconnexion ne garde pas le registre de la session finie`() {
+        val rig = Rig()
+        val received = mutableListOf<String>()
+        rig.manager.on("message:new") { received += "A" }
+        rig.manager.connect()
+        rig.gate.setActive(true)
+
+        rig.store.clear()
+        rig.manager.disconnect()
+        rig.manager.reconnectWithToken()
+        rig.gate.setActive(false)
+
+        rig.store.jwt = validJwt
+        rig.manager.connect()
+        rig.manager.on("message:new") { received += "B" }
+        rig.factory.created.last().fire("message:new", "payload")
+        assertThat(received).containsExactly("B")
+    }
 }
