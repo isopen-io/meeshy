@@ -44,6 +44,9 @@ class AuthRepository @Inject constructor(
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
+    /** Un COMPTE est connecté (JWT) : une session d'invité de lien est [isAuthenticated] sans l'être (#13530). */
+    val hasAccountSession: Boolean get() = tokenStore.jwt != null
+
     /** Of [accountIds], those whose session sleeps on the device: only then is "stay signed in" offered. */
     fun accountsKeepingASession(accountIds: Collection<String>): Set<String> = tokenStore.accountsWithTokens(accountIds)
 

@@ -69,6 +69,7 @@ fun MeeshyApp(
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     warmDeepLink: Uri? = null,
+    warmDeepLinkAwaitsAccount: Boolean = false,
     onWarmDeepLinkHandled: () -> Unit = {},
     callLink: CallLinkRequest? = null,
     onCallLinkHandled: () -> Unit = {},
@@ -145,9 +146,9 @@ fun MeeshyApp(
     // (MainActivity.onNewIntent) : les navDeepLink du graphe ne sont lus qu'au démarrage, c'est
     // donc ici qu'on rejoue l'intent, comme le routeur de liens d'iOS (`.onOpenURL`). Il attend la
     // session, puis la pile se refait avec la liste dessous (le retour revient à la liste).
-    LaunchedEffect(warmDeepLink, authState.isAuthenticated) {
+    LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
         val uri = warmDeepLink ?: return@LaunchedEffect
-        if (!authState.isAuthenticated) return@LaunchedEffect
+        if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
         WarmDeepLink.open(navController, uri)
         onWarmDeepLinkHandled()
     }
