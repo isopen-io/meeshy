@@ -11,15 +11,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -45,6 +43,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerRailPlan
 import me.meeshy.sdk.model.composer.PublicationControl
+import me.meeshy.sdk.model.composer.PublicationControlPlace
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailButton
@@ -139,8 +138,9 @@ fun StatusComposerSheet(
 // MARK: - Plateau
 
 /**
- * The mood ON the plateau: a text-only card has no canvas, so no left rail (nothing is PLACED); the audience — the one
- * thing that structures a mood's publication — stands in the right corridor, the emoji grid and the sentence on the card.
+ * The mood ON the plateau (iOS `ComposerMoodSurface`): no scene, so no column and no socle — the cross, the format and
+ * Publish share the top corridor (`headerPaintsPublish`), and the card carries the question, the emoji grid, the
+ * audience ribbon (the mood's own selector, `socleZones(for: .mood)` is empty) and the sentence.
  */
 @Composable
 private fun MoodPlateau(
@@ -156,18 +156,11 @@ private fun MoodPlateau(
             ComposerRailButton(MeeshyIcons.Close, stringResource(R.string.status_composer_close), onClose)
             formatSlot?.invoke()
             Spacer(Modifier.weight(1f))
-        },
-        trailingRail = {
-            ComposerRailPlan.publicationControls(ComposerFormat.STATUS).forEach { control ->
-                if (control == PublicationControl.AUDIENCE) MoodAudienceDoor(draft.visibility) { onChange(draft.withVisibility(it)) }
-            }
-        },
-        socle = {
             MeeshyPrimaryButton(
                 text = stringResource(R.string.status_composer_publish),
                 onClick = onPublish,
                 enabled = draft.canPublish,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.width(MOOD_PUBLISH_WIDTH),
             )
         },
     ) {
@@ -190,34 +183,15 @@ private fun MoodPlateau(
                 color = MeeshyTheme.tokens.textPrimary,
             )
             EmojiGrid(selected = draft.selectedEmoji, onToggle = { onChange(draft.toggleEmoji(it)) })
+            if (ComposerRailPlan.publicationControls(ComposerFormat.STATUS)[PublicationControl.AUDIENCE] == PublicationControlPlace.SURFACE) {
+                VisibilityRow(selected = draft.visibility, onSelect = { onChange(draft.withVisibility(it)) })
+            }
             TextInput(draft = draft, onTextChange = { onChange(draft.withText(it)) })
         }
     }
 }
 
-@Composable
-private fun MoodAudienceDoor(selected: StatusVisibility, onSelect: (StatusVisibility) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ComposerRailButton(moodAudienceGlyph(selected), visibilityLabel(selected), { open = true }, active = open)
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            StatusVisibility.entries.forEach { visibility ->
-                DropdownMenuItem(
-                    text = { Text(visibilityLabel(visibility)) },
-                    onClick = { open = false; onSelect(visibility) },
-                    leadingIcon = { Icon(moodAudienceGlyph(visibility), contentDescription = null) },
-                )
-            }
-        }
-    }
-}
-
-private fun moodAudienceGlyph(visibility: StatusVisibility) = when (visibility) {
-    StatusVisibility.PUBLIC -> MeeshyIcons.Public
-    StatusVisibility.COMMUNITY -> MeeshyIcons.Groups
-    StatusVisibility.FRIENDS -> MeeshyIcons.Group
-    StatusVisibility.PRIVATE -> MeeshyIcons.Lock
-}
+private val MOOD_PUBLISH_WIDTH = 112.dp
 
 // MARK: - Header
 
