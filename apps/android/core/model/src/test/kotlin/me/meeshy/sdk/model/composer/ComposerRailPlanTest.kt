@@ -18,25 +18,32 @@ class ComposerRailPlanTest {
     }
 
     @Test
-    fun `what appears on the canvas is placed on the left, the publication's own doors on the right`() {
+    fun `what appears on the canvas is placed on the left, the publication's own doors on the canonical line`() {
         val plan = ComposerRailPlan.of(ComposerFormat.POST, everything)
         assertThat(plan.leading).containsAtLeast(ComposerRailDoor.MEDIA, ComposerRailDoor.SOUND, ComposerRailDoor.TEXT)
-        assertThat(plan.trailing).containsAtLeast(ComposerRailDoor.CONTENT, ComposerRailDoor.PLACE, ComposerRailDoor.MENTION)
-        assertThat(plan.leading).containsNoneIn(plan.trailing)
+        assertThat(plan.canonical).containsAtLeast(ComposerRailDoor.PLACE, ComposerRailDoor.MENTION, ComposerRailDoor.HASHTAG)
+        assertThat(plan.leading).containsNoneIn(plan.canonical)
+    }
+
+    @Test
+    fun `the post body door stands in the socle, never twice on screen`() {
+        val plan = ComposerRailPlan.of(ComposerFormat.POST, everything)
+        assertThat(plan.servesPostText).isTrue()
+        assertThat(plan.all).doesNotContain(ComposerRailDoor.CONTENT)
+        assertThat(ComposerRailPlan.of(ComposerFormat.STORY, everything).servesPostText).isFalse()
     }
 
     @Test
     fun `the same door changes side with the format - mention and place are objects only in a story`() {
         assertThat(ComposerRailPlan.side(ComposerRailDoor.PLACE, ComposerFormat.STORY)).isEqualTo(ComposerRailSide.LEADING)
-        assertThat(ComposerRailPlan.side(ComposerRailDoor.PLACE, ComposerFormat.POST)).isEqualTo(ComposerRailSide.TRAILING)
+        assertThat(ComposerRailPlan.side(ComposerRailDoor.PLACE, ComposerFormat.POST)).isEqualTo(ComposerRailSide.CANONICAL)
         assertThat(ComposerRailPlan.side(ComposerRailDoor.BACKGROUND, ComposerFormat.POST)).isEqualTo(ComposerRailSide.LEADING)
     }
 
     @Test
     fun `the post body door exists in a post only`() {
-        assertThat(ComposerRailPlan.of(ComposerFormat.POST, everything).all).contains(ComposerRailDoor.CONTENT)
         listOf(ComposerFormat.STORY, ComposerFormat.REEL, ComposerFormat.STATUS).forEach { format ->
-            assertThat(ComposerRailPlan.of(format, everything).all).doesNotContain(ComposerRailDoor.CONTENT)
+            assertThat(ComposerRailPlan.of(format, everything).servesPostText).isFalse()
         }
     }
 
@@ -48,25 +55,31 @@ class ComposerRailPlanTest {
     }
 
     @Test
-    fun `a story's slide description is the content itself so its door is withdrawn`() {
-        assertThat(ComposerRailPlan.of(ComposerFormat.STORY, everything).all).doesNotContain(ComposerRailDoor.DESCRIPTION)
-        assertThat(ComposerRailPlan.of(ComposerFormat.POST, everything).all).contains(ComposerRailDoor.DESCRIPTION)
+    fun `the slide description has no rail entry - the panel under the scene is its one path`() {
+        ComposerFormat.entries.forEach { format ->
+            assertThat(ComposerRailPlan.of(format, everything).all).doesNotContain(ComposerRailDoor.DESCRIPTION)
+        }
     }
 
     @Test
     fun `only served doors are offered and the canonical order is kept`() {
         val plan = ComposerRailPlan.of(ComposerFormat.POST, setOf(ComposerRailDoor.PLACE, ComposerRailDoor.SOUND, ComposerRailDoor.MEDIA))
         assertThat(plan.leading).containsExactly(ComposerRailDoor.MEDIA, ComposerRailDoor.SOUND).inOrder()
-        assertThat(plan.trailing).containsExactly(ComposerRailDoor.PLACE)
+        assertThat(plan.canonical).containsExactly(ComposerRailDoor.PLACE)
     }
 
     @Test
-    fun `audience is on the right of every format and the language of every format with a text body that is not a mood`() {
-        ComposerFormat.entries.forEach { format ->
-            assertThat(ComposerRailPlan.publicationControls(format)).contains(PublicationControl.AUDIENCE)
+    fun `the audience stands in the socle and the language at the foot of the text - never on a rail`() {
+        listOf(ComposerFormat.POST, ComposerFormat.REEL, ComposerFormat.STORY).forEach { format ->
+            val places = ComposerRailPlan.publicationControls(format)
+            assertThat(places[PublicationControl.AUDIENCE]).isEqualTo(PublicationControlPlace.SOCLE)
+            assertThat(places[PublicationControl.LANGUAGE]).isEqualTo(PublicationControlPlace.CONTENT_FOOT)
         }
-        assertThat(ComposerRailPlan.publicationControls(ComposerFormat.POST)).contains(PublicationControl.LANGUAGE)
-        assertThat(ComposerRailPlan.publicationControls(ComposerFormat.REEL)).contains(PublicationControl.LANGUAGE)
-        assertThat(ComposerRailPlan.publicationControls(ComposerFormat.STATUS)).doesNotContain(PublicationControl.LANGUAGE)
+    }
+
+    @Test
+    fun `a mood carries its own audience ribbon and declares no language`() {
+        val places = ComposerRailPlan.publicationControls(ComposerFormat.STATUS)
+        assertThat(places).containsExactly(PublicationControl.AUDIENCE, PublicationControlPlace.SURFACE)
     }
 }
