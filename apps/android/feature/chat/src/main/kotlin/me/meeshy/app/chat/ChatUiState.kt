@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -144,8 +145,12 @@ data class ChatUiState(
      * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
      * member (null permissions) gets every affordance; a share-link guest is gated
      * to the capabilities the join hardened. */
+    /** Les familles que le lien d'un invité ouvre ; sans restriction pour un membre (elles voyagent avec [composerPermissions]). */
+    val guestAttachmentAllowance: GuestAttachmentAllowance
+        get() = composerPermissions?.attachmentAllowance ?: GuestAttachmentAllowance.UNRESTRICTED
+
     val composerAffordances: ComposerAffordances
-        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions)
+        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions, guestAttachmentAllowance)
 
     /**
      * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne

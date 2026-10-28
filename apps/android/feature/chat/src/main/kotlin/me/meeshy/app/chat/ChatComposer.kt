@@ -36,6 +36,7 @@ import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
@@ -98,8 +99,12 @@ internal fun ChatComposer(
     pendingAttachmentCount: Int = 0,
     /** Ouvre le sélecteur de lieu ; `null` = la tuile « Lieu » n'est pas offerte. */
     onLocationRequest: (() -> Unit)? = null,
+    /** Les familles que le lien d'un invité ouvre ; restreintes, la porte « Fichier » ouvre la feuille de l'invité (#10006). */
+    guestAllowance: GuestAttachmentAllowance = GuestAttachmentAllowance.UNRESTRICTED,
+    conversationTitle: String = "",
 ) {
     val context = LocalContext.current
+    var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
     val ioScope = rememberCoroutineScope()
     val haptics = rememberMeeshyHaptics()
     val focusManager = LocalFocusManager.current
@@ -482,7 +487,8 @@ internal fun ChatComposer(
                             attachmentTrayOpen = false
                             when (kind) {
                                 AttachmentTileKind.Photo -> filePicker.launch("image/*")
-                                AttachmentTileKind.File -> filePicker.launch("*/*")
+                                AttachmentTileKind.File ->
+                                    if (guestAllowance.isRestricted) guestSheetOpen = true else filePicker.launch("*/*")
                                 AttachmentTileKind.Voice -> voice.request()
                                 AttachmentTileKind.Camera -> cameraChooserOpen = true
                                 AttachmentTileKind.Emoji -> emojiPickerOpen = true
@@ -494,6 +500,23 @@ internal fun ChatComposer(
             }
         },
     )
+    if (guestSheetOpen) {
+        GuestAttachmentSheet(
+            conversationTitle = conversationTitle,
+            allowance = guestAllowance,
+            onAccepted = { uris ->
+                if (onPickUris != null) {
+                    onPickUris(uris)
+                } else {
+                    ioScope.launch {
+                        val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
+                        onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+                    }
+                }
+            },
+            onDismiss = { guestSheetOpen = false },
+        )
+    }
     if (emojiPickerOpen) {
         ComposerEmojiSheet(accentColor, onSelect = ::insertEmoji, onDismiss = { emojiPickerOpen = false })
     }

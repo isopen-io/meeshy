@@ -106,14 +106,14 @@ internal class ChatComposerController(
      * posture. A store failure degrades to the full posture (never a crash).
      */
     suspend fun loadComposerPermissions() {
-        val permissions = try {
-            anonymousSessionStore.load()?.permissions
+        val context = try {
+            anonymousSessionStore.load()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
         } ?: return
-        state.update { it.copy(composerPermissions = permissions) }
+        state.update { it.copy(composerPermissions = context.permissions) }
     }
 
     /**

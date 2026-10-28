@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.world
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.model.guest.GuestAttachmentKind
 
 /**
  * Ce que `GET /api/v1/world` sert — public, sans identité (miroir de `WorldEntry`, iOS `WorldModels.swift`).
@@ -67,7 +68,8 @@ data class LinkMembershipResponse(
                 canSendMessages = rights?.let { it.canSendMessages ?: false } ?: true,
                 canSendFiles = rights?.canSendFiles ?: false,
                 canSendImages = rights?.canSendImages ?: false,
-            ),
+                // World Wide plafonne les familles de ses invites (#10001) : des termes qui ne les disent pas prennent le plafond.
+            ).copy(allowedAttachmentKinds = GuestAttachmentKind.WORLD_GUEST_CEILING.map { it.wire }),
             linkId = linkKey,
             conversationId = conversationId,
         )
