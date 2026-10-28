@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
@@ -157,6 +158,23 @@ data class StoryComposerUiState(
     /** The offline-pending media of the **selected** slide, in slide order. */
     val selectedSlidePending: List<PendingMediaUpload>
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
+
+    /**
+     * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
+     * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
+     */
+    val selectedSlideBackdropModel: Any?
+        get() {
+            val designated = deck.selectedSlideBackgroundMediaId
+            val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
+            val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
+            return when {
+                uploaded != null -> uploaded.thumbnailUrl ?: uploaded.url
+                pending != null -> pending.item.previewModel
+                else -> selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
+                    ?: selectedSlidePending.firstOrNull()?.item?.previewModel
+            }
+        }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform

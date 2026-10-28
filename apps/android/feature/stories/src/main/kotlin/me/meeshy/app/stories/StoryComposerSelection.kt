@@ -50,7 +50,7 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
  * ni peint ni publié comme objet par le composeur Android (#11608) : un filtre sur lui serait perdu, il n'est pas proposé.
  */
 internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
-    val isSceneMedia = id == selectedSlideAttachments.firstOrNull()?.id || id == deck.selectedSlideBackgroundMediaId
+    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id)
     return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
 }
 

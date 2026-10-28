@@ -14,6 +14,10 @@ import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
  * it already tracks, so the wire mapping ([toMediaObject]) stays a pure, unit-tested
  * function rather than reaching into upload state.
  *
+ * [url] is `null` for a background still waiting on its offline upload: the object then names the
+ * placeholder `cmid`, travels with its framing and loop in the outbox row, and the drainer's write-back
+ * swaps in the real media id once it lands (#13605).
+ *
  * Mirrors iOS designating exactly one canvas media object `isBackground: true` per
  * slide; the produced object is what the Android viewer's `resolveBackgroundMedia`
  * (`firstOrNull { it.isBackground }`) and the `StorySlideDuration` `bgVideoDur` branch
@@ -21,7 +25,7 @@ import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
  */
 data class StoryBackgroundMedia(
     val mediaId: String,
-    val url: String,
+    val url: String?,
     val mimeType: String,
     val durationSeconds: Double?,
     val loop: Boolean = true,
