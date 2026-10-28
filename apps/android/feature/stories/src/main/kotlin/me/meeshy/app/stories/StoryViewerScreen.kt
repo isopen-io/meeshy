@@ -105,6 +105,10 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.story.canvas.SceneLookChain
@@ -152,7 +156,8 @@ fun StoryViewerScreen(
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var showSendTo by remember { mutableStateOf(false) }
-    var sendToStoryId by remember { mutableStateOf<String?>(null) }
+    val shareLauncher = LocalShareLauncher.current
+    val shareContext = androidx.compose.ui.platform.LocalContext.current
     var showOptions by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -612,8 +617,19 @@ fun StoryViewerScreen(
                                 text = { Text(stringResource(R.string.stories_action_send_to)) },
                                 onClick = {
                                     showOptions = false
-                                    sendToStoryId = state.currentStoryId
-                                    showSendTo = true
+                                    val storyId = state.currentStoryId
+                                    if (storyId != null && shareLauncher != null) {
+                                        showSendTo = true
+                                        shareLauncher.open(
+                                            ShareSubject.Card(
+                                                ShareCards.story(
+                                                    storyId = storyId,
+                                                    authorId = null,
+                                                    messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
+                                                ),
+                                            ),
+                                        ) { showSendTo = false }
+                                    }
                                 },
                             )
                             if (state.isOwnStory) {
@@ -802,18 +818,6 @@ fun StoryViewerScreen(
             storyId = commentsStoryId,
             accentHex = accent,
             onDismiss = { showComments = false },
-        )
-    }
-
-    val frozenSendToStoryId = sendToStoryId
-    if (showSendTo && frozenSendToStoryId != null) {
-        StorySendToSheet(
-            storyId = frozenSendToStoryId,
-            accentHex = accent,
-            onDismiss = {
-                showSendTo = false
-                sendToStoryId = null
-            },
         )
     }
 }

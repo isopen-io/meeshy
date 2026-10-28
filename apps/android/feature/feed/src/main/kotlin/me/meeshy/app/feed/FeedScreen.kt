@@ -37,6 +37,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshySpacing
@@ -124,6 +128,7 @@ fun FeedScreen(
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
             val shareContext = context
+            val shareLauncher = LocalShareLauncher.current
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -185,11 +190,15 @@ fun FeedScreen(
                             isOwn = post.authorId != null && post.authorId == state.currentUserId,
                             onShare = {
                                 viewModel.recordShare(post.id)
-                                val send = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id))
-                                }
-                                shareContext.startActivity(Intent.createChooser(send, null))
+                                // La feuille de partage unique (#13474) : conversations, copier le lien, partage système.
+                                shareLauncher?.open(
+                                    ShareSubject.Card(ShareCards.post(post.id, title = post.content, authorId = post.authorId)),
+                                ) ?: shareContext.startActivity(
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id)),
+                                        null,
+                                    ),
+                                )
                             },
                             onCopyLink = {
                                 clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.story.shareText",
+          "androidName": "share_story_text",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
