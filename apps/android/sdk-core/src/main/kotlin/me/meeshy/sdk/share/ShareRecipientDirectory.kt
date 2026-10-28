@@ -1,6 +1,7 @@
 package me.meeshy.sdk.share
 
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.interlocutor
 import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.mayCurrentUserWrite
@@ -42,6 +43,27 @@ object ShareRecipientDirectory {
                 avatarUrl = conversation.avatar?.takeIf { it.isNotBlank() },
                 accentHex = conversation.accentHex(),
                 peerUserId = peer,
+            )
+        }
+        .toList()
+
+    /**
+     * Les amis acceptés comme personnes à qui écrire, sans conversation encore ouverte (la directe naît
+     * à l'envoi). Ni soi, ni un bloqué. Le nom : le nom affiché, sinon prénom + nom, sinon le pseudo.
+     */
+    fun fromFriends(
+        friends: List<FriendRequestUser>,
+        currentUserId: String?,
+        blockedUserIds: Set<String> = emptySet(),
+    ): List<ShareRecipient> = friends.asSequence()
+        .filter { it.id != currentUserId && it.id !in blockedUserIds }
+        .map { friend ->
+            val full = listOfNotNull(friend.firstName, friend.lastName).filter { it.isNotBlank() }.joinToString(" ")
+            ShareRecipient.person(
+                userId = friend.id,
+                title = friend.displayName?.takeIf { it.isNotBlank() } ?: full.ifEmpty { friend.username },
+                detail = ShareRecipient.Detail.FriendWithoutConversation,
+                avatarUrl = friend.avatar?.takeIf { it.isNotBlank() },
             )
         }
         .toList()

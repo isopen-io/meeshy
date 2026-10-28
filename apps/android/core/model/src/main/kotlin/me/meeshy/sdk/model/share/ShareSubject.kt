@@ -47,6 +47,19 @@ sealed interface ShareSubject {
         override val sourceConversationId: String? get() = null
     }
 
+    /**
+     * Ce qu'une autre app remet à Meeshy (ACTION_SEND / SEND_MULTIPLE) : des fichiers déjà copiés dans
+     * le cache privé ([media], dans l'ordre d'envoi) et le texte ou le lien joint ([text]). Miroir de
+     * `ShareSubject.incoming` (iOS) ; le texte joint devient le corps du message, la légende s'y ajoute.
+     */
+    data class Incoming(val text: String?, val media: List<ShareMedia>) : ShareSubject {
+        override val sourceConversationId: String? get() = null
+
+        /** Un texte qui n'est qu'une adresse web part comme un lien. */
+        val isLink: Boolean
+            get() = media.isEmpty() && text != null && WEB_ADDRESS.matches(text.trim())
+    }
+
     /** La conversation d'où le contenu vient : elle n'est jamais un destinataire. */
     val sourceConversationId: String?
 
@@ -55,7 +68,7 @@ sealed interface ShareSubject {
         get() = when (this) {
             is Messages -> messages
             is Piece -> listOf(message)
-            is Text, is Link, is Card -> emptyList()
+            is Text, is Link, is Card, is Incoming -> emptyList()
         }
 
     /** L'entrée du plan. [removedMessageIds] : les messages ôtés de « Ce qui part ». */
@@ -67,6 +80,11 @@ sealed interface ShareSubject {
         is Text -> ShareEntry.Text(text)
         is Link -> ShareEntry.Link(url)
         is Card -> ShareEntry.Card(card.kind, card.url)
+        is Incoming -> when {
+            media.isNotEmpty() -> ShareEntry.Media(media, text?.takeIf { it.isNotBlank() })
+            isLink -> ShareEntry.Link(text.orEmpty().trim())
+            else -> ShareEntry.Text(text.orEmpty())
+        }
     }
 
     /** « Tout le message » : la pièce s'élargit au message qui la porte. */
@@ -83,9 +101,12 @@ sealed interface ShareSubject {
             is Text -> text
             is Link -> url
             is Card -> card.messageText
+            is Incoming -> text?.trim()
             is Messages, is Piece -> return null
         }
         if (body.isNullOrEmpty()) return trimmed.ifEmpty { null }
         return if (trimmed.isEmpty()) body else "$trimmed\n$body"
     }
 }
+
+private val WEB_ADDRESS = Regex("https?://\\S+")

@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model.share
 
+/** Le destinataire servi en premier et la conversation où il l'a été. */
+data class ShareServed(val recipient: ShareRecipient, val conversationId: String)
+
 /** Où en est l'envoi vers UN destinataire (V6). */
 sealed interface ShareDelivery {
     data object Sending : ShareDelivery
@@ -42,6 +45,8 @@ data class ShareSheetState(
     val grouping: ShareGrouping = ShareGrouping.TOGETHER,
     val chosenDurationSeconds: Int? = null,
     val deliveries: Map<String, ShareDelivery> = emptyMap(),
+    /** La première destination servie : la confirmation « Envoyé à X · Ouvrir » (D5). */
+    val firstServed: ShareServed? = null,
 ) {
     val hasSent: Boolean get() = deliveries.values.any { it != ShareDelivery.Sending }
 
@@ -63,6 +68,16 @@ data class ShareSheetState(
     fun withQuery(text: String): ShareSheetState = copy(query = text)
 
     fun withDelivery(recipientId: String, state: ShareDelivery): ShareSheetState = copy(deliveries = deliveries + (recipientId to state))
+
+    /**
+     * Un destinataire est servi : sa rangée passe à « envoyé » (ou « en file » hors ligne), et le premier
+     * servi nomme la confirmation. [conversationId] est la conversation où le message est vraiment parti
+     * (la directe qu'un envoi vers une personne vient d'ouvrir).
+     */
+    fun served(recipient: ShareRecipient, conversationId: String, queued: Boolean): ShareSheetState = copy(
+        deliveries = deliveries + (recipient.id to if (queued) ShareDelivery.Queued else ShareDelivery.Sent),
+        firstServed = firstServed ?: ShareServed(recipient, conversationId),
+    )
 
     /** La durée choisie ne dépasse jamais celle de la flamme source (D8). */
     fun withDuration(seconds: Int?, plan: SharePlan): ShareSheetState {
