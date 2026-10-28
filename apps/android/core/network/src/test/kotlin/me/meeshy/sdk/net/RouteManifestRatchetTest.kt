@@ -68,8 +68,10 @@ class RouteManifestRatchetTest {
          * `ConversationEncryptionApi.kt`.
          * 237 : moins `GET /conversations/:id/engagement` (#13297 : la Flamme de l'en-tête du fil), que porte
          * `ConversationEngagementApi.kt`.
+         * 236 : moins `DELETE /attachments/:attachmentId` (#13596 : supprimer UNE pièce d'un message), que porte
+         * `MediaApi.delete`.
          */
-        const val TO_PORT_CEILING = 237
+        const val TO_PORT_CEILING = 236
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
