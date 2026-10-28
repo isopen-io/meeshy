@@ -291,12 +291,16 @@ object SdkModule {
         @ApplicationContext context: Context,
         @SecretVault secureStore: SecureStore,
         json: Json,
+        tokenStore: me.meeshy.sdk.net.TokenStore,
     ): AnonymousSessionStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_anonymous_session")
         }
-        return SecureAnonymousSessionStore(secureStore, DataStoreAnonymousSessionStore(dataStore, json), json)
+        return me.meeshy.sdk.session.AccountAwareAnonymousSessionStore(
+            SecureAnonymousSessionStore(secureStore, DataStoreAnonymousSessionStore(dataStore, json), json),
+            tokenStore,
+        )
     }
 
     @Provides

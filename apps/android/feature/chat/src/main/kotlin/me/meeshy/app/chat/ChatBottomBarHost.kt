@@ -144,6 +144,8 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onPickUris = actions.stagePendingUris,
             isEditing = state.isEditing,
             affordances = state.composerAffordances,
+            guestAllowance = state.guestAttachmentAllowance,
+            conversationTitle = state.conversationTitle.orEmpty(),
             slowMode = rememberComposerSlowMode(state),
             isEndToEnd = state.isEndToEnd,
             replyBanner = replyBanner,
