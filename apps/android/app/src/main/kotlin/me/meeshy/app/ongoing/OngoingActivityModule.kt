@@ -110,6 +110,9 @@ internal interface OngoingActivityModule {
     fun ongoingActivityInitializer(initializer: OngoingActivityInitializer): AppInitializer
 
     @Binds
+    fun recordingServiceLauncher(launcher: AndroidRecordingServiceLauncher): RecordingServiceLauncher
+
+    @Binds
     @IntoSet
     fun voiceRecordingLocalsProvider(provider: VoiceRecordingLocalsProvider): AppLocalsProvider
 }

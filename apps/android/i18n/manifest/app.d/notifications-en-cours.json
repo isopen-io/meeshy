@@ -51,6 +51,10 @@
         {
           "androidName": "voice_recording_activity_stop",
           "status": "android-only"
+        },
+        {
+          "androidName": "voice_recording_activity_cancel",
+          "status": "android-only"
         }
       ]
     }

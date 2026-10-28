@@ -13,4 +13,5 @@
     <string name="outbox_activity_remaining">%1$d متبقٍ</string>
     <string name="voice_recording_activity_title">تسجيل صوتي</string>
     <string name="voice_recording_activity_stop">إيقاف</string>
+    <string name="voice_recording_activity_cancel">إلغاء</string>
 </resources>
