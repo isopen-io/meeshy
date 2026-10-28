@@ -1331,6 +1331,69 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `selecting the Original entry shows the source text and never announces the sentinel as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "es"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+
+        vm.selectLanguage(StoryLanguageOverride.ORIGINAL)
+
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.current?.languageCode).isNull()
+        assertThat(vm.state.value.activeLanguageCode).isNull()
+    }
+
+    @Test
+    fun `selecting a language twice keeps it - the explorer never toggles back`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.selectLanguage("es")
+        vm.selectLanguage("es")
+
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.activeLanguageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `the explorer is built only while it is open and follows the served language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.languageExplorer).isNull()
+
+        vm.openLanguageExplorer()
+        vm.selectLanguage("es")
+
+        val explorer = vm.state.value.languageExplorer!!
+        assertThat(explorer.current?.text).isEqualTo("hola")
+        assertThat(explorer.rows.first { it.isSelected }.code).isEqualTo("es")
+
+        vm.closeLanguageExplorer()
+        assertThat(vm.state.value.languageExplorer).isNull()
+    }
+
+    @Test
     fun `re-toggling the same language clears the override`() = runTest {
         val vm = viewModel(
             startUserId = "a1",

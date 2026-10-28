@@ -262,6 +262,10 @@ data class StoryViewerUiState(
     val canAutoAdvance: Boolean = false,
     val availableLanguages: List<StoryLanguageOption> = emptyList(),
     val languageOverride: String? = null,
+    /** La langue réellement servie sur le slide (jamais la sentinelle « Original ») : puce et texte la partagent. */
+    val activeLanguageCode: String? = null,
+    /** L'explorateur de langues ouvert (feuille), `null` tant qu'il est fermé. */
+    val languageExplorer: StoryLanguageExplorer? = null,
     /**
      * Ni le cache ni le réseau n'ont de story jouable pour l'auteur demandé : le lecteur
      * propose Réessayer et Fermer au lieu de se refermer seul ou d'ouvrir un autre auteur.
