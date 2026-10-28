@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.transformLatest
@@ -56,6 +57,7 @@ import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
@@ -156,9 +158,12 @@ class PostRepository @Inject constructor(
      * now. Returns `false` only when the post is not in the cache to begin with.
      */
     suspend fun toggleLike(postId: String): Boolean {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val wasLiked = target.isLikedByMe == true
-        applyLike(postId, liked = !wasLiked, likeCount = adjustedCount(target.likeCount, wasLiked))
+        val ticket = fence?.currentTicket()
+        val before = rewriteRow(ticket, postId) {
+            val wasLiked = it.isLikedByMe == true
+            it.copy(isLikedByMe = !wasLiked, likeCount = adjustedCount(it.likeCount, wasLiked))
+        } ?: return false
+        val wasLiked = before.isLikedByMe == true
 
         outboxRepository.enqueue(
             OutboxMutation(
@@ -189,9 +194,7 @@ class PostRepository @Inject constructor(
      * outbox mutation, and mirrors the feed cache when the post sits there and differs.
      */
     suspend fun setLiked(postId: String, liked: Boolean) {
-        cachedPost(postId)
-            ?.takeIf { (it.isLikedByMe == true) != liked }
-            ?.let { applyLike(postId, liked = liked, likeCount = adjustedCount(it.likeCount, wasSet = !liked)) }
+        rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
@@ -204,11 +207,7 @@ class PostRepository @Inject constructor(
 
     /** The bookmark analogue of [setLiked]. */
     suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
-        cachedPost(postId)
-            ?.takeIf { (it.isBookmarkedByMe == true) != bookmarked }
-            ?.let {
-                applyBookmark(postId, bookmarked = bookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
-            }
+        rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
@@ -233,20 +232,41 @@ class PostRepository @Inject constructor(
      * the delta a second time would double-count or flip a like the server
      * actually accepted.
      */
-    fun rollbackLike(postId: String, liked: Boolean) {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
-        if ((target.isLikedByMe == true) != !liked) return
-        applyLike(postId, liked = liked, likeCount = adjustedCount(target.likeCount, wasSet = !liked))
+    suspend fun rollbackLike(postId: String, liked: Boolean) {
+        rewriteRow(fence?.currentTicket(), postId) {
+            if ((it.isLikedByMe == true) != !liked) null else likeRow(it, liked)
+        }
     }
+
+    private fun likeRow(row: ApiPost, liked: Boolean): ApiPost? =
+        if ((row.isLikedByMe == true) == liked) null
+        else row.copy(isLikedByMe = liked, likeCount = adjustedCount(row.likeCount, wasSet = !liked))
+
+    private fun bookmarkRow(row: ApiPost, bookmarked: Boolean): ApiPost? =
+        if ((row.isBookmarkedByMe == true) == bookmarked) null
+        else row.copy(isBookmarkedByMe = bookmarked, bookmarkCount = adjustedCount(row.bookmarkCount, wasSet = !bookmarked))
+
+    /**
+     * Réécrit la ligne [postId] du fil, lue et remplacée dans UN SEUL `update {}` (aucune mise à jour concurrente perdue,
+     * quel que soit le fil d'exécution), sous le compte de [ticket] (celui du geste). Rend la ligne AVANT réécriture ;
+     * `null` : ligne absente, [transform] sans effet, ou compte fermé — rien n'a été écrit.
+     */
+    private suspend fun rewriteRow(ticket: AccountTicket?, postId: String, transform: (ApiPost) -> ApiPost?): ApiPost? =
+        fence.commitOrWrite(ticket) {
+            var before: ApiPost? = null
+            _feedCache.update { rows ->
+                before = null
+                val index = rows?.indexOfFirst { it.id == postId } ?: -1
+                val row = rows?.getOrNull(index)
+                val next = row?.let(transform)
+                if (rows == null || row == null || next == null) rows
+                else rows.toMutableList().also { it[index] = next }.also { before = row }
+            }
+            before
+        }
 
     private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
         ((current ?: 0) + if (wasSet) -1 else 1).coerceAtLeast(0)
-
-    private fun applyLike(postId: String, liked: Boolean, likeCount: Int?) {
-        _feedCache.value = _feedCache.value?.map {
-            if (it.id == postId) it.copy(isLikedByMe = liked, likeCount = likeCount) else it
-        }
-    }
 
     /**
      * Optimistic, durable bookmark toggle (ARCHITECTURE.md §4-5), the bookmark
@@ -260,13 +280,12 @@ class PostRepository @Inject constructor(
      * only when the post is not in the cache to begin with.
      */
     suspend fun toggleBookmark(postId: String): Boolean {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val wasBookmarked = target.isBookmarkedByMe == true
-        applyBookmark(
-            postId,
-            bookmarked = !wasBookmarked,
-            bookmarkCount = adjustedCount(target.bookmarkCount, wasBookmarked),
-        )
+        val ticket = fence?.currentTicket()
+        val before = rewriteRow(ticket, postId) {
+            val wasBookmarked = it.isBookmarkedByMe == true
+            it.copy(isBookmarkedByMe = !wasBookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasBookmarked))
+        } ?: return false
+        val wasBookmarked = before.isBookmarkedByMe == true
 
         outboxRepository.enqueue(
             OutboxMutation(
@@ -288,19 +307,9 @@ class PostRepository @Inject constructor(
      * state). [bookmarked] is the value to revert TO; the count is recomputed as
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
-    fun rollbackBookmark(postId: String, bookmarked: Boolean) {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
-        if ((target.isBookmarkedByMe == true) != !bookmarked) return
-        applyBookmark(
-            postId,
-            bookmarked = bookmarked,
-            bookmarkCount = adjustedCount(target.bookmarkCount, wasSet = !bookmarked),
-        )
-    }
-
-    private fun applyBookmark(postId: String, bookmarked: Boolean, bookmarkCount: Int?) {
-        _feedCache.value = _feedCache.value?.map {
-            if (it.id == postId) it.copy(isBookmarkedByMe = bookmarked, bookmarkCount = bookmarkCount) else it
+    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean) {
+        rewriteRow(fence?.currentTicket(), postId) {
+            if ((it.isBookmarkedByMe == true) != !bookmarked) null else bookmarkRow(it, bookmarked)
         }
     }
 
@@ -314,16 +323,21 @@ class PostRepository @Inject constructor(
     suspend fun loadMore(): Boolean {
         val cursor = feedCursor
         if (!_feedHasMore.value || cursor == null) return false
-        val current = _feedCache.value ?: return false
+        if (_feedCache.value == null) return false
         val ticket = fence?.currentTicket()
         return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
             is NetworkResult.Success -> {
                 val response = result.data
                 val page = response.data
                 if (!response.success || page == null) return false
-                val existingIds = current.mapTo(HashSet()) { it.id }
                 fence.commitOrWrite(ticket) {
-                    _feedCache.value = current + page.filter { it.id !in existingIds }
+                    // Fusionné sur le fil COURANT au moment d'écrire : une mise à jour arrivée pendant la requête survit.
+                    _feedCache.update { current ->
+                        current?.let { rows ->
+                            val existingIds = rows.mapTo(HashSet()) { it.id }
+                            rows + page.filter { it.id !in existingIds }
+                        }
+                    }
                     feedCursor = response.pagination?.nextCursor
                     _feedHasMore.value = response.pagination?.hasMore ?: false
                 } ?: return false
@@ -668,10 +682,15 @@ class PostRepository @Inject constructor(
 
     /** Remplace dans le fil la ligne [postId] COURANTE par [merge] de cette ligne ; `false` : ligne absente ou fusion sans effet. */
     private fun foldIntoCache(postId: String, merge: (ApiPost) -> ApiPost?): Boolean {
-        val current = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = merge(current) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
+        var changed = false
+        _feedCache.update { rows ->
+            changed = false
+            val index = rows?.indexOfFirst { it.id == postId } ?: -1
+            val merged = rows?.getOrNull(index)?.let(merge)
+            if (rows == null || merged == null) rows
+            else rows.toMutableList().also { it[index] = merged; changed = true }
+        }
+        return changed
     }
 
     /**
@@ -721,9 +740,9 @@ class PostRepository @Inject constructor(
      * sync: that sync brings the post itself.
      */
     fun adoptPublished(post: ApiPost) {
-        val cached = _feedCache.value ?: return
-        if (cached.any { it.id == post.id }) return
-        _feedCache.value = listOf(post) + cached
+        _feedCache.update { cached ->
+            if (cached == null || cached.any { it.id == post.id }) cached else listOf(post) + cached
+        }
     }
 
     /**

@@ -144,7 +144,7 @@ class SocialSendersTest {
 
         coEvery { postApi.like("p1") } throws IOException("offline")
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
-        verify(exactly = 0) { postRepository.rollbackLike(any(), any()) }
+        coVerify(exactly = 0) { postRepository.rollbackLike(any(), any()) }
     }
 
     @Test
