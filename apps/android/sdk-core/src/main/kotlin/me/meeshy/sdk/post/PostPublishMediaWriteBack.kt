@@ -12,7 +12,8 @@ import me.meeshy.sdk.net.api.CreatePostRequest
  * [me.meeshy.sdk.story.PublishMediaWriteBack]: a post queued while its media was still
  * uploading carries each upload's `cmid` as a placeholder, and the moment an upload lands the
  * placeholder becomes the real id — in `mediaIds`, in the per-media alt and caption keys, and
- * wherever a scene designates it.
+ * wherever a scene designates it — the runtime's objects and, for a post of several photos (#13612), every scene of
+ * its document.
  *
  * It decodes the payload as a [CreatePostRequest] and re-encodes the same type, so a field only
  * a post carries (location, discoverability, mood, audio) survives the write-back. Returns
@@ -25,13 +26,15 @@ public object PostPublishMediaWriteBack {
             MeeshyApi.json.decodeFromString<CreatePostRequest>(payload)
         }.getOrNull() ?: return null
         val listed = request.mediaIds.orEmpty()
-        val designated = CanvasMediaAdoption.publicationMediaIds(emptyList(), request.storyEffects)
+        val scenes = request.storyEffects?.canvas
+        val designated = CanvasMediaAdoption.publicationMediaIds(emptyList(), request.storyEffects, scenes)
         if (placeholder !in listed && placeholder !in designated) return null
-        val adopted = CanvasMediaAdoption.adoptingByMedia(
+        val adoption = CanvasMediaAdoption.adoptingByMedia(
             effects = request.storyEffects,
-            canvas = null,
+            canvas = scenes,
             replacing = mapOf(placeholder to ServedMedia(id = realId)),
-        ).effects
+        )
+        val adopted = adoption.effects?.copy(canvas = adoption.canvas)
         val swapped = listed.map { if (it == placeholder) realId else it }.distinct()
         val grafted = request.copy(
             storyEffects = adopted,
