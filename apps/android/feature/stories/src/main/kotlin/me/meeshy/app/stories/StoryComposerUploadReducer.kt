@@ -1,8 +1,10 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.MediaUploadProgress
+import me.meeshy.sdk.net.ApiError
 
 /**
  * The media-upload slice of the story composer's state (#13429): one line per media of the pick, each
@@ -45,6 +47,9 @@ internal object StoryComposerUploadReducer {
      * every retry. The pick is dropped and [LOCATION_REFUSED] tells the author to choose another file.
      */
     fun locationRefused(state: StoryComposerUiState): StoryComposerUiState = settled(state).copy(errorMessage = LOCATION_REFUSED)
+
+    /** The upload failed because a media's location cannot be removed ([MediaLocationRefusal]), not for a reason a retry could fix. */
+    fun refusesForLocation(error: ApiError): Boolean = MediaLocationRefusal.isCode(error.code)
 
     /** The [StoryComposerUiState.errorMessage] key the screen renders as its localized refusal. */
     const val LOCATION_REFUSED: String = "media-location-not-removable"
