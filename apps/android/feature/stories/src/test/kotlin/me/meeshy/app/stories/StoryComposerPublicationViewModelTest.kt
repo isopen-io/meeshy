@@ -73,7 +73,7 @@ class StoryComposerPublicationViewModelTest {
     }
 
     private fun picked(vm: StoryComposerViewModel, vararg ids: String) {
-        coEvery { media.upload(any()) } returns NetworkResult.Success(ids.map { uploaded(it) })
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(ids.map { uploaded(it) })
         vm.onMediaPicked(ids.map { me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(1), "$it.jpg", "image/jpeg") })
     }
 

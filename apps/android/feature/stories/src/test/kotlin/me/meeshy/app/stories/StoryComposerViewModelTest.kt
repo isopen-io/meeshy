@@ -280,7 +280,7 @@ class StoryComposerViewModelTest {
 
         vm.onMediaPicked(emptyList())
 
-        coVerify(exactly = 0) { media.upload(any()) }
+        coVerify(exactly = 0) { media.upload(any(), any()) }
         assertThat(vm.state.value.isUploadingMedia).isFalse()
         assertThat(vm.state.value.attachments).isEmpty()
     }
@@ -288,11 +288,11 @@ class StoryComposerViewModelTest {
     @Test
     fun `onMediaPicked uploads and stores the returned media ids on the draft`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
 
         vm.onMediaPicked(listOf(item()))
 
-        coVerify(exactly = 1) { media.upload(any()) }
+        coVerify(exactly = 1) { media.upload(any(), any()) }
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
         assertThat(vm.state.value.isUploadingMedia).isFalse()
@@ -302,9 +302,9 @@ class StoryComposerViewModelTest {
     @Test
     fun `onMediaPicked appends to media already attached`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
 
         vm.onMediaPicked(listOf(item("two.jpg")))
 
@@ -317,7 +317,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.onTextChange("hi")
         val gate = CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
-        coEvery { media.upload(any()) } coAnswers { gate.await() }
+        coEvery { media.upload(any(), any()) } coAnswers { gate.await() }
 
         vm.onMediaPicked(listOf(item()))
 
@@ -333,19 +333,19 @@ class StoryComposerViewModelTest {
     fun `onMediaPicked is re-entrancy guarded while an upload is in flight`() = runTest {
         val vm = viewModel()
         val gate = CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
-        coEvery { media.upload(any()) } coAnswers { gate.await() }
+        coEvery { media.upload(any(), any()) } coAnswers { gate.await() }
 
         vm.onMediaPicked(listOf(item()))
         vm.onMediaPicked(listOf(item("two.jpg")))
         gate.complete(NetworkResult.Success(listOf(uploaded("m1"))))
 
-        coVerify(exactly = 1) { media.upload(any()) }
+        coVerify(exactly = 1) { media.upload(any(), any()) }
     }
 
     @Test
     fun `onMediaPicked keeps a refused media on the device instead of dropping it`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Failure(ApiError("too large", httpStatus = 413))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError("too large", httpStatus = 413))
         coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_refused"
 
         vm.onMediaPicked(listOf(item()))
@@ -357,7 +357,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onMediaPicked surfaces an error when the upload throws`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } throws IllegalStateException("no network")
+        coEvery { media.upload(any(), any()) } throws IllegalStateException("no network")
 
         vm.onMediaPicked(listOf(item()))
 
@@ -369,7 +369,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onMediaPicked surfaces an error when every uploaded row was unusable`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(emptyList())
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(emptyList())
 
         vm.onMediaPicked(listOf(item()))
 
@@ -381,7 +381,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onRemoveMedia drops the attachment and its id from the draft`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onRemoveMedia("m1")
@@ -393,7 +393,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onToggleSlideBackgroundMedia designates attached media as the slide background`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onToggleSlideBackgroundMedia("m2")
@@ -404,7 +404,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onToggleSlideBackgroundMedia clears the designation on a second tap`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onToggleSlideBackgroundMedia("m1")
@@ -416,7 +416,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onToggleSlideBackgroundMedia is inert for an unknown media id`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onToggleSlideBackgroundMedia("ghost")
@@ -427,7 +427,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing a designated video background emits an isBackground media object with its duration`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
         vm.onMediaPicked(listOf(item("clip.mp4")))
         vm.onToggleSlideBackgroundMedia("v1")
         val request = slot<CreateStoryRequest>()
@@ -446,7 +446,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onSetSlideBackgroundLoop turns off looping for a designated video background`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
         vm.onMediaPicked(listOf(item("clip.mp4")))
         vm.onToggleSlideBackgroundMedia("v1")
 
@@ -458,7 +458,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing a non-looping video background emits loop false on the media object`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
         vm.onMediaPicked(listOf(item("clip.mp4")))
         vm.onToggleSlideBackgroundMedia("v1")
         vm.onSetSlideBackgroundLoop(false)
@@ -476,7 +476,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `selectedSlideBackgroundIsVideo is true only when a designated background is a video`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(
             listOf(uploaded("m1"), uploadedVideo("v1", durationMs = 5000)),
         )
         vm.onMediaPicked(listOf(item()))
@@ -493,7 +493,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing a panned and zoomed image background carries the framing onto the wire object`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         vm.onToggleSlideBackgroundMedia("m1")
         // One pinch-out + pan gesture on the measured 1080x1920 canvas.
@@ -514,7 +514,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing an unframed image background carries the centred defaults`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         vm.onToggleSlideBackgroundMedia("m1")
         val request = slot<CreateStoryRequest>()
@@ -531,7 +531,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `framing is not projected when the designated background is not the framed media`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
         // The canvas frames the FIRST slide media (m1); designate the SECOND (m2) as background.
         vm.onToggleSlideBackgroundMedia("m2")
@@ -551,7 +551,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing a panned and zoomed video background carries the framing onto the wire object`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
         vm.onMediaPicked(listOf(item("clip.mp4")))
         vm.onToggleSlideBackgroundMedia("v1")
         vm.onCanvasTransform(panX = 200f, panY = 100f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
@@ -573,7 +573,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publishing with no designated background emits no media objects`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
         coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
@@ -586,7 +586,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `a media-only draft publishes and carries the media ids into the request`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
         coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
@@ -602,12 +602,12 @@ class StoryComposerViewModelTest {
     fun `onMediaPicked is inert and warns once the draft is at the media cap`() = runTest {
         val vm = viewModel()
         val full = (1..StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") }
-        coEvery { media.upload(any()) } returns NetworkResult.Success(full)
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(full)
         vm.onMediaPicked(List(StoryComposerDraft.MAX_MEDIA) { item("p$it.jpg") })
 
         vm.onMediaPicked(listOf(item("over.jpg")))
 
-        coVerify(exactly = 1) { media.upload(any()) }
+        coVerify(exactly = 1) { media.upload(any(), any()) }
         assertThat(vm.state.value.errorMessage).isNotNull()
         assertThat(vm.state.value.attachments).hasSize(StoryComposerDraft.MAX_MEDIA)
     }
@@ -616,12 +616,12 @@ class StoryComposerViewModelTest {
     fun `onMediaPicked only uploads as many items as there are free media slots`() = runTest {
         val vm = viewModel()
         val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any()) } returns
+        coEvery { media.upload(any(), any()) } returns
             NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
         vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
 
         val captured = slot<List<MediaUploadItem>>()
-        coEvery { media.upload(capture(captured)) } returns NetworkResult.Success(listOf(uploaded("last")))
+        coEvery { media.upload(capture(captured), any()) } returns NetworkResult.Success(listOf(uploaded("last")))
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")))
 
         assertThat(captured.captured).hasSize(1)
@@ -631,7 +631,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publish clears attached media on success`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         coEvery { repo.enqueuePublish(any(), any()) } returns "cmid"
 
@@ -644,7 +644,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `a single offline pick is durably queued and staged as a pending attachment`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
 
         vm.onMediaPicked(listOf(item()))
@@ -662,7 +662,7 @@ class StoryComposerViewModelTest {
         runTest {
             val vm = viewModel()
             val picked = item("clip.jpg")
-            coEvery { media.upload(any()) } returns offline()
+            coEvery { media.upload(any(), any()) } returns offline()
             coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
 
             vm.onMediaPicked(listOf(picked))
@@ -680,7 +680,7 @@ class StoryComposerViewModelTest {
         runTest {
             val vm = viewModel()
             val picked = item("photo.heic")
-            coEvery { media.upload(any()) } returns offline(status = 415)
+            coEvery { media.upload(any(), any()) } returns offline(status = 415)
             coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_heic"
 
             vm.onMediaPicked(listOf(picked))
@@ -693,7 +693,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `a multi-item offline pick durably queues every item as its own pending upload`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
@@ -708,7 +708,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `a second offline pick is appended as a second pending upload`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("first.jpg")))
 
@@ -724,10 +724,10 @@ class StoryComposerViewModelTest {
     fun `an offline pick is truncated to the free slots before being durably queued`() = runTest {
         val vm = viewModel()
         val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any()) } returns
+        coEvery { media.upload(any(), any()) } returns
             NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
         vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
@@ -740,7 +740,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publish gates the story on the pending upload and carries its placeholder id`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
@@ -759,7 +759,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publish gates the story on every pending upload and carries all placeholder ids`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
         val request = slot<CreateStoryRequest>()
@@ -788,7 +788,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing the pending upload clears it and its placeholder media id`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
 
@@ -802,7 +802,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing the pending upload cancels its durable upload row and blob`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
 
@@ -814,7 +814,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing one of several pending uploads keeps the rest and cancels only that durable row`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
@@ -829,7 +829,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing an uploaded attachment never cancels a durable upload`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onRemoveMedia("m1")
@@ -840,7 +840,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing a non-pending id while an upload is pending does not cancel it`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
 
@@ -853,7 +853,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing the pending upload clears state even when the durable cancel fails`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         coEvery { uploadQueue.cancel(any()) } throws IllegalStateException("disk busy")
         vm.onMediaPicked(listOf(item()))
@@ -867,9 +867,9 @@ class StoryComposerViewModelTest {
     @Test
     fun `a pending upload keeps an already-uploaded media id alongside its placeholder`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item("online.jpg")))
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
 
         vm.onMediaPicked(listOf(item("offline.jpg")))
@@ -882,10 +882,10 @@ class StoryComposerViewModelTest {
     fun `the pending upload counts toward the media cap`() = runTest {
         val vm = viewModel()
         val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any()) } returns
+        coEvery { media.upload(any(), any()) } returns
             NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
         vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-last"
         vm.onMediaPicked(listOf(item("offline.jpg")))
 
@@ -896,7 +896,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `a failure while durably queuing surfaces an error and stages nothing`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } throws IllegalStateException("disk full")
 
         vm.onMediaPicked(listOf(item()))
@@ -910,7 +910,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `the first staged item survives when a later durable enqueue fails mid-batch`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1" andThenThrows IllegalStateException("disk full")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
@@ -924,7 +924,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `publish clears the pending upload on success`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
         coEvery { repo.enqueuePublish(any(), any()) } returns "story-cmid"
@@ -1148,7 +1148,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `multi-slide publish carries media and prerequisites only on the first story`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
         vm.onTextChange("one")
@@ -1190,7 +1190,7 @@ class StoryComposerViewModelTest {
         vm.onTextChange("one")
         vm.onAddSlide()
         vm.onTextChange("two")
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
 
         vm.onMediaPicked(listOf(item()))
 
@@ -1206,7 +1206,7 @@ class StoryComposerViewModelTest {
         vm.onTextChange("one")
         vm.onAddSlide()
         vm.onTextChange("two")
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
         val requests = mutableListOf<CreateStoryRequest>()
         coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
@@ -1224,7 +1224,7 @@ class StoryComposerViewModelTest {
         vm.onTextChange("one")
         vm.onAddSlide()
         vm.onTextChange("two")
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-2"
         vm.onMediaPicked(listOf(item()))
         val requests = mutableListOf<CreateStoryRequest>()
@@ -1243,7 +1243,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.onTextChange("one")
         vm.onAddSlide()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
         vm.onAddSlide()
         vm.onTextChange("three")
@@ -1261,7 +1261,7 @@ class StoryComposerViewModelTest {
     fun `the preview shows only the selected slide's media`() = runTest {
         val vm = viewModel()
         vm.onAddSlide()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
         assertThat(vm.state.value.selectedSlideAttachments.map { it.id }).containsExactly("m2")
         val firstSlideId = vm.state.value.deck.slides.first().id
@@ -1275,7 +1275,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `media on a non-selected slide still lets the deck publish`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
 
         vm.onAddSlide()
@@ -1289,12 +1289,12 @@ class StoryComposerViewModelTest {
     fun `the media cap is per-slide so a fresh slide can attach its own ten`() = runTest {
         val vm = viewModel()
         val full = (1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { uploaded("a$it") }
-        coEvery { media.upload(any()) } returns NetworkResult.Success(full)
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(full)
         vm.onMediaPicked(List(StorySlideDeck.MAX_MEDIA_PER_SLIDE) { item("a$it.jpg") })
         assertThat(vm.state.value.draft.isMediaFull).isTrue()
 
         vm.onAddSlide()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("b1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("b1")))
         vm.onMediaPicked(listOf(item("b.jpg")))
 
         assertThat(vm.state.value.deck.slides[1].mediaIds).containsExactly("b1")
@@ -1306,7 +1306,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.onTextChange("keep")
         vm.onAddSlide()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
         val secondSlideId = vm.state.value.deck.slides[1].id
 
@@ -1322,7 +1322,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.onTextChange("keep")
         vm.onAddSlide()
-        coEvery { media.upload(any()) } returns offline()
+        coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
         val secondSlideId = vm.state.value.deck.slides[1].id
@@ -1337,7 +1337,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `removing the last slide is inert and keeps its media`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         val onlyId = vm.state.value.deck.slides.first().id
 

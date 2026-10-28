@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.media.MediaUploadProgress
+import me.meeshy.ui.component.media.UploadProgressLine
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
@@ -61,6 +63,7 @@ internal fun ComposerToolPanel(
     canAddText: Boolean,
     canAddSticker: Boolean,
     isUploadingMedia: Boolean,
+    uploadingMedia: List<MediaUploadProgress>,
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
@@ -113,6 +116,7 @@ internal fun ComposerToolPanel(
                     when (activeTool) {
                         StoryToolMode.MEDIA -> {
                             MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
+                            UploadingMediaLines(uploadingMedia)
                             BandTile(
                                 icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
                                 label = stringResource(R.string.stories_composer_add_sticker),
@@ -245,6 +249,12 @@ private fun MediaTile(
         onClick = onPickMedia,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** One bar per media of the pick being sent, each with its own « 4,8 / 14,2 Mo » (#13429). */
+@Composable
+private fun UploadingMediaLines(lines: List<MediaUploadProgress>) {
+    lines.forEach { line -> (line as? MediaUploadProgress.Uploading)?.let { UploadProgressLine(it) } }
 }
 
 /** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */

@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
@@ -107,10 +108,11 @@ class StoryComposerViewModel @Inject constructor(
                 seededByDoor = seededByDoor,
             ) ?: return@launch
             ownsStoredDraft = true
+            val swept = UnclaimedMediaSweep.hasSweptMediaUploadedBeforeIso(restored.updatedAt, Instant.now())
             val availableIds = restored.slides
                 .flatMap { it.mediaIds }
                 .toSet()
-                .filter { id -> isRestoredMediaAvailable(id) }
+                .filter { id -> isRestoredMediaAvailable(id, swept) }
                 .toSet()
             val reconciled = StoryDraftMediaReconciler.reconcile(restored) { id -> id in availableIds }
             // Media loss can empty the whole draft; a snapshot no longer worth
@@ -142,10 +144,11 @@ class StoryComposerViewModel @Inject constructor(
 
     /**
      * Whether a restored draft's media [id] can still be published: an offline placeholder
-     * ([OutboxIds.isCmid]) needs its bytes in the blob store; a server id is always available.
+     * ([OutboxIds.isCmid]) needs its bytes in the blob store; a server id is gone once the gateway swept
+     * it ([swept], #8012) — a draft picked up after 24 h must not publish a story missing its media unsaid.
      */
-    private suspend fun isRestoredMediaAvailable(id: String): Boolean =
-        !OutboxIds.isCmid(id) || mediaBlobStore.has(id)
+    private suspend fun isRestoredMediaAvailable(id: String, swept: Boolean): Boolean =
+        if (OutboxIds.isCmid(id)) mediaBlobStore.has(id) else !swept
 
     /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
     fun persistDraft() {
@@ -544,58 +547,42 @@ class StoryComposerViewModel @Inject constructor(
             return
         }
         val accepted = items.take(remaining)
-        _state.update { it.copy(isUploadingMedia = true, errorMessage = null) }
+        _state.update { StoryComposerUploadReducer.started(it, accepted.size) }
         viewModelScope.launch {
             try {
-                when (val result = mediaUploader.upload(accepted)) {
+                val onProgress = { index: Int, sent: Long, total: Long ->
+                    _state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
+                }
+                when (val result = mediaUploader.upload(accepted, onProgress)) {
                     is NetworkResult.Success -> applyUploaded(result.data)
                     is NetworkResult.Failure -> queueDurably(accepted)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                _state.update { it.copy(isUploadingMedia = false, errorMessage = e.message ?: MEDIA_FAILED) }
+                _state.update { StoryComposerUploadReducer.settled(it).copy(errorMessage = e.message ?: MEDIA_FAILED) }
             }
         }
     }
 
     private fun applyUploaded(uploaded: List<UploadedMedia>) {
-        if (uploaded.isEmpty()) {
-            _state.update { it.copy(isUploadingMedia = false, errorMessage = MEDIA_UNUSABLE) }
-            return
-        }
-        _state.update {
-            val deck = uploaded.fold(it.deck) { acc, media -> acc.addMediaToSelected(media.id) }
-            it.copy(deck = deck, attachments = it.attachments + uploaded, isUploadingMedia = false)
-                .mirrorDraftToSelection()
-        }
-        record()
+        _state.update { StoryComposerUploadReducer.uploaded(it, uploaded) }
+        if (uploaded.isNotEmpty()) record()
     }
 
     /**
-     * Any failed upload is queued durably (single pick or batch). A refusal (4xx, e.g. a HEIC
-     * the server would not take, #13412) is queued too (#13417): the media stays on the device
-     * and the publication that carries it fails retryable in « Publications non envoyées »
-     * instead of losing what the author picked.
-     *
-     * Enqueues each item durably and stages it as a pending upload, one at a time so
-     * partial progress survives if a later enqueue throws (the already-staged items
-     * stay, the caller's catch surfaces the error). Each enqueued blob + outbox row
-     * shares the returned cmid, which rides in the draft as a placeholder media id.
+     * Any failed upload is queued durably (single pick or batch), a refusal included (#13417): the media
+     * stays on the device and the publication that carries it fails retryable instead of losing what the
+     * author picked. Each item is staged one at a time so partial progress survives a later failure; its
+     * blob and outbox row share the `cmid` that rides in the draft as a placeholder id.
      */
     private suspend fun queueDurably(items: List<MediaUploadItem>) {
         items.forEach { item ->
             val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update {
-                it.copy(
-                    deck = it.deck.addMediaToSelected(cmid),
-                    pendingUploads = it.pendingUploads + PendingMediaUpload(cmid = cmid, item = item),
-                    errorMessage = null,
-                ).mirrorDraftToSelection()
-            }
+            _state.update { StoryComposerUploadReducer.queued(it, cmid, item) }
             record()
         }
-        _state.update { it.copy(isUploadingMedia = false) }
+        _state.update { StoryComposerUploadReducer.settled(it) }
     }
 
     /**

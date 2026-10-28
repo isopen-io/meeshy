@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
@@ -87,6 +88,8 @@ data class StoryComposerUiState(
     val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
     val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
     val isUploadingMedia: Boolean = false,
+    /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
+    val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
