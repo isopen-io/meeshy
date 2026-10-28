@@ -8,6 +8,7 @@ import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.AttachmentDeletedEvent
@@ -29,6 +30,7 @@ class AttachmentDeletionApplier internal constructor(
     private val updater: CachedMessageUpdater,
     private val clock: CacheClock,
     private val fence: AccountFence?,
+    private val mediaHub: ConversationMediaHubIndex,
 ) {
     @Inject
     constructor(
@@ -36,7 +38,8 @@ class AttachmentDeletionApplier internal constructor(
         messageDao: MessageDao,
         clock: CacheClock,
         fence: AccountFence?,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence)
+        mediaHub: ConversationMediaHubIndex,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence, mediaHub)
 
     suspend fun apply(event: AttachmentDeletedEvent) {
         if (event.messageId.isBlank() || event.attachmentId.isBlank()) return
@@ -50,6 +53,7 @@ class AttachmentDeletionApplier internal constructor(
         }
         if (tombstoned) database.editRevisionDao().deleteForMessage(event.messageId)
         patchListPreview(event, ticket)
+        mediaHub.forgetAttachment(event.conversationId, event.messageId, event.attachmentId, ticket)
     }
 
     private suspend fun patchListPreview(event: AttachmentDeletedEvent, ticket: AccountTicket?) {

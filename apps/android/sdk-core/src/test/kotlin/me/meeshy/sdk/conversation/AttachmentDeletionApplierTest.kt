@@ -7,6 +7,8 @@ import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentDeletedEvent
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
+import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.net.MeeshyApi
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,8 +22,8 @@ class AttachmentDeletionApplierTest {
     private fun message(id: String, content: String, vararg pieces: ApiMessageAttachment, createdAt: String = "2026-06-01T10:00:00Z") =
         ApiMessage(id = id, conversationId = "c1", senderId = "u1", content = content, attachments = pieces.toList(), createdAt = createdAt)
 
-    private fun applier(harness: MessageCollaboratorHarness) =
-        AttachmentDeletionApplier(harness.database, harness.updater, harness.clock, null)
+    private fun applier(harness: MessageCollaboratorHarness, mediaHub: ConversationMediaHubIndex = ConversationMediaHubIndex(null)) =
+        AttachmentDeletionApplier(harness.database, harness.updater, harness.clock, null, mediaHub)
 
     private val event = AttachmentDeletedEvent(attachmentId = "a", messageId = "m1", conversationId = "c1")
 
@@ -86,5 +88,19 @@ class AttachmentDeletionApplierTest {
         val last = harness.cachedConversation().lastMessage!!
         assertThat(last.id).isEqualTo("m0")
         assertThat(last.content).isEqualTo("avant")
+    }
+
+    @Test
+    fun `the deleted piece leaves the media hub already seen, and another conversation's hub is untouched`() = runHarnessTest { harness ->
+        val hub = ConversationMediaHubIndex(null)
+        hub.merge("c1", ConversationMediaKind.VISUAL, listOf(message("m1", "", photo("a"), photo("b"))), complete = true, ticket = null)
+        val elsewhere = message("m1", "", photo("a")).copy(conversationId = "c2")
+        hub.merge("c2", ConversationMediaKind.VISUAL, listOf(elsewhere), complete = true, ticket = null)
+
+        applier(harness, hub).apply(event)
+
+        val carriers = hub.read("c1", ConversationMediaKind.VISUAL)!!.carriers
+        assertThat(carriers.flatMap { it.attachments }.map { it.id }).containsExactly("b")
+        assertThat(hub.read("c2", ConversationMediaKind.VISUAL)!!.carriers.single().attachments.map { it.id }).containsExactly("a")
     }
 }
