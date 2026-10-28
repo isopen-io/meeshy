@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.MeasurePolicy
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -70,7 +72,13 @@ internal fun FramedTextBox(
     content: @Composable () -> Unit,
 ) {
     if (!frame.hasBox(background) || !pxPerDesign.isFinite() || pxPerDesign <= 0f) {
-        Box(modifier.padding(horizontal = REST_PADDING_H.dp, vertical = REST_PADDING_V.dp)) { content() }
+        val capPx = if (pxPerDesign.isFinite() && pxPerDesign > 0f) {
+            (StoryTextFrameGeometry.maxTextWidthFraction(frame.shape, framed = false) * StoryTextMetrics.DESIGN_CANVAS_WIDTH * pxPerDesign).toSafePx()
+        } else {
+            MAX_LAYOUT_PX
+        }
+        val capDp = with(LocalDensity.current) { capPx.toDp() }
+        Box(modifier.padding(horizontal = REST_PADDING_H.dp, vertical = REST_PADDING_V.dp).widthIn(max = capDp)) { content() }
         return
     }
     val measurer = rememberTextMeasurer()
