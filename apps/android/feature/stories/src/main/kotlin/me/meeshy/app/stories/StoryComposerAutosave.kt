@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftAnnotations
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
@@ -82,8 +83,9 @@ object StoryComposerAutosave {
         nowIso: String,
         previous: StoryComposerDraftSnapshot?,
         visibilityUserIds: List<String> = emptyList(),
+        annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
     ): StoryDraftPersist {
-        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds)
+        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations)
         if (!snapshot.isWorthRestoring) {
             val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
             return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
@@ -135,6 +137,7 @@ fun StorySlideDeck.toDraftSnapshot(
     repostOfId: String?,
     nowIso: String,
     visibilityUserIds: List<String> = emptyList(),
+    annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
     slides = slides.map {
         StoryDraftSlideSnapshot(
@@ -156,6 +159,7 @@ fun StorySlideDeck.toDraftSnapshot(
     visibility = visibility.wire,
     repostOfId = repostOfId?.takeIf { it.isNotBlank() },
     visibilityUserIds = visibilityUserIds,
+    annotations = annotations,
     updatedAt = nowIso,
 )
 
@@ -313,3 +317,19 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         rotationDeg = rotationDeg,
         timing = me.meeshy.sdk.model.scene.StoryElementTiming(startSeconds, durationSeconds),
     ).normalised()
+
+/** What the composer's draft attaches beside its slides, in the durable form (#13451). */
+fun StoryComposerDraft.annotations(): StoryDraftAnnotations = StoryDraftAnnotations(
+    mentions = mentions,
+    mediaAlt = mediaAlt,
+    mediaCaption = mediaCaption,
+    allowSoundExtraction = allowSoundExtraction,
+)
+
+/** The draft with [annotations] put back (restore, reopening). */
+fun StoryComposerDraft.withAnnotations(annotations: StoryDraftAnnotations): StoryComposerDraft = copy(
+    mentions = annotations.mentions,
+    mediaAlt = annotations.mediaAlt,
+    mediaCaption = annotations.mediaCaption,
+    allowSoundExtraction = annotations.allowSoundExtraction,
+)

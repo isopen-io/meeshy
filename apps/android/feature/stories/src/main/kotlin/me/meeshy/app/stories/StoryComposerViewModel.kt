@@ -123,7 +123,12 @@ class StoryComposerViewModel @Inject constructor(
                     draft = it.draft
                         .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
                         .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds, StoryVisibility.fromWire(reconciled.snapshot.visibility)))
-                        .withRepostOf(reconciled.snapshot.repostOfId),
+                        .withRepostOf(reconciled.snapshot.repostOfId)
+                        .withAnnotations(
+                            reconciled.snapshot.annotations.keepingMedia(
+                                reconciled.snapshot.slides.flatMap { slide -> slide.mediaIds },
+                            ),
+                        ),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
             }
@@ -159,6 +164,7 @@ class StoryComposerViewModel @Inject constructor(
                 nowIso = Instant.now().toString(),
                 previous = draftStore.load(),
                 visibilityUserIds = current.draft.visibilityUserIds,
+                annotations = current.draft.annotations(),
             )
             when (action) {
                 is StoryDraftPersist.Save -> draftStore.save(action.snapshot)
@@ -666,6 +672,7 @@ class StoryComposerViewModel @Inject constructor(
             repostOfId = published.draft.repostOfId,
             nowIso = Instant.now().toString(),
             visibilityUserIds = published.draft.visibilityUserIds,
+            annotations = published.draft.annotations(),
         )
         draftStore.save(snapshot.copy(awaitingPublication = queued))
     }

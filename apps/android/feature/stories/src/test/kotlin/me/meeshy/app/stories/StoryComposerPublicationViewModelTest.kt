@@ -307,4 +307,75 @@ class StoryComposerPublicationViewModelTest {
         assertThat(kept?.awaitingPublication).containsExactly("cmid")
         assertThat(kept?.slides?.single()?.audio?.single()?.soundId).isEqualTo("s1")
     }
+
+    // ---- #13451 : les annotations voyagent avec le brouillon ----
+
+    @Test
+    fun `le brouillon garde jusqu'a la confirmation porte mentions, alt, legende et extraction du son`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        picked(vm, "m1")
+        vm.onAddMention(AudienceCandidate(id = "u1", username = "ana"))
+        vm.onMediaAltChange("m1", "un chat")
+        vm.onMediaCaptionChange("m1", "Minou")
+        vm.onAllowSoundExtractionChange(false)
+
+        vm.published()
+
+        val annotations = store.load()?.annotations
+        assertThat(annotations?.mentions?.map { it.username }).containsExactly("ana")
+        assertThat(annotations?.mediaAlt).containsExactly("m1", "un chat")
+        assertThat(annotations?.mediaCaption).containsExactly("m1", "Minou")
+        assertThat(annotations?.allowSoundExtraction).isFalse()
+    }
+
+    @Test
+    fun `un brouillon restaure retrouve ses annotations, sans celles d'un media disparu`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut", mediaIds = listOf("m1"))),
+            selectedId = "s1",
+            annotations = me.meeshy.sdk.model.StoryDraftAnnotations(
+                mentions = listOf(me.meeshy.sdk.model.PostMentionInput(userId = "u1", username = "ana", display = "PINNED")),
+                mediaAlt = mapOf("m1" to "un chat", "m9" to "disparu"),
+                mediaCaption = mapOf("m1" to "Minou"),
+                allowSoundExtraction = true,
+            ),
+        )
+        val vm = viewModel(InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        val draft = vm.state.value.draft
+        assertThat(draft.mentions.map { it.username }).containsExactly("ana")
+        assertThat(draft.mediaAlt).containsExactly("m1", "un chat")
+        assertThat(draft.mediaCaption).containsExactly("m1", "Minou")
+        assertThat(draft.allowSoundExtraction).isTrue()
+    }
+
+    @Test
+    fun `un brouillon d'avant les annotations se restaure sans rien inventer`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "salut")),
+            selectedId = "s1",
+        )
+        val vm = viewModel(InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.draft.mentions).isEmpty()
+        assertThat(vm.state.value.draft.allowSoundExtraction).isNull()
+    }
+
+    @Test
+    fun `l'autosave voit un changement d'annotation comme un changement de brouillon`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("salut")
+        vm.persistDraft()
+        vm.onAllowSoundExtractionChange(false)
+
+        vm.persistDraft()
+
+        assertThat(store.load()?.annotations?.allowSoundExtraction).isFalse()
+    }
 }
