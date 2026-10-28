@@ -45,7 +45,7 @@ class InboundMediaPolicyTest {
         assertThat(admitted(gif).mimeType).isEqualTo("image/gif")
         assertThat(admitted(webp).mimeType).isEqualTo("image/webp")
         assertThat(admitted(ftyp("heic")).mimeType).isEqualTo("image/heic")
-        assertThat(admitted(ftyp("avif")).extension).isEqualTo("avif")
+        assertThat(refused(ftyp("avif"))).isEqualTo(InboundMediaRefusal.UNRECOGNIZED)
         assertThat(admitted(ftyp("isom")).kind).isEqualTo(InboundMediaKind.VIDEO)
         assertThat(admitted(ftyp("mp42")).mimeType).isEqualTo("video/mp4")
         assertThat(admitted(ftyp("qt  ")).mimeType).isEqualTo("video/quicktime")
