@@ -358,8 +358,8 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects mediaIds beyond 10 entries', () => {
-    const mediaIds = Array.from({ length: 11 }, (_, i) => i.toString(16).padStart(24, '0'));
+  it('rejects mediaIds beyond the widest bound (a story\'s 200) — the route narrows to 10 for non-stories', () => {
+    const mediaIds = Array.from({ length: 201 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
@@ -370,10 +370,10 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
+  it('accepts MAX_POST_MEDIA + 1 media ids at the schema (the post type is stored, the route decides)', () => {
     const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('accepts mediaAlt alongside newly attached mediaIds', () => {

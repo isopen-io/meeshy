@@ -4,7 +4,7 @@ import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import { parseMessageSticker } from '../../services/stickers/messageSticker';
-import { enforceStoryLimits, enforceStoryTextLengthOnCreate } from './storyLimits';
+import { enforceMediaIdsOnCreate, enforceMediaIdsOnUpdate, enforceStoryLimits, enforceStoryTextLengthOnCreate } from './storyLimits';
 import { StoryKeyframesBoundsSchema, StoryScenesBoundsSchema, StoryTimelineDurationSchema } from './storyEffectsBounds';
 
 // ============================================
@@ -318,7 +318,7 @@ export const CreatePostSchema = z.object({
   // préfère à sa propre détection par regex quand `originalLanguage` manque.
   detectedLanguage: z.string().min(2).max(6).optional(),
   // Media IDs (already uploaded)
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
   // de `mediaIds` ci-dessus, IGNORÉ pour tout id absent de `mediaIds` (le
   // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
@@ -386,6 +386,7 @@ export const CreatePostSchema = z.object({
   // 1000 caractères par texte à la CRÉATION (#13590) — sauf une republication, qui recopie le texte STOCKÉ de sa
   // source (`StoryComposerViewModel(reposting:)`) : une story stockée reste publiable telle qu'elle est.
   .superRefine((data, ctx) => {
+    enforceMediaIdsOnCreate(data, ctx);
     if (data.repostOfId?.trim() || !data.storyEffects) return;
     enforceStoryTextLengthOnCreate(data.storyEffects, ctx);
   });
@@ -465,7 +466,7 @@ export const UpdatePostSchema = z.object({
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média — même contrat que `CreatePostSchema.mediaAlt`
   // (clé = un id de `mediaIds` ci-dessus, ignoré sinon). Édite l'accessibilité
   // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne
@@ -482,7 +483,8 @@ export const UpdatePostSchema = z.object({
     return false;
   }
   return true;
-}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
+  .superRefine(enforceMediaIdsOnUpdate);
 
 /// Surfaces d'où peut partir un « Enregistrer ». Volontairement plus courte que
 /// IMPRESSION_SOURCES : seules ces trois surfaces exposent l'action.
