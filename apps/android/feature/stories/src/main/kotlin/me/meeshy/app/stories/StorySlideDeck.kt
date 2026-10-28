@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryObjectPlacement
 import me.meeshy.sdk.model.composer.SceneObjectCaps
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -44,6 +45,8 @@ data class StorySlide(
     val backgroundLoop: Boolean = true,
     /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
+    val frame: SceneFrame = SceneFrame(),
 )
 
 /**
@@ -406,6 +409,13 @@ data class StorySlideDeck(
     fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
+        return copy(slides = next)
+    }
+
+    /** Rewrites the **selected** slide's [SceneFrame] through [change], leaving every other slide untouched. */
+    fun updateSelectedFrame(change: (SceneFrame) -> SceneFrame): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(frame = change(slide.frame)) else slide }
         return copy(slides = next)
     }
 

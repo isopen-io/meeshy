@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
+import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -234,6 +235,12 @@ data class StoryComposerUiState(
         get() = deck.selectedSlideBackgroundMediaId
             ?.let { id -> attachments.firstOrNull { it.id == id } }
             ?.mimeType?.startsWith("video", ignoreCase = true) == true
+
+    /** Le fond MÉDIA de la slide sélectionnée (image ou vidéo) — ce qui ouvre le cadre et les effets ; `null` sans fond média. */
+    val selectedSlideSceneBackground: ComposerSceneBackground?
+        get() = deck.selectedSlideBackgroundMediaId
+            ?.let { id -> attachments.firstOrNull { it.id == id } }
+            ?.let { if (it.mimeType.startsWith("video", ignoreCase = true)) ComposerSceneBackground.VIDEO else ComposerSceneBackground.IMAGE }
 
     /**
      * Whether the **selected** slide's background loops — what the loop toggle reflects,

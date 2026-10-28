@@ -149,6 +149,11 @@ data class StoryDraftSlideSnapshot(
     val stickers: List<StoryDraftStickerElementSnapshot> = emptyList(),
     /** Les sons de la slide — l'objet de piste lui-même est déjà sérialisable, `soundId` et crédit compris. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadre de la slide (#13431) : cadrage du fond, fond des bandes, ouverture, fermeture — noms du fil, jamais d'enum. */
+    val fitMode: String? = null,
+    val backdrop: String? = null,
+    val opening: String? = null,
+    val closing: String? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
