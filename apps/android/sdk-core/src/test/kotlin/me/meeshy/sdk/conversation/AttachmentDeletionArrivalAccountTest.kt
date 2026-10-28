@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.net.MeeshyApi
@@ -70,7 +71,7 @@ class AttachmentDeletionArrivalAccountTest {
             { fence.ticket() },
         )
         val events = ConversationSocketEventsManager(socket, json, router).also { it.attach() }
-        val applier = AttachmentDeletionApplier(db, db.messageDao(), clock, fence)
+        val applier = AttachmentDeletionApplier(db, db.messageDao(), clock, fence, ConversationMediaHubIndex(fence))
         return AttachmentDeletionBinding(events, applier, StandardTestDispatcher(collectorScheduler)).also {
             it.attach()
             collectorScheduler.advanceUntilIdle()

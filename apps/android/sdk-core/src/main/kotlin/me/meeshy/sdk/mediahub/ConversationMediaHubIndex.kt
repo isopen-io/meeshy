@@ -47,6 +47,24 @@ class ConversationMediaHubIndex @Inject constructor(
         }
     }
 
+    /**
+     * Une pièce supprimée (`attachment:deleted`, #13609) quitte les porteurs déjà vus de CETTE conversation : sans ce
+     * retrait, l'union qui n'écrase jamais la garderait jusqu'à la fin du processus, même après revalidation.
+     */
+    suspend fun forgetAttachment(conversationId: String, messageId: String, attachmentId: String, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            ConversationMediaKind.entries.forEach { kind ->
+                entries.computeIfPresent(kind.indexKey(conversationId)) { _, entry ->
+                    entry.copy(carriers = entry.carriers.map { it.without(messageId, attachmentId) })
+                }
+            }
+        }
+    }
+
+    private fun ApiMessage.without(messageId: String, attachmentId: String): ApiMessage =
+        if (id != messageId || attachments.none { it.id == attachmentId }) this
+        else copy(attachments = attachments.filterNot { it.id == attachmentId })
+
     override suspend fun clear() = entries.clear()
 
     companion object {
