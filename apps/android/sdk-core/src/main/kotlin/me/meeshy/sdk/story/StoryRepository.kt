@@ -116,6 +116,17 @@ class StoryRepository @Inject constructor(
         cacheSource.deleteLocal(storyId, cacheSource.ticket())
     }
 
+    /** [removeCachedStory] sous [ticket], pris AVANT la requête dont la réponse retire la story (#13560). */
+    suspend fun removeCachedStory(storyId: String, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        cacheSource.deleteLocal(storyId, ticket)
+    }
+
+    /**
+     * Le compte auquel appartient un geste qui part MAINTENANT (#13560) : à prendre AVANT la requête dont la réponse
+     * écrit l'archive « Mes stories » ([persistMyStories]) ou retire une story ([removeCachedStory]).
+     */
+    suspend fun ticket(): me.meeshy.sdk.session.AccountTicket? = cacheSource.ticket()
+
     /**
      * Folds a realtime `story:updated` into the authoritative Room cache so the tray stream
      * repaints with the edit. [engagementReset] `true` marks a content edit that wiped
@@ -192,9 +203,11 @@ class StoryRepository @Inject constructor(
         return NetworkResult.Success(posts)
     }
 
-    /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
-    suspend fun persistMyStories(posts: List<ApiPost>) {
-        val ticket = cacheSource.ticket()
+    /**
+     * Persists the screen's current « Mes stories » list so a delete or republish survives a restart — under [ticket],
+     * taken at the gesture BEFORE its request (#13560): A's answer never writes B's archive.
+     */
+    suspend fun persistMyStories(posts: List<ApiPost>, ticket: me.meeshy.sdk.session.AccountTicket?) {
         fence.commitOrWrite(ticket) { archiveCache.write(posts) }
     }
 
