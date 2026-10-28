@@ -23,7 +23,7 @@ sealed interface ProfileDecorOutcome {
     /** Le serveur a répondu : sa réponse fait foi. */
     data class Confirmed(val decor: ServedProfileDecor) : ProfileDecorOutcome
 
-    /** Un choix plus récent du même côté a pris la main : cette réponse ne touche plus rien. */
+    /** Un choix plus récent du même côté a pris la main, ou un autre compte est connecté : cette réponse ne touche plus rien. */
     data object Superseded : ProfileDecorOutcome
 
     /** Refus ou panne : le côté touché est rétabli. */
@@ -61,7 +61,7 @@ class ProfileDecorRepository @Inject constructor(
             synchronized(lock) { inFlight[side] = (inFlight[side] ?: 1) - 1 }
             throw cancelled
         }
-        return settle(side, choice, previous, result)
+        return settle(side, choice, previous, result, owner = mine.id)
     }
 
     private fun settle(
@@ -69,8 +69,10 @@ class ProfileDecorRepository @Inject constructor(
         choice: Int,
         previous: ServedProfileDecorItem?,
         result: NetworkResult<ServedProfileDecor>,
+        owner: String,
     ): ProfileDecorOutcome = synchronized(lock) {
         inFlight[side] = (inFlight[side] ?: 1) - 1
+        if (session.currentUserId != owner) return@synchronized ProfileDecorOutcome.Superseded
         val current = latestChoice[side] == choice
         val state = ProfileDecorState(session.currentUser.value?.servedDecor ?: ServedProfileDecor.EMPTY)
         when {
