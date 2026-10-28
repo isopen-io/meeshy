@@ -59,7 +59,7 @@ class ConversationAppearanceViewModelTest {
         val packs = mockk<WallpaperPackRepository>()
         every { packs.cached } returns null
         coEvery { packs.refresh() } returns null
-        val photos = ConversationBackgroundPhotos(ConversationMediaHubIndex())
+        val photos = ConversationBackgroundPhotos(ConversationMediaHubIndex(null))
         val tokens = mockk<TokenStore>()
         every { tokens.jwt } returns "jwt-1"
         every { tokens.sessionToken } returns null
@@ -140,7 +140,7 @@ class ConversationAppearanceViewModelTest {
 
     @Test
     fun `une piece de l index se charge a son adresse resolue sur la passerelle`() = runTest(dispatcher) {
-        val index = ConversationMediaHubIndex().apply {
+        val index = ConversationMediaHubIndex(null).apply {
             runBlocking { merge(
                 "c1",
                 me.meeshy.sdk.model.mediahub.ConversationMediaKind.VISUAL,
