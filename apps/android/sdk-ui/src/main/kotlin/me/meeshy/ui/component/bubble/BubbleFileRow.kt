@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,9 +24,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.contacts.vcard.ContactCardFile
 import me.meeshy.ui.R
+import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -40,6 +45,10 @@ internal fun BubbleFileRow(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    if (file.isContactCard) {
+        BubbleContactCardRow(file, onColor, onClick, modifier)
+        return
+    }
     val openLabel = stringResource(R.string.bubble_file_open)
     Row(
         modifier = modifier
@@ -78,6 +87,38 @@ internal fun BubbleFileRow(
                     color = onColor.copy(alpha = 0.7f),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Une carte de visite du fil (miroir de `ContactCardView`, iOS) : l'initiale du contact, son nom (le fichier sans
+ * extension ni préfixe temporaire) et « Contact partagé » ; un appui ouvre sa fiche.
+ */
+@Composable
+private fun BubbleContactCardRow(file: BubbleFile, onColor: Color, onClick: (() -> Unit)?, modifier: Modifier) {
+    val name = remember(file.name) { file.name?.let(ContactCardFile::displayName).orEmpty() }
+    val shared = stringResource(R.string.bubble_contact_card_shared)
+    val spoken = stringResource(R.string.a11y_message_contact_card, name.ifBlank { shared })
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base.semantics(mergeDescendants = true) { contentDescription = spoken }
+                else base.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) { contentDescription = spoken }
+            }
+            .padding(MeeshySpacing.sm)
+            .heightIn(min = 44.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        MeeshyAvatar(name = name.ifBlank { shared }, size = 40.dp)
+        Column {
+            if (name.isNotBlank()) {
+                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = onColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(shared, style = MaterialTheme.typography.labelSmall, color = onColor.copy(alpha = 0.7f), maxLines = 1)
         }
     }
 }

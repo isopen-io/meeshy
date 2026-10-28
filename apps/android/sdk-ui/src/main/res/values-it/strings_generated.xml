@@ -34,6 +34,7 @@
     <string name="audio_editor_volume_normal">Normale</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="avatar_a11y_mood">umore %s</string>
+    <string name="bubble_contact_card_shared">Contatto condiviso</string>
     <string name="bubble_story_citation_answer">risposta alla sua storia</string>
     <string name="bubble_story_citation_open_hint">Apre la storia citata</string>
     <string name="bubble_story_citation_unavailable">Storia non disponibile</string>
