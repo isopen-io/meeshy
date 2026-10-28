@@ -5,40 +5,33 @@ import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -49,16 +42,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.core.graphics.drawable.toBitmap
 import coil.imageLoader
@@ -73,14 +60,13 @@ import me.meeshy.sdk.model.composer.ComposerHeaderTiles
 import me.meeshy.sdk.model.composer.ComposerSceneAddition
 import me.meeshy.sdk.model.composer.ComposerSlideDeletion
 import me.meeshy.sdk.model.composer.ComposerSlideDrag
+import me.meeshy.ui.component.composer.SlideRailGeometry
+import me.meeshy.ui.component.composer.SlideRailTile
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
-private const val TILE_HEIGHT_DP = 44
-private const val SCENE_ASPECT = 9f / 16f
 private const val DRAG_LIFT_SCALE = 1.1f
 
 /**
@@ -110,7 +96,7 @@ internal fun ComposerSlideRail(
     val density = LocalDensity.current
     val haptics = rememberMeeshyHaptics()
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val tileWidth = (TILE_HEIGHT_DP * SCENE_ASPECT).dp
+    val tileWidth = SlideRailGeometry.TileWidth
     val slotPx = with(density) { (tileWidth + MeeshySpacing.sm).toPx() }
     var dragFrom by remember { mutableIntStateOf(NO_DRAG) }
     var dragPx by remember { mutableFloatStateOf(0f) }
@@ -141,7 +127,6 @@ internal fun ComposerSlideRail(
                 currentIndex = deck.selectedIndex,
                 spec = rememberTileSpec(slide, backgrounds[slide.id], accentHex, tileWidth),
                 backgroundModel = backgrounds[slide.id]?.model,
-                tileWidth = tileWidth,
                 isDragged = dragFrom == index,
                 dragPx = dragPx,
                 shift = shift,
@@ -208,7 +193,7 @@ private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?
                 backgroundKey = background?.key,
                 accentHex = accentHex,
                 widthPx = tileWidth.roundToPx(),
-                heightPx = TILE_HEIGHT_DP.dp.roundToPx(),
+                heightPx = SlideRailGeometry.TileHeight.roundToPx(),
             )
         }
     }
@@ -222,7 +207,6 @@ private fun SlideTile(
     currentIndex: Int,
     spec: SlideThumbnailSpec,
     backgroundModel: Any?,
-    tileWidth: Dp,
     isDragged: Boolean,
     dragPx: Float,
     shift: Float,
@@ -242,15 +226,25 @@ private fun SlideTile(
     val dragEnd by rememberUpdatedState(onDragEnd)
     val dragCancel by rememberUpdatedState(onDragCancel)
     val isCurrent = index == currentIndex
-    val navigates = ComposerHeaderTiles.tilesNavigate(count)
     val animatedShift by animateFloatAsState(targetValue = shift, label = "slideTileShift")
-    val position = stringResource(R.string.composer_slide_rail_position, index + 1, count)
     val moveBefore = stringResource(R.string.stories_composer_slide_move_earlier)
     val moveAfter = stringResource(R.string.stories_composer_slide_move_later)
     val duplicateLabel = stringResource(R.string.stories_composer_duplicate_slide)
     val removeLabel = stringResource(R.string.stories_composer_remove_slide)
-    val ring = if (isCurrent) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.25f)
-    Box(
+    val actions = buildList {
+        if (index > 0) add(CustomAccessibilityAction(moveBefore) { onMove(slide.id, index - 1); true })
+        if (index < count - 1) add(CustomAccessibilityAction(moveAfter) { onMove(slide.id, index + 1); true })
+        add(CustomAccessibilityAction(duplicateLabel) { onDuplicate(slide.id); true })
+        if (count > 1) add(CustomAccessibilityAction(removeLabel) { onDelete(slide.id); true })
+    }
+    SlideRailTile(
+        position = stringResource(R.string.composer_slide_rail_position, index + 1, count),
+        deleteLabel = stringResource(R.string.composer_slide_rail_delete, index + 1),
+        isCurrent = isCurrent,
+        navigates = ComposerHeaderTiles.tilesNavigate(count),
+        showsBin = ComposerHeaderTiles.showsDelete(sceneIndex = index, currentIndex = currentIndex, sceneCount = count),
+        onSelect = { onSelect(slide.id) },
+        onDelete = { onDelete(slide.id) },
         modifier = Modifier
             .graphicsLayer {
                 translationX = if (isDragged) dragPx else animatedShift
@@ -259,72 +253,31 @@ private fun SlideTile(
                 scaleY = lift
             }
             .then(if (isDragged) Modifier.shadow(MeeshySpacing.xs, RoundedCornerShape(MeeshyRadius.xxs)) else Modifier),
+        tileModifier = Modifier.pointerInput(slide.id) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { dragStart() },
+                onDrag = { change, amount -> change.consume(); dragBy(amount.x) },
+                onDragEnd = { dragEnd() },
+                onDragCancel = { dragCancel() },
+            )
+        },
+        actions = actions,
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = tileWidth, height = TILE_HEIGHT_DP.dp)
-                .clip(RoundedCornerShape(MeeshyRadius.xxs))
-                .border(if (isCurrent) 1.5.dp else 0.5.dp, ring, RoundedCornerShape(MeeshyRadius.xxs))
-                .pointerInput(slide.id) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { dragStart() },
-                        onDrag = { change, amount -> change.consume(); dragBy(amount.x) },
-                        onDragEnd = { dragEnd() },
-                        onDragCancel = { dragCancel() },
-                    )
-                }
-                .clickable(enabled = navigates, role = Role.Button) { onSelect(slide.id) }
-                .clearAndSetSemantics {
-                    contentDescription = position
-                    selected = isCurrent
-                    if (navigates) role = Role.Button
-                    customActions = buildList {
-                        if (index > 0) add(CustomAccessibilityAction(moveBefore) { onMove(slide.id, index - 1); true })
-                        if (index < count - 1) add(CustomAccessibilityAction(moveAfter) { onMove(slide.id, index + 1); true })
-                        add(CustomAccessibilityAction(duplicateLabel) { onDuplicate(slide.id); true })
-                        if (count > 1) add(CustomAccessibilityAction(removeLabel) { onDelete(slide.id); true })
-                    }
-                },
-        ) {
-            SlideThumbnail(spec = spec, backgroundModel = backgroundModel, modifier = Modifier.fillMaxSize())
-            DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
-                DropdownMenuItem(
-                    text = { Text(duplicateLabel) },
-                    leadingIcon = { Icon(MeeshyIcons.Copy, contentDescription = null) },
-                    onClick = { onMenuDismiss(); onDuplicate(slide.id) },
-                )
-                if (count > 1) DropdownMenuItem(
-                    text = { Text(removeLabel) },
-                    leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null) },
-                    onClick = { onMenuDismiss(); onDelete(slide.id) },
-                )
-            }
-        }
-        if (ComposerHeaderTiles.showsDelete(sceneIndex = index, currentIndex = currentIndex, sceneCount = count)) {
-            val label = stringResource(R.string.composer_slide_rail_delete, index + 1)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = MeeshySpacing.xs, y = -MeeshySpacing.xs)
-                    .size(DELETE_TARGET_DP.dp)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button) { onDelete(slide.id) }
-                    .clearAndSetSemantics { contentDescription = label; role = Role.Button },
-                contentAlignment = Alignment.TopEnd,
-            ) {
-                Box(
-                    Modifier.size(DELETE_GLYPH_DP.dp).clip(CircleShape).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(MeeshyIcons.Close, contentDescription = null, tint = ComposerPlateauInk.primary, modifier = Modifier.size(10.dp))
-                }
-            }
+        SlideThumbnail(spec = spec, backgroundModel = backgroundModel, modifier = Modifier.fillMaxSize())
+        DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
+            DropdownMenuItem(
+                text = { Text(duplicateLabel) },
+                leadingIcon = { Icon(MeeshyIcons.Copy, contentDescription = null) },
+                onClick = { onMenuDismiss(); onDuplicate(slide.id) },
+            )
+            if (count > 1) DropdownMenuItem(
+                text = { Text(removeLabel) },
+                leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null) },
+                onClick = { onMenuDismiss(); onDelete(slide.id) },
+            )
         }
     }
 }
-
-private const val DELETE_TARGET_DP = 28
-private const val DELETE_GLYPH_DP = 16
 
 /**
  * The picture of a scene. The bitmap comes from [SlideThumbnailStore] when this exact scene was painted before, otherwise it
