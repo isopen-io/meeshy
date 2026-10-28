@@ -20,6 +20,7 @@ import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
+import me.meeshy.sdk.model.composer.ComposerProfile
 import me.meeshy.sdk.model.composer.sceneOpening
 import javax.inject.Inject
 
@@ -45,6 +46,15 @@ class ComposerHostViewModel @Inject constructor(
 
     /** La porte pose elle-même la matière : le brouillon enregistré ne se restaure pas par-dessus (iOS `seededByDoor`). */
     val seededByDoor: Boolean = door.origin.postsItsOwnMatter
+
+    private val _keyboardOwed = MutableStateFlow(ComposerProfile.of(door.origin).opensWith.focusesContentOnAppear)
+
+    /** La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le clavier, UNE fois — jamais rejoué à une bascule de format. */
+    val keyboardOwed: StateFlow<Boolean> = _keyboardOwed.asStateFlow()
+
+    fun onKeyboardRaised() {
+        _keyboardOwed.value = false
+    }
 
     private val _seed = MutableStateFlow<SeedState>(if (door.origin === ComposerOrigin.Share) SeedState.Loading else SeedState.None)
 
