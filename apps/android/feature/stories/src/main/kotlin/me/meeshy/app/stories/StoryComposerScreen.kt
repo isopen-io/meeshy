@@ -68,6 +68,9 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
 import me.meeshy.sdk.model.composer.StoryToolMode
+import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
+import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
+import androidx.compose.foundation.layout.Box
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -93,6 +96,8 @@ fun StoryComposerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val sceneExport = rememberSceneExportHost(state, viewModel)
+    var backgroundMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, lifecycleOwner) {
         viewModel.published
@@ -200,6 +205,11 @@ fun StoryComposerScreen(
                     }
                 },
                 actions = {
+                    ComposerOverflowMenu(
+                        entries = sceneExport.entries,
+                        enabled = !sceneExport.isExporting && !state.isPublishing,
+                        onPick = sceneExport::start,
+                    )
                     IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
                         Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.story_composer_undo))
                     }
@@ -245,6 +255,7 @@ fun StoryComposerScreen(
                     drawingActive = state.isDrawingActive,
                 ),
                 scene = { sceneModifier ->
+                    Box(sceneModifier) {
                     StoryCanvasSurface(
                         transform = state.selectedSlideTransform,
                         backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
@@ -283,8 +294,27 @@ fun StoryComposerScreen(
                             viewModel.onDeselectSticker()
                         },
                         snapFeedback = state.snapFeedback,
-                        modifier = sceneModifier,
+                        modifier = Modifier.fillMaxSize(),
+                        fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
+                        backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
+                        capture = sceneExport.capture,
+                        onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
+                            ?.let { { backgroundMenuOpen = true } },
                     )
+                    ComposerBackgroundMenu(
+                        expanded = backgroundMenuOpen,
+                        onDismiss = { backgroundMenuOpen = false },
+                        onAction = { action ->
+                            backgroundMenuOpen = false
+                            val mediaId = state.deck.selectedSlideBackgroundMediaId ?: return@ComposerBackgroundMenu
+                            when (action) {
+                                ComposerBackgroundMenuAction.BRING_FORWARD -> viewModel.onToggleSlideBackgroundMedia(mediaId)
+                                ComposerBackgroundMenuAction.DELETE -> viewModel.onRemoveMedia(mediaId)
+                                ComposerBackgroundMenuAction.EDIT, ComposerBackgroundMenuAction.RETAKE_PHOTO -> Unit
+                            }
+                        },
+                    )
+                    }
                 },
                 footer = {
                     val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
@@ -412,6 +442,14 @@ fun StoryComposerScreen(
                             onFilterIntensityChange = viewModel::onFilterIntensityChange,
                             onSlideDurationChange = viewModel::onSlideDurationChange,
                             onSelectBackground = viewModel::onSlideBackgroundChange,
+                            sceneBackground = state.selectedSlideSceneBackground,
+                            sceneFrame = state.deck.selectedSlide.frame,
+                            objectSelected = state.selectedTextElement != null || state.selectedStickerId != null,
+                            sceneIsAnimated = state.sceneIsAnimated,
+                            onFitMode = { mode -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.fitModeSet(it, mode) } },
+                            onBackdrop = { fond -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.backdropChosen(it, fond) } },
+                            onSceneEffect = { choice -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.effectChosen(it, choice) } },
+                            onToggleAnimated = { viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled) },
                             audio = state.selectedSlideAudio,
                             canAddSound = state.canBorrowSound,
                             onOpenSoundShelf = { showSoundShelf = true },

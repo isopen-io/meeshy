@@ -20,7 +20,12 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -43,7 +48,10 @@ import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
+import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.ui.theme.hexColor
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
@@ -91,10 +99,17 @@ internal fun StoryCanvasSurface(
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
+    fitMode: String = StoryFitMode.FILL,
+    backdrop: StoryBackdrop = StoryBackdrop.BLUR,
+    capture: SceneCapture? = null,
+    onBackgroundLongPress: (() -> Unit)? = null,
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val capturing = capture != null && capture.pass != SceneCapturePass.NONE
+    val overlayOnly = capture?.pass == SceneCapturePass.OVERLAY_ONLY
+    val frameShape = if (capturing) RectangleShape else RoundedCornerShape(16.dp)
     val guideColor = MaterialTheme.colorScheme.primary
-    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
+    val warnBorder = if (!capturing && snapFeedback?.withinSafeZone == false) {
         BorderStroke(2.dp, MaterialTheme.colorScheme.error)
     } else {
         null
@@ -109,8 +124,9 @@ internal fun StoryCanvasSurface(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(sceneBrush)
+                .then(if (capturing) Modifier.recordInto(capture!!.layer) else Modifier)
+                .clip(frameShape)
+                .then(if (overlayOnly) Modifier else Modifier.background(sceneBrush))
                 .then(
                     if (warnBorder != null) {
                         Modifier.border(warnBorder, RoundedCornerShape(16.dp))
@@ -131,7 +147,12 @@ internal fun StoryCanvasSurface(
                         Modifier
                     } else {
                         Modifier
-                            .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
+                            .pointerInput(onBackgroundLongPress != null) {
+                                detectTapGestures(
+                                    onLongPress = onBackgroundLongPress?.let { longPress -> { _ -> longPress() } },
+                                    onTap = { onBackgroundTap() },
+                                )
+                            }
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, pan, zoom, _ ->
                                     onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
@@ -140,11 +161,13 @@ internal fun StoryCanvasSurface(
                     },
                 ),
         ) {
-            if (backgroundModel != null) {
+            if (backgroundModel != null && !overlayOnly) {
+                val filled = StoryFitMode.rendersFilled(fitMode)
+                if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
                     model = backgroundModel,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
+                    contentScale = if (filled) ContentScale.Crop else ContentScale.Fit,
                     colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
                     modifier = Modifier
                         .fillMaxSize()
@@ -156,7 +179,7 @@ internal fun StoryCanvasSurface(
                         },
                 )
             }
-            if (snapFeedback != null) {
+            if (snapFeedback != null && !capturing) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
                     // element is being dragged, draw the viewer-chrome safe rectangle and the
@@ -265,3 +288,35 @@ internal fun StoryCanvasSurface(
         }
     }
 }
+
+/** Où en est la capture de la scène pour son export : rien, la scène entière, ou ses objets seuls (fond vidéo). */
+internal enum class SceneCapturePass { NONE, FULL, OVERLAY_ONLY }
+
+internal class SceneCapture(val layer: GraphicsLayer, val pass: SceneCapturePass)
+
+/** Enregistre ce que la scène PEINT dans [layer], puis le rejoue : la capture est exactement ce que l'auteur voit. */
+private fun Modifier.recordInto(layer: GraphicsLayer): Modifier = drawWithContent {
+    layer.record { this@drawWithContent.drawContent() }
+    drawLayer(layer)
+}
+
+/**
+ * Le fond des bandes d'un média AJUSTÉ : une teinte unie, ou le flou du média lui-même. Le flou n'existe qu'à partir de
+ * l'API 31 ; en dessous le noir tient la place — jamais un flou factice.
+ */
+@Composable
+private fun SceneBackdropLayer(backdrop: StoryBackdrop, model: Any) {
+    val hex = backdrop.solidHex
+    when {
+        hex != null -> Box(Modifier.fillMaxSize().background(hexColor(hex)))
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> AsyncImage(
+            model = model,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_DP.dp),
+        )
+        else -> Box(Modifier.fillMaxSize().background(hexColor(StoryBackdrop.BLACK.solidHex.orEmpty())))
+    }
+}
+
+private const val BACKDROP_BLUR_DP = 24
