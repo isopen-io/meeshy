@@ -70,7 +70,7 @@ public enum StoryStaticSnapshot {
     public static func glassPanes(slide: StorySlide, size: CGSize) -> [StoryGlassPane] {
         guard size.width >= 1, size.height >= 1 else { return [] }
         let geometry = CanvasGeometry(renderSize: size)
-        return (slide.effects.textObjects ?? []).compactMap { texte in
+        return slide.effects.textObjects.compactMap { texte in
             guard case .glass(let radius) = texte.resolvedBackgroundStyle else { return nil }
             return glassPane(of: texte, sigma: geometry.render(CGFloat(radius)), geometry: geometry)
         }

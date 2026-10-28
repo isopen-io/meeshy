@@ -138,6 +138,7 @@ extension ConversationSyncEngine {
         messageSocket.attachmentUpdated
             .relay(through: lane) { [weak self] in await self?.handleAttachmentUpdated($0) }
             .store(in: &socketSubscriptions)
+        AttachmentDeletionChannel.shared.deleted.relay(through: lane) { [weak self] in await AttachmentDeletionApplier(engine: self)?.apply($0) }.store(in: &socketSubscriptions)
     }
 
     // UN TROU DE SÉQUENCE DÉCLENCHE LA RESYNCHRONISATION `/sync` (#4172
@@ -356,7 +357,6 @@ extension ConversationSyncEngine {
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
         let callId = await cache.messages.load(for: event.conversationId).snapshot()?
             .first(where: { $0.id == event.messageId })?.callSummary?.callId
-
         let deletedAt = Date()
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = deletedAt
@@ -499,7 +499,7 @@ extension ConversationSyncEngine {
     /// replacement (older messages never loaded), the row is left untouched — the
     /// next REST list refresh (which filters `deletedAt: null`) corrects it —
     /// rather than wrongly clearing a preview that should show an earlier message.
-    private func recomputeLastMessagePreviewAfterDeletion(
+    /* partagé entre les fichiers du moteur (#4172) */ func recomputeLastMessagePreviewAfterDeletion(
         conversationId: String, deletedMessageId: String
     ) async {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
@@ -519,7 +519,7 @@ extension ConversationSyncEngine {
                     updated[idx].applyLastMessage(LastMessageFacet(
                         message: newLast,
                         preview: newLast.content
-                    ))
+                    ).sealedForEndToEnd(newLast.isEncrypted))
                 }
                 return updated
             }

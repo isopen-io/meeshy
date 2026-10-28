@@ -97,6 +97,7 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         sysctlbyname("hw.machine", nil, &size, nil, 0)
         var machine = [CChar](repeating: 0, count: max(size, 1))
         sysctlbyname("hw.machine", &machine, &size, nil, 0)
-        return String(cString: machine)
+        let bytes = machine.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
     }
 }

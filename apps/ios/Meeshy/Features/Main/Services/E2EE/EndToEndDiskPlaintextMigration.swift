@@ -41,7 +41,7 @@ struct EndToEndDiskPlaintextMigration: Sendable {
                 await caches.conversationMedia.invalidate(for: id)
                 drafts.remove(for: id)
             }
-            await resealStarred(Set(sealedIds))
+            resealStarred(Set(sealedIds))
             defaults.set(true, forKey: doneKey)
             Logger.e2ee.info("e2ee disk plaintext sealed rows=\(rescued.rows, privacy: .public) conversations=\(endToEndConversations.count, privacy: .public)")
         } catch {
