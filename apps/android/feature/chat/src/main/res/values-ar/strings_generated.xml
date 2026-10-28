@@ -333,10 +333,14 @@
     <string name="security_verify_unavailable_title">التحقق غير متاح</string>
     <string name="sentiment_very_negative">سلبي جدًا</string>
     <string name="sentiment_very_positive">إيجابي جدًا</string>
+    <string name="share_action_copy_link">نسخ الرابط</string>
+    <string name="share_action_share_out">مشاركة خارج Meeshy</string>
     <string name="share_caption_hint">أضف رسالة…</string>
     <string name="share_close">إغلاق</string>
     <string name="share_content_messages_kept">ما سيُرسَل · %1$d من %2$d رسائل</string>
+    <string name="share_copied">تم النسخ</string>
     <string name="share_detail_direct">محادثة</string>
+    <string name="share_detail_friend">صديق · لا توجد محادثة بعد</string>
     <string name="share_detail_group_unsized">مجموعة</string>
     <string name="share_empty_body">ابحث عن شخص باسمه أو اسم المستخدم أو رقمه.</string>
     <string name="share_empty_title">لا أحد هنا بعد</string>
@@ -348,6 +352,7 @@
     <string name="share_refused_undecrypted_source">لم تُفكّ تشفير هذه الرسالة على هذا الجهاز: لا يمكن نسخها.</string>
     <string name="share_search_hint">ابحث عن شخص أو مجموعة</string>
     <string name="share_section_conversations">المحادثات</string>
+    <string name="share_section_people">الأشخاص</string>
     <string name="share_status_queued">في قائمة الانتظار</string>
     <string name="share_status_retry">إعادة المحاولة</string>
     <string name="share_status_sending">جارٍ الإرسال…</string>
@@ -358,6 +363,8 @@
     <string name="share_target_studio">التعديل في الاستوديو</string>
     <string name="share_title_forward">إعادة توجيه</string>
     <string name="share_title_send">إرسال</string>
+    <string name="share_toast_open">فتح</string>
+    <string name="share_toast_sent_to">أُرسل إلى %s</string>
     <string name="share_withdrawn_after_read">تبقى الرسالة التي تختفي بعد القراءة في هذه المحادثة.</string>
     <string name="share_withdrawn_unavailable">لا تُرسَل الرسالة التي لم تعد متاحة.</string>
     <string name="share_withdrawn_view_once">تبقى الرسالة ذات العرض الواحد في هذه المحادثة.</string>
