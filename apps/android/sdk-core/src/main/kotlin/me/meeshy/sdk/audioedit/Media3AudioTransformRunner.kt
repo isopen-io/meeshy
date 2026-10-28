@@ -10,6 +10,7 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultMuxer
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
@@ -31,7 +32,8 @@ import me.meeshy.sdk.model.audioedit.AudioFadeEnvelope
  * Media3 Transformer derrière [AudioTransformRunner] : un [EditedMediaItem] rogné par tranche
  * gardée, concaténés en une séquence audio ; la vitesse passe par [SonicAudioProcessor]
  * (hauteur conservée), le gain et les fondus par [GainFadeAudioProcessor]. Transformer vit
- * sur le fil principal, d'où le dispatcher injecté.
+ * sur le fil principal, d'où le dispatcher injecté. Aucune métadonnée de la source n'est écrite
+ * ([MetadataFreeMuxerFactory]) : le lieu d'un mémo vocal ne survit pas au rendu.
  */
 internal class Media3AudioTransformRunner(
     private val context: Context,
@@ -43,6 +45,7 @@ internal class Media3AudioTransformRunner(
             val finished = CompletableDeferred<Unit>()
             val transformer = Transformer.Builder(context)
                 .setAudioMimeType(MimeTypes.AUDIO_AAC)
+                .setMuxerFactory(MetadataFreeMuxerFactory(DefaultMuxer.Factory()))
                 .addListener(
                     object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
