@@ -122,4 +122,39 @@ class ComposerSeedStoreTest {
         assertThat(store.holds(first)).isFalse()
         assertThat(File(folder.root, "inbound").listFiles()).isEmpty()
     }
+
+    private val staged get() = File(folder.root, ComposerSeedStore.STAGED_DIRECTORY)
+
+    @Test
+    fun `what is taken stays a FILE in the private cache, never an array, and the deposit is gone`() {
+        val store = store()
+        val token = store.stash(listOf(jpeg(3)))!!
+
+        val item = store.take(token).single()
+
+        assertThat(item.source).isInstanceOf(me.meeshy.sdk.media.MediaUploadSource.OnDisk::class.java)
+        val file = (item.source as me.meeshy.sdk.media.MediaUploadSource.OnDisk).file
+        assertThat(file.canonicalFile.parentFile).isEqualTo(staged.canonicalFile)
+        assertThat(item.sizeBytes).isEqualTo(44L)
+        assertThat(file.readBytes()[10]).isEqualTo(3.toByte())
+        assertThat(File(folder.root, "inbound").listFiles()).isEmpty()
+        assertThat(store.take(token)).isEmpty()
+    }
+
+    @Test
+    fun `a taken file outlives the deposit window, then is swept, and signing out removes it at once`() {
+        val store = store()
+        val first = (store.take(store.stash(listOf(jpeg()))!!).single().source as me.meeshy.sdk.media.MediaUploadSource.OnDisk).file
+        clock += ComposerSeedStore.TTL_MS + 1
+        store.stash(listOf(jpeg()))
+        assertThat(first.exists()).isTrue()
+
+        clock += ComposerSeedStore.STAGED_TTL_MS + 1
+        store.stash(listOf(jpeg()))
+        assertThat(first.exists()).isFalse()
+
+        store.take(store.stash(listOf(jpeg()))!!)
+        kotlinx.coroutines.runBlocking { ComposerSeedTeardown(store).clear() }
+        assertThat(staged.listFiles().orEmpty()).isEmpty()
+    }
 }

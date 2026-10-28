@@ -18,7 +18,10 @@ import javax.inject.Singleton
  * il vit dans le cache PRIVÉ de l'application (jamais une URI `content://` gardée au-delà de l'usage), sous un nom que
  * Meeshy choisit (l'indice de l'expéditeur ne sert à aucun chemin), derrière un jeton de 128 bits tiré de [SecureRandom].
  *
- * - **Usage unique** : [take] lit puis efface. Un jeton rejoué, périmé ([TTL_MS]) ou inconnu ne rend rien.
+ * - **Usage unique** : [take] reprend puis efface le dépôt. Un jeton rejoué, périmé ([TTL_MS]) ou inconnu ne rend rien.
+ * - **Jamais en mémoire** (#13551) : [take] rend des médias ADOSSÉS À UN FICHIER, déplacés (pas copiés) dans [staged] du même
+ *   cache privé ; une vidéo de 200 Mo part en flux sans qu'aucun tableau de sa taille n'existe. Ces fichiers vivent le temps
+ *   d'une composition ([STAGED_TTL_MS]) et quittent le disque à la déconnexion ([clearAll]).
  * - **Aucun chemin forgé** : le jeton a la forme de [ComposerHostRoute.seedToken], et le dossier résolu doit être un
  *   enfant direct de la racine (canonique) — `..`, `/` et liens n'en sortent pas.
  * - **Rien ne se publie ici** : le store ne fait que tenir des octets ; c'est le geste de l'auteur, dans l'hôte, qui publie.
@@ -28,6 +31,7 @@ class ComposerSeedStore internal constructor(
     private val root: File,
     private val now: () -> Long,
     private val random: SecureRandom,
+    private val staged: File = File(root.parentFile, STAGED_DIRECTORY),
 ) {
     @Inject
     constructor(@ApplicationContext context: Context) : this(File(context.cacheDir, DIRECTORY), System::currentTimeMillis, SecureRandom())
@@ -59,11 +63,14 @@ class ComposerSeedStore internal constructor(
         return token
     }
 
-    /** Reprend les médias du jeton, UNE fois : le dossier est effacé dans le même geste. Vide pour un jeton inconnu, rejoué ou périmé. */
+    /**
+     * Reprend les médias du jeton, UNE fois : le dossier est effacé dans le même geste. Vide pour un jeton inconnu, rejoué ou
+     * périmé. Chaque média rendu est un fichier de [staged], lu par en-tête seulement (jamais chargé).
+     */
     fun take(token: String?): List<MediaUploadItem> {
         val directory = directoryOf(token) ?: return emptyList()
         if (!directory.isDirectory) return emptyList()
-        val items = if (now() - directory.lastModified() > TTL_MS) emptyList() else readItems(directory)
+        val items = if (now() - directory.lastModified() > TTL_MS) emptyList() else stageItems(directory, directory.name)
         directory.deleteRecursively()
         return items
     }
@@ -81,11 +88,13 @@ class ComposerSeedStore internal constructor(
     /** Efface TOUT dépôt : la déconnexion ou le changement de compte ne laisse rien du média reçu par le compte quitté ([ComposerSeedTeardown]). */
     fun clearAll() {
         root.listFiles().orEmpty().forEach { it.deleteRecursively() }
+        staged.listFiles().orEmpty().forEach { it.deleteRecursively() }
     }
 
     /** Efface tout dépôt plus vieux que [TTL_MS] : un partage qu'aucun hôte n'a repris (processus tué) ne reste pas sur le disque. */
     fun purgeExpired() {
         root.listFiles().orEmpty().filter { now() - it.lastModified() > TTL_MS }.forEach { it.deleteRecursively() }
+        staged.listFiles().orEmpty().filter { now() - it.lastModified() > STAGED_TTL_MS }.forEach { it.deleteRecursively() }
     }
 
     private fun directoryOf(token: String?): File? {
@@ -95,17 +104,34 @@ class ComposerSeedStore internal constructor(
         return directory.takeIf { inside }
     }
 
-    private fun readItems(directory: File): List<MediaUploadItem> =
+    private fun stageItems(directory: File, token: String): List<MediaUploadItem> =
         directory.listFiles().orEmpty()
             .filter { it.isFile && ITEM_NAME.matches(it.name) }
             .sortedBy { it.name.substringBefore('.').toInt() }
-            .mapNotNull { file ->
-                val bytes = runCatching { file.readBytes() }.getOrNull() ?: return@mapNotNull null
-                val verdict = InboundMediaPolicy.judge(bytes.copyOf(minOf(bytes.size, InboundMediaPolicy.HEADER_BYTES)), bytes.size.toLong(), null)
-                (verdict as? InboundMediaVerdict.Admitted)?.let {
-                    MediaUploadItem(bytes = bytes, fileName = "shared-${file.name.substringBefore('.').toInt() + 1}.${it.extension}", mimeType = it.mimeType)
-                }
-            }
+            .mapNotNull { file -> runCatching { stage(file, token) }.getOrNull() }
+
+    private fun stage(file: File, token: String): MediaUploadItem? {
+        val size = file.length()
+        val header = file.inputStream().use { it.readNBytesCompat(InboundMediaPolicy.HEADER_BYTES) }
+        val admitted = InboundMediaPolicy.judge(header, size, null) as? InboundMediaVerdict.Admitted ?: return null
+        val index = file.name.substringBefore('.').toInt()
+        check(staged.isDirectory || staged.mkdirs())
+        val target = File(staged, "$token-$index.${admitted.extension}")
+        if (!file.renameTo(target)) return null
+        target.setLastModified(now())
+        return MediaUploadItem.onDisk(target, fileName = "shared-${index + 1}.${admitted.extension}", mimeType = admitted.mimeType)
+    }
+
+    private fun java.io.InputStream.readNBytesCompat(count: Int): ByteArray {
+        val out = ByteArray(count)
+        var done = 0
+        while (done < count) {
+            val read = read(out, done, count - done)
+            if (read < 0) break
+            done += read
+        }
+        return out.copyOf(done)
+    }
 
     private fun newToken(): String = Base64.encodeToString(ByteArray(TOKEN_BYTES).also(random::nextBytes), Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
 
@@ -113,6 +139,8 @@ class ComposerSeedStore internal constructor(
         const val DIRECTORY = "composer-inbound"
         const val MAX_ITEMS = 10
         const val TTL_MS = 30L * 60_000L
+        const val STAGED_DIRECTORY = "composer-staged"
+        const val STAGED_TTL_MS = 24L * 60L * 60_000L
         private const val TOKEN_BYTES = 16
         private val ITEM_NAME = Regex("\\d{1,2}\\.[a-z0-9]{2,5}")
     }
