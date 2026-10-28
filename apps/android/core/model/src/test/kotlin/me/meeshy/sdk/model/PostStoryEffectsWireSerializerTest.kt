@@ -43,6 +43,19 @@ class PostStoryEffectsWireSerializerTest {
     }
 
     @Test
+    fun `a background alone leaves Android as the very document iOS and the gateway converter write for it`() {
+        // `CanvasV3(migrating: StoryEffects(background:))` (MeeshySDK) and `convertV1ToV3({ background })` (gateway),
+        // printed for this colour: the same keys, the same order of meaning, `transform: null` on the carrier included.
+        val written = Json.parseToJsonElement(
+            """{"v":3,"scenes":[{"id":"s1","objects":[{"id":"bg","kind":"media","anchor":{"t":"free","x":0.5,"y":0.5},""" +
+                """"plane":"bg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},""" +
+                """"payload":{"background":"302B63","transform":null}}]}]}""",
+        )
+
+        CanvasV3FixtureSupport.assertSameJson(written, wire(StoryEffects(background = "302B63"))["storyEffects"]!!)
+    }
+
+    @Test
     fun `read back, the document gives the post its colour again`() {
         val text = json.encodeToString(Body(StoryEffects(background = "08D9D6")))
 
