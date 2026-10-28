@@ -2,6 +2,12 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
+import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.sdk.model.scene.StoryTextDirection
 
 /**
  * Everything that decides what a slide's tile looks like, as a VALUE: two equal specs paint the same bitmap, so equality is
@@ -17,8 +23,24 @@ internal data class SlideThumbnailSpec(
     val texts: List<Text>,
     val stickers: List<Sticker>,
     val strokes: List<StoryDrawingStroke>,
+    /** The slide's filter as a colour matrix, `null` when it changes nothing — applied to the background media only, like the canvas. */
+    val look: StoryColorMatrix? = null,
+    val framing: ThumbFraming = ThumbFraming.IDENTITY,
+    /** The media fills the tile (cropped); otherwise it is contained and the bands show [backdrop]. */
+    val filled: Boolean = true,
+    val backdrop: StoryBackdrop = StoryBackdrop.BLUR,
 ) {
-    data class Text(val text: String, val colorHex: String, val fontDesignPx: Float, val x: Float, val y: Float, val rotationDeg: Float)
+    data class Text(
+        val text: String,
+        val colorHex: String,
+        val fontDesignPx: Float,
+        val x: Float,
+        val y: Float,
+        val rotationDeg: Float,
+        val style: StoryTextStyle = StoryTextStyle.BOLD,
+        val align: StoryTextAlign = StoryTextAlign.CENTER,
+        val rtl: Boolean = false,
+    )
 
     data class Sticker(val emoji: String, val sizeDesignPx: Float, val x: Float, val y: Float, val rotationDeg: Float)
 
@@ -28,21 +50,37 @@ internal data class SlideThumbnailSpec(
     companion object {
         private const val STICKER_BASE_DESIGN_PX = 140f
 
-        fun of(slide: StorySlide, backgroundKey: String?, accentHex: String, widthPx: Int, heightPx: Int): SlideThumbnailSpec =
-            SlideThumbnailSpec(
+        fun of(
+            slide: StorySlide,
+            backgroundKey: String?,
+            accentHex: String,
+            widthPx: Int,
+            heightPx: Int,
+            canvasWidthPx: Float = 0f,
+        ): SlideThumbnailSpec {
+            val backgroundTransform = slide.frame.backgroundTransform()
+            return SlideThumbnailSpec(
                 widthPx = widthPx,
                 heightPx = heightPx,
                 fill = StorySceneFill.resolve(slide.background, accentHex),
                 hasBackgroundColor = slide.background != null,
                 backgroundKey = backgroundKey,
                 texts = slide.elements.filter { it.isPublishable }.map {
-                    Text(it.text, it.color, it.size.designSize * it.scale, it.x, it.y, it.rotationDeg)
+                    Text(
+                        it.text, it.color, it.size.designSize * it.scale, it.x, it.y, it.rotationDeg,
+                        style = it.style, align = it.align, rtl = it.baseDirection == StoryTextDirection.RTL,
+                    )
                 },
                 stickers = slide.stickers.filter { it.isPublishable }.map {
                     Sticker(it.emoji, STICKER_BASE_DESIGN_PX * it.scale, it.x, it.y, it.rotationDeg)
                 },
                 strokes = slide.strokes,
+                look = StoryFilterMatrix.effectiveMatrix(slide.filter, slide.filterIntensity).takeUnless { it == StoryColorMatrix.IDENTITY },
+                framing = ThumbFraming.of(slide.transform, canvasWidthPx),
+                filled = StoryFitMode.rendersFilled(ComposerBackdropFraming.fitMode(backgroundTransform)),
+                backdrop = ComposerBackdropFraming.backdrop(backgroundTransform),
             )
+        }
     }
 }
 

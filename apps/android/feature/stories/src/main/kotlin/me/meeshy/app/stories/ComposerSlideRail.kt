@@ -84,6 +84,7 @@ internal fun ComposerSlideRail(
     deck: StorySlideDeck,
     backgrounds: Map<String, ThumbnailBackground?>,
     accentHex: String,
+    canvasWidthPx: Float,
     onSelect: (String) -> Unit,
     onAdd: () -> Unit,
     onDuplicate: () -> Unit,
@@ -127,7 +128,7 @@ internal fun ComposerSlideRail(
                 index = index,
                 count = deck.size,
                 currentIndex = deck.selectedIndex,
-                spec = rememberTileSpec(slide, backgrounds[slide.id], accentHex, tileWidth),
+                spec = rememberTileSpec(slide, backgrounds[slide.id], accentHex, tileWidth, canvasWidthPx),
                 backgroundModel = backgrounds[slide.id]?.model,
                 isDragged = dragFrom == index,
                 dragPx = dragPx,
@@ -187,9 +188,9 @@ internal fun StorySlide.holdsMatter(): Boolean =
         strokes.isNotEmpty() || audio.isNotEmpty() || background != null
 
 @Composable
-private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?, accentHex: String, tileWidth: Dp): SlideThumbnailSpec {
+private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?, accentHex: String, tileWidth: Dp, canvasWidthPx: Float): SlideThumbnailSpec {
     val density = LocalDensity.current
-    return remember(slide, background?.key, accentHex, tileWidth, density.density) {
+    return remember(slide, background?.key, accentHex, tileWidth, density.density, canvasWidthPx) {
         with(density) {
             SlideThumbnailSpec.of(
                 slide = slide,
@@ -197,6 +198,7 @@ private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?
                 accentHex = accentHex,
                 widthPx = tileWidth.roundToPx(),
                 heightPx = SlideRailGeometry.TileHeight.roundToPx(),
+                canvasWidthPx = canvasWidthPx,
             )
         }
     }
@@ -321,7 +323,7 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, modi
 private suspend fun loadThumbnailBackground(context: android.content.Context, model: Any, spec: SlideThumbnailSpec): Bitmap? {
     val request = ImageRequest.Builder(context)
         .data(model)
-        .size(spec.widthPx, spec.heightPx)
+        .size((spec.widthPx * spec.framing.scale).toInt().coerceAtLeast(1), (spec.heightPx * spec.framing.scale).toInt().coerceAtLeast(1))
         .scale(Scale.FILL)
         .allowHardware(false)
         .build()
