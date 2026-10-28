@@ -16,7 +16,7 @@ class IncomingMessageBufferTest {
         ApiMessage(id = id, conversationId = conversationId, content = content)
 
     private fun TestScope.buffer(batches: MutableList<List<ApiMessage>>, fail: Boolean = false) =
-        IncomingMessageBuffer(backgroundScope, windowMillis = WINDOW) { batch ->
+        IncomingMessageBuffer(backgroundScope, windowMillis = WINDOW) { batch, _ ->
             batches += batch
             if (fail) throw IllegalStateException("disk")
         }

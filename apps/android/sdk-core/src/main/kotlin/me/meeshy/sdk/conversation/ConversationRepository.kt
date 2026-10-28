@@ -47,6 +47,7 @@ import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.core.database.dao.SearchIndexDao
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
@@ -62,6 +63,7 @@ class ConversationRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
     endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    fence: AccountFence? = null,
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -76,6 +78,7 @@ class ConversationRepository @Inject constructor(
         accountProvider = syncAccountProvider,
         protectedIds = ::recentlyCreatedIds,
         endToEnd = endToEndRegimeLedger,
+        fence = fence,
     )
 
     /**

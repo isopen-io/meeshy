@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -47,8 +48,9 @@ class MessageRepository internal constructor(
         syncMetaDao: SyncMetaDao,
         outboxRepository: OutboxRepository,
         clock: CacheClock,
+        fence: AccountFence? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao),

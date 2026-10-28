@@ -17,6 +17,9 @@ import me.meeshy.core.common.IoDispatcher
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
@@ -39,6 +42,7 @@ class IncomingMessageIngestBinding internal constructor(
     private val signal: ConversationRefreshSignal,
     private val scope: CoroutineScope,
     windowMillis: Long,
+    private val fence: AccountFence? = null,
 ) : RealtimeBinding {
 
     @Inject
@@ -48,6 +52,7 @@ class IncomingMessageIngestBinding internal constructor(
         clock: CacheClock,
         signal: ConversationRefreshSignal,
         @IoDispatcher io: CoroutineDispatcher,
+        fence: AccountFence,
     ) : this(
         socket = socket,
         pipeline = MessageIngestPipeline(database),
@@ -55,9 +60,10 @@ class IncomingMessageIngestBinding internal constructor(
         signal = signal,
         scope = CoroutineScope(SupervisorJob() + io),
         windowMillis = IncomingMessageBuffer.DEFAULT_WINDOW_MILLIS,
+        fence = fence,
     )
 
-    private val buffer = IncomingMessageBuffer(scope, windowMillis, ::persist)
+    private val buffer = IncomingMessageBuffer(scope, windowMillis, { fence?.ticket() }, ::persist)
     private var job: Job? = null
 
     override fun attach() {
@@ -81,8 +87,10 @@ class IncomingMessageIngestBinding internal constructor(
         buffer.clear()
     }
 
-    private suspend fun persist(batch: List<ApiMessage>) {
-        signal.notify(pipeline.ingest(batch, clock.nowMillis()))
+    /** #13558 — the window is written under the account its messages arrived for, or dropped once that account left. */
+    private suspend fun persist(batch: List<ApiMessage>, arrivedUnder: AccountTicket?) {
+        val written = fence.commitOrWrite(arrivedUnder) { pipeline.ingest(batch, clock.nowMillis()) } ?: return
+        signal.notify(written)
     }
 }
 
