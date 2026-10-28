@@ -177,7 +177,7 @@ class MessageMutationWriterTest {
 
         (0..EditRevisionLedger.MAX_TRACKED_MESSAGES).forEach { n ->
             harness.clock.now += 1
-            ledger.record("m$n", "avant", "après")
+            ledger.record("m$n", "avant", "après", null)
         }
 
         assertThat(harness.database.editRevisionDao().forMessage("m0")).isEmpty()
