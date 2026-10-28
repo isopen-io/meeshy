@@ -33,6 +33,7 @@ import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
 import me.meeshy.app.navigation.WarmDeepLink
+import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
@@ -87,6 +88,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var callPictureInPicture: CallPictureInPictureCoordinator
 
+    /** La preuve que les extras d'appel d'un intent viennent d'une notification de Meeshy (#13504). */
+    @Inject
+    lateinit var launchProof: LaunchIntentProof
+
     private var launchRoute by mutableStateOf<String?>(null)
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
@@ -105,7 +110,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        InboundIntentGate.admit(intent)
+        InboundIntentGate.admit(intent, launchProof::admits)
         val restored = savedInstanceState != null
         launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
@@ -193,7 +198,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        InboundIntentGate.admit(intent)
+        InboundIntentGate.admit(intent, launchProof::admits)
         setIntent(intent)
         launchRoute = launchRouteOf(intent)
         callLink = callLinkOf(intent)
@@ -262,8 +267,9 @@ private fun LocalizedContent(
 /**
  * Thin platform glue: pull the notification extras [MeeshyFcmService] set on the
  * launch/full-screen intent into the pure [LaunchExtras] the [LaunchRouter] decodes.
+ * Only read AFTER [InboundIntentGate.admit] has stripped the call extras an unproven intent carried.
  */
-private fun Intent.launchExtras(): LaunchExtras {
+internal fun Intent.launchExtras(): LaunchExtras {
     val (tap, routeHint) = PushTapExtras.read(this)
     return LaunchExtras(
         callId = getStringExtra(MeeshyFcmService.EXTRA_CALL_ID),
