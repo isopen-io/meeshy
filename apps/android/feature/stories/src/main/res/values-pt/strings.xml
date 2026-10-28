@@ -44,6 +44,8 @@
     <string name="stories_composer_fade_out">Fade de saída do texto</string>
     <string name="stories_composer_timing_start">Início do texto</string>
     <string name="stories_composer_timing_duration">Duração visível do texto</string>
+    <string name="stories_composer_timing_unset">Não definido</string>
+    <string name="stories_composer_timing_value">%1$s s</string>
     <string name="stories_composer_draw_undo">Undo stroke</string>
     <string name="stories_composer_draw_done">Done drawing</string>
     <string name="stories_composer_remove_sticker">Remover sticker</string>

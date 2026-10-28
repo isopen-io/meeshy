@@ -461,6 +461,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "stories_composer_timing_unset",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_composer_timing_value",
+          "status": "android-only"
+        },
+        {
           "androidName": "stories_composer_title",
           "status": "android-only"
         },

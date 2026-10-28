@@ -44,6 +44,8 @@
     <string name="stories_composer_fade_out">Fondu de sortie du texte</string>
     <string name="stories_composer_timing_start">Heure de début du texte</string>
     <string name="stories_composer_timing_duration">Durée d\'affichage du texte</string>
+    <string name="stories_composer_timing_unset">Non défini</string>
+    <string name="stories_composer_timing_value">%1$s s</string>
     <string name="stories_composer_draw_undo">Annuler le trait</string>
     <string name="stories_composer_draw_done">Terminer le dessin</string>
     <string name="stories_composer_remove_sticker">Supprimer le sticker</string>
