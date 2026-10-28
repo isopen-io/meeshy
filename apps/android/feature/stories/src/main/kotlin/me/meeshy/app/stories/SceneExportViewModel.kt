@@ -46,14 +46,14 @@ class SceneExportViewModel @Inject constructor(
                 sounds = sources.sounds.map { it.input },
             )
             val plan = recipe.plan
-            val scaled = Bitmap.createScaledBitmap(frame, plan.width, plan.height, true).also { painted = it }
+            val scaled = scaledCopy(frame, plan.width, plan.height).also { painted = it }
             work.mkdirs()
             val background = when (recipe.background) {
                 SceneExportBackground.Still -> File(work, "scene.png").also { file ->
                     file.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
                 }
                 is SceneExportBackground.Video -> File(work, "background.mp4").also {
-                    factory.fetcher.fetch(requireNotNull(sources.video).url, it)
+                    factory.fetcher.fetch(factory.mediaUrl(requireNotNull(sources.video).url), it)
                 }
             }
             val sounds = recipe.sounds.withIndex().associate { (index, sound) ->
@@ -70,6 +70,17 @@ class SceneExportViewModel @Inject constructor(
             frame.recycle()
         }
     }
+
+    /**
+     * Toujours une copie NEUVE : `createScaledBitmap` rend la source elle-même quand elle a déjà la taille du plan, et
+     * la source est recyclée à la fin de la préparation — le calque d'un fond vidéo serait alors recyclé sous le moteur.
+     */
+    private fun scaledCopy(frame: Bitmap, width: Int, height: Int): Bitmap =
+        if (frame.width == width && frame.height == height) {
+            frame.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            Bitmap.createScaledBitmap(frame, width, height, true)
+        }
 
     fun cancel() = coordinator.cancel()
 
