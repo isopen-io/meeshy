@@ -87,19 +87,14 @@ class StoryComposerViewModel @Inject constructor(
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()
 
-    /** The door that opened this composer brought its own matter (a repost): the stored draft is not this session's. */
+    /** A repost door brings its own matter: the stored draft is not this session's until it restored or wrote it. */
     private var seededByDoor = false
-
-    /** This session restored the stored draft or wrote it itself: from then on it may keep it up to date. */
     private var ownsStoredDraft = false
 
     /**
-     * Restores a persisted composer draft when the screen opens — iOS `onAppear` +
-     * `StoryDraftStore.load`. Cache-first: the load is silent and only seeds the deck
-     * while the composer is still **pristine** (a single blank slide), so it never
-     * clobbers work the user has already begun in the async gap, and a corrupt/empty
-     * stored blob is inert. The audience and repost link are re-armed alongside the
-     * slides; the draft mirror is re-pointed at the restored selection.
+     * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
+     * Silent and pristine-only: it never clobbers work begun in the async gap, a corrupt blob is
+     * inert, and audience, repost link and annotations are re-armed with the slides.
      */
     fun onEnterComposer(seededByDoor: Boolean = false) {
         this.seededByDoor = seededByDoor
@@ -146,23 +141,13 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Whether a restored draft's media [id] can still be shown/published. An offline
-     * upload placeholder ([OutboxIds.isCmid]) resolves against the durable blob store —
-     * gone once its bytes were swept or its chain abandoned. A server-assigned id lives
-     * server-side and is treated as available (its thumbnail rehydrates on demand). The
-     * cheap [MediaBlobStore.has] never loads the bytes, so probing a whole draft's media
-     * costs a boolean per id.
+     * Whether a restored draft's media [id] can still be published: an offline placeholder
+     * ([OutboxIds.isCmid]) needs its bytes in the blob store; a server id is always available.
      */
     private suspend fun isRestoredMediaAvailable(id: String): Boolean =
         !OutboxIds.isCmid(id) || mediaBlobStore.has(id)
 
-    /**
-     * Persists (or purges) the current composer draft — iOS's save-on-dismiss. Called
-     * when the screen leaves. The pure [StoryComposerAutosave] decides: a restorable
-     * simple draft is saved, an emptied or no-longer-persistable draft purges any stored
-     * one, and an unchanged draft writes nothing. Sticker elements are not yet persistable,
-     * so a draft carrying one purges rather than restores lossily.
-     */
+    /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
     fun persistDraft() {
         viewModelScope.launch {
             val current = _state.value
