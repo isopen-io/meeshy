@@ -11,6 +11,11 @@ public data class BubbleImage(
     val height: Int? = null,
     /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Read by TalkBack as `contentDescription`. */
     val alt: String? = null,
+    /**
+     * Les réactions des membres sur CETTE pièce, en une étiquette compacte (« 👍❤️ 3 ») — `null` sans réaction, et
+     * pour une pièce protégée (#13596). Elle bouge en direct avec `attachment:reaction-added|removed`.
+     */
+    val reactionLabel: String? = null,
 )
 
 @Immutable
