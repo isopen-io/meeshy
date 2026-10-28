@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "profile.decor.done", "androidName": "profile_decor_done", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.error", "androidName": "profile_decor_error", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.ring.section", "androidName": "profile_decor_ring_section", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.banner.section", "androidName": "profile_decor_banner_section", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.frame.section", "androidName": "profile_decor_frame_section", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.none", "androidName": "profile_decor_none", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.image", "androidName": "profile_decor_image", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.image.hint", "androidName": "profile_decor_image_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.image.hidesDesigns", "androidName": "profile_decor_image_hides_designs", "status": "adopted" }
+      ]
+    }
+  }
+}

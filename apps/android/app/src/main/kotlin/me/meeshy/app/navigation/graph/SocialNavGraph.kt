@@ -14,6 +14,7 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
+import me.meeshy.app.profile.ProfileDecorSheet
 import me.meeshy.app.profile.UserStatsScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
@@ -61,7 +62,12 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
             onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
             onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
+            onOpenDecor = { navController.navigate(ProfileRoutes.DECOR) },
         )
+    }
+    // iOS présente `ProfileDecorSheet` en `.sheet` depuis ma page : « Terminé » + glissé vers le bas (#13364).
+    sheetComposable(ProfileRoutes.DECOR, navController) { _, dismiss ->
+        ProfileDecorSheet(onDone = dismiss)
     }
     // iOS présente `UserStatsView` en `.sheet` depuis ma page et les Réglages : croix + glissé vers le bas (#13364).
     sheetComposable(ProfileRoutes.STATS, navController) { _, dismiss ->

@@ -24,6 +24,9 @@ object ProfileRoutes {
     /** Mes statistiques (iOS `UserStatsView`) : lecture seule, ouverte depuis ma page et les Réglages. */
     const val STATS: String = "profile/stats"
 
+    /** Le décor de ma page (iOS `ProfileDecorSheet`, présenté en feuille depuis ma page) : contour, bannière, cadre. */
+    const val DECOR: String = "profile/decor"
+
     /** La route du profil de [userId] vue par la session ([selfId], [selfUsername]) ; `null` pour un id vide. */
     fun profileFor(userId: String, selfId: String?, selfUsername: String? = null): String? {
         val handle = userId.trim()

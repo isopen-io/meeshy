@@ -26,6 +26,15 @@
     <string name="profile_connection_context_sent">Du hast %s eine Verbindungsanfrage gesendet. Warten auf Antwort.</string>
     <string name="profile_conversations_interactionsDisabled">Interaktionen deaktiviert</string>
     <string name="profile_conversations_noShared">Keine gemeinsamen Unterhaltungen</string>
+    <string name="profile_decor_banner_section">Banner</string>
+    <string name="profile_decor_done">Fertig</string>
+    <string name="profile_decor_error">Auswahl konnte nicht gespeichert werden. Versuche es erneut.</string>
+    <string name="profile_decor_frame_section">Bannerrahmen</string>
+    <string name="profile_decor_image">Bild</string>
+    <string name="profile_decor_image_hides_designs">Dein Bannerbild liegt über den Hintergründen.</string>
+    <string name="profile_decor_image_hint">Ein Bannerbild auswählen</string>
+    <string name="profile_decor_none">Keiner</string>
+    <string name="profile_decor_ring_section">Avatar-Rahmen</string>
     <string name="profile_decor_subtitle">Für alle auf deinem Profil sichtbar</string>
     <string name="profile_decor_title">Rahmen und Banner</string>
     <string name="profile_detail_country">Land</string>
