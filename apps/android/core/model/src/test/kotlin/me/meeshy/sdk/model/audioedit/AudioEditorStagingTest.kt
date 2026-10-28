@@ -96,6 +96,38 @@ class AudioEditorStagingTest {
         val trim = staging().select(AudioEditorTool.TRIM, 10.0).copy(trimStart = 2.0, trimEnd = 8.0)
         assertThat(trim.previewRegion(10.0)).isEqualTo(2.0..8.0)
         assertThat(staging().select(AudioEditorTool.FADE, 10.0).previewRegion(10.0)).isNull()
+        assertThat(staging().select(AudioEditorTool.SPLIT, 10.0).previewRegion(10.0)).isNull()
+    }
+
+    @Test
+    fun `la vitesse n'est entendue que quand l'outil Vitesse est ouvert`() {
+        val speed = staging().select(AudioEditorTool.SPEED, 10.0).copy(speed = 1.5)
+        assertThat(speed.previewRate).isEqualTo(1.5f)
+        assertThat(speed.copy(tool = AudioEditorTool.FADE).previewRate).isEqualTo(1f)
+    }
+
+    @Test
+    fun `les poignées de rognage gardent au moins 0,3 s et restent dans la piste`() {
+        val trim = staging().select(AudioEditorTool.TRIM, 10.0)
+        assertThat(trim.withSelectionStart(2.0, 10.0).trimStart).isWithin(1e-9).of(9.7)
+        assertThat(trim.withSelectionStart(0.25, 10.0).trimStart).isWithin(1e-9).of(2.5)
+        assertThat(trim.copy(trimStart = 5.0).withSelectionEnd(0.0, 10.0).trimEnd).isWithin(1e-9).of(5.3)
+        assertThat(trim.withSelectionEnd(-3.0, 10.0).trimEnd).isWithin(1e-9).of(0.3)
+    }
+
+    @Test
+    fun `les poignées de découpe gardent au moins 0,2 s et la fin ne dépasse pas la durée`() {
+        val split = staging().select(AudioEditorTool.SPLIT, 10.0)
+        assertThat(split.withSelectionStart(0.9, 10.0).splitStart).isWithin(1e-9).of(5.8)
+        assertThat(split.withSelectionEnd(1.0, 10.0).splitEnd).isWithin(1e-9).of(10.0)
+        assertThat(split.withSelectionEnd(0.0, 10.0).splitEnd).isWithin(1e-9).of(4.2)
+    }
+
+    @Test
+    fun `une poignée sans outil de sélection ou sans durée ne change rien`() {
+        val fade = staging().select(AudioEditorTool.FADE, 10.0)
+        assertThat(fade.withSelectionStart(0.5, 10.0)).isEqualTo(fade)
+        assertThat(staging().select(AudioEditorTool.TRIM, 10.0).withSelectionEnd(0.5, 0.0).trimEnd).isEqualTo(10.0)
     }
 
     @Test
