@@ -1,7 +1,10 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.media.previewModel
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -111,6 +114,7 @@ internal fun StoryComposerScene(
 @Composable
 internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
         val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
+        val editedSticker = state.selectedSticker.takeIf { editedText == null && !state.isTimelineOpen }
         val onPlateau = LocalOnComposerPlateau.current
         state.sceneInspector?.let { inspector ->
             if (!state.isDrawingActive) {
@@ -131,38 +135,25 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 onDone = viewModel::onExitDrawingMode,
                 control = state.openDrawingControl.takeIf { onPlateau },
             )
-        } else if (editedText != null && onPlateau && state.openTextSection == ComposerObjectEditorSection.Plan) {
-            Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-                StoryPlanFrise(state, viewModel)
+        } else if (editedText != null && onPlateau) {
+            // Une section chasse l'autre en fondu (iOS : le contenu change sous la colonne, sans saut de hauteur).
+            AnimatedContent(
+                targetState = state.openTextSection,
+                transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+                label = "text-section",
+            ) { open ->
+                if (open == ComposerObjectEditorSection.Plan) {
+                    Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+                        StoryPlanFrise(state, viewModel)
+                    }
+                } else {
+                    TextSectionToolbar(editedText, open, viewModel, onPlateau)
+                }
             }
+        } else if (editedSticker != null && onPlateau) {
+            StickerSectionContent(state, editedSticker, viewModel)
         } else if (editedText != null) {
-            TextStyleToolbar(
-                element = editedText,
-                onStyle = { style -> viewModel.onTextElementStyle(editedText.id, style) },
-                onColor = { color -> viewModel.onTextElementColor(editedText.id, color) },
-                onAlign = { align -> viewModel.onTextElementAlign(editedText.id, align) },
-                onBackground = { bg -> viewModel.onTextElementBackground(editedText.id, bg) },
-                onCycleSize = { viewModel.onTextElementCycleSize(editedText.id) },
-                onCycleOutline = { viewModel.onTextElementCycleOutline(editedText.id) },
-                onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(editedText.id) },
-                onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(editedText.id) },
-                onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
-                onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
-                onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
-                onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
-                onDone = if (onPlateau) null else viewModel::onDeselectTextElement,
-                section = state.openTextSection.takeIf { onPlateau },
-                intents = TextSectionIntents(
-                    onFrameShape = { viewModel.onTextElementFrameShape(editedText.id, it) },
-                    onFramePadding = { viewModel.onTextElementFramePadding(editedText.id, it) },
-                    onFrameBorder = { viewModel.onTextElementFrameBorder(editedText.id, it) },
-                    onFrameColor = { viewModel.onTextElementFrameColor(editedText.id, it) },
-                    onOutlineWidth = { viewModel.onTextElementOutlineWidth(editedText.id, it) },
-                    onOutlineColor = { viewModel.onTextElementOutlineColor(editedText.id, it) },
-                    onLanguage = { viewModel.onTextElementLanguage(editedText.id, it) },
-                    publishLanguage = viewModel.resolvePublishLanguage(),
-                ),
-            )
+            TextSectionToolbar(editedText, null, viewModel, onPlateau)
         } else {
             // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun
             // pixel au rendu final) — et seulement quand aucun outil n'occupe la zone basse.

@@ -45,12 +45,39 @@ class StoryComposerTrailingTest {
     }
 
     @Test
-    fun `a sticker has no section, only its actions and the exit`() {
+    fun `a sticker serves time then plan, as the iOS rail of its family, the first open by default`() {
         val focus = withSticker().trailingFocus as Focus.Object
-        assertThat(focus.sections).isEmpty()
+        assertThat(focus.sections).isEqualTo(ComposerObjectEditorRail.entries(ComposerObjectKind.STICKER))
+        assertThat(focus.sections).containsExactly(ComposerObjectEditorSection.Timing, ComposerObjectEditorSection.Plan).inOrder()
+        assertThat(focus.open).isEqualTo(ComposerObjectEditorSection.Timing)
         val entries = me.meeshy.sdk.model.composer.ComposerTrailingColumn.options(focus)
         assertThat(entries.last()).isEqualTo(Entry.ExitObject)
-        assertThat(entries.filterIsInstance<Entry.EditorSection>()).isEmpty()
+        assertThat(entries.filterIsInstance<Entry.EditorSection>()).hasSize(2)
+    }
+
+    @Test
+    fun `a sticker opens its plan, and ignores a text tool it does not serve`() {
+        val plan = StoryComposerTrailingReducer.sectionOpened(withSticker(), ComposerObjectEditorSection.Plan)
+        assertThat((plan.trailingFocus as Focus.Object).open).isEqualTo(ComposerObjectEditorSection.Plan)
+        val ignored = StoryComposerTrailingReducer.sectionOpened(withSticker(), ComposerObjectEditorSection.Tool(TextEditTool.COLOR))
+        assertThat((ignored.trailingFocus as Focus.Object).open).isEqualTo(ComposerObjectEditorSection.Timing)
+    }
+
+    @Test
+    fun `a text section left open does not leak onto the next sticker`() {
+        val color = StoryComposerTrailingReducer.sectionOpened(withText(), ComposerObjectEditorSection.Tool(TextEditTool.COLOR))
+        val onSticker = StoryComposerStickerReducer.added(color, "😀", "s2")
+        assertThat((onSticker.trailingFocus as Focus.Object).open).isEqualTo(ComposerObjectEditorSection.Timing)
+    }
+
+    @Test
+    fun `the sticker window cycles like a text window, on the sticker alone`() {
+        val state = withSticker()
+        val started = StoryComposerStickerReducer.startCycled(state, "s1")
+        assertThat(started.selectedSticker!!.timing).isNotEqualTo(state.selectedSticker!!.timing)
+        val timed = StoryComposerStickerReducer.durationCycled(state, "s1")
+        assertThat(timed.selectedSticker!!.timing.isTimed).isTrue()
+        assertThat(StoryComposerStickerReducer.startCycled(state, "absent")).isEqualTo(state)
     }
 
     @Test
