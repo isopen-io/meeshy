@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.MyStoryDeleteConfirmation
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryPublishQueue
@@ -242,5 +243,53 @@ class MyStoriesViewModelTest {
         assertThat(vm.state.value.active.first().id).isEqualTo("a")
         assertThat(vm.state.value.active.first().viewCount).isEqualTo(0)
         assertThat(vm.state.value.isRepublishing).isFalse()
+    }
+
+    private val ticketOfA = AccountTicket(ownerId = "me", generation = 1L, session = 1L)
+    private val ticketOfB = AccountTicket(ownerId = "B", generation = 2L, session = 3L)
+
+    /** #13560 : le compte courant bascule de A vers B pendant la requête — ce que rend [StoryRepository.ticket] suit. */
+    private fun switchingAccount(repo: StoryRepository): () -> Unit {
+        var current = ticketOfA
+        coEvery { repo.ticket() } answers { current }
+        return { current = ticketOfB }
+    }
+
+    @Test
+    fun `une suppression repondue apres le changement de compte ecrit l'archive sous le ticket du geste`() = runTest(dispatcher) {
+        val repo = repository()
+        val switchToB = switchingAccount(repo)
+        coEvery { repo.delete("a") } coAnswers {
+            switchToB()
+            NetworkResult.Success(Unit)
+        }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestDelete("a"))
+        vm.onEvent(MyStoriesUiEvent.ConfirmDelete)
+        advanceUntilIdle()
+
+        coVerify { repo.removeCachedStory("a", ticketOfA) }
+        coVerify { repo.persistMyStories(any(), ticketOfA) }
+        coVerify(exactly = 0) { repo.persistMyStories(any(), ticketOfB) }
+    }
+
+    @Test
+    fun `une republication repondue apres le changement de compte ecrit l'archive sous le ticket du geste`() = runTest(dispatcher) {
+        val repo = repository()
+        val switchToB = switchingAccount(repo)
+        coEvery { repo.republish("a") } coAnswers {
+            switchToB()
+            NetworkResult.Success(activeA.copy(viewCount = 0))
+        }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.Republish("a"))
+        advanceUntilIdle()
+
+        coVerify { repo.persistMyStories(any(), ticketOfA) }
+        coVerify(exactly = 0) { repo.persistMyStories(any(), ticketOfB) }
     }
 }
