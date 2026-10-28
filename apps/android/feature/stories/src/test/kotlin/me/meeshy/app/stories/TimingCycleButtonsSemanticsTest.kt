@@ -33,7 +33,7 @@ class TimingCycleButtonsSemanticsTest {
 
         timing.value = StoryElementTiming(startSeconds = 2f, durationSeconds = 0.5f)
         compose.waitForIdle()
-        stateOf("Text start time", "2 s")
-        stateOf("Text visible duration", "0.5 s")
+        stateOf("Text start time", "2 seconds")
+        stateOf("Text visible duration", "0.5 seconds")
     }
 }
