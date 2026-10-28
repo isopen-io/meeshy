@@ -44,6 +44,8 @@ private val StoryComposerUiState.servedSections: List<ComposerObjectEditorSectio
     get() = when {
         isEditingTextElement -> ServedTextSections
         selectedSticker != null -> ServedStickerSections
+        selectedMedia != null -> ServedMediaSections
+        selectedSound != null -> ServedSoundSections
         else -> emptyList()
     }
 
@@ -64,12 +66,14 @@ internal val StoryComposerUiState.trailingFocus: ComposerTrailingColumn.Focus
                 open = when {
                     isEditingTextElement -> openTextSection
                     selectedSticker != null -> openStickerSection
+                    selectedMedia != null -> openMediaSection
+                    selectedSound != null -> openSoundSection
                     else -> null
                 },
                 actions = objectControllers.actions,
             )
         }
-        return ComposerTrailingColumn.focus(controls, selection)
+        return ComposerTrailingColumn.focus(controls, selection, servedSceneEffects, sceneEffectCarousel)
     }
 
 /** « Temps » ne paraît que pour une scène animée (iOS `onTimeButton: sceneIsAnimated ? … : nil`). */

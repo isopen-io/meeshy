@@ -53,6 +53,7 @@ internal object StoryComposerTextReducer {
             deck = state.deck.addTextElementToSelected(StoryTextElement(id = id, x = at.x.toFloat(), y = at.y.toFloat())),
             selectedTextElementId = id,
             selectedStickerId = null,
+            selectedMediaId = null, selectedSoundId = null,
             errorMessage = null,
         )
     }
@@ -60,7 +61,7 @@ internal object StoryComposerTextReducer {
     /** Begins editing [id] (inert when it is not on the selected slide). */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(selectedTextElementId = id, selectedStickerId = null)
+        else state.copy(selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Stops editing the active element — the field returns to the slide caption. */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =
@@ -69,7 +70,7 @@ internal object StoryComposerTextReducer {
     /** Opens the long-press menu on [id], selecting it (inert when it is not on the selected slide). */
     fun menuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null)
+        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Dismisses the element context menu without touching the deck or the selection. */
     fun menuDismissed(state: StoryComposerUiState): StoryComposerUiState =

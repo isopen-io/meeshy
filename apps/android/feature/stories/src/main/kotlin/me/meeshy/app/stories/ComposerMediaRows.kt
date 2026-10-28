@@ -3,6 +3,9 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.remember
 import me.meeshy.sdk.media.previewModel
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +48,8 @@ internal fun MediaPreviewRow(
     onRemove: (String) -> Unit,
     onToggleBackground: (String) -> Unit,
     onToggleBackgroundLoop: () -> Unit,
+    selectedMediaId: String? = null,
+    onSelect: ((String) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -56,6 +61,8 @@ internal fun MediaPreviewRow(
                 model = media.thumbnailUrl ?: media.url,
                 isPending = false,
                 isBackground = isBackground,
+                selected = media.id == selectedMediaId,
+                onSelect = onSelect?.let { select -> { select(media.id) } },
                 onRemove = { onRemove(media.id) },
                 onToggleBackground = { onToggleBackground(media.id) },
                 // The loop toggle appears only on the designated background VIDEO — the
@@ -84,15 +91,25 @@ internal fun MediaThumbnail(
     onToggleBackground: (() -> Unit)? = null,
     backgroundLoop: Boolean? = null,
     onToggleBackgroundLoop: (() -> Unit)? = null,
+    selected: Boolean = false,
+    onSelect: (() -> Unit)? = null,
 ) {
+    val selectLabel = stringResource(R.string.composer_column_media_select)
     Box {
         AsyncImage(
             model = model,
-            contentDescription = null,
+            contentDescription = if (onSelect != null) selectLabel else null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(72.dp)
-                .clip(RoundedCornerShape(8.dp)),
+                .clip(RoundedCornerShape(8.dp))
+                .then(
+                    if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier,
+                )
+                .then(
+                    if (onSelect == null) Modifier
+                    else Modifier.selectable(selected = selected, role = Role.Button, onClick = onSelect),
+                ),
         )
         if (onToggleBackground != null) {
             Surface(

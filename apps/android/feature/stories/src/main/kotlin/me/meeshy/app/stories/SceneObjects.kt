@@ -24,6 +24,8 @@ data class SceneInspector(val ref: SceneObjectRef, val chips: List<ComposerObjec
 val StoryComposerUiState.selectedSceneObject: SceneObjectRef?
     get() = selectedTextElement?.let { SceneObjectRef(ComposerObjectKind.TEXT, it.id) }
         ?: selectedSticker?.let { SceneObjectRef(ComposerObjectKind.STICKER, it.id) }
+        ?: selectedMedia?.let { SceneObjectRef(ComposerObjectKind.MEDIA, it) }
+        ?: selectedSound?.let { SceneObjectRef(ComposerObjectKind.AUDIO, it.id) }
 
 val StoryComposerUiState.sceneContextMenu: SceneObjectContextMenu?
     get() {
@@ -97,6 +99,18 @@ private fun StoryComposerUiState.stickerSubject() = SceneObjectMenu.Subject(
     canDuplicate = deck.selectedCanAddSticker,
 )
 
+/** Un média se fait fond de la scène (ou le REMPLACE) et se retire ; il ne se duplique ni ne s'empile. */
+private val mediaActions = listOf(
+    SceneObjectMenu.Action.SET_AS_BACKGROUND, SceneObjectMenu.Action.REPLACE_BACKGROUND, SceneObjectMenu.Action.DELETE,
+)
+
+private fun StoryComposerUiState.mediaSubject(id: String) = SceneObjectMenu.Subject(
+    isBackground = deck.selectedSlideBackgroundMediaId == id,
+    canBecomeBackground = true,
+    sceneHasBackground = deck.selectedSlideBackgroundMediaId != null,
+    canDuplicate = false,
+)
+
 private val controllerActions = listOf(
     SceneObjectMenu.Action.DUPLICATE, SceneObjectMenu.Action.BRING_FORWARD,
     SceneObjectMenu.Action.SEND_BACKWARD, SceneObjectMenu.Action.DELETE,
@@ -110,6 +124,11 @@ private val controllerActions = listOf(
 val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
     get() {
         val ref = selectedSceneObject ?: return null
-        val subject = if (ref.kind == ComposerObjectKind.TEXT) textSubject() else stickerSubject()
-        return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in controllerActions })
+        val (subject, served) = when (ref.kind) {
+            ComposerObjectKind.TEXT -> textSubject() to controllerActions
+            ComposerObjectKind.MEDIA -> mediaSubject(ref.id) to mediaActions
+            ComposerObjectKind.AUDIO -> SceneObjectMenu.Subject(canDuplicate = false) to listOf(SceneObjectMenu.Action.DELETE)
+            else -> stickerSubject() to controllerActions
+        }
+        return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
     }

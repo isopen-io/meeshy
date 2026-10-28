@@ -102,6 +102,14 @@ data class StoryComposerUiState(
     val openObjectSection: me.meeshy.sdk.model.composer.ComposerObjectEditorSection? = null,
     /** Le réglage du pinceau déplié dans la colonne droite. */
     val openDrawingControl: DrawingControl = DrawingControl.COLOR,
+    /** Le média de la slide touché dans la rangée : ses sections s'ouvrent dans la colonne droite (jamais avec un texte ou un sticker). */
+    val selectedMediaId: String? = null,
+    /** La piste de la slide touchée dans la rangée du son. */
+    val selectedSoundId: String? = null,
+    /** La famille d'effets de scène dont le carrousel est ouvert au pied du plateau. */
+    val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
+    /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
+    val isFrameOpen: Boolean = false,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -306,6 +314,8 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
         selectedTextElementId = if (stillSelected) elementId else null,
         selectedStickerId = if (stickerStillSelected) stickerId else null,
+        selectedMediaId = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds },
+        selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
     )
 }
