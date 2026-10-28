@@ -1,5 +1,26 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontStyle
+import me.meeshy.sdk.model.piece.PieceBadge
+import me.meeshy.ui.theme.MeeshyMotion
+import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +56,9 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
- * One generic file attachment: a paperclip, the file name (or a generic label) and its size.
+ * One generic file attachment: a paperclip, the file name (or a generic label), its size, and — like iOS
+ * `DownloadBadgeView` — the state of its transfer carried by the row itself (#13492): to download → progress → ready,
+ * or a failure to retry. A sealed (end-to-end encrypted) piece is drawn as such and never offers a download (#13493).
  * A null [onClick] (no url yet, or no host callback) leaves the row non-interactive.
  */
 @Composable
@@ -44,12 +67,24 @@ internal fun BubbleFileRow(
     onColor: Color,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    transfers: BubbleFileTransfers = LocalBubbleFileTransfers.current,
 ) {
+    if (file.isSealed) {
+        BubbleSealedPieceRow(onColor, modifier)
+        return
+    }
     if (file.isContactCard) {
         BubbleContactCardRow(file, onColor, onClick, modifier)
         return
     }
-    val openLabel = stringResource(R.string.bubble_file_open)
+    val badge = remember(file, transfers) { transfers.badgeOf(file) }
+    val actionLabel = when (badge) {
+        is PieceBadge.Downloading -> stringResource(R.string.bubble_file_cancel)
+        PieceBadge.Failed -> stringResource(R.string.bubble_file_download_failed)
+        is PieceBadge.Idle -> stringResource(R.string.bubble_file_download)
+        else -> stringResource(R.string.bubble_file_open)
+    }
+    val stateText = badgeStateText(badge)
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.sm))
@@ -58,10 +93,12 @@ internal fun BubbleFileRow(
                 if (onClick == null) base
                 else base.clickable(onClick = onClick).semantics {
                     role = Role.Button
-                    contentDescription = openLabel
+                    contentDescription = actionLabel
+                    stateText?.let { stateDescription = it }
                 }
             }
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
+            .animateContentSize(MeeshyMotion.springDefault()),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
@@ -71,7 +108,7 @@ internal fun BubbleFileRow(
             tint = onColor.copy(alpha = 0.8f),
             modifier = Modifier.size(16.dp),
         )
-        Column {
+        Column(modifier = Modifier.weight(1f, fill = false)) {
             Text(
                 text = file.name ?: stringResource(R.string.bubble_attachment_file_fallback),
                 style = MaterialTheme.typography.bodySmall,
@@ -88,6 +125,108 @@ internal fun BubbleFileRow(
                 )
             }
         }
+        FileBadgeView(badge = badge, onColor = onColor)
+    }
+}
+
+@Composable
+private fun badgeStateText(badge: PieceBadge): String? = when (badge) {
+    is PieceBadge.Downloading -> badge.percent?.let { stringResource(R.string.bubble_file_downloading, it) }
+        ?: stringResource(R.string.bubble_file_downloading_unknown)
+    PieceBadge.Ready -> stringResource(R.string.bubble_file_ready)
+    PieceBadge.Failed -> stringResource(R.string.bubble_file_download_failed)
+    else -> null
+}
+
+/** Le badge à droite de la rangée : il apparaît, change d'état et disparaît en fondu ressort (iOS `.scale(0.8) + .opacity`). */
+@Composable
+private fun FileBadgeView(badge: PieceBadge, onColor: Color) {
+    val kind = when (badge) {
+        is PieceBadge.Idle -> 1
+        is PieceBadge.Downloading -> 2
+        PieceBadge.Ready -> 3
+        PieceBadge.Failed -> 4
+        else -> 0
+    }
+    AnimatedContent(
+        targetState = kind,
+        transitionSpec = {
+            (fadeIn(tween(150)) + scaleIn(MeeshyMotion.springFast(), initialScale = 0.8f)) togetherWith
+                (fadeOut(tween(150)) + scaleOut(targetScale = 0.8f))
+        },
+        label = "file-badge",
+        modifier = Modifier.clearAndSetSemantics {},
+    ) { shown ->
+        when (shown) {
+            1 -> BadgeDisc(onColor) {
+                Icon(MeeshyIcons.ArrowDown, null, tint = onColor, modifier = Modifier.size(16.dp))
+            }
+            2 -> DownloadProgressRing((badge as? PieceBadge.Downloading)?.percent, onColor)
+            3 -> BadgeDisc(onColor) {
+                Icon(MeeshyIcons.Check, null, tint = onColor, modifier = Modifier.size(16.dp))
+            }
+            4 -> BadgeDisc(onColor) {
+                Icon(MeeshyIcons.Refresh, null, tint = MeeshyTheme.tokens.error, modifier = Modifier.size(16.dp))
+            }
+            else -> Spacer(Modifier.size(0.dp))
+        }
+    }
+}
+
+@Composable
+private fun BadgeDisc(onColor: Color, content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier.size(28.dp).clip(CircleShape).background(onColor.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+/** L'anneau de progression : l'arc glisse vers chaque nouvelle valeur au lieu de sauter ; indéterminé tant que la taille est inconnue. */
+@Composable
+private fun DownloadProgressRing(percent: Int?, onColor: Color) {
+    Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        if (percent == null) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = onColor)
+        } else {
+            val animated by animateFloatAsState(percent / 100f, tween(200, easing = LinearEasing), label = "file-progress")
+            CircularProgressIndicator(
+                progress = { animated },
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp,
+                color = onColor,
+                trackColor = onColor.copy(alpha = 0.2f),
+            )
+            Icon(MeeshyIcons.Close, null, tint = onColor, modifier = Modifier.size(10.dp))
+        }
+    }
+}
+
+/**
+ * **Une pièce chiffrée de bout en bout** (#13493, miroir de la mention scellée du fil) : un cadenas et « Pièce chiffrée »,
+ * sans nom de fichier, sans taille ni adresse, et aucun appui — l'Android natif ne déchiffre pas encore, donc rien ne
+ * s'ouvre ni ne se télécharge. Dite à TalkBack comme telle.
+ */
+@Composable
+internal fun BubbleSealedPieceRow(onColor: Color, modifier: Modifier = Modifier) {
+    val spoken = stringResource(R.string.bubble_piece_sealed_a11y)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .semantics(mergeDescendants = true) { contentDescription = spoken }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(MeeshyIcons.LockFilled, null, tint = onColor.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+        Text(
+            text = stringResource(R.string.bubble_piece_sealed),
+            style = MaterialTheme.typography.bodySmall,
+            fontStyle = FontStyle.Italic,
+            color = onColor.copy(alpha = 0.8f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

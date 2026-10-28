@@ -54,13 +54,16 @@ internal object BubbleAttachmentBuilder {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
             .map { attachment ->
+                val sealed = attachment.isEncrypted == true
                 BubbleFile(
                     attachmentId = attachment.id,
-                    name = attachment.originalName ?: attachment.fileName,
-                    sizeBytes = attachment.fileSize,
-                    url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    name = if (sealed) null else attachment.originalName ?: attachment.fileName,
+                    sizeBytes = if (sealed) null else attachment.fileSize,
+                    url = if (sealed) null else attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     isVideo = attachment.isVideo,
-                    isContactCard = attachment.isContactCard,
+                    isContactCard = attachment.isContactCard && !sealed,
+                    isSealed = sealed,
+                    isOnDevice = attachment.fileUrl.isLocalUri(),
                 )
             }
         return BubbleAttachments(
@@ -239,6 +242,8 @@ internal object BubbleAttachmentBuilder {
         if (isEncrypted == true || isProtected) return null
         return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
+
+    private fun String?.isLocalUri(): Boolean = this != null && (startsWith("file://") || startsWith("content://"))
 
     private const val LOCATION_MIME = "application/x-location"
 

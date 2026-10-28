@@ -144,6 +144,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            sealedPieceIds = if (isEndToEndSealed && !isDeleted) message.attachments.map { it.id } else emptyList(),
             holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,

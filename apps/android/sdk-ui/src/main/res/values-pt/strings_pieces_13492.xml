@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Baixar</string>
+    <string name="bubble_file_downloading">Baixando %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">Baixando…</string>
+    <string name="bubble_file_ready">Pronto para abrir</string>
+    <string name="bubble_file_download_failed">Falha no download — toque para tentar de novo</string>
+    <string name="bubble_piece_sealed">Anexo criptografado</string>
+    <string name="bubble_piece_sealed_a11y">Anexo criptografado de ponta a ponta — não abre neste dispositivo</string>
+    <string name="bubble_file_cancel">Cancelar o download</string>
+</resources>
