@@ -168,6 +168,15 @@ class StoryComposerSelectionTest {
     }
 
     @Test
+    fun `the frame tapped while a media is touched opens at once, the touched media let go`() {
+        val touched = StoryComposerSelectionReducer.mediaSelected(withBackground(withMedia("m1", "m2"), "m1"), "m2")
+        val frame = StoryComposerSelectionReducer.frameToggled(touched)
+        assertThat(frame.frameOpen).isTrue()
+        assertThat(frame.selectedMedia).isNull()
+        assertThat(StoryComposerSelectionReducer.frameToggled(frame).frameOpen).isFalse()
+    }
+
+    @Test
     fun `the frame needs a media background`() {
         assertThat(StoryComposerSelectionReducer.frameToggled(StoryComposerUiState()).frameOpen).isFalse()
     }
