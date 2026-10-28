@@ -56,6 +56,10 @@
     <string name="feed_quote_cancel">Annulla</string>
     <string name="feed_quote_submit">Ripubblica</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_offer_body">Il tuo post contiene un solo video: come reel, si apre a schermo intero nei Reel.</string>
+    <string name="feed_reel_offer_post">È un post</string>
+    <string name="feed_reel_offer_reel">È un reel</string>
+    <string name="feed_reel_offer_title">Pubblicare come reel?</string>
     <string name="feed_report_reason_harassment">Molestie</string>
     <string name="feed_report_reason_hate_speech">Incitamento all\'odio</string>
     <string name="feed_report_reason_impersonation">Furto d\'identità</string>
