@@ -10,8 +10,9 @@ enum class DrawingControl(val id: String) { COLOR("drawing.color"), WIDTH("drawi
 
 /**
  * Les sections de l'éditeur d'un texte que ce meuble sert, dans l'ordre appris par les doigts (`TextEditTool.all`, puis
- * le temps). Cadre, bordure et langue n'ont aucun réglage ici : servir un bouton inerte serait mentir (loi 4). Le plan
- * (empilement) est servi par les ACTIONS de l'objet, pas par une section : un réglage, un seul chemin.
+ * le temps, puis le plan). Chaque section a son réglage réel (loi 4) : cadre, bordure et langue sont des réducteurs du
+ * texte ; le plan est la frise des pistes (iOS `Plan2DView`), qui ne double PAS l'empilement — celui-ci reste aux ACTIONS
+ * de l'objet : un réglage, un seul chemin.
  */
 internal val ServedTextSections: List<ComposerObjectEditorSection> = listOf(
     ComposerObjectEditorSection.Tool(TextEditTool.STYLE),
@@ -19,7 +20,11 @@ internal val ServedTextSections: List<ComposerObjectEditorSection> = listOf(
     ComposerObjectEditorSection.Tool(TextEditTool.COLOR),
     ComposerObjectEditorSection.Tool(TextEditTool.ALIGN),
     ComposerObjectEditorSection.Tool(TextEditTool.BACKGROUND),
+    ComposerObjectEditorSection.Tool(TextEditTool.FRAME),
+    ComposerObjectEditorSection.Tool(TextEditTool.BORDER),
+    ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE),
     ComposerObjectEditorSection.Timing,
+    ComposerObjectEditorSection.Plan,
 )
 
 /** La section dont les options sont ouvertes : celle que l'auteur a touchée si elle est servie, sinon la première. */

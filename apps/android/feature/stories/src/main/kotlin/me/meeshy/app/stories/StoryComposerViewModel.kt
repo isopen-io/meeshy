@@ -247,6 +247,8 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onSceneReduce(next: (StoryComposerUiState) -> StoryComposerUiState) = reduce(next = next)
 
+    fun onSceneGesture(gesture: String, next: (StoryComposerUiState) -> StoryComposerUiState) = reduce(gesture, next)
+
     fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
 
     fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
@@ -775,7 +777,7 @@ class StoryComposerViewModel @Inject constructor(
         return slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
     }
 
-    private fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
+    internal fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
 
     /** Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées. */
     override fun onCleared() = _state.value.pendingUploads.forEach { MediaIntake.release(it.item) }

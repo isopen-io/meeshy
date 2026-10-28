@@ -36,6 +36,9 @@
     <string name="composer_chip_style_handwriting">HANDSCHRIFT</string>
     <string name="composer_chip_style_neon">NEON</string>
     <string name="composer_chip_style_typewriter">SCHREIBMASCHINE</string>
+    <string name="composer_column_text_frame">Textrahmen</string>
+    <string name="composer_column_text_language">Sprache des Textes</string>
+    <string name="composer_column_text_plan">TIMELINE</string>
     <string name="composer_frise_earlier">Früher</string>
     <string name="composer_frise_empty">Füge einen Text oder Sticker hinzu: Jedes Objekt wird zu einer Spur.</string>
     <string name="composer_frise_entry">Tritt hier ein</string>
@@ -68,6 +71,12 @@
     <string name="composer_socle_audience">Publikum</string>
     <string name="composer_socle_publish">Veröffentlichen</string>
     <string name="composer_sound_background_a11y">Hintergrundton</string>
+    <string name="composer_text_frame_cloud">Wolke</string>
+    <string name="composer_text_frame_diamond">Raute</string>
+    <string name="composer_text_frame_pill">Pille</string>
+    <string name="composer_text_frame_rectangle">Quadrat</string>
+    <string name="composer_text_frame_rounded">Abgerundet</string>
+    <string name="composer_text_frame_speech">Sprechblase</string>
     <string name="my_stories_archive_empty_subtitle">Ihre abgelaufenen Storys landen in diesem Archiv.</string>
     <string name="my_stories_archive_empty_title">Kein Archiv</string>
     <string name="my_stories_back">Zurück</string>

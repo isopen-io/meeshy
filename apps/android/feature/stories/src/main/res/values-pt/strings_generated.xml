@@ -36,6 +36,9 @@
     <string name="composer_chip_style_handwriting">MANUSCRITA</string>
     <string name="composer_chip_style_neon">NÉON</string>
     <string name="composer_chip_style_typewriter">MÁQUINA</string>
+    <string name="composer_column_text_frame">Moldura do texto</string>
+    <string name="composer_column_text_language">Idioma do texto</string>
+    <string name="composer_column_text_plan">LINHA DO TEMPO</string>
     <string name="composer_frise_earlier">Mais cedo</string>
     <string name="composer_frise_empty">Adicione um texto ou um sticker: cada objeto vira uma faixa.</string>
     <string name="composer_frise_entry">Entra aqui</string>
@@ -68,6 +71,12 @@
     <string name="composer_socle_audience">Público</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Som de fundo</string>
+    <string name="composer_text_frame_cloud">Nuvem</string>
+    <string name="composer_text_frame_diamond">Losango</string>
+    <string name="composer_text_frame_pill">Cápsula</string>
+    <string name="composer_text_frame_rectangle">Quadrado</string>
+    <string name="composer_text_frame_rounded">Arredondado</string>
+    <string name="composer_text_frame_speech">Balão de fala</string>
     <string name="my_stories_archive_empty_subtitle">Suas stories expiradas entrarão neste arquivo.</string>
     <string name="my_stories_archive_empty_title">Nenhum arquivo</string>
     <string name="my_stories_back">Voltar</string>

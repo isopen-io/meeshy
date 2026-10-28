@@ -156,7 +156,9 @@ private fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
         TextEditTool.COLOR -> MeeshyIcons.Palette
         TextEditTool.ALIGN -> MeeshyIcons.AlignLeft
         TextEditTool.BACKGROUND -> MeeshyIcons.Wallpaper
-        TextEditTool.FRAME, TextEditTool.BORDER, TextEditTool.LANGUAGE -> MeeshyIcons.TextFields
+        TextEditTool.FRAME -> MeeshyIcons.TextBubble
+        TextEditTool.BORDER -> MeeshyIcons.CheckBoxBlank
+        TextEditTool.LANGUAGE -> MeeshyIcons.Globe
     }
     ComposerObjectEditorSection.Timing -> MeeshyIcons.ScheduleFilled
     is ComposerObjectEditorSection.Media, ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
@@ -169,8 +171,11 @@ private fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
         TextEditTool.COLOR -> R.string.composer_column_text_color
         TextEditTool.ALIGN -> R.string.composer_column_text_align
         TextEditTool.BACKGROUND -> R.string.composer_column_text_background
-        TextEditTool.FRAME, TextEditTool.BORDER, TextEditTool.LANGUAGE -> R.string.composer_column_text_style
+        TextEditTool.FRAME -> R.string.composer_column_text_frame
+        TextEditTool.BORDER -> R.string.stories_composer_outline
+        TextEditTool.LANGUAGE -> R.string.composer_column_text_language
     }
     ComposerObjectEditorSection.Timing -> R.string.composer_column_text_timing
-    is ComposerObjectEditorSection.Media, ComposerObjectEditorSection.Plan -> R.string.composer_column_text_timing
+    ComposerObjectEditorSection.Plan -> R.string.composer_column_text_plan
+    is ComposerObjectEditorSection.Media -> R.string.composer_column_text_timing
 }

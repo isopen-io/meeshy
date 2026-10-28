@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
+import me.meeshy.sdk.model.scene.StoryTextLanguage
 import me.meeshy.sdk.model.scene.StoryTextOutlineCycle
 
 /**
@@ -116,6 +118,30 @@ internal object StoryComposerTextReducer {
     /** Next outline thickness, wrapping to none ([me.meeshy.sdk.model.scene.StoryTextOutlineCycle.advance]). */
     fun outlineCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
         edit(state, id) { it.copy(outline = me.meeshy.sdk.model.scene.StoryTextOutlineCycle.advance(it.outline)) }
+
+    /** Cadre : la forme (un texte neutre reçoit un liseré discret pour qu'elle se voie). */
+    fun frameShaped(state: StoryComposerUiState, id: String, shape: StoryTextFrameShape): StoryComposerUiState =
+        edit(state, id) { it.copy(frame = it.frame.shaped(shape, it.background)) }
+
+    fun framePadded(state: StoryComposerUiState, id: String, scale: Float): StoryComposerUiState =
+        edit(state, id) { it.copy(frame = it.frame.padded(scale)) }
+
+    fun frameBordered(state: StoryComposerUiState, id: String, width: Float): StoryComposerUiState =
+        edit(state, id) { it.copy(frame = it.frame.bordered(width)) }
+
+    fun frameColored(state: StoryComposerUiState, id: String, hex: String): StoryComposerUiState =
+        edit(state, id) { it.copy(frame = it.frame.colored(hex)) }
+
+    /** Bordure : le contour des glyphes, curseur continu 0…12. */
+    fun outlineWidened(state: StoryComposerUiState, id: String, width: Float): StoryComposerUiState =
+        edit(state, id) { it.copy(outline = it.outline.widened(width)) }
+
+    fun outlineColored(state: StoryComposerUiState, id: String, hex: String): StoryComposerUiState =
+        edit(state, id) { it.copy(outline = it.outline.colored(hex)) }
+
+    /** Langue : celle dans laquelle l'auteur ÉCRIT, normalisée (`pt-BR` → `pt`) ; rien d'exploitable la retire. */
+    fun languaged(state: StoryComposerUiState, id: String, code: String?): StoryComposerUiState =
+        edit(state, id) { it.copy(sourceLanguage = StoryTextLanguage.normalised(code)) }
 
     fun fadeInCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
         edit(state, id) { it.copy(fade = it.fade.cycledIn()) }

@@ -7,6 +7,9 @@ import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBidi
 import me.meeshy.sdk.model.scene.StoryTextDirection
 import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextLanguage
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
+import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
@@ -142,6 +145,10 @@ data class StoryTextElement(
     val size: StoryTextSize = StoryTextSize.DEFAULT,
     val background: StoryTextBackground = StoryTextBackground.None,
     val outline: StoryTextOutline = StoryTextOutline(),
+    /** Forme, marge et liseré de la boîte (#13561) — les champs `frame*` d'iOS. */
+    val frame: StoryTextFrame = StoryTextFrame(),
+    /** La langue dans laquelle l'auteur ÉCRIT (#13534) ; `null` : la langue de la publication. */
+    val sourceLanguage: String? = null,
     val fade: StoryTextFade = StoryTextFade(),
     val timing: StoryElementTiming = StoryElementTiming(),
     val x: Float = CENTER,
@@ -232,12 +239,16 @@ data class StoryTextElement(
         backgroundStyle = background.toStyleWire(),
         borderColor = outline.color?.takeIf { outline.width > StoryTextOutline.NONE_WIDTH },
         borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
+        frameShape = frame.shape.wire.takeIf { frame.shape != StoryTextFrameShape.ROUNDED },
+        framePaddingScale = frame.paddingScale.takeIf { it != StoryTextFrame.DEFAULT_PADDING }?.toDouble(),
+        frameBorderWidth = frame.borderWidth.takeIf { it > 0f }?.toDouble(),
+        frameBorderColor = frame.borderColor?.takeIf { frame.borderWidth > 0f },
         textEffect = style.presetEffect().wireOrNull,
         fadeIn = fade.inSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         fadeOut = fade.outSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
-        sourceLanguage = sourceLanguage,
+        sourceLanguage = StoryTextLanguage.normalised(this.sourceLanguage) ?: sourceLanguage,
     )
 
     companion object {

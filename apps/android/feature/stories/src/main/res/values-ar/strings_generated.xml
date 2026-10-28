@@ -36,6 +36,9 @@
     <string name="composer_chip_style_handwriting">خط اليد</string>
     <string name="composer_chip_style_neon">نيون</string>
     <string name="composer_chip_style_typewriter">آلة كاتبة</string>
+    <string name="composer_column_text_frame">إطار النص</string>
+    <string name="composer_column_text_language">لغة النص</string>
+    <string name="composer_column_text_plan">الخط الزمني</string>
     <string name="composer_frise_earlier">أبكر</string>
     <string name="composer_frise_empty">ضع نصًا أو ملصقًا: يصبح كل عنصر مسارًا.</string>
     <string name="composer_frise_entry">يدخل هنا</string>
@@ -68,6 +71,12 @@
     <string name="composer_socle_audience">الجمهور</string>
     <string name="composer_socle_publish">نشر</string>
     <string name="composer_sound_background_a11y">صوت الخلفية</string>
+    <string name="composer_text_frame_cloud">سحابة</string>
+    <string name="composer_text_frame_diamond">معيّن</string>
+    <string name="composer_text_frame_pill">كبسولة</string>
+    <string name="composer_text_frame_rectangle">مربّع</string>
+    <string name="composer_text_frame_rounded">مستدير</string>
+    <string name="composer_text_frame_speech">فقاعة حوار</string>
     <string name="my_stories_archive_empty_subtitle">ستنضم قصصك المنتهية الصلاحية إلى هذا الأرشيف.</string>
     <string name="my_stories_archive_empty_title">لا يوجد أرشيف</string>
     <string name="my_stories_back">رجوع</string>
