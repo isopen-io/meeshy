@@ -150,6 +150,7 @@ class ConversationMediaHubViewModel @Inject constructor(
 
     private suspend fun fetch(id: String, kind: ConversationMediaKind) {
         val segment = segments[kind] ?: return
+        val ticket = index.ticket()
         val result = repository.page(id, kind, query = null, before = segment.before, languages = readerPrism())
         if (conversationId != id) return
         val current = segments[kind] ?: return
@@ -157,7 +158,7 @@ class ConversationMediaHubViewModel @Inject constructor(
             is NetworkResult.Success -> {
                 val page = result.data
                 val next = current.pageArrived(page.carriers, page.nextCursor, page.hasMore)
-                index.merge(id, kind, page.carriers, complete = next.isComplete)
+                index.merge(id, kind, page.carriers, complete = next.isComplete, ticket = ticket)
                 next
             }
             is NetworkResult.Failure -> current.failed(offline = result.error.isOffline())

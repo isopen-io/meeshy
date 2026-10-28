@@ -38,6 +38,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import me.meeshy.sdk.session.commitOrWrite
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -53,7 +54,7 @@ class StoryRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
-    fence: me.meeshy.sdk.session.AccountFence? = null,
+    private val fence: me.meeshy.sdk.session.AccountFence? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -162,6 +163,7 @@ class StoryRepository @Inject constructor(
      * drained. A drain that returned nothing never overwrites a non-empty cache.
      */
     suspend fun drainMyStories(limit: Int = 50, maxPages: Int = MAX_ARCHIVE_PAGES): NetworkResult<List<ApiPost>> {
+        val ticket = cacheSource.ticket()
         val collected = LinkedHashMap<String, ApiPost>()
         var cursor: String? = null
         repeat(maxPages) { page ->
@@ -169,26 +171,32 @@ class StoryRepository @Inject constructor(
             val paged = when (result) {
                 is NetworkResult.Success -> result.data
                 is NetworkResult.Failure ->
-                    return if (page == 0) result else finishDrain(collected)
+                    return if (page == 0) result else finishDrain(collected, ticket)
             }
             val before = collected.size
             paged.data.forEach { collected.putIfAbsent(it.id, it) }
             val stagnant = paged.data.isEmpty() || collected.size == before
             val next = paged.pagination?.nextCursor
-            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected)
+            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected, ticket)
             cursor = next
         }
-        return finishDrain(collected)
+        return finishDrain(collected, ticket)
     }
 
-    private suspend fun finishDrain(collected: Map<String, ApiPost>): NetworkResult<List<ApiPost>> {
+    private suspend fun finishDrain(
+        collected: Map<String, ApiPost>,
+        ticket: me.meeshy.sdk.session.AccountTicket?,
+    ): NetworkResult<List<ApiPost>> {
         val posts = collected.values.toList()
-        if (posts.isNotEmpty()) archiveCache.write(posts)
+        if (posts.isNotEmpty()) fence.commitOrWrite(ticket) { archiveCache.write(posts) }
         return NetworkResult.Success(posts)
     }
 
     /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
-    suspend fun persistMyStories(posts: List<ApiPost>) = archiveCache.write(posts)
+    suspend fun persistMyStories(posts: List<ApiPost>) {
+        val ticket = cacheSource.ticket()
+        fence.commitOrWrite(ticket) { archiveCache.write(posts) }
+    }
 
     /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
     suspend fun republish(storyId: String): NetworkResult<ApiPost> =

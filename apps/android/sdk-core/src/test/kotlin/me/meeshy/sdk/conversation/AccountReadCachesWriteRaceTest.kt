@@ -20,6 +20,19 @@ import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
+import me.meeshy.sdk.chat.StarredMessagesSync
+import me.meeshy.sdk.chat.StarredSource
+import me.meeshy.sdk.post.FeedListingRegistry
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MessageStarredEvent
+import me.meeshy.sdk.model.mediahub.ConversationMediaKind
+import me.meeshy.sdk.net.api.HashtagApi
+import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.post.PostHashtagRepository
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.status.StatusBarCacheRepository
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.story.StoryRepository
@@ -138,5 +151,87 @@ class AccountReadCachesWriteRaceTest {
         bars.persistBar(StatusFeedMode.FRIENDS, listOf(StatusEntry(id = "statut-de-A")), ticket)
 
         assertThat(bars.cachedBar(StatusFeedMode.FRIENDS)).isNull()
+    }
+
+    @Test
+    fun `a feed answered after A signed out is not kept for B`(): Unit = runBlocking {
+        val api: PostApi = mockk(relaxed = true)
+        coEvery { api.getFeed(any(), any()) } coAnswers {
+            signOutThenSignInAsB()
+            ApiResponse(success = true, data = listOf(ApiPost(id = "post-de-A")))
+        }
+        val repository = PostRepository(api, mockk(relaxed = true), OutboxRepository(db, db.outboxDao()), fence = fence)
+
+        repository.refresh()
+
+        assertThat(repository.feedCacheSnapshot).isNull()
+    }
+
+    @Test
+    fun `a feed answered while A is still signed in lands`(): Unit = runBlocking {
+        val api: PostApi = mockk(relaxed = true)
+        coEvery { api.getFeed(any(), any()) } returns ApiResponse(success = true, data = listOf(ApiPost(id = "post-de-A")))
+        val repository = PostRepository(api, mockk(relaxed = true), OutboxRepository(db, db.outboxDao()), fence = fence)
+
+        repository.refresh()
+
+        assertThat(repository.feedCacheSnapshot?.map { it.id }).containsExactly("post-de-A")
+    }
+
+    @Test
+    fun `a hashtag page answered after A signed out is not kept for B`(): Unit = runBlocking {
+        val api: PostApi = mockk(relaxed = true)
+        coEvery { api.getByHashtag(any(), any(), any()) } coAnswers {
+            signOutThenSignInAsB()
+            ApiResponse(success = true, data = listOf(ApiPost(id = "post-de-A")), pagination = Pagination(hasMore = false))
+        }
+        val repository = PostHashtagRepository(api, mockk<HashtagApi>(relaxed = true), FeedListingRegistry(), fence)
+
+        repository.posts("paris")
+
+        assertThat(repository.cachedFirstPage("paris")).isNull()
+    }
+
+    @Test
+    fun `the drained stories archive of A is not kept for B`(): Unit = runBlocking {
+        val api: StoryApi = mockk(relaxed = true)
+        coEvery { api.listMine(any(), any()) } coAnswers {
+            signOutThenSignInAsB()
+            ApiResponse(success = true, data = listOf(story), pagination = Pagination(hasMore = false))
+        }
+        val repository = stories(api)
+
+        repository.drainMyStories()
+
+        assertThat(repository.cachedMyStories()).isNull()
+    }
+
+    @Test
+    fun `a media hub page fetched for A and merged after B signed in never joins B's index`(): Unit = runBlocking {
+        val index = ConversationMediaHubIndex(fence)
+        val ticket = index.ticket()
+        signOutThenSignInAsB()
+
+        index.merge("conv-de-A", ConversationMediaKind.VISUAL, listOf(ApiMessage(id = "m", conversationId = "conv-de-A")), true, ticket)
+
+        assertThat(index.read("conv-de-A", ConversationMediaKind.VISUAL)).isNull()
+    }
+
+    @Test
+    fun `a star placed by A and composed after B signed in never joins B's favourites`(): Unit = runBlocking {
+        val store = InMemoryStarredMessagesStore()
+        val source = object : StarredSource {
+            override suspend fun message(messageId: String): ApiMessage? {
+                signOutThenSignInAsB()
+                return ApiMessage(id = messageId, conversationId = "c1", content = "secret de A", originalLanguage = "fr")
+            }
+            override suspend fun conversation(conversationId: String): ApiConversation? = null
+            override suspend fun readerPrism(): List<String> = listOf("fr")
+        }
+        val sync = StarredMessagesSync(store, source, { "x" }, { null }, { 1L }, fence)
+
+        sync.onStarred(MessageStarredEvent("m1", "c1", true, null), fence.ticket())
+
+        assertThat(store.starred.value.items).isEmpty()
     }
 }

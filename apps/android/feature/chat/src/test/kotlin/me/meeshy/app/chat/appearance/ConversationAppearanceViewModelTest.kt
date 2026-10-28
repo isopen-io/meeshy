@@ -6,6 +6,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -140,12 +141,13 @@ class ConversationAppearanceViewModelTest {
     @Test
     fun `une piece de l index se charge a son adresse resolue sur la passerelle`() = runTest(dispatcher) {
         val index = ConversationMediaHubIndex().apply {
-            merge(
+            runBlocking { merge(
                 "c1",
                 me.meeshy.sdk.model.mediahub.ConversationMediaKind.VISUAL,
                 listOf(me.meeshy.sdk.model.ApiMessage(id = "m1", conversationId = "c1", attachments = listOf(me.meeshy.sdk.model.ApiMessageAttachment(id = "p1", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/p.png")))),
                 complete = true,
-            )
+                ticket = null,
+            ) }
         }
         val source = ConversationBackgroundPhotos(index).resolve("c1", "p1", MeeshyConfig().apiBaseUrl)
 

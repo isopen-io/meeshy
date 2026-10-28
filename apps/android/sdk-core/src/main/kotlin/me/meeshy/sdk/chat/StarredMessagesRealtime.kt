@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.model.MessageStarredEvent
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -66,6 +67,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
     private val source: RoomStarredSource,
     private val session: SessionRepository,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val fence: AccountFence,
 ) : RealtimeBinding, PerAccountCache {
 
     private var scope: CoroutineScope? = null
@@ -78,6 +80,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
             conversationName = { it.displayTitle(session.currentUserId) },
             conversationAccent = { it.accentHex() },
             nowMillis = System::currentTimeMillis,
+            fence = fence,
         )
 
     override fun attach() {
@@ -89,7 +92,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
         }
         live.launchSafely { messageSocketManager.messageDeleted.collect { sync.onGone(it.messageId) } }
         live.launchSafely { messageSocketManager.messageExpired.collect { sync.onGone(it.messageId) } }
-        live.launchSafely { messageSocketManager.messageEdited.collect { sync.onEdited(it) } }
+        live.launchSafely { messageSocketManager.messageEdited.collect { sync.onEdited(it, fence.ticket()) } }
     }
 
     override fun detach() {
@@ -102,9 +105,10 @@ class StarredMessagesRealtimeBinding @Inject constructor(
     private fun onStarredFrame(args: Array<Any>) {
         val live = scope ?: return
         val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return
+        val ticket = fence.ticket()
         live.launchSafely {
             val event = MeeshyApi.json.decodeFromString<MessageStarredEvent>(raw)
-            sync.onStarred(event)
+            sync.onStarred(event, ticket)
         }
     }
 
