@@ -31,7 +31,7 @@ class AccountMediaWipeTest {
     }
 
     @Test
-    fun `changer de compte vide l audio obtenu avec le jeton du compte quitte, et laisse la video`() {
+    fun `changer de compte vide l audio et la video obtenus avec le jeton du compte quitte`() {
         val cache = MeeshyMediaCache.get(context)
         val sound = "https://gate.meeshy.me/api/v1/static/private.m4a"
         val video = "https://gate.meeshy.me/api/v1/attachments/file/clip.mp4"
@@ -43,6 +43,6 @@ class AccountMediaWipeTest {
         AccountMediaWipe.wipe(context)
 
         assertThat(cache.isFullyCached(MediaCacheCategory.AUDIO, MeeshyMediaCacheKey.of(sound))).isFalse()
-        assertThat(cache.isFullyCached(MediaCacheCategory.VIDEO, MeeshyMediaCacheKey.of(video))).isTrue()
+        assertThat(cache.isFullyCached(MediaCacheCategory.VIDEO, MeeshyMediaCacheKey.of(video))).isFalse()
     }
 }
