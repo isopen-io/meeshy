@@ -178,7 +178,7 @@ class StoryComposerViewModel @Inject constructor(
     /** Adds an empty on-canvas text element and selects it (warns at the ≤5-element cap). */
     fun onAddTextElement() {
         val id = newTextElementId()
-        reduce { StoryComposerTextReducer.added(it, id) }
+        reduce { StoryComposerSceneReducer.placedAtPlayhead(it) { s -> StoryComposerTextReducer.added(s, id) } }
     }
 
     fun onSelectTextElement(id: String) = reduce { StoryComposerTextReducer.selected(it, id) }
@@ -230,6 +230,9 @@ class StoryComposerViewModel @Inject constructor(
     fun onSceneObjectWindow(id: String, startSeconds: Float, durationSeconds: Float) =
         reduce { StoryComposerSceneReducer.windowed(it, id, startSeconds, durationSeconds) }
 
+    /** Le bouton « Animé » : allume la scène animée et sa frise, ou l'éteint. */
+    fun onToggleSceneAnimation() = reduce { StoryComposerSceneReducer.animationToggled(it) }
+
     fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
 
     fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
@@ -275,7 +278,7 @@ class StoryComposerViewModel @Inject constructor(
     /** Adds an emoji sticker to the selected slide and selects it (blank ignored, warns at the cap). */
     fun onAddSticker(emoji: String) {
         val id = newStickerId()
-        reduce { StoryComposerStickerReducer.added(it, emoji, id) }
+        reduce { StoryComposerSceneReducer.placedAtPlayhead(it) { s -> StoryComposerStickerReducer.added(s, emoji, id) } }
     }
 
     fun onSelectSticker(id: String) = reduce { StoryComposerStickerReducer.selected(it, id) }
