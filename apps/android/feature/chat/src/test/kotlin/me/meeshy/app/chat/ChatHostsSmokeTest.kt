@@ -46,6 +46,7 @@ class ChatHostsSmokeTest {
         openReactionDetails = { _ -> },
         openImageViewer = { _, _ -> },
         onFileAttachmentOpen = { _, _ -> },
+        pieceOverlayFor = { _, _ -> null },
         onHubFileOpen = { _, _ -> },
         onFileAttachmentShare = { _, _ -> },
         onReplyPreviewTap = { _ -> },

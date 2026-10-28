@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_code_truncated">تم اقتطاع الملف: تُعرض أول 512 كيلوبايت فقط.</string>
+</resources>

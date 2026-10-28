@@ -47,7 +47,9 @@ import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -706,6 +708,12 @@ class ChatViewModel @Inject constructor(
         fileDownload.openProvided(messageId, attachment)
 
     fun dismissFileDownload() = fileDownload.dismiss()
+
+    /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
+    internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
+            PieceOverlayModel.of(message, attachmentId, canReply = _state.value.viewerMayWrite) { resolveMediaUrl(it, config.apiBaseUrl) }
+        }
 
     // --- Forward --------------------------------------------------------------------------
 

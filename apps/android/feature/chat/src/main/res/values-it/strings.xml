@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_code_truncated">File troncato: vengono mostrati solo i primi 512 KB.</string>
+</resources>

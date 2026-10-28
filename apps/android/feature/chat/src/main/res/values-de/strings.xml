@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_code_truncated">Datei gekürzt: Es werden nur die ersten 512 KB angezeigt.</string>
+</resources>

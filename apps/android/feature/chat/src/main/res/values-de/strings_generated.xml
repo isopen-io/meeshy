@@ -280,6 +280,9 @@
     <string name="message_detail_views_read_empty">Niemand hat diese Nachricht gelesen</string>
     <string name="message_detail_views_sent">Gesendet</string>
     <string name="permission_location_denied">Standort verweigert — in den Einstellungen erlauben</string>
+    <string name="piece_a11y_photo">Foto %1$d von %2$d</string>
+    <string name="piece_a11y_video">Video %1$d von %2$d</string>
+    <string name="piece_whole_message">Ganze Nachricht</string>
     <string name="reading_mode_bubbles_subtitle">Die klassischen Sprechblasen</string>
     <string name="reading_mode_bubbles_title">Blasen</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Wechselt zum nächsten Modus. Lange drücken für die Modusliste.</string>

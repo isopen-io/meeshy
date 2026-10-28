@@ -21,6 +21,8 @@ public data class BubbleCallbacks(
     val onReactionLongPress: (() -> Unit)? = null,
     /** Tap on an image of the grid, with its index. */
     val onImageClick: ((Int) -> Unit)? = null,
+    /** Long press on one image of the grid, with its index: that piece alone is previewed (#13461). */
+    val onImageLongClick: ((Int) -> Unit)? = null,
     /** Tap on a shared location that has coordinates. */
     val onLocationClick: ((BubbleLocation) -> Unit)? = null,
     /** Tap on a playable audio attachment. */
