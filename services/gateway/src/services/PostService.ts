@@ -2160,7 +2160,15 @@ export class PostService {
             }
           });
 
-          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap);
+          const urlMap: Record<string, string> = {};
+          originalMedia.forEach((om, idx) => {
+            const newMedia = repostMedia[idx];
+            if (!newMedia) return;
+            if (om.fileUrl && newMedia.fileUrl) urlMap[om.fileUrl] = newMedia.fileUrl;
+            if (om.thumbnailUrl && newMedia.thumbnailUrl) urlMap[om.thumbnailUrl] = newMedia.thumbnailUrl;
+          });
+
+          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap, urlMap);
           if (remapped.changed) {
             try {
               await this.prisma.post.update({

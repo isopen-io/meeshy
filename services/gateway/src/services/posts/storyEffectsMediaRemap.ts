@@ -31,14 +31,22 @@ export interface RemapStoryEffectsMediaIdsResult {
 function remapRefs(
   items: StoryMediaRefRaw[] | undefined,
   idMap: Record<string, string>,
+  urlMap: Record<string, string>,
 ): { items: StoryMediaRefRaw[] | undefined; changed: boolean } {
   if (!Array.isArray(items)) return { items, changed: false };
   let changed = false;
   const next = items.map((item) => {
     const mapped = item.postMediaId !== undefined ? idMap[item.postMediaId] : undefined;
-    if (mapped === undefined || mapped === item.postMediaId) return item;
+    const mappedUrl = typeof item.mediaURL === 'string' ? urlMap[item.mediaURL] : undefined;
+    const idChanged = mapped !== undefined && mapped !== item.postMediaId;
+    const urlChanged = mappedUrl !== undefined && mappedUrl !== item.mediaURL;
+    if (!idChanged && !urlChanged) return item;
     changed = true;
-    return { ...item, postMediaId: mapped };
+    return {
+      ...item,
+      ...(idChanged ? { postMediaId: mapped } : {}),
+      ...(urlChanged ? { mediaURL: mappedUrl } : {}),
+    };
   });
   return { items: next, changed };
 }
@@ -52,6 +60,12 @@ function remapRefs(
  * goes, and regardless of whether the blob is legacy (`mediaObjects[]` /
  * `audioPlayerObjects[]` at the root) or v3 (`{ v: 3, scenes: [...] }`,
  * references under `scenes[].objects[].payload`).
+ *
+ * `urlMap` (ancienne adresse d'une pièce SOURCE copiée → adresse de sa copie,
+ * vignette comprise) réécrit de la même façon `mediaURL` : sans elle, un fond
+ * du repost désignerait encore la pièce source, supprimée à l'expiration de la
+ * story source (#13614). Une adresse que la carte ne connaît pas reste
+ * intacte ; une carte absente laisse le comportement d'avant.
  *
  * A reference not covered by `idMap` (unknown/legacy data) is left untouched
  * rather than nulled out, matching the fail-soft passthrough policy already
@@ -67,20 +81,21 @@ function remapRefs(
 export function remapStoryEffectsMediaIds(
   effects: Prisma.InputJsonValue | undefined,
   idMap: Record<string, string>,
+  urlMap: Record<string, string> = {},
 ): RemapStoryEffectsMediaIdsResult {
   if (effects === undefined || effects === null || typeof effects !== 'object' || Array.isArray(effects)) {
     return { effects, changed: false };
   }
 
   if (isCanvasV3OrNewer(effects)) {
-    const { blob, changed } = remapCanvasV3MediaIds(effects, idMap);
+    const { blob, changed } = remapCanvasV3MediaIds(effects, idMap, urlMap);
     return { effects: (changed ? blob : effects) as Prisma.InputJsonValue, changed };
   }
 
   const raw = effects as StoryEffectsRaw;
 
-  const mediaObjects = remapRefs(raw.mediaObjects, idMap);
-  const audioPlayerObjects = remapRefs(raw.audioPlayerObjects, idMap);
+  const mediaObjects = remapRefs(raw.mediaObjects, idMap, urlMap);
+  const audioPlayerObjects = remapRefs(raw.audioPlayerObjects, idMap, urlMap);
 
   if (!mediaObjects.changed && !audioPlayerObjects.changed) {
     if (Object.prototype.hasOwnProperty.call(raw, 'v')) {
