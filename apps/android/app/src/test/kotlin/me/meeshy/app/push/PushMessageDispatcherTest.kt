@@ -194,14 +194,50 @@ class PushMessageDispatcherTest {
     }
 
     @Test
-    fun `une revocation et un arret de sonnerie du compte quitte s'appliquent encore, ils ne font que retirer`() {
+    fun `une revocation et un arret de sonnerie du compte quitte ne retirent rien au compte connecte`() {
         val fixture = Fixture()
 
-        fixture.dispatcher.dispatch(push("type" to "notification_revoked", "notificationIds" to "n1", "recipientUserId" to "user-a"))
-        fixture.dispatcher.dispatch(push("type" to "call_cancel", "callId" to "call-1", "recipientUserId" to "user-a"), nowMillis = 100)
+        fixture.dispatcher.dispatch(
+            push("type" to "notification_revoked", "notificationIds" to "n1", "conversationIds" to "conv-1", "types" to "new_message", "recipientUserId" to "user-a"),
+        )
+        fixture.dispatcher.dispatch(push("type" to "call_answered_elsewhere", "callId" to "call-1", "recipientUserId" to "user-a"), nowMillis = 100)
 
-        verify(exactly = 1) { fixture.revocationHandler.handle(any()) }
-        verify(exactly = 1) { fixture.callPresenter.cancel(match<CallStopPush> { it.callId == "call-1" }) }
+        verify(exactly = 0) { fixture.revocationHandler.handle(any()) }
+        verify(exactly = 0) { fixture.callPresenter.cancel(any()) }
+    }
+
+    @Test
+    fun `l appel de groupe sonne encore pour le compte connecte quand le compte quitte a ete appele le premier`() {
+        val fixture = Fixture()
+        val ring = arrayOf("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1")
+
+        fixture.dispatcher.dispatch(push(*ring, "recipientUserId" to "user-a"), nowMillis = 100)
+        fixture.dispatcher.dispatch(push(*ring, "recipientUserId" to "me"), nowMillis = 110)
+
+        verify(exactly = 1) { fixture.callPresenter.show(match<IncomingCallPush> { it.callId == "call-3" }) }
+    }
+
+    @Test
+    fun `l appel de groupe sonne encore quand le compte quitte a decroche ailleurs juste avant`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "call_answered_elsewhere", "callId" to "call-3", "recipientUserId" to "user-a"), nowMillis = 100)
+        fixture.dispatcher.dispatch(
+            push("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1", "recipientUserId" to "me"),
+            nowMillis = 110,
+        )
+
+        verify(exactly = 1) { fixture.callPresenter.show(match<IncomingCallPush> { it.callId == "call-3" }) }
+    }
+
+    @Test
+    fun `une session ouverte dont le compte n'est pas encore relu ne perd pas ses pushes`() {
+        val fixture = Fixture()
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
     }
 
     @Test

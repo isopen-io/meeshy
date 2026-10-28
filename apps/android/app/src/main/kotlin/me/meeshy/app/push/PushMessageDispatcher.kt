@@ -36,7 +36,7 @@ class PushMessageDispatcher @Inject constructor(
 
     fun dispatch(push: IncomingPush, nowMillis: Long = System.currentTimeMillis()) {
         if (recipientOf(push) == PushRecipient.FOREIGN) {
-            withdrawOnly(push, nowMillis)
+            Timber.d("Push destine a un autre compte : ignore")
             return
         }
         try {
@@ -55,29 +55,19 @@ class PushMessageDispatcher @Inject constructor(
 
     /**
      * #13567 : le compte connecté est lu sur son miroir PERSISTÉ — un processus réveillé à froid par FCM n'a pas encore
-     * restauré la session en mémoire. Rien sans session enregistrée.
+     * restauré la session en mémoire. Rien sans session enregistrée. Une session ouverte dont le compte n'a pas encore
+     * été persisté (installation antérieure au miroir, réveillée à froid avant toute relecture) ne peut pas être jugée :
+     * le comportement d'avant tient, comme pour un push qui ne nomme personne.
+     *
+     * Un push ÉTRANGER n'a aucun effet, retraits compris : la fin de session a déjà retiré toutes les bannières
+     * (`PostedNotificationsTeardown`), donc un arrêt de sonnerie ou une révocation du compte quitté ne peut viser
+     * que des bannières du compte CONNECTÉ (même appel de groupe, même conversation) — et passer par
+     * [IncomingCallRingStore.route] y inscrirait l'appel comme déjà vu, faisant taire la sonnerie du compte connecté.
      */
     private fun recipientOf(push: IncomingPush): PushRecipient {
-        val signedIn = tokenStore.userId?.takeIf { tokenStore.isAuthenticated }
+        if (!tokenStore.isAuthenticated) return PushRecipient.of(push.payload.recipientUserId, signedInUserId = null)
+        val signedIn = tokenStore.userId ?: return PushRecipient.UNNAMED
         return PushRecipient.of(push.payload.recipientUserId, signedIn)
-    }
-
-    /**
-     * Un push d'un autre compte n'écrit rien, n'affiche rien et ne parvient à aucun observateur (pré-enregistrement,
-     * accusés) : seuls passent ceux qui RETIRENT — l'arrêt d'une sonnerie, la révocation d'une bannière.
-     */
-    private fun withdrawOnly(push: IncomingPush, nowMillis: Long) {
-        Timber.d("Push destine a un autre compte : ni ecriture ni banniere")
-        try {
-            val route = ringStore.route(push.data, nowMillis, selfUserId = session.currentUserId)
-            if (route is IncomingCallPushRoute.StopRing) {
-                callPresenter.cancel(route.push)
-            } else if (route == IncomingCallPushRoute.NotACallPush) {
-                revocationHandler.handle(push.data)
-            }
-        } catch (failure: Exception) {
-            Timber.e(failure, "Push withdrawal failed")
-        }
     }
 
     private fun render(push: IncomingPush, nowMillis: Long) {
