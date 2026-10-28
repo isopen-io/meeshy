@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.UploadedMedia
@@ -24,6 +25,7 @@ class MediaSendersTest {
     private val mediaBlobStore = mockk<MediaBlobStore>(relaxed = true)
     private val mediaRepository = mockk<MediaRepository>()
     private val tusUploadRepository = mockk<TusUploadRepository>()
+    private val ledger = MediaUploadProgressLedger()
 
     private val item = MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = "photo.jpg", mimeType = "image/jpeg")
     private val uploaded = UploadedMedia(
@@ -37,7 +39,7 @@ class MediaSendersTest {
         thumbnailUrl = null,
     )
 
-    private fun handler() = UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson)
+    private fun handler() = UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger)
 
     private fun row(payload: String = "") =
         outboxRow(OutboxKind.UPLOAD_MEDIA, targetId = "cmid-1", payload = payload)
@@ -56,7 +58,7 @@ class MediaSendersTest {
     @Test
     fun `an upload tagged with a known context goes through the resumable upload`() = runTest {
         coEvery { mediaBlobStore.get("cmid-1") } returns item
-        coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY) } returns
+        coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } returns
             NetworkResult.Success(listOf(uploaded))
 
         val result = handler().send(row(encodedPayload(MediaUploadPayload(uploadContext = "story"))))
@@ -113,7 +115,7 @@ class MediaSendersTest {
     fun `a publication upload that yields no usable media keeps its bytes until the author decides`() = runTest {
         listOf("post", "story", "status").forEach { context ->
             coEvery { mediaBlobStore.get("cmid-1") } returns item
-            coEvery { tusUploadRepository.upload(item, any()) } returns NetworkResult.Success(emptyList())
+            coEvery { tusUploadRepository.upload(item, any(), any(), any()) } returns NetworkResult.Success(emptyList())
 
             val result = handler().send(row(encodedPayload(MediaUploadPayload(uploadContext = context))))
 
@@ -137,5 +139,34 @@ class MediaSendersTest {
         handler().onExhausted(row(encodedPayload(MediaUploadPayload(uploadContext = "comment"))))
 
         coVerify(exactly = 2) { mediaBlobStore.remove("cmid-1") }
+    }
+
+    @Test
+    fun `the bytes sent by a durable upload are published per media while it runs and cleared when it ends`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        val seen = mutableListOf<me.meeshy.sdk.model.media.MediaUploadProgress?>()
+        coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val report = arg<(Long, Long) -> Unit>(3)
+            report(10L, 30L)
+            seen += ledger.progress.value["cmid-1"]
+            NetworkResult.Success(listOf(uploaded))
+        }
+
+        handler().send(row(payload = encodedPayload(MediaUploadPayload(uploadContext = "story"))))
+
+        assertThat(seen.single()).isEqualTo(me.meeshy.sdk.model.media.MediaUploadProgress.Uploading(10L, 30L))
+        assertThat(ledger.progress.value).doesNotContainKey("cmid-1")
+    }
+
+    @Test
+    fun `a failed durable upload leaves no progress behind`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1") } returns item
+        coEvery { tusUploadRepository.upload(item, TusUploadContext.STORY, any(), any()) } returns
+            NetworkResult.Failure(ApiError("offline"))
+
+        handler().send(row(payload = encodedPayload(MediaUploadPayload(uploadContext = "story"))))
+
+        assertThat(ledger.progress.value).isEmpty()
     }
 }

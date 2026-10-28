@@ -9,6 +9,7 @@ import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
 import me.meeshy.sdk.model.UploadedMedia
@@ -20,6 +21,7 @@ import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.post.InMemoryPostComposerDraftStore
@@ -46,11 +48,11 @@ class PublicationOutboxTest {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), MeeshyDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        outbox = OutboxRepository(db, db.outboxDao())
+        outbox = OutboxRepository(db, db.outboxDao(), OutboxOwnerSource { "me" })
         blobs = MediaBlobStore(db.mediaBlobDao())
         uploads = MediaUploadQueue(blobs, outbox)
         drafts = InMemoryPostComposerDraftStore()
-        publications = PublicationOutbox(outbox, uploads, drafts)
+        publications = PublicationOutbox(outbox, uploads, drafts, MediaUploadProgressLedger(), OutboxOwnerSource { "me" })
     }
 
     @After
@@ -198,5 +200,17 @@ class PublicationOutboxTest {
         publications.releaseSettledDrafts()
 
         assertThat(drafts.parkedCmids()).containsExactly(waiting)
+    }
+
+    @Test
+    fun `a publication of another account stays out of the list while it is signed in`() = runTest {
+        publications.enqueuePost(CreatePostRequest(content = "mine", mediaIds = emptyList()))
+        val other = OutboxRepository(db, db.outboxDao(), OutboxOwnerSource { "someone-else" })
+        val foreign = PublicationOutbox(other, uploads, drafts, MediaUploadProgressLedger(), OutboxOwnerSource { "someone-else" })
+        foreign.enqueuePost(CreatePostRequest(content = "theirs", mediaIds = emptyList()))
+
+        val seen = publications.unsent().first().map { it.text }
+
+        assertThat(seen).containsExactly("mine")
     }
 }

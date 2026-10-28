@@ -1,9 +1,10 @@
 package me.meeshy.sdk.publication
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
+import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
 import me.meeshy.sdk.model.UploadedMedia
@@ -14,6 +15,7 @@ import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
@@ -37,6 +39,8 @@ public class PublicationOutbox @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val mediaUploadQueue: MediaUploadQueue,
     private val postDraftStore: PostComposerDraftStore,
+    private val progressLedger: MediaUploadProgressLedger,
+    private val ownerSource: OutboxOwnerSource,
 ) {
 
     /**
@@ -63,9 +67,14 @@ public class PublicationOutbox @Inject constructor(
         return cmid
     }
 
-    /** Posts, reels and stories the server has not confirmed, newest first, live. */
+    /**
+     * Posts, reels and stories the signed-in account's server has not confirmed, newest first, live —
+     * each media with its own fate and, while it leaves, its own bytes in flight (#13429).
+     */
     public fun unsent(): Flow<List<UnsentPublication>> =
-        outboxRepository.observeAll().map { UnsentPublications.from(it) }.distinctUntilChanged()
+        combine(outboxRepository.observeAll(), progressLedger.progress) { rows, progress ->
+            UnsentPublications.from(rows, ownerSource.currentOwnerId(), progress)
+        }.distinctUntilChanged()
 
     /** A failed publication goes back on its way, the uploads it waits on with it. */
     public suspend fun retry(cmid: String): Boolean = outboxRepository.retryWithPrerequisites(cmid)
