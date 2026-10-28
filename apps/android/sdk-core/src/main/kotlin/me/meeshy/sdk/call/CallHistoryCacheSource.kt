@@ -87,6 +87,10 @@ internal class CallHistoryCacheSource(
         suppressedIds.addAll(callIds)
     }
 
+    internal fun unsuppressAll() {
+        suppressedIds.clear()
+    }
+
     internal fun unsuppress(callIds: Collection<String>) {
         suppressedIds.removeAll(callIds.toSet())
     }

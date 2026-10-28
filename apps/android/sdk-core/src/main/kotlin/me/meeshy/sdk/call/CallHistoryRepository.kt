@@ -52,7 +52,7 @@ class CallHistoryRepository internal constructor(
     syncMetaDao: SyncMetaDao,
     private val clock: CacheClock,
     fence: me.meeshy.sdk.session.AccountFence? = null,
-) {
+) : me.meeshy.sdk.session.PerAccountCache {
     @Inject
     constructor(
         callHistoryApi: CallHistoryApi,
@@ -99,6 +99,7 @@ class CallHistoryRepository internal constructor(
     ): Flow<CacheResult<List<CallRecord>>> {
         if (query.isDefault) return historyStream(policy, onSyncError)
         return flow {
+            val ticket = cacheSource.ticket()
             val remembered = memory.get(query.cacheKey)
             val derived = cacheSource.observe().first()?.let { query.apply(it, fallbackName) }
             when {
@@ -109,7 +110,9 @@ class CallHistoryRepository internal constructor(
             }
             when (val page = fetchJournalPage(query = query, limit = HEAD_PAGE_SIZE)) {
                 is NetworkResult.Success -> {
-                    memory.put(query.cacheKey, CallJournalMemoryEntry(page.data.records, clock.nowMillis()))
+                    cacheSource.writeUnder(ticket) {
+                        memory.put(query.cacheKey, CallJournalMemoryEntry(page.data.records, clock.nowMillis()))
+                    } ?: return@flow
                     emit(CacheResult.Fresh(page.data.records, 0L))
                 }
                 is NetworkResult.Failure -> onSyncError(CallHistorySyncException(page.error.message))
@@ -186,8 +189,19 @@ class CallHistoryRepository internal constructor(
         ticket: me.meeshy.sdk.session.AccountTicket?,
     ) {
         cacheSource.unsuppress(callIds)
-        cacheSource.writeUnder(ticket) { callHistoryDao.upsertAll(rows) }
-        memory.restore(memorySnapshot)
+        cacheSource.writeUnder(ticket) {
+            callHistoryDao.upsertAll(rows)
+            memory.restore(memorySnapshot)
+        }
+    }
+
+    /**
+     * The searched journals held in memory belong to the account that searched (#13560): a close forgets them, and
+     * the lines it hid for that account stop being hidden for the next one.
+     */
+    override suspend fun clear() {
+        memory.clearAll()
+        cacheSource.unsuppressAll()
     }
 
     /**
