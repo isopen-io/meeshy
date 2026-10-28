@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
+import { STORY_LIMITS, storyTextLength } from '@meeshy/shared/utils/story-limits';
 import { playPattern } from '@/lib/view/haptics';
 import { useStore } from 'zustand';
 
@@ -489,8 +489,8 @@ function StoryStudio({
     if (target === undefined) return;
     edit((current) => withText(current, target, value), `text:${target}`);
     reportComposeText(value);
-    // Le champ s'arrête à la borne (`maxLength`) : l'auteur doit savoir POURQUOI.
-    if (Array.from(value).length >= STORY_LIMITS.maxTextCharacters) {
+    // `withText` coupe le texte à la borne, comptée en caractères AFFICHÉS : l'auteur doit savoir POURQUOI.
+    if (storyTextLength(value) >= STORY_LIMITS.maxTextCharacters) {
       setPlaceRefusal({ reason: 'text-length' });
       playPattern(REFUSAL_HAPTIC);
     } else setPlaceRefusal((current) => (current?.reason === 'text-length' ? null : current));

@@ -1,4 +1,3 @@
-import { STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
 import { useEffect, useRef } from 'react';
 
 import { MentionFieldPanel } from '@/components/mention-suggestions';
@@ -87,7 +86,6 @@ export function StudioTextInput({
         dir="auto"
         disabled={layer === null || locked}
         value={text}
-        maxLength={STORY_LIMITS.maxTextCharacters}
         onInput={(event) => {
           onText(event.currentTarget.value);
           mention.syncCaret(event.currentTarget);
