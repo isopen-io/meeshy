@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 
 /**
  * The exact payload a publish carries to [FeedViewModel.publishPost] — the pure
@@ -178,7 +179,7 @@ data class FeedComposerDraft(
      * otherwise refuse the whole post.
      */
     fun withCaption(mediaId: String, text: String): FeedComposerDraft =
-        copy(mediaCaption = if (text.isBlank()) mediaCaption - mediaId else mediaCaption + (mediaId to text.take(MEDIA_CAPTION_MAX_LENGTH)))
+        copy(mediaCaption = MediaDescriptionLaw.with(mediaCaption, mediaId, text))
 
     /**
      * Sets the author's override of the reel default (mirrors iOS
@@ -237,9 +238,6 @@ data class FeedComposerDraft(
     companion object {
         /** Parity with the story composer's own ≤10 media-per-item rule. */
         const val MAX_MEDIA: Int = 10
-
-        /** Gateway cap on `CreatePostSchema.mediaCaption` values — the same bound as the alt. */
-        const val MEDIA_CAPTION_MAX_LENGTH: Int = 1000
 
         private val HEX_COLOR = Regex("[0-9A-F]{6}")
     }
