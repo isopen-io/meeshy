@@ -38,7 +38,7 @@ public object MediaIntake {
         val directory = directory(cacheDir)
         if (!directory.isDirectory && !directory.mkdirs()) return null
         sweep(cacheDir, now())
-        val target = File(directory, UUID.randomUUID().toString())
+        val target = freshFile(directory)
         val kept = try {
             target.outputStream().use { out -> copyBounded(input, out, maxBytes) }
         } catch (_: IOException) {
@@ -59,7 +59,7 @@ public object MediaIntake {
         if (!file.isFile || file.length() == 0L) return null
         val directory = directory(cacheDir)
         if (!directory.isDirectory && !directory.mkdirs()) return null
-        val target = File(directory, UUID.randomUUID().toString())
+        val target = freshFile(directory)
         if (file.renameTo(target)) return MediaUploadItem.onDisk(target, fileName, mimeType)
         val copied = file.inputStream().use { copy(it, cacheDir, fileName, mimeType) }
         file.delete()
@@ -80,6 +80,11 @@ public object MediaIntake {
     /** La frontière de compte : toute copie en clair quitte le disque. */
     public fun clear(cacheDir: File) {
         directory(cacheDir).listFiles().orEmpty().forEach { it.delete() }
+    }
+
+    /** Le nom du fichier est GÉNÉRÉ : le nom annoncé par le fournisseur ne reste qu'une métadonnée et ne choisit jamais le chemin. */
+    private fun freshFile(directory: File): File = File(directory, UUID.randomUUID().toString()).also {
+        check(it.canonicalPath.startsWith(directory.canonicalPath + File.separator)) { "copie hors de $DIRECTORY" }
     }
 
     private fun copyBounded(input: InputStream, out: java.io.OutputStream, maxBytes: Long): Boolean {

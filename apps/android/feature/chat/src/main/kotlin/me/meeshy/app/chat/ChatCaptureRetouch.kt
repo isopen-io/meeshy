@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.io.File
+import java.util.UUID
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
@@ -101,10 +102,15 @@ internal suspend fun Context.writeRetouchedCapture(file: ChatRetouchedFile): Uri
     androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", writeRetouchedCaptureFile(file))
 }
 
-/** La prise retouchée posée dans le dossier de prises, sous son nom. */
+/**
+ * La prise retouchée posée dans le dossier de prises sous un nom GÉNÉRÉ : le nom d'origine vient du fournisseur de
+ * contenu (il peut porter `../`) et ne reste qu'une métadonnée d'envoi ; seule une extension sûre en est gardée.
+ */
 internal fun Context.writeRetouchedCaptureFile(file: ChatRetouchedFile): File {
     val capturesDir = File(cacheDir, "captures").apply { mkdirs() }
-    return File(capturesDir, file.fileName).apply { writeBytes(file.bytes) }
+    val target = File(capturesDir, ChatCameraCaptureFile.nextRetouchedNamed(UUID.randomUUID().toString(), file.fileName))
+    check(target.canonicalPath.startsWith(capturesDir.canonicalPath + File.separator)) { "capture hors du dossier de prises" }
+    return target.apply { writeBytes(file.bytes) }
 }
 
 /** Une vidéo prise, copiée hors de l'intention système, en attente de sa retouche. */
