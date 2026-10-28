@@ -219,7 +219,7 @@ class PostRepository @Inject constructor(
             targetId = postId,
             payload = "",
         )
-        if (flipped == null) outboxRepository.enqueue(mutation)
+        if (flipped == null) enqueueAdopting(likeFlips, postId, mutation, liked)
         else enqueueTraced(likeFlips, postId, mutation, !liked, liked, adjustedCount(flipped.likeCount, wasSet = !liked))
     }
 
@@ -232,7 +232,7 @@ class PostRepository @Inject constructor(
             targetId = postId,
             payload = "",
         )
-        if (flipped == null) outboxRepository.enqueue(mutation)
+        if (flipped == null) enqueueAdopting(bookmarkFlips, postId, mutation, bookmarked)
         else enqueueTraced(bookmarkFlips, postId, mutation, !bookmarked, bookmarked, adjustedCount(flipped.bookmarkCount, wasSet = !bookmarked))
     }
 
@@ -283,6 +283,12 @@ class PostRepository @Inject constructor(
         traces.record(mutation.cmid, postId, revertTo, state, count)
         if (outboxRepository.enqueue(mutation) == null) traces.discard(mutation.cmid)
         traces.cmidsOf(postId).filter { it != mutation.cmid && outboxRepository.stateOf(it) == null }.forEach(traces::discard)
+    }
+
+    /** Une mutation sans bascule de la ligne : elle hérite de la trace de la ligne que la file vient de remplacer. */
+    private suspend fun enqueueAdopting(traces: GestureTraces, postId: String, mutation: OutboxMutation, state: Boolean) {
+        val cmid = outboxRepository.enqueue(mutation)
+        traces.adopt(cmid, state, traces.cmidsOf(postId).filter { it != cmid && outboxRepository.stateOf(it) == null })
     }
 
     private fun likeRow(row: ApiPost, liked: Boolean): ApiPost? =

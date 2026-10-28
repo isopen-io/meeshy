@@ -39,6 +39,17 @@ internal class GestureTraces {
 
     fun clear() = byCmid.clear()
 
+    /**
+     * La file a REMPLACÉ les lignes [gone] par [cmid] (même geste, rejoué sans bascule de la ligne) : la plus récente trace
+     * qui a écrit [state] passe sous [cmid], les autres traces de [gone] sortent. Sans cela, le refus de la
+     * ligne de remplacement ne trouverait aucune trace et laisserait allumé un cœur que le serveur n'a jamais eu.
+     */
+    fun adopt(cmid: String?, state: Boolean, gone: List<String>) {
+        val heir = gone.mapNotNull { byCmid[it] }.filter { it.state == state }.maxByOrNull { it.seq }
+        gone.forEach(byCmid::remove)
+        if (cmid != null && heir != null) byCmid[cmid] = heir
+    }
+
     fun cmidsOf(postId: String): List<String> = byCmid.entries.filter { it.value.postId == postId }.map { it.key }
 
     /** Ce que le refus d'un geste emporte : sa trace, et si un geste plus récent du même post décide encore de l'état. */
