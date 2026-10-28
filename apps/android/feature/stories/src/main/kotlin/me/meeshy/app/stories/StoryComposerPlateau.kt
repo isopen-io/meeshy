@@ -66,7 +66,7 @@ internal fun StoryComposerPlateau(
                 ComposerRailButton(
                     MeeshyIcons.Add,
                     stringResource(R.string.stories_composer_add_slide),
-                    rememberGuardedAddition(state.deck.canAddSlide, viewModel::onAddSlide),
+                    rememberGuardedAddition(state.deck.canAddSlide, action = viewModel::onAddSlide),
                 )
                 ComposerOverflowMenu(
                     entries = sceneExport.entries,
@@ -77,13 +77,14 @@ internal fun StoryComposerPlateau(
         },
         leadingRail = {
             val matter = state.plateauDoorMatter
+            val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, onOpenStickers)
             StoryPlateauDoors.leading.forEach { door ->
                 val tool = StoryPlateauDoors.toolFor(door)
                 val count = StoryPlateauDoors.badge(door, matter)
                 ComposerRailButton(
                     icon = door.glyph(),
                     label = stringResource(door.labelRes()),
-                    onClick = { tool?.let(viewModel::onBandToolTap) ?: onOpenStickers() },
+                    onClick = { tool?.let(viewModel::onBandToolTap) ?: openStickers() },
                     enabled = !state.isDrawingActive,
                     active = tool != null && state.band.activeTool == tool,
                     badge = ComposerRailBadge(count, stringResource(R.string.story_composer_fab_badge, count))

@@ -368,10 +368,14 @@ private suspend fun loadThumbnailBackground(context: android.content.Context, mo
  * [action] — the add or the duplicate — so the tap is never a silent no-op.
  */
 @Composable
-internal fun rememberGuardedAddition(canAdd: Boolean, action: () -> Unit): () -> Unit {
+internal fun rememberGuardedAddition(
+    canAdd: Boolean,
+    @androidx.annotation.StringRes refusalRes: Int = R.string.composer_slide_rail_capReached,
+    action: () -> Unit,
+): () -> Unit {
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
-    val refusal = stringResource(R.string.composer_slide_rail_capReached)
+    val refusal = stringResource(refusalRes)
     val latest = androidx.compose.runtime.rememberUpdatedState(action)
     return remember(canAdd, refusal) {
         {

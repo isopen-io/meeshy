@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_scene_cap_text">No máximo cinco textos por cena — exclua um para adicionar outro</string>
+    <string name="composer_scene_cap_sticker">No máximo trinta stickers por cena — exclua um para adicionar outro</string>
+    <string name="composer_scene_cap_media">No máximo dez mídias por cena — remova uma para adicionar outra</string>
+    <string name="composer_scene_cap_sound">No máximo cinco sons por cena — remova um para adicionar outro</string>
+</resources>

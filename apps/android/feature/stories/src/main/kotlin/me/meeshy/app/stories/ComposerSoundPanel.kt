@@ -50,8 +50,8 @@ internal fun ComposerSoundPanel(
         BandTile(
             icon = { Icon(MeeshyIcons.QueueMusic, contentDescription = null) },
             label = stringResource(R.string.story_composer_soundLibrary),
-            enabled = canAddSound,
-            onClick = onOpenShelf,
+            enabled = true,
+            onClick = rememberGuardedAddition(canAddSound, R.string.composer_scene_cap_sound, onOpenShelf),
             modifier = Modifier.fillMaxWidth(),
         )
         audio.forEach { track ->
