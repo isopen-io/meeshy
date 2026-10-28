@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryDrawingStroke
 
 /**
@@ -62,6 +63,6 @@ internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide): Thum
         val url = media.thumbnailUrl ?: media.url
         return ThumbnailBackground(url, url)
     }
-    val bytes = pendingUploads.firstOrNull { it.cmid == id }?.item?.bytes ?: return null
-    return ThumbnailBackground("pending:$id:${bytes.size}", bytes)
+    val item = pendingUploads.firstOrNull { it.cmid == id }?.item ?: return null
+    return ThumbnailBackground("pending:$id:${item.sizeBytes}", item.previewModel)
 }

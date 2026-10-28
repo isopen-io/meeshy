@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.remember
+import me.meeshy.sdk.media.previewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,7 +66,7 @@ internal fun MediaPreviewRow(
         }
         items(pending, key = { it.cmid }) { upload ->
             MediaThumbnail(
-                model = upload.item.bytes,
+                model = remember(upload.cmid) { upload.item.previewModel },
                 isPending = true,
                 onRemove = { onRemove(upload.cmid) },
             )

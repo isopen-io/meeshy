@@ -20,6 +20,7 @@ import me.meeshy.sdk.community.CommunityCacheRepository
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.media.ImageCompressor
 import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.AvatarBannerUpload
@@ -160,11 +161,15 @@ class CommunitySettingsViewModel @Inject constructor(
 
     private suspend fun uploadedUrl(target: ImageUploadTarget, item: MediaUploadItem): String? {
         val context = if (target == ImageUploadTarget.AVATAR) ImageUploadContext.AVATAR else ImageUploadContext.BANNER
-        val image = compressor.compress(item.bytes, context)
-        val prefix = if (target == ImageUploadTarget.AVATAR) "community_avatar" else "community_banner"
-        val upload = MediaUploadItem(image.bytes, "${prefix}_${System.nanoTime()}.${image.fileExtension}", image.mimeType)
-        val uploaded = (media.upload(listOf(upload)) as? NetworkResult.Success)?.data ?: return null
-        return AvatarBannerUpload.firstUploadedUrl(uploaded)
+        try {
+            val image = compressor.compress(item.bytes, context)
+            val prefix = if (target == ImageUploadTarget.AVATAR) "community_avatar" else "community_banner"
+            val upload = MediaUploadItem(image.bytes, "${prefix}_${System.nanoTime()}.${image.fileExtension}", image.mimeType)
+            val uploaded = (media.upload(listOf(upload)) as? NetworkResult.Success)?.data ?: return null
+            return AvatarBannerUpload.firstUploadedUrl(uploaded)
+        } finally {
+            MediaIntake.release(item)
+        }
     }
 
     private fun edit(transform: (CommunitySettingsFields) -> CommunitySettingsFields) =

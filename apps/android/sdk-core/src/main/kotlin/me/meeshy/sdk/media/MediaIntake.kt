@@ -51,6 +51,21 @@ public object MediaIntake {
         return MediaUploadItem.onDisk(target, fileName, mimeType)
     }
 
+    /**
+     * Prend en charge un fichier que l'application vient de produire (enregistrement vocal, rendu vidéo) : il CHANGE DE
+     * NOM vers [DIRECTORY] (aucune octet recopié), ou se copie en flux si le renommage échoue. `null` si le fichier est vide.
+     */
+    public fun adopt(file: File, cacheDir: File, fileName: String, mimeType: String): MediaUploadItem? {
+        if (!file.isFile || file.length() == 0L) return null
+        val directory = directory(cacheDir)
+        if (!directory.isDirectory && !directory.mkdirs()) return null
+        val target = File(directory, UUID.randomUUID().toString())
+        if (file.renameTo(target)) return MediaUploadItem.onDisk(target, fileName, mimeType)
+        val copied = file.inputStream().use { copy(it, cacheDir, fileName, mimeType) }
+        file.delete()
+        return copied
+    }
+
     /** Efface la copie d'un élément qui n'est plus ni affiché ni envoyé ; sans effet sur un fichier qui n'est pas une copie d'entrée. */
     public fun release(item: MediaUploadItem) {
         val file = (item.source as? MediaUploadSource.OnDisk)?.file ?: return

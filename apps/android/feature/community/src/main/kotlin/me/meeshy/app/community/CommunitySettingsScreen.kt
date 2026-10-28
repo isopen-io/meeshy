@@ -1,5 +1,6 @@
 package me.meeshy.app.community
 
+import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,7 +95,7 @@ fun CommunitySettingsScreen(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var pickTarget by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }?.let { viewModel.upload(pickTarget, it) }
+        uri?.let { context.readMediaUploadItem(it) }?.let { viewModel.upload(pickTarget, it) }
     }
     fun pick(target: ImageUploadTarget) {
         pickTarget = target

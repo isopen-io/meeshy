@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -162,7 +163,7 @@ private fun DecorHeader(onDone: () -> Unit) {
 private fun rememberBannerPicker(uploadViewModel: AvatarBannerUploadViewModel): () -> Unit {
     val context = androidx.compose.ui.platform.LocalContext.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
+        uri?.let { context.readMediaUploadItem(it) }?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
     }
     return { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
