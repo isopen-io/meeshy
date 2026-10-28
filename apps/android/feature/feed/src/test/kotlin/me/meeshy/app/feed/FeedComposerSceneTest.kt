@@ -41,6 +41,18 @@ class FeedComposerSceneTest {
     }
 
     @Test
+    fun `each swatch is announced by its rank in the palette, never by the group name`() {
+        assertThat(PostSceneLaw.swatchRank(index = 0)).isEqualTo(1 to PostSceneLaw.swatches.size)
+        assertThat(PostSceneLaw.swatchRank(index = 2)).isEqualTo(3 to 17)
+    }
+
+    @Test
+    fun `under a scene the text is a compact description, without one it is the long body`() {
+        assertThat(PostSceneLaw.contentMinLines(showsScene = true)).isLessThan(PostSceneLaw.contentMinLines(showsScene = false))
+        assertThat(PostSceneLaw.contentMinLines(showsScene = false)).isEqualTo(6)
+    }
+
+    @Test
     fun `the text under a scene stays the post content and the background travels with the publish`() {
         val request = FeedComposerDraft(text = "  la vue ").withBackground("08D9D6").publishRequest()!!
 

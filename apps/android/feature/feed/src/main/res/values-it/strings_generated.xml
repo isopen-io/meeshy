@@ -13,6 +13,8 @@
     <string name="feed_action_view_profile">Vedi profilo</string>
     <string name="feed_comments">Commenti</string>
     <string name="feed_composer_attach_file">Allega un file</string>
+    <string name="feed_composer_background">Colore di sfondo</string>
+    <string name="feed_composer_background_swatch">Colore %1$s di %2$s</string>
     <string name="feed_composer_cancel">Annulla</string>
     <string name="feed_composer_language_search">Cerca una lingua</string>
     <string name="feed_composer_language_title">Lingua del post</string>

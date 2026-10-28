@@ -5,8 +5,16 @@
       "resDir": "feature/feed/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "composer.document.a11y.background",
           "androidName": "feed_composer_background",
-          "status": "android-only"
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.color.position",
+          "androidName": "feed_composer_background_swatch",
+          "status": "adopted"
         }
       ]
     }

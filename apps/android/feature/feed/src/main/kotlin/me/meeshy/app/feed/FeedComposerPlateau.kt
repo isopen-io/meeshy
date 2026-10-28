@@ -102,7 +102,7 @@ internal fun FeedComposerPlateau(
                 if (tool == ComposerDocumentTool.VIDEO) {
                     ComposerRailButton(
                         MeeshyIcons.Palette, stringResource(R.string.feed_composer_background),
-                        { paletteOpen = !paletteOpen }, active = paletteOpen || draft.showsScene,
+                        { paletteOpen = !paletteOpen }, active = paletteOpen,
                     )
                 }
             }
@@ -165,7 +165,7 @@ private fun PostCard(
                 onValueChange = field.onValueChange,
                 modifier = Modifier.fillMaxWidth().focusRequester(contentFocus),
                 placeholder = { Text(stringResource(R.string.feed_composer_placeholder)) },
-                minLines = 6,
+                minLines = PostSceneLaw.contentMinLines(draft.showsScene),
             )
             if (showsLanguage) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
