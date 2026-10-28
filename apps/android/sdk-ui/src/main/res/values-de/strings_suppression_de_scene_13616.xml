@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="slide_rail_delete_confirm_title">Diese Szene löschen?</string>
-    <string name="slide_rail_delete_confirm_action">Löschen</string>
-    <string name="slide_rail_delete_cancel">Abbrechen</string>
-</resources>
