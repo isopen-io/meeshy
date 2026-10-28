@@ -77,15 +77,27 @@ final class SceneStickerPoseTests: XCTestCase {
 
     /// Une fois chargé, un sticker CINÉMATIQUE garde son mouvement ; un fixe
     /// n'en porte aucun.
+    func test_aSceneAtTheStickerCap_refusesTheNextPose_andSaysWhy() {
+        let vm = StoryComposerViewModel()
+        var refused: [StoryComposerLimit] = []
+        vm.onLimitReached = { refused.append($0) }
+        for _ in 0..<StoryComposerLimits.maxStickersPerScene {
+            XCTAssertNotNil(SceneStickerPose.pose(.emoji("🎉"), on: vm))
+        }
+
+        XCTAssertNil(SceneStickerPose.pose(.emoji("🔥"), on: vm))
+        XCTAssertEqual(refused, [.sticker])
+    }
+
     func test_aLoadedPackSticker_keepsItsMotionOnlyWhenCinematic() throws {
         let vm = StoryComposerViewModel()
         let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
         let octets = Data([0x52, 0x49, 0x46, 0x46])
 
-        let anime = SceneStickerPose.posePackSticker(
-            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: true), on: vm)
-        let fixe = SceneStickerPose.posePackSticker(
-            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: false), on: vm)
+        let anime = try XCTUnwrap(SceneStickerPose.posePackSticker(
+            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: true), on: vm))
+        let fixe = try XCTUnwrap(SceneStickerPose.posePackSticker(
+            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: false), on: vm))
 
         XCTAssertEqual(vm.loadedStickerAnimations[anime], octets)
         XCTAssertNil(vm.loadedStickerAnimations[fixe])

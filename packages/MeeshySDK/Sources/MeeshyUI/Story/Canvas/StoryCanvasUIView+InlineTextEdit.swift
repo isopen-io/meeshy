@@ -335,6 +335,23 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
     // MARK: - UITextViewDelegate
 
+    /// Le plafond de caractères se tient À LA FRAPPE (#13590) : un collage trop
+    /// long entre coupé à la place qui reste, et la main le sent.
+    public func textView(_ textView: UITextView,
+                         shouldChangeTextIn range: NSRange,
+                         replacementText text: String) -> Bool {
+        let current = textView.text ?? ""
+        guard let swiftRange = Range(range, in: current) else { return true }
+        let fitted = StoryComposerLimits.fittedReplacement(current: current, replacing: swiftRange, with: text)
+        guard fitted != text else { return true }
+        HapticFeedback.warning()
+        guard !fitted.isEmpty else { return false }
+        textView.textStorage.replaceCharacters(in: range, with: fitted)
+        textView.selectedRange = NSRange(location: range.location + (fitted as NSString).length, length: 0)
+        textViewDidChange(textView)
+        return false
+    }
+
     public func textViewDidChange(_ textView: UITextView) {
         // A keystroke is user activity — wakes the idle-throttled edit clock
         // (issue #3906). See `noteEditInteraction()`.

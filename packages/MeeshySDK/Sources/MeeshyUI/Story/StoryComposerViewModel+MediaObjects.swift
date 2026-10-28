@@ -19,12 +19,17 @@ extension StoryComposerViewModel {
     /// n'est jamais retrouvé par la clé issue du fichier → fond `.clear` →
     /// canvas noir (bug user 2026-07-20).
     func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil, id: String) -> StoryMediaObject? {
-        guard canAddMedia else { return nil }
         // Resolve the target slide. If the caller pinned a specific id (e.g., the
         // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
         // honour it — without this guard, the new media object would be appended to
         // whichever slide happened to be active when the async task resolved.
         guard let targetSlideIndex = slideIndex(pinnedTo: toSlideId) else { return nil }
+        // Le plafond se lit sur la scène CIBLE, par famille (#13590).
+        let family: StoryComposerLimit = kind == .video ? .video : .image
+        guard Self.canAdd(family, to: slides[targetSlideIndex].effects) else {
+            refuse(family)
+            return nil
+        }
 
         // La slide CIBLE, pas la courante : ce site peut poser sur une autre
         // slide, et cascader d'après les objets de la mauvaise donnerait un
@@ -181,7 +186,7 @@ extension StoryComposerViewModel {
     @discardableResult
     public func addBorrowedSound(_ sound: APISound,
                                  trim: ClosedRange<TimeInterval>? = nil) -> StoryAudioPlayerObject? {
-        guard canAddMedia else { return nil }
+        guard canAddAudio else { refuse(.audio); return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         var obj = StoryAudioPlayerObject(
             postMediaId: "",
@@ -228,7 +233,7 @@ extension StoryComposerViewModel {
     /// `role` nil ⇒ la règle automatique s'applique telle quelle : aucun site
     /// d'appel existant ne change de comportement (#4483).
     func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
-        guard canAddMedia else { return nil }
+        guard canAddAudio else { refuse(.audio); return nil }
         // La cascade est SANS EFFET sur un son qui bascule en fond juste après
         // — un fond n'a pas de position. La calculer quand même coûte un
         // parcours et évite une branche qui devrait deviner, avant la bascule,

@@ -9,6 +9,14 @@ import PencilKit
 @MainActor
 public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
+    // MARK: - Plafonds (#13590)
+
+    /// Appelé à CHAQUE refus d'un plafond (`StoryComposerLimits`). Le
+    /// viewmodel ne sait ni vibrer ni afficher : l'hôte app branche ici son
+    /// retour (haptique + message) — une seule porte, donc aucun site d'ajout
+    /// n'oublie de dire pourquoi son geste n'a rien fait.
+    public var onLimitReached: ((StoryComposerLimit) -> Void)?
+
     // MARK: - Slides
 
     // `public internal(set)` (#4038) : le meuble app-side LIT les slides pour

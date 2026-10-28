@@ -223,26 +223,47 @@ extension StoryComposerViewModel {
         (currentEffects.audioPlayerObjects?.count ?? 0)
     }
 
-    var canAddText: Bool { textCount < 5 }
+    var canAddText: Bool { textCount < StoryComposerLimits.maxTextsPerScene }
 
-    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
-    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
-    /// collage que la pose refuserait ensuite en silence.
-    public var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène ne peut
+    /// plus recevoir AUCUN média (images, vidéos et audios pleins). Sans ce
+    /// plafond lu de l'extérieur, il proposerait un collage que la pose
+    /// refuserait ensuite en silence.
+    public var canAddMedia: Bool { canAddImage || canAddVideo || canAddAudio }
 
     var canAddImage: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .image }.count ?? 0) < 5
+        Self.canAdd(.image, to: currentEffects)
     }
 
     var canAddVideo: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .video }.count ?? 0) < 4
+        Self.canAdd(.video, to: currentEffects)
     }
 
     var canAddAudio: Bool {
-        canAddMedia &&
-        (currentEffects.audioPlayerObjects?.count ?? 0) < 5
+        Self.canAdd(.audio, to: currentEffects)
+    }
+
+    public var canAddSticker: Bool {
+        Self.canAdd(.sticker, to: currentEffects)
+    }
+
+    /// La règle des plafonds par famille, sur les effets d'UNE scène — celle
+    /// que vise l'ajout, pas forcément la courante.
+    static func canAdd(_ limit: StoryComposerLimit, to effects: StoryEffects) -> Bool {
+        let medias = effects.mediaObjects ?? []
+        switch limit {
+        case .sticker: return (effects.stickerObjects?.count ?? 0) < StoryComposerLimits.maxStickersPerScene
+        case .image: return medias.filter { $0.kind == .image }.count < StoryComposerLimits.maxImagesPerScene
+        case .video: return medias.filter { $0.kind == .video }.count < StoryComposerLimits.maxVideosPerScene
+        case .audio: return (effects.audioPlayerObjects?.count ?? 0) < StoryComposerLimits.maxAudiosPerScene
+        case .text: return effects.textObjects.count < StoryComposerLimits.maxTextsPerScene
+        case .textLength, .duration: return true
+        }
+    }
+
+    /// Dit au composeur qu'un plafond vient de refuser un geste.
+    func refuse(_ limit: StoryComposerLimit) {
+        onLimitReached?(limit)
     }
 
     @discardableResult
@@ -267,7 +288,7 @@ extension StoryComposerViewModel {
     }
 
     public func addText() -> StoryTextObject? {
-        guard canAddText else { return nil }
+        guard canAddText else { refuse(.text); return nil }
         let center = nextObjectPosition(in: currentEffects)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
@@ -384,7 +405,9 @@ extension StoryComposerViewModel {
         var effects = currentEffects
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
-        texts[index].text = text
+        let fitted = StoryComposerLimits.clampedText(text)
+        if fitted != text { refuse(.textLength) }
+        texts[index].text = fitted
         effects.textObjects = texts
         currentEffects = effects
     }
