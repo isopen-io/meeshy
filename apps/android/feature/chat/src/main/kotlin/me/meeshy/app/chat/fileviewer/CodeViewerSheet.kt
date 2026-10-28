@@ -81,7 +81,7 @@ internal fun CodeViewerSheet(request: FileViewerRequest, language: CodeLanguage,
             if (read.isBinary) {
                 CodeLoad.Failed
             } else {
-                val lines = withContext(Dispatchers.Default) { SyntaxTokenizer.tokenize(read.text, language) }
+                val lines = withContext(Dispatchers.Default) { SyntaxTokenizer.tokenize(read.text, language).map(SyntaxTokenizer::clampLine) }
                 CodeLoad.Ready(lines, read.truncated, read.text)
             }
         }.getOrElse { CodeLoad.Failed }
