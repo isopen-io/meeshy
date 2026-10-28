@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -119,5 +120,38 @@ class FramedTextBoxHostileTest {
         listOf(sticker.x, sticker.y, sticker.rotation, sticker.sideFraction, sticker.startTime, sticker.duration, sticker.fadeIn)
             .forEach { assertThat(it.isFinite()).isTrue() }
         assertThat(sticker.sideFraction).isAtMost(4.0)
+    }
+
+    private fun textWidthDp(scale: Double, frame: String?): Float {
+        val words = List(120) { "bonjour" }.joinToString(" ")
+        val view = StoryTextObjectProjection.project(
+            StoryTextObject(id = "t", text = words, fontSize = 40.0, scale = scale, textBg = frame?.let { "FF0000" }, frameShape = frame),
+            preferredLanguages = emptyList(),
+        )
+        compose.setContent {
+            Box(Modifier.size(360.dp, 640.dp)) { StoryTextObjectLayer(textObject = view, playheadSeconds = 0f) }
+        }
+        compose.waitForIdle()
+        return compose.onNodeWithText(words).getBoundsInRoot().let { it.right.value - it.left.value }
+    }
+
+    @Test
+    fun `an enlarged unframed text wraps at 88 percent of the design canvas times its scale like iOS`() {
+        val width = textWidthDp(scale = 2.0, frame = null)
+        assertThat(width).isAtLeast(0.88f * 360f * 2f * 0.85f)
+        assertThat(width).isAtMost(0.88f * 360f * 2f + 1f)
+    }
+
+    @Test
+    fun `an enlarged framed text wraps at 88 percent of the design canvas times its scale like iOS`() {
+        val width = textWidthDp(scale = 2.0, frame = "roundedRect")
+        assertThat(width).isAtLeast(0.88f * 360f * 2f * 0.85f)
+        assertThat(width).isAtMost(0.88f * 360f * 2f + 1f)
+    }
+
+    @Test
+    fun `an unscaled text still wraps at 88 percent of the scene`() {
+        val width = textWidthDp(scale = 1.0, frame = null)
+        assertThat(width).isAtMost(0.88f * 360f + 1f)
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -212,6 +213,9 @@ internal fun StoryTextObjectLayer(
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
+                // iOS mesure le texte à 88 % de la scène de 1080 puis agrandit le calque par transform : la largeur
+                // de mesure suit l'échelle de l'objet, pas les contraintes de l'écran ; la scène rogne (#13582).
+                .wrapContentWidth(Alignment.Start, unbounded = true)
                 .onSizeChanged { textSize = it }
                 .offset {
                     IntOffset(
