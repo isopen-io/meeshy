@@ -1,8 +1,13 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -17,6 +22,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.TextEditTool
 import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextLanguage
@@ -40,7 +47,7 @@ internal class TextSectionIntents(
 )
 
 internal fun StoryTextFrameShape.labelRes(): Int = when (this) {
-    StoryTextFrameShape.NONE -> R.string.stories_composer_bg_none
+    StoryTextFrameShape.NONE -> R.string.stories_composer_background_none
     StoryTextFrameShape.ROUNDED -> R.string.composer_text_frame_rounded
     StoryTextFrameShape.PILL -> R.string.composer_text_frame_pill
     StoryTextFrameShape.RECTANGLE -> R.string.composer_text_frame_rectangle
@@ -49,23 +56,55 @@ internal fun StoryTextFrameShape.labelRes(): Int = when (this) {
     StoryTextFrameShape.SPEECH -> R.string.composer_text_frame_speech
 }
 
+/**
+ * Les sections empilées comme iOS les empile (`VStack` de `frameOptions` / `borderOptions`) : une rangée défilante par
+ * famille de pastilles, un curseur par ligne. Elles vivent hors de la rangée défilante de la barre — un curseur ne se
+ * glisse pas dans un défilement horizontal, et une rangée défilante n'en contient pas une autre.
+ */
+@Composable
+internal fun TextStackedSection(
+    element: StoryTextElement,
+    section: ComposerObjectEditorSection,
+    intents: TextSectionIntents,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().heightIn(max = STACKED_MAX_HEIGHT).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        when (section) {
+            ComposerObjectEditorSection.Tool(TextEditTool.FRAME) -> TextFrameSection(element.frame, intents)
+            ComposerObjectEditorSection.Tool(TextEditTool.BORDER) -> TextBorderSection(element.outline, intents)
+            ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE) -> TextLanguageSection(element.sourceLanguage, intents)
+            else -> Unit
+        }
+    }
+}
+
+internal val StackedTextSections: Set<ComposerObjectEditorSection> = setOf(
+    ComposerObjectEditorSection.Tool(TextEditTool.FRAME),
+    ComposerObjectEditorSection.Tool(TextEditTool.BORDER),
+    ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE),
+)
+
 /** Cadre : la forme, la marge (×0…3) puis le liseré (0…12) et sa couleur — l'ordre d'iOS `frameOptions`. */
 @Composable
-internal fun TextFrameSection(frame: StoryTextFrame, intents: TextSectionIntents) {
+private fun TextFrameSection(frame: StoryTextFrame, intents: TextSectionIntents) {
     val haptics = rememberMeeshyHaptics()
-    StoryTextFrameShape.offered.forEach { shape ->
-        FilterChip(
-            selected = frame.shape == shape,
-            onClick = {
-                haptics.light()
-                intents.onFrameShape(shape)
-            },
-            label = { Text(stringResource(shape.labelRes())) },
-        )
+    ChipRow {
+        StoryTextFrameShape.offered.forEach { shape ->
+            FilterChip(
+                selected = frame.shape == shape,
+                onClick = {
+                    haptics.light()
+                    intents.onFrameShape(shape)
+                },
+                label = { Text(stringResource(shape.labelRes())) },
+            )
+        }
     }
-    val padding = stringResource(R.string.composer_column_text_frame)
     ValueSlider(
-        label = padding,
+        label = stringResource(R.string.composer_column_text_frame),
         value = frame.resolvedPaddingScale,
         range = 0f..StoryTextFrame.MAX_PADDING,
         steps = 29,
@@ -80,17 +119,19 @@ internal fun TextFrameSection(frame: StoryTextFrame, intents: TextSectionIntents
         shown = "%.1f".format(Locale.ROOT, frame.borderWidth),
         onChange = intents.onFrameBorder,
     )
-    STORY_TEXT_COLORS.forEach { hex ->
-        ColorSwatch(hex = hex, selected = frame.borderColor.equals(hex, ignoreCase = true), onClick = {
-            haptics.light()
-            intents.onFrameColor(hex)
-        })
+    ChipRow {
+        STORY_TEXT_COLORS.forEach { hex ->
+            ColorSwatch(hex = hex, selected = frame.borderColor.equals(hex, ignoreCase = true), onClick = {
+                haptics.light()
+                intents.onFrameColor(hex)
+            })
+        }
     }
 }
 
 /** Bordure : le contour des glyphes, curseur continu 0…12 puis la palette (iOS `borderOptions`). */
 @Composable
-internal fun TextBorderSection(outline: StoryTextOutline, intents: TextSectionIntents) {
+private fun TextBorderSection(outline: StoryTextOutline, intents: TextSectionIntents) {
     val haptics = rememberMeeshyHaptics()
     ValueSlider(
         label = stringResource(R.string.stories_composer_outline),
@@ -100,32 +141,44 @@ internal fun TextBorderSection(outline: StoryTextOutline, intents: TextSectionIn
         shown = "%.1f".format(Locale.ROOT, outline.width),
         onChange = intents.onOutlineWidth,
     )
-    STORY_TEXT_COLORS.forEach { hex ->
-        ColorSwatch(hex = hex, selected = outline.color.equals(hex, ignoreCase = true), onClick = {
-            haptics.light()
-            intents.onOutlineColor(hex)
-        })
+    ChipRow {
+        STORY_TEXT_COLORS.forEach { hex ->
+            ColorSwatch(hex = hex, selected = outline.color.equals(hex, ignoreCase = true), onClick = {
+                haptics.light()
+                intents.onOutlineColor(hex)
+            })
+        }
     }
 }
 
 /** Langue : la langue dans laquelle ce texte est ÉCRIT — la base de toute traduction (iOS `languageOptions`). */
 @Composable
-internal fun TextLanguageSection(sourceLanguage: String?, intents: TextSectionIntents) {
+private fun TextLanguageSection(sourceLanguage: String?, intents: TextSectionIntents) {
     val haptics = rememberMeeshyHaptics()
     val effective = StoryTextLanguage.normalised(sourceLanguage ?: intents.publishLanguage)
-    StoryTextLanguage.choices(sourceLanguage ?: intents.publishLanguage).forEach { code ->
-        val selected = effective == code
-        val name = Locale.forLanguageTag(code).getDisplayName(Locale.getDefault()).ifBlank { code }
-        FilterChip(
-            selected = selected,
-            onClick = {
-                haptics.light()
-                intents.onLanguage(code)
-            },
-            label = { Text(code.uppercase(Locale.ROOT)) },
-            modifier = Modifier.semantics { contentDescription = name },
-        )
+    ChipRow {
+        StoryTextLanguage.choices(sourceLanguage ?: intents.publishLanguage).forEach { code ->
+            val name = Locale.forLanguageTag(code).getDisplayName(Locale.getDefault()).ifBlank { code }
+            FilterChip(
+                selected = effective == code,
+                onClick = {
+                    haptics.light()
+                    intents.onLanguage(code)
+                },
+                label = { Text(code.uppercase(Locale.ROOT)) },
+                modifier = Modifier.semantics { contentDescription = name },
+            )
+        }
     }
+}
+
+@Composable
+private fun ChipRow(content: @Composable () -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    ) { content() }
 }
 
 @Composable
@@ -137,13 +190,17 @@ private fun ValueSlider(
     shown: String,
     onChange: (Float) -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Slider(
             value = value.coerceIn(range),
             onValueChange = onChange,
             valueRange = range,
             steps = steps,
-            modifier = Modifier.width(132.dp).semantics {
+            modifier = Modifier.weight(1f).semantics {
                 contentDescription = label
                 stateDescription = shown
             },
@@ -151,3 +208,5 @@ private fun ValueSlider(
         Text(shown, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+private val STACKED_MAX_HEIGHT = 220.dp

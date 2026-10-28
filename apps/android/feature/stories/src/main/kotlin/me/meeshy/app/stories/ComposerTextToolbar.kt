@@ -52,17 +52,11 @@ import me.meeshy.sdk.model.composer.TextEditTool
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
-/** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
+/** La palette des textes — celle d'iOS `StoryTextColors.palette` (couleur, contour, liseré), hex sans `#`, blanc en tête. */
 internal val STORY_TEXT_COLORS = listOf(
-    StoryTextElement.DEFAULT_COLOR,
-    "000000",
-    "FF3B30",
-    "FF9500",
-    "FFCC00",
-    "34C759",
-    "007AFF",
-    "AF52DE",
-    "FF2D55",
+    StoryTextElement.DEFAULT_COLOR, "000000", "FF2E63", "08D9D6", "F8B500",
+    "9B59B6", "2ECC71", "FF6B6B", "3498DB", "E91E63",
+    "FF7F50", "00CED1", "A855F7", "F59E0B",
 )
 
 internal fun StoryTextStyle.labelRes(): Int = when (this) {
@@ -102,15 +96,16 @@ internal fun TextStyleToolbar(
     /** Cadre, bordure, langue (#13561, #13534) : servis par la colonne, jamais par la rangée complète d'avant le plateau. */
     intents: TextSectionIntents = TextSectionIntents(),
 ) {
+    if (section != null && section in StackedTextSections) {
+        TextStackedSection(element, section, intents, modifier)
+        return
+    }
     fun shows(group: ComposerObjectEditorSection?) = section == null || section == group
     val style = ComposerObjectEditorSection.Tool(TextEditTool.STYLE)
     val effect = ComposerObjectEditorSection.Tool(TextEditTool.EFFECT)
     val color = ComposerObjectEditorSection.Tool(TextEditTool.COLOR)
     val align = ComposerObjectEditorSection.Tool(TextEditTool.ALIGN)
     val background = ComposerObjectEditorSection.Tool(TextEditTool.BACKGROUND)
-    val frame = ComposerObjectEditorSection.Tool(TextEditTool.FRAME)
-    val border = ComposerObjectEditorSection.Tool(TextEditTool.BORDER)
-    val language = ComposerObjectEditorSection.Tool(TextEditTool.LANGUAGE)
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -153,9 +148,6 @@ internal fun TextStyleToolbar(
                 CycleButton(Icons.AutoMirrored.Filled.Login, R.string.stories_composer_fade_in, element.fade.hasFadeIn, onCycleFadeIn)
                 CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
             }
-            if (section != null && shows(frame)) TextFrameSection(element.frame, intents)
-            if (section != null && shows(border)) TextBorderSection(element.outline, intents)
-            if (section != null && shows(language)) TextLanguageSection(element.sourceLanguage, intents)
             if (shows(ComposerObjectEditorSection.Timing)) {
                 CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
                 CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
