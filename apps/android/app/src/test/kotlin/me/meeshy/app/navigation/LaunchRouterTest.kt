@@ -418,4 +418,27 @@ class LaunchRouterTest {
         assertThat(tapRoute("type" to "post_like")).isNull()
         assertThat(LaunchRouter.route(LaunchExtras())).isNull()
     }
+
+    // #13527 — un média partagé par une autre app s'ouvre dans l'hôte du composeur, une seule fois.
+    @Test
+    fun `a shared media seed opens the composer host on the share door`() {
+        val seed = "AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = seed))).isEqualTo("composer?origin=share&seed=$seed")
+    }
+
+    @Test
+    fun `a seed without the shape of the store's tokens opens nothing, and a call or a tap wins over it`() {
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = "../../etc"))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = ""))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(callId = "c1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv"))).startsWith("call")
+        assertThat(LaunchRouter.route(LaunchExtras(conversationId = "conv-1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv")))
+            .isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `a recreated activity never reopens the composer on a seed already taken`() {
+        val route = "composer?origin=share&seed=AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.onCreateRoute(route, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(route, restored = false)).isEqualTo(route)
+    }
 }

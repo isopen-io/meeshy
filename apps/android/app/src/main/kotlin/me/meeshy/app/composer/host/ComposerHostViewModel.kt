@@ -2,11 +2,19 @@ package me.meeshy.app.composer.host
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.meeshy.app.composer.inbound.ComposerSeedStore
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.composer.ComposerOrigin
+import me.meeshy.sdk.model.composer.postsItsOwnMatter
 import me.meeshy.app.feed.PostComposerFacts
 import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
@@ -23,6 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ComposerHostViewModel @Inject constructor(
     saved: SavedStateHandle,
+    private val seeds: ComposerSeedStore,
 ) : ViewModel() {
     val door: ComposerHostRoute.Door = ComposerHostRoute.door(
         wire = saved.get<String>(ComposerHostRoute.ORIGIN_ARG),
@@ -33,6 +42,28 @@ class ComposerHostViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ComposerHostState.open(ComposerIntent(door.origin, opening = door.origin.sceneOpening)))
     val state: StateFlow<ComposerHostState> = _state.asStateFlow()
+
+    /** La porte pose elle-même la matière : le brouillon enregistré ne se restaure pas par-dessus (iOS `seededByDoor`). */
+    val seededByDoor: Boolean = door.origin.postsItsOwnMatter
+
+    private val _seed = MutableStateFlow<SeedState>(if (door.origin === ComposerOrigin.Share) SeedState.Loading else SeedState.None)
+
+    /** La matière reçue de l'extérieur, reprise UNE fois du relais ([ComposerSeedStore.take]) et rendue à la scène qui la monte. */
+    val seed: StateFlow<SeedState> = _seed.asStateFlow()
+
+    init {
+        if (door.origin === ComposerOrigin.Share) {
+            viewModelScope.launch {
+                val items = withContext(Dispatchers.IO) { seeds.take(door.seedToken) }
+                _seed.value = if (items.isEmpty()) SeedState.Lost else SeedState.Ready(items)
+            }
+        }
+    }
+
+    /** La scène a pris la matière : elle ne lui est jamais remise deux fois (changement de format, rotation). */
+    fun onSeedApplied() {
+        _seed.update { if (it is SeedState.Ready) SeedState.None else it }
+    }
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 
@@ -56,4 +87,12 @@ class ComposerHostViewModel @Inject constructor(
     }
 
     fun onMoodFacts(text: String, emoji: String?) = _state.update { it.withText(text).withMoodEmoji(emoji) }
+}
+
+/** Où en est la matière que la porte pose : à venir, prête, rien (pas de graine ou déjà prise), ou perdue (périmée, déjà reprise : rien à composer). */
+sealed interface SeedState {
+    data object Loading : SeedState
+    data object None : SeedState
+    data object Lost : SeedState
+    data class Ready(val items: List<MediaUploadItem>) : SeedState
 }

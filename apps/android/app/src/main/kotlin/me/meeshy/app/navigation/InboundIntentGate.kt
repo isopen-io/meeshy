@@ -2,6 +2,7 @@ package me.meeshy.app.navigation
 
 import android.content.Intent
 import android.os.Bundle
+import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
 
@@ -41,7 +42,18 @@ internal object InboundIntentGate {
         LaunchIntentProof.EXTRA_PROOF,
     )
 
-    fun admit(intent: Intent, isGenuineCallLaunch: (Intent) -> Boolean = { false }) {
+    /**
+     * **La graine d'un partage n'est crue que déposée (#13527).** L'extra n'est qu'un jeton de 128 bits que seul le store
+     * de Meeshy connaît : un intent forgé qui en porte un autre (ou qui rejoue un jeton déjà repris) ouvrirait un
+     * composeur sur rien. Il est retiré sauf si [holdsComposerSeed] le reconnaît.
+     */
+    fun admit(
+        intent: Intent,
+        isGenuineCallLaunch: (Intent) -> Boolean = { false },
+        holdsComposerSeed: (String) -> Boolean = { false },
+    ) {
+        val seed = runCatching { intent.getStringExtra(ComposerSeedLaunch.EXTRA_SEED) }.getOrNull()
+        if (seed == null || !holdsComposerSeed(seed)) intent.removeExtra(ComposerSeedLaunch.EXTRA_SEED)
         if (intent.data?.scheme.equals(IMPLICIT_ROUTE_SCHEME, ignoreCase = true)) intent.data = null
         val navigationKeys = runCatching {
             intent.extras?.keySet().orEmpty().filter { it.startsWith(NAV_CONTROLLER_EXTRA_PREFIX) }

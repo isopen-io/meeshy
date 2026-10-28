@@ -13,3 +13,10 @@ val ComposerOrigin.landsOnScene: Boolean
 /** Le format d'ouverture explicite d'une porte à scène ; `null` pour les autres, qui suivent leur profil. */
 val ComposerOrigin.sceneOpening: ComposerFormat?
     get() = ComposerFormat.STORY.takeIf { landsOnScene }
+
+/**
+ * Les portes qui POSENT elles-mêmes la matière de la scène : un brouillon enregistré ne se restaure pas par-dessus, et
+ * l'autosave n'écrase pas le brouillon d'avant. Le brouillon, lui, se REPREND : c'est la matière qu'il rend.
+ */
+val ComposerOrigin.postsItsOwnMatter: Boolean
+    get() = this === ComposerOrigin.Share || this is ComposerOrigin.ConversationMedia || this is ComposerOrigin.SocialMedia

@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.sdk.model.link.EmailLinkSecret
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
@@ -27,6 +28,8 @@ data class LaunchExtras(
     val tap: PushPayload = PushPayload(),
     /** Indice de route de la passerelle (`progression`) : un nom d'écran, jamais une adresse. */
     val routeHint: String? = null,
+    /** Le jeton d'une graine que le partage entrant a déposée (#13527) : l'hôte du composeur la reprend. */
+    val composerSeed: String? = null,
 )
 
 /**
@@ -54,8 +57,12 @@ object LaunchRouter {
             isVideo = extras.isVideo,
             autoAnswer = extras.autoAnswer,
         )
-        else -> tapRoute(extras)
+        else -> tapRoute(extras) ?: sharedMediaRoute(extras)
     }
+
+    /** Un média partagé par une autre app s'ouvre dans l'hôte du composeur ; un jeton sans la forme de ceux du store n'ouvre rien. */
+    private fun sharedMediaRoute(extras: LaunchExtras): String? =
+        extras.composerSeed?.let { Routes.composer(ComposerOrigin.Share, it) }
 
     /**
      * Le toucher d'une notification : la table type -> destination d'iOS ([PushTapDestination]).
@@ -167,7 +174,10 @@ object LaunchRouter {
      * montre déjà son écran.
      */
     fun onCreateRoute(route: String?, restored: Boolean): String? =
-        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it)) }
+        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it) || isSharedMediaRoute(it)) }
+
+    /** La graine d'un partage est à usage unique : une activité recréée ne rouvre pas un composeur sur un média déjà repris (#13527). */
+    private fun isSharedMediaRoute(route: String?): Boolean = route?.startsWith("composer?origin=share") == true
 
     private val EMAIL_LINK_ROUTE_PREFIXES =listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
 

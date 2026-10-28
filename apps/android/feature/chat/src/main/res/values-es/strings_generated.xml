@@ -352,6 +352,7 @@
     <string name="share_target_cancel">Cancelar</string>
     <string name="share_target_loading">Cargando conversaciones…</string>
     <string name="share_target_preview_title">Lo que se envía</string>
+    <string name="share_target_studio">Editar en el estudio</string>
     <string name="share_title_forward">Reenviar</string>
     <string name="share_title_send">Enviar</string>
     <string name="share_withdrawn_after_read">Un mensaje que desaparece tras leerse se queda en esta conversación.</string>

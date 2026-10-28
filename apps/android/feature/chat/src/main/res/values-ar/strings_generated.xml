@@ -355,6 +355,7 @@
     <string name="share_target_cancel">إلغاء</string>
     <string name="share_target_loading">جارٍ تحميل المحادثات…</string>
     <string name="share_target_preview_title">ما سيُرسَل</string>
+    <string name="share_target_studio">التعديل في الاستوديو</string>
     <string name="share_title_forward">إعادة توجيه</string>
     <string name="share_title_send">إرسال</string>
     <string name="share_withdrawn_after_read">تبقى الرسالة التي تختفي بعد القراءة في هذه المحادثة.</string>
