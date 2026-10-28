@@ -34,8 +34,10 @@ internal class IncomingMessageBuffer(
     private var windowTicket: AccountTicket? = null
 
     /** Ajoute [message] à la fenêtre courante, en l'ouvrant si besoin. */
-    fun offer(message: ApiMessage) {
-        val arrivedUnder = ticket()
+    fun offer(message: ApiMessage) = offer(message, ticket())
+
+    /** [offer] sous le compte auquel [message] est ARRIVÉ ([arrivedUnder], #13576), pas celui qui est connecté à la collecte. */
+    fun offer(message: ApiMessage, arrivedUnder: AccountTicket?) {
         synchronized(lock) {
             if (pending.isNotEmpty() && windowTicket != arrivedUnder) {
                 window?.cancel()

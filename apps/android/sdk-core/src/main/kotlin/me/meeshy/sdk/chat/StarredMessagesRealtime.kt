@@ -23,6 +23,7 @@ import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -90,9 +91,9 @@ class StarredMessagesRealtimeBinding @Inject constructor(
             socketListenerRegistered = true
             socketManager.on("message:starred") { args -> onStarredFrame(args) }
         }
-        live.launchSafely { messageSocketManager.messageDeleted.collect { sync.onGone(it.messageId) } }
-        live.launchSafely { messageSocketManager.messageExpired.collect { sync.onGone(it.messageId) } }
-        live.launchSafely { messageSocketManager.messageEdited.collect { sync.onEdited(it, fence.ticket()) } }
+        live.launchSafely { messageSocketManager.messageDeleted.collectArrived { sync.onGone(it.messageId) } }
+        live.launchSafely { messageSocketManager.messageExpired.collectArrived { sync.onGone(it.messageId) } }
+        live.launchSafely { messageSocketManager.messageEdited.collectArrived { sync.onEdited(it, fence.currentTicket()) } }
     }
 
     override fun detach() {

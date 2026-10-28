@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
+import me.meeshy.sdk.socket.collectArrived
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,7 +38,7 @@ class MessageEditBinding @Inject constructor(
     override fun attach() {
         job?.cancel()
         job = scope.launch {
-            socket.messageEdited.collect { message ->
+            socket.messageEdited.collectArrived { message ->
                 try {
                     messages.applyServerEdit(message)
                 } catch (cancelled: CancellationException) {

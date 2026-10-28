@@ -115,7 +115,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collectEachSafely { payload ->
+            socialSocket.storyDeleted.collectEachArrivedSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
             }
         }
@@ -128,7 +128,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryCreations() {
         viewModelScope.launch {
-            socialSocket.storyCreated.collectEachSafely { payload ->
+            socialSocket.storyCreated.collectEachArrivedSafely { payload ->
                 storyRepository.adoptAnnounced(payload.story)
             }
         }
@@ -144,7 +144,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collectEachSafely { payload ->
+            socialSocket.storyUpdated.collectEachArrivedSafely { payload ->
                 storyRepository.applyStoryUpdate(
                     updated = payload.story,
                     engagementReset = payload.engagementReset ?: false,
