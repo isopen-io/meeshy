@@ -56,6 +56,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountClosedException
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
@@ -162,7 +163,7 @@ class PostRepository @Inject constructor(
         val before = rewriteRow(ticket, postId) {
             val wasLiked = it.isLikedByMe == true
             it.copy(isLikedByMe = !wasLiked, likeCount = adjustedCount(it.likeCount, wasLiked))
-        } ?: return false
+        }.orClosed() ?: return false
         val wasLiked = before.isLikedByMe == true
 
         outboxRepository.enqueue(
@@ -246,12 +247,21 @@ class PostRepository @Inject constructor(
         if ((row.isBookmarkedByMe == true) == bookmarked) null
         else row.copy(isBookmarkedByMe = bookmarked, bookmarkCount = adjustedCount(row.bookmarkCount, wasSet = !bookmarked))
 
+    /** Ce qu'une réécriture de ligne a trouvé : la ligne AVANT réécriture, `null` si absente ou [transform] sans effet. */
+    private class RowRewrite(val before: ApiPost?)
+
+    /**
+     * Un geste d'un compte fermé depuis est REFUSÉ par une exception, comme [OutboxRepository.enqueue] le fait : un
+     * `false` se confondrait avec « post absent du fil », que l'hôte (Reels) rabat sur un appel réseau non clôturé.
+     */
+    private fun RowRewrite?.orClosed(): ApiPost? = (this ?: throw AccountClosedException()).before
+
     /**
      * Réécrit la ligne [postId] du fil, lue et remplacée dans UN SEUL `update {}` (aucune mise à jour concurrente perdue,
-     * quel que soit le fil d'exécution), sous le compte de [ticket] (celui du geste). Rend la ligne AVANT réécriture ;
-     * `null` : ligne absente, [transform] sans effet, ou compte fermé — rien n'a été écrit.
+     * quel que soit le fil d'exécution), sous le compte de [ticket] (celui du geste). `null` : compte fermé, rien n'a été
+     * écrit ; sinon la ligne AVANT réécriture, `null` dedans si la ligne est absente ou [transform] sans effet.
      */
-    private suspend fun rewriteRow(ticket: AccountTicket?, postId: String, transform: (ApiPost) -> ApiPost?): ApiPost? =
+    private suspend fun rewriteRow(ticket: AccountTicket?, postId: String, transform: (ApiPost) -> ApiPost?): RowRewrite? =
         fence.commitOrWrite(ticket) {
             var before: ApiPost? = null
             _feedCache.update { rows ->
@@ -262,7 +272,7 @@ class PostRepository @Inject constructor(
                 if (rows == null || row == null || next == null) rows
                 else rows.toMutableList().also { it[index] = next }.also { before = row }
             }
-            before
+            RowRewrite(before)
         }
 
     private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
@@ -284,7 +294,7 @@ class PostRepository @Inject constructor(
         val before = rewriteRow(ticket, postId) {
             val wasBookmarked = it.isBookmarkedByMe == true
             it.copy(isBookmarkedByMe = !wasBookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasBookmarked))
-        } ?: return false
+        }.orClosed() ?: return false
         val wasBookmarked = before.isBookmarkedByMe == true
 
         outboxRepository.enqueue(
@@ -331,6 +341,9 @@ class PostRepository @Inject constructor(
                 val page = response.data
                 if (!response.success || page == null) return false
                 fence.commitOrWrite(ticket) {
+                    // Une page ne prolonge que le fil dont elle suit le curseur : un rafraîchissement arrivé pendant la requête
+                    // a remplacé ce fil, y coudre la page cacherait les posts entre sa fin et l'ancien curseur.
+                    if (feedCursor != cursor) return@commitOrWrite
                     // Fusionné sur le fil COURANT au moment d'écrire : une mise à jour arrivée pendant la requête survit.
                     _feedCache.update { current ->
                         current?.let { rows ->

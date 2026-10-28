@@ -85,9 +85,9 @@ class PostFeedWriteRaceTest {
         coEvery { api.getFeed(null, any()) } returns page(listOf(ApiPost(id = "p1", content = "a", likeCount = 0)), hasMore = true)
         repository.refresh()
 
-        val done = withAccountTicket(ticketOfA) { repository.toggleLike("p1") }
+        val refused = runCatching { withAccountTicket(ticketOfA) { repository.toggleLike("p1") } }.exceptionOrNull()
 
-        assertThat(done).isFalse()
+        assertThat(refused).isInstanceOf(me.meeshy.sdk.session.AccountClosedException::class.java)
         assertThat(repository.cachedPost("p1")!!.isLikedByMe).isNotEqualTo(true)
     }
 
