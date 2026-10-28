@@ -172,13 +172,13 @@ object Routes {
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
-    /** L'hôte unique du composeur : la porte (story, flux, mood) voyage en argument, le format est un champ du document. */
+    /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
 
     /** Ouvre l'hôte unique par [origin] ; `null` pour une porte que l'ancien composeur sert encore. */
-    fun composer(origin: ComposerOrigin): String? = ComposerHostRoute.route(origin)
+    fun composer(origin: ComposerOrigin, seedToken: String? = null): String? = ComposerHostRoute.route(origin, seedToken)
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
 

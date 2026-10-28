@@ -12,6 +12,7 @@ import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
+import me.meeshy.sdk.model.composer.sceneOpening
 import javax.inject.Inject
 
 /**
@@ -23,9 +24,14 @@ import javax.inject.Inject
 class ComposerHostViewModel @Inject constructor(
     saved: SavedStateHandle,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(
-        ComposerHostState.open(ComposerIntent(ComposerHostRoute.origin(saved.get<String>(ComposerHostRoute.ORIGIN_ARG)))),
+    val door: ComposerHostRoute.Door = ComposerHostRoute.door(
+        wire = saved.get<String>(ComposerHostRoute.ORIGIN_ARG),
+        id = saved.get<String>(ComposerHostRoute.ID_ARG),
+        sub = saved.get<String>(ComposerHostRoute.SUB_ARG),
+        seed = saved.get<String>(ComposerHostRoute.SEED_ARG),
     )
+
+    private val _state = MutableStateFlow(ComposerHostState.open(ComposerIntent(door.origin, opening = door.origin.sceneOpening)))
     val state: StateFlow<ComposerHostState> = _state.asStateFlow()
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
