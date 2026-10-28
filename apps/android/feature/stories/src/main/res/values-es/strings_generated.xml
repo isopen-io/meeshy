@@ -61,6 +61,10 @@
     <string name="composer_publish_as_story">Publicar historia</string>
     <string name="composer_publish_as_storyAndReel">Publicar historia y reel</string>
     <string name="composer_rail_object_exit">Salir del objeto</string>
+    <string name="composer_slide_rail">Escenas de la publicación</string>
+    <string name="composer_slide_rail_capReached">Diez escenas como máximo — elimina una para crear otra</string>
+    <string name="composer_slide_rail_delete">Eliminar la escena %1$d</string>
+    <string name="composer_slide_rail_position">Escena %1$d de %2$d</string>
     <string name="composer_socle_audience">Audiencia</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Sonido de fondo</string>

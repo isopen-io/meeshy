@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.slide.rail", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.slide.rail.capReached", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.slide.rail.delete", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.slide.rail.position", "status": "adopted" },
+        { "androidName": "stories_composer_remove_slide_title", "status": "android-only" },
+        { "androidName": "stories_composer_remove_slide_message", "status": "android-only" },
+        { "androidName": "stories_composer_remove_slide_confirm", "status": "android-only" },
+        { "androidName": "stories_composer_slide_move_earlier", "status": "android-only" },
+        { "androidName": "stories_composer_slide_move_later", "status": "android-only" }
+      ]
+    }
+  }
+}

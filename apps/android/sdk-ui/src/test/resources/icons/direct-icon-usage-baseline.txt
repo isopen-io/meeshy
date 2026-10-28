@@ -143,7 +143,6 @@ feature/settings/src/main/kotlin/me/meeshy/app/settings/TwoFactorSetupContent.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerControlsLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerMediaRows.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerSettingsRows.kt
-feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerSlideStrip.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerStickerLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextElementLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextToolbar.kt
