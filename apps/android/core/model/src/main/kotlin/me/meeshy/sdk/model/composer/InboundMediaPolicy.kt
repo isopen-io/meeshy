@@ -32,18 +32,33 @@ object InboundMediaPolicy {
     private const val CONTENT_SCHEME = "content"
 
     /**
-     * [ownNamespace] est l'identifiant de l'application : ses fournisseurs (`<id>.fileprovider`, `<id>.androidx-startup`…) en portent le préfixe.
-     * [grantedBySender] : l'intent porte `FLAG_GRANT_READ_URI_PERMISSION`. Sans lui, Meeshy lirait l'URI avec SES propres
-     * permissions (`content://media/…`, contacts) : n'importe quelle app sans accès enverrait la photo privée d'un autre. Avec lui, le
-     * système a vérifié que l'EXPÉDITEUR pouvait lire l'URI qu'il accorde (il lève `SecurityException` à son `startActivity` sinon).
+     * [ownNamespace] est l'identifiant de l'application : ses fournisseurs (`<id>.fileprovider`, `<id>.androidx-startup`…) en portent
+     * le préfixe ; [providerIsOurs] couvre ceux qu'une bibliothèque déclare sous un autre nom (résolu par le gestionnaire de paquets).
+     *
+     * [grantRecorded] : le système a INSCRIT une autorisation par URI au nom de Meeshy (`Context.checkUriPermission(uri, myPid, myUid,
+     * READ)`, qui ne voit QUE les autorisations explicites, jamais les permissions de Meeshy). Le drapeau
+     * `FLAG_GRANT_READ_URI_PERMISSION` de l'intent ne prouve rien : l'expéditeur le pose lui-même, et quand le destinataire détient
+     * déjà l'accès au fournisseur, le système n'inscrit rien et ne vérifie pas l'expéditeur. Pour un fournisseur que Meeshy lit avec
+     * SES propres permissions d'exécution ([RECEIVER_RIGHTS_AUTHORITIES] : contacts, journal d'appels, SMS, agenda…), seule une
+     * autorisation inscrite admet l'URI — sinon une app sans accès ferait lire et publier par Meeshy ce qu'elle ne peut pas lire.
+     *
+     * `media` reste admis sans autorisation inscrite : la Galerie le partage, et quand Meeshy détient l'accès aux photos le système
+     * n'inscrit rien, si bien qu'un refus couperait le partage depuis la Galerie. Le risque résiduel (une app sans accès fait ouvrir
+     * par Meeshy une photo de l'utilisateur) ne donne rien à cette app : la photo reste chez l'utilisateur, qui la voit et décide.
      */
-    fun admitsSource(scheme: String?, authority: String?, ownNamespace: String, grantedBySender: Boolean): Boolean {
-        if (!grantedBySender) return false
+    fun admitsSource(scheme: String?, authority: String?, ownNamespace: String, grantRecorded: Boolean, providerIsOurs: Boolean = false): Boolean {
+        if (providerIsOurs) return false
         if (!CONTENT_SCHEME.equals(scheme?.trim(), ignoreCase = true)) return false
         val host = authority?.substringAfterLast('@')?.trim()?.lowercase().orEmpty()
         val own = ownNamespace.trim().lowercase()
-        return host.isNotEmpty() && own.isNotEmpty() && host != own && !host.startsWith("$own.")
+        if (host.isEmpty() || own.isEmpty() || host == own || host.startsWith("$own.")) return false
+        return grantRecorded || host !in RECEIVER_RIGHTS_AUTHORITIES
     }
+
+    private val RECEIVER_RIGHTS_AUTHORITIES = setOf(
+        "com.android.contacts", "contacts", "call_log", "call_log_shadow", "sms", "mms", "mms-sms", "icc",
+        "com.android.calendar", "calendar", "user_dictionary", "com.android.voicemail", "com.android.blockednumber",
+    )
 
     fun judge(header: ByteArray, totalBytes: Long, declaredMime: String?): InboundMediaVerdict {
         if (totalBytes <= 0L) return InboundMediaVerdict.Refused(InboundMediaRefusal.EMPTY)

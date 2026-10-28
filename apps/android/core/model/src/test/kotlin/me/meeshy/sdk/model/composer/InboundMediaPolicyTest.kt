@@ -19,29 +19,37 @@ class InboundMediaPolicyTest {
     private fun refused(header: ByteArray, total: Long = header.size.toLong(), declared: String? = null) =
         (InboundMediaPolicy.judge(header, total, declared) as InboundMediaVerdict.Refused).reason
 
+    private fun source(scheme: String?, authority: String?, grantRecorded: Boolean = false, providerIsOurs: Boolean = false) =
+        InboundMediaPolicy.admitsSource(scheme, authority, own, grantRecorded = grantRecorded, providerIsOurs = providerIsOurs)
+
     @Test
     fun `only a content uri of another app is a source`() {
-        assertThat(InboundMediaPolicy.admitsSource("content", "com.android.providers.media.documents", own, grantedBySender = true)).isTrue()
-        assertThat(InboundMediaPolicy.admitsSource("CONTENT", "media", own, grantedBySender = true)).isTrue()
+        assertThat(source("content", "com.android.providers.media.documents")).isTrue()
+        assertThat(source("CONTENT", "media")).isTrue()
+        assertThat(source("content", "com.google.android.apps.photos.contentprovider")).isTrue()
+        assertThat(source("content", "com.whatsapp.provider.media")).isTrue()
         listOf("file", "android.resource", "http", "https", "intent", "javascript", "data", "", null).forEach {
-            assertThat(InboundMediaPolicy.admitsSource(it, "media", own, grantedBySender = true)).isFalse()
+            assertThat(source(it, "media", grantRecorded = true)).isFalse()
         }
     }
 
     @Test
-    fun `a uri the sender did not grant is not a source - Meeshy would read it with its own permissions`() {
-        assertThat(InboundMediaPolicy.admitsSource("content", "media", own, grantedBySender = false)).isFalse()
-        assertThat(InboundMediaPolicy.admitsSource("content", "com.android.contacts", own, grantedBySender = false)).isFalse()
+    fun `a provider Meeshy reads with its own runtime permission is a source only through a grant the system recorded`() {
+        listOf("com.android.contacts", "CONTACTS", "0@com.android.contacts", "call_log", "sms", "mms", "com.android.calendar", "user_dictionary").forEach {
+            assertThat(source("content", it)).isFalse()
+            assertThat(source("content", it, grantRecorded = true)).isTrue()
+        }
     }
 
     @Test
-    fun `a uri of our own providers is not a source, whatever its case or user prefix`() {
+    fun `a uri of our own providers is not a source, whatever its case, user prefix or a recorded grant`() {
         listOf("me.meeshy.app.fileprovider", "ME.MEESHY.APP.FILEPROVIDER", "0@me.meeshy.app.fileprovider", "me.meeshy.app.androidx-startup", "me.meeshy.app").forEach {
-            assertThat(InboundMediaPolicy.admitsSource("content", it, own, grantedBySender = true)).isFalse()
+            assertThat(source("content", it, grantRecorded = true)).isFalse()
         }
-        assertThat(InboundMediaPolicy.admitsSource("content", null, own, grantedBySender = true)).isFalse()
-        assertThat(InboundMediaPolicy.admitsSource("content", "  ", own, grantedBySender = true)).isFalse()
-        assertThat(InboundMediaPolicy.admitsSource("content", "me.meeshy.application.media", own, grantedBySender = true)).isTrue()
+        assertThat(source("content", "com.vendor.sdk.provider", grantRecorded = true, providerIsOurs = true)).isFalse()
+        assertThat(source("content", null, grantRecorded = true)).isFalse()
+        assertThat(source("content", "  ", grantRecorded = true)).isFalse()
+        assertThat(source("content", "me.meeshy.application.media")).isTrue()
     }
 
     @Test
