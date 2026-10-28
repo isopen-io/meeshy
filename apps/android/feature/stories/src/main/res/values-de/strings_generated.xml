@@ -60,6 +60,7 @@
     <string name="composer_object_editor_effects_grain">Körnung</string>
     <string name="composer_publish_as_story">Story veröffentlichen</string>
     <string name="composer_publish_as_storyAndReel">Story und Reel veröffentlichen</string>
+    <string name="composer_rail_object_exit">Objekt verlassen</string>
     <string name="composer_socle_audience">Publikum</string>
     <string name="composer_socle_publish">Veröffentlichen</string>
     <string name="composer_sound_background_a11y">Hintergrundton</string>

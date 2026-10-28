@@ -60,6 +60,7 @@
     <string name="composer_object_editor_effects_grain">Grain</string>
     <string name="composer_publish_as_story">Publish story</string>
     <string name="composer_publish_as_storyAndReel">Publish story and reel</string>
+    <string name="composer_rail_object_exit">Leave the object</string>
     <string name="composer_socle_audience">Audience</string>
     <string name="composer_socle_publish">Publish</string>
     <string name="composer_sound_background_a11y">Background sound</string>

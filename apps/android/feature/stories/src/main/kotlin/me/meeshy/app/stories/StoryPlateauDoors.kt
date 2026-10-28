@@ -29,4 +29,37 @@ internal object StoryPlateauDoors {
         ComposerRailDoor.DRAWING -> StoryToolMode.DRAWING
         else -> null
     }
+
+    /**
+     * What a door already carries on the selected slide (iOS `ComposerRailDoorBadge.count`): the media (background
+     * included), the sounds, the texts, the strokes, the stickers. The BACKGROUND door carries nothing — the media door
+     * counts it, and it fills the card under the author's eyes. Zero means no counter, never a greyed « 0 ».
+     */
+    fun badge(door: ComposerRailDoor, matter: Matter): Int = when (door) {
+        ComposerRailDoor.MEDIA -> matter.media
+        ComposerRailDoor.SOUND -> matter.sounds
+        ComposerRailDoor.TEXT -> matter.texts
+        ComposerRailDoor.DRAWING -> matter.strokes
+        ComposerRailDoor.STICKER -> matter.stickers
+        else -> 0
+    }
+
+    /** The slide's matter the doors count, read once per frame by the plateau. */
+    data class Matter(
+        val media: Int = 0,
+        val sounds: Int = 0,
+        val texts: Int = 0,
+        val strokes: Int = 0,
+        val stickers: Int = 0,
+    )
 }
+
+/** The selected slide's matter, as the doors count it. */
+internal val StoryComposerUiState.plateauDoorMatter: StoryPlateauDoors.Matter
+    get() = StoryPlateauDoors.Matter(
+        media = deck.selectedSlide.mediaIds.size,
+        sounds = selectedSlideAudio.size,
+        texts = selectedSlideTextElements.size,
+        strokes = selectedSlideStrokes.size,
+        stickers = selectedSlideStickers.size,
+    )
