@@ -8,6 +8,8 @@ data class ComposerCarry(
     val plan: MediaTransferPlan,
     val audience: StoryVisibility?,
     val token: Int,
+    /** Le registre d'avant cette bascule : rétabli si l'on revient avant que l'arrivée l'ait reçue. */
+    val ledgerBefore: Set<String> = emptySet(),
 ) {
     /** Les deux porteurs du document : la feuille de post/réel, la scène de story. Le mood ne porte que du texte. */
     enum class Side {

@@ -130,14 +130,48 @@ class ComposerHostStateTest {
     }
 
     @Test
-    fun `an audience the post cannot express stays on the story and never widens the post`() {
+    fun `an audience the post cannot express narrows the post to private, never widens it`() {
         val scene = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.ONLY)
-        assertThat(scene.choose(POST).carry).isNull()
+        assertThat(scene.choose(POST).carry?.audience).isEqualTo(StoryVisibility.PRIVATE)
+        val community = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.COMMUNITY)
+        assertThat(community.choose(POST).carry?.audience).isEqualTo(StoryVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `the narrowed audience left untouched on the post never comes back to overwrite the story's list`() {
+        val inPost = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.ONLY)
+            .choose(POST).let { it.carryApplied(it.carry!!.token) }
+            .withPostDocument(emptyList(), StoryVisibility.PRIVATE)
+        assertThat(inPost.choose(STORY).carry).isNull()
+        val chosenOnPost = inPost.withPostDocument(emptyList(), StoryVisibility.FRIENDS).choose(STORY)
+        assertThat(chosenOnPost.carry?.audience).isEqualTo(StoryVisibility.FRIENDS)
+    }
+
+    @Test
+    fun `switching back before the arrival took the carry removes nothing from the source`() {
+        val story = open(ComposerOrigin.StoryTray).withSceneDocument(listOf(carried("a")), 0, 9, StoryVisibility.PUBLIC)
+        val toPost = story.choose(POST)
+        assertThat(toPost.carry).isNotNull()
+        val back = toPost.choose(STORY)
+        assertThat(back.carry).isNull()
+        assertThat(back.synced).isEmpty()
+        val again = back.choose(POST)
+        assertThat(again.carry?.plan?.add?.map { it.media.id }).containsExactly("a")
+        assertThat(again.carry?.plan?.remove).isEmpty()
+    }
+
+    @Test
+    fun `a post media still queued offline never travels and is counted as left behind`() {
+        val post = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a"), carried("cmid_0000")), StoryVisibility.PUBLIC)
+        val carry = requireNotNull(post.choose(STORY).carry)
+        assertThat(carry.plan.add.map { it.media.id }).containsExactly("a")
+        assertThat(carry.plan.leftBehind).isEqualTo(1)
     }
 
     @Test
     fun `a media removed on the source after a carry is removed on the arrival, a native one is untouched`() {
         val toStory = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a")), StoryVisibility.PUBLIC).choose(STORY)
+            .let { it.carryApplied(it.carry!!.token) }
         val inStory = toStory.withSceneDocument(listOf(carried("a"), carried("own")), 0, 8, StoryVisibility.PUBLIC)
         val trimmedStory = inStory.withSceneDocument(listOf(carried("own")), 0, 9, StoryVisibility.PUBLIC)
         val back = trimmedStory.choose(POST)
