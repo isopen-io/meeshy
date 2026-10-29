@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.HistoryStore
+import me.meeshy.sdk.outbox.OutboxIds
 
 /**
  * L'instantané de l'annuler/rétablir GLOBAL du composer (#12347, iOS `[StorySlide]` empilé dans
@@ -63,7 +64,9 @@ internal class ComposerHistory private constructor(
  * Remet l'état d'écran sur [snapshot] : sélections refermées, brouillon et planche de dessin
  * resynchronisés sur la diapo courante, les envois différés que la diapo rétablie montre rendus (ceux de la pile [buried]),
  * et tout média que ni le répertoire ni les envois
- * différés ne connaissent plus (annulé entre-temps) retiré du deck plutôt que publié orphelin.
+ * différés ne connaissent plus (annulé entre-temps) retiré du deck plutôt que publié orphelin. Un média hors ligne qu'un
+ * brouillon restauré ou rouvert nomme par son seul `cmid` (#13500) n'est dans aucun des deux et reste : son envoi n'est
+ * annulé que lorsque plus aucune étape joignable ne le montre (#13621).
  */
 internal fun StoryComposerUiState.restoredTo(
     snapshot: ComposerSnapshot,
@@ -71,7 +74,7 @@ internal fun StoryComposerUiState.restoredTo(
 ): StoryComposerUiState {
     val pool = (pendingUploads + buried).distinctBy { it.cmid }
     val known = snapshot.attachments.mapTo(mutableSetOf()) { it.id } + pool.map { it.cmid }
-    val orphans = snapshot.deck.slides.flatMap { it.mediaIds }.filterNot { it in known }.toSet()
+    val orphans = snapshot.deck.slides.flatMap { it.mediaIds }.filterNot { it in known || OutboxIds.isCmid(it) }.toSet()
     val deck = orphans.fold(snapshot.deck) { acc, id -> acc.removeMedia(id) }
     val shown = deck.slides.flatMapTo(mutableSetOf()) { it.mediaIds }
     return copy(

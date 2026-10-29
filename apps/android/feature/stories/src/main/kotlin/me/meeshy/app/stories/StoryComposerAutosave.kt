@@ -114,6 +114,9 @@ object StoryComposerAutosave {
         return previous.uploadCmids() - kept?.uploadCmids().orEmpty()
     }
 
+    /** Les envois durables que [snapshot] nomme par leur `cmid`. */
+    fun namedUploads(snapshot: StoryComposerDraftSnapshot?): Set<String> = snapshot?.uploadCmids().orEmpty()
+
     private fun StoryComposerDraftSnapshot.uploadCmids(): Set<String> =
         slides.flatMap { slide -> slide.mediaIds + listOfNotNull(slide.backgroundMediaId) }
             .filterTo(mutableSetOf(), OutboxIds::isCmid)

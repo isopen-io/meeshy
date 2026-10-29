@@ -195,18 +195,32 @@ class StoryComposerViewModel @Inject constructor(
                     is StoryDraftPersist.Save -> {
                         draftStore.save(action.snapshot)
                         ownsStoredDraft = true
-                        StoryComposerAutosave.orphanedUploads(previous, action.snapshot)
+                        DraftRelease(
+                            StoryComposerAutosave.orphanedUploads(previous, action.snapshot),
+                            StoryComposerAutosave.namedUploads(action.snapshot),
+                        )
                     }
                     StoryDraftPersist.Clear -> {
                         draftStore.clear()
-                        StoryComposerAutosave.orphanedUploads(previous, null)
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, null), emptySet())
                     }
-                    StoryDraftPersist.None -> emptySet()
+                    StoryDraftPersist.None -> null
                 }
-            }.orEmpty()
-            orphans.forEach { cancelDurableUpload(it) }
+            } ?: return@launch
+            val (reachable, lost) = orphans.released.partition(history::reaches)
+            releasedByDraft = (releasedByDraft - orphans.named) + reachable
+            lost.forEach { cancelDurableUpload(it) }
         }
     }
+
+    /**
+     * Ce qu'une écriture de brouillon a cessé de nommer, et ce qu'elle nomme. Un média retiré puis enregistré sans lui
+     * (changement de format, recréation de l'activité : l'écran se démonte, le composeur vit) peut revenir par annuler :
+     * son envoi attend dans [releasedByDraft] tant que l'historique le montre, et n'est annulé qu'ensuite (#13621).
+     */
+    private data class DraftRelease(val released: Set<String>, val named: Set<String>)
+
+    private var releasedByDraft: Set<String> = emptySet()
 
     /** Routes the text field to the selected element, else the slide caption. */
     fun onTextChange(text: String) = reduce("type") { StoryComposerTextReducer.typed(it, text) }
@@ -534,8 +548,12 @@ class StoryComposerViewModel @Inject constructor(
         buried.settled(before, _state.value.pendingUploads)
     }
 
-    private fun abandonUnreachableBuried() =
+    private fun abandonUnreachableBuried() {
         buried.abandoned(history::reaches).forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        val (kept, lost) = releasedByDraft.partition(history::reaches)
+        releasedByDraft = kept.toSet()
+        lost.forEach(::cancelDurableUpload)
+    }
 
     private fun StoryComposerUiState.withHistoryFlags(): StoryComposerUiState =
         copy(canUndo = history.canUndo, canRedo = history.canRedo)
@@ -664,6 +682,7 @@ class StoryComposerViewModel @Inject constructor(
                     storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                releasedByDraft = releasedByDraft - current.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
                 keepDraftUntilConfirmed(current, queued)
                 _state.update { StoryComposerUiState() }
                 resetHistory()
@@ -770,9 +789,10 @@ class StoryComposerViewModel @Inject constructor(
     override fun onCleared() {
         val held = buried.held
         (_state.value.pendingUploads + held).forEach { MediaIntake.release(it.item) }
-        if (held.isEmpty()) return
+        val doomed = held.map(PendingMediaUpload::cmid) + releasedByDraft
+        if (doomed.isEmpty()) return
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-            held.forEach { pending -> runCatching { mediaUploadQueue.cancel(pending.cmid) } }
+            doomed.forEach { cmid -> runCatching { mediaUploadQueue.cancel(cmid) } }
         }
     }
 
