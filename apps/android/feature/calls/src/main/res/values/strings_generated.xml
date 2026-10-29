@@ -1,5 +1,18 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_style_comic">Comic</string>
+    <string name="call_capture_style_cover">Cover</string>
+    <string name="call_capture_style_film">Film</string>
+    <string name="call_capture_style_gold">Gold</string>
+    <string name="call_capture_style_grid">Grid</string>
+    <string name="call_capture_style_heart">Heart</string>
+    <string name="call_capture_style_magazine">Magazine</string>
+    <string name="call_capture_style_neon">Neon</string>
+    <string name="call_capture_style_noir">Black &amp; white</string>
+    <string name="call_capture_style_polaroid">Polaroid</string>
+    <string name="call_capture_style_redcarpet">Red carpet</string>
+    <string name="call_capture_style_screen">Screen</string>
+    <string name="call_capture_style_strip">Photo booth</string>
     <string name="call_control_camera">Choose camera</string>
     <string name="call_control_camera_rail">My camera options</string>
     <string name="call_control_capture">Capture the call</string>
@@ -25,6 +38,7 @@
     <string name="call_decline_title">Decline with a message</string>
     <string name="call_detail_participants">Participants</string>
     <string name="call_detail_transcript">Transcript</string>
+    <string name="call_frames_classics">Classics</string>
     <string name="call_frames_mood_corporate">Corporate</string>
     <string name="call_frames_mood_deconnecte">Unplugged</string>
     <string name="call_frames_mood_distingue">Distinguished</string>
@@ -59,6 +73,7 @@
     <string name="call_live_frame_none">No frame</string>
     <string name="call_live_frame_not_proposed">The frame is applied on your side but couldn\'t be offered</string>
     <string name="call_live_frame_proposal">%1$s suggests the “%2$s” frame</string>
+    <string name="call_mode_montage_title">Call montage</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Opens the conversation while keeping the call active</string>
     <string name="call_recording_accept">Accept</string>

@@ -41,8 +41,7 @@ class CallLiveFrameUiTest {
         assertThat(CallLiveFrameReply.DECLINED.wire).isEqualTo("declined")
     }
 
-    @Test
-    fun `le choix du cadre propose Aucun cadre puis les cadres en direct, et en toucher un l'applique`() {
+    private fun liveFrames(): Pair<me.meeshy.sdk.socket.CallSocialSignalManager, CallLiveFrameController> {
         val social = io.mockk.mockk<me.meeshy.sdk.socket.CallSocialSignalManager> {
             io.mockk.every { frameSelected } returns kotlinx.coroutines.flow.MutableSharedFlow()
             io.mockk.coEvery { selectCallLiveFrame(any(), any(), any(), any()) } returns Result.success(Unit)
@@ -55,16 +54,57 @@ class CallLiveFrameUiTest {
             me.meeshy.sdk.model.call.CallState.Idle, me.meeshy.sdk.model.call.CallState.Connected,
             CallSessionInfo("call-1", CallConfig.EMPTY),
         )
-        val first = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.frames(
-            me.meeshy.sdk.model.call.frames.CallLiveFrameRule.moods().first(),
-        ).first()
-        rule.setContent { MeeshyTheme { CallLiveFramePicker(controller, peerName = "Bob", onClose = {}) } }
+        return social to controller
+    }
+
+    private fun capture() = CallCaptureController(
+        frames = io.mockk.mockk(relaxed = true),
+        painter = { _, _, _, _ -> null },
+        saver = io.mockk.mockk(relaxed = true),
+        recorders = { io.mockk.mockk(relaxed = true) },
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+        clock = { 0L },
+        stamp = { "STAMP" },
+    )
+
+    @Test
+    fun `le montage ouvre sur les Classiques et leurs treize montages, et en toucher un le choisit pour la capture`() {
+        val (_, controller) = liveFrames()
+        val capture = capture()
+        rule.setContent { MeeshyTheme { CallMontagePicker(controller, capture, peerName = "Bob", onClose = {}) } }
+
+        rule.onNodeWithText("Classics").assertExists()
+        rule.onNodeWithText("Call montage").assertExists()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Screen")).assertExists()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Gold")).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitForIdle()
+
+        assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, controller.state.value.frameId))
+            .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Classic(me.meeshy.sdk.model.call.montage.CallMontageStyle.GOLD))
+        assertThat(controller.state.value.frameId).isNull()
+        controller.onCleared()
+    }
+
+    @Test
+    fun `une ambiance propose Aucun cadre puis les cadres en direct, et en toucher un l'applique et le capture`() {
+        val (social, controller) = liveFrames()
+        val capture = capture()
+        capture.pickClassic(me.meeshy.sdk.model.call.montage.CallMontageStyle.HEART)
+        val mood = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.moods().first()
+        val first = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.frames(mood).first()
+        rule.setContent { MeeshyTheme { CallMontagePicker(controller, capture, peerName = "Bob", onClose = {}) } }
+        capture.show(me.meeshy.sdk.model.call.montage.CallMontageMoodChip.Mood(mood))
+        rule.waitForIdle()
+
         rule.onNodeWithText("No frame").assertExists()
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Close")).assertExists()
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Minimize call")).assertDoesNotExist()
         rule.onNode(androidx.compose.ui.test.hasContentDescription(first.name)).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
+
         assertThat(controller.state.value.frameId).isEqualTo(first.id)
+        assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, controller.state.value.frameId))
+            .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Frame(first.id))
         io.mockk.coVerify { social.selectCallLiveFrame("call-1", first.id, any(), null) }
         controller.onCleared()
     }

@@ -1,5 +1,18 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_style_comic">Cómic</string>
+    <string name="call_capture_style_cover">Portada</string>
+    <string name="call_capture_style_film">Película</string>
+    <string name="call_capture_style_gold">Oro</string>
+    <string name="call_capture_style_grid">Mosaico</string>
+    <string name="call_capture_style_heart">Corazón</string>
+    <string name="call_capture_style_magazine">Revista</string>
+    <string name="call_capture_style_neon">Neón</string>
+    <string name="call_capture_style_noir">Blanco y negro</string>
+    <string name="call_capture_style_polaroid">Polaroid</string>
+    <string name="call_capture_style_redcarpet">Alfombra roja</string>
+    <string name="call_capture_style_screen">Pantalla</string>
+    <string name="call_capture_style_strip">Fotomatón</string>
     <string name="call_control_camera">Elegir cámara</string>
     <string name="call_control_camera_rail">Opciones de mi cámara</string>
     <string name="call_control_capture">Capturar la llamada</string>
@@ -25,6 +38,7 @@
     <string name="call_decline_title">Rechazar con un mensaje</string>
     <string name="call_detail_participants">Participantes</string>
     <string name="call_detail_transcript">Transcripción</string>
+    <string name="call_frames_classics">Clásicos</string>
     <string name="call_frames_mood_corporate">Corporativo</string>
     <string name="call_frames_mood_deconnecte">Desconectado</string>
     <string name="call_frames_mood_distingue">Distinguido</string>
@@ -59,6 +73,7 @@
     <string name="call_live_frame_none">Sin marco</string>
     <string name="call_live_frame_not_proposed">El marco se aplica en tu pantalla, pero no se pudo proponer</string>
     <string name="call_live_frame_proposal">%1$s te propone el marco «%2$s»</string>
+    <string name="call_mode_montage_title">Montaje de la llamada</string>
     <string name="call_open_conversation">Conversación</string>
     <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>

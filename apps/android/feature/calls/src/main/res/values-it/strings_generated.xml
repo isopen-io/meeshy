@@ -1,5 +1,18 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_style_comic">Fumetto</string>
+    <string name="call_capture_style_cover">Copertina</string>
+    <string name="call_capture_style_film">Pellicola</string>
+    <string name="call_capture_style_gold">Oro</string>
+    <string name="call_capture_style_grid">Mosaico</string>
+    <string name="call_capture_style_heart">Cuore</string>
+    <string name="call_capture_style_magazine">Rivista</string>
+    <string name="call_capture_style_neon">Neon</string>
+    <string name="call_capture_style_noir">Bianco e nero</string>
+    <string name="call_capture_style_polaroid">Polaroid</string>
+    <string name="call_capture_style_redcarpet">Red carpet</string>
+    <string name="call_capture_style_screen">Schermo</string>
+    <string name="call_capture_style_strip">Cabina foto</string>
     <string name="call_control_camera">Scegli la fotocamera</string>
     <string name="call_control_camera_rail">Opzioni della mia fotocamera</string>
     <string name="call_control_capture">Cattura la chiamata</string>
@@ -25,6 +38,7 @@
     <string name="call_decline_title">Rifiuta con un messaggio</string>
     <string name="call_detail_participants">Partecipanti</string>
     <string name="call_detail_transcript">Trascrizione</string>
+    <string name="call_frames_classics">Classici</string>
     <string name="call_frames_mood_corporate">Aziendale</string>
     <string name="call_frames_mood_deconnecte">Staccato</string>
     <string name="call_frames_mood_distingue">Raffinato</string>
@@ -59,6 +73,7 @@
     <string name="call_live_frame_none">Nessuna cornice</string>
     <string name="call_live_frame_not_proposed">La cornice è applicata da te, ma non è stato possibile proporla</string>
     <string name="call_live_frame_proposal">%1$s ti propone la cornice «%2$s»</string>
+    <string name="call_mode_montage_title">Montaggio della chiamata</string>
     <string name="call_open_conversation">Conversazione</string>
     <string name="call_open_conversation_hint">Apre la conversazione mantenendo la chiamata attiva</string>
     <string name="call_recording_accept">Accetta</string>

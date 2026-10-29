@@ -1,8 +1,6 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,9 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -24,60 +19,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import java.text.DateFormat
-import java.util.Date
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.WebRtcEngine
-import me.meeshy.sdk.call.frames.CallFramePortrait
-import me.meeshy.sdk.call.frames.CallFrameRenderer
 import me.meeshy.sdk.model.call.CallLiveFrameReply
-import me.meeshy.sdk.model.call.frames.CallFrameDesign
-import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
-import me.meeshy.sdk.model.call.frames.CallFrameStyleRule
-import me.meeshy.sdk.model.call.frames.CallFrameTexts
 import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.frames.CallLiveFrameSuspension
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.VideoTrack
 
 private const val ANSWER_LINGER_MILLIS = 4_000L
 private val STATUS_TOP = 68.dp
-private val THUMB_WIDTH = 72.dp
-private val THUMB_HEIGHT = 128.dp
 
 /**
  * Le cadre en direct autour des deux vidéos ET ce qui se dit à son sujet : la proposition de l'autre
@@ -272,167 +246,4 @@ internal fun CallLiveFrameNotice(text: String, modifier: Modifier = Modifier) {
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
             .semantics(mergeDescendants = true) { },
     )
-}
-
-/**
- * Le choix du cadre en direct (le mode « Capturer l'appel », comme sur iOS) : « Aucun cadre », puis les cadres
- * d'une ambiance, chacun en vignette. Toucher un cadre l'applique tout de suite chez moi et le propose à l'autre.
- */
-@Composable
-internal fun CallLiveFramePicker(
-    controller: CallLiveFrameController,
-    peerName: String,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val state by controller.state.collectAsState()
-    val moods = remember { CallLiveFrameRule.moods() }
-    var mood by remember(moods) { mutableStateOf(moods.firstOrNull()) }
-    val frames = remember(mood) { CallLiveFrameRule.frames(mood) }
-    val people = remember(peerName, state.remoteSharedName) { controller.people(peerName, state.remoteSharedName) }
-    val haptics = LocalHapticFeedback.current
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = MeeshyRadius.xl, topEnd = MeeshyRadius.xl))
-            .background(Color.Black.copy(alpha = 0.72f))
-            .padding(top = MeeshySpacing.md, bottom = MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        Row(Modifier.padding(horizontal = MeeshySpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.call_live_frame_label),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = CallPalette.Ink,
-                modifier = Modifier.weight(1f),
-            )
-            CallPillButton(
-                icon = MeeshyIcons.Close,
-                kind = CallPillKind.Normal,
-                label = stringResource(R.string.call_panel_close),
-                onClick = onClose,
-                diameter = 40.dp,
-            )
-        }
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            items(moods) { m -> MoodChip(m, selected = m == mood) { mood = m } }
-        }
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            item {
-                FrameTile(label = stringResource(R.string.call_live_frame_none), selected = state.frameId == null, thumb = null, people = people) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    controller.apply(null)
-                }
-            }
-            items(frames, key = { it.id }) { design ->
-                val selected = state.frameId?.let(CallFrameStyleRule::baseId) == design.id
-                FrameTile(label = design.name, selected = selected, thumb = design, people = people, chosen = state.frameId, onDecline = { id ->
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    controller.apply(id)
-                }) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    controller.apply(design.id)
-                }
-            }
-        }
-        Text(
-            stringResource(R.string.call_live_frame_hold_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = CallPalette.InkSecondary,
-            modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
-        )
-    }
-}
-
-@Composable
-private fun MoodChip(mood: CallFrameMood, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = stringResource(moodLabel(mood)),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink,
-        modifier = Modifier
-            .defaultMinSizeForTarget()
-            .clip(CircleShape)
-            .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .semantics { this.selected = selected },
-    )
-}
-
-private fun Modifier.defaultMinSizeForTarget(): Modifier = this.height(40.dp)
-
-@Composable
-private fun FrameTile(
-    label: String,
-    selected: Boolean,
-    thumb: CallFrameDesign?,
-    people: List<CallFramePerson>,
-    chosen: String? = null,
-    onDecline: (String) -> Unit = {},
-    onClick: () -> Unit,
-) {
-    val declinations = remember(thumb?.id) { thumb?.let { CallFrameStyleRule.declinations(it.id) }.orEmpty() }
-    val shape = RoundedCornerShape(MeeshyRadius.md)
-    Column(
-        Modifier
-            .width(THUMB_WIDTH + 8.dp)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.selected = selected; contentDescription = label },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        Box(
-            Modifier
-                .size(THUMB_WIDTH, THUMB_HEIGHT)
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = 0.3f), shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                thumb == null -> Unit
-                selected && declinations.size > 1 -> CallFrameDeclinationPager(
-                    declinations = declinations,
-                    selected = chosen ?: thumb.id,
-                    onSelect = onDecline,
-                ) { design -> FrameThumbnail(design, people) }
-                else -> FrameThumbnail(thumb, people)
-            }
-        }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = CallPalette.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerson>) {
-    val density = LocalDensity.current
-    val w = with(density) { THUMB_WIDTH.roundToPx() }
-    val h = with(density) { THUMB_HEIGHT.roundToPx() }
-    val locale = LocalConfiguration.current.locales[0]
-    val date = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date()) }
-    val bitmap by produceState<ImageBitmap?>(null, design.id, w, h, people, date) {
-        val texts = CallFrameTexts(groupName = null, isGroup = false, date = date, accentHex = null)
-        value = withContext(Dispatchers.Default) {
-            CallFrameRenderer.render(design, people.map { CallFramePortrait(it.id, it.name, it.handle, it.isSelf, null) }, texts, w, h)?.asImageBitmap()
-        }
-    }
-    bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
-}
-
-private fun moodLabel(mood: CallFrameMood): Int = when (mood) {
-    CallFrameMood.CORPORATE -> R.string.call_frames_mood_corporate
-    CallFrameMood.DECONNECTE -> R.string.call_frames_mood_deconnecte
-    CallFrameMood.DISTINGUE -> R.string.call_frames_mood_distingue
-    CallFrameMood.ELEGANT -> R.string.call_frames_mood_elegant
-    CallFrameMood.FANTASTIQUE -> R.string.call_frames_mood_fantastique
-    CallFrameMood.FEERIQUE -> R.string.call_frames_mood_feerique
-    CallFrameMood.FUTURISTE -> R.string.call_frames_mood_futuriste
-    CallFrameMood.GLAUQUE -> R.string.call_frames_mood_glauque
-    CallFrameMood.HORS_NORME -> R.string.call_frames_mood_hors_norme
-    CallFrameMood.JOVIAL -> R.string.call_frames_mood_jovial
-    CallFrameMood.MORBIDE -> R.string.call_frames_mood_morbide
-    CallFrameMood.SIGNATURE -> R.string.call_frames_mood_signature
 }

@@ -1,6 +1,8 @@
 package me.meeshy.app.calls
 
 import android.content.Context
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -33,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -54,11 +58,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.call.montage.CallCaptureLook
+import me.meeshy.sdk.model.call.montage.CallCapturePreviewRule
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
 import me.meeshy.sdk.model.call.montage.CallModeGesture
 import me.meeshy.sdk.model.call.montage.CallModeGestureOutcome
 import me.meeshy.sdk.model.call.montage.CallModeGestureRule
+import me.meeshy.sdk.model.call.montage.CallMontagePickRule
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -71,8 +78,9 @@ private val STOP_SQUARE = 24.dp
 
 /**
  * Le mode « Capturer l'appel » (iOS `CallScreenMode.montage`) : la scène qui SE déclenche, sous le choix du
- * cadre en direct. Ce que la capture peint suit ce que l'écran montre : le cadre appliqué, les deux
- * personnes dans l'ordre du cadre, chacune branchée sur sa piste.
+ * montage. Ce que la capture peint suit ce que l'écran montre : un classique choisi (#13690), peint en
+ * aperçu par-dessus l'appel comme `CallMontageFrameStage` d'iOS, sinon le cadre en direct qui tient déjà
+ * la scène ; les deux personnes dans l'ordre du cadre, chacune branchée sur sa piste.
  */
 @Composable
 internal fun CallMontageMode(
@@ -85,22 +93,55 @@ internal fun CallMontageMode(
 ) {
     val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
+    val capture = captureViewModel.controller
     val frame by frameViewModel.controller.state.collectAsStateWithLifecycle()
+    val pick by capture.pick.collectAsStateWithLifecycle()
+    val constrained = rememberCallDeviceConstrained()
     val people = remember(state.peerName, frame.remoteSharedName) { frameViewModel.controller.people(state.peerName, frame.remoteSharedName) }
-    val scene = remember(people, frame.frameId, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
+    val scene = remember(people, pick, frame.frameId, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
         CallCaptureScene(
-            look = CallCaptureSceneRule.look(frame.frameId, people.size),
+            look = CallMontagePickRule.look(pick, frame.frameId, people.size),
             subjects = CallCaptureSceneRule.duo(people, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff),
         )
     }
+    val liveFrameShown = CallLiveFrameStage.framesTheDuo(frame.frameId, state.isVideoCall, state.showsConnectedLayout, constrained, reduceMotion)
+    val request by rememberUpdatedState(CallCapturePreviewRequest(scene, liveFrameShown))
     val tracks = remember(people, localTrack, remoteTrack) { people.associate { it.id to if (it.isSelf) localTrack else remoteTrack } }
-    CallMontageCaptureLayer(captureViewModel.controller, scene, tracks, reduceMotion, Modifier.fillMaxSize())
-    CallLiveFramePicker(
+    LaunchedEffect(capture) { capture.startPreview { request } }
+    LaunchedEffect(capture, scene.look, liveFrameShown) { capture.refreshSoon() }
+    if (CallCapturePreviewRule.paintsPreview(scene.look, liveFrameShown)) {
+        CallMontagePaintedStage(capture, scene.look, Modifier.fillMaxSize())
+    }
+    CallMontageCaptureLayer(capture, scene, tracks, reduceMotion, Modifier.fillMaxSize())
+    CallMontagePicker(
         controller = frameViewModel.controller,
+        capture = capture,
         peerName = state.peerName,
         onClose = onClose,
         modifier = pickerModifier,
     )
+}
+
+/**
+ * La scène peinte du montage choisi, quelques fois par seconde (iOS `CallMontageStage`) : l'aperçu s'il
+ * porte ce rendu, sinon la vignette du classique choisi en attendant, sinon rien — l'appel reste visible
+ * dessous, jamais un spinner.
+ */
+@Composable
+private fun CallMontagePaintedStage(capture: CallCaptureController, look: CallCaptureLook, modifier: Modifier) {
+    val previews by capture.previews.collectAsStateWithLifecycle()
+    val image = CallMontageStageImage.pick(previews, look) ?: return
+    Box(modifier.background(Color.Black).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        Image(image.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+    }
+}
+
+/** L'image que la scène peinte montre pour [look] : l'aperçu de ce rendu, sinon la vignette du classique choisi. */
+internal object CallMontageStageImage {
+    fun pick(previews: CallCapturePreviews, look: CallCaptureLook): Bitmap? {
+        if (previews.look == look) previews.preview?.let { return it }
+        return (look as? CallCaptureLook.Classic)?.let { previews.thumbnails[it.style] }
+    }
 }
 
 /**

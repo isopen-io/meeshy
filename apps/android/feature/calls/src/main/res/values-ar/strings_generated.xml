@@ -1,5 +1,18 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_style_comic">قصة مصورة</string>
+    <string name="call_capture_style_cover">غلاف</string>
+    <string name="call_capture_style_film">شريط فيلم</string>
+    <string name="call_capture_style_gold">ذهبي</string>
+    <string name="call_capture_style_grid">شبكة</string>
+    <string name="call_capture_style_heart">قلب</string>
+    <string name="call_capture_style_magazine">مجلة</string>
+    <string name="call_capture_style_neon">نيون</string>
+    <string name="call_capture_style_noir">أبيض وأسود</string>
+    <string name="call_capture_style_polaroid">بولارويد</string>
+    <string name="call_capture_style_redcarpet">السجادة الحمراء</string>
+    <string name="call_capture_style_screen">الشاشة</string>
+    <string name="call_capture_style_strip">كشك الصور</string>
     <string name="call_control_camera">اختيار الكاميرا</string>
     <string name="call_control_camera_rail">خيارات الكاميرا الخاصة بي</string>
     <string name="call_control_capture">التقاط المكالمة</string>
@@ -25,6 +38,7 @@
     <string name="call_decline_title">الرفض مع رسالة</string>
     <string name="call_detail_participants">المشاركون</string>
     <string name="call_detail_transcript">النص</string>
+    <string name="call_frames_classics">كلاسيكيات</string>
     <string name="call_frames_mood_corporate">مؤسسي</string>
     <string name="call_frames_mood_deconnecte">بلا اتصال</string>
     <string name="call_frames_mood_distingue">راقٍ</string>
@@ -59,6 +73,7 @@
     <string name="call_live_frame_none">بلا إطار</string>
     <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
     <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
+    <string name="call_mode_montage_title">مونتاج المكالمة</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>

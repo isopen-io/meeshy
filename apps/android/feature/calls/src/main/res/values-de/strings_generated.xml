@@ -1,5 +1,18 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_style_comic">Comic</string>
+    <string name="call_capture_style_cover">Titelseite</string>
+    <string name="call_capture_style_film">Film</string>
+    <string name="call_capture_style_gold">Gold</string>
+    <string name="call_capture_style_grid">Raster</string>
+    <string name="call_capture_style_heart">Herz</string>
+    <string name="call_capture_style_magazine">Magazin</string>
+    <string name="call_capture_style_neon">Neon</string>
+    <string name="call_capture_style_noir">Schwarz-Weiß</string>
+    <string name="call_capture_style_polaroid">Polaroid</string>
+    <string name="call_capture_style_redcarpet">Roter Teppich</string>
+    <string name="call_capture_style_screen">Bildschirm</string>
+    <string name="call_capture_style_strip">Fotoautomat</string>
     <string name="call_control_camera">Kamera auswählen</string>
     <string name="call_control_camera_rail">Optionen meiner Kamera</string>
     <string name="call_control_capture">Anruf festhalten</string>
@@ -25,6 +38,7 @@
     <string name="call_decline_title">Mit Nachricht ablehnen</string>
     <string name="call_detail_participants">Teilnehmende</string>
     <string name="call_detail_transcript">Transkription</string>
+    <string name="call_frames_classics">Klassiker</string>
     <string name="call_frames_mood_corporate">Business</string>
     <string name="call_frames_mood_deconnecte">Abgeschaltet</string>
     <string name="call_frames_mood_distingue">Vornehm</string>
@@ -59,6 +73,7 @@
     <string name="call_live_frame_none">Kein Rahmen</string>
     <string name="call_live_frame_not_proposed">Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden</string>
     <string name="call_live_frame_proposal">%1$s schlägt dir den Rahmen „%2$s“ vor</string>
+    <string name="call_mode_montage_title">Anrufcollage</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>
