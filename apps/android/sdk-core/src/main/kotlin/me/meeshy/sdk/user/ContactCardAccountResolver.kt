@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.contacts.ContactRelation
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ContactResolveRequest
 import me.meeshy.sdk.net.api.PublicContactAccount
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.commitOrWrite
 
 /** Couture du serveur : `POST /contacts/resolve` ne rend que des comptes INSCRITS, avec la relation du lecteur. */
 fun interface ContactAccountsSource {
@@ -21,6 +24,10 @@ fun interface ContactAccountsSource {
  * le serveur ne retient pas (#9225) ; seuls les comptes inscrits reviennent. La résolution ne JETTE jamais : un
  * refus ou un réseau absent rend le dernier résultat connu, ou une liste vide — la carte s'affiche alors sans
  * section Meeshy, et un échec n'est pas rejoué avant [failureBackoffMillis].
+ *
+ * **Par compte** (#13560) : les relations résolues (« vous », « ami », « demande envoyée ») sont celles du compte qui
+ * a demandé. [clear] vide tout à la fin de session ([PerAccountCache]), et une réponse ne s'écrit que sous le ticket
+ * pris AVANT la requête ([AccountFence]) : celle d'un compte fermé entre-temps n'est ni gardée ni servie.
  */
 @Singleton
 class ContactCardAccountResolver internal constructor(
@@ -29,9 +36,10 @@ class ContactCardAccountResolver internal constructor(
     private val failureBackoffMillis: Long,
     private val capacity: Int,
     private val clock: () -> Long,
-) {
+    private val fence: AccountFence? = null,
+) : PerAccountCache {
     @Inject
-    constructor(repository: ContactsBookRepository) : this(
+    constructor(repository: ContactsBookRepository, fence: AccountFence) : this(
         source = ContactAccountsSource { request ->
             repository.resolveRegistered(request.phones, request.emails, request.defaultCountry)
         },
@@ -39,6 +47,7 @@ class ContactCardAccountResolver internal constructor(
         failureBackoffMillis = FAILURE_BACKOFF_MILLIS,
         capacity = CAPACITY,
         clock = System::currentTimeMillis,
+        fence = fence,
     )
 
     private class Entry(val accounts: List<PublicContactAccount>, val storedAt: Long)
@@ -59,19 +68,23 @@ class ContactCardAccountResolver internal constructor(
             val failedAt = failures[request]
             if (failedAt != null && now - failedAt < failureBackoffMillis) return entry?.accounts.orEmpty()
         }
-        return when (val result = source.resolve(request)) {
-            is NetworkResult.Success -> synchronized(lock) {
-                failures.remove(request)
-                entries.remove(request)
-                entries[request] = Entry(result.data, clock())
-                while (entries.size > capacity) entries.remove(entries.keys.first())
-                result.data
+        val ticket = fence?.currentTicket()
+        val result = source.resolve(request)
+        return fence.commitOrWrite(ticket) {
+            when (result) {
+                is NetworkResult.Success -> synchronized(lock) {
+                    failures.remove(request)
+                    entries.remove(request)
+                    entries[request] = Entry(result.data, clock())
+                    while (entries.size > capacity) entries.remove(entries.keys.first())
+                    result.data
+                }
+                is NetworkResult.Failure -> synchronized(lock) {
+                    failures[request] = clock()
+                    entries[request]?.accounts.orEmpty()
+                }
             }
-            is NetworkResult.Failure -> synchronized(lock) {
-                failures[request] = clock()
-                entries[request]?.accounts.orEmpty()
-            }
-        }
+        }.orEmpty()
     }
 
     /** Applique localement un changement de relation (demande envoyée, acceptée) à toute entrée qui porte ce compte. */
@@ -86,8 +99,8 @@ class ContactCardAccountResolver internal constructor(
         }
     }
 
-    /** Déconnexion : les relations résolues (« vous », « ami », « demande envoyée ») sont celles du compte sortant. */
-    fun purge() = synchronized(lock) {
+    /** Fin de session : les relations résolues (« vous », « ami », « demande envoyée ») sont celles du compte sortant. */
+    override suspend fun clear() = synchronized(lock) {
         entries.clear()
         failures.clear()
     }

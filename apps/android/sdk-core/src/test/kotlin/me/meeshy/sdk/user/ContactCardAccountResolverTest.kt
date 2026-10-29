@@ -108,7 +108,7 @@ class ContactCardAccountResolverTest {
         val h = Harness(ok(account("a")))
         val req = request("+33600000001")
         h.resolver.resolve(req)
-        h.resolver.purge()
+        h.resolver.clear()
         assertThat(h.resolver.cached(req)).isNull()
     }
 }
