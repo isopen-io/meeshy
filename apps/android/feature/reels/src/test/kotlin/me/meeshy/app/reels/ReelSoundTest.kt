@@ -48,8 +48,17 @@ class ReelSoundTest {
         val base = reel("video/mp4")
 
         assertThat(ReelSound.showsMuteButton(withScene(base, slide(foregroundAudio = "u")), null)).isTrue()
-        assertThat(ReelSound.showsMuteButton(withScene(base, slide(backgroundVideo = "u")), null)).isTrue()
         assertThat(ReelSound.showsMuteButton(withScene(base, slide()), probedAudioTrack = true)).isFalse()
+    }
+
+    @Test
+    fun `a scene whose only sound could be its background video waits for that video's audio track`() {
+        val scene = withScene(reel("video/mp4"), slide(backgroundVideo = "u"))
+
+        assertThat(ReelSound.showsMuteButton(scene, probedAudioTrack = null)).isFalse()
+        assertThat(ReelSound.showsMuteButton(scene, probedAudioTrack = false)).isFalse()
+        assertThat(ReelSound.showsMuteButton(scene, probedAudioTrack = true)).isTrue()
+        assertThat(ReelSound.showsMuteButton(withScene(reel("video/mp4"), slide(foregroundAudio = "a", backgroundVideo = "u")), false)).isTrue()
     }
 
     @Test

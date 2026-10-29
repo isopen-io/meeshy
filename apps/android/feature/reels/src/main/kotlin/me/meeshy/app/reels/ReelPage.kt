@@ -138,6 +138,8 @@ internal fun ReelPage(
                     loads = loadsMedia,
                     rewindWhenIdle = !isElected,
                     onAudioFocusLost = { paused = true },
+                    // La vidéo de fond de la scène se sonde comme celle d'un réel simple : le bouton muet l'attend.
+                    onBackgroundPlayer = { handle -> player = handle },
                     modifier = Modifier.fillMaxSize(),
                 )
             } else ReelMedia(
