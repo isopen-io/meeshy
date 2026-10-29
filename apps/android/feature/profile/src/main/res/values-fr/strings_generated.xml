@@ -35,6 +35,7 @@
     <string name="profile_decor_image_hint">Choisir une image de bannière</string>
     <string name="profile_decor_none">Aucun</string>
     <string name="profile_decor_ring_section">Contour d\'avatar</string>
+    <string name="profile_decor_shop">Plus dans la boutique</string>
     <string name="profile_decor_subtitle">Visibles de tous sur ton profil</string>
     <string name="profile_decor_title">Contour et bannière</string>
     <string name="profile_detail_country">Pays</string>

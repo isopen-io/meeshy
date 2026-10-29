@@ -35,6 +35,7 @@
     <string name="profile_decor_image_hint">Escolher uma imagem de capa</string>
     <string name="profile_decor_none">Nenhum</string>
     <string name="profile_decor_ring_section">Contorno do avatar</string>
+    <string name="profile_decor_shop">Mais na loja</string>
     <string name="profile_decor_subtitle">Visíveis para todos no seu perfil</string>
     <string name="profile_decor_title">Contorno e banner</string>
     <string name="profile_detail_country">País</string>
