@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -74,5 +75,67 @@ class StoryPlacedMediaTest {
         )
 
         assertThat(deck.removeMedia("m1").slides.single().placedMedia.map { it.mediaId }).containsExactly("m2")
+    }
+}
+
+@RunWith(JUnit4::class)
+class StoryPlacedMediaPublicationTest {
+
+    private fun image(id: String) = StoryMediaObject(id = id, postMediaId = id, mediaType = "image")
+    private fun video(id: String) = StoryMediaObject(id = id, postMediaId = id, mediaType = "video")
+
+    @Test
+    fun `each placed media rides mediaObjects beside the background`() {
+        val draft = StoryComposerDraft(
+            mediaIds = listOf("bg", "m1"),
+            backgroundMedia = StoryBackgroundMedia("bg", "https://x/bg.jpg", "image/jpeg", null),
+            placedMedia = listOf(StoryPlacedMedia("m1", 0.2f, 0.3f, 1.5f, 10f).toMediaObject("https://x/m1.jpg", "image/jpeg", null)),
+        )
+
+        val objects = draft.toCreateStoryRequest("fr").storyEffects!!.mediaObjects!!
+
+        assertThat(objects.map { it.id to it.isBackground }).containsExactly("bg" to true, "m1" to false).inOrder()
+        assertThat(objects.last().x).isWithin(1e-6).of(0.2)
+    }
+
+    @Test
+    fun `a story with only placed media still carries them`() {
+        val draft = StoryComposerDraft(mediaIds = listOf("m1"), placedMedia = listOf(image("m1")))
+
+        assertThat(draft.toCreateStoryRequest("fr").storyEffects!!.mediaObjects!!.map { it.id }).containsExactly("m1")
+    }
+
+    @Test
+    fun `no placed media and no background keeps the effects untouched`() {
+        assertThat(StoryComposerDraft(text = "a").toCreateStoryRequest("fr").storyEffects).isNull()
+    }
+
+    @Test
+    fun `the scene never exceeds fifty images or fifty videos`() {
+        val placed = (1..60).map { image("i$it") } + (1..60).map { video("v$it") }
+
+        val kept = StoryPublishPlacedMedia.withinCaps(image("bg"), placed)
+
+        assertThat(kept.count { it.mediaType == "image" }).isEqualTo(50)
+        assertThat(kept.count { it.mediaType == "video" }).isEqualTo(50)
+        assertThat(kept.first().id).isEqualTo("bg")
+    }
+
+    @Test
+    fun `resolve skips the background, unknown and detached media`() {
+        val slide = StorySlide(
+            id = "s", mediaIds = listOf("bg", "m1"), backgroundMediaId = "bg",
+            placedMedia = listOf(StoryPlacedMedia("bg"), StoryPlacedMedia("m1"), StoryPlacedMedia("gone")),
+        )
+        val state = StoryComposerUiState(
+            deck = StorySlideDeck(listOf(slide), "s"),
+            attachments = listOf(UploadedMedia(id = "m1", url = "https://x/m1.mp4", mimeType = "video/mp4", fileSize = 1L, width = null, height = null, durationMs = 4000L, thumbnailUrl = null)),
+        )
+
+        val objects = StoryPublishPlacedMedia.resolve(slide, state)
+
+        assertThat(objects.map { it.id }).containsExactly("m1")
+        assertThat(objects.single().mediaType).isEqualTo("video")
+        assertThat(objects.single().duration).isEqualTo(4.0)
     }
 }
