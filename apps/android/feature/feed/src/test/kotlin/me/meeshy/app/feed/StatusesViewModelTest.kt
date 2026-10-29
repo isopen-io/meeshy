@@ -304,6 +304,78 @@ class StatusesViewModelTest {
     }
 
     @Test
+    fun `a republication the gateway refuses as wider than its source is announced`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("Repost audience PUBLIC is broader", code = "REPOST_AUDIENCE_WIDENING", httpStatus = 403))
+
+        val vm = viewModel()
+        vm.repostAudienceRefused.test {
+            vm.setStatus(emoji = "🔥", repostOfId = "src", visibility = "PUBLIC")
+            awaitItem()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `any other refusal does not claim the audience was too wide`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("nope", code = "FORBIDDEN", httpStatus = 403))
+
+        val vm = viewModel()
+        vm.repostAudienceRefused.test {
+            vm.setStatus(emoji = "🔥", repostOfId = "src")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a reaction withdrawn from another device can be placed again`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        statusUnreactedFlow.emit(SocketStatusUnreactedData(statusId = "a", userId = "me-id", emoji = "❤️"))
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a reaction on a status the served bar no longer carries can be placed again once it is back`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returnsMany listOf(
+            page(entry("a", userId = "other"), hasMore = false),
+            page(entry("a", userId = "other"), hasMore = false),
+        )
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        vm.refresh()
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a deleted status forgets the reactions placed on it`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        statusDeletedFlow.emit(SocketStatusDeletedData(statusId = "a"))
+        statusCreatedFlow.emit(SocketStatusCreatedData(status = apiStatus(id = "a", userId = "other")))
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
     fun `clearStatus optimistically drops the own status and persists it`() = runTest {
         coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
             page(entry("mine", userId = "me-id"), entry("a", userId = "other"), hasMore = false)

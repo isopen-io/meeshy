@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -13,6 +14,7 @@ import me.meeshy.app.feed.MoodBubble
 import me.meeshy.app.feed.MoodBubbleModel
 import me.meeshy.app.feed.MoodLookup
 import me.meeshy.app.feed.MoodReactFailureToast
+import me.meeshy.app.feed.MoodRepostRefusedToast
 import me.meeshy.app.feed.StatusComposerDraft
 import me.meeshy.app.feed.StatusComposerSheet
 import me.meeshy.app.feed.StatusesViewModel
@@ -37,7 +39,7 @@ internal fun MeeshyStoryRail(
 ) {
     val statuses by statusesViewModel.state.collectAsStateWithLifecycle()
     val moods = remember(statuses.statuses, statuses.myStatus) { MoodLookup.from(statuses) }
-    var bubbleUserId by remember { mutableStateOf<String?>(null) }
+    var bubbleUserId by rememberSaveable { mutableStateOf<String?>(null) }
     var republishSeed by remember { mutableStateOf<StatusComposerDraft?>(null) }
 
     StoryTray(
@@ -60,6 +62,7 @@ internal fun MeeshyStoryRail(
         viewModel = storiesViewModel,
     )
     MoodReactFailureToast(statusesViewModel.reactFailed)
+    MoodRepostRefusedToast(statusesViewModel.repostAudienceRefused)
 
     val shown = bubbleUserId?.let(moods::entryOf)
     if (shown != null) {

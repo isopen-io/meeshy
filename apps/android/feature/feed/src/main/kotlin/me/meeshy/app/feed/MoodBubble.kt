@@ -1,6 +1,9 @@
 package me.meeshy.app.feed
 
 import androidx.compose.foundation.background
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -48,7 +51,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * La bulle de l'humeur d'un ami, ouverte par un appui sur son badge dans le rail de stories (iOS
  * `StatusBubbleOverlay`, #13662) : l'humeur, puis les trois gestes — réagir (rangée de réactions rapides),
  * republier, répondre. [onDwellEnd] part à la fermeture, quelle que soit la sortie ; l'application qui passe en
- * arrière-plan ferme la bulle, comme le retour système et le toucher extérieur — la durée de lecture ne court
+ * arrière-plan ferme la bulle (pas la rotation, qui recrée l'activité), comme le retour système et le toucher extérieur — la durée de lecture ne court
  * jamais écran éteint. Chaque cible tient dans 48 dp ; la rangée de réactions défile.
  */
 @Composable
@@ -59,9 +62,10 @@ fun MoodBubble(
     onReply: () -> Unit,
     onDismiss: () -> Unit,
     onDwellEnd: () -> Unit,
+    isChangingConfigurations: () -> Boolean = rememberIsChangingConfigurations(),
 ) {
     DisposableEffect(model.statusId) { onDispose(onDwellEnd) }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { onDismiss() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (!isChangingConfigurations()) onDismiss() }
     Popup(
         alignment = Alignment.Center,
         onDismissRequest = onDismiss,
@@ -178,6 +182,29 @@ private fun BubbleAction(label: String, icon: androidx.compose.ui.graphics.vecto
             fontWeight = FontWeight.Medium,
             color = MeeshyPalette.Indigo400,
         )
+    }
+}
+
+/** The activity is being recreated (rotation…): its ON_STOP is not a trip to the background (#13667). */
+@Composable
+private fun rememberIsChangingConfigurations(): () -> Boolean {
+    val context = LocalContext.current
+    return { context.findActivity()?.isChangingConfigurations == true }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/** Une republication refusée comme plus large que sa source se dit (403 `REPOST_AUDIENCE_WIDENING`, #13667). */
+@Composable
+fun MoodRepostRefusedToast(refusals: Flow<Unit>) {
+    val context = LocalContext.current
+    val message = stringResource(R.string.status_repost_audience_refused)
+    LaunchedEffect(refusals) {
+        refusals.collect { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
     }
 }
 

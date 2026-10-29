@@ -57,7 +57,11 @@ data class StatusComposerDraft(
     val repostOfId: String? = null,
     val viaUsername: String? = null,
     val repostAudioUrl: String? = null,
+    /** Audiences the author may pick; `null` = every one. A republication is capped by its source (#13667). */
+    val allowedVisibilities: List<StatusVisibility>? = null,
 ) {
+    /** The audiences the picker offers — the whole set, or the cap of a republication. */
+    val offeredVisibilities: List<StatusVisibility> get() = allowedVisibilities ?: StatusVisibility.entries
     /** The status body actually published — trimmed, `null` when nothing remains. */
     val trimmedContent: String? get() = text.trim().ifBlank { null }
 
@@ -110,7 +114,8 @@ data class StatusComposerDraft(
         if (StatusBarePublish.acceptsPicked(emoji)) copy(selectedEmoji = emoji) else this
 
     /** Choose the publish audience. */
-    fun withVisibility(value: StatusVisibility): StatusComposerDraft = copy(visibility = value)
+    fun withVisibility(value: StatusVisibility): StatusComposerDraft =
+        if (value in offeredVisibilities) copy(visibility = value) else this
 
     companion object {
         /**
@@ -120,14 +125,21 @@ data class StatusComposerDraft(
          * carried as the `via` attribution; a source with no mood emoji leaves nothing
          * selected (the user must pick one before it can publish). The body flows through
          * [withText] so the [MAX_CHARS] invariant always holds.
+         *
+         * The audience starts on the original's and may only narrow (#13667): the gateway answers a
+         * wider repost with 403 `REPOST_AUDIENCE_WIDENING`. See [StatusRepostAudience].
          */
-        fun republish(source: StatusEntry): StatusComposerDraft =
-            StatusComposerDraft(
+        fun republish(source: StatusEntry): StatusComposerDraft {
+            val allowed = StatusRepostAudience.allowed(source.visibility)
+            return StatusComposerDraft(
                 selectedEmoji = source.moodEmoji.ifBlank { null },
+                visibility = allowed.first(),
                 repostOfId = source.id,
                 viaUsername = source.username,
                 repostAudioUrl = source.audioUrl,
+                allowedVisibilities = allowed,
             ).withText(source.content.orEmpty())
+        }
 
         /** Gateway content cap for a mood status (iOS clamps the field to 122). */
         const val MAX_CHARS = 122

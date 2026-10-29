@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="status_repost_audience_refused">لا يمكن إعادة نشر هذه الحالة لجمهور أوسع من جمهورها الأصلي. اختر الجمهور نفسه أو جمهورًا أضيق.</string>
+</resources>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="status_repost_audience_refused">Cette humeur ne peut pas être republiée pour une audience plus large que l\'originale. Choisissez la même audience ou une plus restreinte.</string>
+</resources>
