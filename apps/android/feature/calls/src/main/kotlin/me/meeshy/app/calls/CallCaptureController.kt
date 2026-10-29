@@ -2,21 +2,31 @@ package me.meeshy.app.calls
 
 import android.graphics.Bitmap
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureMachine
+import me.meeshy.sdk.model.call.montage.CallCapturePreviewRule
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSpec
 import me.meeshy.sdk.model.call.montage.CallCaptureState
 import me.meeshy.sdk.model.call.montage.CallCaptureStatus
 import me.meeshy.sdk.model.call.montage.CallCaptureSubject
+import me.meeshy.sdk.model.call.montage.CallMontageMoodChip
+import me.meeshy.sdk.model.call.montage.CallMontagePick
+import me.meeshy.sdk.model.call.montage.CallMontagePickRule
+import me.meeshy.sdk.model.call.montage.CallMontageStyle
 import org.webrtc.VideoTrack
 import timber.log.Timber
 
@@ -48,12 +58,27 @@ interface CallCaptureRecording {
     suspend fun cancel()
 }
 
+/** Ce que l'aperçu doit peindre à un tour : la scène, et si un cadre la montre déjà en direct. */
+data class CallCapturePreviewRequest(val scene: CallCaptureScene, val liveFrameShown: Boolean)
+
+/**
+ * L'aperçu peint du mode Montage (iOS `previewFeed` et `thumbnails`) : la scène dans le rendu [look]
+ * qu'elle porte, et les vignettes des classiques. Une image publiée n'est jamais recyclée : l'écran
+ * peut encore la dessiner.
+ */
+data class CallCapturePreviews(
+    val look: CallCaptureLook? = null,
+    val preview: Bitmap? = null,
+    val thumbnails: Map<CallMontageStyle, Bitmap> = emptyMap(),
+)
+
 /**
  * **LA CAPTURE D'UN APPEL** — jumelle de `CallCaptureController` (iOS, #8625) : deux tapes prennent une
  * photo du montage en cours (le cadre appliqué, sinon l'Écran classique) à pleine définition ; un appui
  * long filme le montage rendu à 15 images par seconde jusqu'au stop ; l'une et l'autre partent dans la
  * galerie. Les gardes et les issues sont la loi pure [CallCaptureMachine] ; ce contrôleur ne fait que
- * l'exécuter. Rien ne se publie au rythme des images : l'écran ne lit que [state].
+ * l'exécuter. L'état ne change pas au rythme des images : l'aperçu peint (#13690) se publie à part,
+ * dans [previews], et le choix du montage dans [pick].
  */
 class CallCaptureController(
     private val frames: CallCaptureFrameSource,
@@ -63,9 +88,20 @@ class CallCaptureController(
     private val scope: CoroutineScope,
     private val clock: () -> Long,
     private val stamp: () -> String,
+    private val paintContext: CoroutineContext = Dispatchers.Default,
 ) {
     private val _state = MutableStateFlow(CallCaptureState())
     val state: StateFlow<CallCaptureState> = _state.asStateFlow()
+
+    private val _pick = MutableStateFlow(CallMontagePick())
+    val pick: StateFlow<CallMontagePick> = _pick.asStateFlow()
+
+    private val _previews = MutableStateFlow(CallCapturePreviews())
+    val previews: StateFlow<CallCapturePreviews> = _previews.asStateFlow()
+
+    private var previewing: Job? = null
+    private var previewRequest: (() -> CallCapturePreviewRequest)? = null
+    private var previewsSinceThumbnails = 0
 
     private var recorder: CallCaptureRecording? = null
     private var recording: Job? = null
@@ -79,7 +115,85 @@ class CallCaptureController(
     /** Le mode se ferme : un film en cours s'enregistre (comme iOS), les pistes se débranchent. */
     fun stop() {
         if (_state.value.isRecording) scope.launch { stopRecording() }
+        previewing?.cancel()
+        previewing = null
+        previewRequest = null
+        previewsSinceThumbnails = 0
+        _previews.value = CallCapturePreviews()
         frames.detachAll()
+    }
+
+    /** Toucher une puce : « Classiques » reprend le dernier classique, une ambiance montre ses cadres. */
+    fun show(chip: CallMontageMoodChip) = _pick.update { CallMontagePickRule.showing(it, chip) }
+
+    fun pickClassic(style: CallMontageStyle) = _pick.update { CallMontagePickRule.pickingClassic(it, style) }
+
+    /** Un cadre (ou « Aucun cadre ») vient d'être touché : la capture suit de nouveau le cadre en direct. */
+    fun pickFrame() = _pick.update(CallMontagePickRule::pickingFrame)
+
+    /** L'aperçu tourne toutes les [CallCapturePreviewRule.INTERVAL_MILLIS] tant que le mode est ouvert ; [request] se relit à chaque tour. */
+    fun startPreview(request: () -> CallCapturePreviewRequest) {
+        previewRequest = request
+        if (previewing == null) previewing = previewLoop(request)
+    }
+
+    /** Le choix a changé : il se peint tout de suite, vignettes de son voisinage comprises (iOS `refreshSoon`). */
+    fun refreshSoon() {
+        val request = previewRequest ?: return
+        if (_state.value.isRecording) return
+        previewsSinceThumbnails = CallCapturePreviewRule.THUMBNAIL_EVERY_PREVIEWS
+        previewing?.cancel()
+        previewing = previewLoop(request)
+    }
+
+    private fun previewLoop(request: () -> CallCapturePreviewRequest): Job = scope.launch {
+        while (isActive) {
+            refreshPreview(request())
+            delay(CallCapturePreviewRule.INTERVAL_MILLIS)
+        }
+    }
+
+    suspend fun refreshPreview(request: CallCapturePreviewRequest) {
+        if (_state.value.isRecording) return
+        val scene = request.scene
+        val plan = CallCapturePreviewRule.plan(
+            look = scene.look,
+            liveFrameShown = request.liveFrameShown,
+            hasThumbnails = _previews.value.thumbnails.isNotEmpty(),
+            previewsSinceThumbnails = previewsSinceThumbnails,
+        )
+        previewsSinceThumbnails = if (plan.thumbnails.isEmpty()) previewsSinceThumbnails + 1 else 1
+        if (plan.isEmpty || scene.subjects.isEmpty()) return
+        val images = frames.snapshot(scene.subjects, CallCapturePreviewRule.MAX_DIMENSION)
+        val painted = try {
+            withContext(paintContext) {
+                val preview = if (plan.preview) {
+                    painter.paint(scene, images, CallCapturePreviewRule.PREVIEW_WIDTH, CallCapturePreviewRule.PREVIEW_HEIGHT)
+                } else {
+                    null
+                }
+                val thumbnails = plan.thumbnails.mapNotNull { style ->
+                    painter.paint(
+                        scene.copy(look = CallCaptureLook.Classic(style)),
+                        images,
+                        CallCapturePreviewRule.THUMBNAIL_WIDTH,
+                        CallCapturePreviewRule.THUMBNAIL_HEIGHT,
+                    )?.let { style to it }
+                }.toMap()
+                preview to thumbnails
+            }
+        } finally {
+            images.values.forEach(Bitmap::recycle)
+        }
+        if (_state.value.isRecording) return
+        _previews.update { current ->
+            val (preview, thumbnails) = painted
+            current.copy(
+                look = if (preview != null) scene.look else current.look,
+                preview = preview ?: current.preview,
+                thumbnails = current.thumbnails + thumbnails,
+            )
+        }
     }
 
     suspend fun capture(scene: CallCaptureScene, mayWrite: suspend () -> Boolean) {
@@ -136,7 +250,7 @@ class CallCaptureController(
             images.values.forEach(Bitmap::recycle)
             painted ?: return
             opened.append(painted)
-            painted.recycle()
+            _previews.update { it.copy(look = scene.look, preview = painted) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
