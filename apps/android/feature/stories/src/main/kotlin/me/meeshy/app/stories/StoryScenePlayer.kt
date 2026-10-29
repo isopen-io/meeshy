@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -51,6 +52,7 @@ internal fun StorySceneBackground(
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
     stillFrame: Boolean = false,
+    floor: SceneFloor = SceneFloor.AUTHOR_GRADIENT,
 ) {
     when {
         slide.backgroundVideoUrl != null && !stillFrame -> {
@@ -74,7 +76,7 @@ internal fun StorySceneBackground(
         slide.backgroundVideoUrl != null && restingPosterKind(slide.backgroundPosterUrl, slide.backgroundThumbHash) != RestingPosterKind.NONE -> {
             val bg = slide.backgroundTransform
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()))
+                Box(Modifier.fillMaxSize().background(StorySceneFill.resolve(slide.background, slide.accentHex, floor).brush()))
                 StoryRestingPoster(
                     posterUrl = slide.backgroundPosterUrl,
                     thumbHash = slide.backgroundThumbHash,
@@ -101,7 +103,7 @@ internal fun StorySceneBackground(
         else -> Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
+                .background(StorySceneFill.resolve(slide.background, slide.accentHex, floor).brush()),
         )
     }
 }
@@ -161,6 +163,9 @@ internal fun StorySceneAudio(
  * pistes). Le fond vidéo et chaque vidéo posée gardent leur cadre avec leur affiche (la vignette, sinon le ThumbHash ; l'aplat
  * d'accent quand la vidéo n'a ni l'un ni l'autre) ; images, textes et stickers se dessinent à la position de l'horloge — zéro
  * pour une scène neuve, la dernière reprise quand [rewindWhenIdle] est faux. Seule la scène que le fil élit joue.
+ *
+ * [floor] : ce qui se lit sous une scène sans fond. Un réel pose la sienne sur du NOIR (iOS `ReelCardSceneBackdrop` et lecteur de
+ * réels) ; une story garde le dégradé d'auteur.
  */
 @Composable
 fun StoryScenePlayer(
@@ -173,6 +178,7 @@ fun StoryScenePlayer(
     onAudioFocusLost: () -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
     resting: Boolean = false,
+    floor: SceneFloor = SceneFloor.AUTHOR_GRADIENT,
 ) {
     val progress = remember(slide.id) { Animatable(0f) }
     var lap by remember(slide.id) { mutableIntStateOf(0) }
@@ -189,7 +195,7 @@ fun StoryScenePlayer(
     LaunchedEffect(rewindWhenIdle) {
         if (rewindWhenIdle) progress.snapTo(0f)
     }
-    Box(modifier.fillMaxSize().background(hexColor(slide.accentHex))) {
+    Box(modifier.fillMaxSize().background(if (floor == SceneFloor.BLACK) Color.Black else hexColor(slide.accentHex))) {
         StorySceneBackground(
             slide = slide,
             playing = playing,
@@ -199,6 +205,7 @@ fun StoryScenePlayer(
             onAudioFocusLost = onAudioFocusLost,
             onBackgroundPlayer = onBackgroundPlayer,
             stillFrame = resting,
+            floor = floor,
         )
         if (loads) {
             StorySceneOverlays(

@@ -30,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import me.meeshy.app.stories.SceneFloor
 import me.meeshy.app.stories.StoryScenePlayer
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.ReelContentTap
@@ -141,6 +142,7 @@ internal fun ReelPage(
                     // La vidéo de fond de la scène se sonde comme celle d'un réel simple : le bouton muet l'attend.
                     onBackgroundPlayer = { handle -> player = handle },
                     modifier = Modifier.fillMaxSize(),
+                    floor = SceneFloor.BLACK,
                 )
             } else ReelMedia(
                 reel = reel,

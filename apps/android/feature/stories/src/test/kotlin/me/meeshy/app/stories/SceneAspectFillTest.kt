@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import androidx.compose.ui.unit.Constraints
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -33,5 +34,24 @@ class SceneAspectFillTest {
     @Test
     fun `un cadre vide ne donne aucune scene`() {
         assertThat(SceneAspectFill.cover(0f, 300f)).isEqualTo(SceneAspectFill.Size(0f, 0f))
+    }
+
+    @Test
+    fun `une hauteur non bornee donne a la carte la hauteur du 9 16 a sa largeur`() {
+        val host = SceneAspectFill.host(maxWidth = 200, maxHeight = Constraints.Infinity)
+        assertThat(host.width).isEqualTo(200)
+        assertThat(host.height).isEqualTo(356)
+    }
+
+    @Test
+    fun `une hauteur bornee est gardee telle quelle`() {
+        val host = SceneAspectFill.host(maxWidth = 200, maxHeight = 250)
+        assertThat(host).isEqualTo(SceneAspectFill.Host(200, 250))
+    }
+
+    @Test
+    fun `une largeur non bornee ne donne aucune carte plutot qu un plantage`() {
+        assertThat(SceneAspectFill.host(maxWidth = Constraints.Infinity, maxHeight = 250)).isEqualTo(SceneAspectFill.Host(0, 250))
+        assertThat(SceneAspectFill.host(Constraints.Infinity, Constraints.Infinity)).isEqualTo(SceneAspectFill.Host(0, 0))
     }
 }

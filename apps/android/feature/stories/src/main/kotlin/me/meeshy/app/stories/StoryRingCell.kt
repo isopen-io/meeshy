@@ -367,8 +367,7 @@ private fun StoryCountDotsRow(
     val description = stringResource(R.string.stories_count_dots, unviewedCount, storyCount)
     Row(
         modifier = Modifier
-            .padding(top = StoryEntryMetrics.labelSpacing)
-            .height(DOT_SIZE)
+            .height(StoryEntryMetrics.labelSpacing)
             .semantics { if (dots != null) contentDescription = description },
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(DOT_SPACING),
         verticalAlignment = Alignment.CenterVertically,
@@ -394,16 +393,17 @@ private fun StoryCountDotsRow(
 }
 
 @Composable
-internal fun StoryLabel(label: String, unread: Boolean) {
+internal fun StoryLabel(label: String, unread: Boolean, modifier: Modifier = Modifier) {
     Text(
         text = label,
         fontSize = StoryEntryMetrics.LABEL_FONT_SP.sp,
+        lineHeight = StoryEntryMetrics.LABEL_LINE_HEIGHT_SP.sp,
         color = if (unread) MeeshyTheme.tokens.textPrimary else MeeshyTheme.tokens.textSecondary,
         fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
-        modifier = Modifier.width(StoryEntryMetrics.labelWidth),
+        modifier = modifier.width(StoryEntryMetrics.labelWidth),
     )
 }
 

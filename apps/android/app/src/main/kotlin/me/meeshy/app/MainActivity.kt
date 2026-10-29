@@ -6,15 +6,18 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,9 +50,9 @@ import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
+import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
-import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.PresenceStore
@@ -146,8 +149,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
+            val systemBars = SystemBarsAppearance.of(themeMode, isSystemInDarkTheme())
+            // Les icônes de la barre d'état suivent le thème CHOISI dans l'app, pas seulement celui du système (#13666).
+            DisposableEffect(systemBars) {
+                applySystemBars(systemBars)
+                onDispose {}
+            }
             LocalizedContent(languageCode = languageCode) {
-                MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
+                MeeshyTheme(darkTheme = systemBars.darkTheme) {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
@@ -174,6 +183,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun applySystemBars(appearance: SystemBarsAppearance) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { appearance.darkTheme },
+            navigationBarStyle = SystemBarStyle.auto(NAVIGATION_SCRIM_LIGHT, NAVIGATION_SCRIM_DARK) { appearance.darkTheme },
+        )
     }
 
     /**
@@ -326,3 +342,7 @@ internal fun Intent.launchExtras(): LaunchExtras {
         composerSeed = getStringExtra(ComposerSeedLaunch.EXTRA_SEED),
     )
 }
+
+/** Les voiles de la barre de navigation à trois boutons, ceux d'`enableEdgeToEdge` : clair sur un thème clair, sombre sur un sombre. */
+private val NAVIGATION_SCRIM_LIGHT = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+private val NAVIGATION_SCRIM_DARK = Color.argb(0x80, 0x1B, 0x1B, 0x1B)

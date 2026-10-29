@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -136,11 +135,12 @@ internal fun StoryTrayRail(
     onMoodShown: ((String) -> Unit)? = null,
 ) {
     LazyRow(
-        modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
+        modifier = Modifier.height(StoryEntryMetrics.height),
         horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
         contentPadding = PaddingValues(
-            horizontal = StoryEntryMetrics.paddingHorizontal,
-            vertical = StoryEntryMetrics.paddingVertical,
+            start = StoryEntryMetrics.paddingHorizontal,
+            end = StoryEntryMetrics.paddingHorizontal,
+            top = StoryEntryMetrics.paddingVertical,
         ),
     ) {
         val selfRing = tray.self
@@ -297,7 +297,7 @@ private fun StoryFailedRow(
 @Composable
 private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
     LazyRow(
-        modifier = modifier.semantics { contentDescription = "" },
+        modifier = modifier.height(StoryEntryMetrics.height).semantics { contentDescription = "" },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         userScrollEnabled = false,
@@ -361,6 +361,6 @@ private fun AddStoryItem(
             )
             if (onAddStatus != null) StatusBadge(moodEmoji = moodEmoji, onClick = onAddStatus)
         }
-        StoryLabel(addLabel, unread = false)
+        StoryLabel(addLabel, unread = false, modifier = Modifier.padding(top = StoryEntryMetrics.labelSpacing))
     }
 }

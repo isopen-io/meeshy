@@ -194,7 +194,6 @@ fun RepostEmbedCell(
                 authorName = embed.authorName,
                 onOpen = { (onOpenReel ?: onOpen)(embed.id) },
                 modifier = Modifier.fillMaxWidth().height(REEL_STRIP_HEIGHT),
-                sceneId = sceneId,
             )
         }
 

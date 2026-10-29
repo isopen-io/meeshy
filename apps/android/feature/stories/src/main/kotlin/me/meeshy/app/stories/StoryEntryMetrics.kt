@@ -18,10 +18,16 @@ object StoryEntryMetrics {
     val createGlyph: Dp = 24.dp
     val labelWidth: Dp = 96.dp
     const val LABEL_FONT_SP: Float = 10f
+    const val LABEL_LINE_HEIGHT_SP: Float = 12f
     val labelSpacing: Dp = 5.dp
     val itemSpacing: Dp = MeeshySpacing.md
     val paddingHorizontal: Dp = MeeshySpacing.lg
     val paddingVertical: Dp = MeeshySpacing.sm
+
+    /**
+     * La hauteur TOTALE du rail (iOS `StoryTrayView.trayHeight`, `.frame(height:)`) : marge haute, anneau, intervalle et libellé
+     * y tiennent, la marge basse est ce qui reste — l'anneau 94 + 5 + le libellé 12 + 8 = 119 pour 120.
+     */
     val height: Dp = 120.dp
 
     /** Au-delà de ce rang, un anneau apparaît sans cascade (iOS `staggerCap`). */

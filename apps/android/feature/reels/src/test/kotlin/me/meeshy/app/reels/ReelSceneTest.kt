@@ -3,6 +3,7 @@ package me.meeshy.app.reels
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.app.stories.NoContentPreferences
 import me.meeshy.app.stories.StorySlideProjector
+import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.StoryAudioPlayerObject
@@ -10,6 +11,7 @@ import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.story.toStoryItem
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import org.junit.Test
 
 class ReelSceneTest {
@@ -54,6 +56,14 @@ class ReelSceneTest {
         assertThat(reel.stage.playableUrl).isNull()
         assertThat(reel.stage.showsVideoSurface).isFalse()
         assertThat(reel.stage.backdrop).isEqualTo(ReelBackdrop.None)
+    }
+
+    @Test
+    fun `the scene of a reel carries the colour its feed card gives the author, so opening it does not change the tint`() {
+        val authored = post(composed).copy(author = ApiAuthor(id = "u1", username = "amina"))
+        val reel = ReelBuilder.build(listOf(authored), mediaBaseUrl = null).single()
+
+        assertThat(reel.scene!!.accentHex).isEqualTo(DynamicColorGenerator.colorForPost("u1", "REEL", null))
     }
 
     @Test

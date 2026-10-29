@@ -158,7 +158,7 @@ private const val ELECTION_DEBOUNCE_MS = 100L
 internal val FeedPostPresentation.carriesScene: Boolean
     get() {
         val quoted = repostEmbed?.takeIf { !it.isUnavailable && republishedReel == null }
-        val quotesScene = quoted != null && (quoted.storyItem != null || quoted.reelCover is ReelCover.Scene)
+        val quotesScene = quoted?.storyItem != null
         return quotesScene || (isReel && reelCover is ReelCover.Scene)
     }
 

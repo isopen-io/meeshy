@@ -2,7 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.theme.authorAccentHex
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
@@ -195,18 +195,10 @@ object FeedPostBuilder {
             distanceMeters = post.distanceMeters,
             layout = post.storyEffects.resolvedLayout,
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
-            reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, authorAccent(post)) { post.toStoryItem() } else null,
+            reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
         )
     }
-
-    /** La couleur de l'auteur du post (iOS `FeedPost.authorColor`) : celle de l'aplat et du fond de la scène d'un réel. */
-    private fun authorAccent(post: ApiPost): String =
-        DynamicColorGenerator.colorForPost(
-            authorId = post.author?.id?.takeIf { it.isNotBlank() } ?: post.author?.displayName ?: post.author?.username.orEmpty(),
-            type = post.type,
-            originalLanguage = post.originalLanguage,
-        )
 
     /**
      * The effective displayed language for [post]: the viewer's [override] when it
