@@ -16,6 +16,13 @@ data class OwnReactionWithdrawal(val messageId: String, val emoji: String, val s
  * **Une réaction que l'outbox abandonne** (refusée en clair vers une conversation chiffrée de bout en bout, #13790, ou essais
  * épuisés) défait sa puce dans le résumé en cache ET la marque « mienne » de l'écran ouvert (#13803) : le résumé seul laissait
  * la puce allumée pour le lecteur. L'outbox l'annonce ici, l'écran de conversation l'écoute.
+ *
+ * **Aucune annonce ne se perd** : chaque écran ouvert les entend toutes (diffusion, pas file à un seul lecteur), et quand le
+ * tampon est plein [announce] SUSPEND l'outbox jusqu'à ce que les écrans aient lu, plutôt que d'en jeter une. Sans écran ouvert,
+ * l'annonce n'a personne à corriger : rien n'est gardé, le prochain écran relit le résumé en cache.
+ *
+ * Une seule instance par processus ([Singleton]) : l'outbox et l'écran ne s'entendent que s'ils tiennent la même, et aucun
+ * de leurs constructeurs ne la fabrique.
  */
 @Singleton
 class OwnReactionWithdrawals @Inject constructor() {
@@ -23,8 +30,8 @@ class OwnReactionWithdrawals @Inject constructor() {
 
     val withdrawals: SharedFlow<OwnReactionWithdrawal> = announced.asSharedFlow()
 
-    fun announce(withdrawal: OwnReactionWithdrawal) {
-        announced.tryEmit(withdrawal)
+    suspend fun announce(withdrawal: OwnReactionWithdrawal) {
+        announced.emit(withdrawal)
     }
 
     private companion object {

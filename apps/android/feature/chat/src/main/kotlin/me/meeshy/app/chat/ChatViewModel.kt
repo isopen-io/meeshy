@@ -109,7 +109,7 @@ class ChatViewModel @Inject constructor(
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val blockCache: BlockCache = BlockCache(),
-    ownReactionWithdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
+    ownReactionWithdrawals: OwnReactionWithdrawals,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {

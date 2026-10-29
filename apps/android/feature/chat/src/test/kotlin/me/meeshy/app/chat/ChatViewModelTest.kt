@@ -89,6 +89,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
@@ -273,6 +274,7 @@ class ChatViewModelTest {
                 networkMonitor,
                 fileDownloader,
                 handle,
+                ownReactionWithdrawals = OwnReactionWithdrawals(),
             ),
             repo,
             workManager,

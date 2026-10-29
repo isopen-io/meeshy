@@ -40,7 +40,7 @@ internal class ChatReactionController(
     private val emojiUsageStore: EmojiUsageStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
-    private val ownReactionWithdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
+    private val ownReactionWithdrawals: OwnReactionWithdrawals,
 ) {
 
     private val mutableOwnReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())

@@ -33,7 +33,7 @@ public class AddReactionHandler @Inject constructor(
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
-    private val withdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
+    private val withdrawals: OwnReactionWithdrawals,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
@@ -54,7 +54,7 @@ public class RemoveReactionHandler @Inject constructor(
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
-    private val withdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
+    private val withdrawals: OwnReactionWithdrawals,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =

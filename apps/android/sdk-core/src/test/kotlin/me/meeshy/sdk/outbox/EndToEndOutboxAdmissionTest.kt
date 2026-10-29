@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.outbox.senders.AddReactionHandler
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -386,7 +387,7 @@ class EndToEndOutboxAdmissionTest {
         val reactionApi = mockk<ReactionApi>()
         val drainer = OutboxDrainer(
             outbox = outbox,
-            senders = mapOf(OutboxKind.ADD_REACTION to AddReactionHandler(reactionApi, mockk(relaxed = true), MeeshyApi.json)),
+            senders = mapOf(OutboxKind.ADD_REACTION to AddReactionHandler(reactionApi, mockk(relaxed = true), MeeshyApi.json, withdrawals = OwnReactionWithdrawals())),
             plaintextAdmission = admission,
         )
 

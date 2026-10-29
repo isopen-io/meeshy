@@ -46,7 +46,8 @@ public interface OutboxPlaintextAdmission {
  * **Le verdict du clair pour UNE conversation, lu par un geste qui part HORS de l'outbox** (#13803) : réagir à une pièce (socket
  * `attachment:reaction-add|remove`), supprimer une pièce (`DELETE /attachments/:id`). La même loi que la file
  * ([EndToEndOutboxAdmission.verdictFor]) : registre, mode en cache, puis relecture au serveur d'un mode inconnu. Seul
- * [OutboxAdmissionVerdict.ADMIT] laisse partir le geste.
+ * [OutboxAdmissionVerdict.ADMIT] laisse partir un geste qui ÉCRIT du clair ; ce qu'un geste qui efface en fait, son appelant
+ * le dit.
  */
 public fun interface ConversationPlaintextVerdict {
     public suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict

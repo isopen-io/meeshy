@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
@@ -221,6 +222,7 @@ class ChatControllerSeamTest {
             fileDownloader,
             SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1")),
             controllers,
+            ownReactionWithdrawals = OwnReactionWithdrawals(),
         )
     }
 
