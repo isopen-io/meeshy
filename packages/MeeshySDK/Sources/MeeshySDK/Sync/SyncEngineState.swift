@@ -31,10 +31,13 @@ struct SyncOwnership<Waiter: Sendable>: Sendable {
 typealias APIMessagePersistor = @Sendable @concurrent ([APIMessage]) async -> Void
 typealias RealtimeMessagePersistor = @Sendable @concurrent (RealtimeMessageMutation) async -> Void
 
+typealias MessageTranslationsReader = @Sendable @concurrent (String) async -> [TranslationRecord]
+
 struct SyncEngineState: Sendable {
     var ownership = SyncOwnership<CheckedContinuation<Void, Never>>()
     var apiMessagePersistor: APIMessagePersistor?
     var realtimeMessagePersistor: RealtimeMessagePersistor?
+    var messageTranslationsReader: MessageTranslationsReader?
     var lastDeltaSyncAt: Date = .distantPast
     var reconnectCatchUpPending = false
 
