@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.fileviewer.DocumentHandOff
 import me.meeshy.sdk.model.fileviewer.SavedDocument
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -141,10 +142,13 @@ private fun share(context: Context, request: FileViewerRequest) {
     if (!launched) Toast.makeText(context, R.string.chat_file_open_failed, Toast.LENGTH_SHORT).show()
 }
 
-/** Aucun aperçu sûr dans l'app (Office…) : l'utilisateur confie le fichier téléchargé à l'app de son choix. */
-private fun openWithAnotherApp(context: Context, request: FileViewerRequest) {
+/**
+ * Aucun aperçu sûr dans l'app (Office…) : l'utilisateur confie le fichier téléchargé à l'app de son choix, sous le type
+ * que son EXTENSION implique ([DocumentHandOff]) — jamais sous celui que l'expéditeur a déclaré.
+ */
+private fun openWithAnotherApp(context: Context, request: FileViewerRequest, mimeType: String) {
     val launched = runCatching {
-        context.startActivity(FileAttachmentIntentResolver.viewIntent(request.localUri.toUri(), request.mimeType, request.fileName))
+        context.startActivity(FileAttachmentIntentResolver.viewIntent(request.localUri.toUri(), mimeType, request.fileName))
     }.isSuccess
     if (!launched) Toast.makeText(context, R.string.chat_file_open_failed, Toast.LENGTH_SHORT).show()
 }
@@ -153,7 +157,8 @@ private fun openWithAnotherApp(context: Context, request: FileViewerRequest) {
 private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Color) {
     val context = LocalContext.current
     val uri = remember(request.localUri) { request.localUri.toUri() }
-    val canHandOff = FileAttachmentIntentResolver.canHandOff(uri.scheme)
+    val handOffMime = remember(request.fileName) { DocumentHandOff.mimeFor(request.fileName) }
+        ?.takeIf { FileAttachmentIntentResolver.canHandOff(uri.scheme) }
     Column(
         Modifier.fillMaxSize().padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.CenterVertically),
@@ -162,7 +167,7 @@ private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Col
         Icon(MeeshyIcons.Document, null, tint = accent, modifier = Modifier.size(64.dp))
         Text(title, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.callout, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(stringResource(R.string.viewer_doc_preview_unavailable), color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.label)
-        if (canHandOff) {
+        if (handOffMime != null) {
             val openWith = stringResource(R.string.viewer_doc_open_with)
             Row(
                 modifier = Modifier
@@ -170,7 +175,7 @@ private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Col
                     .heightIn(min = 48.dp)
                     .clip(CircleShape)
                     .background(accent.copy(alpha = 0.15f))
-                    .clickable(role = Role.Button) { openWithAnotherApp(context, request) }
+                    .clickable(role = Role.Button) { openWithAnotherApp(context, request, handOffMime) }
                     .padding(horizontal = MeeshySpacing.lg),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
