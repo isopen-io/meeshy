@@ -35,6 +35,7 @@
     <string name="profile_decor_image_hint">Elegir una imagen de portada</string>
     <string name="profile_decor_none">Ninguno</string>
     <string name="profile_decor_ring_section">Contorno del avatar</string>
+    <string name="profile_decor_shop">Más en la tienda</string>
     <string name="profile_decor_subtitle">Visibles para todos en tu perfil</string>
     <string name="profile_decor_title">Contorno y banner</string>
     <string name="profile_detail_country">País</string>

@@ -35,6 +35,7 @@
     <string name="profile_decor_image_hint">Choose a banner image</string>
     <string name="profile_decor_none">None</string>
     <string name="profile_decor_ring_section">Avatar ring</string>
+    <string name="profile_decor_shop">More in the shop</string>
     <string name="profile_decor_subtitle">Visible to everyone on your profile</string>
     <string name="profile_decor_title">Ring and banner</string>
     <string name="profile_detail_country">Country</string>
