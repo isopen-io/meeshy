@@ -102,12 +102,14 @@ fun StoryReplySheet(
         ) {
             QuotedStory(quote)
             AnimatedVisibility(
-                visible = state.phase == StoryReplyPhase.FAILED,
+                visible = state.phase == StoryReplyPhase.FAILED || state.phase == StoryReplyPhase.ENCRYPTED,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
                 Text(
-                    text = stringResource(R.string.stories_reply_failed),
+                    text = stringResource(
+                        if (state.phase == StoryReplyPhase.ENCRYPTED) R.string.stories_reply_encrypted else R.string.stories_reply_failed,
+                    ),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },

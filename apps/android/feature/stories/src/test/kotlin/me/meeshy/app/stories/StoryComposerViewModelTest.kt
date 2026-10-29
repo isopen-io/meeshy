@@ -74,9 +74,10 @@ class StoryComposerViewModelTest {
         draftStore: StoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
         blobStore: MediaBlobStore = mockk(relaxed = true),
         confirmation: StoryDraftConfirmation = mockk(relaxed = true),
+        fence: me.meeshy.sdk.session.AccountFence? = null,
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation)
+        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation, accountFence = fence)
     }
 
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
@@ -2914,6 +2915,55 @@ class StoryComposerViewModelTest {
         assertThat(saved).isNotNull()
         assertThat(saved!!.slides.single().text).isEqualTo("keep me")
         assertThat(saved.visibility).isEqualTo("PRIVATE")
+    }
+
+    @Test
+    fun `a composer unmounted after the account was purged writes no draft under the next account (#13621)`() = runTest {
+        var owner: String? = "A"
+        val fence = me.meeshy.sdk.session.AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { owner })
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store, fence = fence)
+        vm.onEnterComposer()
+        vm.onTextChange("les mots de A")
+        fence.close { store.clear() }
+        owner = "B"
+
+        vm.persistDraft()
+
+        assertThat(store.load()).isNull()
+    }
+
+    @Test
+    fun `a composer still under its own account saves its draft through the fence (#13621)`() = runTest {
+        val fence = me.meeshy.sdk.session.AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store, fence = fence)
+        vm.onEnterComposer()
+        vm.onTextChange("mes mots")
+
+        vm.persistDraft()
+
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("mes mots")
+    }
+
+    @Test
+    fun `abandoning a reopened draft cancels the exhausted uploads it named, bytes included (#13621)`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "", mediaIds = listOf("cmid_up1", "server-id"))),
+            selectedId = "s1",
+        )
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.onRemoveMedia("server-id")
+        vm.persistDraft()
+
+        assertThat(store.load()).isNull()
+        io.mockk.coVerify(exactly = 1) { uploadQueue.cancel("cmid_up1") }
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("server-id") }
     }
 
     @Test

@@ -14,9 +14,11 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.AccountFence
@@ -24,7 +26,8 @@ import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
-enum class StoryReplyPhase { IDLE, SENDING, SENT, FAILED }
+/** [ENCRYPTED] : la directe avec l'auteur est chiffrée de bout en bout, que cet appareil ne sait pas écrire (#13015) — refusée AVANT l'envoi, dite, jamais « envoyée ». */
+enum class StoryReplyPhase { IDLE, SENDING, SENT, FAILED, ENCRYPTED }
 
 @Immutable
 data class StoryReplyUiState(
@@ -47,6 +50,7 @@ class StoryReplyViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
     private val accountFence: AccountFence? = null,
+    private val endToEndRegime: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryReplyUiState())
@@ -67,13 +71,19 @@ class StoryReplyViewModel @Inject constructor(
         val gesture = accountFence?.ticket()
         viewModelScope.launch(gesture.asCoroutineContext()) {
             try {
-                val conversationId = when (val direct = conversationRepository.directConversationWith(authorId)) {
-                    is DirectConversationResolution.Found -> direct.conversation.id
-                    is DirectConversationResolution.Created -> direct.conversation.id
+                val conversation = when (val direct = conversationRepository.directConversationWith(authorId)) {
+                    is DirectConversationResolution.Found -> direct.conversation
+                    is DirectConversationResolution.Created -> direct.conversation
                     else -> null
                 }
-                if (conversationId == null) {
+                if (conversation == null) {
                     fail(text)
+                    return@launch
+                }
+                val conversationId = conversation.id
+                // Fail closed (#13621): the outbox would withhold this plaintext anyway, but the sheet must not say « sent ».
+                if (EndToEndRegime.isEndToEnd(conversation.encryptionMode) || endToEndRegime.isSealed(conversationId)) {
+                    _state.update { it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.ENCRYPTED) }
                     return@launch
                 }
                 val language = ComposeLanguageDetector.originalLanguageAtSend(

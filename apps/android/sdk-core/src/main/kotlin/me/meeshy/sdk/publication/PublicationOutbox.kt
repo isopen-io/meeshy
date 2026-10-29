@@ -123,11 +123,14 @@ public class PublicationOutbox @Inject constructor(
      * mentions, alternative texts, captions — stops awaiting its publication and becomes the composer's
      * own again, its media under the ids they have since received; the failed publications leave the
      * queue. Their uploads stay: the republish waits on them, so no media is ever sent twice. `null`
-     * (and nothing changed) unless every story the draft awaits is still here and gave up.
+     * (and nothing changed) unless every story the draft awaits is still here, gave up, and belongs to the
+     * signed-in account (#13621: the check is its own, not the screen's).
      */
     public suspend fun reopenStory(cmid: String): StoryComposerDraftSnapshot? {
         val kept = storyDraftStore.load()?.takeIf { cmid in it.awaitingPublication } ?: return null
         val rows = kept.awaitingPublication.mapNotNull { outboxRepository.row(it) }
+        val owner = ownerSource.currentOwnerId() ?: return null
+        if (rows.any { it.ownerId != owner }) return null
         if (UnsentPublications.reopenableStories(kept, rows.associateBy { it.cmid }).isEmpty()) return null
         val requests = rows.map { row ->
             runCatching { MeeshyApi.json.decodeFromString(CreateStoryRequest.serializer(), row.payload) }.getOrNull()
