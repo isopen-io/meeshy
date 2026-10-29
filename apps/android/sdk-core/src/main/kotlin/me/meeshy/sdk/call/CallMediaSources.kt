@@ -54,6 +54,12 @@ internal class CallMediaSources(
     var localVideoTrack: VideoTrack? = null
         private set
 
+    /** La source micro de l'appel : un lien d'aperçu en tire SA piste ([CallPreviewPeer]), jamais la nôtre. */
+    val sharedAudioSource: AudioSource? get() = audioSource
+
+    /** La source caméra de l'appel, même usage. */
+    val sharedVideoSource: VideoSource? get() = videoSource
+
     private var audioAttached = false
     private var videoAttached = false
 
