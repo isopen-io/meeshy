@@ -9,6 +9,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.screen.ScreenFeed
+import me.meeshy.sdk.model.call.CallVideoBudget
 import org.junit.Test
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
@@ -16,6 +17,7 @@ import org.webrtc.IceCandidate
 import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.Priority
 import org.webrtc.RtpParameters.DegradationPreference
 import org.webrtc.RtpSender
 import org.webrtc.RtpTransceiver
@@ -105,23 +107,40 @@ class WebRtcEngineMeshScreenShareTest {
     }
 
     @Test
-    fun `a sending mesh link takes the screen without an offer, encodes it as a screen, then gives it back`() {
+    fun `a sending mesh link takes the screen without an offer, encodes it as a screen under its share, then gives it back`() {
         val rig = Rig(RtpTransceiverDirection.SEND_RECV)
         rig.engine.createConnection(emptyList())
-        rig.openMesh()
-        val before = rig.meshEncoding.encodings.single().maxBitrateBps
+        val link = rig.openMesh()
+        val share = CallVideoBudget.meshLink(encodes = 3)
+        link.applyVideoBudget(share)
 
         rig.engine.beginScreenShare(rig.projection)
 
         verify { rig.meshSender.setTrack(rig.screenTrack, false) }
         assertThat(rig.meshEncoding.degradationPreference).isEqualTo(DegradationPreference.MAINTAIN_RESOLUTION)
         assertThat(rig.meshEncoding.encodings.single().maxFramerate).isEqualTo(15)
+        assertThat(rig.meshEncoding.encodings.single().maxBitrateBps).isEqualTo(share.maxBitrateBps)
         rig.engine.endScreenShare()
 
         verify { rig.meshSender.setTrack(null, false) }
-        assertThat(rig.meshEncoding.encodings.single().maxBitrateBps).isEqualTo(before)
+        assertThat(rig.meshEncoding.degradationPreference).isEqualTo(DegradationPreference.MAINTAIN_FRAMERATE)
+        assertThat(rig.meshEncoding.encodings.single().maxFramerate).isEqualTo(20)
         assertThat(rig.meshDirection).isEqualTo(RtpTransceiverDirection.SEND_RECV)
         assertThat(rig.renegotiations).isEqualTo(0)
+    }
+
+    @Test
+    fun `a mesh link encodes at its share with a high network priority`() {
+        val rig = Rig(RtpTransceiverDirection.SEND_RECV)
+        rig.engine.createConnection(emptyList())
+
+        rig.openMesh().applyVideoBudget(CallVideoBudget.meshLink(encodes = 5))
+
+        val encoding = rig.meshEncoding.encodings.single()
+        assertThat(encoding.maxBitrateBps).isEqualTo(500_000)
+        assertThat(encoding.maxFramerate).isEqualTo(20)
+        assertThat(encoding.scaleResolutionDownBy).isEqualTo(3.0)
+        assertThat(encoding.networkPriority).isEqualTo(Priority.HIGH)
     }
 
     @Test

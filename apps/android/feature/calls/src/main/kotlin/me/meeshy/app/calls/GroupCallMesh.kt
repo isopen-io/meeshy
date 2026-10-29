@@ -10,6 +10,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.call.CallMeshPeerConfig
 import me.meeshy.sdk.model.call.CallSignalEnvelope
+import me.meeshy.sdk.model.call.CallVideoBudget
+import me.meeshy.sdk.model.call.GroupMeshVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.group.ActiveSpeakerDetector
 import me.meeshy.sdk.model.call.group.GroupCallArrival
@@ -60,6 +62,8 @@ internal class GroupCallMesh(
     /** Le niveau sonore reçu du pair principal, que la connexion de l'appel tient — iOS `primaryAudioLevel`. */
     private val primaryAudioLevel: suspend () -> Double? = { null },
     private val samplingIntervalMillis: Long = ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS,
+    /** La part du débit montant posée au pair principal tant que le maillage a des liens (#13752) ; `null` la retire. */
+    private val primaryVideoCeiling: (CallVideoBudget?) -> Unit = {},
     /** La connexion de l'appel se cherche (coupure ICE en cours) — iOS `isGroupPrimaryReconnecting`. */
     private val isPrimaryReconnecting: () -> Boolean = { false },
     private val clock: () -> Long = { System.nanoTime() / NANOS_PER_MILLI },
@@ -90,6 +94,7 @@ internal class GroupCallMesh(
     private var speakingUserIds: Set<String> = emptySet()
     private var samplingJob: Job? = null
     private val lastOfferAt = HashMap<String, Long>()
+    private var survivalFrozen = false
 
     val isGroup: Boolean get() = isGroupCall
 
@@ -236,6 +241,23 @@ internal class GroupCallMesh(
         links.values.forEach { it.setSendsVideo(enabled) }
     }
 
+    /** La survie vidéo de l'appel fige aussi chaque lien du maillage (#13752, iOS `setSurvivalFloor`). */
+    fun setSurvivalFloor(frozen: Boolean) {
+        if (scope == null && links.isEmpty()) return
+        survivalFrozen = frozen
+        rebudgetVideo()
+    }
+
+    /**
+     * Chaque lien encode à sa juste taille (#13752, iOS `rebudgetVideo`, #11292) : le débit montant se partage entre
+     * tous les encodages — le principal tant qu'il tient son siège et chaque lien du maillage.
+     */
+    private fun rebudgetVideo() {
+        val budget = GroupMeshVideoBudget.of(links.size, hasPrimary = primaryUserId != null && !primaryVacated, survivalFrozen)
+        links.values.forEach { it.applyVideoBudget(budget.link) }
+        primaryVideoCeiling(budget.primaryCeiling)
+    }
+
     fun updateIceServers(servers: List<SocketIceServer>) {
         if (servers.isEmpty()) return
         iceServers = servers
@@ -256,6 +278,8 @@ internal class GroupCallMesh(
         links.values.forEach { it.close() }
         links.clear()
         lastOfferAt.clear()
+        survivalFrozen = false
+        primaryVideoCeiling(null)
         knownArrivals.clear()
         servedMemberIds.clear()
         scope = null
@@ -343,6 +367,7 @@ internal class GroupCallMesh(
             return null
         }
         links[userId] = link
+        rebudgetVideo()
         return link
     }
 
@@ -361,6 +386,7 @@ internal class GroupCallMesh(
 
     private fun dropMember(userId: String) {
         links.remove(userId)?.close()
+        rebudgetVideo()
         roster = roster.removing(userId)
         detector = detector.forgetting(userId)
         speakingUserIds = detector.speakers

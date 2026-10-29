@@ -5,6 +5,7 @@ import me.meeshy.sdk.call.CallMeshPeerConfig
 import me.meeshy.sdk.call.CallMeshPeerListener
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallSignalPayload
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
 import org.webrtc.IceCandidate
 import org.webrtc.PeerConnection
@@ -70,6 +71,9 @@ internal interface GroupMeshPeerPort {
 
     /** Le niveau sonore reçu de ce membre (0…1), `null` sans mesure — iOS `GroupPeerLinkProviding.audioLevel`. */
     suspend fun audioLevel(): Double? = null
+
+    /** La part du débit montant de ce lien (#13752) — iOS `GroupPeerLinkProviding.applyVideoBudget`. */
+    fun applyVideoBudget(budget: CallVideoBudget) = Unit
 }
 
 internal fun interface GroupMeshPeerFactory {
@@ -116,4 +120,5 @@ private class CallMeshPeerPort(private val peer: CallMeshPeer) : GroupMeshPeerPo
     }
     override fun close() = peer.close()
     override suspend fun audioLevel(): Double? = peer.inboundAudioLevel()
+    override fun applyVideoBudget(budget: CallVideoBudget) = peer.applyVideoBudget(budget)
 }

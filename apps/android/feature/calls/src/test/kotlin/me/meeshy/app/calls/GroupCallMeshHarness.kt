@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import me.meeshy.sdk.call.CallMeshPeerConfig
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalPayload
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
@@ -19,6 +20,7 @@ internal class FakePort : GroupMeshPeerPort {
     var closed = false
     var level: Double? = null
     var levelReads = 0
+    var budget: CallVideoBudget? = null
     lateinit var callbacks: GroupMeshPeerCallbacks
 
     override val isStable: Boolean get() = stable
@@ -53,6 +55,9 @@ internal class FakePort : GroupMeshPeerPort {
     override fun close() {
         closed = true
     }
+    override fun applyVideoBudget(budget: CallVideoBudget) {
+        this.budget = budget
+    }
     override suspend fun audioLevel(): Double? {
         levelReads += 1
         return level
@@ -71,6 +76,7 @@ internal class Harness(
     val sent = mutableListOf<Sent>()
     var primaryLevel: Double? = null
     var primaryReconnecting = false
+    val ceilings = mutableListOf<CallVideoBudget?>()
     val mesh = GroupCallMesh(
         factory = { _: CallMeshPeerConfig, callbacks ->
             FakePort().also {
@@ -84,6 +90,7 @@ internal class Harness(
         samplingIntervalMillis = samplingMillis,
         clock = clock,
         isPrimaryReconnecting = { primaryReconnecting },
+        primaryVideoCeiling = { ceilings += it },
     )
 
     fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m") = mesh.bind(

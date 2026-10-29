@@ -1,10 +1,8 @@
 package me.meeshy.sdk.call
 
-import me.meeshy.sdk.call.screen.ScreenShareSenderEncoding
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
-import me.meeshy.sdk.model.call.screenshare.ScreenShareEncodingLaw
 import me.meeshy.sdk.model.call.screenshare.ScreenShareSenderLaw
-import me.meeshy.sdk.model.call.screenshare.SenderEncodingSnapshot
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.model.call.WebRtcSdpRules
 import org.webrtc.AudioSource
@@ -70,7 +68,7 @@ public class CallMeshPeer internal constructor(
     private var sendsVideo = config.sendsVideo
     private var screen: VideoTrack? = screenTrack
     private var directionBeforeScreen: RtpTransceiverDirection? = null
-    private var encodingBeforeScreen: SenderEncodingSnapshot? = null
+    private var videoBudget: CallVideoBudget? = null
 
     private val localAudio: AudioTrack? = audioSource?.let { factory.createAudioTrack("$AUDIO_TRACK_ID-${nextId()}", it) }
     private val localVideo: VideoTrack? = videoSource?.let { factory.createVideoTrack("$VIDEO_TRACK_ID-${nextId()}", it) }
@@ -128,9 +126,7 @@ public class CallMeshPeer internal constructor(
 
     public suspend fun setLocalDescription(desc: SessionDescription) {
         live().awaitApply(desc, local = true)
-        if (screen != null && encodingBeforeScreen == null) {
-            transceiverOf(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO)?.let { encodeScreen(it) }
-        }
+        applyVideoEncoding()
     }
 
     /** Collision d'offres, côté poli : ma propre offre s'efface pour accepter celle du membre. */
@@ -174,13 +170,29 @@ public class CallMeshPeer internal constructor(
         if (screen != null) return
         val video = localVideo ?: return
         transceiverOf(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO)?.sender?.setTrack(video.takeIf { enabled }, false)
+        if (enabled) applyVideoEncoding()
+    }
+
+    /**
+     * La part du débit montant de ce lien (#13752, iOS `WebRTCGroupPeerLink.applyVideoBudget`), posée tout de suite
+     * et réappliquée après chaque négociation ; pendant un partage d'écran, elle plafonne l'encodage de l'écran.
+     */
+    public fun applyVideoBudget(budget: CallVideoBudget) {
+        videoBudget = budget
+        applyVideoEncoding()
+    }
+
+    private fun applyVideoEncoding() {
+        val sender = transceiverOf(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO)?.sender ?: return
+        val budget = if (screen != null) (videoBudget ?: CallVideoBudget.CAMERA).capping(CallVideoBudget.SCREEN) else videoBudget ?: return
+        runCatching { VideoSenderEncoding.apply(sender, budget) }
     }
 
     /**
      * L'écran partagé part sur ce lien à la place de ma caméra (#13755), comme sur le pair de l'appel : la piste de
      * l'émetteur vidéo est REMPLACÉE, sans offre quand il émettait déjà ; un émetteur qui ne faisait que recevoir
-     * passe en envoi et le lien offre à nouveau ([CallMeshPeerListener.onRenegotiationNeeded]). `null` rend la caméra
-     * (ou la réception seule) et l'encodage d'avant. Un lien pas encore négocié porte l'écran dès son offre ou sa réponse.
+     * passe en envoi et le lien offre à nouveau ([CallMeshPeerListener.onRenegotiationNeeded]). L'écran s'encode comme
+     * un écran, sous la part du lien. `null` rend la caméra (ou la réception seule) et la part du lien. Un lien pas encore négocié porte l'écran dès son offre ou sa réponse.
      */
     public fun setScreenTrack(track: VideoTrack?) {
         if (closed.get() || screen === track) return
@@ -197,26 +209,16 @@ public class CallMeshPeer internal constructor(
         directionBeforeScreen = before
         transceiver.sender.setTrack(screen, false)
         transceiver.setDirection(RtpTransceiverDirection.SEND_RECV)
-        encodeScreen(transceiver)
+        applyVideoEncoding()
         if (plan.needsRenegotiation) listener.onRenegotiationNeeded()
-    }
-
-    /** Un écran se LIT : l'encodage du partage d'iOS ([ScreenShareEncodingLaw]), l'encodage d'avant gardé pour l'arrêt. */
-    private fun encodeScreen(transceiver: RtpTransceiver) {
-        encodingBeforeScreen = runCatching {
-            ScreenShareSenderEncoding.read(transceiver.sender).also {
-                ScreenShareSenderEncoding.write(transceiver.sender, ScreenShareEncodingLaw.during(it))
-            }
-        }.getOrNull()
     }
 
     private fun stopScreen(transceiver: RtpTransceiver) {
         val before = directionBeforeScreen
-        encodingBeforeScreen?.let { snapshot -> runCatching { ScreenShareSenderEncoding.write(transceiver.sender, snapshot) } }
         transceiver.sender.setTrack(outgoingVideo(), false)
         transceiver.setDirection(before ?: RtpTransceiverDirection.SEND_RECV)
         directionBeforeScreen = null
-        encodingBeforeScreen = null
+        runCatching { VideoSenderEncoding.apply(transceiver.sender, videoBudget ?: CallVideoBudget.CAMERA) }
         if (ScreenShareSenderLaw.end(wasSendingBefore = before.isSending).needsRenegotiation) listener.onRenegotiationNeeded()
     }
 

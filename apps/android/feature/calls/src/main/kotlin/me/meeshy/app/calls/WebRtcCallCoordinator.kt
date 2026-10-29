@@ -59,6 +59,7 @@ class WebRtcCallCoordinator @Inject constructor(
         names = names,
         primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
         isPrimaryReconnecting = { iceMonitor.stalled },
+        primaryVideoCeiling = { engine.setGroupVideoCeiling(it) },
         sender = { callId, to, from, signal ->
             when (signal.kind) {
                 GroupMeshSignalKind.Offer -> signals.emitOffer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.sdk.call.screen.CallScreenFeeds
 import me.meeshy.sdk.call.screen.CallScreenShareRoute
 import me.meeshy.sdk.call.screen.ScreenFeedFactory
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
@@ -28,8 +29,10 @@ import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
+import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpSender
 import org.webrtc.SessionDescription
 import org.webrtc.VideoTrack
 import org.webrtc.audio.JavaAudioDeviceModule
@@ -76,6 +79,7 @@ class WebRtcEngine internal constructor(
     private val meshPeers = CopyOnWriteArraySet<CallMeshPeer>()
     private var configuration: PeerConnection.RTCConfiguration? = null
     private var dataChannel: CallDataChannel? = null
+    private var groupVideoCeiling: CallVideoBudget? = null
 
     /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
     val eglBase: EglBase get() = stack.value.eglBase
@@ -198,6 +202,33 @@ class WebRtcEngine internal constructor(
         meshPeers.forEach { it.setScreenTrack(null) }
         if (peerConnection == null) return screenShare.release()
         if (screenShare.end()) renegotiations.tryEmit(Unit)
+        if (groupVideoCeiling != null) applyCameraEncoding()
+    }
+
+    /**
+     * Dans un appel de groupe, le pair de l'appel est un encodage parmi d'autres (#13752, iOS `setGroupVideoCeiling`) :
+     * le maillage lui pose la même part du débit montant qu'à ses liens ; `null` lui rend son budget entier.
+     */
+    fun setGroupVideoCeiling(ceiling: CallVideoBudget?) {
+        if (groupVideoCeiling == ceiling) return
+        groupVideoCeiling = ceiling
+        applyCameraEncoding()
+    }
+
+    /** La caméra sur l'émetteur vidéo du pair de l'appel, sous le plafond du maillage ; l'écran partagé garde le sien. */
+    private fun applyCameraEncoding() {
+        if (screenShare.isSharing) return
+        val sender = primaryVideoSender() ?: return
+        val camera = CallVideoBudget.CAMERA
+        runCatching { VideoSenderEncoding.apply(sender, groupVideoCeiling?.capping(camera) ?: camera) }
+    }
+
+    private fun primaryVideoSender(): RtpSender? {
+        val peer = peerConnection ?: return null
+        val video = runCatching { peer.transceivers }.getOrDefault(emptyList())
+            .filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO && !it.isStopped }
+        val cameraId = media.localVideoTrack?.id()
+        return (video.firstOrNull { cameraId != null && it.sender.track()?.id() == cameraId } ?: video.firstOrNull())?.sender
     }
 
     /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
@@ -310,6 +341,7 @@ class WebRtcEngine internal constructor(
         dataChannel?.close()
         dataChannel = null
         screenShare.release()
+        groupVideoCeiling = null
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()

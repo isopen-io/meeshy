@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.model.call.group.GroupCallLinkState
 import me.meeshy.sdk.model.call.group.GroupPeerLinkRestart
@@ -104,6 +105,10 @@ internal class GroupPeerLink(
     fun setSendsAudio(enabled: Boolean) = peer?.setSendsAudio(enabled)
 
     fun setSendsVideo(enabled: Boolean) = peer?.setSendsVideo(enabled)
+
+    fun applyVideoBudget(budget: CallVideoBudget) {
+        if (!closed) peer?.applyVideoBudget(budget)
+    }
 
     fun updateIceServers(servers: List<me.meeshy.sdk.model.call.SocketIceServer>) = peer?.updateIceServers(servers)
 
