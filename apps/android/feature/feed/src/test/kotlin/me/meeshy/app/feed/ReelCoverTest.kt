@@ -100,9 +100,9 @@ class ReelCoverTest {
         val plain = RepostEmbedBuilder.forPost(ApiPost(id = "o", type = "POST", repostOf = ApiRepostOf(id = "x", type = "POST")), Prefs, null)
         assertThat(plain!!.reelCover).isNull()
     }
-    /** iOS `FeedPost.reelDisplayMedia` : un réel republié sans média propre montre le réel qu'il republie. */
+    /** iOS `ReelFeedCard.repostedReel` : un réel republié sans média propre ne montre qu'UNE couverture, celle du réel cité. */
     @Test
-    fun `un reel republie sans media propre montre la vignette et le cadre du reel source`() {
+    fun `un reel republie ne porte qu une couverture, celle de la citation avec l auteur d origine`() {
         val landscape = video.copy(width = 1920, height = 1080)
         val source = ApiRepostOf(id = "orig", type = "REEL", media = listOf(landscape), author = ApiAuthor(id = "u9", username = "orig"))
         val republished = FeedPostBuilder.build(
@@ -111,6 +111,35 @@ class ReelCoverTest {
             mediaBaseUrl = "https://cdn.test",
         )
         assertThat((republished.reelCover as ReelCover.Poster).url).isEqualTo("https://cdn.test/u/v.jpg")
+        assertThat(republished.republishedReel!!.id).isEqualTo("orig")
+        assertThat(republished.reelOpenId).isEqualTo("orig")
+        assertThat(republished.showsReelCard).isTrue()
         assertThat(republished.reelAspect).isEqualTo(4f / 3f)
+    }
+
+    @Test
+    fun `un reel republie dont l original n est plus servi garde sa couverture`() {
+        val republished = FeedPostBuilder.build(
+            ApiPost(id = "r3", type = "REEL", media = emptyList(), originalRepostOfId = "gone", author = ApiAuthor(id = "u1", username = "amina")),
+            Prefs,
+            mediaBaseUrl = "https://cdn.test",
+        )
+        assertThat(republished.repostEmbed!!.isUnavailable).isTrue()
+        assertThat(republished.reelCover).isNotNull()
+        assertThat(republished.republishedReel).isNull()
+        assertThat(republished.reelOpenId).isEqualTo("r3")
+    }
+
+    @Test
+    fun `un reel republie avec son propre media garde sa couverture a cote de la citation`() {
+        val source = ApiRepostOf(id = "orig", type = "REEL", media = listOf(video))
+        val own = FeedPostBuilder.build(
+            ApiPost(id = "r4", type = "REEL", media = listOf(image), repostOf = source),
+            Prefs,
+            mediaBaseUrl = "https://cdn.test",
+        )
+        assertThat((own.reelCover as ReelCover.Poster).url).isEqualTo("https://cdn.test/u/i.jpg")
+        assertThat(own.republishedReel).isNull()
+        assertThat(own.reelOpenId).isEqualTo("r4")
     }
 }

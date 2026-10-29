@@ -66,10 +66,12 @@
     <string name="feed_quote_cancel">Abbrechen</string>
     <string name="feed_quote_submit">Erneut teilen</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_reel_card_a11y">Reel von %1$s</string>
     <string name="feed_reel_offer_body">Dein Beitrag enthält nur ein Video: Als Reel läuft es im Vollbild unter Reels.</string>
     <string name="feed_reel_offer_post">Es ist ein Beitrag</string>
     <string name="feed_reel_offer_reel">Es ist ein Reel</string>
     <string name="feed_reel_offer_title">Als Reel veröffentlichen?</string>
+    <string name="feed_reel_republished_by">Geteilt von %1$s</string>
     <string name="feed_report_reason_harassment">Belästigung</string>
     <string name="feed_report_reason_hate_speech">Hassrede</string>
     <string name="feed_report_reason_impersonation">Identitätsdiebstahl</string>

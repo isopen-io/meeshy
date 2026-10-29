@@ -70,10 +70,12 @@
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
+    <string name="feed_reel_card_a11y">ريل من %1$s</string>
     <string name="feed_reel_offer_body">منشورك يحتوي على فيديو واحد فقط: كريل، يُعرض بملء الشاشة في الريلز.</string>
     <string name="feed_reel_offer_post">إنه منشور</string>
     <string name="feed_reel_offer_reel">إنه ريل</string>
     <string name="feed_reel_offer_title">النشر كريل؟</string>
+    <string name="feed_reel_republished_by">أعاد نشره %1$s</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
     <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>

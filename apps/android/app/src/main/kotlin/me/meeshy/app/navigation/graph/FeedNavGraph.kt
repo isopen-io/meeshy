@@ -104,6 +104,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         PostDetailScreen(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenReel = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
             viewersSheet = { postId, onDismiss ->

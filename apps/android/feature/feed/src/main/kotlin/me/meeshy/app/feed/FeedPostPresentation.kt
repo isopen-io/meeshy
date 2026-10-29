@@ -90,6 +90,19 @@ data class FeedPostPresentation(
     /** Rapport largeur / hauteur de la carte du réel (`ReelCoverResolver.cardAspect`). */
     val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
 ) {
+    /**
+     * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
+     * réel source, signée de son auteur d'origine et ouvrant ce réel-là (iOS `ReelFeedCard.repostedReel`).
+     */
+    val republishedReel: RepostEmbedPresentation?
+        get() = repostEmbed?.takeIf { isReel && media.isEmpty() && it.isReel && !it.isUnavailable }
+
+    /** Le réel que la carte ouvre : le réel cité d'une republication, sinon ce réel. */
+    val reelOpenId: String get() = republishedReel?.id ?: id
+
+    /** Ce réel se montre en carte plein cadre, légende en surimpression (iOS `ReelFeedCard`). */
+    val showsReelCard: Boolean get() = isReel && reelCover != null
+
     /** Le pseudo de l'auteur d'origine, pour l'attribution `↻ @pseudo` de l'en-tête ; `null` sans repost servi. */
     val repostAttribution: String?
         get() = repostEmbed?.takeUnless { it.isUnavailable }
