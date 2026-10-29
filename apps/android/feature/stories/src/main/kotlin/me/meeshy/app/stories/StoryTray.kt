@@ -340,12 +340,15 @@ private fun AddStoryItem(
             onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
         )
         Box(
-            modifier = Modifier
-                .size(StoryEntryMetrics.ring)
-                .clip(CircleShape)
-                .background(MeeshyTheme.tokens.backgroundTertiary),
+            modifier = Modifier.size(StoryEntryMetrics.ring),
             contentAlignment = Alignment.Center,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(StoryEntryMetrics.ring)
+                    .clip(CircleShape)
+                    .background(MeeshyTheme.tokens.backgroundTertiary),
+            )
             Icon(
                 Icons.Filled.Add,
                 contentDescription = null,
