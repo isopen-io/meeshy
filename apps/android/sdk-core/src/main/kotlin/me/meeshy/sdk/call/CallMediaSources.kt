@@ -5,6 +5,10 @@ import me.meeshy.sdk.call.camera.CallCameraZoom
 import me.meeshy.sdk.call.camera.CameraLensDiscovery
 import me.meeshy.sdk.call.camera.CameraZoomActuator
 import me.meeshy.sdk.call.camera.ZoomCropObserver
+import me.meeshy.sdk.call.effects.CallDeviceConstraint
+import me.meeshy.sdk.call.effects.CallVideoEffectsProcessor
+import me.meeshy.sdk.call.effects.MlKitPersonSegmenter
+import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.camera.CameraLensClassifier
 import me.meeshy.sdk.model.call.camera.CameraLensProbe
 import org.webrtc.AudioSource
@@ -36,6 +40,8 @@ internal class CallMediaSources(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var zoomObserver: ZoomCropObserver? = null
     private var openCameraName: String? = null
+    private var effects: CallVideoEffectsProcessor? = null
+    @Volatile private var effectsConfig: VideoFilterConfig = VideoFilterConfig.DEFAULT
     private var lensProbes: List<CameraLensProbe> = emptyList()
     private val enumerator: CameraEnumerator by lazy { Camera2Enumerator(appContext) }
 
@@ -83,6 +89,11 @@ internal class CallMediaSources(
         val helper = SurfaceTextureHelper.create("MeeshyCapture", current.eglBase.eglBaseContext)
         val source = current.factory.createVideoSource(false)
         val observer = ZoomCropObserver(source.capturerObserver)
+        val constraint = CallDeviceConstraint(appContext)
+        effects = CallVideoEffectsProcessor(helper.handler, MlKitPersonSegmenter(), constraint::isConstrained).also {
+            it.setConfig(effectsConfig)
+            source.setVideoProcessor(it)
+        }
         capturer.initialize(helper, appContext, observer)
         capturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
         videoCapturer = capturer
@@ -202,10 +213,23 @@ internal class CallMediaSources(
         return main?.takeIf { it in names } ?: names.firstOrNull()
     }
 
+    /**
+     * Les effets de MA caméra (#13331), appliqués à l'image ENVOYÉE : l'autre les voit, mon aperçu aussi.
+     * Gardés pour une caméra qui n'a pas encore démarré ; remis à zéro avec la vidéo, en fin d'appel.
+     */
+    fun setVideoEffects(config: VideoFilterConfig) {
+        effectsConfig = config
+        effects?.setConfig(config)
+    }
+
     /** Arrête la capture et dispose les sources ; à appeler AVANT de disposer le `PeerConnection`. */
     fun releaseVideo() {
         runCatching { videoCapturer?.stopCapture() }
         videoCapturer?.dispose()
+        videoSource?.setVideoProcessor(null)
+        effects?.release()
+        effects = null
+        effectsConfig = VideoFilterConfig.DEFAULT
         surfaceTextureHelper?.dispose()
         localVideoTrack?.dispose()
         videoSource?.dispose()

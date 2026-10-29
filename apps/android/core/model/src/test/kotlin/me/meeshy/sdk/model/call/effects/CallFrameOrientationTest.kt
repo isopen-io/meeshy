@@ -30,3 +30,21 @@ class CallFrameOrientationTest {
         assertThat(CallFrameOrientation.normalised(-90)).isEqualTo(270)
     }
 }
+
+class CallFrameOrientationPixelTest {
+    private fun unpack(p: Int) = (p ushr 16) to (p and 0xFFFF)
+
+    @Test
+    fun `the pixel law agrees with the normalised law on the corners`() {
+        val (bw, bh) = 4 to 2
+        listOf(0, 90, 180, 270).forEach { rotation ->
+            val (uw, uh) = CallFrameOrientation.uprightSize(bw, bh, rotation)
+            listOf(0 to 0, uw - 1 to 0, 0 to uh - 1, uw - 1 to uh - 1).forEach { (x, y) ->
+                val (bx, by) = unpack(CallFrameOrientation.bufferPixel(x, y, bw, bh, rotation))
+                val centre = CallFrameOrientation.buffer((x + 0.5f) / uw, (y + 0.5f) / uh, rotation)
+                assertThat(bx).isEqualTo((centre.first * bw).toInt())
+                assertThat(by).isEqualTo((centre.second * bh).toInt())
+            }
+        }
+    }
+}

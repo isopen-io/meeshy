@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.mlkit.translate)
     implementation(libs.mlkit.language.id)
+    implementation(libs.mlkit.segmentation.selfie)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 

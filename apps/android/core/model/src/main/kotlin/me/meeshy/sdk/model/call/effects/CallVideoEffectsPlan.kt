@@ -82,6 +82,19 @@ object CallFrameOrientation {
         else -> u to v
     }
 
+    /**
+     * The pixel of a [bufferWidth] × [bufferHeight] buffer that lands at the upright pixel ([x], [y]),
+     * packed `bufferX shl 16 or bufferY` so a per-pixel loop allocates nothing.
+     */
+    fun bufferPixel(x: Int, y: Int, bufferWidth: Int, bufferHeight: Int, rotation: Int): Int = when (normalised(rotation)) {
+        90 -> pack(y, bufferHeight - 1 - x)
+        180 -> pack(bufferWidth - 1 - x, bufferHeight - 1 - y)
+        270 -> pack(bufferWidth - 1 - y, x)
+        else -> pack(x, y)
+    }
+
+    private fun pack(x: Int, y: Int): Int = (x shl 16) or y
+
     /** The upright size of a [width] × [height] buffer. */
     fun uprightSize(width: Int, height: Int, rotation: Int): Pair<Int, Int> =
         if (normalised(rotation) % 180 == 0) width to height else height to width

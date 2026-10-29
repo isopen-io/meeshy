@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.DescriptionType
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.Verdict
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.model.call.WebRtcSdpRules
 import org.webrtc.AudioTrack
@@ -154,6 +155,9 @@ class WebRtcEngine internal constructor(
     fun setAudioEnabled(enabled: Boolean) = media.setAudioEnabled(enabled)
 
     fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)
+
+    /** Les effets de ma caméra (flou du fond, lissage, teinte), sur l'image envoyée ; aucune renégociation. */
+    fun setVideoEffects(config: VideoFilterConfig) = media.setVideoEffects(config)
 
     fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = media.switchCamera(onSwitched)
 
