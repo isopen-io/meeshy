@@ -9,12 +9,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.presence.PresenceDecayClock
 import me.meeshy.sdk.model.presence.PresenceMap
 import me.meeshy.sdk.model.presence.ServedPresencePage
 import me.meeshy.sdk.model.profile.ProfileLivePresence
@@ -61,8 +63,11 @@ class PresenceStorePersistenceTest {
         val typing = MutableSharedFlow<me.meeshy.sdk.model.TypingEvent>()
         val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
         val sessionUser = MutableStateFlow(session)
+
+        /** Le temps que l'horloge murale compte et que les minuteurs ne voient pas : veille profonde (positif), horloge reculée (négatif). */
+        var slept = 0L
         val clock = object : CacheClock {
-            override fun nowMillis(): Long = epoch + scope.currentTime
+            override fun nowMillis(): Long = epoch + scope.currentTime + slept
         }
         val store = PresenceStore(
             PresenceSources(userStatus, snapshot, typing, connection, sessionUser),
@@ -145,6 +150,80 @@ class PresenceStorePersistenceTest {
         assertThat(f.store.entryOf("u1").first()).isNull()
         assertThat(f.store.entries.value).doesNotContainKey("u1")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `after a deep sleep what was read back is gone on the very first read, before any timer runs`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        assertThat(f.store.entries.value).containsKey("u1")
+
+        f.slept = 3 * hour
+
+        assertThat(ProfileLivePresence.line(f.store.entryOf("u1").first(), null, null, f.clock.nowMillis())).isNull()
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entries.first()).doesNotContainKey("u1")
+        assertThat(f.store.currentStateOf("u1")).isNull()
+        assertThat(f.store.presenceOf("u1").first()).isNull()
+    }
+
+    @Test
+    fun `after a deep sleep a screen already watching the read back loses it at the next tick, not when the timer catches up`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        val seen = mutableListOf<UserPresence?>()
+        val maps = mutableListOf<PresenceMap>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { f.store.entryOf("u1").collect { seen += it } }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { f.store.entries.collect { maps += it } }
+        assertThat(seen.last()).isNotNull()
+
+        f.slept = 3 * hour
+        testScheduler.advanceTimeBy(PresenceDecayClock.TICK_MS + 1)
+        testScheduler.runCurrent()
+
+        assertThat(seen.last()).isNull()
+        assertThat(maps.last()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `a wall clock set back an hour never shows what was read back as a presence from the future`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+
+        f.slept = -hour
+
+        assertThat(f.store.entryOf("u1").first()).isNull()
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.currentStateOf("u1")).isNull()
+    }
+
+    @Test
+    fun `what the socket says is never hidden by a deep sleep, only what was read back`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        f.userStatus.emit(UserStatusEvent("u2", "b", false, iso(epoch - 60_000)))
+        testScheduler.runCurrent()
+
+        f.slept = 3 * hour
+
+        assertThat(f.store.entries.value.keys).containsExactly("u2")
+        assertThat(f.store.entryOf("u2").first()).isEqualTo(UserPresence(false, iso(epoch - 60_000)))
+    }
+
+    @Test
+    fun `a file written under the old 24 hour bound is rewritten at the read that filters it, even if nothing changes after`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf(
+                "old" to UserPresence(false, iso(epoch - 20 * hour)),
+                "ok" to UserPresence(false, iso(epoch - 60_000)),
+            )
+        }
+        val f = fixture(disk)
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.disk.file?.first).isEqualTo("me")
+        assertThat(f.disk.file?.second?.keys).containsExactly("ok")
     }
 
     @Test

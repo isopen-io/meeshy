@@ -82,4 +82,22 @@ class FilePresenceMapPersistenceTest {
 
         assertThat(File(folder.root, "presence").list().orEmpty().toList()).isEmpty()
     }
+
+    @Test
+    fun `a read with no file erases the temporary file an interrupted save left behind`() = runTest {
+        File(folder.root, "presence").mkdirs()
+        File(folder.root, "presence/presence_map.json.tmp").writeText("""{"accountId":"me","entries":{"u2":{}}}""")
+
+        assertThat(disk().load("me")).isEmpty()
+        assertThat(File(folder.root, "presence").list().orEmpty().toList()).isEmpty()
+    }
+
+    @Test
+    fun `a read keeps the file but erases a temporary file an interrupted save left beside it`() = runTest {
+        disk().save("me", mapOf("u1" to UserPresence(true, "2026-10-29T10:00:00Z")))
+        File(folder.root, "presence/presence_map.json.tmp").writeText("""{"accountId":"me","entries":{"u2":{}}}""")
+
+        assertThat(disk().load("me").keys).containsExactly("u1")
+        assertThat(File(folder.root, "presence").list().orEmpty().toList()).containsExactly("presence_map.json")
+    }
 }

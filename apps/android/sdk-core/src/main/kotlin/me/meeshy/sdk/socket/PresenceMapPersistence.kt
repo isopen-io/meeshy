@@ -62,8 +62,10 @@ class FilePresenceMapPersistence(
     /** L'écriture en cours, renommée sur [file] quand elle est complète ; une écriture interrompue la laisse. */
     private val pending: File get() = File(file.parentFile, file.name + ".tmp")
 
+    /** Une lecture n'a lieu qu'entre deux écritures : un [pending] présent est le reste d'une écriture interrompue, effacé. */
     override suspend fun load(accountId: String): PresenceMap = withContext(io) {
         attempt {
+            pending.delete()
             if (!file.exists()) return@attempt emptyMap()
             val persisted = json.decodeFromString<PersistedPresenceMap>(file.readText())
             if (persisted.accountId == accountId) return@attempt persisted.entries
