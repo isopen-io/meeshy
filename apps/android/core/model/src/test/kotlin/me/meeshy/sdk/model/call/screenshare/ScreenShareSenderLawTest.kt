@@ -46,4 +46,22 @@ class ScreenShareSenderLawTest {
             .isEqualTo(ScreenShareCaptureSize(width = 720, height = 1280))
         assertThat(ScreenShareCaptureSize.fit(widthPx = 0, heightPx = 1280)).isEqualTo(ScreenShareCaptureSize.DEFAULT)
     }
+
+    @Test
+    fun `a rotation during the share gives the capture the new orientation, same ratio`() {
+        val portrait = ScreenShareCaptureSize.fit(widthPx = 1080, heightPx = 2400)
+
+        val turned = ScreenShareCaptureSize.reoriented(portrait, widthPx = 2400, heightPx = 1080)
+
+        assertThat(turned).isEqualTo(ScreenShareCaptureSize(width = 1280, height = 576))
+        assertThat(ScreenShareCaptureSize.reoriented(turned!!, widthPx = 1080, heightPx = 2400)).isEqualTo(portrait)
+    }
+
+    @Test
+    fun `a display change that keeps the size, or an unreadable display, leaves the capture alone`() {
+        val portrait = ScreenShareCaptureSize.fit(widthPx = 1080, heightPx = 2400)
+
+        assertThat(ScreenShareCaptureSize.reoriented(portrait, widthPx = 1080, heightPx = 2400)).isNull()
+        assertThat(ScreenShareCaptureSize.reoriented(portrait, widthPx = 0, heightPx = 0)).isNull()
+    }
 }

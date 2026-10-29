@@ -38,6 +38,16 @@ data class ScreenShareCaptureSize(val width: Int, val height: Int) {
             return ScreenShareCaptureSize(even(widthPx * scale), even(heightPx * scale))
         }
 
+        /**
+         * La taille que la capture prend quand l'écran change (#13735) : une rotation pendant le partage
+         * tourne aussi l'écran virtuel, sinon l'image se déforme. `null` quand rien ne change, ou quand
+         * l'écran ne se lit pas — la capture garde alors sa taille plutôt que de retomber sur [DEFAULT].
+         */
+        fun reoriented(current: ScreenShareCaptureSize, widthPx: Int, heightPx: Int): ScreenShareCaptureSize? {
+            if (widthPx <= 0 || heightPx <= 0) return null
+            return fit(widthPx, heightPx).takeIf { it != current }
+        }
+
         private fun even(value: Float): Int {
             val whole = value.toInt().coerceAtLeast(2)
             return if (whole % 2 == 0) whole else whole - 1

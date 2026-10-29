@@ -19,10 +19,14 @@ import org.webrtc.AudioTrack
 import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpParameters
+import org.webrtc.RtpParameters.DegradationPreference
 import org.webrtc.RtpSender
 import org.webrtc.RtpTransceiver
 import org.webrtc.RtpTransceiver.RtpTransceiverDirection
 import org.webrtc.VideoTrack
+import org.webrtc.rtpEncoding
+import org.webrtc.rtpParameters
 
 /**
  * Le partage d'écran côté moteur (#13332), comme iOS `P2PWebRTCClient+ScreenShare` : la piste d'écran
@@ -37,7 +41,15 @@ class WebRtcEngineScreenShareTest {
         val screenTrack: VideoTrack = mockk(relaxed = true) { every { id() } returns "meeshy_screen" }
         var released = 0
         var opened = 0
-        val sender: RtpSender = mockk(relaxed = true) { every { track() } returns cameraTrack }
+        var encoding = Encoded(DegradationPreference.MAINTAIN_FRAMERATE, maxBitrateBps = 800_000, maxFramerate = 30, scale = 2.0)
+        val sender: RtpSender = mockk(relaxed = true) {
+            every { track() } returns cameraTrack
+            every { parameters } answers { encoding.toParameters() }
+            every { setParameters(any()) } answers {
+                encoding = Encoded.of(firstArg())
+                true
+            }
+        }
         val video: RtpTransceiver? = videoDirection?.let { direction ->
             mockk(relaxed = true) {
                 every { mediaType } returns MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
@@ -70,6 +82,37 @@ class WebRtcEngineScreenShareTest {
             },
         )
         val projection: MediaProjection = mockk(relaxed = true)
+    }
+
+    private data class Encoded(
+        val degradation: DegradationPreference?,
+        val maxBitrateBps: Int?,
+        val maxFramerate: Int?,
+        val scale: Double?,
+    ) {
+        fun toParameters(): RtpParameters = rtpParameters(degradation, listOf(rtpEncoding(maxBitrateBps, maxFramerate, scale)))
+
+        companion object {
+            fun of(parameters: RtpParameters): Encoded = parameters.encodings.single().let {
+                Encoded(parameters.degradationPreference, it.maxBitrateBps, it.maxFramerate, it.scaleResolutionDownBy)
+            }
+        }
+    }
+
+    @Test
+    fun `the screen is encoded like iOS, keeping its resolution at 15 fps, and the camera encoding comes back`() {
+        val rig = Rig(RtpTransceiverDirection.SEND_RECV)
+        val camera = rig.encoding
+        rig.engine.createConnection(emptyList())
+
+        rig.engine.beginScreenShare(rig.projection)
+
+        assertThat(rig.encoding).isEqualTo(
+            Encoded(DegradationPreference.MAINTAIN_RESOLUTION, maxBitrateBps = 2_500_000, maxFramerate = 15, scale = 1.0),
+        )
+        rig.engine.endScreenShare()
+
+        assertThat(rig.encoding).isEqualTo(camera)
     }
 
     @Test

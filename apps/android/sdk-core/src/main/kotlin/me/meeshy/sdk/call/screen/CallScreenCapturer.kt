@@ -62,7 +62,18 @@ internal class CallScreenCapturer(
         observer?.onFrameCaptured(frame)
     }
 
-    override fun changeCaptureFormat(width: Int, height: Int, framerate: Int) = Unit
+    /**
+     * Une rotation pendant le partage (#13735) : l'écran virtuel prend la nouvelle taille, sans en créer un
+     * second — Android 14 refuse un second `createVirtualDisplay` sur la même projection.
+     */
+    override fun changeCaptureFormat(width: Int, height: Int, framerate: Int) {
+        val helper = helper ?: return
+        ThreadUtils.invokeAtFrontUninterruptibly(helper.handler) {
+            val current = display ?: return@invokeAtFrontUninterruptibly
+            helper.setTextureSize(width, height)
+            current.resize(width, height, densityDpi)
+        }
+    }
 
     override fun dispose() {
         helper = null
