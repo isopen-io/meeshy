@@ -72,6 +72,7 @@ class WebRtcEngine internal constructor(
 
     private var peerConnection: PeerConnection? = null
     private val previewPeers = CopyOnWriteArraySet<CallPreviewPeer>()
+    private val meshPeers = CopyOnWriteArraySet<CallMeshPeer>()
     private var configuration: PeerConnection.RTCConfiguration? = null
     private var dataChannel: CallDataChannel? = null
 
@@ -276,7 +277,27 @@ class WebRtcEngine internal constructor(
         return peer
     }
 
+    /**
+     * Ouvre une connexion du maillage d'un appel de groupe (#13740), À CÔTÉ du pair de l'appel : ses pistes
+     * sont tirées des sources de l'appel en cours (micro, caméra s'il y en a une), et [close] la ferme avant
+     * elles. @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     */
+    fun openMeshPeer(config: CallMeshPeerConfig, listener: CallMeshPeerListener): CallMeshPeer {
+        val peer = CallMeshPeer(
+            factory = stack.value.factory,
+            config = config,
+            listener = listener,
+            audioSource = media.sharedAudioSource,
+            videoSource = media.sharedVideoSource,
+            onClosed = { meshPeers.remove(it) },
+        )
+        meshPeers += peer
+        return peer
+    }
+
     fun close() {
+        // Les liens du maillage tirent leurs pistes des sources de l'appel : ils meurent AVANT elles.
+        meshPeers.forEach { it.close() }
         // Un aperçu qui émet tire ses pistes des sources de l'appel : il meurt AVANT elles.
         previewPeers.filter { it.usesCallSources }.forEach { it.close() }
         dataChannel?.close()

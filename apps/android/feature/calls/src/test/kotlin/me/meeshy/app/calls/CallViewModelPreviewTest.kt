@@ -85,6 +85,8 @@ class CallViewModelPreviewTest {
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
         every { signalManager.mediaToggles } returns MutableSharedFlow()
+        every { signalManager.participantArrivals } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns MutableSharedFlow()
         every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1", iceServers = turn))

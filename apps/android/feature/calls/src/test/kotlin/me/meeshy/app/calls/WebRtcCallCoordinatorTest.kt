@@ -508,4 +508,44 @@ class WebRtcCallCoordinatorTest {
         coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
         coordinator.end()
     }
+
+    // --- #13740 : le maillage d'un appel de groupe se pose AU-DESSUS du duo ---
+
+    @Test
+    fun `a third member's offer never reaches the primary's connection`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-bob").let { it.copy(signal = it.signal.copy(from = "bob")) })
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(any()) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a duo's re-joining peer is offered by the call's own connection, never by a mesh link`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.onParticipantJoined("peer")
+        coordinator.onParticipantJoined("peer")
+
+        verify(exactly = 0) { engine.openMeshPeer(any(), any()) }
+        coVerify(exactly = 2) { engine.createOffer() }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a group caller offers the second joiner through the mesh, addressed to it`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.startOutgoing(
+            this, "call-9", emptyList(), peerId = "", selfId = "me", isVideo = false,
+            onMediaConnected = {}, onMediaStalled = {},
+        )
+        coordinator.onParticipantJoined("alice")
+        coordinator.onParticipantJoined("bob")
+
+        coVerify(exactly = 1) { engine.createOffer() }
+        verify(exactly = 1) { signals.emitOffer("call-9", any(), to = "alice", from = "me", negotiationId = 0) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        assertThat(coordinator.groupMesh.value.roster.members.map { it.userId }).containsExactly("alice", "bob").inOrder()
+        coordinator.end()
+    }
 }

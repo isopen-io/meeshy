@@ -121,6 +121,7 @@ class CallPeerIndicatorsController @Inject constructor(
     private fun onMediaToggle(toggle: CallMediaTogglePayload) {
         val host = host ?: return
         if (host.callId.isBlank() || toggle.callId != host.callId) return
+        if (host.routesGroupMediaToggle(toggle)) return
         indicators = when (toggle.mediaType) {
             "audio" -> indicators.copy(audioEnabled = toggle.enabled)
             "video" -> indicators.copy(videoEnabled = toggle.enabled)

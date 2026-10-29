@@ -165,6 +165,8 @@ class CallViewModelTest {
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments
         every { signalManager.mediaToggles } returns mediaToggles
+        every { signalManager.participantArrivals } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns MutableSharedFlow()
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))

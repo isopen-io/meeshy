@@ -647,6 +647,19 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `a participant-joined frame republishes the named arrival on participantArrivals`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.participantArrivals.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1","participant":{"userId":"u2","displayName":"Bob"}}""")
+            val arrival = awaitItem()
+            assertThat(arrival.callId).isEqualTo("c1")
+            assertThat(arrival.arrival.userId).isEqualTo("u2")
+            assertThat(arrival.arrival.displayName).isEqualTo("Bob")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a participant-left frame emits nothing on the FSM events flow`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {

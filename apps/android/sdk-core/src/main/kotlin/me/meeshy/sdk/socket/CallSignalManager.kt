@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -124,6 +125,13 @@ class CallSignalManager internal constructor(
      * FSM-facing [events]; the consumer prunes the leaver's media by identity.
      * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
      */
+    /**
+     * Who joined the room, named (`call:participant-joined`, participant nested) — a group call admits the
+     * arrival to its roster. [events] keeps only the joiner's id for the FSM. Hot, no replay.
+     */
+    private val _participantArrivals = SocketInboundRoute.subject<CallParticipantArrival>()
+    val participantArrivals: SharedFlow<CallParticipantArrival> = _participantArrivals.exposed()
+
     private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
     val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
@@ -437,6 +445,9 @@ class CallSignalManager internal constructor(
         if (event == ICE_SERVERS_REFRESHED_EVENT) {
             CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
         }
+        if (event == PARTICIPANT_JOINED_EVENT) {
+            CallSignalMapper.participantArrival(raw)?.let(_participantArrivals::emitArrived)
+        }
         if (event == PARTICIPANT_LEFT_EVENT) {
             CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)
         }
@@ -486,6 +497,8 @@ class CallSignalManager internal constructor(
 
         /** A participant left the room without ending the call (group calls). */
         const val PARTICIPANT_LEFT_EVENT = SocketEventNames.CALL_PARTICIPANT_LEFT
+
+        const val PARTICIPANT_JOINED_EVENT = SocketEventNames.CALL_PARTICIPANT_JOINED
 
         /** The gateway flagging the REMOTE peer's sustained bad network. */
         const val QUALITY_ALERT_EVENT = SocketEventNames.CALL_QUALITY_ALERT

@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import kotlinx.coroutines.CoroutineScope
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallState
 
@@ -45,6 +46,12 @@ interface CallSessionHost {
 
     /** Rebuild and publish the [CallUiState] from the current slices. */
     fun publish()
+
+    /**
+     * A peer toggled a medium: `true` when it is a member of a group call's mesh, not the primary peer — the
+     * primary's indicators must then ignore it (#13740). A duo never routes one.
+     */
+    fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean = false
 }
 
 /** What an extension point needs to key its work to the call in flight. */

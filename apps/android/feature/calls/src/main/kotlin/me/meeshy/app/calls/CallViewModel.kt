@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallPreviewPhase
 import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallSound
@@ -105,6 +106,8 @@ class CallViewModel @Inject constructor(
         override fun endMedia() = coordinator.end()
         override fun restartMediaIce() = coordinator.retryIceRestart()
         override fun publish() = this@CallViewModel.publish()
+        override fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
+            coordinator.routesGroupMediaToggle(toggle)
     }
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
@@ -133,6 +136,7 @@ class CallViewModel @Inject constructor(
         preview.attach(viewModelScope, ::onPreviewAudible)
         coordinator.onRemoteBye = { onRemoteBye() }
         coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
+        coordinator.onPrimaryVacated = ::onPrimaryVacated
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
@@ -146,6 +150,12 @@ class CallViewModel @Inject constructor(
         }
         viewModelScope.launch {
             signalManager.iceServersRefreshed.collect(::onIceServersRefreshed)
+        }
+        viewModelScope.launch {
+            signalManager.participantArrivals.collect(coordinator::onParticipantArrival)
+        }
+        viewModelScope.launch {
+            signalManager.participantLeft.collect(coordinator::onParticipantLeft)
         }
         viewModelScope.launch {
             appStatePresence.foreground.collect(::onAppStateChanged)
@@ -203,6 +213,14 @@ class CallViewModel @Inject constructor(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
             ::onMediaConnected, ::onMediaStalled,
         )
+    }
+
+    /**
+     * The primary left a group call that carries on (#13740): its connection is no longer watched, so a stall it
+     * caused on its way out must not leave the call « Reconnexion… » while the mesh carries everyone else.
+     */
+    private fun onPrimaryVacated() {
+        if (callState is CallState.Reconnecting) dispatch(CallEvent.MediaConnected)
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
@@ -339,6 +357,9 @@ class CallViewModel @Inject constructor(
     /** Le zoom de MA caméra (objectifs, pincement) : lu par les feuilles, jamais par l'écran entier. */
     val cameraZoom get() = coordinator.cameraZoom
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
+
+    /** Le maillage d'un appel de groupe : la scène de groupe le lit (#13740). */
+    val groupMesh: StateFlow<GroupCallMeshUi> get() = coordinator.groupMesh
 
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */
     fun toggleCamera() {

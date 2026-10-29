@@ -123,6 +123,8 @@ data class CallForceLeavePayload(
 data class CallMediaTogglePayload(
     val callId: String,
     val participantId: String? = null,
+    /** The toggling user's id — a group call keys its roster by it (`participantId` is the database row). */
+    val userId: String? = null,
     val mediaType: String,
     val enabled: Boolean,
 )
