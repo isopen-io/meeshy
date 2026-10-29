@@ -1,12 +1,17 @@
 package me.meeshy.app.calls
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import me.meeshy.sdk.call.CallMeshPeerConfig
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.group.ActiveSpeakerDetector
 import me.meeshy.sdk.model.call.group.GroupCallArrival
 import me.meeshy.sdk.model.call.group.GroupCallEvidence
 import me.meeshy.sdk.model.call.group.GroupCallLinkState
@@ -23,6 +28,8 @@ data class GroupCallMeshUi(
     val primaryUserId: String? = null,
     val isPrimaryVacated: Boolean = false,
     val videoTracks: Map<String, VideoTrack> = emptyMap(),
+    /** Qui parle maintenant (#13751) : le principal et les membres du maillage, jamais moi. */
+    val speakingUserIds: Set<String> = emptySet(),
 )
 
 /** Ce que le maillage émet : un `call:signal` adressé à UN membre. */
@@ -43,6 +50,10 @@ internal fun interface GroupMeshSignalSender {
 internal class GroupCallMesh(
     private val factory: GroupMeshPeerFactory,
     private val sender: GroupMeshSignalSender,
+    /** Le niveau sonore reçu du pair principal, que la connexion de l'appel tient — iOS `primaryAudioLevel`. */
+    private val primaryAudioLevel: suspend () -> Double? = { null },
+    private val samplingIntervalMillis: Long = ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS,
+    private val clock: () -> Long = { System.nanoTime() / NANOS_PER_MILLI },
 ) {
     private val _ui = MutableStateFlow(GroupCallMeshUi())
     val ui: StateFlow<GroupCallMeshUi> = _ui.asStateFlow()
@@ -62,6 +73,9 @@ internal class GroupCallMesh(
     private val links = LinkedHashMap<String, GroupPeerLink>()
     private val knownArrivals = HashMap<String, GroupCallArrival>()
     private val servedMemberIds = HashSet<String>()
+    private var detector = ActiveSpeakerDetector()
+    private var speakingUserIds: Set<String> = emptySet()
+    private var samplingJob: Job? = null
 
     val isGroup: Boolean get() = isGroupCall
 
@@ -199,6 +213,10 @@ internal class GroupCallMesh(
 
     /** La fin de l'appel ferme tout. */
     fun teardown() {
+        samplingJob?.cancel()
+        samplingJob = null
+        detector = ActiveSpeakerDetector()
+        speakingUserIds = emptySet()
         links.values.forEach { it.close() }
         links.clear()
         knownArrivals.clear()
@@ -214,6 +232,7 @@ internal class GroupCallMesh(
 
     private fun becomeGroup() {
         isGroupCall = true
+        startSampling()
         val primary = primaryUserId ?: return
         roster = roster.admitting(knownArrivals[primary] ?: GroupCallArrival(primary), isPrimary = true)
             .updatingLink(GroupCallLinkState.Connected, primary)
@@ -271,7 +290,44 @@ internal class GroupCallMesh(
     private fun dropMember(userId: String) {
         links.remove(userId)?.close()
         roster = roster.removing(userId)
+        detector = detector.forgetting(userId)
+        speakingUserIds = detector.speakers
         publish()
+    }
+
+    /**
+     * Qui parle (#13751), miroir de iOS `GroupCallMeshCoordinator.sampleAudioLevels` : toutes les 400 ms, le niveau
+     * reçu du principal et de chaque lien du maillage nourrit [ActiveSpeakerDetector] ; l'écran n'est republié que si
+     * l'ensemble des locuteurs change. Un relevé par lien et par intervalle, jamais par trame audio.
+     */
+    private fun startSampling() {
+        val scope = scope ?: return
+        if (samplingJob != null) return
+        samplingJob = scope.launch {
+            while (isActive) {
+                delay(samplingIntervalMillis)
+                sampleAudioLevels()
+            }
+        }
+    }
+
+    private suspend fun sampleAudioLevels() {
+        if (!isGroupCall) return
+        val boundCall = callId
+        val current = links.entries.map { it.key to it.value }
+        val levels = HashMap<String, Double>(current.size + 1)
+        current.forEach { (userId, link) -> link.audioLevel()?.let { levels[userId] = it } }
+        val primary = primaryUserId?.takeIf { !primaryVacated }
+        if (primary != null) primaryAudioLevel()?.let { levels[primary] = it }
+        if (boundCall != callId) return
+        val present = primaryUserId?.takeIf { !primaryVacated }
+        levels.keys.retainAll { it in links || it == present }
+        detector = detector.recording(levels, clock())
+        val speakers = detector.speakers
+        if (speakers != speakingUserIds) {
+            speakingUserIds = speakers
+            publish()
+        }
     }
 
     private fun publish() {
@@ -281,10 +337,12 @@ internal class GroupCallMesh(
             primaryUserId = primaryUserId,
             isPrimaryVacated = primaryVacated,
             videoTracks = links.mapNotNull { (id, link) -> link.remoteVideoTrack?.let { id to it } }.toMap(),
+            speakingUserIds = speakingUserIds,
         )
     }
 
     private companion object {
         const val OFFER = "offer"
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }

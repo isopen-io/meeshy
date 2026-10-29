@@ -84,6 +84,7 @@ internal fun CallGroupStage(
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
         localName = stringResource(R.string.call_group_tile_you),
+        speakingUserIds = mesh.speakingUserIds,
         isLocalMicMuted = state.isMuted,
         isLocalVideoEnabled = state.isVideoCall && state.isCameraOn && localTrack != null,
         isPrimaryVideoActive = primaryTrack != null && !state.isPeerCameraOff,

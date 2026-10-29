@@ -64,6 +64,9 @@ internal interface GroupMeshPeerPort {
     fun setSendsVideo(enabled: Boolean)
     fun updateIceServers(servers: List<SocketIceServer>)
     fun close()
+
+    /** Le niveau sonore reçu de ce membre (0…1), `null` sans mesure — iOS `GroupPeerLinkProviding.audioLevel`. */
+    suspend fun audioLevel(): Double? = null
 }
 
 internal fun interface GroupMeshPeerFactory {
@@ -108,4 +111,5 @@ private class CallMeshPeerPort(private val peer: CallMeshPeer) : GroupMeshPeerPo
         peer.updateIceServers(servers)
     }
     override fun close() = peer.close()
+    override suspend fun audioLevel(): Double? = peer.inboundAudioLevel()
 }

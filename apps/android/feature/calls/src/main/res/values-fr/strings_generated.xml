@@ -66,6 +66,7 @@
     <string name="call_group_tile_mic_muted">Micro coupé</string>
     <string name="call_group_tile_reconnecting">Reconnexion…</string>
     <string name="call_group_tile_screen_sharing">Partage son écran</string>
+    <string name="call_group_tile_speaking">Parle</string>
     <string name="call_group_tile_unknown">Participant</string>
     <string name="call_group_tile_you">Vous</string>
     <string name="call_invite_failed">Impossible d’inviter cette personne</string>

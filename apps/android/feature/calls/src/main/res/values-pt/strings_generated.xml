@@ -66,6 +66,7 @@
     <string name="call_group_tile_mic_muted">Microfone desativado</string>
     <string name="call_group_tile_reconnecting">Reconectando…</string>
     <string name="call_group_tile_screen_sharing">Compartilhando a tela</string>
+    <string name="call_group_tile_speaking">Falando</string>
     <string name="call_group_tile_unknown">Participante</string>
     <string name="call_group_tile_you">Você</string>
     <string name="call_invite_failed">Não foi possível convidar esta pessoa</string>

@@ -4,6 +4,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -45,8 +49,8 @@ class CallGroupSpotlightStageTest {
         .admitting(GroupCallArrival("alice", displayName = "Alice"), isPrimary = true)
         .admitting(GroupCallArrival("bob", displayName = "Bob"))
 
-    private fun mesh(roster: GroupCallRoster = trio) =
-        GroupCallMeshUi(isActive = true, roster = roster, primaryUserId = "alice")
+    private fun mesh(roster: GroupCallRoster = trio, speaking: Set<String> = emptySet()) =
+        GroupCallMeshUi(isActive = true, roster = roster, primaryUserId = "alice", speakingUserIds = speaking)
 
     private class Taps {
         var stage = 0
@@ -55,6 +59,7 @@ class CallGroupSpotlightStageTest {
 
     private fun stage(
         roster: GroupCallRoster = trio,
+        speaking: Set<String> = emptySet(),
         isChromeVisible: Boolean = true,
         taps: Taps = Taps(),
     ): Taps {
@@ -63,7 +68,7 @@ class CallGroupSpotlightStageTest {
             MeeshyTheme(darkTheme = true) {
                 CallGroupStage(
                     state = state,
-                    mesh = mesh(roster),
+                    mesh = mesh(roster, speaking),
                     localTrack = null,
                     primaryTrack = null,
                     eglContext = noEgl,
@@ -128,5 +133,17 @@ class CallGroupSpotlightStageTest {
         stage(roster = trio.applying(GroupCallMediaKind.Screen, enabled = true, userId = "bob"))
         rule.onNodeWithContentDescription("Bob's screen").assertExists()
         rule.onNodeWithContentDescription("Back to grid").assertExists()
+    }
+
+    @Test
+    fun `the member who speaks is said to speak, the others are not`() {
+        stage(speaking = setOf("bob"))
+        rule.onNodeWithContentDescription("Bob").assert(stateMentions("Speaking", expected = true))
+        rule.onNodeWithContentDescription("Alice").assert(stateMentions("Speaking", expected = false))
+        rule.onNodeWithContentDescription("You").assert(stateMentions("Speaking", expected = false))
+    }
+
+    private fun stateMentions(word: String, expected: Boolean) = SemanticsMatcher("state mentions $word = $expected") { node ->
+        (node.config.getOrNull(SemanticsProperties.StateDescription)?.contains(word) == true) == expected
     }
 }

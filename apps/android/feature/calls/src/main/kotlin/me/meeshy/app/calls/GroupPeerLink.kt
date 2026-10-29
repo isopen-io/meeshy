@@ -101,6 +101,9 @@ internal class GroupPeerLink(
 
     fun updateIceServers(servers: List<me.meeshy.sdk.model.call.SocketIceServer>) = peer?.updateIceServers(servers)
 
+    /** Le niveau sonore reçu du membre, lu par le détecteur de parole du maillage. */
+    suspend fun audioLevel(): Double? = peer?.takeIf { !closed }?.audioLevel()
+
     fun close() {
         if (closed) return
         closed = true

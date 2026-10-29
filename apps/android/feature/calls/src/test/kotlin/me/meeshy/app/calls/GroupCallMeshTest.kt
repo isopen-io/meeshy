@@ -3,7 +3,9 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.CallMeshPeerConfig
 import me.meeshy.sdk.model.call.CallSignalEnvelope
@@ -29,6 +31,8 @@ class GroupCallMeshTest {
         val calls = mutableListOf<String>()
         var sendsAudio: Boolean? = null
         var closed = false
+        var level: Double? = null
+        var levelReads = 0
         lateinit var callbacks: GroupMeshPeerCallbacks
 
         override val isStable: Boolean get() = stable
@@ -63,13 +67,19 @@ class GroupCallMeshTest {
         override fun close() {
             closed = true
         }
+        override suspend fun audioLevel(): Double? {
+            levelReads += 1
+            return level
+        }
     }
 
     private data class Sent(val to: String, val from: String, val signal: GroupMeshSignal)
 
-    private class Harness {
+    /** Sans [samplingMillis], le détecteur de parole ne relève rien : `advanceUntilIdle` reste atteignable. */
+    private class Harness(clock: () -> Long = { 0L }, samplingMillis: Long = Long.MAX_VALUE) {
         val opened = mutableListOf<FakePort>()
         val sent = mutableListOf<Sent>()
+        var primaryLevel: Double? = null
         val mesh = GroupCallMesh(
             factory = { _: CallMeshPeerConfig, callbacks ->
                 FakePort().also {
@@ -78,6 +88,9 @@ class GroupCallMeshTest {
                 }
             },
             sender = { _, to, from, signal -> sent += Sent(to, from, signal) },
+            primaryAudioLevel = { primaryLevel },
+            samplingIntervalMillis = samplingMillis,
+            clock = clock,
         )
 
         fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m") = mesh.bind(
@@ -243,5 +256,67 @@ class GroupCallMeshTest {
 
     private companion object {
         const val CALL = "call-1"
+    }
+
+    private fun TestScope.callerTrio(): Harness {
+        val h = Harness(clock = { testScheduler.currentTime }, samplingMillis = 400)
+        h.bind(this, isOutgoing = true)
+        h.mesh.claimsArrival("alice")
+        h.mesh.claimsArrival("bob")
+        return h
+    }
+
+    @Test
+    fun `every 400 ms the levels of the primary and of each mesh link tell who speaks`() = runTest(UnconfinedTestDispatcher()) {
+        val h = callerTrio()
+        h.opened.single().level = 0.2
+        h.primaryLevel = 0.01
+        advanceTimeBy(399)
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+        advanceTimeBy(2)
+        assertThat(h.mesh.ui.value.speakingUserIds).containsExactly("bob")
+        h.primaryLevel = 0.3
+        advanceTimeBy(400)
+        assertThat(h.mesh.ui.value.speakingUserIds).containsExactly("alice", "bob")
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `a speaker who falls silent keeps the ring through the hold, then loses it`() = runTest(UnconfinedTestDispatcher()) {
+        val h = callerTrio()
+        h.opened.single().level = 0.2
+        advanceTimeBy(401)
+        h.opened.single().level = 0.0
+        advanceTimeBy(800)
+        assertThat(h.mesh.ui.value.speakingUserIds).containsExactly("bob")
+        advanceTimeBy(400)
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `a departing speaker loses the ring at once and the end of the call stops the readings`() = runTest(UnconfinedTestDispatcher()) {
+        val h = callerTrio()
+        val bob = h.opened.single()
+        bob.level = 0.2
+        advanceTimeBy(401)
+        h.mesh.onParticipantLeft(CALL, "bob")
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+        h.mesh.teardown()
+        val reads = bob.levelReads
+        advanceTimeBy(2_000)
+        assertThat(bob.levelReads).isEqualTo(reads)
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+    }
+
+    @Test
+    fun `a duo never samples anybody`() = runTest(UnconfinedTestDispatcher()) {
+        val h = Harness(clock = { testScheduler.currentTime }, samplingMillis = 400)
+        h.bind(this, isOutgoing = true)
+        h.mesh.claimsArrival("alice")
+        h.primaryLevel = 0.5
+        advanceTimeBy(2_000)
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+        h.mesh.teardown()
     }
 }

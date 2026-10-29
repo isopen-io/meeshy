@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
@@ -52,21 +53,25 @@ class WebRtcCallCoordinator @Inject constructor(
      * Le maillage d'un appel de groupe (#13740) : une connexion par membre AUTRE que le principal. Il ne prend un
      * signal ou une arrivée qu'une fois le groupe prouvé ; un duo ne le traverse jamais.
      */
-    private val mesh = GroupCallMesh(EngineGroupMeshPeerFactory(engine)) { callId, to, from, signal ->
-        when (signal.kind) {
-            GroupMeshSignalKind.Offer -> signals.emitOffer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
-            GroupMeshSignalKind.Answer -> signals.emitAnswer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
-            GroupMeshSignalKind.Candidate -> signals.emitIceCandidate(
-                callId = callId,
-                candidate = signal.candidate.orEmpty(),
-                sdpMLineIndex = signal.sdpMLineIndex ?: 0,
-                sdpMid = signal.sdpMid,
-                to = to,
-                from = from,
-                negotiationId = signal.negotiationId,
-            )
-        }
-    }
+    private val mesh = GroupCallMesh(
+        factory = EngineGroupMeshPeerFactory(engine),
+        primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
+        sender = { callId, to, from, signal ->
+            when (signal.kind) {
+                GroupMeshSignalKind.Offer -> signals.emitOffer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
+                GroupMeshSignalKind.Answer -> signals.emitAnswer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
+                GroupMeshSignalKind.Candidate -> signals.emitIceCandidate(
+                    callId = callId,
+                    candidate = signal.candidate.orEmpty(),
+                    sdpMLineIndex = signal.sdpMLineIndex ?: 0,
+                    sdpMid = signal.sdpMid,
+                    to = to,
+                    from = from,
+                    negotiationId = signal.negotiationId,
+                )
+            }
+        },
+    )
 
     init {
         negotiator.router = mesh::claims
