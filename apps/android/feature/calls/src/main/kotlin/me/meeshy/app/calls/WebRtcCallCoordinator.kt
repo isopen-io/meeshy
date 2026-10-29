@@ -308,5 +308,18 @@ class WebRtcCallCoordinator @Inject constructor(
         restartIceAndRenegotiate()
     }
 
+    /**
+     * Des identifiants TURN frais viennent d'être posés sur un appel établi (#13773, iOS `restartIceOnLiveCall`) :
+     * `setConfiguration` ne touche pas les allocations déjà faites, qui garderaient les anciens identifiants jusqu'à
+     * leur expiration. Une relance ICE discrète re-collecte les relais ; la paire en service porte le média jusqu'à
+     * l'élection d'une nouvelle, l'appel ne passe pas par « Reconnexion… ». Inerte sans appel, et quand le principal
+     * a laissé son siège : il n'y a plus personne au bout de la connexion de l'appel (les liens du maillage ont déjà
+     * reçu le jeu, iOS `handleIceServersRefreshed`).
+     */
+    fun restartIceOnFreshCredentials() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
+    }
+
     private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
 }

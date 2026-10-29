@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TelecomConnectionUpdate
 import me.meeshy.sdk.session.SessionRepository
@@ -75,7 +76,7 @@ class CallViewModelSocketRejoinTest {
         every { signalManager.events } returns MutableSharedFlow()
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns endedCalls
-        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<List<SocketIceServer>>()
+        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
@@ -120,6 +121,8 @@ class CallViewModelSocketRejoinTest {
         mockk(relaxed = true),
         CallPeerVisualSource { emptyFlow() },
         recordingCallPreview(),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
     )
 
     private fun socketDropsAndReturns() {

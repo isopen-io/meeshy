@@ -23,7 +23,7 @@ import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallState
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.TelecomConnectionUpdate
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
@@ -116,7 +116,7 @@ class CallExtensionPointsWiringTest {
         every { signalManager.events } returns events
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns endedCalls
-        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<List<SocketIceServer>>()
+        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
@@ -155,6 +155,8 @@ class CallExtensionPointsWiringTest {
         io.mockk.mockk(relaxed = true),
         peerVisuals,
         recordingCallPreview(),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
     )
 
     @Test

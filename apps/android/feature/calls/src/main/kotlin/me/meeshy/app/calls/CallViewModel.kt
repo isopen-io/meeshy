@@ -8,6 +8,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
@@ -23,10 +25,14 @@ import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.CallTurnCredentialsLaw
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
+import me.meeshy.sdk.model.call.TurnRefreshIceAction
 import me.meeshy.sdk.model.call.ConnectionQuality
-import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.model.call.camera.CameraFacing
+import me.meeshy.sdk.model.call.group.GroupCallTitle
+import me.meeshy.sdk.model.call.group.text
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
@@ -63,6 +69,8 @@ class CallViewModel @Inject constructor(
     private val ongoing: CallOngoingController,
     private val peerVisuals: CallPeerVisualSource,
     private val preview: CallPreviewCoordinator,
+    private val turnCredentials: CallTurnCredentialsController,
+    private val groupTitleWording: GroupCallTitleWordingSource,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -96,6 +104,12 @@ class CallViewModel @Inject constructor(
 
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
+
+    /**
+     * The name of a group call once its primary left (#13768, iOS `groupCallTitleDidChange` → `remoteUsername`): the
+     * header, the pill and the ongoing-call notification all read it. Kept until the next [start], like iOS.
+     */
+    private var groupTitle: GroupCallTitle? = null
 
     /** The signalling socket's last known edge (`null` before the first), and the rejoin it started (#13765). */
     private var socketWasConnected: Boolean? = null
@@ -148,6 +162,7 @@ class CallViewModel @Inject constructor(
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
+        turnCredentials.attach(host)
         ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
@@ -173,6 +188,15 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.socketConnected.collect(::onSocketConnection)
         }
+        viewModelScope.launch {
+            coordinator.groupMesh.map { it.title }.distinctUntilChanged().collect(::onGroupTitle)
+        }
+    }
+
+    private fun onGroupTitle(title: GroupCallTitle?) {
+        if (title == null || title == groupTitle) return
+        groupTitle = title
+        publish()
     }
 
     /**
@@ -192,6 +216,11 @@ class CallViewModel @Inject constructor(
             if (!callState.isActive || callId != joining) return@launch
             CallSignalingRejoinLaw.plan(result, CallRejoinMedia(isMuted = media.isMuted, isCameraOn = media.isCameraOn))
                 .forEach { applyRejoin(joining, it) }
+            // iOS cancels the periodic refresh and asks for a fresh set on the return; Android already holds the
+            // ACK's fresh set, so the deadline restarts from it (an empty set asks now, the room being joined).
+            if (result is CallJoinResult.Success && callState.isActive && callId == joining) {
+                turnCredentials.afterConfigure(joining, result.iceServers)
+            }
         }
     }
 
@@ -240,11 +269,24 @@ class CallViewModel @Inject constructor(
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
     }
 
-    /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
-    private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
+    /**
+     * A fresh TURN set landed (#13773, iOS `observeIceServerRefresh`): the connection takes it by `setConfiguration`,
+     * the next refresh is armed on its lifetime, and ICE re-gathers its relays with it ([CallTurnCredentialsLaw.iceAction]).
+     * A set for another call is not this call's.
+     */
+    private fun onIceServersRefreshed(refresh: IceServersRefreshedPayload) {
+        val iceServers = refresh.iceServers
         preview.onIceServersRefreshed(iceServers)
         if (!awaitingIncomingIce) {
-            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            if (callId.isBlank() || (refresh.callId != null && refresh.callId != callId)) return
+            turnCredentials.schedule(refresh.ttl?.toLong())
+            if (iceServers.isEmpty()) return
+            coordinator.updateIceServers(iceServers)
+            when (CallTurnCredentialsLaw.iceAction(callState)) {
+                TurnRefreshIceAction.Inert -> Unit
+                TurnRefreshIceAction.RearmReconnect -> coordinator.retryIceRestart()
+                TurnRefreshIceAction.RestartIce -> coordinator.restartIceOnFreshCredentials()
+            }
             return
         }
         awaitingIncomingIce = false
@@ -286,6 +328,8 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.mediaEstablished = false
         this.connectionQuality = null
+        this.groupTitle = null
+        turnCredentials.cancelAll()
         telecomReporter.begin(TelecomCallInfo(config.peerId, config.peerName, config.isVideo, config.isOutgoing))
         waiting.reset()
         analytics.begin()
@@ -321,6 +365,7 @@ class CallViewModel @Inject constructor(
                         config.isVideo, ::onMediaConnected, ::onMediaStalled, conversationId = config.conversationId,
                     )
                     preview.adoptIceServers(callId, result.ack.iceServers)
+                    turnCredentials.schedule(result.ack.ttlSeconds?.toLong())
                     syncPreview()
                 }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
@@ -340,11 +385,14 @@ class CallViewModel @Inject constructor(
         // A fire-and-forget join raced the room -> NOT_A_PARTICIPANT on answer.
         viewModelScope.launch {
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
-                is CallJoinResult.Success -> coordinator.startIncoming(
-                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
-                    ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
-                    conversationId = config.conversationId,
-                )
+                is CallJoinResult.Success -> {
+                    coordinator.startIncoming(
+                        viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
+                        ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
+                        conversationId = config.conversationId,
+                    )
+                    if (callState.isActive) turnCredentials.afterConfigure(callId, result.iceServers)
+                }
                 is CallJoinResult.Failure -> {
                     coordinator.end()
                     dispatch(CallEvent.ConnectionFailed(result.message))
@@ -544,6 +592,7 @@ class CallViewModel @Inject constructor(
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
         if (callState is CallState.Connected) mediaEstablished = true
+        if (!callState.isActive) turnCredentials.cancelAll()
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
@@ -627,7 +676,7 @@ class CallViewModel @Inject constructor(
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
             peerScreenSharing = peer.screenSharing,
-        )
+        ).withGroupTitle(groupTitle?.text(groupTitleWording.current()))
         syncPreview()
     }
 

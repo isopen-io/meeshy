@@ -67,9 +67,10 @@ fun CallScreen(
     val captionsViewModel: CallCaptionsViewModel = hiltViewModel()
     val captionsChip by remember(captionsViewModel) { captionsViewModel.state.map(CallCaptionsChip::of).distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = CallCaptionsChip.of(captionsViewModel.state.value))
-    // Le principal parti d'un groupe qui continue, l'appel se nomme par ceux qui restent (#13754, iOS #9091).
+    // Le principal parti d'un groupe qui continue, l'appel se nomme par ceux qui restent (#13754, iOS #9091) : le
+    // ViewModel le sert déjà dans `peerName`, que la pilule et la notification lisent aussi (#13768).
     val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
-    val state = callState.withCaptions(captionsChip).withGroupTitle(groupCallTitleText(groupMesh.title))
+    val state = callState.withCaptions(captionsChip)
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)

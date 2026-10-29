@@ -22,7 +22,7 @@ import me.meeshy.sdk.call.camera.CameraZoomActuator
 import me.meeshy.sdk.model.call.camera.CameraDeviceOption
 import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -54,7 +54,7 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
-    private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
+    private val iceServersRefreshed = MutableSharedFlow<IceServersRefreshedPayload>(extraBufferCapacity = 8)
     private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
     private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
     private val translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(extraBufferCapacity = 64)
@@ -198,6 +198,8 @@ class CallViewModelTest {
         mockk(relaxed = true),
         CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
         recordingCallPreview(),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
     )
 
     @Test

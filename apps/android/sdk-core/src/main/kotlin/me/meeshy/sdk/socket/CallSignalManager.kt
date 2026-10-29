@@ -23,7 +23,7 @@ import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -121,13 +121,11 @@ class CallSignalManager internal constructor(
         socketManager.connectionState.map { it == SocketConnectionState.CONNECTED }.distinctUntilChanged()
 
     /**
-     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
-     * The caller gets its ICE servers in the initiate ACK; the callee — whose
-     * `call:initiated` frame carries none — requests them on accept and configures
-     * the WebRTC engine once they land here. Hot, no replay.
+     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers]: the call they answer,
+     * the set, and its lifetime (`ttl`), which re-arms the next refresh of a long call (#13773). Hot, no replay.
      */
-    private val _iceServersRefreshed = SocketInboundRoute.subject<List<SocketIceServer>>()
-    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.exposed()
+    private val _iceServersRefreshed = SocketInboundRoute.subject<IceServersRefreshedPayload>()
+    val iceServersRefreshed: SharedFlow<IceServersRefreshedPayload> = _iceServersRefreshed.exposed()
 
     /**
      * A participant left the room WITHOUT ending the call (`call:participant-left`

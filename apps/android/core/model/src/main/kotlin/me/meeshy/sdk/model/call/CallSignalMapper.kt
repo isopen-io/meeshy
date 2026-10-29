@@ -87,12 +87,12 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
-     * Decode a `call:ice-servers-refreshed` frame into the fresh STUN/TURN servers
-     * the callee's WebRTC engine needs (the caller already has them from the
-     * initiate ACK). `null` on a malformed frame.
+     * Decode a `call:ice-servers-refreshed` frame: the call it answers, the fresh STUN/TURN servers and their
+     * lifetime (`ttl`, seconds), which re-arms the next refresh (#13773, iOS `CallTurnCredentials`). `null` on a
+     * malformed frame.
      */
-    fun iceServersRefreshed(rawJson: String): List<SocketIceServer>? = runCatching {
-        json.decodeFromString<IceServersRefreshedPayload>(rawJson).iceServers
+    fun iceServersRefreshed(rawJson: String): IceServersRefreshedPayload? = runCatching {
+        json.decodeFromString<IceServersRefreshedPayload>(rawJson)
     }.getOrNull()
 
     /**
