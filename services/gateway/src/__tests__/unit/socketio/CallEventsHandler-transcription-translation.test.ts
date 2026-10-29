@@ -109,6 +109,7 @@ function makePrisma() {
       findUnique: jest.fn<any>().mockResolvedValue({
         status: 'active',
         metadata: { translationEnabled: true },
+        conversation: { encryptionMode: null },
       }),
     },
     participant: {
@@ -306,6 +307,7 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     (prisma.callSession.findUnique as jest.Mock).mockResolvedValue({
       status: 'active',
       metadata: {},
+      conversation: { encryptionMode: null },
     });
     const { socket, handlers, roomEmit } = makeSocket();
     const taskId = 'task-no-gate';

@@ -143,7 +143,7 @@ const prismaStub = {
     findMany: async () => [{ userId: USER_B }],
   },
   callSession: {
-    findUnique: async () => ({ conversationId: CONV_ID }),
+    findUnique: async () => ({ conversationId: CONV_ID, status: 'active', conversation: { encryptionMode: null } }),
   },
   user: {
     findMany: async () => [],

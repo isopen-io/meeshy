@@ -60,6 +60,8 @@ import {
   persistTranscriptionSegment,
   translateAndEmitSegment,
 } from './call-transcription-relay';
+import { admitCallCaptions } from './call-captions-admission';
+import type { AckOf } from '@meeshy/shared/types/socketio-events';
 import {
   registerCallClientReportEvents,
   type CallClientReportDeps,
@@ -3700,7 +3702,7 @@ export class CallEventsHandler {
      * CALL_ERROR) : signal cosmétique, jamais bloquant pour l'appel — même
      * posture que call:backgrounded/foregrounded.
      */
-    socket.on(CALL_EVENTS.TRANSCRIPTION_ACTIVE, async (data: CallTranscriptionActiveEvent) => {
+    socket.on(CALL_EVENTS.TRANSCRIPTION_ACTIVE, async (data: CallTranscriptionActiveEvent, ack?: AckOf<typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE>) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -3722,11 +3724,8 @@ export class CallEventsHandler {
         const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!participantId) return;
 
-        const callSession = await this.prisma.callSession.findUnique({
-          where: { id: data.callId },
-          select: { status: true }
-        });
-        if (!callSession || (CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) return;
+        // #13720 — appel terminé : silence ; conversation e2ee ou régime illisible : refus.
+        if (!(await admitCallCaptions(this.prisma, { callId: data.callId, userId, event: CALL_EVENTS.TRANSCRIPTION_ACTIVE, ack }))) return;
 
         socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSCRIPTION_ACTIVE, {
           callId: data.callId,
@@ -3743,7 +3742,7 @@ export class CallEventsHandler {
      * Validates, checks participation, and relays to other call participants
      * If translation is enabled on the call, forwards to ZMQ translator
      */
-    socket.on(CALL_EVENTS.TRANSCRIPTION_SEGMENT, async (data: CallTranscriptionSegmentEvent) => {
+    socket.on(CALL_EVENTS.TRANSCRIPTION_SEGMENT, async (data: CallTranscriptionSegmentEvent, ack?: AckOf<typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT>) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -3776,12 +3775,9 @@ export class CallEventsHandler {
           return;
         }
 
-        const callSession = await this.prisma.callSession.findUnique({
-          where: { id: data.callId },
-          select: { status: true }
-        });
-
-        if (!callSession || (CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) return;
+        // #13720 — AVANT tout relais, traduction ou écriture : une parole d'un
+        // appel e2ee (ou au régime illisible) n'atteint rien (call-captions-admission.ts).
+        if (!(await admitCallCaptions(this.prisma, { callId: data.callId, userId, event: CALL_EVENTS.TRANSCRIPTION_SEGMENT, ack }))) return;
 
         // Journal metadata normalized once so every downstream emission
         // (translated or not, success or timeout) stamps the SAME

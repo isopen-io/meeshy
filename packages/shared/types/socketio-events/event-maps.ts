@@ -600,8 +600,13 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_RECONNECTED]: (data: CallReconnectedEvent) => void;
   [CLIENT_EVENTS.CALL_BACKGROUNDED]: (data: { callId: string; participantId: string }) => void;
   [CLIENT_EVENTS.CALL_FOREGROUNDED]: (data: { callId: string; participantId: string }) => void;
-  [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
-  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveEvent) => void;
+  /**
+   * L'acquittement est FACULTATIF et ne répond qu'au refus d'un appel chiffré de
+   * bout en bout (`E2EE_CAPTIONS_REFUSED`, #13720) : aucun client publié n'en
+   * passe, et le relais nominal ne l'appelle pas.
+   */
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent, ack?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveEvent, ack?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSLATION_REQUEST]: (data: CallTranslationRequestEvent) => void;
