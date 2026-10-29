@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
+import java.io.File
 import org.junit.Test
 
 class OnboardingRootRulesTest {
@@ -31,5 +32,14 @@ class OnboardingRootRulesTest {
         assertThat(OnboardingRootRules.isStoryComposer(Routes.STORY_COMPOSER)).isTrue()
         assertThat(OnboardingRootRules.isStoryComposer(Routes.FEED)).isFalse()
         assertThat(OnboardingRootRules.isStoryComposer(null)).isFalse()
+    }
+
+    @Test
+    fun `une inscription aligne l'etat d'authentification de la racine avant d'ouvrir l'accueil`() {
+        val graph = File("src/main/kotlin/me/meeshy/app/navigation/graph/AuthNavGraph.kt").readText()
+        val registered = graph.substringAfter("onRegistered = {").substringBefore("onOpenTerms")
+
+        assertThat(registered).contains("authViewModel.onExternalSessionOpened()")
+        assertThat(registered.indexOf("onExternalSessionOpened")).isLessThan(registered.indexOf("navController.navigate"))
     }
 }

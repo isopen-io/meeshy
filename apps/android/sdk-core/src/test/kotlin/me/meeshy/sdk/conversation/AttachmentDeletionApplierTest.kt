@@ -10,6 +10,10 @@ import me.meeshy.sdk.model.AttachmentDeletedEvent
 import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.withAccountTicket
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -102,5 +106,56 @@ class AttachmentDeletionApplierTest {
         val carriers = hub.read("c1", ConversationMediaKind.VISUAL)!!.carriers
         assertThat(carriers.flatMap { it.attachments }.map { it.id }).containsExactly("b")
         assertThat(hub.read("c2", ConversationMediaKind.VISUAL)!!.carriers.single().attachments.map { it.id }).containsExactly("a")
+    }
+
+    private class RecordingPurger : DeletedAttachmentFilePurger {
+        val purged = mutableListOf<Set<String>>()
+        override suspend fun purge(urls: Set<String>) {
+            purged += urls
+        }
+    }
+
+    private fun applierWith(harness: MessageCollaboratorHarness, purger: DeletedAttachmentFilePurger, fence: AccountFence? = null) =
+        AttachmentDeletionApplier(harness.database, harness.database.messageDao(), harness.clock, fence, ConversationMediaHubIndex(null), purger)
+
+    private fun hosted(id: String) = ApiMessageAttachment(id = id, mimeType = "image/jpeg", fileUrl = "https://m.test/$id.jpg", thumbnailUrl = "https://m.test/$id-t.jpg")
+
+    @Test
+    fun `the files of the deleted piece leave the disk caches, and the neighbour's stay`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", "", hosted("a"), hosted("b")))
+        val purger = RecordingPurger()
+
+        applierWith(harness, purger).apply(event)
+
+        assertThat(purger.purged).containsExactly(setOf("https://m.test/a.jpg", "https://m.test/a-t.jpg"))
+    }
+
+    @Test
+    fun `a replay, an unknown message or a piece the author already removed purges nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", "x", hosted("b")))
+        val purger = RecordingPurger()
+
+        applierWith(harness, purger).apply(event)
+        applierWith(harness, purger).apply(event.copy(messageId = "inconnu"))
+
+        assertThat(purger.purged).isEmpty()
+    }
+
+    @Test
+    fun `an event that lands after its account closed purges the files of nobody`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", "", hosted("a")))
+        val owner = object : OutboxOwnerSource {
+            var id: String? = "A"
+            override fun currentOwnerId() = id
+        }
+        val fence = AccountFence(owner, SessionTransitionFlags())
+        val purger = RecordingPurger()
+        val ticket = fence.ticket()
+        owner.id = "B"
+
+        withAccountTicket(ticket) { applierWith(harness, purger, fence).apply(event) }
+
+        assertThat(purger.purged).isEmpty()
+        assertThat(harness.cachedMessage("m1").attachments.map { it.id }).containsExactly("a")
     }
 }

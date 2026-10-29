@@ -97,11 +97,11 @@ nonisolated final class QRCodeCaptureSession: NSObject, AVCaptureMetadataOutputO
     }
 
     func start() {
-        queue.async { [session] in if !session.isRunning { session.startRunning() } }
+        queue.async { [self] in if !session.isRunning { session.startRunning() } }
     }
 
     func stop() {
-        queue.async { [session] in if session.isRunning { session.stopRunning() } }
+        queue.async { [self] in if session.isRunning { session.stopRunning() } }
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.StoryVisibility
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +100,8 @@ fun StoryComposerScreen(
     repostOfId: String? = null,
     /** La porte pose elle-même la matière (partage entrant, média de conversation ou de post) : le brouillon enregistré ne se restaure pas par-dessus et n'est pas écrasé. */
     seededByDoor: Boolean = false,
+    /** L'audience dont la porte amorce le composeur (onboarding d'un mineur) ; un brouillon restauré garde la sienne. */
+    initialVisibility: StoryVisibility? = null,
     titleContent: (@Composable () -> Unit)? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
@@ -125,7 +128,7 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor)
+        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor, initialVisibility = initialVisibility)
         onDispose { viewModel.persistDraft() }
     }
 

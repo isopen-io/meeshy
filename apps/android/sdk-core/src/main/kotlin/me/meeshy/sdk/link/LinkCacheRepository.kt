@@ -11,6 +11,8 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.KeyedJsonCacheSource
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ShareLinkArrivalStats
+import me.meeshy.sdk.model.conversationcard.ConversationCardResolution
+import me.meeshy.sdk.model.deeplink.ConversationCardTarget
 import me.meeshy.sdk.model.ShareLinkArrivalsListState
 import me.meeshy.sdk.model.ShareLinkArrivalsPage
 import me.meeshy.sdk.net.NetworkResult
@@ -36,9 +38,45 @@ class LinkCacheRepository(
     constructor(api: LinkDetailApi, dao: KeyedJsonCacheDao, fence: AccountFence) :
         this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
 
-    fun card(identifier: String): Flow<CacheResult<JsonElement>> =
-        source(CARD, identifier, JsonElement.serializer()) { apiCall { api.card(identifier) } }
-            .results(CachePolicy.LinksAndTokens, clock)
+    /**
+     * La carte d'une conversation désignée par un lien, cache d'abord (#13672). Un refus du serveur est
+     * un VERDICT qui se cache ([ConversationCardResolution.definitiveVerdict]) ; une panne n'en est pas
+     * un : elle lève, le cache reste servi et [onRevalidateError] le dit.
+     */
+    fun card(
+        target: ConversationCardTarget,
+        onRevalidateError: (Throwable) -> Unit = {},
+    ): Flow<CacheResult<ConversationCardResolution>> =
+        KeyedJsonCacheSource(cache, CARD, cardKey(target), ConversationCardResolution.serializer()) { fetchCard(target) }
+            .results(CachePolicy.LinksAndTokens, clock, onRevalidateError)
+
+    /** Pose un verdict connu localement (la carte d'une jonction confirmée), sans la dater comme relue. */
+    suspend fun storeCard(target: ConversationCardTarget, resolution: ConversationCardResolution) {
+        cache.update(CARD, cardKey(target), ConversationCardResolution.serializer()) { resolution }
+    }
+
+    /** Oublie la carte de [target] : la prochaine lecture repart du serveur (une jonction faite ailleurs l'a périmée). */
+    suspend fun forgetCard(target: ConversationCardTarget) {
+        cache.clear(CARD, cardKey(target))
+    }
+
+    private suspend fun fetchCard(target: ConversationCardTarget): ConversationCardResolution {
+        val result = when (target) {
+            is ConversationCardTarget.ShareLink -> apiCall { api.card(target.identifier) }
+            is ConversationCardTarget.Direct -> apiCall { api.directCard(target.conversationId) }
+        }
+        return when (result) {
+            is NetworkResult.Success -> ConversationCardResolution.Card(result.data)
+            is NetworkResult.Failure ->
+                ConversationCardResolution.definitiveVerdict(result.error.httpStatus, target)
+                    ?: throw LinkFetchException(result.error.message)
+        }
+    }
+
+    private fun cardKey(target: ConversationCardTarget): String = when (target) {
+        is ConversationCardTarget.ShareLink -> "share:${target.identifier}"
+        is ConversationCardTarget.Direct -> "direct:${target.conversationId}"
+    }
 
     fun messages(identifier: String): Flow<CacheResult<JsonElement>> =
         source(MESSAGES, identifier, JsonElement.serializer()) { apiCall { api.messages(identifier, limit = PAGE_SIZE) } }

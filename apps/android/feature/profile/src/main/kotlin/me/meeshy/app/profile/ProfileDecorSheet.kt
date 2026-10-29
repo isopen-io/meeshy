@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -232,8 +233,17 @@ private fun RingSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, sho
 private fun RingTile(design: AvatarRingDesign?, label: String, selected: Boolean, who: ProfileDecorUiState, onClick: () -> Unit) {
     val base = LocalMediaBaseUrl.current
     DecorTile(label, selected, Modifier.width(RING_TILE_WIDTH), onClick) {
-        AvatarRingLayer(design, footprint = RING_AVATAR, modifier = Modifier.size(RING_FOOTPRINT)) {
-            MeeshyAvatar(name = who.name, size = RING_AVATAR, imageUrl = resolveServedImageUrl(who.avatarUrl, base))
+        Box(
+            Modifier
+                .size(RING_FOOTPRINT)
+                .clip(CircleShape)
+                .background(MeeshyPalette.Indigo950)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            AvatarRingLayer(design, footprint = RING_AVATAR, modifier = Modifier.size(RING_FOOTPRINT)) {
+                MeeshyAvatar(name = who.name, size = RING_AVATAR, imageUrl = resolveServedImageUrl(who.avatarUrl, base))
+            }
         }
         TileLabel(label)
     }

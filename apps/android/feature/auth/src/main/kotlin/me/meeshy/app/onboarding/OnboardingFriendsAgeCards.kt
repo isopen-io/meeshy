@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -126,7 +124,6 @@ private fun BirthDateField(state: OnboardingUiState, onPick: (LocalDate) -> Unit
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
-            androidx.compose.material3.Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = MeeshyPalette.Indigo500)
             Text(
                 text = shown,
                 color = if (state.ageDatePicked) MeeshyTheme.tokens.textPrimary else MeeshyTheme.tokens.textMuted,

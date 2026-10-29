@@ -163,7 +163,7 @@ final class ComposerRetouchTextBoard: ObservableObject {
     /// `nil` sans texte.
     func overlay(canvas: CGSize) -> ComposerTextOverlay? {
         guard let slide = bakedSlide, canvas.width >= 1, canvas.height >= 1 else { return nil }
-        let couches = ComposerRetouchTextRule.bakeRuns(slide.effects.textObjects ?? []).flatMap { passe in
+        let couches = ComposerRetouchTextRule.bakeRuns(slide.effects.textObjects).flatMap { passe in
             Self.layers(of: passe, in: slide, canvas: canvas)
         }
         return couches.isEmpty ? nil : ComposerTextOverlay(layers: couches)

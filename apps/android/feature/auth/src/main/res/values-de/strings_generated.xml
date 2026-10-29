@@ -256,6 +256,7 @@
     <string name="signup_email_taken">Mit dieser Adresse existiert bereits ein Konto.</string>
     <string name="signup_error_generic">Die Kontoerstellung ist fehlgeschlagen. Versuche es erneut.</string>
     <string name="signup_error_network">Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.</string>
+    <string name="signup_error_rejected">Die Registrierung wurde abgelehnt — versuche es gleich noch einmal.</string>
     <string name="signup_have_account">Schon ein Konto?</string>
     <string name="signup_language_change">Ändern</string>
     <string name="signup_language_picker_title">Lesesprache</string>

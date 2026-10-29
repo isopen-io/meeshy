@@ -17,12 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -61,6 +55,7 @@ import me.meeshy.sdk.model.onboarding.OnboardingRecap
 import me.meeshy.sdk.model.onboarding.OnboardingRewards
 import me.meeshy.sdk.model.onboarding.OnboardingSendState
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -238,7 +233,7 @@ private fun EmailCard(state: OnboardingUiState, actions: OnboardingCardActions) 
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
             state.accountEmail?.let { address ->
-                IconLine(Icons.Filled.Email, stringResource(R.string.onboarding_email_address, address))
+                IconLine(MeeshyIcons.Mail, stringResource(R.string.onboarding_email_address, address))
             }
             VerificationStatus(state)
         }
@@ -258,14 +253,14 @@ internal fun VerificationStatus(state: OnboardingUiState) {
     val tokens = MeeshyTheme.tokens
     when (state.verificationLinkState) {
         OnboardingSendState.SENT ->
-            IconLine(Icons.Filled.CheckCircle, stringResource(R.string.onboarding_email_sent), tokens.success)
+            IconLine(MeeshyIcons.CheckCircleFilled, stringResource(R.string.onboarding_email_sent), tokens.success)
         OnboardingSendState.FAILED -> Text(
             text = stringResource(R.string.onboarding_email_failed),
             color = tokens.errorInk,
             style = meeshyText(MeeshyFontSize.subhead, FontWeight.Medium),
         )
         else -> IconLine(
-            Icons.Filled.HourglassEmpty,
+            MeeshyIcons.Hourglass,
             stringResource(R.string.onboarding_email_waiting),
             tokens.textMuted,
             MeeshyFontSize.footnote,
@@ -396,7 +391,7 @@ private fun StoryCard(state: OnboardingUiState, actions: OnboardingCardActions, 
                 else -> {
                     val friendsOnly = state.storyVisibility == me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.FRIENDS
                     IconLine(
-                        icon = if (friendsOnly) Icons.Filled.People else Icons.Filled.Public,
+                        icon = if (friendsOnly) MeeshyIcons.GroupFilled else MeeshyIcons.Globe,
                         text = stringResource(
                             if (friendsOnly) R.string.onboarding_story_audience_friends else R.string.onboarding_story_audience_public,
                         ),
@@ -588,7 +583,7 @@ internal fun OutcomeBanner(text: String, reward: String?) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = success, modifier = Modifier.size(28.dp))
+        Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = success, modifier = Modifier.size(28.dp))
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
             Text(text, color = MeeshyTheme.tokens.textPrimary, style = meeshyText(MeeshyFontSize.body, FontWeight.SemiBold))
             if (reward != null) {

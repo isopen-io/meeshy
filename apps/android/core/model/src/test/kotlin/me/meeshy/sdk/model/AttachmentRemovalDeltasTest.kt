@@ -183,4 +183,34 @@ class AttachmentRemovalDeltasTest {
         assertThat(located.location).isEqualTo(place)
         assertThat(photo.attachmentSummary).isEqualTo(LastMessageAttachmentSummary(count = 1, kinds = mapOf("image" to 1), totalSize = 10))
     }
+
+    @Test
+    fun `a message that carries a place or a sticker is not a tombstone when its last piece goes`() {
+        val place = SharedPlace(latitude = 1.0, longitude = 2.0)
+        val located = message("", piece("a")).copy(location = place)
+        val stickered = message("", piece("a")).copy(sticker = MessageSticker(emoji = "🔥"))
+
+        assertThat(AttachmentRemovalDeltas.message(located, "c1", "a", at).deletedAt).isNull()
+        assertThat(AttachmentRemovalDeltas.message(stickered, "c1", "a", at).deletedAt).isNull()
+    }
+
+    @Test
+    fun `every file the piece left on the device is named once, whatever the cache that holds it`() {
+        val full = ApiMessageAttachment(
+            id = "a",
+            fileUrl = "https://m.test/f.jpg",
+            thumbnailUrl = "https://m.test/t.jpg",
+            imageVariants = listOf(MeeshyImageVariant(width = 100, height = 100, url = "https://m.test/v.webp", size = 5)),
+            translations = mapOf(
+                "en" to ApiAttachmentTranslation(url = "https://m.test/en.mp3"),
+                "es" to ApiAttachmentTranslation(url = "https://m.test/f.jpg"),
+                "de" to ApiAttachmentTranslation(url = " "),
+            ),
+        )
+
+        assertThat(AttachmentRemovalDeltas.fileUrls(full)).containsExactly(
+            "https://m.test/f.jpg", "https://m.test/t.jpg", "https://m.test/v.webp", "https://m.test/en.mp3",
+        )
+        assertThat(AttachmentRemovalDeltas.fileUrls(ApiMessageAttachment(id = "b"))).isEmpty()
+    }
 }

@@ -701,6 +701,9 @@ class ChatViewModel @Inject constructor(
     /** Les pièces-fichiers reçues pendant la session (badge « prêt » des rangées, #13492). */
     val downloadedFileIds: StateFlow<Set<String>> get() = fileDownload.downloadedIds
 
+    /** L'adresse locale d'une pièce déjà reçue pendant la session ; `null` si elle n'a pas été téléchargée. */
+    fun downloadedFileUri(attachmentId: String): String? = fileDownload.localUriOf(attachmentId)
+
     /** Le toucher d'une rangée de fichier du fil : télécharger puis ouvrir, annuler, ou retenter (#13492). */
     fun onFileAttachmentTap(messageId: String, attachmentId: String? = null) =
         fileDownload.tap(messageId, attachmentId)

@@ -11,6 +11,7 @@ import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.stories.StoryViewerViewModel
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
@@ -133,6 +134,8 @@ object Routes {
     const val NOTIFICATION_SETTINGS = "settings/notifications"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
+    /** Réglages › Packs et téléchargements : la Boutique, ouvrable sur un domaine (`?domain=`) et un pack (`?pack=`). */
+    const val PACK_SHOP = "settings/packs"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
     const val ENCRYPTED_DEVICES = "settings/encrypted-devices"
@@ -171,7 +174,8 @@ object Routes {
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
+    const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}"
     /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
@@ -186,6 +190,10 @@ object Routes {
     fun storyComposerRepost(storyId: String): String =
         "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
 
+    /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
+    fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =
+        if (audience == OnboardingStoryVisibility.FRIENDS) "story_composer?$STORY_COMPOSER_AUDIENCE_ARG=FRIENDS" else STORY_COMPOSER
+
     fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String, highlightMessageId: String? = null): String =
         ChatRouteArgs.route(conversationId, highlightMessageId)
@@ -197,6 +205,9 @@ object Routes {
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
+    fun packShop(domain: String? = null, pack: String? = null): String =
+        listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })
+            .joinToString("&").let { query -> if (query.isEmpty()) PACK_SHOP else "$PACK_SHOP?$query" }
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }

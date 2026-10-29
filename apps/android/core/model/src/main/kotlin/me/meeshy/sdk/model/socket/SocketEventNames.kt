@@ -152,6 +152,9 @@ object SocketEventNames {
     const val PRESENCE_APP_STATE = "presence:app-state"
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
+    // pack
+    const val PACK_INSTALLATION_UPDATED = "pack:installation-updated"
+
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
     const val REACTION_ADDED = "reaction:added"
@@ -335,6 +338,7 @@ object SocketEventNames {
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,
         POST_UPDATED,
+        PACK_INSTALLATION_UPDATED,
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,

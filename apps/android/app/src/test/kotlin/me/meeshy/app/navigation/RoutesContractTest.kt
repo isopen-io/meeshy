@@ -78,10 +78,18 @@ class RoutesContractTest {
             "USER_POSTS", "profile/{userId}/posts",
             "REPORT_USER", "report/{userId}?username={username}",
             "STORY_VIEWER", "story/{userId}",
-            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}",
+            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}",
             "REELS", "reels?seed={seed}",
             "CALL", CallRoute.PATTERN,
         )
+    }
+
+    @Test
+    fun `l'onboarding d'un mineur ouvre le composeur sur FRIENDS, un adulte sur la route par defaut`() {
+        assertThat(Routes.storyComposerFromOnboarding(me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.FRIENDS))
+            .isEqualTo("story_composer?audience=FRIENDS")
+        assertThat(Routes.storyComposerFromOnboarding(me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.PUBLIC))
+            .isEqualTo(Routes.STORY_COMPOSER)
     }
 
     @Test

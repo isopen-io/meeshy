@@ -28,5 +28,6 @@
     <string name="signup_country_picker_title">Wähle ein Land</string>
     <string name="signup_password_too_short">Mindestens 6 Zeichen.</string>
     <string name="signup_submit">Mein Konto erstellen</string>
+    <string name="signup_display_name_invalid_characters">Der Name darf nur Buchstaben, Leerzeichen, Apostrophe, Punkte und Bindestriche enthalten.</string>
     <string name="signup_error_invalid_field">Dieser Wert wurde abgelehnt.</string>
 </resources>

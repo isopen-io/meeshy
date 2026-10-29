@@ -25,9 +25,12 @@ internal object OnboardingRootRules {
     /** Un lien profond ou un push qui a mené ailleurs que les onglets : le calque attend le retour. */
     fun isRoutedElsewhere(route: String?): Boolean = route != null && route !in tabRoutes
 
-    /** Le calque recouvre la racine (contenu, chrome) tant qu'il est présent — hors composeur de story, qu'il laisse libre. */
+    /** L'écran d'appel : sur iOS une présentation modale, donc PAR-DESSUS le calque — un appel ne se cache jamais dessous. */
+    fun isCallOpen(route: String?): Boolean = CallRoute.isCallRoute(route)
+
+    /** Le calque recouvre la racine (contenu, chrome) tant qu'il est présent — hors composeur de story et appel, qu'il laisse libres. */
     fun coversRoot(isPresented: Boolean, currentRoute: String?): Boolean =
-        isPresented && !isStoryComposer(currentRoute)
+        isPresented && !isStoryComposer(currentRoute) && !isCallOpen(currentRoute)
 }
 
 @HiltViewModel
@@ -60,8 +63,9 @@ internal fun OnboardingHost(
         isRoutedElsewhere = OnboardingRootRules.isRoutedElsewhere(currentRoute),
         isCelebrating = celebrating,
         isStoryComposerOpen = OnboardingRootRules.isStoryComposer(currentRoute),
+        isCallOpen = OnboardingRootRules.isCallOpen(currentRoute),
         navigation = OnboardingNavigation(
-            openStoryComposer = { navController.navigate(Routes.STORY_COMPOSER) },
+            openStoryComposer = { audience -> navController.navigate(Routes.storyComposerFromOnboarding(audience)) },
             openConversation = { navController.navigate(Routes.chat(it)) },
             openProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
             signOut = { authViewModel.logout() },

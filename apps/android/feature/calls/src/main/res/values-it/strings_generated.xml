@@ -21,6 +21,8 @@
     <string name="call_decline_reply_meeting">Sono in riunione.</string>
     <string name="call_decline_reply_write_me">Scrivimi, ti rispondo subito.</string>
     <string name="call_decline_title">Rifiuta con un messaggio</string>
+    <string name="call_detail_participants">Partecipanti</string>
+    <string name="call_detail_transcript">Trascrizione</string>
     <string name="call_frames_mood_corporate">Aziendale</string>
     <string name="call_frames_mood_deconnecte">Staccato</string>
     <string name="call_frames_mood_distingue">Raffinato</string>
@@ -82,6 +84,9 @@
     <string name="call_recording_stopped_timeout">Non tutti hanno risposto: nessuna registrazione</string>
     <string name="call_recording_unavailable">Registrazione non disponibile al momento</string>
     <string name="call_recording_waiting">In attesa del consenso di tutti…</string>
+    <string name="call_transcript_participant">Partecipante</string>
+    <string name="call_transcript_show_original">Mostra il testo originale</string>
+    <string name="call_transcript_show_translated">Mostra la traduzione</string>
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
 </resources>

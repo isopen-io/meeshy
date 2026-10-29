@@ -35,6 +35,9 @@ internal class ChatFileDownloadController(
     /** Les pièces-fichiers déjà reçues pendant la session : leur rangée dit « prêt » (#13492). */
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds
 
+    /** L'adresse locale d'une pièce reçue pendant la session, ou `null` : la seule qu'une carte de visite lit sans réseau. */
+    fun localUriOf(attachmentId: String): String? = completedDownloads[attachmentId]?.localUri
+
     /**
      * Attachments already downloaded this session, by [ApiMessageAttachment.id] — a completed
      * transfer's terminal [FileAttachmentDownloadState.Completed] (the reusable `localUri`).

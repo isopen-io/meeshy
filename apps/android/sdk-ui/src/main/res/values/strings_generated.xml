@@ -38,6 +38,8 @@
     <string name="audio_trim_handle_end">Selection end</string>
     <string name="audio_trim_handle_start">Selection start</string>
     <string name="avatar_a11y_mood">mood %1$s</string>
+    <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
+    <string name="bubble_contact_card_on_meeshy">On Meeshy</string>
     <string name="bubble_contact_card_shared">Shared contact</string>
     <string name="bubble_story_citation_answer">reply to their story</string>
     <string name="bubble_story_citation_open_hint">Opens the quoted story</string>

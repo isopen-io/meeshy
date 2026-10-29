@@ -256,6 +256,7 @@
     <string name="signup_email_taken">An account already exists with this address.</string>
     <string name="signup_error_generic">Account creation failed. Please try again.</string>
     <string name="signup_error_network">No connection. Check your network and try again.</string>
+    <string name="signup_error_rejected">Sign-up was refused — try again in a moment.</string>
     <string name="signup_have_account">Already have an account?</string>
     <string name="signup_language_change">Change</string>
     <string name="signup_language_picker_title">Reading language</string>

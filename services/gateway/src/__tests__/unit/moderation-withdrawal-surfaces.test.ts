@@ -73,11 +73,26 @@ describe("l'original d'une republication", () => {
     expect(withMentions(repost({ visibility: 'PRIVATE', moderationHiddenAt: null })).repostOf).toBeNull();
   });
 
+  it('ne voyage plus quand son auteur l\'a supprimé (#13661), sans rien de son contenu', () => {
+    const served = withMentions(repost({
+      visibility: 'PUBLIC', moderationHiddenAt: null, deletedAt: new Date(),
+      media: [{ id: 'm-1', fileUrl: 'https://x/secret.jpg' }], translations: { en: { text: 'secret' } },
+    }));
+    expect(served.repostOf).toBeNull();
+    expect(JSON.stringify(served)).not.toContain('secret');
+  });
+
   it('voyage sinon, sans ses deux colonnes de décision', () => {
     const served = withMentions(repost({ visibility: 'PUBLIC', moderationHiddenAt: null })).repostOf as Record<string, unknown>;
     expect(served.content).toBe('secret');
     expect('visibility' in served).toBe(false);
     expect('moderationHiddenAt' in served).toBe(false);
+    expect('deletedAt' in served).toBe(false);
+  });
+
+  it('un original non supprimé (deletedAt null) voyage inchangé', () => {
+    const served = withMentions(repost({ visibility: 'PUBLIC', moderationHiddenAt: null, deletedAt: null })).repostOf as Record<string, unknown>;
+    expect(served.content).toBe('secret');
   });
 });
 

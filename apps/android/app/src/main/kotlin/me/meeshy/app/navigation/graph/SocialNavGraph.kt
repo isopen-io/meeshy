@@ -75,6 +75,7 @@ internal fun NavGraphBuilder.socialNavGraph(
         ProfileDecorSheet(
             onDone = dismiss,
             uploadViewModel = if (page != null) hiltViewModel(page) else hiltViewModel(),
+            onOpenShop = { domain -> navController.navigate(Routes.packShop(domain = domain.wire)) },
         )
     }
     // iOS présente `UserStatsView` en `.sheet` depuis ma page et les Réglages : croix + glissé vers le bas (#13364).

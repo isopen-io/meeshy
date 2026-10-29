@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.piece.MessagePieceTarget
 import me.meeshy.sdk.model.EndToEndRegimeMemory
@@ -97,6 +98,7 @@ public object BubbleContentBuilder {
             preferences = preferences,
             mediaBaseUrl = mediaBaseUrl,
             displayDensity = displayDensity,
+            contactScope = ContactCardResolutionScope.of(message),
         )
         val messagePlace = message.location
             ?.takeUnless { isDeleted || isEndToEndSealed }

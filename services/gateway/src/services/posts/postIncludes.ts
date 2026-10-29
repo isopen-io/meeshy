@@ -268,6 +268,7 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     // jamais servis : la projection les retire.
     visibility: true,
     moderationHiddenAt: true,
+    deletedAt: true,
     author: { select: postAuthorSelect },
     media: mediaInclude,
     createdAt: true,
@@ -331,6 +332,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
       createdAt: true,
       visibility: true,
       moderationHiddenAt: true,
+      deletedAt: true,
       author: { select: postAuthorSelect },
       media: mediaInclude,
     },

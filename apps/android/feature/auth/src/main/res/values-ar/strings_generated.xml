@@ -276,6 +276,7 @@
     <string name="signup_email_taken">يوجد حساب بهذا العنوان بالفعل.</string>
     <string name="signup_error_generic">تعذّر إنشاء الحساب. حاول مرة أخرى.</string>
     <string name="signup_error_network">لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.</string>
+    <string name="signup_error_rejected">تم رفض التسجيل — أعد المحاولة بعد قليل.</string>
     <string name="signup_have_account">لديك حساب بالفعل؟</string>
     <string name="signup_language_change">تغيير</string>
     <string name="signup_language_picker_title">لغة القراءة</string>

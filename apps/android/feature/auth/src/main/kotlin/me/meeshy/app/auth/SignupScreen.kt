@@ -186,7 +186,7 @@ private fun DisplayNameField(state: SignupUiState, viewModel: SignupViewModel) {
         singleLine = true,
         enabled = !state.isSubmitting,
         isError = message != null,
-        supportingText = fieldSupportingText(message),
+        supportingText = fieldSupportingText(SignupField.DISPLAY_NAME, message),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
         modifier = Modifier
             .fillMaxWidth()
@@ -207,7 +207,7 @@ private fun EmailField(state: SignupUiState, viewModel: SignupViewModel, onSignI
         isError = message != null,
         // Une adresse déjà prise n'est pas une faute de frappe : la sortie est de
         // se connecter, et elle doit être à portée du doigt, sous le champ.
-        supportingText = fieldSupportingText(message, action = if (emailTaken) onSignIn else null),
+        supportingText = fieldSupportingText(SignupField.EMAIL, message, action = if (emailTaken) onSignIn else null),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
         modifier = Modifier
             .fillMaxWidth()
@@ -255,7 +255,7 @@ private fun PhoneField(state: SignupUiState, viewModel: SignupViewModel) {
             singleLine = true,
             enabled = !state.isSubmitting,
             isError = message != null,
-            supportingText = fieldSupportingText(message),
+            supportingText = fieldSupportingText(SignupField.PHONE, message),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
             modifier = Modifier
                 .weight(1f)
@@ -286,7 +286,7 @@ private fun PasswordField(state: SignupUiState, viewModel: SignupViewModel) {
         singleLine = true,
         enabled = !state.isSubmitting,
         isError = message != null,
-        supportingText = fieldSupportingText(message),
+        supportingText = fieldSupportingText(SignupField.PASSWORD, message),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { viewModel.register() }),
@@ -369,7 +369,7 @@ private fun GlobalErrorBanner(error: SignupSubmitError?) {
     val text = when (error) {
         null, is SignupSubmitError.Field -> null
         SignupSubmitError.Network -> stringResource(R.string.signup_error_network)
-        is SignupSubmitError.Global -> error.message ?: stringResource(R.string.signup_error_generic)
+        is SignupSubmitError.Global -> stringResource(SignupRefusalCopy.globalRefusal(error))
     }
     AuthErrorMessage(text = text, boxed = true)
 }
@@ -439,10 +439,11 @@ private fun SignInPrompt(enabled: Boolean, onSignIn: () -> Unit) {
  */
 @Composable
 private fun fieldSupportingText(
+    field: SignupField,
     message: SignupFieldMessage?,
     action: (() -> Unit)? = null,
 ): (@Composable () -> Unit)? {
-    val text = fieldMessageText(message) ?: return null
+    val text = fieldMessageText(field, message) ?: return null
     val actionLabel = if (action != null) stringResource(R.string.signup_sign_in) else null
     return {
         Column {
@@ -469,32 +470,24 @@ private fun fieldSupportingText(
 /**
  * Le texte d'un message de champ.
  *
- * Un refus TYPÉ est rendu dans NOS mots : la passerelle répond dans sa langue,
- * pas dans celle du lecteur, et « ce numéro est déjà rattaché à un compte » doit
- * se lire dans la langue de l'écran. Seule une violation de validation
- * ([SignupRefusal.INVALID]) préfère le texte du serveur — lui seul sait ce qui
- * n'allait pas — avec un repli générique s'il n'en donne aucun.
+ * Un refus de la passerelle est rendu dans NOS mots ([SignupRefusalCopy]) : elle répond dans sa
+ * langue, pas dans celle du lecteur, et sa validation brute (motif AJV) ne se montre jamais.
  */
 @Composable
-private fun fieldMessageText(message: SignupFieldMessage?): String? = when (message) {
+private fun fieldMessageText(field: SignupField, message: SignupFieldMessage?): String? = when (message) {
     null -> null
     is SignupFieldMessage.Local -> when (message.issue) {
         SignupFieldIssue.PHONE_TOO_SHORT ->
             stringResource(R.string.signup_phone_too_short, PhonePlausibility.MIN_DIGITS)
         else -> stringResource(message.issue.labelRes())
     }
-    is SignupFieldMessage.Refused -> when (message.refusal) {
-        SignupRefusal.PHONE_OWNERSHIP_CONFLICT -> stringResource(R.string.signup_phone_conflict)
-        SignupRefusal.PHONE_INVALID -> stringResource(R.string.signup_phone_invalid)
-        SignupRefusal.EMAIL_TAKEN -> stringResource(R.string.signup_email_taken)
-        SignupRefusal.NAME_TAKEN -> stringResource(R.string.signup_display_name_taken)
-        SignupRefusal.INVALID -> message.serverMessage ?: stringResource(R.string.signup_error_invalid_field)
-    }
+    is SignupFieldMessage.Refused -> stringResource(SignupRefusalCopy.fieldRefusal(field, message.refusal))
 }
 
 private fun SignupFieldIssue.labelRes(): Int = when (this) {
     SignupFieldIssue.DISPLAY_NAME_REQUIRED -> R.string.signup_display_name_required
     SignupFieldIssue.DISPLAY_NAME_TOO_LONG -> R.string.signup_display_name_too_long
+    SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS -> R.string.signup_display_name_invalid_characters
     SignupFieldIssue.EMAIL_INVALID -> R.string.signup_email_invalid
     SignupFieldIssue.PASSWORD_TOO_SHORT -> R.string.signup_password_too_short
     SignupFieldIssue.PHONE_TOO_SHORT -> R.string.signup_phone_implausible
