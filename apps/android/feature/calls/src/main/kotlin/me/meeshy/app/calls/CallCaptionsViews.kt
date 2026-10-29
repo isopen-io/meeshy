@@ -264,7 +264,7 @@ internal fun CallCaptionsJournalSheet(onDismiss: () -> Unit, viewModel: CallCapt
             labels = labels,
         )
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF13111C), contentColor = Color.White) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = CallPalette.Raised, contentColor = Color.White) {
         Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).navigationBarsPadding()) {
             CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal, onClose = onDismiss)
             CallJournalList(lines = lines, onToggleOriginal = viewModel::toggleReveal, modifier = Modifier.weight(1f))
@@ -381,7 +381,7 @@ private fun CallJournalReturnToLive(hasUnseen: Boolean, onClick: () -> Unit, mod
         Text(stringResource(R.string.call_captions_back_to_live), style = MaterialTheme.typography.labelLarge, color = Color.White)
         if (hasUnseen) {
             Spacer(Modifier.width(2.dp))
-            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF818CF8)))
+            Box(Modifier.size(8.dp).clip(CircleShape).background(CallPalette.Brand))
         }
     }
 }

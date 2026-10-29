@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -177,6 +175,6 @@ private fun CallCameraPickerRow(camera: CameraDeviceOption, selected: Boolean, a
     ) {
         Icon(MeeshyIcons.Camera, contentDescription = null, tint = if (selected) accent else MaterialTheme.colorScheme.onSurface)
         Text(camera.displayName(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = accent) else Spacer(Modifier.size(24.dp))
+        if (selected) Icon(MeeshyIcons.Check, contentDescription = null, tint = accent) else Spacer(Modifier.size(24.dp))
     }
 }
