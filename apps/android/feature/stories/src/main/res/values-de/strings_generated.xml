@@ -115,6 +115,7 @@
     <string name="share_story_text">🔗 Story von %1$s: %2$s</string>
     <string name="stories_action_delete">Löschen</string>
     <string name="stories_action_react">Reagieren</string>
+    <string name="stories_action_reply">Antworten</string>
     <string name="stories_action_report">Melden</string>
     <string name="stories_action_repost">Erneut posten</string>
     <string name="stories_action_translations">Übersetzungen</string>
@@ -169,6 +170,11 @@
     <string name="stories_composer_text_finish_a11y">Textbearbeitung beenden</string>
     <string name="stories_delete_confirm_title">Story löschen?</string>
     <string name="stories_publish_retry">Erneut versuchen</string>
+    <string name="stories_reply_failed">Die Antwort wurde nicht gesendet</string>
+    <string name="stories_reply_placeholder">%s antworten…</string>
+    <string name="stories_reply_send">Antwort senden</string>
+    <string name="stories_reply_sent">Antwort gesendet</string>
+    <string name="stories_reply_to">Antwort an %s</string>
     <string name="stories_report_reason_harassment">Belästigung</string>
     <string name="stories_report_reason_hate_speech">Hassrede</string>
     <string name="stories_report_reason_impersonation">Identitätsdiebstahl</string>

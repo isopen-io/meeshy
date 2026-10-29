@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "story.viewer.action.reply", "androidName": "stories_action_reply", "status": "adopted"},
+        {"catalog": "app", "iosKey": "story.viewer.replyTo", "androidName": "stories_reply_to", "status": "adopted"},
+        {"catalog": "app", "iosKey": "mood.spotlight.reply.placeholder", "androidName": "stories_reply_placeholder", "status": "adopted"},
+        {"catalog": "app", "iosKey": "mood.spotlight.reply.send", "androidName": "stories_reply_send", "status": "adopted"},
+        {"catalog": "app", "iosKey": "mood.spotlight.reply.sent", "androidName": "stories_reply_sent", "status": "adopted"},
+        {"catalog": "app", "iosKey": "mood.spotlight.reply.failed", "androidName": "stories_reply_failed", "status": "adopted"}
+      ]
+    }
+  }
+}
