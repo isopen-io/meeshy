@@ -707,7 +707,8 @@ class StoryComposerViewModel @Inject constructor(
      * Maps the deck to one wire request **per publishable slide** (non-blank text or
      * attached media), in deck order. Each story carries **its own** slide's media —
      * media now belongs to the slide it was added to, not the whole story — and
-     * `dependsOn` only the offline uploads staged on that same slide, so the drainer
+     * `dependsOn` only the offline uploads staged on that same slide (a draft restored or reopened
+     * names its still-queued uploads by their `cmid` alone, #13500), so the drainer
      * gates each story on exactly its own prerequisites and grafts the real ids in.
      */
     private fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
@@ -736,7 +737,7 @@ class StoryComposerViewModel @Inject constructor(
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
-                dependsOn = slide.mediaIds.filter { it in pendingCmids },
+                dependsOn = slide.mediaIds.filter { it in pendingCmids || OutboxIds.isCmid(it) },
             )
         }
     }

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadSender
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.media.MediaFate
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.net.MeeshyApi
@@ -36,9 +37,11 @@ public data class UnsentPublication(
     val createdAtMillis: Long,
     val failureReason: String?,
     val media: List<UnsentMedia> = emptyList(),
+    /** Whether the composer draft this publication was made from is still on the device — a story reopens only from it. */
+    val draftKept: Boolean = true,
 ) {
-    /** A failed post or reel reopens in the composer; a story is retried or discarded. */
-    val canReopen: Boolean get() = status == UnsentPublicationStatus.FAILED && kind != UnsentPublicationKind.STORY
+    /** A failed post or reel reopens in the composer; so does a failed story whose draft is still kept (#13500). */
+    val canReopen: Boolean get() = status == UnsentPublicationStatus.FAILED && (kind != UnsentPublicationKind.STORY || draftKept)
 
     /** Only a publication that gave up is retried by hand: one on its way retries on its own. */
     val canRetry: Boolean get() = status == UnsentPublicationStatus.FAILED
@@ -57,12 +60,26 @@ public object UnsentPublications {
         ownerId: String?,
         progress: Map<String, MediaUploadProgress>,
         json: Json = MeeshyApi.json,
+        storyDraft: StoryComposerDraftSnapshot? = null,
     ): List<UnsentPublication> {
         if (ownerId == null) return emptyList()
         val uploads = rows.associateBy { it.cmid }
+        val reopenableStories = reopenableStories(storyDraft, uploads)
         return rows.filter { it.ownerId == ownerId }
             .mapNotNull { it.toUnsent(json, uploads, progress) }
+            .map { if (it.kind == UnsentPublicationKind.STORY) it.copy(draftKept = it.cmid in reopenableStories) else it }
             .sortedByDescending { it.createdAtMillis }
+    }
+
+    /**
+     * The story rows a kept draft can be reopened from (#13500): the draft awaits them, and every one of them is
+     * still on the device and gave up. A draft one of whose stories already left, or is still on its way, would
+     * publish that slide twice — it is retried or discarded, never reopened.
+     */
+    fun reopenableStories(draft: StoryComposerDraftSnapshot?, rows: Map<String, OutboxEntity>): Set<String> {
+        val awaited = draft?.takeIf { it.isWorthRestoring }?.awaitingPublication.orEmpty()
+        val allGaveUp = awaited.isNotEmpty() && awaited.all { rows[it]?.stateEnum == OutboxState.EXHAUSTED }
+        return if (allGaveUp) awaited.toSet() else emptySet()
     }
 
     private fun OutboxEntity.toUnsent(
