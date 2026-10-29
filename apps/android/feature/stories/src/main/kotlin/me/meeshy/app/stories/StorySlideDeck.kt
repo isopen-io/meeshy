@@ -664,7 +664,8 @@ data class StorySlideDeck(
      */
     fun nextObjectPosition(): StoryObjectPlacement.Point = StoryObjectPlacement.next(
         selectedSlide.elements.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) } +
-            selectedSlide.stickers.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) },
+            selectedSlide.stickers.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) } +
+            selectedSlide.placedMedia.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) },
     )
 
     companion object {
