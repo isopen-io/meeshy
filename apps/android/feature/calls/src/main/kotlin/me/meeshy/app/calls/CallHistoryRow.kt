@@ -1,6 +1,5 @@
 package me.meeshy.app.calls
 
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -102,7 +101,6 @@ internal fun CallHistoryRow(
             onOpen = onOpen,
             onRedial = onRedial,
             modifier = Modifier
-                .floatingChromeLateralReserve()
                 .semantics { customActions = listOf(CustomAccessibilityAction(hideLabel) { onHide(); true }) },
         )
     }

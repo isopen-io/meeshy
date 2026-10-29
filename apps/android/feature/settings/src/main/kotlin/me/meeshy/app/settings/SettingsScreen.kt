@@ -1,6 +1,5 @@
 package me.meeshy.app.settings
 
-import me.meeshy.ui.component.chrome.floatingChromeBottomReserve
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -162,7 +161,6 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = floatingChromeBottomReserve())
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
             ) {

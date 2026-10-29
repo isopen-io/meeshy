@@ -16,22 +16,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -52,8 +46,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
 import me.meeshy.sdk.model.chrome.FloatingButtonsLayout
-import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
-import me.meeshy.sdk.model.chrome.FloatingChromeReserve
 import me.meeshy.sdk.model.layout.PointDp
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.layout.currentMeeshyWindowInfo
@@ -95,6 +87,9 @@ public data class FloatingButtonSemantics(
  * l'echelle), [aboveButtons] au-dessus (l'echelle elle-meme), tous deux dans le repere de
  * l'ecran. Tant que [LocalScrollMotionActive] est vrai, les disques s'effacent et ne repondent
  * plus.
+ *
+ * Un calque PUR, comme iOS (#13671) : le contenu dessous ne cede rien, et seule la surface des
+ * disques prend le doigt — un geste pose a cote atteint la liste.
  */
 @Composable
 public fun MeeshyFloatingButtons(
@@ -117,11 +112,7 @@ public fun MeeshyFloatingButtons(
     val safeInsets = currentMeeshyWindowInfo().safeInsets
     val swipeCoordinator = LocalSwipeRowCoordinator.current
     val scrolling = LocalScrollMotionActive.current || swipeCoordinator.isRowOpen
-    val windowDensity = LocalDensity.current.density
-    var originTopDp by remember { mutableFloatStateOf(0f) }
-    BoxWithConstraints(
-        modifier = modifier.fillMaxSize().onGloballyPositioned { originTopDp = it.positionInWindow().y / windowDensity },
-    ) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val geometry = remember(maxWidth, maxHeight, safeInsets) {
             FloatingButtonGeometry(screenWidth = maxWidth.value, screenHeight = maxHeight.value, safeInsets = safeInsets)
         }
@@ -134,17 +125,6 @@ public fun MeeshyFloatingButtons(
 
         if (geometry.isMeasured) {
             val layout = geometry.layout(leftPending ?: leftStorage, rightPending ?: rightStorage)
-            val reserve = LocalFloatingChromeReserve.current
-            val reserved = FloatingChromeReserve.bottomDp(layout, maxHeight.value)
-            val lateralBands = remember(layout, maxWidth, originTopDp) {
-                FloatingChromeLateralReserve.bands(layout, maxWidth.value)
-                    .map { it.copy(top = it.top + originTopDp, bottom = it.bottom + originTopDp) }
-            }
-            SideEffect {
-                reserve.publish(reserved.dp)
-                reserve.publishBands(lateralBands)
-            }
-            DisposableEffect(reserve) { onDispose { reserve.publish(0.dp); reserve.publishBands(emptyList()) } }
             behindButtons()
             FloatingDisc(
                 center = layout.feed,

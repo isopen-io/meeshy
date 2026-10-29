@@ -1,57 +1,67 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
-import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
 import me.meeshy.sdk.model.layout.EdgeInsetsDp
-import me.meeshy.ui.component.chrome.FloatingChromeReserveState
-import me.meeshy.ui.component.chrome.LocalFloatingChromeReserve
+import me.meeshy.ui.component.chrome.FLOATING_BUTTON_LEFT_TAG
+import me.meeshy.ui.component.chrome.FLOATING_BUTTON_RIGHT_TAG
+import me.meeshy.ui.component.chrome.FloatingButtonSemantics
+import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
+import me.meeshy.ui.layout.currentMeeshyWindowInfo
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Les deux disques flottants à leur position PAR DÉFAUT sur 360 × 740 dp (#12497) : bord de chaque disque, en dp. */
+/** Les deux disques flottants à leur position PAR DÉFAUT sur 360 × 740 dp : bord de chaque disque, en dp. */
 internal object RestingDiscs {
     private val geometry = FloatingButtonGeometry(360f, 740f, EdgeInsetsDp(top = 24f))
     private val layout = geometry.layout(FloatingButtonGeometry.DEFAULT_FEED_STORAGE, FloatingButtonGeometry.DEFAULT_MENU_STORAGE)
-    val bands = FloatingChromeLateralReserve.bands(layout, 360f)
     val leadingEdge: Float = layout.feed.x + FloatingButtonGeometry.BUTTON_SIZE / 2f
-    val trailingEdge: Float = layout.menu.x - FloatingButtonGeometry.BUTTON_SIZE / 2f
     val top: Float = layout.feed.y - FloatingButtonGeometry.BUTTON_SIZE / 2f
 }
 
-/** Pose [content] à la hauteur des disques au repos, fenêtre de 360 dp. */
+/**
+ * Pose [content] à la hauteur des disques au repos, fenêtre de 360 dp, SOUS les vrais disques flottants (#13671) :
+ * un calque pur, comme iOS — le contenu ne cède rien, il passe dessous.
+ */
 internal fun ComposeContentTestRule.setContentBesideRestingDiscs(content: @Composable () -> Unit) {
-    val reserve = FloatingChromeReserveState(initialBands = RestingDiscs.bands)
     setContent {
         MeeshyTheme(darkTheme = false) {
-            CompositionLocalProvider(LocalFloatingChromeReserve provides reserve) {
-                // La fenêtre d'essai porte une barre d'état : la rangée se pose à la hauteur des disques DANS LA FENÊTRE.
-                var windowOffset by remember { mutableFloatStateOf(0f) }
-                val density = LocalDensity.current.density
-                Column(
-                    Modifier
-                        .requiredWidth(360.dp)
-                        .onGloballyPositioned { windowOffset = it.positionInWindow().y / density },
-                ) {
-                    Spacer(Modifier.height((RestingDiscs.top + 4f - windowOffset).coerceAtLeast(0f).dp))
+            BoxWithConstraints(Modifier.requiredWidth(360.dp).fillMaxSize()) {
+                // La géométrie même du calque (sa boîte, la zone sûre de la fenêtre) : la rangée se pose à la hauteur RÉELLE du disque.
+                val safeInsets = currentMeeshyWindowInfo().safeInsets
+                val discTop = FloatingButtonGeometry(maxWidth.value, maxHeight.value, safeInsets)
+                    .layout(FloatingButtonGeometry.DEFAULT_FEED_STORAGE, FloatingButtonGeometry.DEFAULT_MENU_STORAGE)
+                    .feed.y - FloatingButtonGeometry.BUTTON_SIZE / 2f
+                Column {
+                    Spacer(Modifier.height((discTop + 4f).coerceAtLeast(0f).dp))
                     content()
                 }
+                MeeshyFloatingButtons(
+                    leftStorage = FloatingButtonGeometry.DEFAULT_FEED_STORAGE,
+                    rightStorage = FloatingButtonGeometry.DEFAULT_MENU_STORAGE,
+                    onLeftStorageChange = {},
+                    onRightStorageChange = {},
+                    onLeftTap = {},
+                    onLeftLongPress = {},
+                    onRightTap = {},
+                    onRightLongPress = {},
+                    leftSemantics = FloatingButtonSemantics(label = "Flux"),
+                    rightSemantics = FloatingButtonSemantics(label = "Menu"),
+                    leftContent = {},
+                    rightContent = {},
+                )
             }
         }
     }
@@ -59,3 +69,10 @@ internal fun ComposeContentTestRule.setContentBesideRestingDiscs(content: @Compo
 }
 
 internal fun ComposeContentTestRule.scrollerBounds() = onNode(hasScrollAction()).getBoundsInRoot()
+
+/** Le disque de gauche, puis celui de droite, tels que le calque les pose réellement. */
+internal fun ComposeContentTestRule.restingDiscBounds() =
+    onNodeWithTag(FLOATING_BUTTON_LEFT_TAG).getBoundsInRoot() to onNodeWithTag(FLOATING_BUTTON_RIGHT_TAG).getBoundsInRoot()
+
+/** Vrai quand les deux rectangles partagent une bande de hauteur : le contenu passe bien à la hauteur du disque. */
+internal fun DpRect.sharesHeightWith(other: DpRect): Boolean = top < other.bottom && bottom > other.top

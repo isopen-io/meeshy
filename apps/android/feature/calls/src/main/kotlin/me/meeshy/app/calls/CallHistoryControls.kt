@@ -50,7 +50,6 @@ import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -97,7 +96,6 @@ internal fun CallHistoryFilterRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .floatingChromeLateralReserve(yieldsBothSides = true)
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,

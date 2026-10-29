@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -52,7 +51,6 @@ public fun SettingsRow(
     val spoken = SettingsRowMetrics.accessibilityLabel(title, value)
     Row(
         modifier = modifier
-            .floatingChromeLateralReserve()
             .fillMaxWidth()
             .defaultMinSize(minHeight = SettingsRowMetrics.minimumHeight)
             .padding(horizontal = SettingsRowMetrics.horizontalPadding, vertical = SettingsRowMetrics.verticalPadding),
