@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_network_title">الجودة والشبكة</string>
+    <string name="call_network_timeline">التسلسل الزمني</string>
+    <string name="call_network_packet_loss">فقدان الحزم</string>
+    <string name="call_network_latency">زمن الاستجابة</string>
+    <string name="call_network_jitter">التذبذب</string>
+    <string name="call_network_reconnections">إعادات الاتصال</string>
+    <string name="call_network_route">مسار الشبكة</string>
+    <string name="call_network_route_relayed">مُرحِّل</string>
+    <string name="call_network_route_direct">مباشر</string>
+    <string name="call_network_profiles">ملف البيانات</string>
+    <string name="call_network_faults">أعطال الوسائط</string>
+    <string name="call_network_peak">%1$s (الذروة %2$s)</string>
+    <string name="call_network_ms">%1$s مللي ثانية</string>
+    <string name="call_network_event_link_connecting">جارٍ إنشاء الاتصال</string>
+    <string name="call_network_event_link_connected">تم إنشاء الاتصال</string>
+    <string name="call_network_event_link_disconnected">انقطع الاتصال</string>
+    <string name="call_network_event_link_failed">فُقد الاتصال</string>
+    <string name="call_network_event_reconnecting">إعادة الاتصال، المحاولة %1$d</string>
+    <string name="call_network_event_reconnected">أُعيد الاتصال</string>
+    <string name="call_network_event_route">المسار: %1$s</string>
+    <string name="call_network_event_tier">الجودة: %1$s</string>
+    <string name="call_network_event_profile">الملف: %1$s</string>
+    <string name="call_network_event_fault">عطل في الوسائط</string>
+    <string name="call_network_event_ended">انتهت المكالمة</string>
+    <string name="call_network_tier_excellent">ممتازة</string>
+    <string name="call_network_tier_good">جيدة</string>
+    <string name="call_network_tier_fair">متوسطة</string>
+    <string name="call_network_tier_poor">ضعيفة</string>
+    <string name="call_transcript_disclaimer">نسخة مشفّرة محفوظة على هذا الجهاز. يُحفظ سجل المكالمة أيضًا على خادم Meeshy ولا يقرؤه إلا المشاركون فيها. ويتضمن كلام محاورك كما وصل أثناء المكالمة.</string>
+    <string name="call_transcript_delete">حذف هذا النص</string>
+    <string name="call_transcript_delete_confirm_title">حذف هذا النص؟</string>
+    <string name="call_transcript_delete_confirm_message">يُحذف من هذا الجهاز نهائيًا. لا يُمحى السجل المحفوظ على الخادم.</string>
+</resources>

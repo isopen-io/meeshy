@@ -13,7 +13,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.call.CachedCallTranscript
 import me.meeshy.sdk.call.CallRecordsRepository
+import me.meeshy.sdk.call.CallTranscriptCache
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.call.CallTranscriptPage
 import me.meeshy.sdk.model.call.CallTranscriptState
@@ -45,8 +47,16 @@ class CallDetailTranscriptViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private val cache: CallTranscriptCache = mockk(relaxUnitFun = true) {
+        coEvery { cached(any()) } returns CachedCallTranscript.None
+    }
+    private var sealed: Boolean? = false
+
+    private fun viewModel() = CallDetailTranscriptViewModel(records, session, cache, CallConversationRegime { sealed })
+
     private fun request(callId: String = "call-1") = CallTranscriptRequest(
         callId = callId,
+        conversationId = "conv-1",
         recordStartedAt = "2026-10-29T10:00:00.000Z",
         youLabel = "Vous",
         participantLabel = "Participant",
@@ -73,7 +83,7 @@ class CallDetailTranscriptViewModelTest {
     fun `stays loading, drawing nothing, until the replay answers`() = runTest {
         val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
         coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
 
         viewModel.load(request())
 
@@ -85,7 +95,7 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `a served journal is projected in the reader's prism`() = runTest {
         coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
 
         viewModel.load(request())
 
@@ -98,7 +108,7 @@ class CallDetailTranscriptViewModelTest {
     fun `a refusal hides the section, a transient failure offers a retry that reloads`() = runTest {
         coEvery { records.transcript("call-1", any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
         viewModel.load(request())
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
 
@@ -116,7 +126,7 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `reopening the same call does not refetch`() = runTest {
         coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
 
         viewModel.load(request())
         viewModel.load(request())
@@ -130,7 +140,7 @@ class CallDetailTranscriptViewModelTest {
             NetworkResult.Failure(ApiError(message = "offline")),
             NetworkResult.Success(page(peerSegment())),
         )
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
 
         viewModel.load(request())
         viewModel.load(request())
@@ -141,7 +151,7 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `another call's lines are never served to the sheet opened next`() = runTest {
         coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
         viewModel.load(request())
 
         assertThat(viewModel.state.value.stateFor("call-2")).isEqualTo(CallTranscriptState.Loading)
@@ -150,11 +160,75 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `a call without id never reaches the network`() = runTest {
-        val viewModel = CallDetailTranscriptViewModel(records, session)
+        val viewModel = viewModel()
 
         viewModel.load(request(callId = ""))
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
         coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+    }
+
+    @Test
+    fun `the encrypted copy is drawn at once and stays when offline`() = runTest {
+        coEvery { cache.cached("call-1") } returns CachedCallTranscript.Copy(page(peerSegment()))
+        val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
+        coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+
+        pending.complete(NetworkResult.Failure(ApiError(message = "offline")))
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+        coVerify(exactly = 0) { cache.drop(any()) }
+    }
+
+    @Test
+    fun `a served replay revalidates the copy, a refusal removes it`() = runTest {
+        val served = page(peerSegment())
+        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(served)
+        coEvery { records.transcript("call-2", any(), any()) } returns NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+        viewModel.load(request(callId = "call-2"))
+
+        coVerify { cache.store("call-1", served) }
+        coVerify { cache.drop("call-2") }
+    }
+
+    @Test
+    fun `a transcript the reader deleted is neither shown nor fetched again`() = runTest {
+        coEvery { cache.cached("call-1") } returns CachedCallTranscript.Dismissed
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
+        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+    }
+
+    @Test
+    fun `deleting hides the transcript at once and dismisses it on the device`() = runTest {
+        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.delete()
+
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
+        coVerify { cache.dismiss("call-1") }
+    }
+
+    @Test
+    fun `a conversation sealed end to end fetches no transcript and keeps no copy`() = runTest {
+        sealed = true
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
+        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify { cache.drop("call-1") }
     }
 }

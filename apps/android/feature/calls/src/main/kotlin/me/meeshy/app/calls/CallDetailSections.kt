@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -101,11 +103,16 @@ internal fun CallDetailParticipantsSection(participants: List<CallDetailParticip
  * a retry.
  */
 @Composable
-internal fun CallDetailTranscriptSection(state: CallTranscriptState, accentHex: String, onRetry: () -> Unit) {
+internal fun CallDetailTranscriptSection(
+    state: CallTranscriptState,
+    accentHex: String,
+    onRetry: () -> Unit,
+    onDelete: () -> Unit,
+) {
     when (state) {
         CallTranscriptState.Loading, CallTranscriptState.Absent -> Unit
         CallTranscriptState.Failed -> TranscriptFailure(onRetry)
-        is CallTranscriptState.Ready -> TranscriptLines(state, accentHex)
+        is CallTranscriptState.Ready -> TranscriptLines(state, accentHex, onDelete)
     }
 }
 
@@ -142,7 +149,7 @@ private fun TranscriptFailure(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String) {
+private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String, onDelete: () -> Unit) {
     var showOriginal by rememberSaveable { mutableStateOf(false) }
     val accent = hexColor(accentHex, MeeshyPalette.Indigo500)
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
@@ -169,6 +176,58 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String)
         ) {
             state.lines.forEach { line -> TranscriptRow(line, showOriginal) }
         }
+        TranscriptDisclaimer()
+        TranscriptDeletion(onDelete)
+    }
+}
+
+/** Says where the transcript lives — here AND on the server (the iOS sentence « jamais envoyée au serveur » is not true). */
+@Composable
+private fun TranscriptDisclaimer() {
+    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
+        Icon(
+            imageVector = MeeshyIcons.Info,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = stringResource(R.string.call_transcript_disclaimer),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textMuted,
+        )
+    }
+}
+
+/** « Supprimer ce transcript », always confirmed (iOS `CallTranscriptSection`). */
+@Composable
+private fun TranscriptDeletion(onDelete: () -> Unit) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text(
+            text = stringResource(R.string.call_transcript_delete),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyPalette.Error,
+        )
+    }
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.call_transcript_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.call_transcript_delete_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirming = false
+                    onDelete()
+                }) {
+                    Text(stringResource(R.string.call_transcript_delete), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.call_journal_cancel)) }
+            },
+        )
     }
 }
 

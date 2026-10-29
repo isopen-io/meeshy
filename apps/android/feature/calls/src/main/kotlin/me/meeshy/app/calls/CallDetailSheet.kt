@@ -77,6 +77,7 @@ internal fun CallDetailSheet(
     val participants = CallDetailParticipants.of(record, fallbackName = participantLabel)
     val transcriptRequest = CallTranscriptRequest(
         callId = record.callId,
+        conversationId = record.conversationId,
         recordStartedAt = record.startedAt,
         youLabel = stringResource(R.string.call_avatar_you),
         participantLabel = participantLabel,
@@ -108,7 +109,12 @@ internal fun CallDetailSheet(
             if (record.peer != null) CallDetailRedialButtons(accent, onRedial)
             CallDetailCard(record)
             if (participants.isNotEmpty()) CallDetailParticipantsSection(participants)
-            CallDetailTranscriptSection(transcriptState, accentHex, onRetry = transcriptViewModel::retry)
+            CallDetailTranscriptSection(
+                state = transcriptState,
+                accentHex = accentHex,
+                onRetry = transcriptViewModel::retry,
+                onDelete = transcriptViewModel::delete,
+            )
         }
     }
 }
