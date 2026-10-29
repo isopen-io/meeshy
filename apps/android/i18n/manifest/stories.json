@@ -854,6 +854,10 @@
           "status": "adopted"
         },
         {
+          "androidName": "my_stories_repost_audience_kept",
+          "status": "android-only"
+        },
+        {
           "catalog": "app",
           "iosKey": "story.mine.repost.error",
           "androidName": "my_stories_repost_error",

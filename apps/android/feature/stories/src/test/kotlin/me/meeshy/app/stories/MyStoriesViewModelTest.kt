@@ -430,6 +430,24 @@ class MyStoriesViewModelTest {
     }
 
     @Test
+    fun `une restauration refusee dit a l'auteur l'audience ou la story est restee`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { repo.republish("a") } returns failure()
+        coEvery { postRepo.update(any(), any<PostEditDraft>()) } returnsMany listOf(NetworkResult.Success(activeA), failure())
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.PUBLIC))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        assertThat(vm.effects.first()).isEqualTo(MyStoriesUiEffect.RepublishRefusedAudienceKept(StoryVisibility.PUBLIC))
+        assertThat(vm.state.value.active.first { it.id == "a" }.item.visibility).isEqualTo("PUBLIC")
+        assertThat(vm.state.value.isRepublishing).isFalse()
+    }
+
+    @Test
     fun `une audience refusee n'envoie pas la republication`() = runTest(dispatcher) {
         val repo = repository()
         coEvery { postRepo.update(any(), any<PostEditDraft>()) } returns failure()
@@ -518,9 +536,9 @@ class MyStoriesViewModelTest {
         coEvery { postRepo.update("a", onlyDraft) } returns NetworkResult.Success(activeA)
         coEvery { repo.republish("a") } returns NetworkResult.Success(original)
         vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
-        assertThat(vm.state.value.pendingRepublish!!.choice).isEqualTo(
-            me.meeshy.sdk.model.composer.StoryRepublishAudience.Choice(StoryVisibility.ONLY, listOf("ok")),
-        )
+        assertThat(vm.state.value.pendingRepublish!!.choice.visibility).isEqualTo(StoryVisibility.PUBLIC)
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.ONLY))
+        vm.onEvent(MyStoriesUiEvent.SetRepublishUserIds(listOf("ok")))
         vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
         advanceUntilIdle()
 

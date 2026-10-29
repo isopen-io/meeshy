@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -110,6 +111,7 @@ fun MyStoriesScreen(
         republished = stringResource(R.string.my_stories_repost_success),
         republishFailed = stringResource(R.string.my_stories_repost_error),
     )
+    val context = LocalContext.current
     val bulkFailedFormat = stringResource(R.string.my_stories_delete_selected_error, 0)
 
     LaunchedEffect(viewModel) {
@@ -122,6 +124,8 @@ fun MyStoriesScreen(
                     bulkFailedFormat.replaceFirst("0", effect.failures.toString()).also { haptics.error() }
                 MyStoriesUiEffect.Republished -> messages.republished.also { haptics.success() }
                 MyStoriesUiEffect.RepublishFailed -> messages.republishFailed.also { haptics.error() }
+                is MyStoriesUiEffect.RepublishRefusedAudienceKept ->
+                    context.getString(R.string.my_stories_repost_audience_kept, context.getString(effect.visibility.labelRes())).also { haptics.error() }
             }
             snackbar.showSnackbar(message)
         }

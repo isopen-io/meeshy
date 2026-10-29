@@ -101,6 +101,9 @@ sealed interface MyStoriesUiEffect {
     data class BulkDeleteFailed(val failures: Int) : MyStoriesUiEffect
     data object Republished : MyStoriesUiEffect
     data object RepublishFailed : MyStoriesUiEffect
+
+    /** La republication est refusée ET l'audience d'avant n'a pas pu être rendue : la story garde [visibility]. */
+    data class RepublishRefusedAudienceKept(val visibility: StoryVisibility) : MyStoriesUiEffect
 }
 
 /**
@@ -357,15 +360,29 @@ class MyStoriesViewModel internal constructor(
                         _effects.send(MyStoriesUiEffect.Republished)
                     }
                     is NetworkResult.Failure -> {
-                        if (change is StoryRepublishAudience.Change.Apply) {
-                            restoreVisibility?.let { writeAudience(pending.storyId, it, restoreUserIds.orEmpty()) }
+                        val restored = change !is StoryRepublishAudience.Change.Apply ||
+                            (restoreVisibility != null && writeAudience(pending.storyId, restoreVisibility, restoreUserIds.orEmpty()))
+                        if (restored) {
+                            _effects.send(MyStoriesUiEffect.RepublishFailed)
+                        } else {
+                            keepWrittenAudience(pending.storyId, change as StoryRepublishAudience.Change.Apply)
+                            _effects.send(MyStoriesUiEffect.RepublishRefusedAudienceKept(change.visibility))
                         }
-                        _effects.send(MyStoriesUiEffect.RepublishFailed)
                     }
                 }
             }
             _state.update { it.copy(isRepublishing = false) }
         }
+    }
+
+    /** La restauration a échoué : l'écran reflète l'audience réellement écrite, pas celle d'avant. */
+    private fun keepWrittenAudience(id: String, written: StoryRepublishAudience.Change.Apply) {
+        val align = { post: ApiPost ->
+            if (post.id == id) post.copy(visibility = written.visibility.wire, visibilityUserIds = written.userIds) else post
+        }
+        fresh = fresh.map(align)
+        archive = archive.map(align)
+        rebuild(coldDone = true)
     }
 
     /** La liste part TOUJOURS, vide au besoin : une ancienne liste ne reste pas orpheline. */
