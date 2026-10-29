@@ -38,6 +38,8 @@
     <string name="audio_trim_handle_end">Fin de la selección</string>
     <string name="audio_trim_handle_start">Inicio de la selección</string>
     <string name="avatar_a11y_mood">estado de ánimo %1$s</string>
+    <string name="bubble_contact_card_a11y_on_meeshy">En Meeshy: %1$s</string>
+    <string name="bubble_contact_card_on_meeshy">En Meeshy</string>
     <string name="bubble_contact_card_shared">Contacto compartido</string>
     <string name="bubble_story_citation_answer">respuesta a su historia</string>
     <string name="bubble_story_citation_open_hint">Abre la historia citada</string>

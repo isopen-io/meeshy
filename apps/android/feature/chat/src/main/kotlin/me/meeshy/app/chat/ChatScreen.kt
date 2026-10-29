@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.ui.component.bubble.LocalBubbleContactCardAccounts
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.appearance.rememberConversationAppearance
@@ -129,6 +131,12 @@ fun ChatScreen(
         downloadedFileIds = downloadedFileIds,
     )
 
+    val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val isEndToEnd = state.isEndToEnd
+    val contactCards = remember(cardsViewModel, viewModel, isEndToEnd) {
+        ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, viewModel::downloadedFileUri)
+    }
+    CompositionLocalProvider(LocalBubbleContactCardAccounts provides contactCards) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
@@ -176,6 +184,7 @@ fun ChatScreen(
             }
         }
         ChatSheetsHost(host)
+    }
     }
 }
 

@@ -74,7 +74,7 @@ internal fun BubbleFileRow(
         return
     }
     if (file.isContactCard) {
-        BubbleContactCardRow(file, onColor, onClick, modifier)
+        BubbleContactCardRow(file, onColor, onClick, transfers, modifier)
         return
     }
     val badge = remember(file, transfers) { transfers.badgeOf(file) }
@@ -235,11 +235,13 @@ internal fun BubbleSealedPieceRow(onColor: Color, modifier: Modifier = Modifier)
  * extension ni préfixe temporaire) et « Contact partagé » ; un appui ouvre sa fiche.
  */
 @Composable
-private fun BubbleContactCardRow(file: BubbleFile, onColor: Color, onClick: (() -> Unit)?, modifier: Modifier) {
+private fun BubbleContactCardRow(file: BubbleFile, onColor: Color, onClick: (() -> Unit)?, transfers: BubbleFileTransfers, modifier: Modifier) {
     val name = remember(file.name) { file.name?.let(ContactCardFile::displayName).orEmpty() }
     val shared = stringResource(R.string.bubble_contact_card_shared)
-    val spoken = stringResource(R.string.a11y_message_contact_card, name.ifBlank { shared })
-    Row(
+    val account = rememberMeeshyAccount(file, isDownloaded = file.attachmentId in transfers.readyAttachmentIds)
+    val card = stringResource(R.string.a11y_message_contact_card, name.ifBlank { shared })
+    val spoken = meeshyAccountSpoken(account)?.let { "$card, $it" } ?: card
+    Column(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(onColor.copy(alpha = 0.1f))
@@ -248,17 +250,22 @@ private fun BubbleContactCardRow(file: BubbleFile, onColor: Color, onClick: (() 
                 else base.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) { contentDescription = spoken }
             }
             .padding(MeeshySpacing.sm)
-            .heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            .animateContentSize(MeeshyMotion.springDefault()),
     ) {
-        MeeshyAvatar(name = name.ifBlank { shared }, size = 40.dp)
-        Column {
-            if (name.isNotBlank()) {
-                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = onColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(
+            modifier = Modifier.heightIn(min = 44.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            MeeshyAvatar(name = name.ifBlank { shared }, size = 40.dp)
+            Column {
+                if (name.isNotBlank()) {
+                    Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = onColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(shared, style = MaterialTheme.typography.labelSmall, color = onColor.copy(alpha = 0.7f), maxLines = 1)
             }
-            Text(shared, style = MaterialTheme.typography.labelSmall, color = onColor.copy(alpha = 0.7f), maxLines = 1)
         }
+        BubbleMeeshyAccountRow(account, onColor)
     }
 }
 

@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ImageVariantPicker
@@ -40,10 +41,11 @@ internal object BubbleAttachmentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         displayDensity: Float,
+        contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
     ): BubbleAttachments {
         // #13106 — un blob chiffré de bout en bout n'est aucun genre de pièce : ni nom, ni lien.
         val openable = visibleAttachments.filterNot { it.isEndToEndBlob }
-        return project(openable, effects, preferences, mediaBaseUrl, displayDensity)
+        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope)
     }
 
     private fun project(
@@ -52,6 +54,7 @@ internal object BubbleAttachmentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         displayDensity: Float,
+        contactScope: ContactCardResolutionScope,
     ): BubbleAttachments {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
@@ -66,6 +69,8 @@ internal object BubbleAttachmentBuilder {
                     isContactCard = attachment.isContactCard && !sealed,
                     isSealed = sealed,
                     isOnDevice = attachment.fileUrl.isLocalUri(),
+                    localUri = attachment.fileUrl.takeIf { !sealed && it.isLocalUri() },
+                    contactScope = if (attachment.isContactCard) contactScope.sealedBy(attachment) else ContactCardResolutionScope.Unknown,
                 )
             }
         return BubbleAttachments(
