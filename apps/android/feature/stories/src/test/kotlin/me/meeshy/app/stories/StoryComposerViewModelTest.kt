@@ -2960,10 +2960,100 @@ class StoryComposerViewModelTest {
         vm.onRemoveMedia("cmid_up1")
         vm.onRemoveMedia("server-id")
         vm.persistDraft()
+        leaveComposer(vm)
 
         assertThat(store.load()).isNull()
         io.mockk.coVerify(exactly = 1) { uploadQueue.cancel("cmid_up1") }
         io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("server-id") }
+    }
+
+    private fun reopenedDraftWithUpload(): InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(
+        StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "mes mots", mediaIds = listOf("cmid_up1"))),
+            selectedId = "s1",
+        ),
+    )
+
+    @Test
+    fun `undoing an edit on a reopened draft keeps the offline media it names (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onSelectFilter(StoryFilter.WARM)
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("cmid_up1")
+    }
+
+    @Test
+    fun `a format switch that saves the draft without a removed media keeps its upload while undo can bring it back (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).contains("cmid_up1")
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `the upload of a media removed then brought back by undo survives the composer and rides the next save (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+        vm.onUndo()
+        vm.persistDraft()
+
+        leaveComposer(vm)
+
+        assertThat(store.load()?.slides?.single()?.mediaIds).containsExactly("cmid_up1")
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `a removed media whose save dropped it is cancelled when the composer is left for good (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+
+        leaveComposer(vm)
+
+        io.mockk.coVerify(exactly = 1) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `a media removed, saved away, then brought back and published keeps the upload its story waits on (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        coEvery { repo.enqueuePublish(any(), any()) } returns "story-cmid"
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+        vm.onUndo()
+
+        vm.publish()
+        leaveComposer(vm)
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), listOf("cmid_up1")) }
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
     }
 
     @Test
