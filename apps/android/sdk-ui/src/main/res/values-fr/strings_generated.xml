@@ -91,6 +91,7 @@
     <string name="media_trim_loading">Chargement de l\'aperçu</string>
     <string name="media_trim_of_total">sur %1$s</string>
     <string name="media_trim_window">Portion conservée</string>
+    <string name="media_video_pip_enter">Picture in Picture</string>
     <string name="message_long_collapse">Réduire</string>
     <string name="message_long_read_more">Lire la suite</string>
     <string name="notification_date_ago">il y a %1$s</string>

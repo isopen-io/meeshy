@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
 import org.junit.Test
 
@@ -113,5 +114,25 @@ class CallPictureInPictureCoordinatorTest {
         val outside = coordinator().apply { connected() }
         outside.onTransition(CallState.Connected, CallState.Idle, video)
         assertThat(dismissed).isEqualTo(1)
+    }
+    @Test
+    fun `un appel video en cours garde la priorite sur la fenetre d'une video, des qu'il sonne et jusqu'a sa fin`() {
+        val pip = coordinator()
+        assertThat(pip.videoCallInProgress).isFalse()
+
+        pip.onTransition(CallState.Idle, CallState.Ringing(true), video)
+        assertThat(pip.videoCallInProgress).isTrue()
+
+        pip.connected()
+        assertThat(pip.videoCallInProgress).isTrue()
+
+        pip.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), video)
+        assertThat(pip.videoCallInProgress).isFalse()
+
+        val audioCall = coordinator().apply { connected(audio) }
+        assertThat(audioCall.videoCallInProgress).isFalse()
+
+        val cleared = coordinator().apply { connected(); onCleared() }
+        assertThat(cleared.videoCallInProgress).isFalse()
     }
 }

@@ -91,6 +91,7 @@
     <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
     <string name="media_trim_of_total">من %1$s</string>
     <string name="media_trim_window">الجزء المحتفظ به</string>
+    <string name="media_video_pip_enter">صورة داخل صورة</string>
     <string name="message_long_collapse">عرض أقل</string>
     <string name="message_long_read_more">اقرأ المزيد</string>
     <string name="notification_date_ago">قبل %1$s</string>

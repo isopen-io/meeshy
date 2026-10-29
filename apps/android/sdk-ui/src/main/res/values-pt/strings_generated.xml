@@ -91,6 +91,7 @@
     <string name="media_trim_loading">Carregando a prévia</string>
     <string name="media_trim_of_total">de %1$s</string>
     <string name="media_trim_window">Trecho mantido</string>
+    <string name="media_video_pip_enter">Picture in Picture</string>
     <string name="message_long_collapse">Ver menos</string>
     <string name="message_long_read_more">Continuar lendo</string>
     <string name="notification_date_ago">há %1$s</string>

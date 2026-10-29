@@ -40,6 +40,7 @@ import me.meeshy.sdk.model.ReelSwitchWork
 import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.fullscreen.FullscreenScrims
+import me.meeshy.ui.component.video.rememberVideoWindowShown
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -76,6 +77,9 @@ fun ReelsScreen(
     val probedAudio = remember { mutableStateMapOf<String, Boolean>() }
     // Mode immersif : un appui long efface tout le chrome, un toucher le rend.
     var chromeHidden by rememberSaveable { mutableStateOf(false) }
+    // Dans la fenêtre Picture-in-Picture, la vidéo seule : aucun chrome, aucun toast, aucune feuille (#13814).
+    val inVideoWindow = rememberVideoWindowShown()
+    val chromeOff = chromeHidden || inVideoWindow
     val shareContext = LocalContext.current
     val shareLauncher = LocalShareLauncher.current
     val haptics = rememberMeeshyHaptics()
@@ -123,7 +127,7 @@ fun ReelsScreen(
                 viewModel = viewModel,
                 muted = muted,
                 onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
-                chromeHidden = chromeHidden,
+                chromeHidden = chromeOff,
                 quickEmojis = quickEmojis,
                 railActions = railActions,
                 onChromeHidden = { chromeHidden = it },
@@ -136,12 +140,12 @@ fun ReelsScreen(
             )
             FullscreenScrims(
                 topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
-                chromeVisible = !chromeHidden,
+                chromeVisible = !chromeOff,
             )
         }
         ReelTopChrome(
             reel = state.reels.getOrNull(pagerState.currentPage),
-            chromeHidden = chromeHidden,
+            chromeHidden = chromeOff,
             muted = muted,
             showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
             viewModel = viewModel,
@@ -162,11 +166,11 @@ fun ReelsScreen(
                 )
             },
         )
-        FeedbackToastHost(toasts = viewModel.toasts)
+        if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts)
     }
 
     val openCommentsReelId = commentsReelId
-    if (openCommentsReelId != null) {
+    if (openCommentsReelId != null && !inVideoWindow) {
         ReelCommentsSheet(
             reelId = openCommentsReelId,
             onDismiss = { commentsReelId = null },

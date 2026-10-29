@@ -53,6 +53,7 @@ import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
+import me.meeshy.sdk.model.playback.PipAspect
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.ConversationViewingBinding
@@ -60,6 +61,8 @@ import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.LocalConversationViewers
 import me.meeshy.ui.component.LocalPresenceStore
+import me.meeshy.ui.component.video.LocalVideoPictureInPicture
+import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
@@ -103,6 +106,12 @@ class MainActivity : ComponentActivity() {
     /** Le Picture-in-Picture de l'appel vidéo : l'activité fournit le geste, le coordinateur la règle. */
     @Inject
     lateinit var callPictureInPicture: CallPictureInPictureCoordinator
+
+    /**
+     * Le Picture-in-Picture d'une vidéo plein écran (réel, vidéo de conversation, #13814) : une instance par activité,
+     * celle qu'une relance remplace emporte la sienne. L'appel passe toujours avant elle.
+     */
+    private lateinit var videoPictureInPicture: VideoPictureInPictureCoordinator
 
     /** La preuve que les extras d'appel d'un intent viennent d'une notification de Meeshy (#13504). */
     @Inject
@@ -153,6 +162,11 @@ class MainActivity : ComponentActivity() {
             enter = ::enterCallPictureInPicture,
             dismiss = { moveTaskToBack(false) },
         )
+        videoPictureInPicture = VideoPictureInPictureCoordinator(
+            deviceSupportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+            videoCallInProgress = { callPictureInPicture.videoCallInProgress },
+            enter = ::enterVideoPictureInPicture,
+        )
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
@@ -170,6 +184,7 @@ class MainActivity : ComponentActivity() {
                         LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
+                        LocalVideoPictureInPicture provides videoPictureInPicture,
                     ) {
                         ProvideRootSplash {
                             MeeshyApp(
@@ -222,26 +237,40 @@ class MainActivity : ComponentActivity() {
         return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
     }
 
+    private fun enterVideoPictureInPicture(aspect: PipAspect): Boolean {
+        val params = PictureInPictureParams.Builder().setAspectRatio(Rational(aspect.width, aspect.height)).build()
+        return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
+    }
+
     @Deprecated("ComponentActivity deprecates it; every activity launch still funnels through it")
     @Suppress("DEPRECATION")
     override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
         callPictureInPicture.holdForInAppLaunch()
+        videoPictureInPicture.holdForInAppLaunch()
         try {
             super.startActivityForResult(intent, requestCode, options)
         } catch (failure: RuntimeException) {
             callPictureInPicture.releaseInAppLaunch()
+            videoPictureInPicture.onActivityResumed()
             throw failure
         }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        callPictureInPicture.onUserLeaveHint()
+        // Un seul départ, une seule fenêtre : l'appel d'abord, la vidéo plein écran ensuite.
+        callPictureInPicture.onUserLeaveHint() || videoPictureInPicture.onUserLeaveHint()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        callPictureInPicture.setInPip(isInPictureInPictureMode)
+        val videoOwnsWindow = videoPictureInPicture.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        callPictureInPicture.setInPip(isInPictureInPictureMode && !videoOwnsWindow)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        videoPictureInPicture.onActivityStopped()
     }
 
     override fun onDestroy() {
@@ -283,6 +312,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         callPictureInPicture.releaseInAppLaunch()
+        videoPictureInPicture.onActivityResumed()
         lifecycleScope.launch {
             DynamicShortcutsPublisher.publish(
                 context = this@MainActivity,

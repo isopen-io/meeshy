@@ -30,6 +30,7 @@ import javax.inject.Singleton
 class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureController {
     @Volatile private var isVideoCall = false
     @Volatile private var isEstablished = false
+    @Volatile private var isInProgress = false
     @Volatile private var callScreenShown = false
     @Volatile private var deviceSupportsPip = false
     @Volatile private var enter: (() -> Boolean)? = null
@@ -42,14 +43,20 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     /** `true` tant que l'activité est dans la fenêtre flottante. */
     val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
 
+    /** Un appel VIDÉO vit (de la sonnerie à la fin) : il garde la fenêtre flottante, une vidéo ne l'ouvre pas. */
+    val videoCallInProgress: Boolean
+        get() = isVideoCall && isInProgress
+
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
         isVideoCall = session.config.isVideo
         isEstablished = next is CallState.Connected
+        isInProgress = next.isActive
         if (next is CallState.Ended || next == CallState.Idle) leaveWindow()
     }
 
     override fun onCleared() {
         isEstablished = false
+        isInProgress = false
         leaveWindow()
     }
 
