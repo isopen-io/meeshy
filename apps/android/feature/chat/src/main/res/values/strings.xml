@@ -291,4 +291,7 @@
         <item quantity="other">%1$d unread messages</item>
     </plurals>
     <string name="viewer_code_truncated">File truncated: only the first 512 KB are shown.</string>
+    <string name="viewer_doc_open_with">Open with another app</string>
+    <string name="viewer_text_show_source">Show source</string>
+    <string name="viewer_text_show_rendered">Show rendered</string>
 </resources>

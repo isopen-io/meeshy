@@ -32,6 +32,22 @@ class FileViewerKindTest {
     }
 
     @Test
+    fun `un texte brut ou du markdown se lit dans l'app`() {
+        assertThat(FileViewerKind.of("text/plain", "notes.txt")).isEqualTo(FileViewerKind.Text(isMarkdown = false))
+        assertThat(FileViewerKind.of("application/octet-stream", "export.CSV")).isEqualTo(FileViewerKind.Text(isMarkdown = false))
+        assertThat(FileViewerKind.of("text/plain", "sans-extension")).isEqualTo(FileViewerKind.Text(isMarkdown = false))
+        assertThat(FileViewerKind.of("text/markdown", "README")).isEqualTo(FileViewerKind.Text(isMarkdown = true))
+        assertThat(FileViewerKind.of("application/octet-stream", "doc.md")).isEqualTo(FileViewerKind.Text(isMarkdown = true))
+    }
+
+    @Test
+    fun `les documents Office n'ont pas d'apercu dans l'app`() {
+        assertThat(FileViewerKind.of("application/msword", "a.doc")).isEqualTo(FileViewerKind.Document)
+        assertThat(FileViewerKind.of("application/vnd.ms-excel", "a.xls")).isEqualTo(FileViewerKind.Document)
+        assertThat(FileViewerKind.of("application/octet-stream", "deck.pptx")).isEqualTo(FileViewerKind.Document)
+    }
+
+    @Test
     fun `le langage se lit sur le nom avant l'extension puis le type`() {
         assertThat(CodeLanguage.detect("Makefile", "")).isEqualTo(CodeLanguage.MAKEFILE)
         assertThat(CodeLanguage.detect("x.TSX", "")).isEqualTo(CodeLanguage.TYPESCRIPT)

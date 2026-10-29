@@ -292,4 +292,7 @@
         <item quantity="other">%1$d mensagens não lidas</item>
     </plurals>
     <string name="viewer_code_truncated">Arquivo truncado: apenas os primeiros 512 KB são exibidos.</string>
+    <string name="viewer_doc_open_with">Abrir com outro app</string>
+    <string name="viewer_text_show_source">Mostrar a fonte</string>
+    <string name="viewer_text_show_rendered">Mostrar o resultado</string>
 </resources>
