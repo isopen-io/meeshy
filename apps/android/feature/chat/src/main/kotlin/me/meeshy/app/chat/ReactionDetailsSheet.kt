@@ -178,7 +178,7 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
             size = 36.dp,
             containerColor = accentColor,
             imageUrl = reactor.avatarUrl,
-            presence = rememberPresence(reactor.userId.takeUnless { reactor.isSelf }),
+            presence = rememberPresence(reactor.userId),
         )
         Text(
             text = when {

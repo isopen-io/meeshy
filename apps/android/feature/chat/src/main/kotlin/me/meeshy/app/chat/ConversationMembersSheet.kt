@@ -309,7 +309,7 @@ private fun MemberRow(
             containerColor = accentColor,
             imageUrl = member.avatar,
             presence = rememberPresence(
-                member.userId.takeUnless { isSelf },
+                member.userId,
                 UserPresence.served(member.isOnline, member.lastActiveAt),
             ),
         )

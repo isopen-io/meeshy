@@ -44,7 +44,7 @@ internal class PresenceSources(
 /**
  * LA carte de présence de la session (miroir de `PresenceManager` iOS) : un singleton, abonné dès le
  * démarrage du process — pas par écran —, qui fusionne `user:status`, `presence:snapshot` et la
- * frappe, et se vide à la coupure du socket. Les flux socket sont chauds SANS rejeu : une carte par
+ * frappe, et garde ses entrées à la coupure du socket (elles décroissent, `isOnline` à faux). Les flux socket sont chauds SANS rejeu : une carte par
  * écran ratait le snapshot posté après l'authentification, un écran ouvert ensuite repartait vide.
  * Ici le snapshot est GARDÉ EN ÉTAT, donc tout écran ouvert après lui le voit.
  *
@@ -117,8 +117,8 @@ class PresenceStore internal constructor(
     fun start() {
         if (started) return
         started = true
-        scope.launch { sources.userStatus.collect { event -> _entries.update { PresenceMapReducer.applyStatus(it, event) } } }
-        scope.launch { sources.presenceSnapshot.collect { snapshot -> _entries.update { PresenceMapReducer.applySnapshot(it, snapshot.users) } } }
+        scope.launch { sources.userStatus.collect { event -> _entries.update { withoutMe(PresenceMapReducer.applyStatus(it, event)) } } }
+        scope.launch { sources.presenceSnapshot.collect { snapshot -> _entries.update { withoutMe(PresenceMapReducer.applySnapshot(it, snapshot.users)) } } }
         scope.launch {
             sources.typingStarted.collect { event ->
                 _entries.update { PresenceMapReducer.noteActivity(it, event.userId, currentUserId(), clock.nowMillis()) }
@@ -150,14 +150,31 @@ class PresenceStore internal constructor(
         when (state) {
             SocketConnectionState.CONNECTING ->
                 if (previous == SocketConnectionState.CONNECTED) _entries.update(PresenceMapReducer::socketDisconnected)
-            SocketConnectionState.DISCONNECTED -> _entries.update { if (it.isEmpty()) it else emptyMap() }
+            SocketConnectionState.DISCONNECTED -> _entries.update(PresenceMapReducer::socketDisconnected)
             SocketConnectionState.CONNECTED -> Unit
         }
     }
 
-    /** L'entrée servie de [userId] ; `null` = rien servi (aucun point). */
+    private fun isMe(userId: String): Boolean = userId == currentUserId()
+
+    /** Le compte courant n'a jamais de présence servie (miroir de `knownPresenceState` iOS). */
+    private fun withoutMe(map: PresenceMap): PresenceMap {
+        val me = currentUserId() ?: return map
+        return if (map.containsKey(me)) map - me else map
+    }
+
+    /** L'entrée servie de [userId] ; `null` = rien servi (aucun point), toujours pour le compte courant. */
     fun entryOf(userId: String): Flow<UserPresence?> =
-        _entries.map { it[userId] }.distinctUntilChanged()
+        _entries.map { if (isMe(userId)) null else it[userId] }.distinctUntilChanged()
+
+    /**
+     * L'état du point de [userId] à cet instant, sans abonnement (valeur initiale d'une surface) :
+     * la carte d'abord, [served] sinon ; `null` = aucun point, toujours pour le compte courant.
+     */
+    fun currentStateOf(userId: String, served: UserPresence? = null): PresenceState? {
+        if (isMe(userId)) return null
+        return (_entries.value[userId] ?: served)?.state(clock.nowMillis())
+    }
 
     /**
      * L'état du point de [userId], recalculé avec le temps ; `null` = aucune entrée, aucun point.
@@ -172,7 +189,7 @@ class PresenceStore internal constructor(
      */
     fun presenceOf(userId: String, served: UserPresence?): Flow<PresenceState?> =
         if (served == null) presenceOf(userId)
-        else decayingState(_entries.map { it[userId] ?: served }.distinctUntilChanged())
+        else decayingState(_entries.map { if (isMe(userId)) null else it[userId] ?: served }.distinctUntilChanged())
 
     private fun decayingState(entry: Flow<UserPresence?>): Flow<PresenceState?> =
         entry.flatMapLatest { presence ->

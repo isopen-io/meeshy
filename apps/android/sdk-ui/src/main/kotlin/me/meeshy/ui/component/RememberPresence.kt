@@ -24,16 +24,15 @@ val LocalPresenceStore = staticCompositionLocalOf<PresenceStore?> { null }
  * La collecte suit le cycle de vie : écran en arrière-plan, plus d'abonné, l'horloge partagée
  * s'arrête — aucun réveil toutes les 15 s quand personne ne regarde.
  *
- * `null` = rien servi par la passerelle pour cet utilisateur : aucun point.
+ * `null` = rien servi par la passerelle pour cet utilisateur : aucun point — toujours le cas du
+ * compte courant, que le store ne sert à aucune surface.
  */
 @Composable
 fun rememberPresence(userId: String?): PresenceState? {
     val store = LocalPresenceStore.current ?: return null
     if (userId.isNullOrBlank()) return null
     val flow = remember(store, userId) { store.presenceOf(userId) }
-    val initial = remember(store, userId) {
-        store.entries.value[userId]?.state(store.nowMillis())
-    }
+    val initial = remember(store, userId) { store.currentStateOf(userId) }
     val state by flow.collectAsStateWithLifecycle(initialValue = initial)
     return state
 }
@@ -48,9 +47,7 @@ fun rememberPresence(userId: String?, served: UserPresence?): PresenceState? {
     val store = LocalPresenceStore.current ?: return null
     if (userId.isNullOrBlank()) return null
     val flow = remember(store, userId, served) { store.presenceOf(userId, served) }
-    val initial = remember(store, userId, served) {
-        (store.entries.value[userId] ?: served)?.state(store.nowMillis())
-    }
+    val initial = remember(store, userId, served) { store.currentStateOf(userId, served) }
     val state by flow.collectAsStateWithLifecycle(initialValue = initial)
     return state
 }

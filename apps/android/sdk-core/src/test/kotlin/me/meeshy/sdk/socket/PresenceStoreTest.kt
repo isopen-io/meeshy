@@ -103,16 +103,56 @@ class PresenceStoreTest {
     }
 
     @Test
-    fun `an explicit disconnect empties the map`() = runTest {
+    fun `a disconnect keeps the map and the dot decays instead of vanishing`() = runTest {
         val f = fixture()
         f.connection.value = SocketConnectionState.CONNECTED
         f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch)))
         testScheduler.runCurrent()
 
+        f.store.presenceOf("u1").test {
+            assertThat(awaitItem()).isEqualTo(PresenceState.ONLINE)
+
+            f.connection.value = SocketConnectionState.DISCONNECTED
+            testScheduler.runCurrent()
+            assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch)))
+            expectNoEvents()
+
+            testScheduler.advanceTimeBy(61_000)
+            assertThat(awaitItem()).isEqualTo(PresenceState.AWAY)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the snapshot of the reconnection restores what survived a disconnect`() = runTest {
+        val f = fixture()
+        f.connection.value = SocketConnectionState.CONNECTED
+        f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
         f.connection.value = SocketConnectionState.DISCONNECTED
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        f.connection.value = SocketConnectionState.CONNECTED
+        f.snapshot.emit(PresenceSnapshotEvent(listOf(UserStatusEvent("u1", "a", true, iso(epoch + 5_000)))))
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(true, iso(epoch + 5_000)))
+    }
+
+    @Test
+    fun `the signed-in account never has a served presence`() = runTest {
+        val f = fixture()
+        f.snapshot.emit(PresenceSnapshotEvent(listOf(UserStatusEvent("me", "m", true, iso(epoch)), UserStatusEvent("u1", "a", true, iso(epoch)))))
+        f.userStatus.emit(UserStatusEvent("me", "m", true, iso(epoch)))
+        testScheduler.runCurrent()
+        val served = UserPresence(isOnline = true, lastActiveAt = iso(epoch))
+
+        assertThat(f.store.entries.value.keys).containsExactly("u1")
+        f.store.presenceOf("me").test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
+        f.store.presenceOf("me", served).test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
+        f.store.entryOf("me").test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
+        assertThat(f.store.currentStateOf("me", served)).isNull()
+        assertThat(f.store.currentStateOf("u1", null)).isEqualTo(PresenceState.ONLINE)
     }
 
     @Test

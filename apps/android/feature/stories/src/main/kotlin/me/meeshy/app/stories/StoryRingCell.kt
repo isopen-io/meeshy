@@ -315,7 +315,7 @@ private fun BoxScope.BadgeTarget(
 
 @Composable
 private fun BoxScope.PresenceDot(ring: StoryRing) {
-    val presence = rememberPresence(ring.userId.takeUnless { ring.isMine }, ring.servedPresence)
+    val presence = rememberPresence(ring.userId, ring.servedPresence)
     val color = meeshyPresenceDotColor(presence) ?: return
     Box(
         modifier = Modifier
