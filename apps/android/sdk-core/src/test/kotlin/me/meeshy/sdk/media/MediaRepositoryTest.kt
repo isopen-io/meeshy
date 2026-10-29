@@ -170,4 +170,33 @@ class MediaRepositoryTest {
 
         assertThat(media).isEmpty()
     }
+
+    @Test
+    fun requestTranscription_alreadyTranscribed_returnsIt() = runTest {
+        val body = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"taskId":null,"status":"completed","transcription":{"text":"Bonjour","language":"fr","confidence":0.8}}""",
+        )
+        coEvery { api.transcribe("a1", me.meeshy.sdk.model.TranscribeRequest(force = false)) } returns ApiResponse(success = true, data = body)
+
+        val result = repository().requestTranscription("a1")
+
+        assertThat((result as NetworkResult.Success).data?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun requestTranscription_processing_returnsNothingYet() = runTest {
+        val body = kotlinx.serialization.json.Json.parseToJsonElement("""{"taskId":"t","status":"processing","transcription":null}""")
+        coEvery { api.transcribe(any(), any()) } returns ApiResponse(success = true, data = body)
+
+        val result = repository().requestTranscription("a1")
+
+        assertThat((result as NetworkResult.Success).data).isNull()
+    }
+
+    @Test
+    fun requestTranscription_refused_fails() = runTest {
+        coEvery { api.transcribe(any(), any()) } throws IOException("offline")
+
+        assertThat(repository().requestTranscription("a1")).isInstanceOf(NetworkResult.Failure::class.java)
+    }
 }

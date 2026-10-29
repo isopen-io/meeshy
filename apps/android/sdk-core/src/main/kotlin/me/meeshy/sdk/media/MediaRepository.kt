@@ -1,6 +1,11 @@
 package me.meeshy.sdk.media
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.DEFAULT_MEDIA_MIME_TYPE
+import me.meeshy.sdk.model.MessageTranscriptionFiche
+import me.meeshy.sdk.model.TranscribeRequest
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.toUploadedMedia
 import me.meeshy.sdk.net.NetworkResult
@@ -65,5 +70,21 @@ class MediaRepository @Inject constructor(
         } finally {
             clean.forEach { (sent, original) -> sanitizer.release(sent, original) }
         }
+    }
+
+    /**
+     * Demande la transcription d'une pièce son (`POST /attachments/:id/transcribe`, iOS `requestTranscription`). Le
+     * résultat d'une transcription lancée arrive par la socket ; celle qui existait déjà revient ici, `null` sinon.
+     */
+    suspend fun requestTranscription(attachmentId: String): NetworkResult<ApiAttachmentTranscription?> =
+        apiCall { mediaApi.transcribe(attachmentId, TranscribeRequest(force = false)) }
+            .map { data -> completedTranscription(data) }
+
+    private fun completedTranscription(data: JsonElement): ApiAttachmentTranscription? =
+        runCatching { outcomeJson.decodeFromJsonElement(MessageTranscriptionFiche.TranscribeOutcome.serializer(), data) }
+            .getOrNull()?.completed
+
+    private companion object {
+        val outcomeJson = Json { ignoreUnknownKeys = true }
     }
 }
