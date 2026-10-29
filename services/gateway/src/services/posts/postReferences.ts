@@ -185,9 +185,14 @@ function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
   // #10315 — un original PRIVÉ ou mis hors ligne par la modération ne voyage plus
   // dans la republication d'un autre : `repostOf: null`, la forme qu'a déjà un
   // original disparu. Ses deux colonnes de décision ne partent jamais sur le fil.
-  const { visibility, moderationHiddenAt, ...stripped } = loaded as { visibility?: unknown; moderationHiddenAt?: unknown };
-  if (visibility === 'PRIVATE' || (moderationHiddenAt !== null && moderationHiddenAt !== undefined)) return { ...post, repostOf: null };
-  const carried = 'visibility' in loaded || 'moderationHiddenAt' in loaded;
+  // #13661 — idem pour un original SUPPRIMÉ par son auteur (`deletedAt`) : son
+  // contenu, ses médias et ses traductions ne survivent pas dans les reposts.
+  // `originalRepostOfId` / `repostOfId` restent sur le repost : le client y lit
+  // « ce contenu n'est plus disponible ».
+  const { visibility, moderationHiddenAt, deletedAt, ...stripped } = loaded as { visibility?: unknown; moderationHiddenAt?: unknown; deletedAt?: unknown };
+  const set = (v: unknown) => v !== null && v !== undefined;
+  if (visibility === 'PRIVATE' || set(moderationHiddenAt) || set(deletedAt)) return { ...post, repostOf: null };
+  const carried = 'visibility' in loaded || 'moderationHiddenAt' in loaded || 'deletedAt' in loaded;
   const repostOf = withServedAuthors(carried ? stripped : loaded);
 
   // La négociation du blob précède le tri des mentions : le chemin « pas de
