@@ -102,6 +102,19 @@ internal class CallNegotiator(
                 )
             }
             .launchIn(scope)
+
+        engine.renegotiationRequests
+            .onEach { renegotiate() }
+            .launchIn(scope)
+    }
+
+    /**
+     * The engine changed a sender's direction (screen share on an audio call, #13332): either side
+     * re-offers with the next generation, like iOS `screenShareNeedsRenegotiation` → `emitCallOffer`.
+     */
+    private suspend fun renegotiate() {
+        negotiationId += 1
+        sendOffer()
     }
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */

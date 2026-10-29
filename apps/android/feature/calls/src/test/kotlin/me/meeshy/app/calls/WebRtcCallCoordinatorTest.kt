@@ -46,11 +46,13 @@ class WebRtcCallCoordinatorTest {
     private val iceState = MutableStateFlow(IceConnectionState.NEW)
     private val localCandidates = MutableSharedFlow<IceCandidate>(extraBufferCapacity = 8)
     private val incomingSignals = MutableSharedFlow<CallSignalEnvelope>(extraBufferCapacity = 8)
+    private val renegotiations = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     private val engine: WebRtcEngine = mockk(relaxed = true) {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
         every { dataChannelMessages } returns MutableSharedFlow()
+        every { renegotiationRequests } returns renegotiations
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
         coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit
@@ -316,6 +318,33 @@ class WebRtcCallCoordinatorTest {
             coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-legacy" }) }
             coordinator.end()
         }
+
+    // MARK: - Screen share renegotiation (#13332, mirrors iOS screenShareNeedsRenegotiation)
+
+    @Test
+    fun `an engine renegotiation request sends a fresh offer of the next generation, from the callee too`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCallee()
+            incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-offer"))
+
+            renegotiations.emit(Unit)
+
+            coVerify(exactly = 1) { engine.setLocalDescription(match { it.type == SessionDescription.Type.OFFER }) }
+            verify(exactly = 1) {
+                signals.emitOffer("call-9", "v=0-restart", to = "peer", from = "me", negotiationId = 3)
+            }
+            coordinator.end()
+        }
+
+    @Test
+    fun `a renegotiation request after the call ended sends nothing`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.end()
+
+        renegotiations.emit(Unit)
+
+        verify(exactly = 0) { signals.emitOffer(any(), any(), any(), any(), any()) }
+    }
 
     // MARK: - Speaker routing (#4798)
     //

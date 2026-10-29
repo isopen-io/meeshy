@@ -1,6 +1,7 @@
 package me.meeshy.sdk.call
 
 import android.content.Context
+import android.media.projection.MediaProjection
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import me.meeshy.sdk.call.screen.CallScreenFeeds
+import me.meeshy.sdk.call.screen.CallScreenShareRoute
+import me.meeshy.sdk.call.screen.ScreenFeedFactory
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
@@ -50,6 +54,7 @@ class WebRtcEngine internal constructor(
     appContext: Context,
     stackProvider: () -> WebRtcStack,
     private val activityGate: CallActivityGate,
+    screenFeeds: ScreenFeedFactory? = null,
 ) {
     @Inject
     constructor(
@@ -62,6 +67,8 @@ class WebRtcEngine internal constructor(
     private val engineEvents = CallEngineEvents(onRemoteDataChannel = ::adoptRemoteDataChannel)
     private val remoteDescriptions = RemoteDescriptionGuard()
     private val dataMessages = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64)
+    private val screenShare = CallScreenShareRoute(screenFeeds ?: CallScreenFeeds(appContext, stack))
+    private val renegotiations = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     private var peerConnection: PeerConnection? = null
     private val previewPeers = CopyOnWriteArraySet<CallPreviewPeer>()
@@ -88,6 +95,15 @@ class WebRtcEngine internal constructor(
 
     /** Canal de données, renégociation, état de connexion complet. */
     val events: SharedFlow<CallEngineEvent> = engineEvents.events
+
+    /**
+     * Le pair doit recevoir une offre : la direction de l'émetteur vidéo a changé (partage d'écran d'un
+     * appel audio). Le négociateur de l'appel l'émet, comme iOS `screenShareNeedsRenegotiation`.
+     */
+    val renegotiationRequests: SharedFlow<Unit> = renegotiations.asSharedFlow()
+
+    /** Vrai tant que la piste d'écran occupe l'émetteur vidéo. */
+    val isScreenSharing: Boolean get() = screenShare.isSharing
 
     /** Trames reçues sur le canal de données « transcription », brutes (bye, ping, sous-titres). */
     val dataChannelMessages: SharedFlow<ByteArray> = dataMessages.asSharedFlow()
@@ -160,6 +176,22 @@ class WebRtcEngine internal constructor(
     fun setVideoEffects(config: VideoFilterConfig) = media.setVideoEffects(config)
 
     fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = media.switchCamera(onSwitched)
+
+    /**
+     * Partage l'écran de [projection] à la place de ma caméra (#13332), sans renégocier quand l'émetteur
+     * vidéo émettait déjà. @throws WebRtcError.NoPeerConnection hors appel, WebRtcError.ConfigureFailed si
+     * la capture est refusée.
+     */
+    fun beginScreenShare(projection: MediaProjection) {
+        val peer = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        if (screenShare.begin(peer, projection, media.localVideoTrack)) renegotiations.tryEmit(Unit)
+    }
+
+    /** Arrête le partage : l'émetteur vidéo retrouve la caméra (et ses effets) ou repasse en réception. */
+    fun endScreenShare() {
+        if (peerConnection == null) return screenShare.release()
+        if (screenShare.end()) renegotiations.tryEmit(Unit)
+    }
 
     /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
     val cameraZoom: me.meeshy.sdk.call.camera.CallCameraZoom get() = media.zoom
@@ -249,6 +281,7 @@ class WebRtcEngine internal constructor(
         previewPeers.filter { it.usesCallSources }.forEach { it.close() }
         dataChannel?.close()
         dataChannel = null
+        screenShare.release()
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()
