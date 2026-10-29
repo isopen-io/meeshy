@@ -48,11 +48,12 @@ data class PendingMyStoryDelete(
     val storyId: String?,
 )
 
-/** Une republication en attente d'audience : [previous] est ce que la story porte, [choice] ce que l'auteur confirme. */
+/** Une republication en attente d'audience : [rawVisibility] / [rawUserIds] sont ce que le serveur porte, tel quel ; [choice] est ce que l'auteur voit et confirme. */
 @Immutable
 data class PendingRepublish(
     val storyId: String,
-    val previous: StoryRepublishAudience.Choice,
+    val rawVisibility: String?,
+    val rawUserIds: List<String>?,
     val choice: StoryRepublishAudience.Choice,
 ) {
     val canConfirm: Boolean get() = StoryRepublishAudience.isPublishable(choice)
@@ -312,7 +313,7 @@ class MyStoriesViewModel internal constructor(
             selfId = sessionRepository.currentUserId,
             blocked = blocks.currentBlockedIds,
         )
-        _state.update { it.copy(pendingRepublish = PendingRepublish(id, previous, previous)) }
+        _state.update { it.copy(pendingRepublish = PendingRepublish(id, item.visibility, item.visibilityUserIds, previous)) }
     }
 
     private fun editRepublish(edit: (StoryRepublishAudience.Choice) -> StoryRepublishAudience.Choice) =
@@ -331,9 +332,9 @@ class MyStoriesViewModel internal constructor(
         _state.update { it.copy(pendingRepublish = null, isRepublishing = true) }
         viewModelScope.launch {
             val ticket = storyRepository.ticket()
-            val change = StoryRepublishAudience.change(pending.previous, pending.choice)
+            val change = StoryRepublishAudience.change(pending.rawVisibility, pending.rawUserIds, pending.choice)
             val audienceApplied = change !is StoryRepublishAudience.Change.Apply ||
-                writeAudience(pending.storyId, change.visibility, change.userIds)
+                writeAudience(pending.storyId, change.visibility.wire, change.userIds)
             if (!audienceApplied) {
                 _effects.send(MyStoriesUiEffect.RepublishFailed)
             } else {
@@ -349,7 +350,7 @@ class MyStoriesViewModel internal constructor(
                     }
                     is NetworkResult.Failure -> {
                         if (change is StoryRepublishAudience.Change.Apply) {
-                            writeAudience(pending.storyId, pending.previous.visibility, pending.previous.userIds)
+                            pending.rawVisibility?.let { writeAudience(pending.storyId, it, pending.rawUserIds.orEmpty()) }
                         }
                         _effects.send(MyStoriesUiEffect.RepublishFailed)
                     }
@@ -360,10 +361,10 @@ class MyStoriesViewModel internal constructor(
     }
 
     /** La liste part TOUJOURS, vide au besoin : une ancienne liste ne reste pas orpheline. */
-    private suspend fun writeAudience(id: String, visibility: StoryVisibility, userIds: List<String>): Boolean {
+    private suspend fun writeAudience(id: String, visibility: String, userIds: List<String>): Boolean {
         val draft = PostEditPayload.build(
             setOf(PostEditField.VISIBILITY, PostEditField.VISIBILITY_USER_IDS),
-            PostEditDraft(visibility = visibility.wire, visibilityUserIds = userIds),
+            PostEditDraft(visibility = visibility, visibilityUserIds = userIds),
         )
         return postRepository.update(id, draft) is NetworkResult.Success
     }

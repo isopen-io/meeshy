@@ -82,7 +82,9 @@ class MyStoriesViewModelTest {
         coEvery { it.delete(any()) } returns NetworkResult.Success(Unit)
     }
 
-    private val postRepo: PostRepository = mockk(relaxed = true)
+    private val postRepo: PostRepository = mockk<PostRepository>(relaxed = true).also {
+        coEvery { it.update(any(), any<PostEditDraft>()) } returns NetworkResult.Success(ApiPost(id = "a"))
+    }
     private val blocks = BlockCache()
 
     private fun viewModel(repo: StoryRepository): MyStoriesViewModel {
@@ -318,7 +320,7 @@ class MyStoriesViewModelTest {
 
         val pending = vm.state.value.pendingRepublish!!
         assertThat(pending.choice.visibility).isEqualTo(StoryVisibility.FRIENDS)
-        assertThat(pending.choice).isEqualTo(pending.previous)
+        assertThat(pending.choice.userIds).isEmpty()
         coVerify(exactly = 0) { repo.republish(any()) }
     }
 
@@ -439,5 +441,56 @@ class MyStoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { repo.republish(any()) }
+    }
+
+    @Test
+    fun `une audience brute inconnue est ecrite en PRIVATE avant la republication meme sans toucher la feuille`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "GALAXY")))
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA)
+        coEvery { postRepo.update("a", any<PostEditDraft>()) } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        republish(vm, "a")
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "PRIVATE", visibilityUserIds = emptyList()))
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `une liste brute aux ids invalides est reecrite nettoyee avant la republication`() = runTest(dispatcher) {
+        blocks.setBlocked("bad", true)
+        val repo = repository(stream = listOf(activeA.copy(visibility = "ONLY", visibilityUserIds = listOf("ok", "bad", "me"))))
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA)
+        coEvery { postRepo.update("a", any<PostEditDraft>()) } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        republish(vm, "a")
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("ok")))
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `un echec restaure les valeurs brutes du serveur`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "ONLY", visibilityUserIds = listOf("ok", "bad"))))
+        coEvery { repo.republish("a") } returns failure()
+        coEvery { postRepo.update(any(), any<PostEditDraft>()) } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.SetRepublishUserIds(listOf("ok")))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerify { postRepo.update("a", PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("ok", "bad"))) }
     }
 }

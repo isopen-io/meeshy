@@ -49,9 +49,18 @@ object StoryRepublishAudience {
     fun isPublishable(choice: Choice): Boolean =
         ComposerAudienceSelection.isPublishable(choice.visibility, choice.userIds)
 
-    fun change(previous: Choice, chosen: Choice): Change =
-        if (previous.visibility == chosen.visibility && previous.userIds.toSet() == chosen.userIds.toSet()) Change.None
-        else Change.Apply(chosen.visibility, chosen.userIds)
+    /**
+     * Se mesure contre les valeurs BRUTES du serveur, jamais contre la proposition nettoyée : une
+     * valeur inconnue, ou une liste que le nettoyage a changée (soi, bloqués, orpheline), doit être
+     * ÉCRITE — sinon la story repart avec l'audience effective du serveur, plus large que celle que
+     * l'auteur a vue et confirmée.
+     */
+    fun change(rawVisibility: String?, rawUserIds: List<String>?, chosen: Choice): Change {
+        val known = parse(rawVisibility)
+        val same = known == chosen.visibility && rawUserIds.orEmpty().toSet() == chosen.userIds.toSet() &&
+            rawUserIds.orEmpty().size == rawUserIds.orEmpty().toSet().size
+        return if (same) Change.None else Change.Apply(chosen.visibility, chosen.userIds)
+    }
 
     private fun parse(raw: String?): StoryVisibility? =
         raw?.let { value -> StoryVisibility.entries.firstOrNull { it.wire == value.uppercase() } }
