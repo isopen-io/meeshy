@@ -174,6 +174,41 @@ class PackShopViewModelTest {
         assertThat(ids[0]).isEqualTo(ids[1])
     }
 
+    @Test fun `a purchase whose call throws leaves nothing in flight, says it failed, and keeps the intention id`() = runTest(dispatcher) {
+        val repository = repository()
+        val ids = mutableListOf<String>()
+        coEvery { repository.purchase(any(), any(), capture(ids)) } throws IllegalStateException("interceptor") andThen
+            PackPurchaseOutcome.Refused(PackPurchaseRefusal(PackShopFailure.GENERIC, definitive = false))
+        val vm = viewModel(repository)
+        advanceUntilIdle()
+
+        vm.buy("animes")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.pendingSlugs).isEmpty()
+        assertThat(vm.state.value.failure).isEqualTo(PackShopFailure.GENERIC)
+        assertThat(vm.state.value.packs!!.first { it.slug == "animes" }.isOwned).isFalse()
+        vm.buy("animes")
+        advanceUntilIdle()
+        assertThat(ids).hasSize(2)
+        assertThat(ids[0]).isEqualTo(ids[1])
+    }
+
+    @Test fun `a pack the server says is already mine is no failure, the shop is reread`() = runTest(dispatcher) {
+        val repository = repository()
+        coEvery { repository.purchase(any(), any(), any()) } returns
+            PackPurchaseOutcome.Refused(PackPurchaseRefusal.of(409, "PACK_ALREADY_OWNED"))
+        val vm = viewModel(repository)
+        advanceUntilIdle()
+
+        vm.buy("animes")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.failure).isNull()
+        assertThat(vm.state.value.pendingSlugs).isEmpty()
+        coVerify(exactly = 1) { repository.refresh() }
+    }
+
     @Test fun `a free or owned pack is never bought`() = runTest(dispatcher) {
         val repository = repository()
         val vm = viewModel(repository)

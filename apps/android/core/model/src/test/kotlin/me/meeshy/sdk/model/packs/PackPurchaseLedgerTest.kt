@@ -69,6 +69,17 @@ class PackPurchaseLedgerTest {
     }
 
     @Test
+    fun `a pack already mine closes the gesture without a failure to say`() {
+        val refusal = PackPurchaseRefusal.of(httpStatus = 409, code = "PACK_ALREADY_OWNED")
+        val refused = begin()!!.ledger.refused(wallpaper, "animes", refusal)
+
+        assertThat(refusal.definitive).isTrue()
+        assertThat(refused.failure).isNull()
+        assertThat(refused.pending).isEmpty()
+        assertThat(begin(refused, id = "r2")!!.requestId).isEqualTo("r2")
+    }
+
+    @Test
     fun `a settled purchase clears the gesture and its id`() {
         val settled = begin()!!.ledger.settled(wallpaper, "animes")
 

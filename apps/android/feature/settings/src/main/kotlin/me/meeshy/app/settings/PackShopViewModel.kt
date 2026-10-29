@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.packs.PackPurchaseLedger
+import me.meeshy.sdk.model.packs.PackPurchaseRefusal
 import me.meeshy.sdk.model.packs.PackShopFailure
 import me.meeshy.sdk.model.packs.PackShopResponse
 import me.meeshy.sdk.model.packs.ShopPack
@@ -105,7 +106,13 @@ class PackShopViewModel @Inject constructor(
         ledger.value = begun.ledger
         viewModelScope.launch {
             // Le geste part et se conclut même si l'écran est quitté : le cache doit recevoir ce que le serveur a dit.
-            val outcome = withContext(NonCancellable) { repository.purchase(domain, slug, begun.requestId) }
+            val outcome = withContext(NonCancellable) {
+                try {
+                    repository.purchase(domain, slug, begun.requestId)
+                } catch (_: Exception) {
+                    PackPurchaseOutcome.Refused(PackPurchaseRefusal.UNREAD)
+                }
+            }
             when (outcome) {
                 is PackPurchaseOutcome.Done -> {
                     shop.update { it?.applying(domain, outcome.purchase) }

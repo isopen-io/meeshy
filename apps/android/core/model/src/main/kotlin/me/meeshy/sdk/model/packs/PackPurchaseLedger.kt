@@ -9,13 +9,24 @@ enum class PackShopFailure { INSUFFICIENT_MEESHES, GENERIC }
 /**
  * Un refus lu pour ce qu'il dit : [definitive] = le geste est tranché (4xx hors 408/429), son identifiant d'intention
  * est clos ; un réseau coupé ou un 5xx laisse le geste rejouable avec le MÊME identifiant, le serveur ne débite qu'une fois.
+ * [failure] `null` = rien n'a échoué à dire : `PACK_ALREADY_OWNED`, le pack est à moi (une réponse perdue, un autre
+ * appareil) et la vitrine relue le montre possédé.
  */
-data class PackPurchaseRefusal(val failure: PackShopFailure, val definitive: Boolean) {
+data class PackPurchaseRefusal(val failure: PackShopFailure?, val definitive: Boolean) {
     companion object {
+        const val ALREADY_OWNED = "PACK_ALREADY_OWNED"
+
         fun of(httpStatus: Int?, code: String?): PackPurchaseRefusal = PackPurchaseRefusal(
-            failure = if (code == GameErrorCode.InsufficientMeeshes.wire) PackShopFailure.INSUFFICIENT_MEESHES else PackShopFailure.GENERIC,
+            failure = when (code) {
+                GameErrorCode.InsufficientMeeshes.wire -> PackShopFailure.INSUFFICIENT_MEESHES
+                ALREADY_OWNED -> null
+                else -> PackShopFailure.GENERIC
+            },
             definitive = httpStatus != null && httpStatus in 400..499 && httpStatus != 408 && httpStatus != 429,
         )
+
+        /** Une panne que la couche réseau n'a pas su lire : rien ne dit que le serveur n'a pas débité, le geste reste rejouable. */
+        val UNREAD: PackPurchaseRefusal = PackPurchaseRefusal(PackShopFailure.GENERIC, definitive = false)
     }
 }
 
