@@ -153,7 +153,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'EXCEPT',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -168,7 +168,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'ONLY',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -337,12 +337,12 @@ describe('UpdatePostSchema', () => {
   });
 
   it('accepts EXCEPT visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
   it('accepts ONLY visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 

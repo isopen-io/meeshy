@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -58,7 +59,7 @@ export const createLinkSchema = z.object({
   newConversation: z.object({
     title: z.string().min(1, 'Le titre de la conversation est requis'),
     description: z.string().optional(),
-    memberIds: z.array(z.string()).optional()
+    memberIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional()
   }).optional()
 });
 
