@@ -52,6 +52,8 @@ import me.meeshy.sdk.model.NearbyDensityCell
 import me.meeshy.sdk.model.NearbyDensityCellSize
 import me.meeshy.sdk.model.PublicationTarget
 import me.meeshy.sdk.net.rawApiCall
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -947,6 +949,32 @@ class PostRepository @Inject constructor(
                 clientMutationId,
             )
         }
+
+    /**
+     * Commente [postId] sans écran ouvert (une saisie en ligne de bannière, #13679) : le commentaire entre dans la file
+     * d'envoi durable sous le `cmid` de sa ligne — l'`X-Client-Mutation-Id` qui rend le rejeu sans doublon —, et le
+     * compteur du post, s'il est dans le cache du fil, monte tout de suite. [parentId] `null` = commentaire racine.
+     * Rend le `cmid` de la ligne, ou `null` si la file a refusé l'écriture (compte clos entre-temps).
+     */
+    suspend fun queueComment(postId: String, content: String, parentId: String? = null, originalLanguage: String? = null): String? {
+        val ticket = fence?.currentTicket()
+        val cmid = outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.CREATE_COMMENT,
+                lane = OutboxLanes.COMMENT,
+                targetId = postId,
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage)),
+            ),
+            ticket,
+        ) ?: return null
+        rewriteRow(ticket, postId) { it.copy(commentCount = (it.commentCount ?: 0) + 1) }
+        return cmid
+    }
+
+    /** Un commentaire en file a renoncé (refus définitif, tentatives épuisées) : le compteur du post reprend ce qu'il avait ajouté. */
+    suspend fun rollbackQueuedComment(postId: String) {
+        rewriteRow(fence?.currentTicket(), postId) { row -> row.copy(commentCount = ((row.commentCount ?: 0) - 1).coerceAtLeast(0)) }
+    }
 
     suspend fun updateComment(
         postId: String,

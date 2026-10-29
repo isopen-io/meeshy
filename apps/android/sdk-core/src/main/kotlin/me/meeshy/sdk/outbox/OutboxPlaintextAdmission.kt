@@ -116,8 +116,17 @@ public class EndToEndOutboxAdmission @Inject constructor(
     private val modeReader: ConversationModeReader = ConversationModeReader.Unavailable,
 ) : OutboxPlaintextAdmission {
 
-    override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
-        val clearances = conversationsOf(row).distinct().associateWith { clearanceOf(it) }
+    override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict = judgeConversations(conversationsOf(row))
+
+    /**
+     * Le verdict du clair pour UNE conversation, AVANT qu'une bulle n'y naisse (la réponse d'une bannière, #13678) : la même
+     * loi que [judge] — registre, mode en cache, puis relecture au serveur d'un mode inconnu —, de sorte que ni une
+     * conversation chiffrée ni une conversation dont le mode est encore inconnu ne reçoit une bulle condamnée à ne jamais partir.
+     */
+    public suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict = judgeConversations(listOf(conversationId))
+
+    private suspend fun judgeConversations(conversations: List<String>): OutboxAdmissionVerdict {
+        val clearances = conversations.distinct().associateWith { clearanceOf(it) }
         if (clearances.values.any { it == ConversationClearance.END_TO_END }) return OutboxAdmissionVerdict.WITHHOLD
         for ((id, clearance) in clearances) {
             if (clearance != ConversationClearance.UNKNOWN) continue

@@ -2,9 +2,12 @@ package me.meeshy.sdk.model.push
 
 import java.time.Instant
 
-/** Les actions que la bannière d'un message offre : « Répondre » (saisie en ligne) et « Marquer comme lu ». */
-public data class PushActionOffer(val reply: Boolean, val markRead: Boolean) {
-    val any: Boolean get() = reply || markRead
+/**
+ * Les actions d'une bannière : « Répondre » (saisie en ligne) et « Marquer comme lu » sur un message,
+ * « Commenter » (saisie en ligne) sur une notification sociale commentable.
+ */
+public data class PushActionOffer(val reply: Boolean, val markRead: Boolean, val comment: Boolean = false) {
+    val any: Boolean get() = reply || markRead || comment
 
     public companion object {
         public val NONE: PushActionOffer = PushActionOffer(reply = false, markRead = false)
@@ -32,8 +35,39 @@ public object PushNotificationActions {
     public fun isMessage(payload: PushPayload): Boolean =
         payload.type?.lowercase() in MESSAGE_TYPES && payload.conversationId?.let(KEY::matches) == true
 
-    public fun offer(payload: PushPayload): PushActionOffer =
-        if (isMessage(payload) && payload.mediaMayTravel) PushActionOffer(reply = true, markRead = true) else PushActionOffer.NONE
+    /**
+     * JUMEAU de `commentableSocialTypes` (`NotificationPayloadHelpers.swift`) : les commentaires, fils de réponses et
+     * publications d'un ami. Réactions, j'aime, humeurs et nouvelles stories n'offrent pas de bouton « Commenter ».
+     */
+    private val COMMENTABLE_TYPES = setOf(
+        "post_comment",
+        "comment_reply",
+        "story_new_comment",
+        "story_thread_reply",
+        "friend_story_comment",
+        "friend_new_post",
+    )
+
+    /** JUMEAU de `threadReplyTypes` (`NotificationActionHandler.threadedParentCommentId`) : `friend_new_post` commente à la racine. */
+    private val THREAD_TYPES = COMMENTABLE_TYPES - "friend_new_post"
+
+    public fun isCommentable(payload: PushPayload): Boolean =
+        payload.type?.lowercase() in COMMENTABLE_TYPES && payload.postId?.let(KEY::matches) == true
+
+    /** Le commentaire est une réponse à CELUI de la notification (fil), sinon un commentaire racine ; un `commentId` absent dégrade en racine. */
+    public fun threadedParentCommentId(type: String?, notifiedCommentId: String?): String? =
+        notifiedCommentId?.takeIf { type?.lowercase() in THREAD_TYPES && it.isNotBlank() && KEY.matches(it) }
+
+    /**
+     * [conversationLocked] : une conversation verrouillée par code n'offre AUCUNE action rapide (iOS
+     * `LockedConversationNotificationCategory`) — « Répondre » écrirait dans le coffre et « Marquer comme lu » le lirait,
+     * depuis l'écran verrouillé, sans le code. Toucher la bannière ouvre la conversation, que la porte du routeur garde.
+     */
+    public fun offer(payload: PushPayload, conversationLocked: Boolean = false): PushActionOffer = when {
+        isMessage(payload) && payload.mediaMayTravel && !conversationLocked -> PushActionOffer(reply = true, markRead = true)
+        isCommentable(payload) -> PushActionOffer(reply = false, markRead = false, comment = true)
+        else -> PushActionOffer.NONE
+    }
 
     /** Le nom de celui qui écrit : nom d'affichage, puis pseudo, puis le titre servi. */
     public fun senderName(payload: PushPayload): String? =

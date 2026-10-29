@@ -23,4 +23,6 @@
     <string name="composer_mosaic_wave">A onda</string>
     <string name="composer_publish_menu_a11y_hint">Apre la scelta del formato e della disposizione</string>
     <string name="composer_publish_menu_title">Pubblica come</string>
+    <string name="push_action_comment">Commenta</string>
+    <string name="push_action_comment_hint">Commenta…</string>
 </resources>

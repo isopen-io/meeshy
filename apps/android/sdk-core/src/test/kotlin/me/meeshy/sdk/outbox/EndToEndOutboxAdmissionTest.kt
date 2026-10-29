@@ -308,4 +308,35 @@ class EndToEndOutboxAdmissionTest {
             assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Unreadable)
         }
     }
+
+    @Test
+    fun `la reponse d une banniere, une conversation chiffree est retenue avant toute bulle`() = runTest {
+        cache("c1", "e2ee")
+
+        assertThat(admission.verdictFor("c1")).isEqualTo(OutboxAdmissionVerdict.WITHHOLD)
+    }
+
+    @Test
+    fun `la reponse d une banniere, un mode inconnu est relu au serveur, jamais admis a l aveugle`() = runTest {
+        served = ApiConversation(id = "c2", encryptionMode = null)
+
+        assertThat(admission.verdictFor("c2")).isEqualTo(OutboxAdmissionVerdict.ADMIT)
+        assertThat(reads).containsExactly("c2")
+
+        reads.clear()
+        served = null
+        refusal = ConversationModeRead.Unreadable
+        assertThat(admission.verdictFor("c3")).isEqualTo(OutboxAdmissionVerdict.WAIT)
+
+        refusal = ConversationModeRead.Inaccessible
+        assertThat(admission.verdictFor("c4")).isEqualTo(OutboxAdmissionVerdict.UNREACHABLE)
+    }
+
+    @Test
+    fun `la reponse d une banniere, un mode clair confirme n appelle pas le serveur`() = runTest {
+        ledger.confirmClear(listOf("c5"))
+
+        assertThat(admission.verdictFor("c5")).isEqualTo(OutboxAdmissionVerdict.ADMIT)
+        assertThat(reads).isEmpty()
+    }
 }

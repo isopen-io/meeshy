@@ -11,8 +11,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.outbox.EndToEndOutboxAdmission
+import me.meeshy.sdk.outbox.OutboxAdmissionVerdict
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,17 +27,29 @@ class PushNotificationActionHandlerTest {
 
     private val me = MeeshyUser(id = "me", username = "me")
 
-    private class Fixture(user: MeeshyUser?, sealed: Boolean) {
+    private class Fixture(
+        user: MeeshyUser?,
+        verdict: OutboxAdmissionVerdict = OutboxAdmissionVerdict.ADMIT,
+        locked: Set<String> = emptySet(),
+    ) {
+        constructor(user: MeeshyUser?, sealed: Boolean) :
+            this(user, if (sealed) OutboxAdmissionVerdict.WITHHOLD else OutboxAdmissionVerdict.ADMIT)
+
         val messages = mockk<MessageRepository>(relaxed = true)
         val conversations = mockk<ConversationRepository>(relaxed = true)
         val session = mockk<SessionRepository>(relaxed = true) {
             every { currentUser } returns MutableStateFlow(user)
         }
         val admission = mockk<EndToEndOutboxAdmission> {
-            coEvery { isConversationSealed(any()) } returns sealed
+            coEvery { verdictFor(any()) } returns verdict
         }
+        val posts = mockk<PostRepository>(relaxed = true) {
+            coEvery { queueComment(any(), any(), any(), any()) } returns "cmid_c1"
+        }
+        val notifications = mockk<NotificationRepository>(relaxed = true)
+        val locks = InMemoryConversationLockStore().also { store -> locked.forEach { store.setLock(it, "1234") } }
         val handler = PushNotificationActionHandler(
-            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission,
+            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission, posts, notifications, locks,
         )
     }
 
@@ -112,5 +128,112 @@ class PushNotificationActionHandlerTest {
         val f = Fixture(me, sealed = false)
 
         assertThat(f.handler.reply("c1", "salut", accountId = "me")).isEqualTo(PushNotificationActionHandler.Outcome.SENT)
+    }
+
+    @Test
+    fun `la reponse cite le message de la notification`() = runTest {
+        val f = Fixture(me, sealed = false)
+
+        f.handler.reply("c1", "ok", replyToId = "m42")
+
+        coVerify { f.messages.sendOptimistic(conversationId = "c1", content = "ok", originalLanguage = any(), sender = me, replyToId = "m42") }
+    }
+
+    @Test
+    fun `un mode inconnu et illisible ne fait naitre aucune bulle condamnee et garde la banniere`() = runTest {
+        listOf(OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE).forEach { verdict ->
+            val f = Fixture(me, verdict)
+
+            val outcome = f.handler.reply("c1", "secret", replyToId = "m42")
+
+            assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.MODE_UNKNOWN)
+            assertThat(outcome.dismissesBanner).isFalse()
+            coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { f.conversations.markReadOptimistic(any()) }
+        }
+    }
+
+    @Test
+    fun `une conversation verrouillee par code n agit ni en reponse ni en lecture`() = runTest {
+        val f = Fixture(me, locked = setOf("c1"))
+
+        assertThat(f.handler.reply("c1", "salut")).isEqualTo(PushNotificationActionHandler.Outcome.LOCKED)
+        assertThat(f.handler.markRead("c1")).isEqualTo(PushNotificationActionHandler.Outcome.LOCKED)
+
+        coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { f.conversations.markReadOptimistic(any()) }
+        assertThat(f.handler.reply("c2", "salut")).isEqualTo(PushNotificationActionHandler.Outcome.SENT)
+    }
+
+    @Test
+    fun `apres la reponse la conversation est marquee lue, comme iOS`() = runTest {
+        val f = Fixture(me, sealed = false)
+
+        f.handler.reply("c1", "ok")
+
+        coVerify(exactly = 1) { f.conversations.markReadOptimistic("c1") }
+    }
+
+    @Test
+    fun `un marquage lu qui echoue apres l envoi n annule pas la reponse`() = runTest {
+        val f = Fixture(me, sealed = false)
+        coEvery { f.conversations.markReadOptimistic(any()) } throws IllegalStateException("db")
+
+        assertThat(f.handler.reply("c1", "ok")).isEqualTo(PushNotificationActionHandler.Outcome.SENT)
+    }
+
+    @Test
+    fun `commenter un commentaire de fil repond a celui de la notification puis marque la cloche lue`() = runTest {
+        val f = Fixture(me)
+
+        val outcome = f.handler.comment("p1", "  Bravo ", accountId = "me", type = "post_comment", notifiedCommentId = "c9", serverNotificationId = "n7")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.COMMENT_QUEUED)
+        assertThat(outcome.dismissesBanner).isTrue()
+        coVerify(exactly = 1) { f.posts.queueComment("p1", "Bravo", "c9", null) }
+        coVerify(exactly = 1) { f.notifications.markAsRead("n7") }
+    }
+
+    @Test
+    fun `commenter la publication d un ami est un commentaire racine`() = runTest {
+        val f = Fixture(me)
+
+        f.handler.comment("p1", "Joli", type = "friend_new_post", notifiedCommentId = "c9")
+
+        coVerify(exactly = 1) { f.posts.queueComment("p1", "Joli", null, null) }
+    }
+
+    @Test
+    fun `un commentaire d un autre compte, vide ou anonyme n entre pas dans la file`() = runTest {
+        val f = Fixture(me)
+        assertThat(f.handler.comment("p1", "Bravo", accountId = "previous-account"))
+            .isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(f.handler.comment("p1", "   ")).isEqualTo(PushNotificationActionHandler.Outcome.EMPTY)
+        assertThat(Fixture(me.copy(isAnonymous = true)).handler.comment("p1", "Bravo"))
+            .isEqualTo(PushNotificationActionHandler.Outcome.NOT_SIGNED_IN)
+
+        coVerify(exactly = 0) { f.posts.queueComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { f.notifications.markAsRead(any()) }
+    }
+
+    @Test
+    fun `une file qui refuse garde la banniere et ne marque pas la cloche`() = runTest {
+        val f = Fixture(me)
+        coEvery { f.posts.queueComment(any(), any(), any(), any()) } returns null
+
+        val outcome = f.handler.comment("p1", "Bravo", serverNotificationId = "n7")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.FAILED)
+        assertThat(outcome.dismissesBanner).isFalse()
+        coVerify(exactly = 0) { f.notifications.markAsRead(any()) }
+    }
+
+    @Test
+    fun `une cloche impossible a marquer ne defait pas le commentaire garde`() = runTest {
+        val f = Fixture(me)
+        coEvery { f.notifications.markAsRead(any()) } throws IllegalStateException("offline")
+
+        assertThat(f.handler.comment("p1", "Bravo", serverNotificationId = "n7"))
+            .isEqualTo(PushNotificationActionHandler.Outcome.COMMENT_QUEUED)
     }
 }

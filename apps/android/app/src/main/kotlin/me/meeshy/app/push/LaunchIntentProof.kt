@@ -49,13 +49,23 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
         return Base64.encodeToString(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
     }
 
-    private fun actionCanonical(intent: Intent): String = listOf(
-        ACTION_DOMAIN,
-        intent.action.field(),
-        intent.getStringExtra(PushActionReceiver.EXTRA_CONVERSATION_ID).field(),
-        intent.getIntExtra(PushActionReceiver.EXTRA_NOTIFICATION_ID, 0).toString(),
-        intent.getStringExtra(PushActionReceiver.EXTRA_ACCOUNT_ID).field(),
-    ).joinToString(separator = FIELD_SEPARATOR)
+    /**
+     * Les cinq champs historiques, puis la cible détaillée (message cité, post, commentaire, type, notification de la
+     * cloche) QUAND l'intent en porte une. Une bannière posée avant l'arrivée de ces extras garde sa preuve : sa forme
+     * canonique est inchangée.
+     */
+    private fun actionCanonical(intent: Intent): String {
+        val target = ACTION_TARGET_EXTRAS.map { intent.getStringExtra(it) }
+        return (
+            listOf(
+                ACTION_DOMAIN,
+                intent.action.field(),
+                intent.getStringExtra(PushActionReceiver.EXTRA_CONVERSATION_ID).field(),
+                intent.getIntExtra(PushActionReceiver.EXTRA_NOTIFICATION_ID, 0).toString(),
+                intent.getStringExtra(PushActionReceiver.EXTRA_ACCOUNT_ID).field(),
+            ) + if (target.all { it == null }) emptyList() else target.map { it.field() }
+            ).joinToString(separator = FIELD_SEPARATOR)
+    }
 
     private fun canonical(intent: Intent): String = listOf(
         intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID).field(),
@@ -86,6 +96,13 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
         private const val KEY_SECRET = "secret"
         private const val SECRET_BYTES = 32
         private const val ACTION_DOMAIN = "push-action"
+        private val ACTION_TARGET_EXTRAS = listOf(
+            PushActionReceiver.EXTRA_MESSAGE_ID,
+            PushActionReceiver.EXTRA_POST_ID,
+            PushActionReceiver.EXTRA_COMMENT_ID,
+            PushActionReceiver.EXTRA_TYPE,
+            PushActionReceiver.EXTRA_SERVER_NOTIFICATION_ID,
+        )
         private const val FIELD_SEPARATOR = "\u0000"
     }
 }

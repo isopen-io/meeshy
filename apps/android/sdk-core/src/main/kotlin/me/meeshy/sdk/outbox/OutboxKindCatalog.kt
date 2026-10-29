@@ -55,6 +55,7 @@ public object OutboxKindCatalog {
         OutboxKind.UNBOOKMARK_POST,
         OutboxKind.RESPOND_FRIEND_REQUEST,
         OutboxKind.CREATE_POST,
+        OutboxKind.CREATE_COMMENT,
         -> true
     }
 
@@ -86,6 +87,7 @@ public object OutboxKindCatalog {
         OutboxKind.PUBLISH_STORY,
         OutboxKind.UPLOAD_MEDIA,
         OutboxKind.CREATE_POST,
+        OutboxKind.CREATE_COMMENT,
         -> false
     }
 
