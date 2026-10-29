@@ -147,6 +147,26 @@ data class PackShopResponse(
         return replacing(domain, current.copy(installed = installed, installCount = count))
     }
 
+    /**
+     * Les gestes d'installation EN VOL ([wanted] : clé `<domaine>.<slug>` → état voulu) peints par-dessus ce que le
+     * serveur a dit en dernier. Un pack que le serveur montre déjà dans l'état voulu reste tel qu'il l'a servi ; un geste
+     * tranché sort de [wanted] et ne laisse rien : un refus n'a rien à « remettre », la vitrine servie n'a jamais été
+     * réécrite.
+     */
+    fun showingInstalls(wanted: Map<String, Boolean>): PackShopResponse =
+        if (wanted.isEmpty()) this
+        else copy(
+            domains = domains.map { section ->
+                section.copy(
+                    packs = section.packs.map { pack ->
+                        val target = wanted["${section.domain}.${pack.slug}"]
+                        if (target == null || target == pack.installed) pack
+                        else pack.copy(installed = target, installCount = (pack.installCount + if (target) 1 else -1).coerceAtLeast(0))
+                    },
+                )
+            },
+        )
+
     /** Le serveur a confirmé : son `installed` et son `installCount` font foi, le reste du pack reste tel que lu. */
     fun installSettled(domain: AppearancePackDomain, confirmed: ShopPack): PackShopResponse {
         val current = packs(domain).firstOrNull { it.slug == confirmed.slug } ?: return this

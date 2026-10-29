@@ -181,6 +181,23 @@ class PackShopTest {
     }
 
     @Test
+    fun `showing installs paints a gesture in flight over the served pack and leaves a pack the server already shows that way`() {
+        val shop = installShop(
+            ShopPack(slug = "animes", owned = true, installed = false, installCount = 4),
+            ShopPack(slug = "autre", owned = true, installed = true, installCount = 2),
+        )
+
+        val shown = shop.showingInstalls(mapOf("wallpaper.animes" to true, "wallpaper.autre" to true, "banner.animes" to false))
+
+        val packs = shown.packs(AppearancePackDomain.WALLPAPER)
+        assertThat(packs.first { it.slug == "animes" }.installed).isTrue()
+        assertThat(packs.first { it.slug == "animes" }.installCount).isEqualTo(5)
+        assertThat(packs.first { it.slug == "autre" }).isEqualTo(shop.packs(AppearancePackDomain.WALLPAPER).last())
+        assertThat(shop.showingInstalls(emptyMap())).isEqualTo(shop)
+        assertThat(shown.balance).isEqualTo(340)
+    }
+
+    @Test
     fun `a locked pack that is already installed can still be removed`() {
         val installedLocked = pack(requirementPreview = """{"met":false}""").copy(installed = true)
 

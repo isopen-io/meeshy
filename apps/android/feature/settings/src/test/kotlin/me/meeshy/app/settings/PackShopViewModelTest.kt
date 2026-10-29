@@ -293,6 +293,54 @@ class PackShopViewModelTest {
         coVerify(exactly = 1) { repository.refresh() }
     }
 
+    @Test fun `a refused install never paints over what the server said meanwhile`() = runTest(dispatcher) {
+        val answer = CompletableDeferred<PackInstallOutcome>()
+        val cache = MutableStateFlow<CacheResult<PackShopResponse>>(CacheResult.Fresh(served, 0))
+        val repository = mockk<PackShopRepository>(relaxed = true)
+        every { repository.shop(any()) } returns cache
+        coEvery { repository.setInstalled(AppearancePackDomain.WALLPAPER, "essentiels", true) } coAnswers { answer.await() }
+        val vm = viewModel(repository)
+        advanceUntilIdle()
+
+        vm.toggleInstall("essentiels")
+        advanceUntilIdle()
+        val written = served.restoring(AppearancePackDomain.WALLPAPER, ShopPack(slug = "essentiels", owned = true, installed = true, installCount = 1))
+        cache.value = CacheResult.Fresh(written, 1)
+        advanceUntilIdle()
+        assertThat(installed(vm, "essentiels")).isTrue()
+
+        answer.complete(PackInstallOutcome.Refused(PackPurchaseRefusal.UNREAD))
+        advanceUntilIdle()
+
+        assertThat(installed(vm, "essentiels")).isTrue()
+        assertThat(vm.state.value.packs!!.first { it.slug == "essentiels" }.installCount).isEqualTo(1)
+        assertThat(vm.state.value.pendingSlugs).isEmpty()
+    }
+
+    @Test fun `a shop reread while the install flies keeps showing the gesture`() = runTest(dispatcher) {
+        val answer = CompletableDeferred<PackInstallOutcome>()
+        val cache = MutableStateFlow<CacheResult<PackShopResponse>>(CacheResult.Fresh(served, 0))
+        val repository = mockk<PackShopRepository>(relaxed = true)
+        every { repository.shop(any()) } returns cache
+        coEvery { repository.setInstalled(AppearancePackDomain.WALLPAPER, "essentiels", true) } coAnswers { answer.await() }
+        val vm = viewModel(repository)
+        advanceUntilIdle()
+
+        vm.toggleInstall("essentiels")
+        advanceUntilIdle()
+        cache.value = CacheResult.Fresh(served.withBalance(300), 1)
+        advanceUntilIdle()
+
+        assertThat(installed(vm, "essentiels")).isTrue()
+        assertThat(vm.state.value.balance).isEqualTo(300)
+
+        answer.complete(PackInstallOutcome.Refused(PackPurchaseRefusal.UNREAD))
+        advanceUntilIdle()
+
+        assertThat(installed(vm, "essentiels")).isFalse()
+        assertThat(vm.state.value.balance).isEqualTo(300)
+    }
+
     @Test fun `a cut connection puts the pack back without rereading`() = runTest(dispatcher) {
         val repository = repository()
         coEvery { repository.setInstalled(any(), any(), any()) } returns PackInstallOutcome.Refused(PackPurchaseRefusal.UNREAD)
