@@ -12,6 +12,7 @@ import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
 import me.meeshy.sdk.notification.NotificationReadBulkSocketEvent
 import me.meeshy.sdk.notification.NotificationReadSocketEvent
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileDecorUpdatedEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.model.MessageTranslationSharedEvent
@@ -110,6 +111,7 @@ class MessageSocketManager @Inject constructor(
     private val _notificationDeletedBulk = SocketInboundRoute.subject<NotificationDeletedBulkSocketEvent>()
     private val _notificationCounts = SocketInboundRoute.subject<NotificationCountsSocketEvent>()
     private val _profileDecorUpdated = SocketInboundRoute.subject<ProfileDecorUpdatedEvent>()
+    private val _packInstallationUpdated = SocketInboundRoute.subject<PackInstallationUpdatedEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.exposed()
     val messageEdited: SharedFlow<ApiMessage> = _messageEdited.exposed()
@@ -195,6 +197,9 @@ class MessageSocketManager @Inject constructor(
     /** `profile:decor-updated` : le décor d'un compte a changé ; le filtrage par compte est celui du consommateur. */
     val profileDecorUpdated: SharedFlow<ProfileDecorUpdatedEvent> = _profileDecorUpdated.exposed()
 
+    /** `pack:installation-updated` : un pack s'installe ou se retire sur mon compte (ici ou sur un autre appareil). */
+    val packInstallationUpdated: SharedFlow<PackInstallationUpdatedEvent> = _packInstallationUpdated.exposed()
+
     /**
      * Déclare les routes de la famille messagerie. Gelé (socket-routage-evenements-ordre-arrivee) :
      * une nouvelle famille d'événements ajoute sa propre classe et enregistre ses routes par
@@ -254,6 +259,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
         route(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
         route(SocketEventNames.PROFILE_DECOR_UPDATED, _profileDecorUpdated)
+        route(SocketEventNames.PACK_INSTALLATION_UPDATED, _packInstallationUpdated)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

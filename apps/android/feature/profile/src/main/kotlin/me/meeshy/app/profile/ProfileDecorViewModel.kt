@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
 import me.meeshy.sdk.model.ProfileDecorRef
@@ -30,10 +31,13 @@ import me.meeshy.sdk.model.appearance.ProfileBannerPaint
 import me.meeshy.sdk.model.appearance.ProfileDecorOptions
 import me.meeshy.sdk.model.appearance.ProfileDecorResolver
 import me.meeshy.sdk.model.appearance.WallpaperPackOptions
+import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
+import me.meeshy.sdk.model.packs.applying
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PackApi
 import me.meeshy.sdk.net.api.installed
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.packs.PackShopRepository
 import me.meeshy.sdk.profile.ProfileDecorOutcome
 import me.meeshy.sdk.profile.ProfileDecorRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -76,6 +80,7 @@ class ProfileDecorViewModel @Inject constructor(
     private val session: SessionRepository,
     private val loader: AppearanceCatalogLoader,
     private val packs: PackApi,
+    private val shop: PackShopRepository,
 ) : ViewModel() {
 
     private val installed = MutableStateFlow<Installed?>(null)
@@ -112,6 +117,31 @@ class ProfileDecorViewModel @Inject constructor(
     init {
         viewModelScope.launch { runCatching { loader.catalog() } }
         viewModelScope.launch { load() }
+        viewModelScope.launch { shop.installations.collect(::follow) }
+    }
+
+    /**
+     * Un pack s'installe ou se retire sur mon compte (`pack:installation-updated`, achat compris) : la charge suffit à
+     * tenir la liste du domaine. Seule une liste jamais lue (panne) coûte UNE relecture de CE domaine.
+     */
+    private suspend fun follow(event: PackInstallationUpdatedEvent) {
+        val domain = event.appearanceDomain?.takeIf { it in DECOR_DOMAINS } ?: return
+        val current = installed.value
+        val known = current?.let { list(it, domain) }
+        val next = known?.applying(event) ?: read(domain) ?: return
+        installed.update { latest -> (latest ?: Installed(null, null, null)).with(domain, next) }
+    }
+
+    private fun list(lists: Installed, domain: AppearancePackDomain) = when (domain) {
+        AppearancePackDomain.AVATAR_RING -> lists.rings
+        AppearancePackDomain.BANNER -> lists.banners
+        else -> lists.frames
+    }
+
+    private fun Installed.with(domain: AppearancePackDomain, packs: List<InstalledPackSummary>) = when (domain) {
+        AppearancePackDomain.AVATAR_RING -> Installed(packs, banners, frames)
+        AppearancePackDomain.BANNER -> Installed(rings, packs, frames)
+        else -> Installed(rings, banners, packs)
     }
 
     private suspend fun load() {
@@ -139,6 +169,8 @@ class ProfileDecorViewModel @Inject constructor(
         }
     }
 }
+
+private val DECOR_DOMAINS = setOf(AppearancePackDomain.AVATAR_RING, AppearancePackDomain.BANNER, AppearancePackDomain.BANNER_FRAME)
 
 private const val STOP_TIMEOUT_MS = 5_000L
 private const val DEFAULT_ACCENT_HEX = "#6366F1"

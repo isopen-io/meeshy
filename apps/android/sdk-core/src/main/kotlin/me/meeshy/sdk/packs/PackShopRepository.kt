@@ -8,6 +8,9 @@ import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import me.meeshy.core.database.dao.KeyedJsonCacheDao
@@ -18,15 +21,18 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlowOf
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
+import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.packs.PackPurchaseRefusal
 import me.meeshy.sdk.model.packs.PackPurchaseResponse
 import me.meeshy.sdk.model.packs.PackShopResponse
+import me.meeshy.sdk.model.packs.applying
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PackApi
 import me.meeshy.sdk.net.api.purchase
 import me.meeshy.sdk.net.api.shop
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
 
 /** Le sort d'un achat : confirmé par le serveur, ou refusé (lu pour ce qu'il dit). */
@@ -55,11 +61,17 @@ class PackShopRepository(
     private val api: PackApi,
     private val cache: KeyedJsonCache,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : PerAccountCache {
 
     @Inject
     constructor(api: PackApi, dao: KeyedJsonCacheDao, fence: AccountFence) :
-        this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock)
+        this(api, KeyedJsonCache(dao, fence = fence), SystemCacheClock, fence)
+
+    private val _installations = MutableSharedFlow<PackInstallationUpdatedEvent>(extraBufferCapacity = 16)
+
+    /** Les installations du compte COURANT (ici ou sur un autre appareil), déjà reportées dans la vitrine en cache. */
+    val installations: SharedFlow<PackInstallationUpdatedEvent> = _installations.asSharedFlow()
 
     private val writes = Mutex()
     private var confirmedPurchases = 0L
@@ -96,6 +108,18 @@ class PackShopRepository(
                 PackPurchaseOutcome.Refused(PackPurchaseRefusal.of(result.error.httpStatus, result.error.code))
         }
     }
+
+    /**
+     * `pack:installation-updated` reçu sous [ticket] (pris AU REÇU) : la charge suffit, la vitrine en cache la reprend
+     * sans relire le réseau, puis les écrans la reçoivent. Un compte clos depuis ne reçoit rien et n'écrit rien.
+     */
+    suspend fun onInstallationUpdated(event: PackInstallationUpdatedEvent, ticket: AccountTicket?) {
+        if (fence != null && ticket != null && !fence.isCurrent(ticket)) return
+        cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.applying(event) }
+        if (fence == null || ticket == null || fence.isCurrent(ticket)) _installations.emit(event)
+    }
+
+    suspend fun installationTicket(): AccountTicket? = cache.ticket()
 
     override suspend fun clear() = cache.clearNamespace(NAMESPACE)
 

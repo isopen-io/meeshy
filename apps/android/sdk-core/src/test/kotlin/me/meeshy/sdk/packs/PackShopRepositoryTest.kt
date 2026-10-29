@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import java.io.IOException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -192,5 +193,54 @@ class PackShopRepositoryTest {
         repository.clear()
 
         assertThat(cache().get("pack-shop", "offered", PackShopResponse.serializer())).isNull()
+    }
+
+    private fun ringShop(owned: Boolean = false) = PackShopResponse(
+        domains = listOf(PackShopSection("avatar-ring", listOf(ShopPack(slug = "prestige", price = 90, owned = owned)))),
+        balance = 340,
+    )
+
+    private val ringEvent = me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent("avatar-ring", "prestige", installed = true, owned = true, at = "t")
+
+    @Test fun `an installation event from another device flips the cached pack and is announced, with no network read`() = runTest {
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = ringShop())
+        val repository = repository()
+        repository.refresh()
+        val announced = async(kotlinx.coroutines.Dispatchers.Unconfined) { repository.installations.first() }
+
+        repository.onInstallationUpdated(ringEvent, ticket = null)
+
+        val cached = cache().get("pack-shop", "offered", PackShopResponse.serializer())!!.value
+        assertThat(cached.packs(AppearancePackDomain.AVATAR_RING).single().isOwned).isTrue()
+        assertThat(cached.packs(AppearancePackDomain.AVATAR_RING).single().installed).isTrue()
+        assertThat(announced.await()).isEqualTo(ringEvent)
+        io.mockk.coVerify(exactly = 1) { api.shop(domains) }
+    }
+
+    @Test fun `an event taken under an account that has since closed neither writes nor is announced`() = runTest {
+        val owner = Owner("A")
+        val fence = me.meeshy.sdk.session.AccountFence(owner, me.meeshy.sdk.net.SessionTransitionFlags())
+        val repository = PackShopRepository(api, KeyedJsonCache(db.keyedJsonCacheDao(), clock, fence), clock, fence)
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = ringShop())
+        repository.refresh()
+        val ticket = fence.ticket()
+        val announced = mutableListOf<me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent>()
+        val collecting = launch(kotlinx.coroutines.Dispatchers.Unconfined) { repository.installations.collect { announced += it } }
+
+        owner.id = "B"
+        repository.onInstallationUpdated(ringEvent, ticket)
+        collecting.cancel()
+
+        assertThat(cache().get("pack-shop", "offered", PackShopResponse.serializer())!!.value).isEqualTo(ringShop())
+        assertThat(announced).isEmpty()
+    }
+
+    @Test fun `an event with the cache empty is still announced so the sheet can follow`() = runTest {
+        val repository = repository()
+        val announced = async(kotlinx.coroutines.Dispatchers.Unconfined) { repository.installations.first() }
+
+        repository.onInstallationUpdated(ringEvent, ticket = null)
+
+        assertThat(announced.await()).isEqualTo(ringEvent)
     }
 }
