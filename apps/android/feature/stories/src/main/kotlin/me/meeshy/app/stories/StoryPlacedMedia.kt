@@ -30,8 +30,11 @@ data class StoryPlacedMedia(
     fun nudged(dx: Float, dy: Float): StoryPlacedMedia =
         copy(x = coord(x + dx), y = coord(y + dy))
 
-    /** L'objet du fil : jamais un fond, la pose en x / y / scale / rotation comme iOS. */
-    fun toMediaObject(url: String?, mimeType: String, durationSeconds: Double?): StoryMediaObject {
+    /**
+     * L'objet du fil : jamais un fond, la pose en x / y / scale / rotation (degrés) comme iOS, et le ratio MESURÉ
+     * quand on le connaît — `null` sinon, jamais un faux carré (#5100).
+     */
+    fun toMediaObject(url: String?, mimeType: String, durationSeconds: Double?, aspectRatio: Double? = null): StoryMediaObject {
         val video = mimeType.startsWith("video", ignoreCase = true)
         val duration = durationSeconds?.takeIf { it > 0.0 && video }
         return StoryMediaObject(
@@ -44,6 +47,7 @@ data class StoryPlacedMedia(
             y = y.toDouble(),
             scale = scale.toDouble(),
             rotation = rotationDeg.toDouble(),
+            aspectRatio = aspectRatio,
             isBackground = false,
             intrinsicDuration = duration,
             duration = duration,

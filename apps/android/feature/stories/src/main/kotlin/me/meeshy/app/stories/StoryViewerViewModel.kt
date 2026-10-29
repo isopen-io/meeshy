@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.FeedMedia
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.game.GameMomentPresence
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.util.resolveMediaUrl
@@ -718,7 +720,7 @@ class StoryViewerViewModel @Inject constructor(
         val clipTransitions = storyEffects?.clipTransitions.orEmpty()
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
-            .mapNotNull { it.toForegroundMediaView(clipTransitions) }
+            .mapNotNull { it.toForegroundMediaView(clipTransitions, media) }
             .let(SceneObjectNumbers::capped)
         val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
         val textObjects = SceneObjectNumbers.capped(storyEffects?.textObjects.orEmpty())
@@ -791,8 +793,10 @@ class StoryViewerViewModel @Inject constructor(
         val designatedId = backgroundObject?.postMediaId?.takeIf { it.isNotBlank() }
         val ownUrl = backgroundObject?.mediaURL ?: designatedId?.let { id -> media.firstOrNull { it.id == id }?.url }
         val governing = backgroundObject?.takeIf { ownUrl != null || designatedId == null }
-        val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
-            ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
+        val designatedPieces = canvasDesignatedPieceIds()
+        val undesignated = media.filterNot { it.id in designatedPieces }
+        val fallbackMedia = undesignated.firstOrNull { it.type == FeedMediaType.VIDEO }
+            ?: undesignated.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
 
         val isVideo = governing?.let { it.mediaType == "video" } ?: (fallbackMedia?.type == FeedMediaType.VIDEO)
         val resolvedUrl = (ownUrl ?: fallbackMedia?.url)?.let { resolveMediaUrl(it, config.apiBaseUrl) }
@@ -821,7 +825,7 @@ class StoryViewerViewModel @Inject constructor(
             )
         }
         val imageUrl = resolvedUrl
-            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            ?: undesignated.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         // The framing rides only on a modern `isBackground` object; a legacy/flat
         // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
         val transform = governing
@@ -831,10 +835,33 @@ class StoryViewerViewModel @Inject constructor(
         return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true, transform = transform)
     }
 
+    /**
+     * Les pièces que le canevas désigne (médias posés, fond, sons et leurs variantes) — jamais un fond statique de
+     * repli, comme `StoryItem.toRenderableSlide` sur iOS : une story faite des seuls médias posés n'a pas de photo de
+     * fond, et la pièce posée ne se peint pas deux fois. Sans `mediaObjects`, rien n'est désigné (forme héritée).
+     */
+    private fun StoryItem.canvasDesignatedPieceIds(): Set<String> {
+        val objects = storyEffects?.mediaObjects.orEmpty()
+        if (objects.isEmpty()) return emptySet()
+        val sounds = storyEffects?.audioPlayerObjects.orEmpty()
+        return (
+            objects.map { it.postMediaId } +
+                sounds.map { it.postMediaId } +
+                sounds.flatMap { sound -> sound.backgroundAudioVariants.orEmpty().map { it.postMediaId } }
+            ).filterTo(mutableSetOf()) { it.isNotBlank() }
+    }
+
+    /**
+     * Un média posé se lit à sa propre adresse, sinon à la pièce que son `postMediaId` désigne — un média publié
+     * depuis la file hors ligne n'a que l'identifiant que la greffe lui a donné (#13630, comme le fond #13605). Son
+     * ratio non mesuré se reprend des dimensions de cette pièce, comme iOS l'hydrate à la lecture.
+     */
     private fun StoryMediaObject.toForegroundMediaView(
         clipTransitions: List<StoryClipTransition>,
+        pieces: List<FeedMedia>,
     ): StoryForegroundMediaView? {
-        val url = mediaURL?.let { resolveMediaUrl(it, config.apiBaseUrl) } ?: return null
+        val piece = postMediaId.takeIf { it.isNotBlank() }?.let { id -> pieces.firstOrNull { it.id == id } }
+        val url = (mediaURL ?: piece?.url)?.let { resolveMediaUrl(it, config.apiBaseUrl) } ?: return null
         return StoryForegroundMediaView(
             id = id,
             url = url,
@@ -842,7 +869,8 @@ class StoryViewerViewModel @Inject constructor(
             x = x,
             y = y,
             scale = scale,
-            aspectRatio = servedAspectRatio,
+            rotation = rotation,
+            aspectRatio = aspectRatio ?: ForegroundMediaFrame.measuredAspectRatio(piece?.width, piece?.height) ?: servedAspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
             fadeIn = fadeIn ?: 0.0,

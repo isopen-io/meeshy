@@ -26,8 +26,8 @@ import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
  * [opacity] are the layer's *static* base transform; when the clip carries
  * [keyframes] or participates in a slide [clipTransitions] entry, call [animated]
  * with the playhead to obtain the transform for that instant. [id] matches the
- * clip against transitions; [duration] bounds its own timing window. Rotation is
- * still not applied in this projection.
+ * clip against transitions; [duration] bounds its own timing window. [rotation] is the
+ * author's static tilt in DEGREES (iOS `StoryMediaLayer`), which keyframes do not animate.
  */
 @Immutable
 data class StoryForegroundMediaView(
@@ -38,6 +38,7 @@ data class StoryForegroundMediaView(
     val y: Double,
     val scale: Double,
     val aspectRatio: Double,
+    val rotation: Double = 0.0,
     val opacity: Double = 1.0,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
@@ -136,6 +137,7 @@ data class StoryForegroundMediaView(
         y = SceneObjectNumbers.position(y),
         scale = SceneObjectScalePolicy.clamped(scale),
         aspectRatio = SceneObjectNumbers.aspectRatio(aspectRatio),
+        rotation = SceneObjectNumbers.rotation(rotation),
         opacity = SceneObjectNumbers.opacity(opacity),
         startTime = SceneObjectNumbers.seconds(startTime),
         duration = SceneObjectNumbers.seconds(duration),

@@ -80,7 +80,7 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = state.placedMediaFrames(),
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads) { state.placedMediaFrames() },
                 placedMediaGestures = remember(viewModel) {
                     PlacedMediaGestures(viewModel::onMediaPlacementMoved, viewModel::onMediaPlacementDragEnd, viewModel::onMediaPlacementTransformed)
                 },
@@ -218,7 +218,7 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 selectedMediaId = state.selectedMedia,
                 onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                 onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
-                placedMediaIds = state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId },
+                placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
                 onTogglePlaced = viewModel::onTogglePlacedMedia,
                 onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
             )

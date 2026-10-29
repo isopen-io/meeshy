@@ -25,7 +25,7 @@ internal fun StorySceneOverlays(
 
     slide.foregroundMedia.forEach { foreground ->
         if (foreground.isVisible(playheadSeconds)) {
-            key(foreground.url) {
+            key(foreground.id) {
                 StoryForegroundLayer(
                     media = foreground,
                     playheadSeconds = playheadSeconds,

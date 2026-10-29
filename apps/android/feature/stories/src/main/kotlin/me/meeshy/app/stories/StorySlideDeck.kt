@@ -558,7 +558,16 @@ data class StorySlideDeck(
         val slidesNext = slides.mapIndexed { i, slide ->
             // A fresh designation always starts looping (the default); a stale
             // author-chosen `loop = false` must never carry over to a new background.
-            if (i == index) slide.copy(backgroundMediaId = next, backgroundLoop = true) else slide
+            // Le fond et la scène s'excluent, comme `isBackground` sur iOS : désigner un média posé le retire de la scène.
+            if (i == index) {
+                slide.copy(
+                    backgroundMediaId = next,
+                    backgroundLoop = true,
+                    placedMedia = if (next == null) slide.placedMedia else slide.placedMedia.filterNot { it.mediaId == next },
+                )
+            } else {
+                slide
+            }
         }
         return copy(slides = slidesNext)
     }

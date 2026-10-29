@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.SceneObjectCaps
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 
 /** Les médias posés d'une slide tels qu'ils partent en `mediaObjects[]`, à côté du fond. */
 internal object StoryPublishPlacedMedia {
@@ -16,7 +17,12 @@ internal object StoryPublishPlacedMedia {
             .filter { it.mediaId in slide.mediaIds && it.mediaId != slide.backgroundMediaId }
             .mapNotNull { placed ->
                 state.attachments.firstOrNull { it.id == placed.mediaId }?.let { media ->
-                    placed.toMediaObject(media.url, media.mimeType, media.durationMs?.let { it / 1000.0 })
+                    placed.toMediaObject(
+                        url = media.url,
+                        mimeType = media.mimeType,
+                        durationSeconds = media.durationMs?.let { it / 1000.0 },
+                        aspectRatio = ForegroundMediaFrame.measuredAspectRatio(media.width, media.height),
+                    )
                 } ?: state.pendingUploads.firstOrNull { it.cmid == placed.mediaId }?.let { pending ->
                     placed.toMediaObject(null, pending.item.mimeType, null)
                 }
