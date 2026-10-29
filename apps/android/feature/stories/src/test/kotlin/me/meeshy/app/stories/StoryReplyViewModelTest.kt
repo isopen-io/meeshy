@@ -20,6 +20,8 @@ import me.meeshy.sdk.conversation.DirectConversationResolution
 import me.meeshy.sdk.conversation.MessageRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
+import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.session.AccountFence
@@ -48,7 +50,13 @@ class StoryReplyViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel(fence: AccountFence? = null) = StoryReplyViewModel(conversations, messages, session, workManager, fence)
+    private fun viewModel(fence: AccountFence? = null, ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None) =
+        StoryReplyViewModel(conversations, messages, session, workManager, fence, ledger)
+
+    private fun encrypted(id: String) = DirectConversationResolution.Found(
+        mockk(relaxed = true) { every { this@mockk.id } returns id; every { encryptionMode } returns "e2ee" },
+        fromCache = false,
+    )
 
     private fun direct(id: String) = DirectConversationResolution.Found(mockk(relaxed = true) { every { this@mockk.id } returns id }, fromCache = false)
 
@@ -132,5 +140,32 @@ class StoryReplyViewModelTest {
         opened.complete(direct("c1"))
 
         assertThat(queuedUnder?.ownerId).isEqualTo("A")
+    }
+
+    @Test
+    fun `a reply to a story in an end-to-end encrypted conversation is refused, said, and never queued (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns encrypted("c1")
+        val vm = viewModel()
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
+        assertThat(vm.state.value.text).isEqualTo("trop bien")
+        coVerify(exactly = 0) { messages.sendOptimistic(conversationId = any(), content = any(), originalLanguage = any(), sender = any(), storyReplyToId = any()) }
+        verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun `a conversation this account has seen encrypted stays refused even when the cached mode lags (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns direct("c1")
+        val ledger = InMemoryEndToEndRegimeLedger().also { it.learn("c1") }
+        val vm = viewModel(ledger = ledger)
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
+        coVerify(exactly = 0) { messages.sendOptimistic(conversationId = any(), content = any(), originalLanguage = any(), sender = any(), storyReplyToId = any()) }
     }
 }

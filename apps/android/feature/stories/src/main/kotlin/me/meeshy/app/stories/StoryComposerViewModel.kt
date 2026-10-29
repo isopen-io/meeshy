@@ -48,7 +48,10 @@ import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
@@ -80,7 +83,14 @@ class StoryComposerViewModel @Inject constructor(
     private val draftConfirmation: StoryDraftConfirmation,
     private val blocks: BlockCache = BlockCache(),
     private val config: MeeshyConfig = MeeshyConfig(),
+    private val accountFence: AccountFence? = null,
 ) : ViewModel() {
+
+    /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
+    private val openedUnder: AccountTicket? = accountFence?.ticket()
+
+    /** `null` : le compte du composeur s'est fermé avant que l'écriture n'atterrisse — rien n'a été écrit. */
+    private suspend fun <T> underOpeningAccount(write: suspend () -> T): T? = accountFence.commitOrWrite(openedUnder, write)
 
     private val _state = MutableStateFlow(StoryComposerUiState())
     private var history = ComposerHistory(_state.value.snapshot())
@@ -133,7 +143,7 @@ class StoryComposerViewModel @Inject constructor(
             // restoring must not seed a deck of blank slides — purge it instead so a
             // later cold start never rebuilds the dead draft.
             if (!reconciled.snapshot.isWorthRestoring) {
-                draftStore.clear()
+                underOpeningAccount { draftStore.clear() }
                 if (reconciled.hasLoss) _state.update { it.copy(errorMessage = MEDIA_RESTORE_LOST) }
                 return@launch
             }
@@ -168,25 +178,33 @@ class StoryComposerViewModel @Inject constructor(
     /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
     fun persistDraft() {
         viewModelScope.launch {
-            val current = _state.value
-            val action = StoryComposerAutosave.resolve(
-                deck = current.deck,
-                visibility = current.draft.visibility,
-                repostOfId = current.draft.repostOfId,
-                nowIso = Instant.now().toString(),
-                previous = draftStore.load(),
-                visibilityUserIds = current.draft.visibilityUserIds,
-                annotations = current.draft.annotations(),
-                mayOverwriteStored = !seededByDoor || ownsStoredDraft,
-            )
-            when (action) {
-                is StoryDraftPersist.Save -> {
-                    draftStore.save(action.snapshot)
-                    ownsStoredDraft = true
+            val orphans = underOpeningAccount {
+                val current = _state.value
+                val previous = draftStore.load()
+                val action = StoryComposerAutosave.resolve(
+                    deck = current.deck,
+                    visibility = current.draft.visibility,
+                    repostOfId = current.draft.repostOfId,
+                    nowIso = Instant.now().toString(),
+                    previous = previous,
+                    visibilityUserIds = current.draft.visibilityUserIds,
+                    annotations = current.draft.annotations(),
+                    mayOverwriteStored = !seededByDoor || ownsStoredDraft,
+                )
+                when (action) {
+                    is StoryDraftPersist.Save -> {
+                        draftStore.save(action.snapshot)
+                        ownsStoredDraft = true
+                        StoryComposerAutosave.orphanedUploads(previous, action.snapshot)
+                    }
+                    StoryDraftPersist.Clear -> {
+                        draftStore.clear()
+                        StoryComposerAutosave.orphanedUploads(previous, null)
+                    }
+                    StoryDraftPersist.None -> emptySet()
                 }
-                StoryDraftPersist.Clear -> draftStore.clear()
-                StoryDraftPersist.None -> Unit
-            }
+            }.orEmpty()
+            orphans.forEach { cancelDurableUpload(it) }
         }
     }
 
@@ -666,7 +684,7 @@ class StoryComposerViewModel @Inject constructor(
     private suspend fun keepDraftUntilConfirmed(published: StoryComposerUiState, queued: List<String>) {
         if (seededByDoor && !ownsStoredDraft && draftStore.load() != null) return
         if (queued.isEmpty()) {
-            draftStore.clear()
+            underOpeningAccount { draftStore.clear() }
             return
         }
         val snapshot = published.deck.toDraftSnapshot(
@@ -676,7 +694,7 @@ class StoryComposerViewModel @Inject constructor(
             visibilityUserIds = published.draft.visibilityUserIds,
             annotations = published.draft.annotations(),
         )
-        draftStore.save(snapshot.copy(awaitingPublication = queued))
+        underOpeningAccount { draftStore.save(snapshot.copy(awaitingPublication = queued)) }
     }
 
     /**

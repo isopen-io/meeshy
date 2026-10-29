@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftAnnotations
@@ -101,6 +102,21 @@ object StoryComposerAutosave {
         if (previous != null && previous.sameContentAs(snapshot)) return StoryDraftPersist.None
         return StoryDraftPersist.Save(snapshot)
     }
+
+    /**
+     * Les envois durables que le brouillon [previous] nommait et que [kept] ne nomme plus (#13621) : un brouillon
+     * rouvert (#13500) garde par leur `cmid` les envois épuisés de sa publication ; l'abandonner (ou en retirer le
+     * média) sans eux laissait la ligne et ses octets jusqu'à la déconnexion. Un brouillon qui attend sa publication
+     * ne libère rien : ses lignes sont celles de la publication.
+     */
+    fun orphanedUploads(previous: StoryComposerDraftSnapshot?, kept: StoryComposerDraftSnapshot?): Set<String> {
+        if (previous == null || previous.isAwaitingPublication) return emptySet()
+        return previous.uploadCmids() - kept?.uploadCmids().orEmpty()
+    }
+
+    private fun StoryComposerDraftSnapshot.uploadCmids(): Set<String> =
+        slides.flatMap { slide -> slide.mediaIds + listOfNotNull(slide.backgroundMediaId) }
+            .filterTo(mutableSetOf(), OutboxIds::isCmid)
 
     /**
      * The snapshot to seed when the composer opens, or `null` to leave it untouched. A

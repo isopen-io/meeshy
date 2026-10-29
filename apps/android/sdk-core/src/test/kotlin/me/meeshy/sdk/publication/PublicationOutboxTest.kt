@@ -326,4 +326,24 @@ class PublicationOutboxTest {
         assertThat(publications.reopenStory("story-1")).isNull()
         assertThat(outbox.row("story-1")).isNotNull()
     }
+
+    @Test
+    fun `a story whose publication belongs to another account is not reopened (#13621)`() = runTest {
+        val other = OutboxRepository(db, db.outboxDao(), OutboxOwnerSource { "other" })
+        other.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.PUBLISH_STORY,
+                lane = OutboxLanes.STORY,
+                targetId = "pending_story-1",
+                payload = MeeshyApi.json.encodeToString(CreateStoryRequest(content = "ma story", mediaIds = listOf("m1"))),
+                cmid = "story-1",
+            ),
+        )
+        other.markExhausted("story-1", "HTTP 500")
+        storyDrafts.save(keptStory("story-1"))
+
+        assertThat(publications.reopenStory("story-1")).isNull()
+        assertThat(outbox.row("story-1")).isNotNull()
+        assertThat(storyDrafts.load()?.isAwaitingPublication).isTrue()
+    }
 }
