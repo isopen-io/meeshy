@@ -68,6 +68,12 @@ class BubbleContentBuilderTest {
         BubbleContentBuilder.build(msg, currentUserId = "me", preferences = french, isSlowSend = isSlowSend)
 
     @Test
+    fun `the bubble remembers its conversation so that here can be read for its author`() {
+        assertThat(built(message()).viewingConversationId).isEqualTo("c1")
+        assertThat(built(message().copy(conversationId = "")).viewingConversationId).isNull()
+    }
+
+    @Test
     fun `video attachments are counted and flagged apart from documents`() {
         val content = built(
             message().copy(

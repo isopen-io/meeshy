@@ -32,6 +32,8 @@ internal data class RiverBubbleIdentity(
     val userId: String?,
     val profile: ProfileSheetUser?,
     val storyRing: StoryRingState,
+    /** La conversation du message : « ici » (`viewing:*`) ne vaut que pour elle, lu au pied de l'avatar. */
+    val conversationId: String? = null,
 )
 
 /** Ce qui remplace le texte d'une bulle que rien n'a le droit de montrer. */
@@ -141,6 +143,7 @@ internal object RiverRenderingBuilder {
                 userId = userId,
                 profile = source.senderProfile,
                 storyRing = storyRing(userId),
+                conversationId = source.viewingConversationId,
             ),
             isForwarded = source.isForwarded,
             forwardedFromName = source.forwardedFromName,

@@ -26,6 +26,7 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.profile.LocalProfileSheetOpener
@@ -87,6 +88,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
         }
     }
     val peerPresence = rememberPresence(state.directPeerUserId)
+    val peerHere = rememberConversationHere(state.directPeerUserId.takeUnless { state.isGroup }, state.conversationId)
     val headerAvatar: @Composable (AvatarContext) -> Unit = { context ->
         ChatHeaderAvatar(
             name = title,
@@ -94,6 +96,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
             accentColor = accentColor,
             imageUrl = header.avatarUrl,
             presence = if (state.isGroup) null else peerPresence,
+            here = peerHere,
             isUser = !state.isGroup,
             onOpenProfile = openProfile,
             onOpenDetails = openDetails,

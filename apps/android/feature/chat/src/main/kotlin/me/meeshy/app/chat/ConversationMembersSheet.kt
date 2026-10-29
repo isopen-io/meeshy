@@ -55,6 +55,7 @@ import me.meeshy.sdk.model.displayLabel
 import me.meeshy.sdk.model.role
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -184,6 +185,7 @@ internal fun ConversationMembersSheet(
                         }
                         MemberRow(
                             member = member,
+                            conversationId = conversationId,
                             isSelf = state.isSelf(member),
                             accentColor = accentColor,
                             roleActions = state.roleActions(member),
@@ -279,8 +281,9 @@ internal fun ConversationMembersSheet(
 }
 
 @Composable
-private fun MemberRow(
+internal fun MemberRow(
     member: PaginatedParticipant,
+    conversationId: String,
     isSelf: Boolean,
     accentColor: Color,
     roleActions: List<MemberRoleAction>,
@@ -312,6 +315,8 @@ private fun MemberRow(
                 member.userId,
                 UserPresence.served(member.isOnline, member.lastActiveAt),
             ),
+            // Le compte courant n'a jamais de point : le serveur n'annonce que les autres.
+            here = rememberConversationHere(member.userId.takeUnless { isSelf }, conversationId),
         )
 
         Column(modifier = Modifier.weight(1f)) {

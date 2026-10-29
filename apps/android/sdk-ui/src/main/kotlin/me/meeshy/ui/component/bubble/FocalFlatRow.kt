@@ -64,6 +64,7 @@ import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.ui.icons.MeeshyIcons
@@ -341,6 +342,7 @@ private fun FlatIdentityHeader(content: BubbleContent, onSenderTap: (() -> Unit)
             containerColor = senderColor,
             imageUrl = content.senderAvatarUrl,
             presence = rememberPresence(content.senderProfile?.userId),
+            here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
         )
         Text(
             text = displayName,

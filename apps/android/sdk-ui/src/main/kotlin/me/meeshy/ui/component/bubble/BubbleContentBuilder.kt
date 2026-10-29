@@ -133,6 +133,7 @@ public object BubbleContentBuilder {
             ?.takeIf { it.isNotBlank() }
         return BubbleContent(
             messageId = message.id,
+            viewingConversationId = message.conversationId.takeIf { it.isNotBlank() },
             text = text,
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,

@@ -121,7 +121,7 @@ class PresenceStore internal constructor(
         scope.launch { sources.presenceSnapshot.collect { snapshot -> _entries.update { withoutMe(PresenceMapReducer.applySnapshot(it, snapshot.users)) } } }
         scope.launch {
             sources.typingStarted.collect { event ->
-                _entries.update { PresenceMapReducer.noteActivity(it, event.userId, currentUserId(), clock.nowMillis()) }
+                noteActivity(event.userId)
             }
         }
         scope.launch { sources.connectionState.collect(::onConnectionState) }
@@ -153,6 +153,15 @@ class PresenceStore internal constructor(
             SocketConnectionState.DISCONNECTED -> _entries.update(PresenceMapReducer::socketDisconnected)
             SocketConnectionState.CONNECTED -> Unit
         }
+    }
+
+    /**
+     * Date l'activité de [userId] à maintenant (miroir de `PresenceManager.noteActivity` iOS) : un
+     * pair annoncé dans la conversation (`viewing:*`) est actif LÀ, MAINTENANT, donc vert 60 s puis
+     * il décroît. `isOnline` reste ce que le serveur a dit ; le compte courant n'écrit jamais la carte.
+     */
+    fun noteActivity(userId: String) {
+        _entries.update { PresenceMapReducer.noteActivity(it, userId, currentUserId(), clock.nowMillis()) }
     }
 
     private fun isMe(userId: String): Boolean = userId == currentUserId()

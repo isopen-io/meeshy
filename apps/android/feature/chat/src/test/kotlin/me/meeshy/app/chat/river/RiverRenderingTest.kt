@@ -60,6 +60,12 @@ class RiverRenderingTest {
     }
 
     @Test
+    fun `l'identite d'une voix sait de quelle conversation elle parle, pour y lire ou est le pair`() {
+        val rendering = render(riverBubble("a", "alice", 0).copy(viewingConversationId = "c9"))
+        assertThat(rendering.contentByMessageId["a"]?.identity?.conversationId).isEqualTo("c9")
+    }
+
+    @Test
     fun `un message chiffre ou brule ne rend jamais son texte`() {
         val rendering = render(
             riverBubble("e", "alice", 0, endToEnd = true),

@@ -55,8 +55,10 @@ import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.ConversationViewingBinding
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
+import me.meeshy.ui.component.LocalConversationViewers
 import me.meeshy.ui.component.LocalPresenceStore
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
@@ -93,6 +95,10 @@ class MainActivity : ComponentActivity() {
     /** La carte de présence unique de la session : [LocalPresenceStore] la fournit aux avatars. */
     @Inject
     lateinit var presenceStore: PresenceStore
+
+    /** Qui a l'écran de quelle conversation ouvert : [LocalConversationViewers] le fournit aux avatars. */
+    @Inject
+    lateinit var conversationViewing: ConversationViewingBinding
 
     /** Le Picture-in-Picture de l'appel vidéo : l'activité fournit le geste, le coordinateur la règle. */
     @Inject
@@ -160,6 +166,7 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
+                        LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
                     ) {

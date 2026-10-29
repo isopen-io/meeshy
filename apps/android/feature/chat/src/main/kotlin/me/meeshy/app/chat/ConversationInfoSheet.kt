@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -62,6 +63,7 @@ internal fun ConversationInfoSheet(
     avatarUrl: String?,
     accentColor: Color,
     peerUserId: String?,
+    conversationId: String?,
     entries: List<ConversationInfoEntry>,
     onDismiss: () -> Unit,
 ) {
@@ -81,12 +83,12 @@ internal fun ConversationInfoSheet(
                 .padding(bottom = MeeshySpacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            MeeshyAvatar(
-                name = title,
-                size = 80.dp,
-                containerColor = accentColor,
-                imageUrl = avatarUrl,
-                presence = rememberPresence(peerUserId),
+            ConversationInfoAvatar(
+                title = title,
+                accentColor = accentColor,
+                avatarUrl = avatarUrl,
+                peerUserId = peerUserId,
+                conversationId = conversationId,
             )
             Spacer(Modifier.size(MeeshySpacing.md))
             Text(
@@ -146,4 +148,23 @@ internal fun ConversationInfoSheet(
             }
         }
     }
+}
+
+/** Le grand avatar de la feuille : le point du pair d'une directe, « ici » s'il regarde CETTE conversation. */
+@Composable
+internal fun ConversationInfoAvatar(
+    title: String,
+    accentColor: Color,
+    avatarUrl: String?,
+    peerUserId: String?,
+    conversationId: String?,
+) {
+    MeeshyAvatar(
+        name = title,
+        size = 80.dp,
+        containerColor = accentColor,
+        imageUrl = avatarUrl,
+        presence = rememberPresence(peerUserId),
+        here = rememberConversationHere(peerUserId, conversationId),
+    )
 }

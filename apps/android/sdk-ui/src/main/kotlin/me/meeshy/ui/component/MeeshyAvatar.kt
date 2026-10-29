@@ -112,6 +112,8 @@ public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (pres
  * [imageUrl] is the person's photo reference (iOS `avatarURL:`), resolved HERE ([AvatarFace]) so no
  * caller composes an address. ONE face at a time: the initials stand IN PLACE of the photo while it
  * loads or if it fails, and are removed once it shows — never layered under it (#12569).
+ *
+ * [here] : le pair a l'ecran de CETTE conversation ouvert ; son point « ici » prime sur la presence.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -125,6 +127,7 @@ public fun MeeshyAvatar(
     presence: PresenceState? = null,
     moodEmoji: String? = null,
     imageUrl: String? = null,
+    here: ConversationHere = ConversationHere.ABSENT,
 ) {
     val density = LocalDensity.current
     val textSize = with(density) { (size * 0.38f).toSp() }
@@ -167,6 +170,15 @@ public fun MeeshyAvatar(
                 text = moodEmoji,
                 fontSize = with(density) { (size * 0.4f).toSp() },
                 modifier = Modifier.align(Alignment.BottomEnd),
+            )
+        } else if (here.isHere) {
+            AvatarPresenceDot(
+                presence = presence,
+                avatarSize = size.value,
+                modifier = Modifier.align(Alignment.BottomEnd),
+                isHere = true,
+                here = here,
+                frameSize = boxSize.value,
             )
         } else if (dotColor != null) {
             Box(
