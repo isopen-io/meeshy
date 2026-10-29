@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -58,6 +59,7 @@ import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.location.LocationFullscreen
+import me.meeshy.ui.component.video.MeeshyVideoViewer
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -262,6 +264,9 @@ internal fun ChatListHost(
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
     var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
+    // Une vidéo du fil se regarde dans le lecteur de Meeshy, avec son PiP (#13822) ; un autre fichier sort par ACTION_VIEW.
+    var threadVideo by remember { mutableStateOf<ThreadPieceOpening.Video?>(null) }
+    val currentMessages by rememberUpdatedState(state.messages)
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
@@ -279,7 +284,14 @@ internal fun ChatListHost(
                 if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
             },
             onFileClick = { messageId, attachmentId ->
-                actions.onFileAttachmentTap(messageId, attachmentId)
+                val bubble = currentMessages.firstOrNull { it.messageId == messageId }
+                val file = bubble?.files?.firstOrNull { it.attachmentId == attachmentId }
+                val opening = if (bubble != null && file != null) ThreadPieceOpener.of(bubble, file) else ThreadPieceOpening.ExternalFile
+                when (opening) {
+                    is ThreadPieceOpening.Video -> threadVideo = opening
+                    ThreadPieceOpening.ExternalFile -> actions.onFileAttachmentTap(messageId, attachmentId)
+                    ThreadPieceOpening.Nothing -> Unit
+                }
             },
             onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
@@ -359,6 +371,9 @@ internal fun ChatListHost(
                 PieceFailure.REMOVE -> Toast.makeText(selectionContext, pieceRemoveFailed, Toast.LENGTH_SHORT).show()
             }
         }
+    }
+    threadVideo?.let { video ->
+        MeeshyVideoViewer(mediaUrl = video.url, onDismiss = { threadVideo = null }, secure = video.secure)
     }
     openedPlace?.let { opened ->
         LocationFullscreen(

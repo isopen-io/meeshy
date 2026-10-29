@@ -39,7 +39,7 @@ internal fun BubbleAttachmentSections(
         BubbleFileRow(
             file = file,
             onColor = onColor,
-            onClick = callbacks.onFileClick?.takeIf { !file.isSealed && !file.isProtected && !file.url.isNullOrBlank() }
+            onClick = callbacks.onFileClick?.takeIf { file.opensOnTap }
                 ?.let { { it(file) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
@@ -65,6 +65,13 @@ internal fun BubbleAttachmentSections(
         )
     }
 }
+
+/**
+ * La rangée répond au toucher : jamais scellée ni sans adresse ; une pièce protégée ne s'ouvre que si c'est une VIDÉO,
+ * que l'hôte joue dans son lecteur sécurisé (#13822) — un autre fichier protégé ne sort pas de Meeshy (#13492).
+ */
+internal val BubbleFile.opensOnTap: Boolean
+    get() = !isSealed && !url.isNullOrBlank() && (isVideo || !isProtected)
 
 /** True when the bubble carries at least one attachment of a kind the body renders. */
 internal val BubbleContent.hasRenderedAttachments: Boolean
