@@ -90,6 +90,7 @@ internal class GroupCallMesh(
     private val departedMemberIds = HashSet<String>()
     private var directory = GroupCallDirectory.EMPTY
     private var namesJob: Job? = null
+    private var groupProbeJob: Job? = null
     private var detector = ActiveSpeakerDetector()
     private var speakingUserIds: Set<String> = emptySet()
     private var samplingJob: Job? = null
@@ -122,6 +123,21 @@ internal class GroupCallMesh(
         this.sendsVideo = sendsVideo
         roster = GroupCallRoster(localUserId = selfId)
         publish()
+        readNamesOfKnownGroup()
+    }
+
+    /**
+     * Un appel dont la conversation est connue pour réunir plus de deux membres lit ses noms dès sa liaison (#13769,
+     * iOS `syncWithHost`, #9092 « lue dès la sonnerie ») : quand le groupe se prouve, les membres déjà là sont nommés
+     * sans attendre une première offre. Toujours une seule lecture par appel ([readNames]).
+     */
+    private fun readNamesOfKnownGroup() {
+        val scope = scope ?: return
+        val boundCall = callId
+        val conversation = conversationId.takeIf { it.isNotBlank() } ?: return
+        groupProbeJob = scope.launch {
+            if (names.isGroupConversation(conversation) && boundCall == callId) readNames()
+        }
     }
 
     /**
@@ -270,6 +286,8 @@ internal class GroupCallMesh(
         samplingJob = null
         namesJob?.cancel()
         namesJob = null
+        groupProbeJob?.cancel()
+        groupProbeJob = null
         directory = GroupCallDirectory.EMPTY
         departedMemberIds.clear()
         conversationId = ""

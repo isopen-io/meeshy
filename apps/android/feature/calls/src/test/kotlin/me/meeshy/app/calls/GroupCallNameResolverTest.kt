@@ -73,4 +73,18 @@ class GroupCallNameResolverTest {
     fun `no conversation, nothing read`() = runTest {
         assertThat(resolver.directoryFor("", "call-1").toList()).isEmpty()
     }
+
+    @Test
+    fun `a conversation known not to be direct is a group call from the ring, a direct or unknown one is not`() = runTest {
+        cached(type = "group", title = "Famille")
+        assertThat(resolver.isGroupConversation("conv")).isTrue()
+
+        cached(type = "direct", title = "Ada")
+        assertThat(resolver.isGroupConversation("conv")).isFalse()
+
+        coEvery { conversations.cachedById("unknown") } returns null
+        coEvery { conversations.getById("unknown") } throws IllegalStateException("offline")
+        assertThat(resolver.isGroupConversation("unknown")).isFalse()
+        assertThat(resolver.isGroupConversation("")).isFalse()
+    }
 }

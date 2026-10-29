@@ -69,6 +69,16 @@ class GroupSignalRoutingTest {
     }
 
     @Test
+    fun `a conversation known not to be direct announces a group call before any member shows up`() {
+        assertThat(GroupCallEvidence.fromConversationType("group")).isTrue()
+        assertThat(GroupCallEvidence.fromConversationType("public")).isTrue()
+        assertThat(GroupCallEvidence.fromConversationType("direct")).isFalse()
+        assertThat(GroupCallEvidence.fromConversationType("DM")).isFalse()
+        assertThat(GroupCallEvidence.fromConversationType(null)).isFalse()
+        assertThat(GroupCallEvidence.fromConversationType(" ")).isFalse()
+    }
+
+    @Test
     fun `a mesh link retries at once, then 2, 4, 8, 16 s, five times at most`() {
         assertThat((1..6).map(GroupPeerLinkRestart::backoffMs)).containsExactly(0L, 2_000L, 4_000L, 8_000L, 16_000L, 16_000L).inOrder()
         assertThat(GroupPeerLinkRestart.isExhausted(5)).isFalse()

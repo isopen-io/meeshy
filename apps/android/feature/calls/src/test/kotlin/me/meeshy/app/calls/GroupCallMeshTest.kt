@@ -176,13 +176,14 @@ class GroupCallMeshTest {
     }
 
     /** Un annuaire qu'on fait parler à la main, et qui compte ses lectures. */
-    private class FakeNames : GroupCallNameSource {
+    private class FakeNames(private val groupConversations: Set<String> = emptySet()) : GroupCallNameSource {
         val reads = mutableListOf<Pair<String, String>>()
         val directories = MutableSharedFlow<GroupCallDirectory>(replay = 0, extraBufferCapacity = 4)
         override fun directoryFor(conversationId: String, callId: String): Flow<GroupCallDirectory> {
             reads += conversationId to callId
             return directories
         }
+        override suspend fun isGroupConversation(conversationId: String): Boolean = conversationId in groupConversations
     }
 
     private fun named(vararg names: Pair<String, String>, groupTitle: String? = null, present: Set<String> = emptySet()) =
@@ -202,6 +203,36 @@ class GroupCallMeshTest {
 
         h.signal("offer", from = "cleo", negotiationId = 2)
         assertThat(h.mesh.ui.value.roster.member("cleo")!!.displayName).isEqualTo("Cléo")
+        assertThat(names.reads).containsExactly(CONVERSATION to CALL)
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `a call in a group conversation reads its names at the ring, once, and names the members as the group proves itself`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val names = FakeNames(groupConversations = setOf(CONVERSATION))
+            val h = Harness(names = names)
+            h.bind(this, isOutgoing = false)
+            assertThat(names.reads).containsExactly(CONVERSATION to CALL)
+
+            names.directories.emit(named("alice" to "Alice", "bob" to "Bob"))
+            h.signal("offer", from = "alice")
+            h.signal("offer", from = "bob", negotiationId = 4)
+
+            assertThat(h.mesh.ui.value.roster.members.map { it.displayName }).containsExactly("Alice", "Bob").inOrder()
+            assertThat(names.reads).containsExactly(CONVERSATION to CALL)
+            h.mesh.teardown()
+        }
+
+    @Test
+    fun `a direct or unknown conversation waits for the group to prove itself before reading`() = runTest(UnconfinedTestDispatcher()) {
+        val names = FakeNames()
+        val h = Harness(names = names)
+        h.bind(this, isOutgoing = false)
+        assertThat(names.reads).isEmpty()
+
+        h.signal("offer", from = "alice")
+        h.signal("offer", from = "bob", negotiationId = 4)
         assertThat(names.reads).containsExactly(CONVERSATION to CALL)
         h.mesh.teardown()
     }

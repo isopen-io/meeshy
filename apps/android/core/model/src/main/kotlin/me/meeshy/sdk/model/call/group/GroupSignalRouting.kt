@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.call.group
 
+import me.meeshy.sdk.model.isDirectConversationType
+
 /**
  * À qui appartient un `call:signal` reçu pendant un appel — iOS `GroupSignalDestination`. La connexion de
  * l'appel tient UN pair, le principal ; le maillage tient les autres. Sans ce tri, l'offre d'un troisième
@@ -82,6 +84,13 @@ object GroupCallEvidence {
 
     fun fromSignal(type: String, from: String?, localUserId: String, primaryUserId: String?): Boolean =
         type == OFFER && isThirdParty(from, localUserId, primaryUserId)
+
+    /**
+     * La conversation de l'appel est connue et n'est pas un direct : elle peut réunir plus de deux membres, ce que
+     * iOS lit dans l'offre (`isGroupCall`, #9092) pour lire les noms dès la sonnerie (#13769). Un type inconnu ne
+     * prouve rien — les deux preuves de terrain restent alors seules juges.
+     */
+    fun fromConversationType(type: String?): Boolean = !type.isNullOrBlank() && !isDirectConversationType(type)
 
     private const val OFFER = "offer"
 }
