@@ -59,7 +59,15 @@
     <string name="composer_recent_grantAccess_hint">Para ver aquí tus archivos recientes</string>
     <string name="composer_recent_select">Seleccionar</string>
     <string name="contact_card_a11y_label">Contacto compartido: %s</string>
+    <string name="contact_card_a11y_on_meeshy">En Meeshy: %s</string>
+    <string name="contact_card_action_connect">Conectar</string>
+    <string name="contact_card_action_write">Escribir</string>
+    <string name="contact_card_on_meeshy">En Meeshy</string>
+    <string name="contact_card_open_failed">No se pudo abrir la conversación</string>
     <string name="contact_card_shared">Contacto compartido</string>
+    <string name="contact_card_state_request_received">Te envió una solicitud</string>
+    <string name="contact_card_state_request_sent">Solicitud enviada</string>
+    <string name="contact_card_toast_request_failed">No se pudo enviar la solicitud</string>
     <string name="context_invite_friends">Invitar a mis amigos</string>
     <string name="conversation_appearance_accent_auto">Automático</string>
     <string name="conversation_appearance_entry_title">Fondo de la conversación</string>

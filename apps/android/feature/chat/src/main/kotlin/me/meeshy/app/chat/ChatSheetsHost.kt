@@ -179,7 +179,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
-    FileViewerHost(fileViewer, accentColor) { fileViewer = null }
+    FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
         onOpenInApp = { fileViewer = it },

@@ -58,7 +58,15 @@
     <string name="composer_recent_grantAccess_hint">Damit deine neuesten Medien hier erscheinen</string>
     <string name="composer_recent_select">Auswählen</string>
     <string name="contact_card_a11y_label">Geteilter Kontakt: %s</string>
+    <string name="contact_card_a11y_on_meeshy">Auf Meeshy: %s</string>
+    <string name="contact_card_action_connect">Verbinden</string>
+    <string name="contact_card_action_write">Schreiben</string>
+    <string name="contact_card_on_meeshy">Auf Meeshy</string>
+    <string name="contact_card_open_failed">Unterhaltung konnte nicht geöffnet werden</string>
     <string name="contact_card_shared">Geteilter Kontakt</string>
+    <string name="contact_card_state_request_received">Hat dir eine Anfrage gesendet</string>
+    <string name="contact_card_state_request_sent">Anfrage gesendet</string>
+    <string name="contact_card_toast_request_failed">Anfrage konnte nicht gesendet werden</string>
     <string name="context_invite_friends">Meine Freunde einladen</string>
     <string name="conversation_appearance_accent_auto">Automatisch</string>
     <string name="conversation_appearance_entry_title">Hintergrund der Unterhaltung</string>

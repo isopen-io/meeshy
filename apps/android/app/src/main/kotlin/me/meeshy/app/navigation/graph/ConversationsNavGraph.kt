@@ -221,6 +221,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
             locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
             onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
         )
     }
     composable(Routes.STARRED) {
