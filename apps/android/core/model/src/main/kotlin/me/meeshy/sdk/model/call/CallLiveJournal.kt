@@ -160,3 +160,24 @@ data class CallLiveJournal(
         const val CEILING: Int = 10_000
     }
 }
+
+/**
+ * Whether the journal sheet follows the live edge — iOS `CallJournalFollow`. At the bottom it
+ * follows; scrolling UP leaves the live edge and every new line is then « unseen » until the reader
+ * comes back (« Revenir au direct »). A scroll that does not go up changes nothing.
+ */
+data class CallJournalFollow(val isFollowing: Boolean = true, val hasUnseen: Boolean = false) {
+    val showsReturnToLive: Boolean get() = !isFollowing
+
+    fun scrolled(atLiveEdge: Boolean, movedUp: Boolean): CallJournalFollow = when {
+        atLiveEdge -> LIVE
+        movedUp -> CallJournalFollow(isFollowing = false, hasUnseen = hasUnseen)
+        else -> this
+    }
+
+    fun lineArrived(): CallJournalFollow = if (isFollowing) this else copy(hasUnseen = true)
+
+    companion object {
+        val LIVE: CallJournalFollow = CallJournalFollow()
+    }
+}

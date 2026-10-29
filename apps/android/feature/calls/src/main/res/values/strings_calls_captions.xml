@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">Captions</string>
+    <string name="call_captions_state_off">Off</string>
+    <string name="call_captions_state_translated">Translation</string>
+    <string name="call_captions_state_original">Original text</string>
+    <string name="call_captions_peer_active">The other person turned on transcription</string>
+    <string name="call_captions_journal">Journal</string>
+    <string name="call_captions_journal_title">Call journal</string>
+    <string name="call_captions_journal_hint">Opens every sentence of the call</string>
+    <string name="call_captions_waiting">Captions will appear here as soon as someone speaks.</string>
+    <string name="call_captions_translated">Translated</string>
+    <string name="call_captions_original">Original</string>
+    <string name="call_captions_back_to_live">Back to live</string>
+    <string name="call_captions_new_lines">New sentences</string>
+    <string name="call_captions_end_to_end">Captions are unavailable in an end-to-end encrypted conversation.</string>
+    <string name="call_captions_unavailable">Captions are not available yet for this call.</string>
+    <string name="call_captions_local_pending">Your own words are not transcribed from this device yet.</string>
+</resources>

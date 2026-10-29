@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_captions_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_state_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_state_translated",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_state_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_peer_active",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_journal",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_journal_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_journal_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_waiting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_translated",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_back_to_live",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_new_lines",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_end_to_end",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_local_pending",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

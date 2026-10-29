@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">Legendas</string>
+    <string name="call_captions_state_off">Desativadas</string>
+    <string name="call_captions_state_translated">Tradução</string>
+    <string name="call_captions_state_original">Texto original</string>
+    <string name="call_captions_peer_active">O seu interlocutor ativou a transcrição</string>
+    <string name="call_captions_journal">Registo</string>
+    <string name="call_captions_journal_title">Registo da chamada</string>
+    <string name="call_captions_journal_hint">Abre todas as frases da chamada</string>
+    <string name="call_captions_waiting">As legendas aparecerão aqui assim que alguém falar.</string>
+    <string name="call_captions_translated">Traduzido</string>
+    <string name="call_captions_original">Original</string>
+    <string name="call_captions_back_to_live">Voltar ao direto</string>
+    <string name="call_captions_new_lines">Novas frases</string>
+    <string name="call_captions_end_to_end">As legendas não estão disponíveis numa conversa encriptada de ponta a ponta.</string>
+    <string name="call_captions_unavailable">As legendas ainda não estão disponíveis para esta chamada.</string>
+    <string name="call_captions_local_pending">As suas próprias palavras ainda não são transcritas a partir deste dispositivo.</string>
+</resources>

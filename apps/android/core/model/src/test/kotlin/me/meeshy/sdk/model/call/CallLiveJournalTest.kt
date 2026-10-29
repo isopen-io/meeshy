@@ -149,4 +149,15 @@ class CallLiveJournalTest {
         assertThat(CallJournalSegment.fromRelay(CallTranslatedSegmentRef(text = "x"), 1)).isNull()
         assertThat(CallJournalSegment.fromRelay(CallTranslatedSegmentRef(text = " ", speakerId = "u"), 1)).isNull()
     }
+
+    @Test
+    fun `the journal follows the live edge until the reader scrolls up, then counts what arrives unseen`() {
+        val left = CallJournalFollow.LIVE.scrolled(atLiveEdge = false, movedUp = true)
+
+        assertThat(CallJournalFollow.LIVE.lineArrived()).isEqualTo(CallJournalFollow.LIVE)
+        assertThat(left.showsReturnToLive).isTrue()
+        assertThat(left.lineArrived().hasUnseen).isTrue()
+        assertThat(left.lineArrived().scrolled(atLiveEdge = true, movedUp = false)).isEqualTo(CallJournalFollow.LIVE)
+        assertThat(CallJournalFollow.LIVE.scrolled(atLiveEdge = false, movedUp = false)).isEqualTo(CallJournalFollow.LIVE)
+    }
 }

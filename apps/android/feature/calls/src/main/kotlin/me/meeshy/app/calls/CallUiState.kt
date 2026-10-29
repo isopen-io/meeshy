@@ -148,6 +148,8 @@ data class CallUiState(
      * audio) — iOS `isRemoteAudioEnabled` parity. Only on the media phases.
      */
     val isPeerMuted: Boolean = false,
+    /** #13333 — what the « Sous-titres » button shows: mode, invitation, and whether this call may carry captions. */
+    val captions: CallCaptionsChip = CallCaptionsChip(),
     /**
      * `true` while the remote peer's camera is off DURING A VIDEO CALL
      * (`call:media-toggled` video) — iOS `isRemoteVideoEnabled` parity, driving
@@ -182,6 +184,9 @@ data class CallUiState(
      */
     fun withFrozenClock(): CallUiState =
         if (hasLiveClock && durationLabel != null) copy(durationLabel = FROZEN_CLOCK, durationSeconds = 0) else this
+
+    /** The captions as the screen reads them, folded in without a copy when nothing changed. */
+    fun withCaptions(chip: CallCaptionsChip): CallUiState = if (chip == captions) this else copy(captions = chip)
 
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean

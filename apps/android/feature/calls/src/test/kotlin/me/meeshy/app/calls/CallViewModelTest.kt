@@ -1805,25 +1805,9 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `a translated segment surfaces the translation as the live caption`() = runTest {
+    fun `a relayed segment no longer draws a bare caption line — the captions band owns the peer's words (#13333)`() = runTest {
         val vm = vm().connect()
         translatedSegments.emit(segment(text = "bonjour", translated = "hello"))
-
-        assertThat(vm.state.value.captionText).isEqualTo("hello")
-    }
-
-    @Test
-    fun `an untranslated segment falls back to the original text`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(text = "bonjour", translated = null))
-
-        assertThat(vm.state.value.captionText).isEqualTo("bonjour")
-    }
-
-    @Test
-    fun `a segment for another call never leaks onto the caption`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(callId = "call-77"))
 
         assertThat(vm.state.value.captionText).isNull()
     }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">Untertitel</string>
+    <string name="call_captions_state_off">Aus</string>
+    <string name="call_captions_state_translated">Übersetzung</string>
+    <string name="call_captions_state_original">Originaltext</string>
+    <string name="call_captions_peer_active">Dein Gesprächspartner hat die Transkription aktiviert</string>
+    <string name="call_captions_journal">Protokoll</string>
+    <string name="call_captions_journal_title">Anrufprotokoll</string>
+    <string name="call_captions_journal_hint">Öffnet alle Sätze des Anrufs</string>
+    <string name="call_captions_waiting">Untertitel erscheinen hier, sobald jemand spricht.</string>
+    <string name="call_captions_translated">Übersetzt</string>
+    <string name="call_captions_original">Original</string>
+    <string name="call_captions_back_to_live">Zurück zu live</string>
+    <string name="call_captions_new_lines">Neue Sätze</string>
+    <string name="call_captions_end_to_end">Untertitel sind in einer Ende-zu-Ende-verschlüsselten Unterhaltung nicht verfügbar.</string>
+    <string name="call_captions_unavailable">Untertitel sind für diesen Anruf noch nicht verfügbar.</string>
+    <string name="call_captions_local_pending">Deine eigenen Worte werden auf diesem Gerät noch nicht transkribiert.</string>
+</resources>

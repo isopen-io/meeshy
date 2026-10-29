@@ -87,6 +87,7 @@ internal object CallPillModel {
                 icon = entry.presentation.icon,
                 labelRes = entry.presentation.labelRes,
                 kind = if (entry.presentation.isActive) CallPillKind.Active else CallPillKind.Normal,
+                hintRes = entry.presentation.hintRes,
                 isToggle = entry.presentation.isActive,
             )
         }

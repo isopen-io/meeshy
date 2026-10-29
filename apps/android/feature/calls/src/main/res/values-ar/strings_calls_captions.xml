@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">الترجمة النصية</string>
+    <string name="call_captions_state_off">متوقفة</string>
+    <string name="call_captions_state_translated">الترجمة</string>
+    <string name="call_captions_state_original">النص الأصلي</string>
+    <string name="call_captions_peer_active">فعّل محاورك النسخ</string>
+    <string name="call_captions_journal">السجل</string>
+    <string name="call_captions_journal_title">سجل المكالمة</string>
+    <string name="call_captions_journal_hint">يفتح كل جمل المكالمة</string>
+    <string name="call_captions_waiting">ستظهر الترجمة النصية هنا بمجرد أن يتكلم أحد.</string>
+    <string name="call_captions_translated">مترجم</string>
+    <string name="call_captions_original">الأصلي</string>
+    <string name="call_captions_back_to_live">العودة إلى البث المباشر</string>
+    <string name="call_captions_new_lines">جمل جديدة</string>
+    <string name="call_captions_end_to_end">الترجمة النصية غير متاحة في محادثة مشفرة من طرف إلى طرف.</string>
+    <string name="call_captions_unavailable">الترجمة النصية غير متاحة بعد لهذه المكالمة.</string>
+    <string name="call_captions_local_pending">لا يتم نسخ كلامك من هذا الجهاز بعد.</string>
+</resources>

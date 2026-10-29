@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -56,8 +57,13 @@ fun CallScreen(
 ) {
     // L'écran voit un état à chrono GELÉ : un tic de 1 Hz ne le recompose pas. Le temps vivant
     // voyage en `State` (LocalCallLiveSeconds) et n'est lu que par les feuilles qui l'affichent.
-    val state by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
+    val callState by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.withFrozenClock())
+    // Les sous-titres (#13333) entrent dans l'état que l'écran dessine : le bouton s'allume au toucher.
+    val captionsViewModel: CallCaptionsViewModel = hiltViewModel()
+    val captionsChip by remember(captionsViewModel) { captionsViewModel.state.map(CallCaptionsChip::of).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = CallCaptionsChip.of(captionsViewModel.state.value))
+    val state = callState.withCaptions(captionsChip)
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
@@ -127,6 +133,7 @@ fun CallScreen(
     }
     val chromeState by chrome.state.collectAsStateWithLifecycle()
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
+    LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -323,6 +330,11 @@ fun CallScreen(
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
                 )
+            }
+
+            // Le journal de la transcription : une feuille, comme iOS ; la fermer rend le menu de la pilule.
+            if (chromeState.layer.openPanel == CallScreenPanel.Journal) {
+                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel)
             }
 
             CallToastHost(
