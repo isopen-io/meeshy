@@ -60,7 +60,7 @@ import me.meeshy.ui.theme.hexColor
  * The detail of one past call — port of the iOS `CallDetailSheet`: the contact,
  * direction and time, « Appel vocal » / « Appel vidéo » to call back (direct calls
  * only, as on iOS), then the type, date, duration, data and number of the call,
- * the participants of a group call and the call's transcript.
+ * the participants of a group call, the network journal this device recorded and the call's transcript.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +69,7 @@ internal fun CallDetailSheet(
     onRedial: (isVideo: Boolean) -> Unit,
     onDismiss: () -> Unit,
     transcriptViewModel: CallDetailTranscriptViewModel = hiltViewModel(),
+    networkViewModel: CallDetailNetworkJournalViewModel = hiltViewModel(),
 ) {
     val name = record.displayName(fallback = stringResource(R.string.call_unknown_peer))
     val accentHex = DynamicColorGenerator.colorForName(name)
@@ -85,6 +86,9 @@ internal fun CallDetailSheet(
     LaunchedEffect(transcriptRequest) { transcriptViewModel.load(transcriptRequest) }
     val transcript by transcriptViewModel.state.collectAsStateWithLifecycle()
     val transcriptState = transcript.stateFor(record.callId)
+    LaunchedEffect(record.callId) { networkViewModel.load(record.callId) }
+    val network by networkViewModel.state.collectAsStateWithLifecycle()
+    val networkJournal = network.shownFor(record.callId)
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -109,6 +113,7 @@ internal fun CallDetailSheet(
             if (record.peer != null) CallDetailRedialButtons(accent, onRedial)
             CallDetailCard(record)
             if (participants.isNotEmpty()) CallDetailParticipantsSection(participants)
+            networkJournal?.let { CallDetailNetworkJournalSection(it, accent) }
             CallDetailTranscriptSection(
                 state = transcriptState,
                 accentHex = accentHex,
