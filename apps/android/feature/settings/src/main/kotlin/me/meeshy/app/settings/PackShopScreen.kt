@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -47,13 +49,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import java.util.Locale
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.packs.PackShopFailure
 import me.meeshy.sdk.model.packs.ShopPack
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
+import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -117,7 +123,11 @@ fun PackShopScreen(
                 ) {
                     ui.balance?.let { Balance(it) }
                     failureText?.let { FailureLine(it) }
-                    Shelf(ui, language, onRetry = { haptics.light(); viewModel.retry() }) { slug ->
+                    Shelf(
+                        ui, language,
+                        onRetry = { haptics.light(); viewModel.retry() },
+                        onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
+                    ) { slug ->
                         haptics.light()
                         viewModel.buy(slug)
                     }
@@ -190,7 +200,13 @@ private fun AppearancePackDomain.titleRes(): Int = when (this) {
 }
 
 @Composable
-private fun Shelf(ui: PackShopUiState, language: String, onRetry: () -> Unit, onBuy: (String) -> Unit) {
+private fun Shelf(
+    ui: PackShopUiState,
+    language: String,
+    onRetry: () -> Unit,
+    onToggleInstall: (String) -> Unit,
+    onBuy: (String) -> Unit,
+) {
     val packs = ui.packs
     when {
         ui.loadFailed -> LoadFailure(onRetry)
@@ -207,6 +223,7 @@ private fun Shelf(ui: PackShopUiState, language: String, onRetry: () -> Unit, on
                 busy = pack.slug in ui.pendingSlugs,
                 focused = pack.slug == ui.focusTarget,
                 onBuy = { onBuy(pack.slug) },
+                onToggleInstall = { onToggleInstall(pack.slug) },
             )
         }
     }
@@ -254,7 +271,14 @@ private fun Skeleton() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: Boolean, onBuy: () -> Unit) {
+internal fun PackRow(
+    pack: ShopPack,
+    language: String,
+    busy: Boolean,
+    focused: Boolean,
+    onBuy: () -> Unit,
+    onToggleInstall: () -> Unit = {},
+) {
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) requester.bringIntoView() }
     val name = pack.localizedName(language)
@@ -269,16 +293,7 @@ internal fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: B
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(CoverSide)
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .background(MeeshyTheme.tokens.surfaceFill)
-                .clearAndSetSemantics { },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(MeeshyIcons.Shopping, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(24.dp))
-        }
+        Cover(pack)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = name,
@@ -314,14 +329,13 @@ internal fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: B
         when {
             pack.isLocked && !pack.isOwned -> LockedBadge()
             pack.canBuy -> BuyButton(name, pack.meeshes ?: 0, busy, onBuy)
+            pack.canToggleInstall && (!pack.installed || pack.removable) ->
+                InstallButton(name, installed = pack.installed, busy = busy, onClick = onToggleInstall)
         }
     }
 }
 
-/**
- * Un pack sans prix et pas verrouillé le dit (« Gratuit ») : sans cela sa rangée n'avait ni mot ni geste. iOS y offre
- * « Installer / Retirer » ; ce geste n'existe pas encore ici (#13641), l'état lisible, lui, est dû dès maintenant.
- */
+/** Un pack sans prix et pas verrouillé le dit (« Gratuit »), et offre en plus « Installer / Retirer ». */
 internal val ShopPack.showsFree: Boolean get() = meeshes == null && !isLocked
 
 @Composable
@@ -355,6 +369,60 @@ private fun BuyButton(name: String, price: Int, busy: Boolean, onBuy: () -> Unit
             text = stringResource(R.string.pack_shop_buy_price, price),
             style = meeshyText(MeeshyFontSize.subhead, FontWeight.SemiBold),
             color = MeeshyPalette.White,
+        )
+    }
+}
+
+/**
+ * La couverture servie (`coverUrl`, résolue sur la base d'API) ; le ThumbHash, quand le serveur le sert, tient lieu
+ * de placeholder, sinon la tuile générique reste visible dessous (aussi en cas d'échec de chargement).
+ */
+@Composable
+private fun Cover(pack: ShopPack) {
+    val base = LocalMediaBaseUrl.current
+    val model = remember(pack.coverPath, base) { pack.coverPath?.let { resolveMediaUrl(it, base) } }
+    val hash = rememberThumbHashPainter(pack.coverThumbHash)
+    Box(
+        modifier = Modifier
+            .size(CoverSide)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(MeeshyTheme.tokens.surfaceFill)
+            .clearAndSetSemantics { },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(MeeshyIcons.Shopping, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(24.dp))
+        if (model != null) {
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                placeholder = hash,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** « Installer » / « Retirer » : lu avec le nom du pack ; optimiste côté modèle, un seul geste à la fois par pack. */
+@Composable
+private fun InstallButton(name: String, installed: Boolean, busy: Boolean, onClick: () -> Unit) {
+    val label = stringResource(if (installed) R.string.pack_shop_remove else R.string.pack_shop_install)
+    val spoken = "$label $name"
+    Box(
+        modifier = Modifier
+            .sizeIn(minHeight = TargetSize, minWidth = TargetSize)
+            .alpha(if (busy) 0.6f else 1f)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (installed) MeeshyTheme.tokens.controlFill else MeeshyPalette.Indigo500)
+            .clickable(enabled = !busy, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp)
+            .semantics { contentDescription = spoken; role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = meeshyText(MeeshyFontSize.subhead, FontWeight.SemiBold),
+            color = if (installed) MeeshyTheme.tokens.textPrimary else MeeshyPalette.White,
         )
     }
 }

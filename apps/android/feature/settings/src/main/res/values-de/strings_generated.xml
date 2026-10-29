@@ -135,8 +135,10 @@
     <string name="pack_shop_error_insufficient">Dir fehlen Meeshes für dieses Paket.</string>
     <string name="pack_shop_error_load">Der Shop konnte nicht geladen werden. Versuche es erneut.</string>
     <string name="pack_shop_failed">Das Paket konnte nicht geändert werden. Versuch es noch einmal.</string>
+    <string name="pack_shop_install">Installieren</string>
     <string name="pack_shop_locked">Gesperrt</string>
     <string name="pack_shop_owned">Im Besitz</string>
+    <string name="pack_shop_remove">Entfernen</string>
     <string name="pack_shop_retry">Erneut versuchen</string>
     <string name="privacy_analytics">Analytics</string>
     <string name="privacy_block_screenshots">Screenshots blockieren</string>

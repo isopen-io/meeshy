@@ -136,6 +136,8 @@ object Routes {
     const val MEDIA_CACHE = "settings/media-cache"
     /** Réglages › Packs et téléchargements : la Boutique, ouvrable sur un domaine (`?domain=`) et un pack (`?pack=`). */
     const val PACK_SHOP = "settings/packs"
+    /** Lien profond de la Boutique (iOS `meeshy://settings/packs?domaine=…&pack=…`) ; `domaine` alimente l'argument `domain`. */
+    const val PACK_SHOP_DEEP_LINK = "meeshy://$PACK_SHOP?domaine={domain}&pack={pack}"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
     const val ENCRYPTED_DEVICES = "settings/encrypted-devices"

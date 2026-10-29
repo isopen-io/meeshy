@@ -101,4 +101,30 @@ class PackPurchaseLedgerTest {
 
         assertThat(second.ledger.pending).containsExactly("wallpaper.animes", "banner.animes")
     }
+
+    private val owned = ShopPack(slug = "essentiels", owned = true)
+
+    @Test
+    fun `an install in flight marks the gesture and mints no intention id`() {
+        val begun = PackPurchaseLedger().beginInstall(wallpaper, owned)!!
+
+        assertThat(begun.pending).containsExactly("wallpaper.essentiels")
+        assertThat(begun.requestIds).isEmpty()
+        assertThat(begun.failure).isNull()
+    }
+
+    @Test
+    fun `a pack to buy, locked, unknown, or already in flight starts no install`() {
+        assertThat(PackPurchaseLedger().beginInstall(wallpaper, null)).isNull()
+        assertThat(PackPurchaseLedger().beginInstall(wallpaper, paid)).isNull()
+        val inFlight = PackPurchaseLedger().beginInstall(wallpaper, owned)!!
+        assertThat(inFlight.beginInstall(wallpaper, owned)).isNull()
+    }
+
+    @Test
+    fun `an install gesture also blocks a purchase of the same pack while it flies`() {
+        val flying = PackPurchaseLedger().beginInstall(wallpaper, owned)!!
+
+        assertThat(flying.begin(wallpaper, owned.copy(price = 5, owned = false)) { "r" }).isNull()
+    }
 }

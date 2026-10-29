@@ -76,8 +76,11 @@ class RouteManifestRatchetTest {
          * achat confirmé par le serveur), que porte `PackApi`.
          * 229 : moins `GET /conversations/:id/card` (#13672 : la carte d'un lien direct de conversation dans
          * une bulle), que porte `LinkDetailApi.directCard`.
+         * 208 : moins l'installation et le retrait d'un pack (`PUT` / `DELETE /packs/<domaine>/:slug/install`) et la
+         * boutique d'un domaine (`GET /packs/<domaine>`, le repli d'un ancien serveur) (#13641), que porte `PackApi` ; le
+         * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
          */
-        const val TO_PORT_CEILING = 229
+        const val TO_PORT_CEILING = 208
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

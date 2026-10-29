@@ -135,8 +135,10 @@
     <string name="pack_shop_error_insufficient">You need more Meeshes for this pack.</string>
     <string name="pack_shop_error_load">The shop could not load. Try again.</string>
     <string name="pack_shop_failed">The pack couldn’t be updated. Try again.</string>
+    <string name="pack_shop_install">Install</string>
     <string name="pack_shop_locked">Locked</string>
     <string name="pack_shop_owned">Owned</string>
+    <string name="pack_shop_remove">Remove</string>
     <string name="pack_shop_retry">Try again</string>
     <string name="privacy_analytics">Analytics</string>
     <string name="privacy_block_screenshots">Block screenshots</string>

@@ -42,6 +42,14 @@ class WarmDeepLinkTest {
                     ),
                 ) {}
                 composable(
+                    route = "${Routes.PACK_SHOP}?domain={domain}&pack={pack}",
+                    arguments = listOf(
+                        navArgument("domain") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("pack") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    ),
+                    deepLinks = listOf(navDeepLink { uriPattern = Routes.PACK_SHOP_DEEP_LINK }),
+                ) {}
+                composable(
                     route = GameRoutes.PROGRESSION,
                     deepLinks = GameRoutes.PROGRESSION_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
                 ) {}
@@ -102,5 +110,16 @@ class WarmDeepLinkTest {
         assertThat(nav.currentBackStackEntry?.arguments?.getString("conversationId")).isEqualTo("second")
         nav.popBackStack()
         assertThat(nav.currentDestination?.route).isEqualTo(Routes.CONVERSATIONS)
+    }
+
+    @Test
+    fun `the pack shop link opens the shop on the asked domain and pack`() {
+        val nav = startedNavigation()
+
+        assertThat(open(nav, "meeshy://settings/packs?domaine=banner&pack=x")).isTrue()
+
+        assertThat(nav.currentDestination?.route).isEqualTo("${Routes.PACK_SHOP}?domain={domain}&pack={pack}")
+        assertThat(nav.currentBackStackEntry?.arguments?.getString("domain")).isEqualTo("banner")
+        assertThat(nav.currentBackStackEntry?.arguments?.getString("pack")).isEqualTo("x")
     }
 }

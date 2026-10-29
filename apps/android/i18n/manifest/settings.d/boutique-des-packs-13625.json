@@ -21,6 +21,8 @@
         { "catalog": "ui", "iosKey": "shop.domain.banner_frame", "androidName": "pack_shop_domain_banner_frame", "status": "adopted" },
         { "catalog": "ui", "iosKey": "sticker.sheet.pack.by", "androidName": "pack_shop_by", "status": "adopted" },
         { "catalog": "ui", "iosKey": "sticker.shop.failed", "androidName": "pack_shop_failed", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "sticker.shop.install", "androidName": "pack_shop_install", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "sticker.shop.remove", "androidName": "pack_shop_remove", "status": "adopted" },
         { "androidName": "pack_shop_free", "status": "android-only" }
       ]
     }

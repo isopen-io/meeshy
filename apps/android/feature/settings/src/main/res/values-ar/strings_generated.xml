@@ -135,8 +135,10 @@
     <string name="pack_shop_error_insufficient">تحتاج إلى مزيد من Meeshes لهذه الحزمة.</string>
     <string name="pack_shop_error_load">تعذّر تحميل المتجر. حاول مرة أخرى.</string>
     <string name="pack_shop_failed">تعذّر تحديث الحزمة. حاول مرة أخرى.</string>
+    <string name="pack_shop_install">تثبيت</string>
     <string name="pack_shop_locked">مقفل</string>
     <string name="pack_shop_owned">مملوك</string>
+    <string name="pack_shop_remove">إزالة</string>
     <string name="pack_shop_retry">إعادة المحاولة</string>
     <string name="privacy_analytics">التحليلات</string>
     <string name="privacy_block_screenshots">حظر لقطات الشاشة</string>

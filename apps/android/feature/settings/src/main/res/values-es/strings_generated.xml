@@ -135,8 +135,10 @@
     <string name="pack_shop_error_insufficient">Te faltan Meeshes para este pack.</string>
     <string name="pack_shop_error_load">No se pudo cargar la tienda. Inténtalo de nuevo.</string>
     <string name="pack_shop_failed">No se pudo actualizar el paquete. Inténtalo de nuevo.</string>
+    <string name="pack_shop_install">Instalar</string>
     <string name="pack_shop_locked">Por desbloquear</string>
     <string name="pack_shop_owned">Adquirido</string>
+    <string name="pack_shop_remove">Quitar</string>
     <string name="pack_shop_retry">Reintentar</string>
     <string name="privacy_analytics">Analítica</string>
     <string name="privacy_block_screenshots">Bloquear capturas</string>
