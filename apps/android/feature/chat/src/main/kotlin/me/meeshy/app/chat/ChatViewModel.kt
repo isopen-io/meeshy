@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
@@ -250,8 +251,9 @@ class ChatViewModel @Inject constructor(
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            initialUnreadCount.value =
-                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            initialUnreadCount.value = unread
+            if (unread > 0) latestMessages.first { it.isNotEmpty() }
             markConversationRead()
         }
 
@@ -390,8 +392,8 @@ class ChatViewModel @Inject constructor(
             launch {
                 messageSocketManager.messageReceived.collectArrived { event ->
                     if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                        markConversationRead()
+                        if (IncomingMessageCompletion.needsRest(event)) messageRepository.refresh(conversationId)
+                        markConversationRead(arrived = event)
                     }
                 }
             }
@@ -507,10 +509,14 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Mark-as-read never surfaces an error: the badge is non-critical and the
-     * queued receipt retries with the outbox on reconnect.
+     * queued receipt retries with the outbox on reconnect. An unreadable sealed message is never
+     * acknowledged « read » ([ReadAcknowledgement], #13793) : the conversation is simply left unread.
      */
-    private suspend fun markConversationRead() {
+    private suspend fun markConversationRead(arrived: ApiMessage? = null) {
         try {
+            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            val window = latestMessages.value.map { it.message }
+            if (!ReadAcknowledgement.mayAcknowledge(window, sessionRepository.currentUser.value?.id, unread, arrived)) return
             if (conversationRepository.markReadOptimistic(conversationId)) {
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             }

@@ -619,6 +619,94 @@ class ChatViewModelTest {
         coVerify(exactly = 2) { h.conversations.markReadOptimistic("c1") }
     }
 
+    private fun sealedMessage(id: String) = ApiMessage(
+        id = id,
+        conversationId = "c1",
+        senderId = "other",
+        content = "[Encrypted]",
+        isEncrypted = true,
+        encryptionMode = "e2ee",
+    )
+
+    private fun sealedStream() = flowOf(
+        CacheResult.Fresh(listOf(synced(sealedMessage("m1")), synced(sealedMessage("m2"))), ageMillis = 0),
+    )
+
+    @Test
+    fun opening_a_conversation_of_unreadable_sealed_messages_does_not_mark_it_read() = runTest(dispatcher) {
+        val h = harness(sealedStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+        coEvery { h.conversations.markReadOptimistic(any()) } returns true
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+        coVerify(exactly = 0) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun opening_a_conversation_of_unread_clear_messages_still_marks_it_read() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+    }
+
+    @Test
+    fun an_unread_conversation_whose_messages_are_not_loaded_yet_waits_before_marking_read() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = unreadConversation(unread = 2))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+    }
+
+    @Test
+    fun an_incoming_sealed_message_is_never_marked_read() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(sealedMessage("m9"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+    }
+
+    @Test
+    fun an_incoming_clear_message_after_unread_sealed_ones_is_not_marked_read_either() = runTest(dispatcher) {
+        val h = harness(sealedStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", senderId = "other", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+    }
+
+    @Test
+    fun an_incoming_message_in_the_open_conversation_no_longer_re_reads_the_page() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", senderId = "other", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.refresh("c1") }
+    }
+
+    @Test
+    fun a_forwarded_message_arriving_without_its_provenance_keeps_one_targeted_refresh() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messageReceived.emit(
+            ApiMessage(id = "m9", conversationId = "c1", senderId = "other", content = "fwd", forwardedFromId = "src"),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.refresh("c1") }
+    }
+
     @Test
     fun an_incoming_message_elsewhere_does_not_mark_this_conversation_read() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
