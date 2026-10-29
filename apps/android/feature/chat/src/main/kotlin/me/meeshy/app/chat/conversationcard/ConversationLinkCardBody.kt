@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.conversationcard.ConversationCard
 import me.meeshy.sdk.model.conversationcard.ConversationCardInviter
 import me.meeshy.sdk.model.conversationcard.ConversationCardKind
 import me.meeshy.sdk.model.conversationcard.ConversationCardStats
+import me.meeshy.sdk.model.format.CompactCountFormat
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -186,15 +187,8 @@ private fun Metric(icon: ImageVector, value: Int) {
     val ink = MeeshyTheme.tokens.textSecondary
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(12.dp))
-        Text(compact(value), color = ink, fontSize = MeeshyFontSize.small, fontWeight = FontWeight.SemiBold)
+        Text(CompactCountFormat.text(value, Locale.getDefault()), color = ink, fontSize = MeeshyFontSize.small, fontWeight = FontWeight.SemiBold)
     }
-}
-
-private fun compact(value: Int): String = when {
-    value >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", value / 1_000_000.0)
-    value >= 10_000 -> "${value / 1_000}k"
-    value >= 1_000 -> String.format(Locale.getDefault(), "%.1fk", value / 1_000.0)
-    else -> value.toString()
 }
 
 /** Qui invite, puis son message en citation — même barre d'accent que la réponse citée d'une bulle. */
