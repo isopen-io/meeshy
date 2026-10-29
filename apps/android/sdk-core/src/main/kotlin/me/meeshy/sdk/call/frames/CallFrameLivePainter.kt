@@ -13,8 +13,10 @@ import me.meeshy.sdk.model.call.frames.CallFrameMotionTrack
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentGeometry
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentPartition
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentStage
+import me.meeshy.sdk.model.call.frames.CallFrameRect
 import me.meeshy.sdk.model.call.frames.CallFrameRenderKit
 import me.meeshy.sdk.model.call.frames.CallFrameShapeGeometry
+import me.meeshy.sdk.model.call.frames.CallFrameTextLayout
 import kotlin.math.roundToInt
 
 /** Un ornement animé, peint une fois : une image transparente par groupe, à la taille de la toile des ornements. */
@@ -60,7 +62,7 @@ object CallFrameLivePainter {
         if (stage.width < 1 || stage.height < 1) return null
         val tracks = if (animates) CallFrameMotionPlan.tracks(stage.look) + CallFrameMotionPlan.sceneTracks(stage.look) else emptyList()
         val excluded = tracks.map { it.rank }.filter { it < CallFrameMotionPlan.SCENE_RANK_OFFSET }.toSet()
-        val extras = CallFrameOrnamentPainter(stage.look.ornaments, excluded = excluded)
+        val extras = CallFrameFramePainter(stage.look.ornaments, excluded = excluded)
         val layers = CallFrameRenderer.layers(stage, extras) ?: return null
         val backdrop = faces(stage, layers.backdrop) ?: return null
         val motion = if (tracks.isEmpty()) null else motion(stage, tracks)
@@ -85,13 +87,21 @@ object CallFrameLivePainter {
     private fun motion(stage: CallFrameStage, tracks: List<CallFrameMotionTrack>): CallFrameMotionScene? {
         val (width, height) = spriteSize(stage)
         val scale = width.toDouble() / stage.width
-        val sprites = tracks.map { track -> sprite(stage, track, width, height, scale) ?: return null }
-        val mask = mask(stage, width, height, scale) ?: return null
+        val layout = CallFrameRendererText.layout(stage)
+        val sprites = tracks.map { track -> sprite(stage, track, layout, width, height, scale) ?: return null }
+        val mask = mask(stage, layout, width, height, scale) ?: return null
         return CallFrameMotionScene(width, height, stage.unit * scale, mask, sprites)
     }
 
-    private fun sprite(stage: CallFrameStage, track: CallFrameMotionTrack, width: Int, height: Int, scale: Double): CallFrameMotionSprite? {
-        val scene = ornamentStage(stage, track)
+    private fun sprite(
+        stage: CallFrameStage,
+        track: CallFrameMotionTrack,
+        layout: CallFrameTextLayout,
+        width: Int,
+        height: Int,
+        scale: Double,
+    ): CallFrameMotionSprite? {
+        val scene = ornamentStage(stage, track, layout)
         val images = (0 until track.partitions).map { index ->
             val image = bitmap(width, height) ?: return null
             val canvas = Canvas(image)
@@ -102,15 +112,24 @@ object CallFrameLivePainter {
         return CallFrameMotionSprite(track, images)
     }
 
-    /** Ce qui tombe ou monte se sème sur toute la toile, pour qu'en défilant il ne laisse jamais de bande vide. */
-    fun ornamentStage(stage: CallFrameStage, track: CallFrameMotionTrack): CallFrameOrnamentStage {
-        val base = CallFrameOrnamentGeometry.stage(stage.bounds, stage.areas, stage.boxes, track.ornament.layer == CallFrameLayer.FRONT)
+    /**
+     * La scène d'un ornement animé : celle des couches fixes (qui évite les textes et habille le titre), sauf pour
+     * ce qui tombe ou monte, semé sur toute la toile pour qu'en défilant il ne laisse jamais de bande vide.
+     */
+    fun ornamentStage(
+        stage: CallFrameStage,
+        track: CallFrameMotionTrack,
+        layout: CallFrameTextLayout = CallFrameRendererText.layout(stage),
+    ): CallFrameOrnamentStage {
+        val base = CallFrameOrnamentGeometry.stage(
+            stage.bounds, stage.areas, stage.boxes, track.ornament.layer == CallFrameLayer.FRONT, layout.boxes, layout.headline,
+        )
         if (!track.travels) return base
         return base.copy(zones = listOf(stage.bounds), avoid = emptyList(), front = false, text = emptyList())
     }
 
-    /** Opaque partout, sauf dans les cases (la carte entière quand la case en porte une). */
-    private fun mask(stage: CallFrameStage, width: Int, height: Int, scale: Double): Bitmap? {
+    /** Opaque partout, sauf dans les cases (la carte entière quand la case en porte une) et sous les textes. */
+    private fun mask(stage: CallFrameStage, layout: CallFrameTextLayout, width: Int, height: Int, scale: Double): Bitmap? {
         val mask = bitmap(width, height) ?: return null
         val canvas = Canvas(mask)
         canvas.drawColor(android.graphics.Color.WHITE)
@@ -126,6 +145,10 @@ object CallFrameLivePainter {
                 canvas.drawRect(rectF(box.rect), clear)
             }
             canvas.restore()
+        }
+        val margin = stage.unit * 0.01
+        layout.boxes.forEach { box ->
+            canvas.drawRect(rectF(CallFrameRect(box.minX - margin, box.minY - margin, box.width + margin * 2, box.height + margin * 2)), clear)
         }
         return mask
     }

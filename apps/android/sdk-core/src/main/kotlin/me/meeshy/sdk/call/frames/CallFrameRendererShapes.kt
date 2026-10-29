@@ -35,7 +35,7 @@ internal object CallFrameRendererShapes {
     private val WHITE = CallFrameColor(1.0, 1.0, 1.0, 1.0)
 
     /** Exécute [body] dans le repère de la case : tourné de `box.rotation` degrés autour de son centre. */
-    private inline fun inBox(canvas: Canvas, box: CallFrameSlotBox, body: () -> Unit) {
+    inline fun inBox(canvas: Canvas, box: CallFrameSlotBox, body: () -> Unit) {
         canvas.save()
         if (box.rotation != 0.0) canvas.rotate(box.rotation.toFloat(), box.rect.midX.toFloat(), box.rect.midY.toFloat())
         body()
