@@ -7,20 +7,20 @@ import os
 // taille, avant d'y recevoir le micro coupé.
 
 extension CallManager {
-    /// **Réconcilie la capture locale avec l'écoute RÉELLE de l'appel** —
-    /// le nom « toggle » est historique : ce n'est plus le panneau local seul
-    /// qui décide. Un device ne transcrit que son PROPRE micro (jamais l'audio
-    /// distant), donc lier la capture au seul panneau local faisait de celui
-    /// qui active les sous-titres un pur ÉMETTEUR : le pair recevait tout, lui
-    /// ne recevait rien tant que le pair n'avait pas activé de son côté. C'est
-    /// exactement le symptôme rapporté (« il reçoit mes transcriptions, je ne
-    /// reçois pas les siennes »). La règle vit dans
-    /// `TranscriptionCapturePolicy` ; appeler cette méthode est idempotent.
-    ///
-    /// Appelée par les DEUX entrées d'écoute : le panneau local
-    /// (`CallView.advanceCaptionsMode`) et le signal du pair
-    /// (`call:transcription-active`).
+    /// **Réconcilie la capture locale avec l'écoute RÉELLE de l'appel** (le
+    /// nom « toggle » est historique) : un device ne transcrit que son PROPRE
+    /// micro, il capture donc dès que quelqu'un écoute — son panneau ou un
+    /// pair (`call:transcription-active`). Règle : `TranscriptionCapturePolicy`.
+    /// Idempotente. #13720 — une conversation chiffrée de bout en bout, ou au
+    /// régime illisible, n'annonce rien et ne capture rien (`CallCaptionsGate`).
     func toggleTranscription() {
+        guard transcriptionService.admitsCaptions(conversationId: conversationId, onSettled: { [weak self] in self?.toggleTranscription() }) else {
+            return CallCaptionsRefusal.settle(
+                service: transcriptionService,
+                publishListeningIntent: { publishListeningIntentIfChanged() },
+                tellUser: { FeedbackToastManager.shared.showError($0) }
+            )
+        }
         publishListeningIntentIfChanged()
         switch TranscriptionCapturePolicy.action(
             localPanelOpen: transcriptionService.isShowingOverlay,

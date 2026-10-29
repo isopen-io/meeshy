@@ -111,8 +111,18 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var configurationChangeObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
 
-    init(socket: any MessageSocketProviding = MessageSocketManager.shared) {
+    /// #13720 — la porte des sous-titres de l'appel en cours. Fermée tant que
+    /// le régime de la conversation n'est pas lu en clair : rien ne se capte,
+    /// rien ne part (`CallCaptionsGate`).
+    @Published private(set) var captionsGate: CallCaptionsGate = .unresolved
+    private(set) var isCaptionsGateSettled = false
+    private let gateResolver: any CallCaptionsGateResolving
+    private var gateConversationId: String?
+    private var gateReading: Task<Void, Never>?
+
+    init(socket: any MessageSocketProviding = MessageSocketManager.shared, gateResolver: (any CallCaptionsGateResolving)? = nil) {
         self.socket = socket
+        self.gateResolver = gateResolver ?? CallCaptionsGateResolver()
     }
 
     #if DEBUG
@@ -134,7 +144,63 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     func setCallIdForTesting(_ value: String?) {
         callId = value
     }
+
+    func setCaptionsGateForTesting(_ gate: CallCaptionsGate) {
+        captionsGate = gate
+        isCaptionsGateSettled = true
+    }
     #endif
+
+    // MARK: - Captions gate (#13720)
+
+    /// Les sous-titres de cet appel peuvent-ils s'ouvrir ? Vrai seulement quand
+    /// le régime de `conversationId` est lu en clair. La première question
+    /// lance la lecture (une par appel et par conversation) et rend faux ;
+    /// `onSettled` est rappelé quand elle aboutit, pour que l'appelant
+    /// réconcilie avec la réponse.
+    func admitsCaptions(conversationId: String?, onSettled: @escaping @MainActor () -> Void) -> Bool {
+        if conversationId != gateConversationId || (!isCaptionsGateSettled && gateReading == nil) {
+            resetCaptionsGate()
+            gateConversationId = conversationId
+            let resolver = gateResolver
+            gateReading = Task { [weak self] in
+                let gate = await resolver.gate(conversationId: conversationId)
+                guard let self, !Task.isCancelled, self.gateConversationId == conversationId else { return }
+                self.captionsGate = gate
+                self.isCaptionsGateSettled = true
+                self.gateReading = nil
+                onSettled()
+            }
+        }
+        return captionsStillAllowed()
+    }
+
+    /// La porte ouverte se referme dès que l'appareil apprend la conversation
+    /// chiffrée de bout en bout, en cours d'appel compris.
+    private func captionsStillAllowed() -> Bool {
+        guard captionsGate.allowsCaptions else { return false }
+        guard let gateConversationId, gateResolver.remembersEndToEnd(conversationId: gateConversationId) else { return true }
+        captionsGate = .endToEnd
+        return false
+    }
+
+    /// Le refus réglé ferme ce qu'il interdit : la capture et le panneau.
+    /// Rend vrai quand l'utilisateur avait ouvert le panneau — à lui de lire
+    /// pourquoi il se referme.
+    func closeForRefusedCaptions() -> Bool {
+        if isTranscribing { stopTranscribing() }
+        let userAsked = isShowingOverlay
+        isShowingOverlay = false
+        return userAsked
+    }
+
+    private func resetCaptionsGate() {
+        gateReading?.cancel()
+        gateReading = nil
+        gateConversationId = nil
+        captionsGate = .unresolved
+        isCaptionsGateSettled = false
+    }
 
     // MARK: - Permission
 
@@ -164,6 +230,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     // MARK: - Lifecycle
 
     func startTranscribing(callId: String, localLanguage: String, localUserId: String, localDisplayName: String = "") {
+        guard captionsStillAllowed() else {
+            callsLogger.warning("startTranscribing refused — captions gate \(String(describing: self.captionsGate), privacy: .public)")
+            return
+        }
         guard !isTranscribing else {
             callsLogger.warning("startTranscribing called while already transcribing")
             return
@@ -285,6 +355,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         persistedSegments.removeAll()
         segments.removeAll()
         isShowingOverlay = false
+        resetCaptionsGate()
     }
 
     // MARK: - Local audio capture (jamais l'audio distant)
@@ -646,6 +717,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     ) {
         guard self.callId == callId else { return }
         guard isTranscribing else { return }
+        // #13720 — porte fermée en cours de capture : rien ne part, ni socket
+        // ni canal de données, et la capture s'arrête.
+        guard captionsStillAllowed() else { return stopTranscribing() }
         // Les révisions PARTIELLES partent toujours sur le data channel : la
         // capture peut tourner pour servir un PAIR qui écoute alors que le
         // panneau local est fermé (TranscriptionCapturePolicy) — les gâter

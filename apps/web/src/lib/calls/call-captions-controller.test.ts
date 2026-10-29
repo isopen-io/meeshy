@@ -320,11 +320,14 @@ describe('une conversation chiffrée de bout en bout n’envoie aucune parole à
   test('une conversation qui devient chiffrée pendant la capture : la phrase suivante ne part pas, la capture s’arrête', () => {
     let sealed = false;
     const h = harness({ regime: () => (sealed ? 'sealed' : 'clear') });
+    const link = channel();
+    h.port.attach(PEER, link as unknown as RTCDataChannel);
     h.port.toggle();
     expect(h.captures).toHaveLength(1);
     sealed = true;
     h.say('le code est 4512', true);
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([]);
+    expect(link.sent.some((raw) => raw.includes('4512'))).toBe(false);
     expect(h.captures[0]?.stopped).toBe(true);
     expect(h.call()?.transcription).toBe('sealed');
   });

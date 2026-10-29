@@ -315962,6 +315962,100 @@
           }
         }
       }
+    },
+    "call.captions.refused.e2ee": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الترجمة النصية غير متاحة في محادثة مشفرة من طرف إلى طرف."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel sind in einer Ende-zu-Ende-verschlüsselten Unterhaltung nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captions are unavailable in an end-to-end encrypted conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los subtítulos no están disponibles en una conversación cifrada de extremo a extremo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les sous-titres ne sont pas disponibles dans une conversation chiffrée de bout en bout."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I sottotitoli non sono disponibili in una conversazione crittografata end-to-end."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As legendas não estão disponíveis em uma conversa criptografada de ponta a ponta."
+          }
+        }
+      }
+    },
+    "call.captions.refused.unverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر فتح الترجمة النصية: لم يُتحقق من تشفير هذه المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel können nicht geöffnet werden: Die Verschlüsselung dieser Unterhaltung konnte nicht geprüft werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captions can’t open: this conversation’s encryption could not be verified."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los subtítulos no pueden abrirse: no se pudo verificar el cifrado de esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les sous-titres ne peuvent pas s’ouvrir : le chiffrement de cette conversation n’a pas pu être vérifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I sottotitoli non possono aprirsi: non è stato possibile verificare la crittografia di questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As legendas não podem ser abertas: não foi possível verificar a criptografia desta conversa."
+          }
+        }
+      }
     }
   },
   "version": "1.1"
