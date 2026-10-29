@@ -38,7 +38,10 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.group.CallInviteBoard
 import me.meeshy.sdk.model.call.group.CallInviteNotice
 import me.meeshy.sdk.model.call.group.CallPendingInvite
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -79,10 +82,18 @@ internal fun CallInviteBoardView(board: CallInviteBoard, onDismissNotice: () -> 
     }
 }
 
-/** Les invitations qui sonnent (iOS `CallInviteStrip`) : une information, pas un contrôle. */
+/**
+ * Les invitations qui sonnent (iOS `CallInviteStrip`) : une information, pas un contrôle. L'avatar de chaque invité
+ * porte sa présence (#13770, iOS `LivePresence` + `knownPresenceState`), telle que la passerelle l'a servie : un
+ * non-ami ou un invité hors ligne n'a aucun point, rien n'est fabriqué ici.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CallInviteStrip(invites: List<CallPendingInvite>, modifier: Modifier = Modifier) {
+internal fun CallInviteStrip(
+    invites: List<CallPendingInvite>,
+    modifier: Modifier = Modifier,
+    presenceOf: @Composable (String) -> PresenceState? = { rememberPresence(it) },
+) {
     val ringing = stringResource(R.string.call_invite_ringing)
     FlowRow(
         modifier = modifier.testTag(INVITE_STRIP_TAG),
@@ -101,7 +112,7 @@ internal fun CallInviteStrip(invites: List<CallPendingInvite>, modifier: Modifie
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
                 ) {
-                    MeeshyAvatar(name = invite.displayName, imageUrl = invite.avatarUrl, size = 24.dp)
+                    CallInviteAvatar(invite, presence = presenceOf(invite.userId))
                     Text(
                         text = invite.displayName,
                         style = MaterialTheme.typography.labelMedium,
@@ -121,6 +132,17 @@ internal fun CallInviteStrip(invites: List<CallPendingInvite>, modifier: Modifie
             }
         }
     }
+}
+
+/** L'avatar d'un invité qui sonne : 24 pt, son point de présence servie (iOS `context: .typingIndicator`). */
+@Composable
+internal fun CallInviteAvatar(invite: CallPendingInvite, presence: PresenceState?) {
+    MeeshyAvatar(
+        name = invite.displayName,
+        context = AvatarContext.TypingIndicator,
+        presence = presence,
+        imageUrl = invite.avatarUrl,
+    )
 }
 
 /** Le mot de retour d'une invitation (iOS `CallControlsNoticePill`) : il s'efface seul au bout de 4 s. */

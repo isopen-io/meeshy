@@ -10,9 +10,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.call.CallInviteOutcome
 import me.meeshy.sdk.model.call.group.CallInviteBoard
 import me.meeshy.sdk.model.call.group.CallPendingInvite
+import me.meeshy.ui.component.AvatarPresenceDotTestTag
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -70,5 +72,32 @@ class CallInviteBoardViewTest {
 
     private companion object {
         const val FRAME_MILLIS = 32L
+    }
+
+    @Test
+    fun `each ringing invitation reads its own served presence, by user id`() {
+        val asked = mutableListOf<String>()
+        rule.setContent {
+            MeeshyTheme {
+                CallInviteStrip(ringing.invites, presenceOf = { userId -> asked += userId; null })
+            }
+        }
+        rule.waitForIdle()
+        assertThat(asked.distinct()).containsExactly("bob", "carol").inOrder()
+    }
+
+    @Test
+    fun `an invitee's avatar carries a dot when present, none offline or unserved`() {
+        var presence by mutableStateOf<PresenceState?>(PresenceState.ONLINE)
+        rule.setContent { MeeshyTheme { CallInviteAvatar(CallPendingInvite("bob", "Bob"), presence) } }
+        rule.onAllNodesWithTag(AvatarPresenceDotTestTag, useUnmergedTree = true).assertCountEquals(1)
+
+        presence = PresenceState.OFFLINE
+        rule.waitForIdle()
+        rule.onAllNodesWithTag(AvatarPresenceDotTestTag, useUnmergedTree = true).assertCountEquals(0)
+
+        presence = null
+        rule.waitForIdle()
+        rule.onAllNodesWithTag(AvatarPresenceDotTestTag, useUnmergedTree = true).assertCountEquals(0)
     }
 }
