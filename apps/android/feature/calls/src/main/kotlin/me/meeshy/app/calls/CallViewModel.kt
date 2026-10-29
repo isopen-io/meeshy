@@ -175,6 +175,10 @@ class CallViewModel @Inject constructor(
      * room ([CallEvent.ParticipantJoined]) — offering earlier races the callee.
      */
     private fun onRemoteEvent(event: CallEvent) {
+        // An incoming call enters through start(config) only: the socket offer carries no
+        // identity here, and folding it first left the FSM ringing with a blank callId, so the
+        // screen's start() was inert and « Répondre » could never join the room.
+        if (event == CallEvent.ReceiveIncoming) return
         extensions.controllers.notifyRemoteEvent(event, session())
         dispatch(event)
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)

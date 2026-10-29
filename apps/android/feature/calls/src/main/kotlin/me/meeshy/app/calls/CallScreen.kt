@@ -191,7 +191,6 @@ fun CallScreen(
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
-                    accent = accent,
                     peer = peer,
                     reduceMotion = reduceMotion,
                     onAccept = {

@@ -514,6 +514,17 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `the socket offer folded before the incoming screen starts does not swallow the caller identity`() = runTest {
+        val vm = vm()
+        events.emit(CallEvent.ReceiveIncoming)
+        vm.start(incomingAudio)
+        vm.accept()
+
+        assertThat(vm.activeConfig).isEqualTo(incomingAudio)
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
     fun `declining an incoming call ends it on the wire`() {
         val vm = vm()
         vm.start(incomingAudio)
