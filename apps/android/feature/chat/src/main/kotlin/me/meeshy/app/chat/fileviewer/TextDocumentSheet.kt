@@ -43,7 +43,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.fileviewer.MarkdownBlock
@@ -81,7 +80,7 @@ internal fun TextDocumentSheet(request: FileViewerRequest, isMarkdown: Boolean, 
             if (read.isBinary) {
                 TextLoad.Failed
             } else {
-                withContext(Dispatchers.Default) {
+                withContext(FileViewerDispatchers.default) {
                     val blocks = if (isMarkdown) MarkdownBlocks.parse(read.text) else emptyList()
                     val lines = read.text.lines().map { if (it.length > MAX_LINE_CHARS) it.take(MAX_LINE_CHARS) + "…" else it }
                     TextLoad.Ready(read.text, lines, blocks, read.truncated)

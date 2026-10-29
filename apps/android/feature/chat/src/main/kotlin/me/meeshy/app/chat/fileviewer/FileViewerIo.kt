@@ -8,6 +8,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.IOException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,12 @@ import me.meeshy.sdk.model.contacts.vcard.VCard
 import me.meeshy.sdk.model.contacts.vcard.VCardParser
 import me.meeshy.sdk.model.fileviewer.BoundedTextReader
 
+/** Les dispatchers des visionneuses : ceux du système en production, remplaçables par les tests (aucun temps réel). */
+internal object FileViewerDispatchers {
+    @Volatile var io: CoroutineDispatcher = Dispatchers.IO
+    @Volatile var default: CoroutineDispatcher = Dispatchers.Default
+}
+
 /**
  * Ce que les visionneuses lisent du fichier téléchargé : tout passe par le `ContentResolver` sur l'URI que le
  * système a donnée au téléchargement (jamais un chemin de fichier), hors du fil principal, avec une borne de taille.
@@ -28,20 +35,20 @@ internal object FileViewerIo {
     /** Une carte de visite pèse quelques Ko ; au-delà, ce n'est plus une carte. */
     private const val MAX_CARD_BYTES = 256 * 1024
 
-    suspend fun readText(context: Context, uri: Uri): BoundedTextReader.Result = withContext(Dispatchers.IO) {
+    suspend fun readText(context: Context, uri: Uri): BoundedTextReader.Result = withContext(FileViewerDispatchers.io) {
         val stream = context.contentResolver.openInputStream(uri) ?: throw IOException("unreadable")
         stream.use { BoundedTextReader.read(it) }
     }
 
     /** La carte lue, ou `null` quand le fichier n'est pas une vCard lisible. */
-    suspend fun readCard(context: Context, uri: Uri): VCard? = withContext(Dispatchers.IO) {
+    suspend fun readCard(context: Context, uri: Uri): VCard? = withContext(FileViewerDispatchers.io) {
         val stream = context.contentResolver.openInputStream(uri) ?: throw IOException("unreadable")
         val read = stream.use { BoundedTextReader.read(it, MAX_CARD_BYTES) }
         if (read.isBinary || read.truncated) null else VCardParser.parse(read.text)
     }
 
     /** Copie le fichier téléchargé vers l'emplacement que l'utilisateur a choisi (sélecteur système). */
-    suspend fun copy(context: Context, from: Uri, to: Uri): Boolean = withContext(Dispatchers.IO) {
+    suspend fun copy(context: Context, from: Uri, to: Uri): Boolean = withContext(FileViewerDispatchers.io) {
         runCatching {
             val input = context.contentResolver.openInputStream(from) ?: return@runCatching false
             val output = context.contentResolver.openOutputStream(to, "w") ?: return@runCatching false
@@ -63,7 +70,7 @@ internal class PdfPages private constructor(
     private var closed = false
     val pageCount: Int = renderer.pageCount
 
-    suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(FileViewerDispatchers.io) {
         lock.withLock {
             if (closed) return@withLock null
             runCatching {
@@ -101,7 +108,7 @@ internal class PdfPages private constructor(
         private const val MAX_HEIGHT_PX = 3200
 
         /** Ouvre le document, ou `null` s'il est protégé, corrompu ou vide. */
-        suspend fun open(context: Context, uri: Uri): PdfPages? = withContext(Dispatchers.IO) {
+        suspend fun open(context: Context, uri: Uri): PdfPages? = withContext(FileViewerDispatchers.io) {
             val descriptor = runCatching { context.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
                 ?: return@withContext null
             runCatching {
