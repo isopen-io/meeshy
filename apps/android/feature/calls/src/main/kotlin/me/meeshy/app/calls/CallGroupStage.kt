@@ -43,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.call.CallInvitedUser
 import me.meeshy.sdk.model.call.GroupStageTapOutcome
 import me.meeshy.sdk.model.call.GroupStageTapRule
 import me.meeshy.sdk.model.call.group.CallInviteCandidates
@@ -221,7 +222,7 @@ internal fun CallAddPeopleSheet(
                 LazyColumn {
                     items(candidates, key = { it.id }) { friend ->
                         CallInviteRow(friend) {
-                            viewModel.invite(friend.id)
+                            viewModel.invite(CallInvitedUser(friend.id, friend.username, friend.displayName, friend.avatar))
                             onDismiss()
                         }
                     }

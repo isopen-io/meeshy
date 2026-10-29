@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.declined",
+          "androidName": "call_invite_declined",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.unanswered",
+          "androidName": "call_invite_unanswered",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.participants.more",
+          "androidName": "call_participants_more",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

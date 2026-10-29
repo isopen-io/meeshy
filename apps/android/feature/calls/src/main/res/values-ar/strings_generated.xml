@@ -69,10 +69,12 @@
     <string name="call_group_tile_speaking">يتحدث</string>
     <string name="call_group_tile_unknown">مشارك</string>
     <string name="call_group_tile_you">أنت</string>
+    <string name="call_invite_declined">رفض %1$s المكالمة</string>
     <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
     <string name="call_invite_ringing">يرنّ…</string>
     <string name="call_invite_sheet_empty">لا يوجد أصدقاء لإضافتهم</string>
     <string name="call_invite_sheet_title">إضافة إلى المكالمة</string>
+    <string name="call_invite_unanswered">لم يرد %1$s</string>
     <string name="call_journal_cancel">إلغاء</string>
     <string name="call_journal_clear_action">مسح</string>
     <string name="call_journal_clear_all">مسح الكل</string>
@@ -102,6 +104,7 @@
     <string name="call_moderation_cancel">إلغاء</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
+    <string name="call_participants_more">%1$s +%2$d</string>
     <string name="call_recording_accept">قبول</string>
     <string name="call_recording_active">التسجيل جارٍ</string>
     <string name="call_recording_ask">%1$s يريد تسجيل المكالمة</string>

@@ -69,10 +69,12 @@
     <string name="call_group_tile_speaking">Spricht</string>
     <string name="call_group_tile_unknown">Teilnehmer</string>
     <string name="call_group_tile_you">Du</string>
+    <string name="call_invite_declined">%1$s hat abgelehnt</string>
     <string name="call_invite_failed">Diese Person konnte nicht eingeladen werden</string>
     <string name="call_invite_ringing">Klingelt …</string>
     <string name="call_invite_sheet_empty">Keine Freunde zum Hinzufügen</string>
     <string name="call_invite_sheet_title">Zum Anruf hinzufügen</string>
+    <string name="call_invite_unanswered">%1$s hat nicht geantwortet</string>
     <string name="call_journal_cancel">Abbrechen</string>
     <string name="call_journal_clear_action">Löschen</string>
     <string name="call_journal_clear_all">Alle löschen</string>
@@ -102,6 +104,7 @@
     <string name="call_moderation_cancel">Abbrechen</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
+    <string name="call_participants_more">%1$s +%2$d</string>
     <string name="call_recording_accept">Zustimmen</string>
     <string name="call_recording_active">Aufnahme läuft</string>
     <string name="call_recording_ask">%1$s möchte den Anruf aufnehmen</string>

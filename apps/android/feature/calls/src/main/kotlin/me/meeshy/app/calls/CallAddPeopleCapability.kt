@@ -1,12 +1,10 @@
 package me.meeshy.app.calls
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import dagger.multibindings.IntoSet
@@ -26,7 +24,10 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallInvitedUser
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.group.CallInviteBoard
+import me.meeshy.sdk.model.call.group.CallPendingInvite
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CallSignalManager
@@ -35,26 +36,31 @@ import me.meeshy.ui.icons.MeeshyIcons
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Ce que le sélecteur « Ajouter à l'appel » montre : les amis lus, et ceux qui sonnent déjà. */
+/**
+ * Ce que le sélecteur « Ajouter à l'appel » et la bande au-dessus de la pilule montrent : les amis lus, ceux qui
+ * sonnent ([CallInviteBoard], #13753) et le mot qui suit la fin d'une invitation.
+ */
 data class CallInviteUi(
     val friends: List<FriendRequestUser> = emptyList(),
     val isLoaded: Boolean = false,
-    val ringing: Set<String> = emptySet(),
-)
+    val board: CallInviteBoard = CallInviteBoard(),
+) {
+    val ringing: Set<String> get() = board.ringingIds
+}
 
 /**
  * « Ajouter des personnes » (iOS `CallControlsController.invite` + `CallAddPeopleSheet`, #13740) : on fait
  * sonner un ami accepté dans l'appel en cours (`call:invite-participant`, à accusé) ; il sonne aussitôt dans la
- * liste (optimiste), et un refus de la passerelle le retire et se dit. Une invitation qui se solde (refus,
- * expiration) ou un invité qui rejoint quitte la liste de ceux qui sonnent. Décrocher passe par le `call:join`
- * ordinaire de l'invité, et le maillage de l'appel le relie à chacun ([GroupCallMesh]).
+ * bande (optimiste), et un refus de la passerelle le retire et se dit. Une invitation qui se solde dit « X a
+ * refusé » ou « X n'a pas répondu » (#13753, la passerelle tient le délai de sonnerie) ; un invité qui rejoint quitte
+ * la bande sans mot. Décrocher passe par le `call:join` ordinaire de l'invité, et le maillage de l'appel le relie à
+ * chacun ([GroupCallMesh]).
  */
 @Singleton
 class CallInviteController internal constructor(
     private val social: CallSocialSignalManager,
     private val signals: CallSignalManager,
     private val loadFriends: suspend () -> List<FriendRequestUser>?,
-    private val reportFailure: () -> Unit,
     private val scope: CoroutineScope,
 ) : CallFeatureController {
     @Inject
@@ -63,8 +69,6 @@ class CallInviteController internal constructor(
         signals: CallSignalManager,
         friends: FriendRepository,
         session: SessionRepository,
-        toasts: CallToastBus,
-        @ApplicationContext context: Context,
     ) : this(
         social = social,
         signals = signals,
@@ -72,7 +76,6 @@ class CallInviteController internal constructor(
             val me = session.currentUser.value?.id.orEmpty()
             friends.acceptedFriendRequests().getOrNull()?.let { ContactList.fromAcceptedRequests(it, me) }
         },
-        reportFailure = { toasts.error(context.getString(R.string.call_invite_failed)) },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
 
@@ -86,7 +89,7 @@ class CallInviteController internal constructor(
         when (next) {
             is CallState.Ended, CallState.Idle -> reset()
             else -> {
-                if (session.callId != callId) _state.update { it.copy(ringing = emptySet()) }
+                if (session.callId != callId) _state.update { it.copy(board = CallInviteBoard()) }
                 callId = session.callId
                 if (listening == null) listening = listen()
             }
@@ -103,34 +106,36 @@ class CallInviteController internal constructor(
         }
     }
 
-    /** Fait sonner [userId] dans l'appel ; `false` tant que l'appel n'a pas d'identifiant. */
-    fun invite(userId: String): Boolean {
+    /** Fait sonner [user] dans l'appel ; `false` tant que l'appel n'a pas d'identifiant, ou s'il sonne déjà. */
+    fun invite(user: CallInvitedUser): Boolean {
         val target = callId.ifBlank { return false }
-        _state.update { it.copy(ringing = it.ringing + userId) }
+        if (_state.value.board.isRinging(user.userId)) return false
+        board { it.inviting(CallPendingInvite.of(user)) }
         scope.launch {
-            social.inviteCallParticipant(target, userId).onFailure {
-                _state.update { it.copy(ringing = it.ringing - userId) }
-                reportFailure()
-            }
+            social.inviteCallParticipant(target, user.userId).onFailure { board { it.refused(user.userId) } }
         }
         return true
     }
 
+    /** Le mot de retour s'efface (au bout de [CallInviteBoard.NOTICE_DISPLAY_MILLIS], ou d'un toucher). */
+    fun dismissNotice() = board(CallInviteBoard::dismissingNotice)
+
     private fun listen(): Job = merge(
-        social.participantInvited.onEach { if (it.callId == callId) ring(it.invitee.userId) },
-        social.inviteSettled.onEach { if (it.callId == callId) settle(it.userId) },
-        signals.participantArrivals.onEach { if (it.callId == callId) settle(it.arrival.userId) },
+        social.participantInvited.onEach { event ->
+            if (event.callId == callId) board { it.ringing(CallPendingInvite.of(event.invitee)) }
+        },
+        social.inviteSettled.onEach { event -> if (event.callId == callId) board { it.settled(event.userId, event.outcome) } },
+        signals.participantArrivals.onEach { event -> if (event.callId == callId) board { it.withdrawn(event.arrival.userId) } },
     ).launchIn(scope)
 
-    private fun ring(userId: String) = _state.update { it.copy(ringing = it.ringing + userId) }
-
-    private fun settle(userId: String) = _state.update { it.copy(ringing = it.ringing - userId) }
+    private fun board(transform: (CallInviteBoard) -> CallInviteBoard) =
+        _state.update { it.copy(board = transform(it.board)) }
 
     private fun reset() {
         listening?.cancel()
         listening = null
         callId = ""
-        _state.update { it.copy(ringing = emptySet()) }
+        _state.update { it.copy(board = CallInviteBoard()) }
     }
 }
 
@@ -160,7 +165,7 @@ class CallAddPeopleActionHandler @Inject constructor(
 class CallInviteViewModel @Inject constructor(private val controller: CallInviteController) : ViewModel() {
     val state: StateFlow<CallInviteUi> = controller.state
 
-    fun invite(userId: String): Boolean = controller.invite(userId)
+    fun invite(user: CallInvitedUser): Boolean = controller.invite(user)
 }
 
 @Module
@@ -169,6 +174,10 @@ interface CallAddPeopleCapabilityModule {
     @Binds
     @IntoSet
     fun bindInviteFeatureController(impl: CallInviteController): CallFeatureController
+
+    @Binds
+    @IntoSet
+    fun bindInviteOverlay(impl: CallInviteOverlay): CallOverlay
 
     @Binds
     @IntoMap
