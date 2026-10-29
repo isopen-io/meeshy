@@ -325,6 +325,11 @@ class MyStoriesViewModel internal constructor(
     /**
      * L'audience d'abord (seulement si elle change), la republication ensuite : une republication
      * qui échoue rend l'audience précédente — rien n'est élargi sans que la story soit repartie.
+     *
+     * « Change » se mesure contre l'audience RELUE au serveur au moment de confirmer, jamais contre
+     * le cache qui a peint la feuille : une écriture précédente dont la restauration a échoué, ou un
+     * autre appareil, a pu la changer, et la story repartirait alors avec une audience que l'auteur
+     * n'a pas confirmée. Sans relecture, l'audience confirmée est écrite.
      */
     private fun confirmRepublish() {
         val pending = _state.value.pendingRepublish ?: return
@@ -332,7 +337,10 @@ class MyStoriesViewModel internal constructor(
         _state.update { it.copy(pendingRepublish = null, isRepublishing = true) }
         viewModelScope.launch {
             val ticket = storyRepository.ticket()
-            val change = StoryRepublishAudience.change(pending.rawVisibility, pending.rawUserIds, pending.choice)
+            val server = (postRepository.getPost(pending.storyId) as? NetworkResult.Success)?.data
+            val change = StoryRepublishAudience.change(server?.visibility, server?.visibilityUserIds, pending.choice)
+            val restoreVisibility = server?.visibility ?: pending.rawVisibility
+            val restoreUserIds = if (server != null) server.visibilityUserIds else pending.rawUserIds
             val audienceApplied = change !is StoryRepublishAudience.Change.Apply ||
                 writeAudience(pending.storyId, change.visibility.wire, change.userIds)
             if (!audienceApplied) {
@@ -350,7 +358,7 @@ class MyStoriesViewModel internal constructor(
                     }
                     is NetworkResult.Failure -> {
                         if (change is StoryRepublishAudience.Change.Apply) {
-                            pending.rawVisibility?.let { writeAudience(pending.storyId, it, pending.rawUserIds.orEmpty()) }
+                            restoreVisibility?.let { writeAudience(pending.storyId, it, restoreUserIds.orEmpty()) }
                         }
                         _effects.send(MyStoriesUiEffect.RepublishFailed)
                     }
