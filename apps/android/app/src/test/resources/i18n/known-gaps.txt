@@ -1698,3 +1698,4 @@ bare-specifier :feature:auth en visitor_shared_by_reel
 bare-specifier :feature:auth en visitor_shared_by_story
 bare-specifier :feature:chat en guest_attach_title
 bare-specifier :feature:chat en share_toast_sent_to
+bare-specifier :feature:chat en contact_card_a11y_on_meeshy
