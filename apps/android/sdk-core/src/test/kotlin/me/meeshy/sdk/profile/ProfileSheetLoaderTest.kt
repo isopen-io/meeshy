@@ -61,6 +61,41 @@ class ProfileSheetLoaderTest {
         assertThat(remote.profileCalls).isEqualTo(1)
     }
 
+    private val threeHoursAgo = "2026-10-29T09:00:00.000Z"
+
+    private suspend fun cacheLegacyBobSeenThreeHoursAgo() {
+        val row = kotlinx.serialization.json.Json.encodeToString(
+            MeeshyUser.serializer(),
+            bob.copy(isOnline = true, lastActiveAt = threeHoursAgo),
+        )
+        db.keyedJsonCacheDao().upsert(
+            me.meeshy.core.database.entity.KeyedJsonCacheEntity(ProfileCacheRepository.NAMESPACE, id, row, 1L),
+        )
+    }
+
+    @Test
+    fun `hors ligne une fiche datee de trois heures en cache n'affiche ni date ni point`() = runTest {
+        cacheLegacyBobSeenThreeHoursAgo()
+        val states = loader(FakeRemote(failure(null, "NETWORK"), failure(null))).states(id, "bob")
+        assertThat(states).isNotEmpty()
+        states.forEach {
+            assertThat(it.profile?.lastActiveAt).isNull()
+            assertThat(it.profile?.isOnline).isNull()
+            assertThat(it.profile?.displayName).isEqualTo("Bob")
+        }
+    }
+
+    @Test
+    fun `en ligne la presence servie fraiche s'affiche et le cache peint d'abord sans presence`() = runTest {
+        cacheLegacyBobSeenThreeHoursAgo()
+        val served = bob.copy(isOnline = true, lastActiveAt = "2026-10-29T12:00:00.000Z")
+        val states = loader(FakeRemote(ok(served), failure(null))).states(id, "bob")
+        assertThat(states.first().profile?.lastActiveAt).isNull()
+        assertThat(states.last().profile?.isOnline).isTrue()
+        assertThat(states.last().profile?.lastActiveAt).isEqualTo("2026-10-29T12:00:00.000Z")
+        assertThat(profiles.cachedProfile(id)?.lastActiveAt).isNull()
+    }
+
     @Test
     fun `statistiques du meme document mises en cache sous l'id`() = runTest {
         val remote = FakeRemote(ok(), failure(500))
