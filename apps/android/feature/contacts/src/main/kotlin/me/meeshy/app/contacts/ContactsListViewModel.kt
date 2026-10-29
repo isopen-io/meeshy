@@ -98,6 +98,14 @@ class ContactsListViewModel @Inject constructor(
     private val _state = MutableStateFlow(ContactsListUiState())
     val state: StateFlow<ContactsListUiState> = _state.asStateFlow()
 
+    /**
+     * Le carnet tel que le SERVEUR l'a servi (REST, ou son dernier écrit relu du cache) — jamais
+     * recouvert. C'est la seule source de [ContactsListUiState.friends] (recouverte de la carte de
+     * présence à chaque lecture) ET la seule liste écrite en base : recouvrir l'état courant
+     * ferait survivre une présence que la carte a retirée, et la repeindrait au démarrage suivant.
+     */
+    private var servedRoster: List<FriendRequestUser> = emptyList()
+
     private var lastReconciledFriendIds: Set<String> = friendshipCache.currentFriendIds
 
     init {
@@ -146,9 +154,10 @@ class ContactsListViewModel @Inject constructor(
     private suspend fun paintFromCache() {
         if (_state.value.friends.isNotEmpty()) return
         val cached = friendListRepository.cachedSnapshot()
+        if (cached != null) servedRoster = BlockedExclusion.friends(cached, blockCache.currentBlockedIds)
         _state.update {
             if (cached == null) it.copy(isLoading = true)
-            else it.copy(friends = withPresence(BlockedExclusion.friends(cached, blockCache.currentBlockedIds)), isLoading = false)
+            else it.copy(friends = withPresence(servedRoster), isLoading = false)
         }
     }
 
@@ -184,9 +193,10 @@ class ContactsListViewModel @Inject constructor(
                 val received = BlockedExclusion.requests(graph.data.received, blockedIds)
                 friendshipCache.hydrate(sent = sent, received = received, ticket = ticket)
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
-                val friends = ContactList.fromAcceptedRequests(received + sent, currentUserId)
-                _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }
-                friendListRepository.persist(friends, ticket)
+                servedRoster = ContactList.fromAcceptedRequests(received + sent, currentUserId)
+                val persisted = servedRoster
+                _state.update { it.copy(friends = withPresence(persisted), isLoading = false, errorMessage = null) }
+                friendListRepository.persist(persisted, ticket)
             }
             is NetworkResult.Failure -> _state.update {
                 it.copy(
@@ -212,7 +222,7 @@ class ContactsListViewModel @Inject constructor(
     private fun observePresence() {
         viewModelScope.launch {
             presenceStore.entries.collect { entries ->
-                _state.update { it.copy(friends = PresenceOverlay.apply(it.friends, entries)) }
+                _state.update { it.copy(friends = PresenceOverlay.apply(servedRoster, entries)) }
             }
         }
     }
@@ -225,10 +235,11 @@ class ContactsListViewModel @Inject constructor(
         if (cacheIds == lastReconciledFriendIds) return
         lastReconciledFriendIds = cacheIds
 
-        val current = _state.value.friends
+        val current = servedRoster
         val result = ContactList.reconcile(current, cacheIds)
         if (result.friends != current) {
-            _state.update { it.copy(friends = result.friends) }
+            servedRoster = result.friends
+            _state.update { it.copy(friends = withPresence(result.friends)) }
             val ticket = friendListRepository.ticket()
             viewModelScope.launch { friendListRepository.persist(result.friends, ticket) }
         }
