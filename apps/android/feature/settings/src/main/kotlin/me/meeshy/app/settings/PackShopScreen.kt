@@ -335,8 +335,11 @@ internal fun PackRow(
     }
 }
 
-/** Un pack sans prix et pas verrouillé le dit (« Gratuit »), et offre en plus « Installer / Retirer ». */
-internal val ShopPack.showsFree: Boolean get() = meeshes == null && !isLocked
+/**
+ * Un pack sans prix, à moi et pas verrouillé le dit (« Gratuit »), et offre en plus « Installer / Retirer ». Un pack à
+ * gagner que le jeu n'a pas encore donné n'est pas gratuit, même sans prix.
+ */
+internal val ShopPack.showsFree: Boolean get() = meeshes == null && isOwned && !isLocked
 
 @Composable
 private fun LockedBadge() {

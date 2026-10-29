@@ -126,6 +126,10 @@ class PackShopRepository(
      * pas à moi répond `403 PACK_NOT_OWNED`, lu comme un refus définitif. Le cache ne reçoit que SA réponse (l'état servi,
      * jamais le geste), puis le profil et la liste des packs installés l'apprennent par [installations] — le même chemin
      * qu'un événement d'un autre appareil. Un compte clos entre-temps n'écrit ni n'annonce rien.
+     *
+     * La possession annoncée est celle que le serveur a VÉRIFIÉE : une installation confirmée prouve le pack à moi (sinon
+     * `403`), un retrait ne vérifie rien — le résumé qu'il rend dit `owned: true` d'office — donc il n'annonce aucune
+     * possession, comme `pack:installation-updated` de la passerelle, et celle déjà connue est gardée.
      */
     suspend fun setInstalled(domain: AppearancePackDomain, slug: String, installed: Boolean): PackInstallOutcome {
         val ticket = cache.ticket()
@@ -138,7 +142,7 @@ class PackShopRepository(
                 }
                 if (fence == null || ticket == null || fence.isCurrent(ticket)) {
                     _installations.emit(
-                        PackInstallationUpdatedEvent(domain.wire, slug, installed = confirmed.installed, owned = confirmed.owned),
+                        PackInstallationUpdatedEvent(domain.wire, slug, installed = confirmed.installed, owned = confirmed.owned.takeIf { installed }),
                     )
                 }
                 PackInstallOutcome.Done(confirmed)

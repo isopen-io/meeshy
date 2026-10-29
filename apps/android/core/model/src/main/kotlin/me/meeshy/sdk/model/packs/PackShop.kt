@@ -56,10 +56,11 @@ data class ShopPack(
     val coverPath: String? get() = coverUrl?.trim()?.takeIf { it.isNotEmpty() }
 
     /**
-     * Installer / retirer est offert : à moi (gratuit ou acheté) et débloqué — le serveur refuserait sinon
-     * (`403 PACK_NOT_OWNED`). Un pack déjà installé se retire toujours (iOS `togglingInstall`).
+     * Installer / retirer est offert : installer exige un pack à moi (gratuit, acheté ou GAGNÉ) et débloqué — le serveur
+     * refuserait sinon (`403 PACK_NOT_OWNED`), y compris pour un pack à gagner dont l'objectif est atteint mais que le
+     * jeu n'a pas encore donné. Un pack déjà installé se retire toujours (iOS `togglingInstall`).
      */
-    val canToggleInstall: Boolean get() = !needsPurchase && (installed || !isLocked)
+    val canToggleInstall: Boolean get() = !needsPurchase && (installed || (isOwned && !isLocked))
 
     /** Payant et pas encore à moi. */
     val needsPurchase: Boolean get() = meeshes != null && !isOwned

@@ -170,6 +170,17 @@ class PackShopTest {
     }
 
     @Test
+    fun `a pack to earn whose goal is met but not yet granted cannot be installed, the server would refuse it`() {
+        val metNotGranted = pack(owned = false, requirementPreview = """{"met":true}""")
+
+        assertThat(metNotGranted.isLocked).isFalse()
+        assertThat(metNotGranted.needsPurchase).isFalse()
+        assertThat(metNotGranted.canToggleInstall).isFalse()
+        assertThat(pack(owned = false).canToggleInstall).isFalse()
+        assertThat(pack(owned = false).copy(installed = true).canToggleInstall).isTrue()
+    }
+
+    @Test
     fun `a locked pack that is already installed can still be removed`() {
         val installedLocked = pack(requirementPreview = """{"met":false}""").copy(installed = true)
 

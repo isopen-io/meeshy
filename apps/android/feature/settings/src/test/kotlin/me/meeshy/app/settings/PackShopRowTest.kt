@@ -98,6 +98,15 @@ class PackShopRowTest {
     }
 
     @Test
+    fun `a pack to earn whose goal is met but not yet granted is neither free nor installable`() {
+        val met = kotlinx.serialization.json.buildJsonObject { put("met", kotlinx.serialization.json.JsonPrimitive(true)) }
+        showToggling(ShopPack(slug = "gagne", name = "Gagné", owned = false, requirementPreview = met))
+
+        compose.onNodeWithText("Install").assertDoesNotExist()
+        compose.onNodeWithText("Free").assertDoesNotExist()
+    }
+
+    @Test
     fun `the install gesture is read by its action and the pack name`() {
         showToggling(ShopPack(slug = "base", name = "Essentials", owned = true))
 

@@ -315,6 +315,21 @@ class PackShopRepositoryTest {
         io.mockk.coVerify(exactly = 1) { api.uninstall("avatar-ring", "prestige") }
     }
 
+    @Test fun `a removal never announces a possession the server did not check`() = runTest {
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = ownedRingShop())
+        val repository = repository()
+        repository.refresh()
+        coEvery { api.uninstall("avatar-ring", "prestige") } returns ApiResponse(
+            success = true,
+            data = ShopPack(slug = "prestige", owned = true, installed = false, installCount = 3),
+        )
+        val announced = async(kotlinx.coroutines.Dispatchers.Unconfined) { repository.installations.first() }
+
+        repository.setInstalled(AppearancePackDomain.AVATAR_RING, "prestige", installed = false)
+
+        assertThat(announced.await().owned).isNull()
+    }
+
     @Test fun `a refused install changes nothing, announces nothing, and a not owned pack is a definitive refusal`() = runTest {
         coEvery { api.shop(domains) } returns ApiResponse(success = true, data = ownedRingShop())
         val repository = repository()
