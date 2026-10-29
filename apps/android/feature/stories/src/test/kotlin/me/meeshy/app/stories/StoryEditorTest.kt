@@ -21,12 +21,14 @@ import org.junit.Test
 
 class StoryEditorTest {
 
+    private val reader: StoryServedReader = mockk()
     private val posts: PostRepository = mockk(relaxed = true)
     private val stories: StoryRepository = mockk(relaxed = true)
-    private val session: SessionRepository = mockk(relaxed = true)
-    private val editor = StoryEditor(posts, stories, session)
+    private val session: SessionRepository = mockk(relaxed = true) { every { currentUserId } returns ME }
+    private val editor = StoryEditor(reader, posts, stories, session)
     private val post = StoryEditFixtures.iosPost
     private val opening = StoryEditFixtures.opening()
+    private val servedStory = ServedStory(post, StoryEditFixtures.servedFor(post))
     private val cached = post.copy(isViewedByMe = false, viewCount = 12)
 
     private fun privateAudience(): StoryComposerUiState {
@@ -36,38 +38,37 @@ class StoryEditorTest {
 
     @Test
     fun `ouvrir une story de l'utilisateur la releve au serveur et sait qu'elle porte toutes ses references`() = runTest {
-        every { session.currentUserId } returns ME
-        coEvery { posts.getPost("p1") } returns NetworkResult.Success(post)
+        coEvery { reader.read("p1") } returns servedStory
 
         val opened = editor.open("p1")
 
         assertThat(opened!!.mentionsKnown).isTrue()
         assertThat(opened.slide.text).isEqualTo("Bonjour")
+        assertThat(opened.served).isEqualTo(servedStory.effects)
     }
 
     @Test
     fun `hors ligne la story se rouvre depuis le cache mais ne parle plus des references silencieuses`() = runTest {
-        every { session.currentUserId } returns ME
-        coEvery { posts.getPost("p1") } returns NetworkResult.Failure(ApiError("offline"))
+        coEvery { reader.read("p1") } returns null
         coEvery { stories.cachedStories() } returns listOf(cached)
 
         val opened = editor.open("p1")
 
         assertThat(opened!!.mentionsKnown).isFalse()
+        assertThat(opened.served).isNull()
     }
 
     @Test
     fun `la story d'un autre auteur ne se rouvre pas`() = runTest {
         every { session.currentUserId } returns "someone-else"
-        coEvery { posts.getPost("p1") } returns NetworkResult.Success(post)
+        coEvery { reader.read("p1") } returns servedStory
 
         assertThat(editor.open("p1")).isNull()
     }
 
     @Test
     fun `un post qui n'est pas une story ne se rouvre pas ici`() = runTest {
-        every { session.currentUserId } returns ME
-        coEvery { posts.getPost("p1") } returns NetworkResult.Success(post.copy(type = "POST"))
+        coEvery { reader.read("p1") } returns servedStory.copy(post = post.copy(type = "POST"))
 
         assertThat(editor.open("p1")).isNull()
     }
@@ -113,6 +114,48 @@ class StoryEditorTest {
         assertThat(failure).isEqualTo(StoryEditErrors.FAILED)
         assertThat(adopted.last()).isEqualTo(cached)
         assertThat(adopted.first().visibility).isEqualTo("PRIVATE")
+    }
+
+    @Test
+    fun `une story rouverte du cache relit son blob servi avant d'ecrire, et c'est sur lui qu'elle s'ecrit`() = runTest {
+        coEvery { stories.cachedStories() } returns listOf(cached)
+        coEvery { reader.read("p1") } returns servedStory
+        val sent = slot<UpdatePostRequest>()
+        coEvery { posts.update("p1", capture(sent)) } returns NetworkResult.Success(post)
+        val fromCache = StoryEditFixtures.opening(served = null)
+        val state = StoryEditFixtures.opened(fromCache).let { opened ->
+            val slide = opened.deck.selectedSlide
+            opened.copy(deck = StorySlideDeck(listOf(slide.copy(elements = slide.elements.map { if (it.id == "t2") it.copy(text = "Bonsoir") else it })), slide.id))
+        }
+
+        val failure = editor.save(fromCache, state, "fr")
+
+        assertThat(failure).isNull()
+        assertThat(sent.captured.storyEffects!!.document!!["musicTrackId"].toString()).isEqualTo("\"legacy-track-9\"")
+    }
+
+    @Test
+    fun `une story rouverte du cache ne s'ecrit pas quand son blob servi reste injoignable`() = runTest {
+        coEvery { stories.cachedStories() } returns listOf(cached)
+        coEvery { reader.read("p1") } returns null
+
+        val failure = editor.save(StoryEditFixtures.opening(served = null), privateAudience(), "fr")
+
+        assertThat(failure).isEqualTo(StoryEditErrors.OFFLINE)
+        coVerify(exactly = 0) { posts.update(any<String>(), any<UpdatePostRequest>()) }
+        coVerify(exactly = 0) { stories.adoptPublished(any()) }
+    }
+
+    @Test
+    fun `un compte change pendant l'edition n'ecrit rien, ni au serveur ni dans sa barre`() = runTest {
+        every { session.currentUserId } returns "64f0a1b2c3d4e5f6a7b8c9ff"
+        coEvery { stories.cachedStories() } returns listOf(cached)
+
+        val failure = editor.save(opening, privateAudience(), "fr")
+
+        assertThat(failure).isEqualTo(StoryEditErrors.UNAVAILABLE)
+        coVerify(exactly = 0) { posts.update(any<String>(), any<UpdatePostRequest>()) }
+        coVerify(exactly = 0) { stories.adoptPublished(any()) }
     }
 
     @Test

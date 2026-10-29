@@ -2,9 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
-import me.meeshy.sdk.model.CanvasV3Migration
 import me.meeshy.sdk.model.PostMentionInput
-import me.meeshy.sdk.model.SceneV3
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySticker
@@ -26,6 +24,9 @@ internal object StoryEditErrors {
     const val OFFLINE = "story-edit-offline"
     const val ONE_SLIDE = "story-edit-one-slide"
     const val UNAVAILABLE = "story-edit-unavailable"
+
+    /** La story s'est rouverte du cache : son blob servi n'est pas encore relu, rien ne s'écrit sans lui. */
+    const val BASE_UNKNOWN = "story-edit-base-unknown"
 }
 
 /**
@@ -46,6 +47,7 @@ internal object StoryEditMerge {
         val slides = state.deck.publishableSlides
         if (slides.size != 1) return StoryEditPlan.Refused(StoryEditErrors.ONE_SLIDE)
         if (state.pendingUploads.isNotEmpty()) return StoryEditPlan.Refused(StoryEditErrors.OFFLINE)
+        val served = opening.served ?: return StoryEditPlan.Refused(StoryEditErrors.BASE_UNKNOWN)
         val slide = slides.single()
         val create = publishPlans(state, language).single().request
         val merged = effects(opening, slide, create.storyEffects)
@@ -62,7 +64,7 @@ internal object StoryEditMerge {
             visibility = visibility.wire.takeIf { audienceChanged },
             visibilityUserIds = userIds.takeIf { audienceChanged && visibility.requiresUserSelection },
             removeMediaIds = removed.takeIf { it.isNotEmpty() },
-            storyEffects = wire(opening, merged),
+            storyEffects = StoryEditDocument.written(served.json, opening.effects, merged)?.let { StoryEffects(document = it) },
             mediaIds = attach.takeIf { it.isNotEmpty() },
             mentions = state.draft.mentions.takeIf { mentionsChanged },
             allowSoundExtraction = state.draft.allowSoundExtraction,
@@ -84,11 +86,11 @@ internal object StoryEditMerge {
             textObjects = texts(original.textObjects, slide.elements, hydrated.elements, built.textObjects),
             stickerObjects = stickers(opening, slide, built.stickerObjects.orEmpty()),
             mediaObjects = medias(opening, slide, built.mediaObjects.orEmpty()),
-            drawingStrokes = built.drawingStrokes,
+            drawingStrokes = if (slide.strokes == hydrated.strokes) original.drawingStrokes else built.drawingStrokes,
             filter = if (filterKept) original.filter else built.filter,
             filterIntensity = if (filterKept) original.filterIntensity else built.filterIntensity,
-            timelineDuration = built.timelineDuration,
-            audioPlayerObjects = built.audioPlayerObjects,
+            timelineDuration = if (slide.durationSecondsPin == hydrated.durationSecondsPin) original.timelineDuration else built.timelineDuration,
+            audioPlayerObjects = if (slide.audio == hydrated.audio) original.audioPlayerObjects else built.audioPlayerObjects,
             backgroundTransform = if (frameKept) original.backgroundTransform else framed(original, built),
             opening = if (frameKept) original.opening else built.opening,
             closing = if (frameKept) original.closing else built.closing,
@@ -109,14 +111,35 @@ internal object StoryEditMerge {
         val openedById = opened.associateBy { it.id }
         return now.filter { it.isPublishable }.zip(built).map { (element, wire) ->
             val original = byId[element.id]
-            if (original != null && element == openedById[element.id]) original else wire.keeping(original)
+            val before = openedById[element.id]
+            if (original == null || before == null) wire else touched(original, element, before, wire)
         }
     }
 
-    /** Un texte modifié repart avec ce que le composeur ne tient pas (keyframes, verrou, nom, rang, ancre) ; ses traductions, elles, sont périmées. */
-    private fun StoryTextObject.keeping(original: StoryTextObject?): StoryTextObject = original?.let {
-        copy(keyframes = it.keyframes, isLocked = it.isLocked, name = it.name, zIndex = it.zIndex, anchor = it.anchor, fontFamily = it.fontFamily, fontWeight = it.fontWeight)
-    } ?: this
+    /**
+     * Un texte touché : l'ORIGINAL, dont seuls les traits que le geste a changés prennent la forme du composeur. Déplacer un
+     * texte ne lui retire ni ses traductions, ni son effet, ni son fond ; seules en changer les mots périme ses traductions.
+     */
+    private fun touched(original: StoryTextObject, now: StoryTextElement, before: StoryTextElement, wire: StoryTextObject): StoryTextObject =
+        TEXT_TRAITS.filter { (changed, _) -> changed(now, before) }.fold(original) { text, (_, take) -> take(text, wire) }
+
+    private val TEXT_TRAITS: List<Pair<(StoryTextElement, StoryTextElement) -> Boolean, (StoryTextObject, StoryTextObject) -> StoryTextObject>> = listOf(
+        { a: StoryTextElement, b: StoryTextElement -> a.text != b.text } to { o: StoryTextObject, w: StoryTextObject -> o.copy(text = w.text, translations = null) },
+        { a: StoryTextElement, b: StoryTextElement -> a.x != b.x || a.y != b.y } to { o: StoryTextObject, w: StoryTextObject -> o.copy(x = w.x, y = w.y) },
+        { a: StoryTextElement, b: StoryTextElement -> a.scale != b.scale || a.size != b.size } to { o: StoryTextObject, w: StoryTextObject -> o.copy(scale = w.scale, fontSize = w.fontSize) },
+        { a: StoryTextElement, b: StoryTextElement -> a.rotationDeg != b.rotationDeg } to { o: StoryTextObject, w: StoryTextObject -> o.copy(rotation = w.rotation) },
+        { a: StoryTextElement, b: StoryTextElement -> a.style != b.style } to { o: StoryTextObject, w: StoryTextObject -> o.copy(textStyle = w.textStyle, textEffect = w.textEffect) },
+        { a: StoryTextElement, b: StoryTextElement -> a.color != b.color } to { o: StoryTextObject, w: StoryTextObject -> o.copy(textColor = w.textColor) },
+        { a: StoryTextElement, b: StoryTextElement -> a.align != b.align } to { o: StoryTextObject, w: StoryTextObject -> o.copy(textAlign = w.textAlign) },
+        { a: StoryTextElement, b: StoryTextElement -> a.background != b.background } to { o: StoryTextObject, w: StoryTextObject -> o.copy(textBg = w.textBg, backgroundStyle = w.backgroundStyle) },
+        { a: StoryTextElement, b: StoryTextElement -> a.outline != b.outline } to { o: StoryTextObject, w: StoryTextObject -> o.copy(borderColor = w.borderColor, borderWidth = w.borderWidth) },
+        { a: StoryTextElement, b: StoryTextElement -> a.frame != b.frame } to { o: StoryTextObject, w: StoryTextObject ->
+            o.copy(frameShape = w.frameShape, framePaddingScale = w.framePaddingScale, frameBorderWidth = w.frameBorderWidth, frameBorderColor = w.frameBorderColor)
+        },
+        { a: StoryTextElement, b: StoryTextElement -> a.fade != b.fade } to { o: StoryTextObject, w: StoryTextObject -> o.copy(fadeIn = w.fadeIn, fadeOut = w.fadeOut) },
+        { a: StoryTextElement, b: StoryTextElement -> a.timing != b.timing } to { o: StoryTextObject, w: StoryTextObject -> o.copy(startTime = w.startTime, duration = w.duration) },
+        { a: StoryTextElement, b: StoryTextElement -> a.sourceLanguage != b.sourceLanguage } to { o: StoryTextObject, w: StoryTextObject -> o.copy(sourceLanguage = w.sourceLanguage) },
+    )
 
     private fun stickers(opening: StoryEditOpening, slide: StorySlide, built: List<StorySticker>): List<StorySticker>? {
         val byId = opening.effects.stickerObjects.orEmpty().associateBy { it.id }
@@ -170,15 +193,6 @@ internal object StoryEditMerge {
         val onPost = opening.post.media.orEmpty().mapTo(mutableSetOf()) { it.id }
         val kept = slide.audio.map { it.postMediaId }.toSet()
         return opening.slide.audio.map { it.postMediaId }.filter { it.isNotBlank() && it in onPost && it !in kept }
-    }
-
-    /** Un document v3 quand l'origine porte ce que le fil v1 ne sait pas dire ; sinon le fil v1 de `createStory`. */
-    fun wire(opening: StoryEditOpening, merged: StoryEffects): StoryEffects {
-        val extras = opening.effects.unpaintableObjects
-        if (extras.isEmpty() && opening.effects.layout == null) return merged
-        val document = CanvasV3Migration.migrate(merged)
-        val scenes = document.scenes.ifEmpty { listOf(SceneV3(id = "s1")) }
-        return StoryEffects(canvas = document.copy(scenes = scenes.mapIndexed { i, scene -> if (i == 0) scene.copy(objects = scene.objects + extras) else scene }))
     }
 
     private fun optimistic(opening: StoryEditOpening, state: StoryComposerUiState, request: UpdatePostRequest, merged: StoryEffects, removed: List<String>): ApiPost {

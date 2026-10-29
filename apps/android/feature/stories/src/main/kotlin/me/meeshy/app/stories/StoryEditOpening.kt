@@ -42,6 +42,11 @@ internal data class StoryEditOpening(
     val mentions: List<PostMentionInput>,
     /** `false` : la charge ne portait pas les références SILENCIEUSES — l'enregistrement n'en parle pas plutôt que de les révoquer. */
     val mentionsKnown: Boolean,
+    /**
+     * Le blob tel que la passerelle le tient, base de l'écriture ([StoryEditDocument]). `null` : la story s'est rouverte du
+     * cache, qui ne le garde pas — l'enregistrement le relit avant de rien écrire.
+     */
+    val served: ServedStoryEffects? = null,
 ) {
     val postId: String get() = post.id
 
@@ -63,7 +68,7 @@ internal data class StoryEditOpening(
 
     companion object {
         /** La largeur de référence d'un cadrage de fond : le composeur n'a pas encore mesuré son canevas à l'ouverture. */
-        fun open(post: ApiPost, mentionsKnown: Boolean): StoryEditOpening {
+        fun open(post: ApiPost, mentionsKnown: Boolean, served: ServedStoryEffects? = null): StoryEditOpening {
             val effects = post.storyEffects ?: StoryEffects()
             val media = post.media.orEmpty().associateBy { it.id }
             val objects = effects.mediaObjects.orEmpty()
@@ -115,6 +120,7 @@ internal data class StoryEditOpening(
                     .filter { it.display != PostReferenceDisplay.INLINE }
                     .map { PostMentionInput(userId = it.userId, username = it.username, display = it.display.wire) },
                 mentionsKnown = mentionsKnown,
+                served = served,
             )
         }
 

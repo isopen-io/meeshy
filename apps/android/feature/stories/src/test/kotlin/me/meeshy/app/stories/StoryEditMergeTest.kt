@@ -4,8 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.Json
 import me.meeshy.app.stories.StoryEditFixtures.BACKGROUND_VIDEO
 import me.meeshy.app.stories.StoryEditFixtures.FOREGROUND_PHOTO
-import me.meeshy.sdk.model.AnchorV3
-import me.meeshy.sdk.model.ObjectV3
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryVisibility
@@ -49,32 +47,16 @@ class StoryEditMergeTest {
         assertThat(request.mentions).isNull()
         assertThat(request.originalLanguage).isNull()
         assertThat(request.type).isNull()
+        assertThat(request.storyEffects).isNull()
     }
 
     @Test
-    fun `l'aller-retour par le fil v3 garde la disposition d'iOS et l'ecrit comme un document de scene`() {
-        val wire = production.encodeToString(UpdatePostRequest.serializer(), ready().request)
+    fun `sans disposition ni objet inconnu une story v1 modifiee garde le fil v1 de createStory`() {
+        val plain = StoryEditFixtures.iosEffects.replace(",\n  \"layout\": \"hero\"", "")
+        val opening = StoryEditFixtures.opening(served = StoryEditFixtures.served(plain))
+        val state = edited(StoryEditFixtures.opened(opening)) { it.copy(elements = it.elements.map { e -> if (e.id == "t2") e.copy(text = "Bonsoir") else e }) }
 
-        assertThat(wire).contains("\"v\":3")
-        assertThat(wire).contains("\"layout\":\"hero\"")
-    }
-
-    @Test
-    fun `un objet de scene que ce build ne peint pas reste dans le document ecrit`() {
-        val mention = ObjectV3(id = "pastille", kind = "mention", anchor = AnchorV3(x = 0.4, y = 0.4))
-        val ios = opening.copy(effects = opening.effects.copy(unpaintableObjects = listOf(mention)))
-
-        val wire = production.encodeToString(UpdatePostRequest.serializer(), ready(StoryEditFixtures.opened(ios), ios).request)
-
-        assertThat(wire).contains("\"kind\":\"mention\"")
-        assertThat(wire).contains("pastille")
-    }
-
-    @Test
-    fun `sans disposition ni objet inconnu la charge garde le fil v1 de createStory`() {
-        val plain = opening.copy(effects = opening.effects.copy(layout = null))
-
-        val wire = production.encodeToString(UpdatePostRequest.serializer(), ready(StoryEditFixtures.opened(plain), plain).request)
+        val wire = production.encodeToString(UpdatePostRequest.serializer(), ready(state, opening).request)
 
         assertThat(wire).doesNotContain("\"v\":3")
         assertThat(wire).contains("\"textObjects\"")

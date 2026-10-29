@@ -200,6 +200,7 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                                 StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
                                 StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
                                 StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
+                                StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
                                 else -> error
                             },
                             modifier = Modifier.fillMaxWidth(),

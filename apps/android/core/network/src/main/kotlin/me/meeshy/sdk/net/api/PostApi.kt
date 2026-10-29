@@ -4,6 +4,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.DiscoverabilityPrecision
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ApiPost
@@ -283,6 +284,10 @@ interface PostApi {
 
     @GET("posts/{id}")
     suspend fun getPost(@Path("id") postId: String): ApiResponse<ApiPost>
+
+    /** Le même post, tel que la passerelle le sert, sans le rabattre sur le modèle : la base de l'édition d'une story (#13632). */
+    @GET("posts/{id}")
+    suspend fun getPostDocument(@Path("id") postId: String): ApiResponse<JsonObject>
 
     @POST("posts/{id}/like")
     suspend fun like(@Path("id") postId: String): ApiResponse<Unit>

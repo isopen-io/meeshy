@@ -44,6 +44,15 @@ class StoryEditEffectsWireSerializerTest {
     }
 
     @Test
+    fun `un blob servi recompose part a l'octet, cles inconnues et scenes suivantes comprises`() {
+        val document = production.parseToJsonElement(
+            """{"v":3,"futureKey":{"a":1},"scenes":[{"id":"s1","objects":[]},{"id":"s2","objects":[{"id":"x","kind":"text","payload":{"text":"b"}}]}]}""",
+        ) as JsonObject
+
+        assertThat(written(StoryEffects(document = document))).isEqualTo(document)
+    }
+
+    @Test
     fun `la lecture est celle de createStory`() {
         val read = production.decodeFromString(Holder.serializer(), """{"storyEffects":{"filter":"warm","textObjects":[{"id":"t","text":"x"}]}}""")
 

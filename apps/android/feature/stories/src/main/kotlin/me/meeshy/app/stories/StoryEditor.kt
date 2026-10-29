@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -52,21 +53,27 @@ internal sealed interface StoryEditMode {
  */
 @Singleton
 internal class StoryEditor @Inject constructor(
+    private val reader: StoryServedReader,
     private val posts: PostRepository,
     private val stories: StoryRepository,
     private val session: SessionRepository,
 ) {
     /** La story à rouvrir, ou `null` : elle n'existe plus, n'est pas une story de l'utilisateur, ou n'est joignable nulle part. */
     suspend fun open(storyId: String): StoryEditOpening? {
-        val served = (posts.getPost(storyId) as? NetworkResult.Success)?.data
-        val post = served ?: stories.cachedStories().firstOrNull { it.id == storyId }
-        val mine = post?.author?.id == session.currentUserId
-        return post?.takeIf { it.type == STORY && mine }?.let { StoryEditOpening.open(it, mentionsKnown = served != null) }
+        val served = reader.read(storyId)
+        val post = served?.post ?: stories.cachedStories().firstOrNull { it.id == storyId }
+        return post?.takeIf { it.type == STORY && it.isMine() }
+            ?.let { StoryEditOpening.open(it, mentionsKnown = served != null, served = served?.effects) }
     }
 
-    /** `null` : enregistrée. Sinon le repère de l'échec, que le composeur dit à l'auteur. */
+    /**
+     * `null` : enregistrée. Sinon le repère de l'échec, que le composeur dit à l'auteur. Une story rouverte du cache relit
+     * d'abord son blob servi : sans lui l'écriture rabattrait la story sur ce qu'Android en sait, et rien ne part.
+     */
     suspend fun save(opening: StoryEditOpening, state: StoryComposerUiState, language: String): String? {
-        val plan = StoryEditMerge.plan(opening, state, language)
+        if (!opening.post.isMine()) return StoryEditErrors.UNAVAILABLE
+        val first = StoryEditMerge.plan(opening, state, language)
+        val plan = if (first == StoryEditPlan.Refused(StoryEditErrors.BASE_UNKNOWN)) rebased(opening, state, language) else first
         if (plan !is StoryEditPlan.Ready) return (plan as StoryEditPlan.Refused).reason
         val before = stories.cachedStories().firstOrNull { it.id == opening.postId }
         if (before != null) stories.adoptPublished(plan.optimistic)
@@ -81,6 +88,14 @@ internal class StoryEditor @Inject constructor(
             }
         }
     }
+
+    private suspend fun rebased(opening: StoryEditOpening, state: StoryComposerUiState, language: String): StoryEditPlan {
+        val served = reader.read(opening.postId)?.takeIf { it.post.type == STORY && it.post.isMine() }
+            ?: return StoryEditPlan.Refused(StoryEditErrors.OFFLINE)
+        return StoryEditMerge.plan(opening.copy(served = served.effects), state, language)
+    }
+
+    private fun ApiPost.isMine(): Boolean = author?.id != null && author?.id == session.currentUserId
 
     private companion object {
         const val STORY = "STORY"

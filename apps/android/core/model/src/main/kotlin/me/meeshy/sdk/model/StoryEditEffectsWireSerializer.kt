@@ -10,11 +10,10 @@ import kotlinx.serialization.json.JsonEncoder
  * L'écriture de `storyEffects` quand une story PUBLIÉE est modifiée (`PUT /posts/:id`, #13632).
  *
  * La route REMPLACE le blob entier (`updatePost` écrit `storyEffects` tel quel, le schéma est `passthrough`) : tout ce que
- * l'écriture ne nomme pas disparaît de la story. Une story écrite par iOS peut porter des objets de scène v3 qu'Android ne
- * sait pas peindre (pastilles de mention, genres plus récents) ou une disposition (`layout`) que seul un document v3
- * déclare ; le fil v1 n'a aucune place pour eux. Quand la modification doit les garder, la charge est donc un document v3
- * ([StoryEffects.canvas], composé par `StoryEditEffects`) et part tel quel ; sinon elle garde le fil v1 d'avant, le seul
- * que `createStory` écrit déjà.
+ * l'écriture ne nomme pas disparaît de la story. Le modèle Android ne sait pas tout dire de ce qu'iOS écrit ; une story
+ * modifiée part donc sous la forme du blob SERVI où seul ce que l'auteur a changé est remplacé ([StoryEffects.document]),
+ * écrite telle quelle. Un document de scène ([StoryEffects.canvas]) part de même ; le reste garde le fil v1 de
+ * `createStory`.
  */
 object StoryEditEffectsWireSerializer : KSerializer<StoryEffects> {
     override val descriptor: SerialDescriptor = StoryEffectsWireSerializer.descriptor
@@ -23,11 +22,13 @@ object StoryEditEffectsWireSerializer : KSerializer<StoryEffects> {
 
     override fun serialize(encoder: Encoder, value: StoryEffects) {
         val output = encoder as? JsonEncoder
+        val document = value.document
         val canvas = value.canvas
-        if (output != null && canvas != null && value == StoryEffects(canvas = canvas)) {
-            output.encodeJsonElement(CanvasV3Migration.encodeDocument(canvas))
-        } else {
-            StoryEffectsWireSerializer.serialize(encoder, value)
+        when {
+            output != null && document != null && value == StoryEffects(document = document) -> output.encodeJsonElement(document)
+            output != null && canvas != null && value == StoryEffects(canvas = canvas) ->
+                output.encodeJsonElement(CanvasV3Migration.encodeDocument(canvas))
+            else -> StoryEffectsWireSerializer.serialize(encoder, value)
         }
     }
 }
