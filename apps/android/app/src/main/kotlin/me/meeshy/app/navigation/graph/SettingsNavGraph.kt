@@ -30,6 +30,7 @@ import me.meeshy.app.settings.LicensesScreen
 import me.meeshy.app.settings.MediaCacheScreen
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.NotificationSettingsScreen
+import me.meeshy.app.settings.PackShopScreen
 import me.meeshy.app.settings.PrivacySettingsScreen
 import me.meeshy.app.settings.SecurityScreen
 import me.meeshy.app.settings.SettingsScreen
@@ -58,6 +59,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
             onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
             onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
             onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
+            onOpenPacks = { navController.navigate(Routes.packShop()) },
             onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
             onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
             onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
@@ -106,6 +108,16 @@ internal fun NavGraphBuilder.settingsNavGraph(
     }
     sheetComposable(Routes.MEDIA_CACHE, navController) { _, dismiss ->
         MediaCacheScreen(onBack = dismiss)
+    }
+    sheetComposable(
+        route = "${Routes.PACK_SHOP}?domain={domain}&pack={pack}",
+        navController = navController,
+        arguments = listOf(
+            navArgument("domain") { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument("pack") { type = NavType.StringType; nullable = true; defaultValue = null },
+        ),
+    ) { _, dismiss ->
+        PackShopScreen(onBack = dismiss)
     }
     sheetComposable(Routes.DATA_EXPORT, navController) { _, dismiss ->
         DataExportScreen(onBack = dismiss)

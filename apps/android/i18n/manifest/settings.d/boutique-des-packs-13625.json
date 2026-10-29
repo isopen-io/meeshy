@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "settings.packs.title", "androidName": "settings_packs_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "settings.packs.domain", "androidName": "settings_packs_domain", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.retry", "androidName": "pack_shop_retry", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.balance", "androidName": "pack_shop_balance", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.buy.price", "androidName": "pack_shop_buy_price", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.buy.a11y", "androidName": "pack_shop_buy_a11y", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.owned", "androidName": "pack_shop_owned", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.locked", "androidName": "pack_shop_locked", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.empty", "androidName": "pack_shop_empty", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.error.insufficient", "androidName": "pack_shop_error_insufficient", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.error.load", "androidName": "pack_shop_error_load", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.domain.wallpaper", "androidName": "pack_shop_domain_wallpaper", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.domain.avatar_ring", "androidName": "pack_shop_domain_avatar_ring", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.domain.banner", "androidName": "pack_shop_domain_banner", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "shop.domain.banner_frame", "androidName": "pack_shop_domain_banner_frame", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "sticker.sheet.pack.by", "androidName": "pack_shop_by", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "sticker.shop.failed", "androidName": "pack_shop_failed", "status": "adopted" }
+      ]
+    }
+  }
+}

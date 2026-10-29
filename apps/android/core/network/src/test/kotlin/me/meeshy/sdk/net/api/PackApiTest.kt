@@ -109,4 +109,35 @@ class PackApiTest {
         assertThat(response.success).isTrue()
         assertThat(response.data!!.packs).isEmpty()
     }
+
+    private val servedShop = """{"success":true,"data":{"balance":340,"domains":[{"domain":"wallpaper","packs":[{"slug":"animes","price":90,"owned":false}]}]}}"""
+
+    @Test
+    fun `the shop is read from one address filtered by the asked domains`() = runTest {
+        val capture = Capture()
+
+        val shop = apiServing(servedShop, capture).shop(listOf(AppearancePackDomain.WALLPAPER, AppearancePackDomain.AVATAR_RING)).data!!
+
+        assertThat(capture.request!!.method).isEqualTo("GET")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/shop")
+        assertThat(capture.request!!.url.queryParameter("domains")).isEqualTo("wallpaper,avatar-ring")
+        assertThat(shop.balance).isEqualTo(340)
+        assertThat(shop.packs(AppearancePackDomain.WALLPAPER).single().canBuy).isTrue()
+    }
+
+    @Test
+    fun `a purchase posts only its intention id to the pack address and reads the served pack and balance`() = runTest {
+        val capture = Capture()
+        val body = """{"success":true,"data":{"pack":{"slug":"animes","price":90,"owned":true,"installed":true},"balance":250}}"""
+
+        val bought = apiServing(body, capture).purchase(AppearancePackDomain.BANNER_FRAME, "animes", "req-1").data!!
+
+        assertThat(capture.request!!.method).isEqualTo("POST")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/banner-frame/animes/purchase")
+        val sent = okio.Buffer().also { capture.request!!.body!!.writeTo(it) }.readUtf8()
+        assertThat(sent).isEqualTo("""{"requestId":"req-1"}""")
+        assertThat(bought.pack.isOwned).isTrue()
+        assertThat(bought.balance).isEqualTo(250)
+    }
 }
+

@@ -134,6 +134,8 @@ object Routes {
     const val NOTIFICATION_SETTINGS = "settings/notifications"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
+    /** Réglages › Packs et téléchargements : la Boutique, ouvrable sur un domaine (`?domain=`) et un pack (`?pack=`). */
+    const val PACK_SHOP = "settings/packs"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
     const val ENCRYPTED_DEVICES = "settings/encrypted-devices"
@@ -203,6 +205,9 @@ object Routes {
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
+    fun packShop(domain: String? = null, pack: String? = null): String =
+        listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })
+            .joinToString("&").let { query -> if (query.isEmpty()) PACK_SHOP else "$PACK_SHOP?$query" }
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }
