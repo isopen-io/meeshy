@@ -287,7 +287,7 @@ export const PostReferenceInputSchema = z.object({
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
@@ -443,7 +443,7 @@ function hasAnyContentCarrier(data: {
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
   // Basculer à false libère l'usage vidéo à la prochaine passe de capture.

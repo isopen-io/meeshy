@@ -104,7 +104,7 @@ describe('createLinkSchema', () => {
 
   it('accepts newConversation with valid title', () => {
     const result = createLinkSchema.safeParse({
-      newConversation: { title: 'New Chat', description: 'A conversation', memberIds: ['u1'] },
+      newConversation: { title: 'New Chat', description: 'A conversation', memberIds: ['507f1f77bcf86cd799439011'] },
     });
     expect(result.success).toBe(true);
   });
