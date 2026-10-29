@@ -69,7 +69,6 @@ internal object BubbleAttachmentBuilder {
                     isContactCard = attachment.isContactCard && !sealed,
                     isSealed = sealed,
                     isOnDevice = attachment.fileUrl.isLocalUri(),
-                    localUri = attachment.fileUrl.takeIf { !sealed && it.isLocalUri() },
                     contactScope = if (attachment.isContactCard) contactScope.sealedBy(attachment) else ContactCardResolutionScope.Unknown,
                 )
             }

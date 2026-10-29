@@ -35,8 +35,8 @@ internal class ChatContactCardsViewModel @Inject constructor(
 
 /**
  * La rangée « Sur Meeshy » des cartes de visite du fil (#13495). Trois portes, toutes FERMÉES par défaut : la carte
- * doit être DÉJÀ sur l'appareil (envoi local, ou reçue pendant la session — la politique de téléchargement n'est
- * jamais contournée), ni son message ni la conversation ne doivent être chiffrés de bout en bout (#13622), et le mode
+ * doit avoir été TÉLÉCHARGÉE par le fil pendant la session (la politique de téléchargement n'est jamais contournée, et
+ * l'adresse servie d'une pièce n'est jamais lue), ni son message ni la conversation ne doivent être chiffrés de bout en bout (#13622), et le mode
  * de la conversation doit être CONNU clair (#13628) : un mode jamais servi, ou que cette version ne connaît pas, ferme.
  */
 internal class ChatContactCardAccounts(
@@ -50,7 +50,7 @@ internal class ChatContactCardAccounts(
         lookup.cached(file.attachmentId, scopeOf(file))
 
     override suspend fun lookup(file: BubbleFile): ContactCardMeeshyAccount? {
-        val uri = file.localUri ?: downloadedUri(file.attachmentId) ?: return null
+        val uri = downloadedUri(file.attachmentId) ?: return null
         return lookup.lookup(file.attachmentId, uri, scopeOf(file))
     }
 

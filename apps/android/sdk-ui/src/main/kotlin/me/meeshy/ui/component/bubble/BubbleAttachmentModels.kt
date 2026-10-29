@@ -33,8 +33,6 @@ public data class BubbleFile(
     val isOnDevice: Boolean = false,
     /** À vue unique, floutée, éphémère ou retenue par la loi de sortie : la rangée n'offre ni badge ni appui (#13492). */
     val isProtected: Boolean = false,
-    /** L'adresse locale (`file://`, `content://`) d'une pièce déjà sur l'appareil : la seule qu'on lit sans réseau. */
-    val localUri: String? = null,
     /** Où une carte de visite a le droit de résoudre ses identifiants ; FERMÉ par défaut (#13622). */
     val contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
 )

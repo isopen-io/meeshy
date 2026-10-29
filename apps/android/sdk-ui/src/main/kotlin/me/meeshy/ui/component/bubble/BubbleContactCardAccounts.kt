@@ -37,8 +37,9 @@ import me.meeshy.ui.theme.MeeshySpacing
  * iOS). L'hôte du fil le fournit à toutes les bulles ; une bulle ne pose JAMAIS la question à un service.
  *
  * - [cached] répond sans attendre ni réseau (une bulle qui revient à l'écran s'affiche d'emblée) ;
- * - [lookup] n'est appelée que pour une carte DÉJÀ sur l'appareil, et rend « rien » hors d'une conversation en clair
- *   (échec fermé, #13622).
+ * - [lookup] n'est appelée que pour une carte que le fil a DÉJÀ téléchargée, et rend « rien » hors d'une conversation
+ *   en clair (échec fermé, #13622). L'adresse SERVIE d'une pièce n'est jamais lue, même `content://` ou `file://` : elle
+ *   viendrait du serveur, et désignerait un fichier de l'appareil (le carnet d'adresses, un fichier privé).
  */
 @Stable
 public interface BubbleContactCardAccounts {
@@ -58,11 +59,11 @@ public interface BubbleContactCardAccounts {
 public val LocalBubbleContactCardAccounts = compositionLocalOf { BubbleContactCardAccounts.None }
 
 /**
- * Faut-il même demander ? Une carte qui n'est pas encore sur l'appareil, ou que sa conversation interdit de
- * résoudre, ne fait AUCUN appel : ni lecture, ni requête. Pur, donc testé sans écran.
+ * Faut-il même demander ? Une carte que le fil n'a pas téléchargée, ou que sa conversation interdit de résoudre, ne
+ * fait AUCUN appel : ni lecture, ni requête. Pur, donc testé sans écran.
  */
 internal fun BubbleFile.asksForMeeshyAccount(isDownloaded: Boolean): Boolean =
-    isContactCard && !isSealed && contactScope.mayResolveOnServer && (localUri != null || isDownloaded)
+    isContactCard && !isSealed && contactScope.mayResolveOnServer && isDownloaded
 
 /**
  * Le compte Meeshy de la carte, tant que la bulle est composée. Clés STABLES (l'identifiant de la pièce et le fait

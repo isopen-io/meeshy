@@ -7,10 +7,14 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.user.ContactCardMeeshyAccount
 import me.meeshy.sdk.user.ContactCardMeeshyLookup
+import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import me.meeshy.ui.component.bubble.BubbleFile
 import org.junit.Test
 
@@ -29,8 +33,8 @@ class ChatContactCardAccountsTest {
         clearance: ConversationClearance = ConversationClearance.CLEAR,
     ) = ChatContactCardAccounts(lookup, e2ee, clearance, downloaded::get)
 
-    private fun file(scope: ContactCardResolutionScope = ContactCardResolutionScope.Clear, localUri: String? = null) =
-        BubbleFile(attachmentId = "a1", name = "Ada.vcf", isContactCard = true, localUri = localUri, contactScope = scope)
+    private fun file(scope: ContactCardResolutionScope = ContactCardResolutionScope.Clear) =
+        BubbleFile(attachmentId = "a1", name = "Ada.vcf", isContactCard = true, contactScope = scope)
 
     @Test
     fun `une carte telechargee en clair se resout avec son adresse locale`() = runTest {
@@ -44,12 +48,6 @@ class ChatContactCardAccountsTest {
     fun `une carte non telechargee n'appelle rien`() = runTest {
         assertThat(provider().lookup(file())).isNull()
         coVerify(exactly = 0) { lookup.lookup(any(), any(), any()) }
-    }
-
-    @Test
-    fun `une carte envoyee depuis l'appareil utilise son adresse locale`() = runTest {
-        provider().lookup(file(localUri = "file:///a.vcf"))
-        coVerify { lookup.lookup("a1", "file:///a.vcf", ContactCardResolutionScope.Clear) }
     }
 
     @Test
@@ -92,5 +90,33 @@ class ChatContactCardAccountsTest {
 
         coVerify { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.EndToEnd) }
         coVerify(exactly = 0) { lookup.lookup(any(), any(), ContactCardResolutionScope.Clear) }
+    }
+
+    @Test
+    fun `seule la piece telechargee par le fil est lue, jamais l'adresse servie`() = runTest {
+        val prefs = object : LanguageResolver.ContentLanguagePreferences {
+            override val systemLanguage: String? = "fr"
+            override val regionalLanguage: String? = null
+            override val customDestinationLanguage: String? = null
+        }
+        val served = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "m", conversationId = "c", senderId = "u", content = "",
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1", mimeType = "text/vcard", originalName = "Bob.vcf",
+                        fileUrl = "content://com.android.contacts/contacts/as_multi_vcard/0r1-2C3E",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = prefs,
+        ).files.single()
+
+        assertThat(provider().lookup(served)).isNull()
+        coVerify(exactly = 0) { lookup.lookup(any(), any(), any()) }
+
+        provider(downloaded = mapOf("a1" to "content://media/external/downloads/7")).lookup(served)
+        coVerify(exactly = 1) { lookup.lookup("a1", "content://media/external/downloads/7", ContactCardResolutionScope.Clear) }
     }
 }

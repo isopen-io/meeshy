@@ -46,11 +46,10 @@ class BubbleContactCardAccountsTest {
 
     private fun card(
         scope: ContactCardResolutionScope = ContactCardResolutionScope.Clear,
-        localUri: String? = null,
         sealed: Boolean = false,
     ) = BubbleFile(
         attachmentId = "a1", name = "Bob.vcf", url = "https://x/a1", isContactCard = true,
-        isSealed = sealed, localUri = localUri, contactScope = scope,
+        isSealed = sealed, contactScope = scope,
     )
 
     private fun show(file: BubbleFile, accounts: BubbleContactCardAccounts, transfers: BubbleFileTransfers = BubbleFileTransfers.None) {
@@ -94,15 +93,6 @@ class BubbleContactCardAccountsTest {
     }
 
     @Test
-    fun `une carte envoyee depuis l'appareil se resout sans telechargement`() {
-        val spy = Spy(ada)
-        show(card(localUri = "content://x/1"), spy)
-        compose.waitForIdle()
-
-        compose.onNodeWithText("Ada Lovelace", useUnmergedTree = true).assertIsDisplayed()
-    }
-
-    @Test
     fun `bout en bout ne demande jamais`() = neverAsks(ContactCardResolutionScope.EndToEnd)
 
     @Test
@@ -110,7 +100,7 @@ class BubbleContactCardAccountsTest {
 
     private fun neverAsks(scope: ContactCardResolutionScope) {
         val spy = Spy(ada)
-        show(card(scope = scope, localUri = "content://x/1"), spy, BubbleFileTransfers(readyAttachmentIds = setOf("a1")))
+        show(card(scope = scope), spy, BubbleFileTransfers(readyAttachmentIds = setOf("a1")))
         compose.waitForIdle()
         assertThat(spy.lookups).isEqualTo(0)
         compose.onNodeWithText("On Meeshy", useUnmergedTree = true).assertDoesNotExist()
@@ -138,10 +128,9 @@ class BubbleContactCardAccountsTest {
     }
 
     @Test
-    fun `la loi de demande exige une carte lisible, prete ou locale, en clair, non scellee`() {
+    fun `la loi de demande exige une carte lisible, telechargee, en clair, non scellee`() {
         assertThat(card().asksForMeeshyAccount(isDownloaded = true)).isTrue()
         assertThat(card().asksForMeeshyAccount(isDownloaded = false)).isFalse()
-        assertThat(card(localUri = "file:///a").asksForMeeshyAccount(isDownloaded = false)).isTrue()
         assertThat(card(scope = ContactCardResolutionScope.EndToEnd).asksForMeeshyAccount(true)).isFalse()
         assertThat(card(scope = ContactCardResolutionScope.Unknown).asksForMeeshyAccount(true)).isFalse()
         assertThat(card(sealed = true).asksForMeeshyAccount(true)).isFalse()
@@ -165,20 +154,6 @@ class BubbleContactCardAccountsTest {
     }
 
     @Test
-    fun `l'adresse locale d'un envoi depuis l'appareil est gardee brute pour la lecture`() {
-        val content = BubbleContentBuilder.build(
-            message = ApiMessage(
-                id = "m", conversationId = "c", senderId = "me", content = "",
-                attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "text/vcard", originalName = "B.vcf", fileUrl = "content://x/1")),
-            ),
-            currentUserId = "me",
-            preferences = Prefs,
-            mediaBaseUrl = "https://gate.meeshy.me/api/v1",
-        )
-        assertThat(content.files.single().localUri).isEqualTo("content://x/1")
-    }
-
-    @Test
     fun `une portee qui se ferme retire la rangee deja montree`() {
         val open = Spy(ada)
         val closed = Spy(null)
@@ -199,6 +174,31 @@ class BubbleContactCardAccountsTest {
         accounts.value = closed
         compose.waitForIdle()
 
+        compose.onNodeWithText("On Meeshy", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `une piece servie avec une adresse content etrangere ne lit rien et ne demande rien`() {
+        val foreign = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "m", conversationId = "c", senderId = "u", content = "",
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1", mimeType = "text/vcard", originalName = "Bob.vcf",
+                        fileUrl = "content://com.android.contacts/contacts/as_multi_vcard/0r1-2C3E",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = Prefs,
+        ).files.single()
+        val spy = Spy(ada)
+
+        show(foreign, spy)
+        compose.waitForIdle()
+
+        assertThat(foreign.asksForMeeshyAccount(isDownloaded = false)).isFalse()
+        assertThat(spy.lookups).isEqualTo(0)
         compose.onNodeWithText("On Meeshy", useUnmergedTree = true).assertDoesNotExist()
     }
 }
