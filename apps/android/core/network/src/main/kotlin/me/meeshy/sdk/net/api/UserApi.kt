@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.model.VerifyEmailChangeRequest
 import me.meeshy.sdk.model.VerifyEmailChangeResponse
 import me.meeshy.sdk.model.VerifyPhoneChangeRequest
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -41,7 +42,11 @@ data class UserSearchResult(
     val displayName: String? = null,
     val avatar: String? = null,
     val isOnline: Boolean? = null,
-)
+    val lastActiveAt: String? = null,
+) {
+    /** La présence que la ligne a SERVIE ; `null` (non-ami, rien servi) = aucun point. */
+    fun servedPresence(): UserPresence? = UserPresence.served(isOnline, lastActiveAt)
+}
 
 /** Avatar update body — port of UserService.updateAvatar inline body. */
 @Serializable

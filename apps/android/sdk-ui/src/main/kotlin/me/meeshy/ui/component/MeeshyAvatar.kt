@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -159,6 +160,7 @@ public fun MeeshyAvatar(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .testTag(presenceDotTag(presence))
                     .size(size * 0.26f + 4.dp)
                     .clip(CircleShape)
                     .background(dotBorderColor)
@@ -169,6 +171,9 @@ public fun MeeshyAvatar(
         }
     }
 }
+
+/** Repère de test du point de présence d'un avatar : `presence-dot-ONLINE`, `-AWAY` ou `-IDLE` ; absent = aucun point. */
+public fun presenceDotTag(presence: PresenceState?): String = "presence-dot-${presence?.name}"
 
 /** Couleur d'une teinte de point ou de contour : « ici » en primaire, le reste par le mapping central. */
 public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
