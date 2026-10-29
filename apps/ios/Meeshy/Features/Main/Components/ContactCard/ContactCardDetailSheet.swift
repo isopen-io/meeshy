@@ -80,6 +80,12 @@ struct ContactCardDetailSheet: View {
                     ForEach(model.accounts) { account in
                         meeshySection(account)
                     }
+                    if model.meeshyLookupIsUnavailable {
+                        Text(String(localized: "contact-card.lookup-unavailable-encrypted", defaultValue: "Vérification « Sur Meeshy » indisponible dans une conversation chiffrée", bundle: .main))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     footerActions
                 }
                 .padding(MeeshySpacing.lg)

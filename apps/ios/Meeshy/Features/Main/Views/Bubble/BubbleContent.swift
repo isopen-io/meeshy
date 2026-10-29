@@ -424,6 +424,10 @@ nonisolated struct BubbleContent: Equatable {
     /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
     var sticker: Sticker? = nil
 
+    /// #13622 — ce que la conversation porteuse permet aux cartes de visite de
+    /// faire du réseau ; `.unknown` (défaut) ne résout rien.
+    var contactCardScope: ContactCardResolutionScope = .unknown
+
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
     /// Mirrors legacy `ThemedMessageBubble.hasTextOrNonMediaContent`:
@@ -525,5 +529,6 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
             && lhs.sticker == rhs.sticker
+            && lhs.contactCardScope == rhs.contactCardScope
     }
 }

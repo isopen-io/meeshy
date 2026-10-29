@@ -295,7 +295,7 @@ nonisolated enum RiverConversationMapping {
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
                 linksAreInert: message.senderIsAnonymous || !message.senderHasAccount,
-                contactCards: RiverContactCards(items: contactCards(of: message)),
+                contactCards: RiverContactCards(items: contactCards(of: message), scope: ContactCardResolutionScope.of(message: message)),
                 capturesBlocked: message.exitOffer.capture.shieldsCapture(),
                 emojiFontSize: emojiFontSize(of: message, text: text),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
