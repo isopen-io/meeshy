@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -16,7 +17,9 @@ import me.meeshy.sdk.game.InMemoryGameDevicePrefsStore
 import me.meeshy.sdk.game.UserGameRepository
 import me.meeshy.sdk.model.game.GameIntegrationParser
 import me.meeshy.sdk.model.game.GameBannerBadge
+import me.meeshy.sdk.model.game.UserGameProfileResponse
 import me.meeshy.sdk.model.game.pages.GameDevicePrefs
+import me.meeshy.sdk.session.AccountFence
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -37,7 +40,8 @@ class GameBannerBadgeViewModelTest {
     private fun viewModel(
         repository: UserGameRepository,
         hidden: Boolean = false,
-    ) = GameBannerBadgeViewModel(repository, InMemoryGameDevicePrefsStore(GameDevicePrefs(hidden = hidden)))
+        fence: AccountFence = AccountFence { "me" },
+    ) = GameBannerBadgeViewModel(repository, InMemoryGameDevicePrefsStore(GameDevicePrefs(hidden = hidden)), fence)
 
     @Test
     fun `le disque se peint d'abord puis la lecture servie le remplace`() = runTest(dispatcher.scheduler) {
@@ -118,5 +122,60 @@ class GameBannerBadgeViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.observe("u1").first()!!.level).isEqualTo(3)
+    }
+
+    @Test
+    fun `le badge lu pour un compte ne se peint jamais sous le compte suivant`() = runTest(dispatcher.scheduler) {
+        var owner: String? = "a"
+        val repository = mockk<UserGameRepository>()
+        coEvery { repository.cached("u1") } returns null
+        coEvery { repository.load("u1") } returns response(7)
+        val vm = viewModel(repository, fence = AccountFence { owner })
+
+        vm.ensureLoaded("u1")
+        advanceUntilIdle()
+        assertThat(vm.observe("u1").first()).isNotNull()
+
+        owner = "b"
+
+        assertThat(vm.observe("u1").first()).isNull()
+    }
+
+    @Test
+    fun `une lecture partie sous un compte qui arrive apres le changement de compte n'est pas peinte`() = runTest(dispatcher.scheduler) {
+        var owner: String? = "a"
+        val gate = CompletableDeferred<UserGameProfileResponse?>()
+        val repository = mockk<UserGameRepository>()
+        coEvery { repository.cached("u1") } returns null
+        coEvery { repository.load("u1") } coAnswers { gate.await() }
+        val vm = viewModel(repository, fence = AccountFence { owner })
+
+        vm.ensureLoaded("u1")
+        advanceUntilIdle()
+        owner = "b"
+        gate.complete(response(7))
+        advanceUntilIdle()
+
+        assertThat(vm.observe("u1").first()).isNull()
+    }
+
+    @Test
+    fun `le compte suivant relit le membre que le precedent lisait encore`() = runTest(dispatcher.scheduler) {
+        var owner: String? = "a"
+        val gate = CompletableDeferred<UserGameProfileResponse?>()
+        val repository = mockk<UserGameRepository>()
+        coEvery { repository.cached("u1") } returns null
+        coEvery { repository.load("u1") } coAnswers { gate.await() } andThen response(2)
+        val vm = viewModel(repository, fence = AccountFence { owner })
+
+        vm.ensureLoaded("u1")
+        advanceUntilIdle()
+        owner = "b"
+        vm.ensureLoaded("u1")
+        advanceUntilIdle()
+        gate.complete(response(7))
+        advanceUntilIdle()
+
+        assertThat(vm.observe("u1").first()!!.level).isEqualTo(2)
     }
 }
