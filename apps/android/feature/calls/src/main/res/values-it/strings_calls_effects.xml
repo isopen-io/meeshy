@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Effetti</string>
+    <string name="call_effects_title">Effetti della mia fotocamera</string>
+    <string name="call_effects_category_face">Viso</string>
+    <string name="call_effects_category_color">Colore</string>
+    <string name="call_effects_face_none">Nessuno</string>
+    <string name="call_effects_face_smoothing">Levigatura della pelle</string>
+    <string name="call_effects_face_toad">Rospo</string>
+    <string name="call_effects_face_angel">Angelo</string>
+    <string name="call_effects_face_demon">Demone</string>
+    <string name="call_effects_face_volcano">Eruzione</string>
+    <string name="call_effects_preset_natural">Naturale</string>
+    <string name="call_effects_preset_warm">Caldo</string>
+    <string name="call_effects_preset_cool">Freddo</string>
+    <string name="call_effects_preset_vivid">Vivace</string>
+    <string name="call_effects_preset_muted">Morbido</string>
+    <string name="call_effects_settings">Impostazioni</string>
+    <string name="call_effects_settings_hint">Mostra luminosità e sfocatura dello sfondo al posto degli effetti</string>
+    <string name="call_effects_validate">Applica</string>
+    <string name="call_effects_validate_hint">Mantiene questo effetto e torna alla chiamata</string>
+    <string name="call_effects_quit">Esci</string>
+    <string name="call_effects_quit_hint">Ripristina la tua immagine com\'era e torna alla chiamata</string>
+    <string name="call_effects_blur">Sfondo sfocato</string>
+    <string name="call_effects_smoothing_strength">Intensità della levigatura</string>
+    <string name="call_effects_brightness">Luminosità</string>
+    <string name="call_effects_percent">%1$d%%</string>
+    <string name="call_effects_next">Effetto successivo</string>
+    <string name="call_effects_previous">Effetto precedente</string>
+</resources>

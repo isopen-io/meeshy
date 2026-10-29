@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Effets</string>
+    <string name="call_effects_title">Effets de ma caméra</string>
+    <string name="call_effects_category_face">Visage</string>
+    <string name="call_effects_category_color">Couleur</string>
+    <string name="call_effects_face_none">Aucun</string>
+    <string name="call_effects_face_smoothing">Lissage de peau</string>
+    <string name="call_effects_face_toad">Crapaud</string>
+    <string name="call_effects_face_angel">Ange</string>
+    <string name="call_effects_face_demon">Démon</string>
+    <string name="call_effects_face_volcano">Éruption</string>
+    <string name="call_effects_preset_natural">Naturel</string>
+    <string name="call_effects_preset_warm">Chaud</string>
+    <string name="call_effects_preset_cool">Froid</string>
+    <string name="call_effects_preset_vivid">Vif</string>
+    <string name="call_effects_preset_muted">Doux</string>
+    <string name="call_effects_settings">Réglages</string>
+    <string name="call_effects_settings_hint">Affiche la luminosité et le flou du fond à la place des effets</string>
+    <string name="call_effects_validate">Valider</string>
+    <string name="call_effects_validate_hint">Garde cet effet et revient à l\'appel</string>
+    <string name="call_effects_quit">Quitter</string>
+    <string name="call_effects_quit_hint">Rend votre image telle qu\'elle était et revient à l\'appel</string>
+    <string name="call_effects_blur">Flou du fond</string>
+    <string name="call_effects_smoothing_strength">Force du lissage</string>
+    <string name="call_effects_brightness">Luminosité</string>
+    <string name="call_effects_percent">%1$d %%</string>
+    <string name="call_effects_next">Effet suivant</string>
+    <string name="call_effects_previous">Effet précédent</string>
+</resources>

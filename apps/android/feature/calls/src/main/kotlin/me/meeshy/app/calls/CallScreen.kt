@@ -166,7 +166,9 @@ fun CallScreen(
                 constrained = rememberCallDeviceConstrained(),
                 reduceMotion = reduceMotion,
             )
-            if (videoStage) {
+            // Le mode « Effets » pose lui-même les deux vidéos (la mienne en plein écran, l'autre en vignette) : la
+            // scène du duo s'efface, sa vignette de soi en `SurfaceView` superposée percerait le mode.
+            if (videoStage && chromeState.layer.activeMode != CallScreenMode.Effects) {
                 CallDuoVideoStage(
                     state = state,
                     callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId },
@@ -308,6 +310,18 @@ fun CallScreen(
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
                     pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+                )
+            }
+
+            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
+            if (chromeState.layer.activeMode == CallScreenMode.Effects) {
+                CallEffectsMode(
+                    state = state,
+                    localTrack = viewModel.localVideoTrack,
+                    remoteTrack = remoteVideo,
+                    eglContext = viewModel.eglBaseContext,
+                    reduceMotion = reduceMotion,
+                    onClose = chrome::exitMode,
                 )
             }
 

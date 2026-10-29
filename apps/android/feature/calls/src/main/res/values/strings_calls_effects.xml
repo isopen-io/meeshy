@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Effects</string>
+    <string name="call_effects_title">My camera effects</string>
+    <string name="call_effects_category_face">Face</string>
+    <string name="call_effects_category_color">Colour</string>
+    <string name="call_effects_face_none">None</string>
+    <string name="call_effects_face_smoothing">Skin smoothing</string>
+    <string name="call_effects_face_toad">Toad</string>
+    <string name="call_effects_face_angel">Angel</string>
+    <string name="call_effects_face_demon">Demon</string>
+    <string name="call_effects_face_volcano">Eruption</string>
+    <string name="call_effects_preset_natural">Natural</string>
+    <string name="call_effects_preset_warm">Warm</string>
+    <string name="call_effects_preset_cool">Cool</string>
+    <string name="call_effects_preset_vivid">Vivid</string>
+    <string name="call_effects_preset_muted">Soft</string>
+    <string name="call_effects_settings">Settings</string>
+    <string name="call_effects_settings_hint">Shows brightness and background blur instead of the effects</string>
+    <string name="call_effects_validate">Apply</string>
+    <string name="call_effects_validate_hint">Keeps this effect and returns to the call</string>
+    <string name="call_effects_quit">Quit</string>
+    <string name="call_effects_quit_hint">Restores your image as it was and returns to the call</string>
+    <string name="call_effects_blur">Background blur</string>
+    <string name="call_effects_smoothing_strength">Smoothing strength</string>
+    <string name="call_effects_brightness">Brightness</string>
+    <string name="call_effects_percent">%1$d%%</string>
+    <string name="call_effects_next">Next effect</string>
+    <string name="call_effects_previous">Previous effect</string>
+</resources>
