@@ -7,6 +7,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
@@ -29,7 +33,9 @@ class MessageSendersTest {
     )
     private val serverMessage = ApiMessage(id = "srv-1", conversationId = "c1")
 
-    private fun sendHandler() = SendMessageHandler(messageApi, messageRepository, senderJson)
+    private val ledger = InMemoryEndToEndRegimeLedger()
+
+    private fun sendHandler() = SendMessageHandler(messageApi, messageRepository, senderJson, ledger)
 
     private fun sendRow(payload: String = encodedPayload(sendRequest)) =
         outboxRow(OutboxKind.SEND_MESSAGE, targetId = "c1", payload = payload)
@@ -52,6 +58,32 @@ class MessageSendersTest {
 
         assertThat(result).isEqualTo(SendResult.TransientFailure)
         coVerify(exactly = 0) { messageRepository.reconcileSent(any(), any()) }
+    }
+
+    @Test
+    fun `un clair refuse par la passerelle pour chiffrement de bout en bout scelle la conversation et n'est jamais renvoye`() = runTest {
+        coEvery { messageApi.send(any(), any()) } returns ApiResponse(success = false, error = "chiffree", code = "E2EE_PLAINTEXT_REFUSED")
+
+        val result = sendHandler().send(sendRow())
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
+        assertThat(ledger.isSealed("c1")).isTrue()
+    }
+
+    @Test
+    fun `une modification en clair refusee pour chiffrement de bout en bout scelle la conversation de sa file`() = runTest {
+        coEvery { messageApi.edit(any(), any()) } returns ApiResponse(success = false, error = "chiffree", code = "E2EE_PLAINTEXT_REFUSED")
+        val row = outboxRow(
+            OutboxKind.EDIT_MESSAGE,
+            targetId = "m1",
+            payload = encodedPayload(EditMessageRequest(content = "corrige")),
+            lane = OutboxLanes.forMessage("c9"),
+        )
+
+        val result = EditMessageHandler(messageApi, senderJson, ledger).send(row)
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
+        assertThat(ledger.isSealed("c9")).isTrue()
     }
 
     @Test
