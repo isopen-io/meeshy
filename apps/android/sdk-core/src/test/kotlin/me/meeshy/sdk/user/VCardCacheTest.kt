@@ -132,8 +132,23 @@ class VCardCacheTest {
         assertThat(kept).isInstanceOf(CardIdentifiers::class.java)
         assertThat(kept!!.phones).hasSize(10)
         assertThat(kept.emails).hasSize(10)
+        val full = me.meeshy.sdk.model.contacts.vcard.VCardParser.parse(body)!!
         assertThat(subject.cached("1")!!.request("FR")).isEqualTo(
-            me.meeshy.sdk.net.api.ContactResolveRequest.bounded(kept.phones, kept.emails, "FR"),
+            me.meeshy.sdk.net.api.ContactResolveRequest.bounded(full.phones.map { it.value }, full.emails.map { it.value }, "FR"),
         )
+    }
+
+    @Test
+    fun `la requete gardee est celle que la fiche envoie, espaces casse et doublons compris`() = runTest {
+        val body = "BEGIN:VCARD\nVERSION:3.0\nFN:Ada\nTEL: +33600000001 \nTEL:+33600000001\nTEL:\nEMAIL: Ada@Example.COM \nEMAIL:ada@example.com\nEND:VCARD\n"
+        val subject = cache(Files(mutableMapOf("file:///2" to body.toByteArray())))
+
+        val kept = subject.load("2", "file:///2")!!
+        val full = me.meeshy.sdk.model.contacts.vcard.VCardParser.parse(body)!!
+
+        assertThat(kept.request("FR")).isEqualTo(
+            me.meeshy.sdk.net.api.ContactResolveRequest.bounded(full.phones.map { it.value }, full.emails.map { it.value }, "FR"),
+        )
+        assertThat(kept.request(null).defaultCountry).isNull()
     }
 }
