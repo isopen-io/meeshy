@@ -128,6 +128,8 @@ data class StoryDraftPlacedMediaSnapshot(
     val rotationDeg: Float = 0f,
     /** Le filtre propre du média (nom du fil, #13603) ; un blob d'avant ou un nom inconnu se lit « aucun filtre ». */
     val filter: String? = null,
+    /** Les réglages et effets propres du média (#13599) ; un blob d'avant se lit « aucun réglage ». */
+    val adjustments: ImageAdjustments? = null,
 )
 
 /**

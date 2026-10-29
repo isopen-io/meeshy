@@ -36,6 +36,7 @@
     <string name="composer_chip_style_handwriting">CORSIVO</string>
     <string name="composer_chip_style_neon">NEON</string>
     <string name="composer_chip_style_typewriter">MACCHINA</string>
+    <string name="composer_column_media_adjust">Regolazioni</string>
     <string name="composer_column_media_alt_text">Descrivi</string>
     <string name="composer_column_media_filter">Filtri</string>
     <string name="composer_column_media_trim">Taglia</string>

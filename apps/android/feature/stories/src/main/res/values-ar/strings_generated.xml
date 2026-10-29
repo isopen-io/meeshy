@@ -36,6 +36,7 @@
     <string name="composer_chip_style_handwriting">خط اليد</string>
     <string name="composer_chip_style_neon">نيون</string>
     <string name="composer_chip_style_typewriter">آلة كاتبة</string>
+    <string name="composer_column_media_adjust">تعديلات</string>
     <string name="composer_column_media_alt_text">وصف</string>
     <string name="composer_column_media_filter">فلاتر</string>
     <string name="composer_column_media_trim">اقتصاص</string>

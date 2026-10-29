@@ -72,6 +72,13 @@ class ImageAdjustments internal constructor(private val values: Map<AdjustmentKi
     fun with(kind: AdjustmentKind, value: Float): ImageAdjustments =
         ImageAdjustments(normalized(values + (kind to value.coerceIn(kind.range))))
 
+    /** Le nombre de réglages d'UN sous-outil qui diffèrent du neutre. */
+    fun activeCount(family: AdjustmentFamily): Int = AdjustmentKind.entries.count { it.family == family && isActive(it) }
+
+    /** Ces réglages, un sous-outil remis au neutre : le « Réinitialiser » de l'un laisse l'autre intact. */
+    fun resetting(family: AdjustmentFamily): ImageAdjustments =
+        ImageAdjustments(normalized(values.filterKeys { it.family != family }))
+
     /** Ces réglages tels qu'un média de ce genre les PEINT : un réglage non servi revient au neutre. */
     fun served(isVideo: Boolean): ImageAdjustments =
         if (!isVideo) this else ImageAdjustments(normalized(values.filterKeys { it.isServedForVideo }))

@@ -26,6 +26,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.AdjustmentFamily
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -56,6 +58,8 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
                 onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel)
             else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
                 FilterRow(
                     selected = state.placedFilterOf(mediaId),
@@ -72,6 +76,21 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
                 )
             }
         }
+    }
+}
+
+/** Les curseurs d'un sous-outil du média posé : chaque image du geste écrit sa valeur, un seul cran d'historique par curseur et par geste. */
+@Composable
+private fun PlacedAdjustSection(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily, viewModel: StoryComposerViewModel) {
+    Column(Modifier.heightIn(max = SECTION_PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+        ComposerImageAdjustmentsPanel(
+            adjustments = state.placedAdjustmentsOf(mediaId) ?: ImageAdjustments.NEUTRAL,
+            isVideo = state.placedMediaIsVideo(mediaId),
+            family = family,
+            accent = MaterialTheme.colorScheme.primary,
+            onAdjust = { kind, value -> viewModel.onSceneGesture("adjust-$mediaId-${kind.wireName}") { StoryComposerPlacedMediaReducer.adjusted(it, mediaId, kind, value) } },
+            onReset = { viewModel.onSceneReduce { StoryComposerPlacedMediaReducer.adjustmentsReset(it, mediaId, family) } },
+        )
     }
 }
 

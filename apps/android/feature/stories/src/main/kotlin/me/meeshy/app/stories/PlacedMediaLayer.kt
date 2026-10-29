@@ -37,11 +37,11 @@ import me.meeshy.ui.component.imageedit.sceneLook
  * et son ratio mesuré — `null` tant que le média n'est pas téléversé, peint alors en carré comme chez les lecteurs.
  */
 @Immutable
-internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: Any?, val aspectRatio: Double? = null) {
+internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: Any?, val aspectRatio: Double? = null, val isVideo: Boolean = false) {
     val key: String get() = placed.mediaId
 
-    /** Le look que le plateau peint : SON filtre à pleine force, jamais celui de la scène — le même que lit `SceneLookRecipe.forMedia`. */
-    val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, null)
+    /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
+    val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, placed.adjustments, isVideo)
 }
 
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
@@ -55,8 +55,9 @@ internal fun StoryComposerUiState.placedMediaFrames(): List<PlacedMediaFrame> {
                 placed = placed,
                 model = uploaded.thumbnailUrl ?: uploaded.url,
                 aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
+                isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true),
             )
-            pending != null -> PlacedMediaFrame(placed, pending.item.previewModel)
+            pending != null -> PlacedMediaFrame(placed, pending.item.previewModel, isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true))
             else -> null
         }
     }

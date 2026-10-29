@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryDraftPlacedMediaSnapshot
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryMediaObject
@@ -9,7 +10,8 @@ import me.meeshy.sdk.model.scene.wireValue
  * Un média de premier plan posé sur la scène d'une slide (miroir d'un `StoryMediaObject` iOS non-fond) : le média
  * (id d'un média de la slide) et sa pose normalisée — position 0..1 (centre 0,5), échelle et rotation, bornées par
  * les mêmes lois que les textes et stickers ([StoryTextElement]). Son [filter] est le sien, à pleine force, jamais celui de la
- * scène (iOS `StoryMediaObject.filter`) ; `null` : aucun filtre.
+ * scène (iOS `StoryMediaObject.filter`) ; `null` : aucun filtre. Ses [adjustments] (réglages et effets, iOS
+ * `StoryMediaObject.adjustments`) sont les siens aussi ; `null` : rien de réglé — jamais un sac neutre.
  */
 data class StoryPlacedMedia(
     val mediaId: String,
@@ -18,12 +20,14 @@ data class StoryPlacedMedia(
     val scale: Float = StoryTextElement.DEFAULT_SCALE,
     val rotationDeg: Float = StoryTextElement.DEFAULT_ROTATION,
     val filter: StoryFilter? = null,
+    val adjustments: ImageAdjustments? = null,
 ) {
     fun normalised(): StoryPlacedMedia = copy(
         x = coord(x),
         y = coord(y),
         scale = StoryTextElement.clampScale(scale),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg),
+        adjustments = adjustments?.takeUnless { it.isNeutral },
     )
 
     fun transformed(scaleBy: Float, rotateByDeg: Float): StoryPlacedMedia = copy(
@@ -54,13 +58,14 @@ data class StoryPlacedMedia(
             aspectRatio = aspectRatio,
             isBackground = false,
             filter = filter?.wireValue(),
+            adjustments = adjustments?.takeUnless { it.isNeutral },
             intrinsicDuration = duration,
             duration = duration,
         )
     }
 
     fun toDraftSnapshot(): StoryDraftPlacedMediaSnapshot =
-        StoryDraftPlacedMediaSnapshot(id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue())
+        StoryDraftPlacedMediaSnapshot(id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue(), adjustments = adjustments)
 
     companion object {
         private fun coord(value: Float): Float =
@@ -76,6 +81,7 @@ data class StoryPlacedMedia(
                     scale = it.scale.toFloat(),
                     rotationDeg = it.rotation.toFloat(),
                     filter = it.parsedFilter,
+                    adjustments = it.adjustments,
                 ).normalised()
             }
 
@@ -83,6 +89,7 @@ data class StoryPlacedMedia(
             StoryPlacedMedia(
                 snapshot.id, snapshot.x, snapshot.y, snapshot.scale, snapshot.rotationDeg,
                 snapshot.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } },
+                snapshot.adjustments,
             ).normalised()
     }
 }

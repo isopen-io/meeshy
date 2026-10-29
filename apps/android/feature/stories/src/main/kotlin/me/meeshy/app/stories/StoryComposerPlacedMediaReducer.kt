@@ -1,5 +1,8 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.AdjustmentFamily
+import me.meeshy.sdk.model.AdjustmentKind
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryFilter
 
 /**
@@ -38,6 +41,24 @@ internal object StoryComposerPlacedMediaReducer {
     fun filtered(state: StoryComposerUiState, mediaId: String, filter: StoryFilter?): StoryComposerUiState {
         if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId && it.filter != filter } }) return state
         return rewritten(state, mediaId) { it.copy(filter = filter) }
+    }
+
+    /**
+     * Règle UN curseur de CE média posé (réglage ou effet), et de lui seul : la valeur est bornée à son curseur, le neutre
+     * retire la clé, un sac redevenu neutre s'efface (`null`). Inerte si le média n'est pas posé ou la valeur inchangée.
+     */
+    fun adjusted(state: StoryComposerUiState, mediaId: String, kind: AdjustmentKind, value: Float): StoryComposerUiState =
+        adjustments(state, mediaId) { it.with(kind, value) }
+
+    /** Remet au neutre un sous-outil (Réglages ou Effets) de CE média posé ; l'autre garde ses valeurs. */
+    fun adjustmentsReset(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily): StoryComposerUiState =
+        adjustments(state, mediaId) { it.resetting(family) }
+
+    private fun adjustments(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val next = change(current.adjustments ?: ImageAdjustments.NEUTRAL).takeUnless { it.isNeutral }
+        if (next == current.adjustments) return state
+        return rewritten(state, mediaId) { it.copy(adjustments = next) }
     }
 
     private fun rewritten(state: StoryComposerUiState, mediaId: String, change: (StoryPlacedMedia) -> StoryPlacedMedia): StoryComposerUiState {

@@ -36,6 +36,7 @@
     <string name="composer_chip_style_handwriting">MANUSCRITA</string>
     <string name="composer_chip_style_neon">NÉON</string>
     <string name="composer_chip_style_typewriter">MÁQUINA</string>
+    <string name="composer_column_media_adjust">Ajustes</string>
     <string name="composer_column_media_alt_text">Descrever</string>
     <string name="composer_column_media_filter">Filtros</string>
     <string name="composer_column_media_trim">Aparar</string>

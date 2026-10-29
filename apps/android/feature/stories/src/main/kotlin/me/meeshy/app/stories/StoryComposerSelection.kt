@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectEditorRail
@@ -20,6 +21,19 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
  */
 internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
+
+/**
+ * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans rognage ni actions — filtre propre,
+ * Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
+ */
+internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
+    .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
+        ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
+        ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
+        ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT),
+        ComposerObjectEditorSection.Plan,
+    ) }
 
 /** Les sections d'un SON sans source rognable (aucune adresse ou durée inconnue) : son départ et sa durée, puis le plan. */
 internal val ServedSoundSections: List<ComposerObjectEditorSection> =
@@ -52,10 +66,22 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
  * Un média posé (#13630) est un objet de la scène : il offre SON filtre (#13603), à côté de celui de la scène.
  */
 internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
-    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id) ||
-        deck.selectedSlide.placedMedia.any { it.mediaId == id }
+    if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) {
+        return if (placedMediaIsVideo(id)) ServedPlacedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) else ServedPlacedMediaSections
+    }
+    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id)
     return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
 }
+
+/** Le média posé [id] est-il une vidéo ? (téléversé ou encore en attente) — elle ne reçoit ni netteté, ni flou, ni effets. */
+internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
+    val mime = attachments.firstOrNull { it.id == id }?.mimeType ?: pendingUploads.firstOrNull { it.cmid == id }?.item?.mimeType
+    return mime?.startsWith("video", ignoreCase = true) == true
+}
+
+/** Les réglages et effets PROPRES du média posé [id] ; `null` : pas posé, ou rien de réglé. */
+internal fun StoryComposerUiState.placedAdjustmentsOf(id: String): ImageAdjustments? =
+    deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.adjustments
 
 /** Le filtre PROPRE du média posé [id] ; `null` : pas posé, ou aucun filtre. Le fond n'en a pas : il porte celui de la scène. */
 internal fun StoryComposerUiState.placedFilterOf(id: String): StoryFilter? =
