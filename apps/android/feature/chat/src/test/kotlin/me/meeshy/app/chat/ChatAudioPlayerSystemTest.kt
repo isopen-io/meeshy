@@ -1,6 +1,5 @@
 package me.meeshy.app.chat
 
-import android.media.MediaPlayer
 import android.os.Looper
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.Flow
@@ -16,8 +15,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowMediaPlayer
-import org.robolectric.shadows.util.DataSource
 
 /** Le lecteur de vocaux parle au système : carte publiée, ordres obéis, interruptions décidées par le registre partagé. */
 @RunWith(RobolectricTestRunner::class)
@@ -46,13 +43,76 @@ class ChatAudioPlayerSystemTest {
         isProtected = false,
     )
 
-    private fun playing(host: RecordingHost): ChatAudioPlayer {
-        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(voice.url!!), ShadowMediaPlayer.MediaInfo(12_000, 0))
-        val player = ChatAudioPlayer(MediaPlayer(), host, audioManager = null, conversationTitle = "Famille")
+    private class FakeEngine : VoiceNoteEngine {
+        val loaded = mutableListOf<String>()
+        var started = 0
+        var playing = false
+        private var prepared: () -> Unit = {}
+        override val positionMs: Long = 0L
+        override val durationMs: Long = 12_000L
+
+        override fun listen(onPrepared: () -> Unit, onCompleted: () -> Unit, onError: () -> Unit) {
+            prepared = onPrepared
+        }
+
+        override fun load(url: String) {
+            loaded += url
+        }
+
+        fun becomesReady() = prepared()
+
+        override fun start() {
+            started++
+            playing = true
+        }
+
+        override fun pause() {
+            playing = false
+        }
+
+        override fun seekTo(positionMs: Long) = Unit
+        override fun reset() {
+            playing = false
+        }
+
+        override fun release() = Unit
+    }
+
+    private fun playing(host: RecordingHost, engine: FakeEngine = FakeEngine()): ChatAudioPlayer {
+        val player = ChatAudioPlayer(engine, host, audioManager = null, conversationTitle = "Famille")
         player.toggle(voice, source)
-        player.onPrepared()
+        engine.becomesReady()
         shadowOf(Looper.getMainLooper()).idle()
         return player
+    }
+
+    @Test
+    fun `touching a voice note loads its url and starts it once the engine is ready`() {
+        val engine = FakeEngine()
+
+        playing(RecordingHost(), engine)
+
+        assertThat(engine.loaded).containsExactly("https://cdn.meeshy.me/a1.m4a")
+        assertThat(engine.playing).isTrue()
+    }
+
+    @Test
+    fun `the card carries the duration the engine read`() {
+        val host = RecordingHost()
+
+        playing(host)
+
+        assertThat(host.published.last().first.durationMs).isEqualTo(12_000L)
+    }
+
+    @Test
+    fun `a pause from the notification pauses the engine itself`() {
+        val engine = FakeEngine()
+        val player = playing(RecordingHost(), engine)
+
+        player.handle(VoicePlaybackCommand.Pause)
+
+        assertThat(engine.playing).isFalse()
     }
 
     @Test
