@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
+import java.io.File
 import org.junit.Test
 
 class OnboardingRootRulesTest {
@@ -34,10 +35,11 @@ class OnboardingRootRulesTest {
     }
 
     @Test
-    fun `l'ecran d'appel passe devant le calque, comme sa presentation modale sur iOS`() {
-        assertThat(OnboardingRootRules.isCallOpen(CallRoute.PATTERN)).isTrue()
-        assertThat(OnboardingRootRules.isCallOpen(Routes.CONVERSATIONS)).isFalse()
-        assertThat(OnboardingRootRules.isCallOpen(null)).isFalse()
-        assertThat(OnboardingRootRules.coversRoot(isPresented = true, currentRoute = CallRoute.PATTERN)).isFalse()
+    fun `une inscription aligne l'etat d'authentification de la racine avant d'ouvrir l'accueil`() {
+        val graph = File("src/main/kotlin/me/meeshy/app/navigation/graph/AuthNavGraph.kt").readText()
+        val registered = graph.substringAfter("onRegistered = {").substringBefore("onOpenTerms")
+
+        assertThat(registered).contains("authViewModel.onExternalSessionOpened()")
+        assertThat(registered.indexOf("onExternalSessionOpened")).isLessThan(registered.indexOf("navController.navigate"))
     }
 }

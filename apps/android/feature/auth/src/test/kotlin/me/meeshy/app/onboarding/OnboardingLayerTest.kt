@@ -131,6 +131,21 @@ class OnboardingLayerTest {
     }
 
     @Test
+    fun `un utilisateur apparu en cours de vie de l'activite demarre le parcours et lit l'eligibilite`() {
+        val gateway = LayerGateway()
+        val user = mutableStateOf<MeeshyUser?>(null)
+        val (presence, _) = mount(gateway, user = user)
+        assertThat(gateway.fetches).isEqualTo(0)
+
+        user.value = ada
+        compose.waitForIdle()
+
+        assertThat(gateway.fetches).isEqualTo(1)
+        compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertExists()
+        assertThat(presence.isPresented.value).isTrue()
+    }
+
+    @Test
     fun `Tout passer ferme le calque et libere la revelation d'un palier`() {
         val (presence, _) = mount()
 
