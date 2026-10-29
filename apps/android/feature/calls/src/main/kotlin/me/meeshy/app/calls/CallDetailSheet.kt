@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Call
@@ -27,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,9 +40,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallDetailParticipants
 import me.meeshy.sdk.model.call.CallDirection
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -52,7 +59,8 @@ import me.meeshy.ui.theme.hexColor
 /**
  * The detail of one past call — port of the iOS `CallDetailSheet`: the contact,
  * direction and time, « Appel vocal » / « Appel vidéo » to call back (direct calls
- * only, as on iOS), then the type, date, duration, data and number of the call.
+ * only, as on iOS), then the type, date, duration, data and number of the call,
+ * the participants of a group call and the call's transcript.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,14 +68,28 @@ internal fun CallDetailSheet(
     record: CallRecord,
     onRedial: (isVideo: Boolean) -> Unit,
     onDismiss: () -> Unit,
+    transcriptViewModel: CallDetailTranscriptViewModel = hiltViewModel(),
 ) {
     val name = record.displayName(fallback = stringResource(R.string.call_unknown_peer))
-    val accent = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500)
+    val accentHex = DynamicColorGenerator.colorForName(name)
+    val accent = hexColor(accentHex, MeeshyPalette.Indigo500)
+    val participantLabel = stringResource(R.string.call_transcript_participant)
+    val participants = CallDetailParticipants.of(record, fallbackName = participantLabel)
+    val transcriptRequest = CallTranscriptRequest(
+        callId = record.callId,
+        recordStartedAt = record.startedAt,
+        youLabel = stringResource(R.string.call_avatar_you),
+        participantLabel = participantLabel,
+    )
+    LaunchedEffect(transcriptRequest) { transcriptViewModel.load(transcriptRequest) }
+    val transcript by transcriptViewModel.state.collectAsStateWithLifecycle()
+    val transcriptState = transcript.stateFor(record.callId)
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 560.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = MeeshySpacing.xl)
                 .navigationBarsPadding()
                 .padding(bottom = MeeshySpacing.xl),
@@ -85,6 +107,8 @@ internal fun CallDetailSheet(
             CallDetailStatusLine(record)
             if (record.peer != null) CallDetailRedialButtons(accent, onRedial)
             CallDetailCard(record)
+            if (participants.isNotEmpty()) CallDetailParticipantsSection(participants)
+            CallDetailTranscriptSection(transcriptState, accentHex, onRetry = transcriptViewModel::retry)
         }
     }
 }
