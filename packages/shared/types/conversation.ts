@@ -239,6 +239,14 @@ export interface Message {
    */
   readonly sticker?: MessageSticker | null;
   /**
+   * Lieu partagé hissé de `metadata.location` par la passerelle (REST et
+   * `message:new`). Même contrat que les charges socket : la forme n'est pas
+   * contrainte ici, la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`) et le client la revalide
+   * (`placeOf`, apps/web). `null` ou absent : aucun lieu.
+   */
+  readonly location?: unknown;
+  /**
    * Les URL BRUTES du contenu que la passerelle a rendues traçables
    * (`metadata.trackingLinks`, hissé tel quel sur `message:new`) — le client
    * garde le texte et fait passer le lien par `/l/<token>` (#7827).

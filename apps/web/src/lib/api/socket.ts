@@ -22,7 +22,7 @@ import { attachmentStatusDetailsQueryKey } from './attachments';
 import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
 import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
-import { applyAttachmentDeleted, isAttachmentDeletedEvent } from './realtime-attachment-deleted';
+import { applyAttachmentDeleted, decodeAttachmentDeletedEvent } from './realtime-attachment-deleted';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
 import { applyEncryptionChanged, isEncryptionChanged } from './realtime-encryption-changed';
@@ -455,7 +455,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   /** `attachment:deleted` (#13611) — une pièce retirée par un membre quitte le fil, l'écran des médias et la ligne de liste. Règle : `realtime-attachment-deleted.ts`. */
   const onAttachmentDeleted = (payload: unknown): void => {
-    if (isAttachmentDeletedEvent(payload)) applyAttachmentDeleted(deps.queryClient, payload);
+    const data = decodeAttachmentDeletedEvent(payload);
+    if (data !== null) applyAttachmentDeleted(deps.queryClient, data);
   };
 
   /** `reaction:added|removed` (#5863) — le compte ABSOLU d'un emoji ; « ma réaction » ne suit que MON geste. Règle : `realtime-message-reactions.ts`. */
