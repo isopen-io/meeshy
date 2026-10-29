@@ -31,7 +31,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     // La scène d'une story reposté se dessine dans le fil par le lecteur du module des stories (#13654).
     val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
-    val openStory: (String) -> Unit = remember(navController) { { authorId -> navController.navigate(Routes.story(authorId)) } }
+    val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
         LocalShareLauncher provides launcher,
         LocalRepostSceneRenderer provides repostScene,

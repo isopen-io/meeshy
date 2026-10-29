@@ -28,8 +28,9 @@ class RepostEmbedCellTest {
         storyItem: StoryItem? = null,
         isStory: Boolean = false,
         authorId: String? = null,
+        id: String = "orig-1",
     ) = RepostEmbedPresentation(
-        id = "orig-1",
+        id = id,
         authorName = "Origen",
         authorAvatarUrl = null,
         createdAtIso = null,
@@ -114,28 +115,52 @@ class RepostEmbedCellTest {
         assertThat(lives.last()).isTrue()
     }
 
-    @Test
-    fun `toucher une story reposte l ouvre en plein ecran sur son auteur, pas la fiche du post`() {
-        val stories = mutableListOf<String>()
+    private fun tapOnStory(embed: RepostEmbedPresentation, withOpener: Boolean = true): Pair<List<Pair<String, String>>, List<String>> {
+        val stories = mutableListOf<Pair<String, String>>()
         val posts = mutableListOf<String>()
         var open: () -> Unit = {}
         compose.setContent {
             MeeshyTheme {
                 CompositionLocalProvider(
-                    LocalStoryOpener provides { stories += it },
+                    LocalStoryOpener provides if (withOpener) ({ author, story -> stories += author to story }) else null,
                     LocalRepostSceneRenderer provides { _, _, _, onOpen, _ -> open = onOpen },
-                ) {
-                    RepostEmbedCell(
-                        embed = embed(isStory = true, storyItem = StoryItem(id = "s1"), authorId = "author-1"),
-                        onOpen = { posts += it },
-                    )
-                }
+                ) { RepostEmbedCell(embed = embed, onOpen = { posts += it }) }
             }
         }
         compose.waitForIdle()
         open()
-        assertThat(stories).containsExactly("author-1")
+        return stories to posts
+    }
+
+    @Test
+    fun `toucher une story reposte vivante l ouvre en plein ecran, sur CETTE story et pas sur la premiere de son auteur`() {
+        val story = StoryItem(id = "orig-1", expiresAt = "2999-01-01T00:00:00Z")
+        val (stories, posts) = tapOnStory(embed(isStory = true, storyItem = story, authorId = "author-1"))
+        assertThat(stories).containsExactly("author-1" to "orig-1")
         assertThat(posts).isEmpty()
+    }
+
+    @Test
+    fun `une story reposte sans echeance connue reste ouvrable`() {
+        val (stories, posts) = tapOnStory(embed(isStory = true, storyItem = StoryItem(id = "orig-1"), authorId = "author-1"))
+        assertThat(stories).containsExactly("author-1" to "orig-1")
+        assertThat(posts).isEmpty()
+    }
+
+    @Test
+    fun `une story reposte expiree ouvre la fiche du post, pas un lecteur sans story`() {
+        val story = StoryItem(id = "orig-1", expiresAt = "2020-01-01T00:00:00Z")
+        val (stories, posts) = tapOnStory(embed(isStory = true, storyItem = story, authorId = "author-1"))
+        assertThat(stories).isEmpty()
+        assertThat(posts).containsExactly("orig-1")
+    }
+
+    @Test
+    fun `une story reposte sans auteur connu ouvre la fiche du post meme avec un lecteur de stories`() {
+        val story = StoryItem(id = "orig-1", expiresAt = "2999-01-01T00:00:00Z")
+        val (stories, posts) = tapOnStory(embed(isStory = true, storyItem = story, authorId = null))
+        assertThat(stories).isEmpty()
+        assertThat(posts).containsExactly("orig-1")
     }
 
     @Test

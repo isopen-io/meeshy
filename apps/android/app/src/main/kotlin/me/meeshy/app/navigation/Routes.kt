@@ -172,8 +172,9 @@ object Routes {
     const val MY_STORIES = "stories/mine"
     const val MOOD_SPOTLIGHT = "mood/{statusId}"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
-    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
-    const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
+    /** `storyId` (facultatif) : une story précise de l'auteur — celle d'une story republiée —, au lieu de sa première non vue. */
+    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}?${StoryViewerViewModel.STORY_ID_ARG}={${StoryViewerViewModel.STORY_ID_ARG}}"
+    const val STORY_DEEP_LINK = "meeshy://story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
@@ -211,7 +212,8 @@ object Routes {
     fun hashtag(tag: String): String = "hashtag/${Uri.encode(tag.removePrefix("#"))}"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
-    fun story(userId: String): String = "story/$userId"
+    fun story(userId: String, storyId: String? = null): String =
+        if (storyId.isNullOrBlank()) "story/$userId" else "story/$userId?${StoryViewerViewModel.STORY_ID_ARG}=${java.net.URLEncoder.encode(storyId, "UTF-8").replace("+", "%20")}"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
     fun packShop(domain: String? = null, pack: String? = null): String =
         listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })

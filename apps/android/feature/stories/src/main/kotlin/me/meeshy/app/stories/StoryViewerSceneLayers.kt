@@ -147,7 +147,7 @@ internal fun StoryForegroundLayer(
     onAudioFocusLost: () -> Unit = {},
     players: Boolean = true,
 ) {
-    if (media.isVideo && !players) return
+    if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val frame = ForegroundMediaFrame.renderedSize(
@@ -165,7 +165,14 @@ internal fun StoryForegroundLayer(
             .graphicsLayer { rotationZ = media.rotation.toFloat() }
             .clip(RoundedCornerShape(minOf(targetWidth, targetHeight) * FOREGROUND_CORNER_FRACTION))
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
-        if (media.isVideo) {
+        if (media.isVideo && !players) {
+            StoryRestingPoster(
+                posterUrl = media.posterUrl,
+                thumbHash = media.thumbHash,
+                lookRecipe = media.lookRecipe,
+                modifier = layerModifier,
+            )
+        } else if (media.isVideo) {
             ReelVideoSurface(
                 mediaUrl = media.url,
                 isActive = playing,

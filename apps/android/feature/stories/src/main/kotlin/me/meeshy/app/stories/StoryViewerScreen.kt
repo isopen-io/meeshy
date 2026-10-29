@@ -138,9 +138,15 @@ fun StoryViewerScreen(
     onRepost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onEditStory: ((String) -> Unit)? = null,
+    onStoryMissing: (String) -> Unit = { onClose() },
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    state.missingStoryId?.let { missingId ->
+        LaunchedEffect(missingId) { onStoryMissing(missingId) }
+        StoryViewerLoading()
+        return
+    }
     if (state.loadFailed) {
         StoryViewerNotFound(onRetry = viewModel::retry, onClose = onClose)
         return

@@ -17,7 +17,7 @@ typealias RepostSceneRenderer = @Composable (item: StoryItem, authorName: String
 val LocalRepostSceneRenderer = staticCompositionLocalOf<RepostSceneRenderer?> { null }
 
 /**
- * Ouvre la story d'un auteur en plein écran, dans le lecteur de stories (iOS : toucher une story republiée l'ouvre, il n'ouvre
- * pas la fiche du post). `null` hors de l'application : la carte retombe sur la fiche du post.
+ * Ouvre une story PRÉCISE (`storyId`, de l'auteur `authorId`) en plein écran, dans le lecteur de stories (iOS : toucher une story
+ * republiée l'ouvre, il n'ouvre pas la fiche du post). `null` hors de l'application : la carte retombe sur la fiche du post.
  */
-val LocalStoryOpener = staticCompositionLocalOf<((authorId: String) -> Unit)?> { null }
+val LocalStoryOpener = staticCompositionLocalOf<((authorId: String, storyId: String) -> Unit)?> { null }

@@ -152,14 +152,19 @@ data class StoryPlayback(
          * de Bob (iOS `StoryViewerContainer.ensureGroupAvailable` affiche un repli). Le
          * départ suit `startAtFirstUnviewed` (`StoryViewerView+Lifecycle.swift`) : la
          * première story non vue, ou la première quand tout est vu.
+         *
+         * Avec [storyId] (une story republiée qu'on ouvre), le départ est CETTE story, vue ou non ; si l'auteur ne la porte plus
+         * (expirée, supprimée), `null` — jamais une autre story du même auteur.
          */
-        fun forAuthor(groups: List<StoryGroupSlides>, authorId: String): StoryPlayback? {
+        fun forAuthor(groups: List<StoryGroupSlides>, authorId: String, storyId: String? = null): StoryPlayback? {
             if (authorId.isBlank()) return null
             val live = groups.filter { it.slides.isNotEmpty() }
             val start = live.indexOfFirst { it.userId == authorId }
             if (start < 0) return null
-            val firstUnviewed = live[start].slides.indexOfFirst { !it.isViewed }.coerceAtLeast(0)
-            return StoryPlayback(groups = live, groupIndex = start, slideIndex = firstUnviewed)
+            val slides = live[start].slides
+            val slideIndex = if (storyId != null) slides.indexOfFirst { it.id == storyId } else slides.indexOfFirst { !it.isViewed }.coerceAtLeast(0)
+            if (slideIndex < 0) return null
+            return StoryPlayback(groups = live, groupIndex = start, slideIndex = slideIndex)
         }
     }
 }

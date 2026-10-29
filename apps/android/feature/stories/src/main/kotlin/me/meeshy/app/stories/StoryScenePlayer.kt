@@ -70,6 +70,19 @@ internal fun StorySceneBackground(
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
             )
         }
+        // Au repos le fond vidéo n'a pas de lecteur : son affiche (vignette, sinon ThumbHash) garde le cadre, l'aplat dessous.
+        slide.backgroundVideoUrl != null && restingPosterKind(slide.backgroundPosterUrl, slide.backgroundThumbHash) != RestingPosterKind.NONE -> {
+            val bg = slide.backgroundTransform
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()))
+                StoryRestingPoster(
+                    posterUrl = slide.backgroundPosterUrl,
+                    thumbHash = slide.backgroundThumbHash,
+                    lookRecipe = slide.lookRecipe,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
+                )
+            }
+        }
         slide.imageUrl != null -> {
             val imageUrl = slide.imageUrl
             val bg = slide.backgroundTransform
@@ -144,8 +157,10 @@ internal fun StorySceneAudio(
  * ET les médias repartent de zéro, ensemble. [onBackgroundPlayer] tend le lecteur de la vidéo de fond (sonde de sa
  * piste audio).
  *
- * [resting] : la scène est une image fixe (#13663) — fond, images, textes et stickers à l'instant zéro, et AUCUN lecteur
- * (ni la vidéo de fond, ni les vidéos posées, ni les pistes). Seule la scène que le fil élit joue ; les autres restent ainsi.
+ * [resting] : la scène est une image fixe (#13663) et n'a AUCUN lecteur (ni la vidéo de fond, ni les vidéos posées, ni les
+ * pistes). Le fond vidéo et chaque vidéo posée gardent leur cadre avec leur affiche (la vignette, sinon le ThumbHash ; l'aplat
+ * d'accent quand la vidéo n'a ni l'un ni l'autre) ; images, textes et stickers se dessinent à la position de l'horloge — zéro
+ * pour une scène neuve, la dernière reprise quand [rewindWhenIdle] est faux. Seule la scène que le fil élit joue.
  */
 @Composable
 fun StoryScenePlayer(

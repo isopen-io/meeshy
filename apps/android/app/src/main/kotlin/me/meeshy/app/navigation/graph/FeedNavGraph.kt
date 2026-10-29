@@ -129,7 +129,14 @@ internal fun NavGraphBuilder.feedNavGraph(
     }
     composable(
         route = Routes.STORY_VIEWER,
-        arguments = listOf(navArgument(StoryViewerViewModel.USER_ID_ARG) { type = NavType.StringType }),
+        arguments = listOf(
+            navArgument(StoryViewerViewModel.USER_ID_ARG) { type = NavType.StringType },
+            navArgument(StoryViewerViewModel.STORY_ID_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
         ),
@@ -139,6 +146,10 @@ internal fun NavGraphBuilder.feedNavGraph(
             onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
+            // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
+            onStoryMissing = { postId ->
+                navController.navigate(Routes.postDetail(postId)) { popUpTo(Routes.STORY_VIEWER) { inclusive = true } }
+            },
         )
     }
     composable(

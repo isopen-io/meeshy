@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.media
 
+import androidx.annotation.VisibleForTesting
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -16,6 +17,7 @@ object PlayerCensus {
         born.incrementAndGet()
     }
 
+    @VisibleForTesting
     fun reset() {
         born.set(0)
     }

@@ -51,7 +51,7 @@ internal fun ReelCoverView(
     val renderer = LocalRepostSceneRenderer.current
     if (cover is ReelCover.Scene && renderer != null) {
         val live by rememberSceneLive(sceneId)
-        renderer(cover.item, authorName, live, onOpen, Modifier.fillMaxWidth())
+        renderer(cover.item, authorName, live, onOpen, Modifier.fillMaxWidth().sceneFrame(sceneId))
         return
     }
     val label = stringResource(R.string.feed_reel)

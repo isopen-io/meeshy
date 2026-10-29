@@ -55,6 +55,10 @@ data class StoryForegroundMediaView(
     val sourceWindow: StorySourceWindowMs? = null,
     /** Le look PROPRE de ce média (son filtre, ses réglages) : il ne colore que lui, jamais la scène. */
     val lookRecipe: me.meeshy.sdk.model.scene.SceneLookRecipe = me.meeshy.sdk.model.scene.SceneLookRecipe.NEUTRAL,
+    /** L'affiche de la vidéo (la vignette que le serveur sert) : ce que la scène au repos peint à son cadre, sans lecteur. */
+    val posterUrl: String? = null,
+    /** Le ThumbHash de la pièce : l'affiche de repli quand le serveur n'a pas de vignette. */
+    val thumbHash: String? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -212,6 +216,11 @@ data class StorySlideView(
      */
     val backgroundThumbHash: String? = null,
     /**
+     * L'affiche d'un fond VIDÉO (la vignette que le serveur sert) : ce que la scène au repos peint à la place du lecteur
+     * (#13663). `null` sans vignette — le [backgroundThumbHash] de la vidéo, puis l'aplat, prennent le relais.
+     */
+    val backgroundPosterUrl: String? = null,
+    /**
      * The locked repost attribution shown after the author's name when this slide
      * is a repost of someone else's story (repost icon + `@handle`, no "via"),
      * resolved once at projection time via [StoryRepostAttribution]. `null` for a
@@ -291,6 +300,11 @@ data class StoryViewerUiState(
      * propose Réessayer et Fermer au lieu de se refermer seul ou d'ouvrir un autre auteur.
      */
     val loadFailed: Boolean = false,
+    /**
+     * La story précise demandée (une story republiée) n'est plus jouable : expirée, supprimée ou d'un auteur absent. L'écran
+     * ouvre alors la fiche du post ([loadFailed] reste faux — ce n'est pas un échec de chargement).
+     */
+    val missingStoryId: String? = null,
     /**
      * Pause demandée par l'appui long (iOS `StoryGestureOverlayView`, ≥ 200 ms) : la
      * lecture se fige et l'interface s'efface ; le relâchement ne reprend PAS, le tap

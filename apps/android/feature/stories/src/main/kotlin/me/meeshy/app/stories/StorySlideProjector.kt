@@ -60,7 +60,9 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundVideoWindow = background.window,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
-            backgroundThumbHash = StorySlidePlaceholder.resolve(this),
+            backgroundThumbHash = StorySlidePlaceholder.resolve(this)
+                ?: StorySlidePlaceholder.resolve(effectsThumbHash = null, backgroundImageThumbHash = background.posterThumbHash),
+            backgroundPosterUrl = background.posterUrl,
             foregroundMedia = foreground,
             textObjects = textObjects,
             backgroundAudioUrl = backgroundTrack?.url,
@@ -92,6 +94,9 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
         /** Fenêtre de lecture d'un fond VIDÉO (#5129) ; une image n'en a pas. */
         val window: StorySourceWindowMs? = null,
+        /** L'affiche d'un fond VIDÉO : la vignette du serveur, son ThumbHash à défaut (la scène au repos n'a pas de lecteur). */
+        val posterUrl: String? = null,
+        val posterThumbHash: String? = null,
     )
 
     /**
@@ -122,6 +127,11 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         val resolvedUrl = (ownUrl ?: fallbackMedia?.url)?.let { resolveMediaUrl(it, apiBaseUrl) }
 
         if (isVideo) {
+            // La pièce qui porte la vidéo de fond : celle que l'objet désigne (ou dont il porte l'adresse), sinon le repli plat.
+            val piece = if (governing == null) fallbackMedia else {
+                designatedId?.let { id -> media.firstOrNull { it.id == id } }
+                    ?: ownUrl?.let { url -> media.firstOrNull { it.url == url } }
+            }
             // The framing rides only on a modern `isBackground` object whose OWN
             // address (its mediaURL, or the piece it names) produced the resolved url;
             // a legacy/flat fallback video never carries one, so it stays a plain
@@ -142,6 +152,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 window = StorySourceWindow.clippingMs(
                     governing?.sourceStart, governing?.sourceEnd,
                 ),
+                posterUrl = piece?.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) },
+                posterThumbHash = piece?.thumbHash,
             )
         }
         val imageUrl = resolvedUrl
@@ -199,6 +211,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             clipTransitions = clipTransitions,
             sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
             lookRecipe = SceneLookRecipe.forMedia(this),
+            posterUrl = piece?.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) },
+            thumbHash = piece?.thumbHash,
         ).bounded()
     }
 

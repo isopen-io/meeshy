@@ -67,6 +67,9 @@ class StoryViewerViewModel @Inject constructor(
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
 
+    /** La story précise à ouvrir (une story republiée) ; `null` : le lecteur démarre à la première non vue de l'auteur. */
+    private val requestedStoryId: String? = savedStateHandle.get<String>(STORY_ID_ARG)?.takeIf { it.isNotBlank() }
+
     private val projector = StorySlideProjector(config.apiBaseUrl)
 
     private var playback: StoryPlayback = StoryPlayback(groups = emptyList())
@@ -261,6 +264,10 @@ class StoryViewerViewModel @Inject constructor(
      * s'affichent sans réseau, hors ligne compris ; le réseau n'est interrogé que si
      * l'auteur y manque. Introuvable des deux côtés ⇒ [StoryViewerUiState.loadFailed]
      * (Réessayer / Fermer), jamais la story d'un autre auteur, jamais une fermeture seule.
+     *
+     * Une story PRÉCISE demandée ([requestedStoryId], une story republiée) que ni le cache ni le réseau ne portent vivante
+     * (expirée, supprimée, auteur absent) n'est pas un échec de chargement : [StoryViewerUiState.missingStoryId] laisse
+     * l'écran ouvrir la fiche du post, comme avant.
      */
     private fun load() {
         viewModelScope.launch {
@@ -268,7 +275,10 @@ class StoryViewerViewModel @Inject constructor(
             if (startFrom(attempt { storyRepository.cachedStories() })) return@launch
             val network = attempt { (storyRepository.list() as? NetworkResult.Success)?.data }
             if (startFrom(network)) return@launch
-            _state.update { it.copy(isLoading = false, loadFailed = true) }
+            _state.update {
+                if (requestedStoryId != null) it.copy(isLoading = false, missingStoryId = requestedStoryId)
+                else it.copy(isLoading = false, loadFailed = true)
+            }
         }
     }
 
@@ -301,7 +311,7 @@ class StoryViewerViewModel @Inject constructor(
                 .purgingDeadStories(currentUserId = currentUserId, nowMillis = clock.nowMillis())
                 .map { it.toGroupSlides() }
         } ?: return false
-        val next = StoryPlayback.forAuthor(groups, userId) ?: return false
+        val next = StoryPlayback.forAuthor(groups, userId, requestedStoryId) ?: return false
         playback = next
         emit()
         return true
@@ -721,6 +731,7 @@ class StoryViewerViewModel @Inject constructor(
 
     companion object {
         const val USER_ID_ARG: String = "userId"
+        const val STORY_ID_ARG: String = "storyId"
     }
 
     /**
