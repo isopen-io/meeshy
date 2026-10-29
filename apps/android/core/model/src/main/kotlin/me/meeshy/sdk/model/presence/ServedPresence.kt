@@ -5,25 +5,39 @@ import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
- * La présence que la page de conversations a SERVIE, par compte (miroir de la boucle de
- * `PresenceManager.seed(from:)` iOS). La passerelle masque ce que la loi de visibilité ne permet pas
- * (`false` et pas de date) : une ligne qui ne dit rien — absente ou masquée — ne donne rien, ni
- * « hors ligne » inventé, ni entrée qui en cacherait une meilleure. Un même compte vu dans plusieurs
- * conversations garde la présence la plus récente.
+ * Ce qu'une page de conversations a dit de la présence de chacun : [served], ce qu'elle a SERVI
+ * (`isOnline` + `lastActiveAt`) ; [masked], ceux qu'elle a MASQUÉS (`false` et pas de date — la loi de
+ * visibilité ne permet plus de les voir : ami retiré, `showOnlineStatus` coupé). Un masqué ne sème
+ * rien, mais il retire ce que la carte n'avait que du disque.
  */
-fun List<ApiConversation>.servedPresence(): Map<String, UserPresence> {
+data class ServedPresencePage(
+    val served: Map<String, UserPresence> = emptyMap(),
+    val masked: Set<String> = emptySet(),
+)
+
+/**
+ * La présence que la page de conversations a SERVIE, par compte (miroir de la boucle de
+ * `PresenceManager.seed(from:)` iOS). Une ligne qui ne dit rien (champ absent) ne donne rien, ni
+ * « hors ligne » inventé, ni entrée qui en cacherait une meilleure ; une ligne masquée nomme son
+ * compte dans [ServedPresencePage.masked], sauf si une autre conversation le sert. Un même compte vu
+ * dans plusieurs conversations garde la présence la plus récente.
+ */
+fun List<ApiConversation>.servedPresence(): ServedPresencePage {
     val served = HashMap<String, UserPresence>()
+    val masked = HashSet<String>()
     for (conversation in this) {
         for (participant in conversation.participants) {
             val userId = participant.userId?.takeIf { it.isNotBlank() } ?: continue
-            val presence = UserPresence.served(participant.isOnline, participant.lastActiveAt)
-                ?.takeIf { it.isOnline || !it.lastActiveAt.isNullOrBlank() }
-                ?: continue
+            val presence = UserPresence.served(participant.isOnline, participant.lastActiveAt) ?: continue
+            if (!presence.isOnline && presence.lastActiveAt.isNullOrBlank()) {
+                masked += userId
+                continue
+            }
             val known = served[userId]
             if (known == null || presence.isNewerThan(known)) served[userId] = presence
         }
     }
-    return served
+    return ServedPresencePage(served, masked - served.keys)
 }
 
 private fun UserPresence.isNewerThan(other: UserPresence): Boolean {

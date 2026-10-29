@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +15,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.presence.PresenceMap
+import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.session.PerAccountCache
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -22,7 +25,8 @@ import javax.inject.Singleton
 
 /**
  * La mémoire disque de la carte de présence (miroir de `presence_map.json` d'iOS). Une écriture porte
- * le compte qui l'a reçue : une lecture pour un AUTRE compte ne rend rien. Ni l'âge (24 h) ni le
+ * le compte qui l'a reçue : une lecture pour un AUTRE compte ne rend rien et EFFACE le fichier — ce que
+ * le compte précédent a laissé ne survit pas à sa première lecture par un autre. Ni l'âge (24 h) ni le
  * compte courant ne se décident ici — c'est la loi pure `PresenceRetention`.
  */
 interface PresenceMapPersistence {
@@ -59,7 +63,9 @@ class FilePresenceMapPersistence(
         attempt {
             if (!file.exists()) return@attempt emptyMap()
             val persisted = json.decodeFromString<PersistedPresenceMap>(file.readText())
-            if (persisted.accountId == accountId) persisted.entries else emptyMap()
+            if (persisted.accountId == accountId) return@attempt persisted.entries
+            file.delete()
+            emptyMap()
         } ?: emptyMap()
     }
 
@@ -100,6 +106,15 @@ internal object PresenceMapPersistenceModule {
 
     @Provides
     @Singleton
-    fun provideServedPresenceSink(store: dagger.Lazy<PresenceStore>): ServedPresenceSink =
-        ServedPresenceSink { served -> store.get().seed(served) }
+    fun provideServedPresenceSink(store: dagger.Lazy<PresenceStore>): ServedPresenceSink = object : ServedPresenceSink {
+        override fun seed(served: Map<String, UserPresence>) = store.get().seed(served)
+        override fun seed(page: ServedPresencePage) = store.get().seed(page)
+    }
+
+    /** La carte et son fichier se vident dans [me.meeshy.sdk.session.SessionTeardown.wipe], attendu par la déconnexion. */
+    @Provides
+    @IntoSet
+    fun providePresenceAccountCache(store: dagger.Lazy<PresenceStore>): PerAccountCache = object : PerAccountCache {
+        override suspend fun clear() = store.get().clear()
+    }
 }

@@ -34,6 +34,15 @@ class FilePresenceMapPersistenceTest {
     }
 
     @Test
+    fun `a file of another account is erased by the read that refuses it`() = runTest {
+        disk().save("me", mapOf("u1" to UserPresence(true, "2026-10-29T10:00:00Z")))
+
+        disk().load("autre")
+
+        assertThat(File(folder.root, "presence/presence_map.json").exists()).isFalse()
+    }
+
+    @Test
     fun `no file reads as an empty map`() = runTest {
         assertThat(disk().load("me")).isEmpty()
     }

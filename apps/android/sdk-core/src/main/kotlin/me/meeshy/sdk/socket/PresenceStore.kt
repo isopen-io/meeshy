@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transformWhile
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,7 +29,9 @@ import me.meeshy.sdk.model.presence.PresenceDecayClock
 import me.meeshy.sdk.model.presence.PresenceMap
 import me.meeshy.sdk.model.presence.PresenceMapReducer
 import me.meeshy.sdk.model.presence.PresenceRetention
+import me.meeshy.sdk.model.presence.ServedPresencePage
 import me.meeshy.sdk.net.TokenStore
+import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -68,7 +69,7 @@ class PresenceStore internal constructor(
     private val tickMillis: Long = PresenceDecayClock.TICK_MS,
     private val persistence: PresenceMapPersistence = PresenceMapPersistence.None,
     private val persistIntervalMillis: Long = PERSIST_INTERVAL_MS,
-) : ServedPresenceSink {
+) : ServedPresenceSink, PerAccountCache {
     @Inject
     constructor(
         messageSocketManager: MessageSocketManager,
@@ -124,16 +125,21 @@ class PresenceStore internal constructor(
     fun start() {
         if (started) return
         started = true
-        scope.launch { sources.userStatus.collect { event -> _entries.update { withoutMe(PresenceMapReducer.applyStatus(it, event)) } } }
-        scope.launch { sources.presenceSnapshot.collect { snapshot -> _entries.update { withoutMe(PresenceMapReducer.applySnapshot(it, snapshot.users)) } } }
         scope.launch {
-            sources.typingStarted.collect { event ->
-                noteActivity(event.userId)
+            sources.userStatus.collect { event ->
+                applyLive(listOf(event.userId)) { map, _ -> PresenceMapReducer.applyStatus(map, event) }
             }
         }
+        scope.launch {
+            sources.presenceSnapshot.collect { snapshot ->
+                applyLive(snapshot.users.map { it.userId }) { map, _ -> PresenceMapReducer.applySnapshot(map, snapshot.users) }
+            }
+        }
+        scope.launch { sources.typingStarted.collect { event -> noteActivity(event.userId) } }
         scope.launch { sources.connectionState.collect(::onConnectionState) }
         scope.launch { sources.sessionUserId.collect { onSessionUser(it) } }
-        scope.launch { currentUserId()?.let { restoreFor(it) } }
+        val first = synchronized(lock) { adoptedLocked() }
+        first.owner?.let { account -> scope.launch { restore(first.id, account) } }
         scope.launch { _entries.collect { persistNow(); delay(persistIntervalMillis) } }
     }
 
@@ -142,67 +148,153 @@ class PresenceStore internal constructor(
      * iOS) : seuls les INCONNUS sont semés, une entrée déjà posée — socket, frappe, relecture — est
      * gardée, et le compte courant n'y entre jamais.
      */
-    override fun seed(served: Map<String, UserPresence>) {
-        if (served.isEmpty()) return
-        _entries.update { PresenceMapReducer.seed(it, served, currentUserId()) }
+    override fun seed(served: Map<String, UserPresence>) = seed(ServedPresencePage(served))
+
+    /**
+     * Semis d'une page entière : comme ci-dessus, et une entrée qui ne venait que du DISQUE cède à la
+     * page — remplacée par ce qu'elle sert, retirée si elle la masque. Le socket l'emporte toujours.
+     */
+    override fun seed(page: ServedPresencePage) {
+        if (page.served.isEmpty() && page.masked.isEmpty()) return
+        mutate { map, current ->
+            val seeded = PresenceMapReducer.seed(map, current.restored, page, current.owner)
+            seeded.entries to current.copy(restored = seeded.restored)
+        }
     }
 
-    private var previousSessionUser: String? = null
+    /**
+     * La carte appartient à UNE génération de compte : l'identifiant du compte qui la possède et un
+     * numéro qui change à chaque passage de propriétaire (vers ou depuis aucun compte compris).
+     * [readBack] : la relecture du disque de cette génération est faite ; [restored] : les comptes dont
+     * l'entrée ne vient encore que de cette relecture (une page servie les remplace).
+     */
+    private data class Generation(
+        val id: Long = 0,
+        val owner: String? = null,
+        val readBack: Boolean = false,
+        val restored: Set<String> = emptySet(),
+    ) {
+        val adopted: Boolean get() = id > 0
+    }
+
+    /** Garde la génération et la carte ensemble : un événement, un semis, une relecture ou un vidage à la fois. */
+    private val lock = Any()
+    private var generation = Generation()
 
     /** Un seul à la fois écrit, relit ou efface le disque : un effacement n'est jamais rattrapé par une écriture tardive. */
     private val disk = Mutex()
 
-    /** Le compte à qui appartient la carte en mémoire ; `null` tant qu'elle n'a pas été relue ou après une déconnexion. */
-    private var mapOwner: String? = null
-
     /** Ce qui est sur le disque : une écriture identique est sautée. */
     private var onDisk: PresenceMap = emptyMap()
 
-    /**
-     * Relit le disque pour [account] et comble les inconnus de la carte (une entrée vivante gagne
-     * toujours). Une réponse arrivée après un changement de compte est jetée.
-     */
-    private suspend fun restoreFor(account: String) = disk.withLock {
-        if (mapOwner == account) return@withLock
-        val now = clock.nowMillis()
-        val persisted = persistence.load(account)
-        if (currentUserId() != account) return@withLock
-        val restored = PresenceRetention.restoredAtLaunch(persisted, account, now)
-        _entries.update { PresenceMapReducer.restore(it, restored) }
-        onDisk = PresenceRetention.retained(persisted, account, now)
-        mapOwner = account
+    /** La génération courante ; la première est adoptée pour le compte connu au premier usage. */
+    private fun adoptedLocked(): Generation {
+        if (!generation.adopted) generation = Generation(id = 1, owner = currentUserId())
+        return generation
     }
 
-    /** Écrit la carte, bornée à 24 h et sans le compte courant, sous la clé du compte qui la possède. */
+    /** Passe la carte à [account] : nouvelle génération, carte VIDE. `null` si le propriétaire ne change pas. */
+    private fun handOverLocked(account: String?): Generation? {
+        val current = adoptedLocked()
+        if (current.owner == account) return null
+        generation = Generation(id = current.id + 1, owner = account)
+        _entries.value = emptyMap()
+        return generation
+    }
+
+    /**
+     * Applique [transform] à la carte de la génération courante, et seulement si elle a un
+     * propriétaire qui est encore le compte connu : un événement reçu sans compte, ou pour un compte
+     * qui n'est plus celui de la carte (socket de A encore ouvert après sa déconnexion), est jeté.
+     */
+    private inline fun mutate(transform: (PresenceMap, Generation) -> Pair<PresenceMap, Generation>) {
+        synchronized(lock) {
+            val current = adoptedLocked()
+            val owner = current.owner ?: return
+            if (owner != currentUserId()) return
+            val before = _entries.value
+            val (next, nextGeneration) = transform(before, current)
+            generation = nextGeneration
+            val mine = if (next.containsKey(owner)) next - owner else next
+            if (mine != before) _entries.value = mine
+        }
+    }
+
+    /** Une source vivante (socket, frappe, `viewing:*`) : les comptes [touched] ne sont plus « relus du disque ». */
+    private inline fun applyLive(touched: Collection<String>, crossinline transform: (PresenceMap, String) -> PresenceMap) =
+        mutate { map, current ->
+            transform(map, current.owner.orEmpty()) to current.copy(restored = current.restored - touched.toSet())
+        }
+
+    /**
+     * Relit le disque pour [account] dans la génération [id] et comble les inconnus de la carte (une
+     * entrée vivante gagne toujours). Le résultat n'est versé que sous le verrou de la carte et si la
+     * génération n'a pas changé pendant la lecture : un vidage survenu entre-temps n'est jamais rattrapé.
+     */
+    private suspend fun restore(id: Long, account: String) {
+        disk.withLock {
+            if (synchronized(lock) { generation.id } != id) return@withLock
+            val now = clock.nowMillis()
+            val persisted = persistence.load(account)
+            val merged = synchronized(lock) {
+                if (generation.id != id || currentUserId() != account) return@synchronized false
+                val readBack = PresenceRetention.restoredAtLaunch(persisted, account, now)
+                val before = _entries.value
+                val added = readBack.keys - before.keys
+                generation = generation.copy(readBack = true, restored = generation.restored + added)
+                _entries.value = PresenceMapReducer.restore(before, readBack)
+                true
+            }
+            if (merged) onDisk = PresenceRetention.retained(persisted, account, now)
+        }
+        persistNow()
+    }
+
+    /** Écrit la carte, bornée à 24 h et sans le compte courant, sous la clé du compte qui la possède — une fois son disque relu. */
     private suspend fun persistNow() = disk.withLock {
-        val owner = mapOwner ?: return@withLock
-        if (owner != currentUserId()) return@withLock
-        val retained = PresenceRetention.retained(_entries.value, owner, clock.nowMillis())
+        val (owner, entries) = synchronized(lock) {
+            val owner = generation.owner?.takeIf { generation.readBack && it == currentUserId() } ?: return@withLock
+            owner to _entries.value
+        }
+        val retained = PresenceRetention.retained(entries, owner, clock.nowMillis())
         if (retained == onDisk) return@withLock
         persistence.save(owner, retained)
         onDisk = retained
     }
 
-    private suspend fun forgetAccount() {
-        _entries.value = emptyMap()
-        disk.withLock {
-            mapOwner = null
-            onDisk = emptyMap()
-            persistence.clear()
+    private suspend fun clearDisk() = disk.withLock {
+        onDisk = emptyMap()
+        persistence.clear()
+    }
+
+    /**
+     * Le vidage de [me.meeshy.sdk.session.SessionTeardown.wipe] : la carte quitte tout compte sur-le-champ
+     * (plus rien ne s'y écrit jusqu'au compte suivant), puis le fichier est effacé — ATTENDU, une relecture
+     * en cours achevée d'abord, et rien de ce qu'elle a lu n'est versé.
+     */
+    override suspend fun clear() {
+        synchronized(lock) {
+            generation = Generation(id = adoptedLocked().id + 1, owner = null)
+            _entries.value = emptyMap()
         }
+        clearDisk()
     }
 
     /**
      * La carte appartient au compte qui l'a reçue (miroir de `resetForLogout` iOS) : dès que le
-     * compte connu change — déconnexion ou bascule directe vers un autre —, elle est vidée. La
-     * coupure du socket ne suffit pas : `reconnectWithToken` enchaîne DISCONNECTED puis CONNECTING
+     * compte connu change — déconnexion, bascule directe vers un autre, ou premier compte après une
+     * session refusée —, elle est vidée et une nouvelle génération relit le disque du nouveau compte.
+     * La coupure du socket ne suffit pas : `reconnectWithToken` enchaîne DISCONNECTED puis CONNECTING
      * sous le même verrou, et un collecteur d'état conflaté ne voit que le second.
      */
     private suspend fun onSessionUser(userId: String?) {
-        val previous = previousSessionUser
-        previousSessionUser = userId
-        if (previous != null && previous != userId) forgetAccount()
-        if (userId != null) restoreFor(userId)
+        val account = userId ?: currentUserId()
+        val (previous, next) = synchronized(lock) {
+            val previous = adoptedLocked().owner
+            previous to (handOverLocked(account) ?: return)
+        }
+        if (previous != null) clearDisk()
+        next.owner?.let { restore(next.id, it) }
     }
 
     private var previousConnection: SocketConnectionState = SocketConnectionState.DISCONNECTED
@@ -212,8 +304,8 @@ class PresenceStore internal constructor(
         previousConnection = state
         when (state) {
             SocketConnectionState.CONNECTING ->
-                if (previous == SocketConnectionState.CONNECTED) _entries.update(PresenceMapReducer::socketDisconnected)
-            SocketConnectionState.DISCONNECTED -> _entries.update(PresenceMapReducer::socketDisconnected)
+                if (previous == SocketConnectionState.CONNECTED) mutate { map, g -> PresenceMapReducer.socketDisconnected(map) to g }
+            SocketConnectionState.DISCONNECTED -> mutate { map, g -> PresenceMapReducer.socketDisconnected(map) to g }
             SocketConnectionState.CONNECTED -> Unit
         }
     }
@@ -224,16 +316,10 @@ class PresenceStore internal constructor(
      * il décroît. `isOnline` reste ce que le serveur a dit ; le compte courant n'écrit jamais la carte.
      */
     fun noteActivity(userId: String) {
-        _entries.update { PresenceMapReducer.noteActivity(it, userId, currentUserId(), clock.nowMillis()) }
+        applyLive(listOf(userId)) { map, owner -> PresenceMapReducer.noteActivity(map, userId, owner, clock.nowMillis()) }
     }
 
     private fun isMe(userId: String): Boolean = userId == currentUserId()
-
-    /** Le compte courant n'a jamais de présence servie (miroir de `knownPresenceState` iOS). */
-    private fun withoutMe(map: PresenceMap): PresenceMap {
-        val me = currentUserId() ?: return map
-        return if (map.containsKey(me)) map - me else map
-    }
 
     /** L'entrée servie de [userId] ; `null` = rien servi (aucun point), toujours pour le compte courant. */
     fun entryOf(userId: String): Flow<UserPresence?> =

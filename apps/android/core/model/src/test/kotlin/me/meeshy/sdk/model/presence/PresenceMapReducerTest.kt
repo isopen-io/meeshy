@@ -133,4 +133,35 @@ class PresenceMapReducerTest {
         assertThat(after["a"]).isEqualTo(UserPresence(true, iso(0)))
         assertThat(after["b"]).isEqualTo(UserPresence(false, iso(-9000)))
     }
+
+    @Test
+    fun `a served page replaces what was only read back from the disk`() {
+        val map: PresenceMap = mapOf("u1" to UserPresence(false, iso(-60_000)))
+        val after = PresenceMapReducer.seed(map, setOf("u1"), ServedPresencePage(served = mapOf("u1" to UserPresence(false, iso(-600_000)))), "me")
+
+        assertThat(after.entries["u1"]).isEqualTo(UserPresence(false, iso(-600_000)))
+        assertThat(after.restored).isEmpty()
+    }
+
+    @Test
+    fun `a masked row of the page withdraws what was only read back from the disk`() {
+        val map: PresenceMap = mapOf("u1" to UserPresence(false, iso(-60_000)), "u2" to UserPresence(false, iso(-60_000)))
+        val after = PresenceMapReducer.seed(map, setOf("u1", "u2"), ServedPresencePage(masked = setOf("u1")), "me")
+
+        assertThat(after.entries.keys).containsExactly("u2")
+        assertThat(after.restored).containsExactly("u2")
+    }
+
+    @Test
+    fun `a masked row never withdraws a live entry, and a page never replaces one`() {
+        val live: PresenceMap = mapOf("u1" to UserPresence(true, iso(0)), "u2" to UserPresence(false, iso(-10)))
+        val after = PresenceMapReducer.seed(
+            live,
+            emptySet(),
+            ServedPresencePage(served = mapOf("u2" to UserPresence(true, iso(-5000))), masked = setOf("u1")),
+            "me",
+        )
+
+        assertThat(after.entries).isSameInstanceAs(live)
+    }
 }

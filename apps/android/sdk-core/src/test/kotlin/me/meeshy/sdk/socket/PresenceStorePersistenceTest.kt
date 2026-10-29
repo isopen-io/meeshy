@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
@@ -14,6 +15,8 @@ import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.presence.PresenceMap
+import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.session.PerAccountCache
 import org.junit.Test
 import java.time.Instant
 
@@ -50,12 +53,12 @@ class PresenceStorePersistenceTest {
         }
     }
 
-    private class Fixture(scope: TestScope, epoch: Long, val disk: FakePersistence, var account: String?) {
+    private class Fixture(scope: TestScope, epoch: Long, val disk: FakePersistence, var account: String?, session: String?) {
         val userStatus = MutableSharedFlow<UserStatusEvent>()
         val snapshot = MutableSharedFlow<PresenceSnapshotEvent>()
         val typing = MutableSharedFlow<me.meeshy.sdk.model.TypingEvent>()
         val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
-        val sessionUser = MutableStateFlow(account)
+        val sessionUser = MutableStateFlow(session)
         val clock = object : CacheClock {
             override fun nowMillis(): Long = epoch + scope.currentTime
         }
@@ -68,8 +71,13 @@ class PresenceStorePersistenceTest {
         )
     }
 
-    private fun TestScope.fixture(disk: FakePersistence = FakePersistence(), account: String? = "me", start: Boolean = true) =
-        Fixture(this, epoch, disk, account).also {
+    private fun TestScope.fixture(
+        disk: FakePersistence = FakePersistence(),
+        account: String? = "me",
+        session: String? = account,
+        start: Boolean = true,
+    ) =
+        Fixture(this, epoch, disk, account, session).also {
             if (start) it.store.start()
             testScheduler.runCurrent()
         }
@@ -190,18 +198,21 @@ class PresenceStorePersistenceTest {
     }
 
     @Test
-    fun `a sign out clears the map and the disk, and nothing is written afterwards`() = runTest {
+    fun `a sign out clears the map and the disk, and nothing received afterwards is kept or written`() = runTest {
         val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
         val f = fixture(disk)
+        val savesBefore = disk.saves
 
         switchTo(f, null)
         f.userStatus.emit(UserStatusEvent("u9", "z", true, iso(epoch)))
+        f.typing.emit(me.meeshy.sdk.model.TypingEvent(conversationId = "c", userId = "u8"))
+        f.store.noteActivity("u7")
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
+        assertThat(f.store.entries.value).isEmpty()
         assertThat(f.disk.file).isNull()
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
-        assertThat(f.disk.file).isNull()
+        assertThat(f.disk.saves).isEqualTo(savesBefore)
     }
 
     @Test
@@ -229,5 +240,133 @@ class PresenceStorePersistenceTest {
 
         assertThat(f.disk.file?.first).isEqualTo("B")
         assertThat(f.disk.file?.second?.keys).containsExactly("u7")
+    }
+
+    @Test
+    fun `what the socket of the account that left still delivers is never carried into the next account`() = runTest {
+        val f = fixture()
+
+        switchTo(f, null)
+        f.userStatus.emit(UserStatusEvent("u9", "z", true, iso(epoch)))
+        testScheduler.runCurrent()
+        switchTo(f, "B")
+        f.userStatus.emit(UserStatusEvent("u7", "s", true, iso(epoch)))
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value).doesNotContainKey("u9")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u9")
+    }
+
+    @Test
+    fun `a cold start read back for A whose session is refused never reaches B`() = runTest {
+        val disk = FakePersistence().apply { file = "A" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
+        val f = fixture(disk, account = "A", session = null)
+        assertThat(f.store.entries.value).containsKey("u1")
+
+        f.account = null
+        f.userStatus.emit(UserStatusEvent("u9", "z", true, iso(epoch)))
+        testScheduler.runCurrent()
+        switchTo(f, "B")
+        f.userStatus.emit(UserStatusEvent("u7", "s", true, iso(epoch)))
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value.keys).containsExactly("u7")
+        assertThat(f.disk.file?.first).isEqualTo("B")
+        assertThat(f.disk.file?.second?.keys).containsExactly("u7")
+    }
+
+    @Test
+    fun `a read still running when the account leaves never reinjects what it read`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000)))
+            gate = CompletableDeferred()
+        }
+        val f = fixture(disk)
+
+        switchTo(f, null)
+        switchTo(f, "me")
+        disk.gate!!.complete(Unit)
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `the session teardown empties the map and the disk before it returns`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
+        val f = fixture(disk)
+        f.userStatus.emit(UserStatusEvent("u2", "b", true, iso(epoch)))
+        testScheduler.runCurrent()
+
+        val cache: PerAccountCache = f.store
+        f.account = null
+        cache.clear()
+
+        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.disk.file).isNull()
+    }
+
+    @Test
+    fun `the session teardown waits for a read in flight, which then reinjects nothing`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000)))
+            gate = CompletableDeferred()
+        }
+        val f = fixture(disk)
+        f.account = null
+        var wiped = false
+        launch { (f.store as PerAccountCache).clear(); wiped = true }
+        testScheduler.runCurrent()
+
+        disk.gate!!.complete(Unit)
+        testScheduler.runCurrent()
+
+        assertThat(wiped).isTrue()
+        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.disk.file).isNull()
+    }
+
+    @Test
+    fun `the teardown contributed to the session wipe empties the presence store`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
+        val f = fixture(disk)
+        f.account = null
+
+        PresenceMapPersistenceModule.providePresenceAccountCache { f.store }.clear()
+
+        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.disk.file).isNull()
+    }
+
+    @Test
+    fun `at cold start the served page wins over what was read back, and a masked row withdraws it`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf(
+                "u1" to UserPresence(false, iso(epoch - 60_000)),
+                "u2" to UserPresence(false, iso(epoch - 60_000)),
+                "u3" to UserPresence(false, iso(epoch - 60_000)),
+            )
+        }
+        val f = fixture(disk)
+        f.userStatus.emit(UserStatusEvent("u3", "c", true, iso(epoch)))
+        testScheduler.runCurrent()
+
+        f.store.seed(
+            ServedPresencePage(
+                served = mapOf("u1" to UserPresence(false, iso(epoch - 600_000))),
+                masked = setOf("u2", "u3"),
+            ),
+        )
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 600_000)))
+        assertThat(f.store.entries.value).doesNotContainKey("u2")
+        assertThat(f.store.entries.value["u3"]).isEqualTo(UserPresence(true, iso(epoch)))
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u2")
     }
 }

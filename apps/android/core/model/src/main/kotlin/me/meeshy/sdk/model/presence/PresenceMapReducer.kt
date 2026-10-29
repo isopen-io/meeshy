@@ -76,6 +76,24 @@ object PresenceMapReducer {
         return if (unknown.isEmpty()) map else map + unknown
     }
 
+    /** La carte après un semis, et ceux de ses comptes dont l'entrée ne vient encore que du disque. */
+    data class Seeded(val entries: PresenceMap, val restored: Set<String>)
+
+    /**
+     * Semis d'une page servie sur une carte dont [restored] ne vient que de la relecture du disque :
+     * la page comble les inconnus ET remplace ce qui n'était que relu (le serveur parle maintenant,
+     * le disque parlait d'avant) ; une ligne masquée RETIRE ce qui n'était que relu (la visibilité a
+     * changé depuis l'écriture). Une entrée vivante — socket, frappe — n'est jamais touchée.
+     */
+    fun seed(map: PresenceMap, restored: Set<String>, page: ServedPresencePage, currentUserId: String?): Seeded {
+        val accepted = page.served.filter { (userId, _) ->
+            userId.isNotBlank() && userId != currentUserId && (userId !in map || userId in restored)
+        }
+        val withdrawn = page.masked.filter { it in restored && it !in page.served }.toSet()
+        if (accepted.isEmpty() && withdrawn.isEmpty()) return Seeded(map, restored)
+        return Seeded(map - withdrawn + accepted, restored - accepted.keys - withdrawn)
+    }
+
     /** Relecture du disque : elle comble les inconnus et cède à toute entrée vivante déjà posée. */
     fun restore(map: PresenceMap, restored: PresenceMap): PresenceMap {
         val unknown = restored.filterKeys { it !in map }

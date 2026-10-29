@@ -5,13 +5,19 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * Ce que la carte de présence garde sur disque (miroir de la persistance `presence_map.json` d'iOS) :
- * 24 h au plus, jamais le compte courant, jamais une entrée sans date lisible — on ne restitue que ce
- * que le serveur a servi, et seule une date permet de dire depuis quand.
+ * 24 h au plus, jamais le compte courant, jamais une entrée sans date lisible ni datée dans le futur — on
+ * ne restitue que ce que le serveur a servi, et seule une date passée permet de dire depuis quand.
  */
 object PresenceRetention {
 
     /** Au-delà, une présence n'est plus un renseignement : elle n'est ni écrite ni relue. */
     const val MAX_AGE_MS: Long = 24L * 60 * 60 * 1000
+
+    /**
+     * L'avance tolérée d'une date sur l'horloge de l'appareil (dérive entre serveur et appareil) ; au-delà,
+     * la date est fausse et l'entrée, qui se lirait « en ligne » jusqu'à cette date, n'est ni écrite ni relue.
+     */
+    const val FUTURE_TOLERANCE_MS: Long = 2L * 60 * 1000
 
     /** Le sous-ensemble de [map] qui a le droit de rester sur disque à [nowMillis]. */
     fun retained(map: PresenceMap, currentUserId: String?, nowMillis: Long): PresenceMap =
@@ -29,6 +35,7 @@ object PresenceRetention {
 
     private fun isFresh(presence: UserPresence, nowMillis: Long): Boolean {
         val last = isoToEpochMillisOrNull(presence.lastActiveAt) ?: return false
-        return nowMillis - last <= MAX_AGE_MS
+        val age = nowMillis - last
+        return age in -FUTURE_TOLERANCE_MS..MAX_AGE_MS
     }
 }

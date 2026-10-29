@@ -70,4 +70,22 @@ class PresenceRetentionTest {
 
         assertThat(restored.keys).containsExactly("ok")
     }
+
+    @Test
+    fun `an entry dated in the future beyond the tolerance is never written - a wrong clock is not a presence`() {
+        val kept = PresenceRetention.retained(
+            mapOf("late" to UserPresence(false, iso(10 * 60_000)), "skew" to UserPresence(false, iso(60_000))),
+            "me",
+            now,
+        )
+
+        assertThat(kept.keys).containsExactly("skew")
+    }
+
+    @Test
+    fun `an entry dated in the future is never read back as online or recent`() {
+        val restored = PresenceRetention.restoredAtLaunch(mapOf("u1" to UserPresence(true, iso(hour))), "me", now)
+
+        assertThat(restored).isEmpty()
+    }
 }
