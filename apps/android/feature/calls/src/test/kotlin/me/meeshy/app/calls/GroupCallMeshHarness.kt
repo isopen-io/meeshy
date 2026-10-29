@@ -70,6 +70,7 @@ internal class Harness(
     val opened = mutableListOf<FakePort>()
     val sent = mutableListOf<Sent>()
     var primaryLevel: Double? = null
+    var primaryReconnecting = false
     val mesh = GroupCallMesh(
         factory = { _: CallMeshPeerConfig, callbacks ->
             FakePort().also {
@@ -82,6 +83,7 @@ internal class Harness(
         primaryAudioLevel = { primaryLevel },
         samplingIntervalMillis = samplingMillis,
         clock = clock,
+        isPrimaryReconnecting = { primaryReconnecting },
     )
 
     fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m") = mesh.bind(

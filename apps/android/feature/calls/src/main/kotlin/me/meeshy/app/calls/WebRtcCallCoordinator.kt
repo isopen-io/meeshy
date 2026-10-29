@@ -58,6 +58,7 @@ class WebRtcCallCoordinator @Inject constructor(
         factory = EngineGroupMeshPeerFactory(engine),
         names = names,
         primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
+        isPrimaryReconnecting = { iceMonitor.stalled },
         sender = { callId, to, from, signal ->
             when (signal.kind) {
                 GroupMeshSignalKind.Offer -> signals.emitOffer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
@@ -201,7 +202,11 @@ class WebRtcCallCoordinator @Inject constructor(
         val cs = callScope ?: return
         // Un membre d'un appel de groupe autre que le principal : le maillage lui offre, la connexion de l'appel
         // ne change ni de destinataire ni d'offre.
-        if (mesh.claimsArrival(joinerId)) return
+        val wasVacated = mesh.isPrimaryVacated
+        if (mesh.claimsArrival(joinerId)) {
+            if (!wasVacated && mesh.isPrimaryVacated) vacatePrimary()
+            return
+        }
         negotiator.onParticipantJoined(cs, joinerId)
     }
 

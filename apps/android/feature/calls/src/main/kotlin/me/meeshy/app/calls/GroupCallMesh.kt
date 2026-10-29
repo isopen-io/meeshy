@@ -60,6 +60,8 @@ internal class GroupCallMesh(
     /** Le niveau sonore reçu du pair principal, que la connexion de l'appel tient — iOS `primaryAudioLevel`. */
     private val primaryAudioLevel: suspend () -> Double? = { null },
     private val samplingIntervalMillis: Long = ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS,
+    /** La connexion de l'appel se cherche (coupure ICE en cours) — iOS `isGroupPrimaryReconnecting`. */
+    private val isPrimaryReconnecting: () -> Boolean = { false },
     private val clock: () -> Long = { System.nanoTime() / NANOS_PER_MILLI },
 ) {
     private val _ui = MutableStateFlow(GroupCallMeshUi())
@@ -87,6 +89,7 @@ internal class GroupCallMesh(
     private var detector = ActiveSpeakerDetector()
     private var speakingUserIds: Set<String> = emptySet()
     private var samplingJob: Job? = null
+    private val lastOfferAt = HashMap<String, Long>()
 
     val isGroup: Boolean get() = isGroupCall
 
@@ -154,7 +157,10 @@ internal class GroupCallMesh(
         }
         if (!isGroupCall && GroupCallEvidence.fromArrival(userId, selfId, primaryUserId)) becomeGroup()
         if (!isGroupCall) return false
-        if (userId == primaryUserId && !primaryVacated) return false
+        if (userId == primaryUserId && !primaryVacated) {
+            if (!isPrimaryReconnecting()) return false
+            primaryDidReturn(userId)
+        }
         servedMemberIds += userId
         departedMemberIds -= userId
         if (userId !in roster && roster.isFull) return true
@@ -202,6 +208,16 @@ internal class GroupCallMesh(
 
     val isPrimaryVacated: Boolean get() = primaryVacated
 
+    /**
+     * Le principal revient (plantage, coupure) pendant que sa connexion se cherche (#13756, iOS `primaryDidReturn`,
+     * #9111) : l'ancienne PeerConnection ne le reverra jamais. Son siège se libère et le maillage lui offre à neuf,
+     * comme à tout membre — sans exiger qu'il reste quelqu'un d'autre, à la différence d'un départ.
+     */
+    private fun primaryDidReturn(primary: String) {
+        primaryVacated = true
+        dropMember(primary)
+    }
+
     fun onMediaToggled(callId: String, userId: String?, mediaType: String, enabled: Boolean): Boolean {
         if (callId != this.callId || !isGroupCall || userId.isNullOrBlank()) return false
         val kind = GroupCallMediaKind.fromWire(mediaType) ?: return false
@@ -239,6 +255,7 @@ internal class GroupCallMesh(
         speakingUserIds = emptySet()
         links.values.forEach { it.close() }
         links.clear()
+        lastOfferAt.clear()
         knownArrivals.clear()
         servedMemberIds.clear()
         scope = null
@@ -285,9 +302,18 @@ internal class GroupCallMesh(
         }
     }
 
+    /**
+     * Deux `participant-joined` d'un même retour (reconnexion du socket, puis « Rejoindre ») ne font qu'UNE offre : la
+     * seconde trouverait la première en pleine négociation et la casserait (iOS `offerDebounce`).
+     */
     private fun offer(userId: String) {
+        val now = clock()
+        val last = lastOfferAt[userId]
+        if (links[userId] != null && last != null && now - last < OFFER_DEBOUNCE_MILLIS) return
         links.remove(userId)?.close()
-        makeLink(userId)?.offer()
+        val link = makeLink(userId) ?: return
+        lastOfferAt[userId] = now
+        link.offer()
     }
 
     private fun receive(signal: GroupMeshSignal, userId: String) {
@@ -391,5 +417,6 @@ internal class GroupCallMesh(
     private companion object {
         const val OFFER = "offer"
         const val NANOS_PER_MILLI = 1_000_000L
+        const val OFFER_DEBOUNCE_MILLIS = 3_000L
     }
 }
