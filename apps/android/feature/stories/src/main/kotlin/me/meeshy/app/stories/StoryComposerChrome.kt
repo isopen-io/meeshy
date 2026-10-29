@@ -7,7 +7,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.icons.MeeshyIcons
 
@@ -25,7 +28,7 @@ internal fun StoryComposerTopBar(
     titleContent: (@Composable () -> Unit)?,
 ) {
     TopAppBar(
-        title = titleContent ?: { Text(stringResource(R.string.stories_composer_title)) },
+        title = titleContent ?: { StoryComposerTitle() },
         navigationIcon = {
             IconButton(onClick = onClose) {
                 Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.stories_composer_cancel))
@@ -47,5 +50,17 @@ internal fun StoryComposerTopBar(
                 Text(publishLabel(state.publishTitle))
             }
         },
+    )
+}
+
+/** The bar title: one line, ellipsized, so the neighbouring buttons keep their full touch targets (#13639). */
+@Composable
+internal fun StoryComposerTitle(modifier: Modifier = Modifier, onTextLayout: (TextLayoutResult) -> Unit = {}) {
+    Text(
+        text = stringResource(R.string.stories_composer_title),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = onTextLayout,
+        modifier = modifier,
     )
 }

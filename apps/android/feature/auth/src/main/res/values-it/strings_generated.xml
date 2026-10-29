@@ -261,6 +261,7 @@
     <string name="signup_email_taken">Esiste già un account con questo indirizzo.</string>
     <string name="signup_error_generic">Creazione dell\'account non riuscita. Riprova.</string>
     <string name="signup_error_network">Nessuna connessione. Controlla la rete e riprova.</string>
+    <string name="signup_error_rejected">La registrazione è stata rifiutata — riprova tra un momento.</string>
     <string name="signup_have_account">Hai già un account?</string>
     <string name="signup_language_change">Cambia</string>
     <string name="signup_language_picker_title">Lingua di lettura</string>

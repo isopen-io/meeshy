@@ -52,10 +52,27 @@ class SignupFormTest {
     }
 
     @Test
-    fun nameCarryingOneLetterAmongDigits_isAccepted() {
-        // Le miroir client ne porte QUE la règle « au moins une lettre » : le jeu
-        // de caractères borne firstName/lastName, jamais displayName.
-        assertThat(valid(displayName = "R2 D2").canSubmit).isTrue()
+    fun nameCarryingDigitsOrSymbols_isRefusedWithTheCharacterSetIssue() {
+        // Le motif du serveur (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`) refuse « R2 D2 » : le client le
+        // dit avant l'envoi, dans la langue du lecteur, au lieu de montrer le motif brut.
+        listOf("R2 D2", "Jean_Eric", "Ana@home", "Bob!").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName)
+                .isEqualTo(SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS)
+            assertThat(valid(displayName = name).canSubmit).isFalse()
+        }
+    }
+
+    @Test
+    fun nameMadeOfLettersMarksSpacesApostrophesDotsAndHyphens_isAccepted() {
+        listOf("Mary-Jane O’Neil", "J. R. R. Tolkien", "Ana ʼAli", "Zoë d'Été", "محمد علي", "e\u0301lise").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+        }
+    }
+
+    @Test
+    fun nameWithoutLetter_staysRequiredEvenWithForbiddenCharacters() {
+        assertThat(valid(displayName = "1234 !").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
     }
 
     @Test
