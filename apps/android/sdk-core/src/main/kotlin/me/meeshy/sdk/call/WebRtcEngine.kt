@@ -187,10 +187,15 @@ class WebRtcEngine internal constructor(
     fun beginScreenShare(projection: MediaProjection) {
         val peer = peerConnection ?: throw WebRtcError.NoPeerConnection()
         if (screenShare.begin(peer, projection, media.localVideoTrack)) renegotiations.tryEmit(Unit)
+        meshPeers.forEach { it.setScreenTrack(screenShare.track) }
     }
 
-    /** Arrête le partage : l'émetteur vidéo retrouve la caméra (et ses effets) ou repasse en réception. */
+    /**
+     * Arrête le partage : l'émetteur vidéo retrouve la caméra (et ses effets) ou repasse en réception, sur le pair de
+     * l'appel comme sur chaque lien du maillage — avant que la piste d'écran ne soit libérée.
+     */
     fun endScreenShare() {
+        meshPeers.forEach { it.setScreenTrack(null) }
         if (peerConnection == null) return screenShare.release()
         if (screenShare.end()) renegotiations.tryEmit(Unit)
     }
@@ -280,8 +285,8 @@ class WebRtcEngine internal constructor(
 
     /**
      * Ouvre une connexion du maillage d'un appel de groupe (#13740), À CÔTÉ du pair de l'appel : ses pistes
-     * sont tirées des sources de l'appel en cours (micro, caméra s'il y en a une), et [close] la ferme avant
-     * elles. @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     * sont tirées des sources de l'appel en cours (micro, caméra s'il y en a une, l'écran s'il est partagé —
+     * #13755), et [close] la ferme avant elles. @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
      */
     fun openMeshPeer(config: CallMeshPeerConfig, listener: CallMeshPeerListener): CallMeshPeer {
         val peer = CallMeshPeer(
@@ -290,6 +295,7 @@ class WebRtcEngine internal constructor(
             listener = listener,
             audioSource = media.sharedAudioSource,
             videoSource = media.sharedVideoSource,
+            screenTrack = screenShare.track,
             onClosed = { meshPeers.remove(it) },
         )
         meshPeers += peer

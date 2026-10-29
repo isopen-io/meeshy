@@ -46,6 +46,9 @@ internal class CallScreenShareRoute(private val feeds: ScreenFeedFactory) {
 
     val isSharing: Boolean get() = feed != null
 
+    /** La piste d'écran en cours de partage, que chaque lien du maillage porte aussi (#13755) ; `null` hors partage. */
+    val track: VideoTrack? get() = feed?.track
+
     /** Branche l'écran ; `true` quand le pair doit recevoir une offre. */
     fun begin(peer: PeerConnection, projection: MediaProjection, cameraTrack: VideoTrack?): Boolean {
         if (feed != null) return false

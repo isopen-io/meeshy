@@ -47,6 +47,8 @@ internal class GroupPeerLink(
     private var restartJob: Job? = null
     private var restartAttempts = 0
     private var closed = false
+    private var negotiated = false
+    private var renegotiationPending = false
 
     var remoteVideoTrack: VideoTrack? = null
         private set
@@ -71,6 +73,10 @@ internal class GroupPeerLink(
 
         override fun onState(state: GroupMeshPeerState) {
             scope.launch { if (!closed) connectionChanged(state) }
+        }
+
+        override fun onRenegotiationNeeded() {
+            scope.launch { lock.withLock { renegotiate() } }
         }
 
         override fun onRemoteVideo(track: VideoTrack) {
@@ -113,6 +119,26 @@ internal class GroupPeerLink(
         peer?.close()
     }
 
+    /**
+     * Une direction a changé sur un lien déjà négocié : une offre neuve (iOS `setVideoEnabled`, web `setVideoTrack`).
+     * Pendant une négociation, l'offre attend la description qui la clôt ; avant la première, celle-ci porte déjà tout.
+     */
+    private suspend fun renegotiate() {
+        val pc = peer?.takeIf { !closed } ?: return
+        if (!negotiated) return
+        if (makingOffer || !pc.isStable) {
+            renegotiationPending = true
+            return
+        }
+        renegotiationPending = false
+        makeOffer(iceRestart = false)
+    }
+
+    private suspend fun settled() {
+        negotiated = true
+        if (renegotiationPending) renegotiate()
+    }
+
     private suspend fun makeOffer(iceRestart: Boolean) {
         val pc = peer?.takeIf { !closed } ?: return
         makingOffer = true
@@ -137,6 +163,7 @@ internal class GroupPeerLink(
                     val sdp = signal.sdp ?: return
                     if (!pc.awaitsAnswer) return
                     pc.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdp))
+                    settled()
                 }
                 GroupMeshSignalKind.Candidate -> {
                     val line = signal.candidate ?: return
@@ -158,6 +185,7 @@ internal class GroupPeerLink(
         val answer = pc.createAnswer()
         pc.setLocalDescription(answer)
         if (!closed) onEvent(GroupPeerLinkEvent.Signal(GroupMeshSignal(GroupMeshSignalKind.Answer, sdp = answer.description, negotiationId = epoch)))
+        settled()
     }
 
     private fun connectionChanged(state: GroupMeshPeerState) {

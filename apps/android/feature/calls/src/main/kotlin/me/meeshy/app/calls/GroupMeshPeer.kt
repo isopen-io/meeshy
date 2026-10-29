@@ -48,6 +48,9 @@ internal interface GroupMeshPeerCallbacks {
     fun onIceCandidate(candidate: IceCandidate)
     fun onState(state: GroupMeshPeerState)
     fun onRemoteVideo(track: VideoTrack)
+
+    /** L'émetteur vidéo a changé de direction (écran partagé d'un appel audio, #13755) : le lien doit offrir. */
+    fun onRenegotiationNeeded() = Unit
 }
 
 /** UNE connexion WebRTC vers UN membre, sans politique ([CallMeshPeer] en production, un faux en test). */
@@ -81,6 +84,7 @@ internal class EngineGroupMeshPeerFactory(private val engine: WebRtcEngine) : Gr
             override fun onIceCandidate(candidate: IceCandidate) = callbacks.onIceCandidate(candidate)
             override fun onConnectionChange(state: PeerConnection.PeerConnectionState) = callbacks.onState(state.asMeshState())
             override fun onRemoteVideo(track: VideoTrack) = callbacks.onRemoteVideo(track)
+            override fun onRenegotiationNeeded() = callbacks.onRenegotiationNeeded()
         }
         val peer = runCatching { engine.openMeshPeer(config, listener) }.getOrNull() ?: return null
         return CallMeshPeerPort(peer)
