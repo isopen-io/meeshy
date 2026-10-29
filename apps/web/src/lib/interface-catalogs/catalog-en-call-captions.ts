@@ -15,6 +15,7 @@ const enCallCaptions = {
   'callCaptions.listening': 'Your voice is being transcribed',
   'callCaptions.unsupported': 'Your voice can’t be transcribed on this device: you can read the others',
   'callCaptions.denied': 'Speech recognition denied: you can read the others',
+  'callCaptions.sealed': 'Captions are unavailable: this conversation is end-to-end encrypted, or its encryption could not be verified',
   'callCaptions.journal.title': 'Call log',
   'callCaptions.participant': 'Participant',
   'callTranscript.show': 'Transcript',
