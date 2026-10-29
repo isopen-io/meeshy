@@ -7,7 +7,11 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
@@ -56,6 +60,24 @@ class CallEffectsCarouselTest {
 
         assertThat(photos).isEqualTo(1)
         assertThat(films).isEqualTo(1)
+    }
+
+    @Test
+    fun `le carrousel du visage propose les six effets d'iOS, crapaud, ange, demon et eruption compris`() {
+        var mode by mutableStateOf(opening())
+        rule.setContent {
+            MeeshyTheme {
+                EffectsCarousel(mode = mode, reduceMotion = true, shots = null, hint = null, onChange = { mode = it })
+            }
+        }
+
+        val seen = mutableListOf(mode.face)
+        repeat(CallFaceEffect.entries.size) {
+            rule.runOnIdle { action("Face", "Next effect")() }
+            rule.runOnIdle { seen += mode.face }
+        }
+
+        assertThat(seen.distinct()).containsExactlyElementsIn(CallFaceEffect.entries).inOrder()
     }
 
     @Test

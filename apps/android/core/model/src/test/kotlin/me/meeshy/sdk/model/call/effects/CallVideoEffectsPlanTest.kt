@@ -15,11 +15,46 @@ class CallVideoEffectsPlanTest {
     private fun overloaded(frames: Int, blurActive: Boolean, from: CallVideoDegradation = healthy) =
         (1..frames).fold(from) { ladder, _ -> ladder.recording(40.0, blurActive) }
 
+    private val bare = VideoFilterConfig(naturalComplexionEnabled = false)
+
     @Test
     fun `no chosen filter costs nothing, the frame goes out untouched`() {
-        assertThat(CallVideoEffectsPlan.make(VideoFilterConfig(), healthy, isConstrained = false)).isNull()
-        val natural = VideoFilterConfig().applyingPreset(VideoFilterPreset.Natural)
+        assertThat(CallVideoEffectsPlan.make(bare, healthy, isConstrained = false)).isNull()
+        val natural = bare.applyingPreset(VideoFilterPreset.Natural)
         assertThat(CallVideoEffectsPlan.make(natural, healthy, isConstrained = false)).isNull()
+    }
+
+    @Test
+    fun `natural complexion alone waits for a face, and draws nothing without one`() {
+        val plan = CallVideoEffectsPlan.make(VideoFilterConfig(), healthy, isConstrained = false)!!
+        assertThat(plan.retouch?.tone).isEqualTo(1f)
+        assertThat(plan.needsFace).isTrue()
+        assertThat(plan.draws(faceKnown = false)).isFalse()
+        assertThat(plan.draws(faceKnown = true)).isTrue()
+        assertThat(CallVideoEffectsPlan.make(VideoFilterConfig(), healthy, isConstrained = true)).isNull()
+    }
+
+    @Test
+    fun `a stylized face effect draws, with or without a face, and degrades with the ladder`() {
+        val toad = CallVideoEffectsPlan.make(VideoFilterConfig().selectingFaceEffect(CallFaceEffect.Toad), healthy, false)!!
+        assertThat(toad.stylized).isEqualTo(CallFaceEffect.Toad)
+        assertThat(toad.retouch).isNull()
+        assertThat(toad.needsFace).isTrue()
+        assertThat(toad.draws(faceKnown = false)).isTrue()
+        assertThat(toad.isFaceDegraded).isFalse()
+
+        val volcano = CallVideoEffectsPlan.make(VideoFilterConfig().selectingFaceEffect(CallFaceEffect.Volcano), healthy, true)!!
+        assertThat(volcano.needsFace).isFalse()
+        assertThat(volcano.isFaceDegraded).isTrue()
+    }
+
+    @Test
+    fun `every face effect of iOS has a plan that draws`() {
+        CallFaceEffect.entries.filter { it.isStylized }.forEach { effect ->
+            val plan = CallVideoEffectsPlan.make(VideoFilterConfig().selectingFaceEffect(effect), healthy, false)
+            assertThat(plan?.stylized).isEqualTo(effect)
+            assertThat(plan?.draws(faceKnown = false)).isTrue()
+        }
     }
 
     @Test
@@ -27,7 +62,7 @@ class CallVideoEffectsPlanTest {
         val plan = CallVideoEffectsPlan.make(VideoFilterConfig().applyingPreset(VideoFilterPreset.Warm), healthy, false)
         assertThat(plan?.look).isEqualTo(VideoFilterPreset.Warm)
         assertThat(plan?.blur).isNull()
-        assertThat(plan?.smoothing).isEqualTo(0f)
+        assertThat(plan?.retouch?.smoothing).isEqualTo(0f)
     }
 
     @Test
@@ -41,8 +76,8 @@ class CallVideoEffectsPlanTest {
     fun `smoothing carries its strength and the texture share`() {
         val config = VideoFilterConfig(skinSmoothingIntensity = 0.6f).selectingFaceEffect(CallFaceEffect.Smoothing)
         val plan = CallVideoEffectsPlan.make(config, healthy, false)
-        assertThat(plan?.smoothing).isEqualTo(0.6f)
-        assertThat(plan?.textureKept).isEqualTo(0.35f)
+        assertThat(plan?.retouch?.smoothing).isEqualTo(0.6f)
+        assertThat(plan?.retouch?.texture).isEqualTo(0.35f)
     }
 
     @Test
@@ -59,7 +94,7 @@ class CallVideoEffectsPlanTest {
         val config = VideoFilterConfig(backgroundBlurEnabled = true).selectingFaceEffect(CallFaceEffect.Smoothing)
         val half = overloaded(5, blurActive = true)
         val halfPlan = CallVideoEffectsPlan.make(config, half, false)
-        assertThat(halfPlan?.smoothing).isEqualTo(0f)
+        assertThat(halfPlan?.retouch?.smoothing).isEqualTo(0f)
         assertThat(halfPlan?.blur).isNotNull()
 
         val exhausted = overloaded(30, blurActive = true)
@@ -73,12 +108,6 @@ class CallVideoEffectsPlanTest {
         val plan = CallVideoEffectsPlan.make(config, overloaded(30, blurActive = true), false)
         assertThat(plan?.look).isEqualTo(VideoFilterPreset.Cool)
         assertThat(plan?.blur).isNull()
-    }
-
-    @Test
-    fun `a stylized face effect alone draws nothing yet`() {
-        assertThat(CallVideoEffectsPlan.make(VideoFilterConfig(faceEffect = CallFaceEffect.Toad), healthy, false)).isNull()
-        assertThat(CallVideoEffectsPlan.DRAWABLE_FACES).doesNotContain(CallFaceEffect.Toad)
     }
 
     @Test

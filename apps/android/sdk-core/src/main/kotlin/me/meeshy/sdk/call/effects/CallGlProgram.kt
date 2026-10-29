@@ -44,6 +44,13 @@ internal class CallGlProgram(vertex: String, fragment: String) {
 
     fun uniform(name: String, x: Float, y: Float) = location(name).takeIf { it >= 0 }?.let { GLES20.glUniform2f(it, x, y) }
 
+    fun uniform(name: String, x: Float, y: Float, z: Float, w: Float) =
+        location(name).takeIf { it >= 0 }?.let { GLES20.glUniform4f(it, x, y, z, w) }
+
+    /** A `vec4` read at [offset] of [values] — the packed layouts of the face, without a copy. */
+    fun uniform4(name: String, values: FloatArray, offset: Int) =
+        location(name).takeIf { it >= 0 }?.let { GLES20.glUniform4fv(it, 1, values, offset) }
+
     fun sampler(name: String, unit: Int) = location(name).takeIf { it >= 0 }?.let { GLES20.glUniform1i(it, unit) }
 
     fun matrix(name: String, value: FloatArray) =

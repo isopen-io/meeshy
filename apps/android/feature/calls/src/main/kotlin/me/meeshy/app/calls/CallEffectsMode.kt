@@ -59,7 +59,6 @@ import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
 import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
-import me.meeshy.sdk.model.call.effects.CallVideoEffectsPlan
 import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
@@ -215,7 +214,7 @@ internal fun EffectsCarousel(
 ) {
     when (mode.category) {
         CallEffectsCategory.Face -> CallModeCarousel(
-            items = CallEffectsModeRule.faces(CallVideoEffectsPlan.DRAWABLE_FACES),
+            items = CallEffectsModeRule.faces,
             selection = mode.face,
             title = stringResource(R.string.call_effects_category_face),
             name = { stringResource(faceLabel(it)) },

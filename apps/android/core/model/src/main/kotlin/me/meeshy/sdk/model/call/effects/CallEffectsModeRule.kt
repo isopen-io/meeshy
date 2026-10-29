@@ -16,15 +16,13 @@ enum class CallEffectsCategory { Face, Color }
 
 /**
  * **LE MODE « EFFETS » DE L'APPEL** — miroir de iOS `CallEffectsModeRule` (`CallModeRules.swift`). The
- * catalogue keeps iOS order; a face effect the device cannot draw is NOT offered (a control exists only
- * if it has an effect), the rest of the order is untouched.
+ * catalogue keeps iOS order, and every face effect of iOS is drawn on the sent image (#13706).
  */
 object CallEffectsModeRule {
     val colors: List<VideoFilterPreset> = VideoFilterPreset.entries
 
-    /** The face effects this device draws, in iOS order. */
-    fun faces(drawable: Set<CallFaceEffect>): List<CallFaceEffect> =
-        CallFaceEffect.entries.filter { it == CallFaceEffect.None || it in drawable }
+    /** The face effects, in iOS order (iOS `faces = CallFaceEffect.allCases`). */
+    val faces: List<CallFaceEffect> = CallFaceEffect.entries
 
     fun colorSelection(config: VideoFilterConfig): VideoFilterPreset = config.activePreset ?: VideoFilterPreset.Natural
 

@@ -54,6 +54,9 @@ mlkitLanguageId = "17.0.0"
 # lot: effets-video-appel (#13331)
 mlkitSelfieSegmentation = "16.0.0-beta6"
 
+# lot: effets-de-visage-appel (#13706)
+mlkitFaceDetection = "17.1.0"
+
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
@@ -158,6 +161,9 @@ mlkit-translate = { module = "com.google.mlkit:translate", version.ref = "mlkitT
 mlkit-language-id = { module = "com.google.android.gms:play-services-mlkit-language-id", version.ref = "mlkitLanguageId" }
 # lot: effets-video-appel (#13331) — modèle EMBARQUÉ : le flou marche sans téléchargement ni Play Services.
 mlkit-segmentation-selfie = { module = "com.google.mlkit:segmentation-selfie", version.ref = "mlkitSelfieSegmentation" }
+# lot: effets-de-visage-appel (#13706) — modèle servi par Play Services (déclaré à l'installation dans le manifeste de
+# sdk-core) : l'embarqué pèse ~13 Mo par appareil (bibliothèque native + modèles), celui-ci moins d'un.
+mlkit-face-detection = { module = "com.google.android.gms:play-services-mlkit-face-detection", version.ref = "mlkitFaceDetection" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]

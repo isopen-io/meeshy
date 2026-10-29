@@ -14,12 +14,9 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the face catalogue keeps iOS order and offers only what the device draws`() {
-        assertThat(CallFaceEffect.entries.map { it.id })
+    fun `the face catalogue offers the six effects of iOS, in iOS order`() {
+        assertThat(CallEffectsModeRule.faces.map { it.id })
             .containsExactly("none", "smoothing", "toad", "angel", "demon", "volcano").inOrder()
-        assertThat(CallEffectsModeRule.faces(setOf(CallFaceEffect.Smoothing)))
-            .containsExactly(CallFaceEffect.None, CallFaceEffect.Smoothing).inOrder()
-        assertThat(CallEffectsModeRule.faces(CallFaceEffect.entries.toSet())).isEqualTo(CallFaceEffect.entries)
     }
 
     @Test

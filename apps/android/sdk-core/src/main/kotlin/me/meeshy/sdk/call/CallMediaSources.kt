@@ -6,7 +6,9 @@ import me.meeshy.sdk.call.camera.CameraLensDiscovery
 import me.meeshy.sdk.call.camera.CameraZoomActuator
 import me.meeshy.sdk.call.camera.ZoomCropObserver
 import me.meeshy.sdk.call.effects.CallDeviceConstraint
+import me.meeshy.sdk.call.effects.CallMotionPreference
 import me.meeshy.sdk.call.effects.CallVideoEffectsProcessor
+import me.meeshy.sdk.call.effects.MlKitFaceDetector
 import me.meeshy.sdk.call.effects.MlKitPersonSegmenter
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.camera.CameraLensClassifier
@@ -101,7 +103,14 @@ internal class CallMediaSources(
         val source = current.factory.createVideoSource(false)
         val observer = ZoomCropObserver(source.capturerObserver)
         val constraint = CallDeviceConstraint(appContext)
-        effects = CallVideoEffectsProcessor(helper.handler, MlKitPersonSegmenter(), constraint::isConstrained).also {
+        val motion = CallMotionPreference(appContext)
+        effects = CallVideoEffectsProcessor(
+            helper.handler,
+            MlKitPersonSegmenter(),
+            constraint::isConstrained,
+            faces = MlKitFaceDetector(),
+            isReduceMotion = motion::isReduceMotion,
+        ).also {
             it.setConfig(effectsConfig)
             source.setVideoProcessor(it)
         }

@@ -11,44 +11,49 @@ import me.meeshy.sdk.model.call.activePreset
  * and the device state. `null` from [make]: nothing to do, the camera frame goes out untouched and costs
  * nothing more. Android's projection of iOS `VideoFilterPipeline.process` + `CallSkinRetouchPlan` +
  * `lensStages`: the order of the passes is the same (retouch on the sensor image, then the background
- * blur, then the colour).
+ * blur, then the colour, then the stylized face effect).
  *
  * @property look the graded look, `null` when the colorimetry is off, Natural or hand-tuned.
  * @property brightness the user's additive offset (−0.3…0.3), 0 when the colorimetry is off.
- * @property smoothing skin smoothing strength 0…1, 0 when off or shed by the ladder — at half the overload
- *   streak, and for good once the ladder is exhausted (the « repli sans effet » of a slow device).
- * @property textureKept share of the fine texture (pores) re-injected by smoothing (iOS `textureKept`).
+ * @property retouch Natural complexion and skin smoothing on the tracked face (#9196), `null` when neither
+ *   applies; it only draws once a face is known.
  * @property blur the segmentation rung of the background blur, `null` when off or shed.
  * @property blurRadius the blur radius in full-resolution pixels.
+ * @property stylized the stylized face effect (toad, angel, demon, eruption), `null` without one.
+ * @property isFaceDegraded the device struggles: the face effects spend less (iOS `isFaceDegraded`).
  */
 data class CallVideoEffectsPlan(
     val look: VideoFilterPreset?,
     val brightness: Float,
-    val smoothing: Float,
-    val textureKept: Float,
+    val retouch: CallSkinRetouchPlan?,
     val blur: CallBlurTier.Segmentation?,
     val blurRadius: Double,
+    val stylized: CallFaceEffect? = null,
+    val isFaceDegraded: Boolean = false,
 ) {
     val blurActive: Boolean get() = blur != null
 
+    /** Whether the frame needs the tracked face: for the retouch, or for a stylized effect drawn on it. */
+    val needsFace: Boolean get() = retouch != null || stylized?.needsFace == true
+
+    /**
+     * Whether the frame is drawn at all. The retouch alone waits for a face (iOS: no face known, the frame goes
+     * out as is and costs nothing more); everything else draws without one.
+     */
+    fun draws(faceKnown: Boolean): Boolean =
+        look != null || brightness != 0f || blur != null || stylized != null || (retouch != null && faceKnown)
+
     companion object {
-        const val TEXTURE_KEPT: Float = 0.35f
-
-        /** The face effects the Android pipeline draws today; the stylized ones wait for face tracking. */
-        val DRAWABLE_FACES: Set<CallFaceEffect> = setOf(CallFaceEffect.Smoothing)
-
         fun make(config: VideoFilterConfig, ladder: CallVideoDegradation, isConstrained: Boolean): CallVideoEffectsPlan? {
-            if (!config.hasChosenFilters) return null
+            val retouch = CallSkinRetouchPlan.make(config, ladder, isConstrained)
+            if (!config.hasChosenFilters && retouch == null) return null
             val look = config.activePreset?.takeIf { CallColorLook.recipe(it) != null }
             val brightness = if (config.isEnabled) config.brightness else 0f
-            val smoothing = if (config.activeFaceEffect == CallFaceEffect.Smoothing && !ladder.isSmoothingDegraded && !ladder.isExhausted) {
-                config.skinSmoothingIntensity.coerceIn(0f, 1f)
-            } else {
-                0f
-            }
             val blur = if (config.backgroundBlurEnabled) ladder.blurTier(isConstrained).segmentation else null
-            if (look == null && brightness == 0f && smoothing == 0f && blur == null) return null
-            return CallVideoEffectsPlan(look, brightness, smoothing, TEXTURE_KEPT, blur, config.backgroundBlurRadius)
+            val stylized = config.activeFaceEffect.takeIf { it.isStylized }
+            if (look == null && brightness == 0f && retouch == null && blur == null && stylized == null) return null
+            val isFaceDegraded = ladder.tier != CallBlurTier.Balanced || ladder.isSmoothingDegraded || isConstrained
+            return CallVideoEffectsPlan(look, brightness, retouch, blur, config.backgroundBlurRadius, stylized, isFaceDegraded)
         }
 
         /** A new mask is due once ~one segmentation interval has passed (iOS: 90 % of the interval). */
