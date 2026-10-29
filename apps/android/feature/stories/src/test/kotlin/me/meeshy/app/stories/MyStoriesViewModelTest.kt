@@ -80,6 +80,7 @@ class MyStoriesViewModelTest {
         coEvery { it.cachedMyStories() } returns cached
         coEvery { it.drainMyStories(any(), any()) } returns drained
         coEvery { it.delete(any()) } returns NetworkResult.Success(Unit)
+        stream.forEach { story -> coEvery { postRepo.getPost(story.id) } returns NetworkResult.Success(story) }
     }
 
     private val postRepo: PostRepository = mockk<PostRepository>(relaxed = true).also {
@@ -492,5 +493,97 @@ class MyStoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify { postRepo.update("a", PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("ok", "bad"))) }
+    }
+
+    @Test
+    fun `une audience ecrite puis laissee par une restauration ratee n'est pas tenue pour inchangee au tour suivant`() = runTest(dispatcher) {
+        val original = activeA.copy(visibility = "ONLY", visibilityUserIds = listOf("ok"))
+        val repo = repository(stream = listOf(original))
+        coEvery { repo.republish("a") } returns failure()
+        val publicDraft = PostEditDraft(visibility = "PUBLIC", visibilityUserIds = emptyList())
+        val onlyDraft = PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("ok"))
+        coEvery { postRepo.update("a", publicDraft) } coAnswers {
+            coEvery { postRepo.getPost("a") } returns NetworkResult.Success(original.copy(visibility = "PUBLIC", visibilityUserIds = emptyList()))
+            NetworkResult.Success(activeA)
+        }
+        coEvery { postRepo.update("a", onlyDraft) } returns failure()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.PUBLIC))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coEvery { postRepo.update("a", onlyDraft) } returns NetworkResult.Success(activeA)
+        coEvery { repo.republish("a") } returns NetworkResult.Success(original)
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        assertThat(vm.state.value.pendingRepublish!!.choice).isEqualTo(
+            me.meeshy.sdk.model.composer.StoryRepublishAudience.Choice(StoryVisibility.ONLY, listOf("ok")),
+        )
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", publicDraft)
+            repo.republish("a")
+            postRepo.update("a", onlyDraft)
+            postRepo.update("a", onlyDraft)
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `une audience changee ailleurs depuis le cache est reecrite telle que confirmee avant la republication`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { postRepo.getPost("a") } returns NetworkResult.Success(activeA.copy(visibility = "PUBLIC"))
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        republish(vm, "a")
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "FRIENDS", visibilityUserIds = emptyList()))
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `sans relecture du serveur l'audience confirmee est ecrite avant la republication`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { postRepo.getPost("a") } returns failure()
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        republish(vm, "a")
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "FRIENDS", visibilityUserIds = emptyList()))
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `une republication refusee restaure l'audience relue au serveur et non celle du cache`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { postRepo.getPost("a") } returns NetworkResult.Success(activeA.copy(visibility = "ONLY", visibilityUserIds = listOf("x")))
+        coEvery { repo.republish("a") } returns failure()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.PUBLIC))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "PUBLIC", visibilityUserIds = emptyList()))
+            repo.republish("a")
+            postRepo.update("a", PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("x")))
+        }
     }
 }
