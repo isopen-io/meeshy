@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.contacts.vcard.VCardParser
 import me.meeshy.sdk.model.fileviewer.BoundedTextReader
 import me.meeshy.sdk.net.api.ContactResolveRequest
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.commitOrWrite
 
@@ -62,7 +63,7 @@ class VCardCache internal constructor(
     private val cards = object : LinkedHashMap<String, CardIdentifiers>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CardIdentifiers>?): Boolean = size > capacity
     }
-    private val flights = SingleFlight<String, CardIdentifiers?>()
+    private val flights = SingleFlight<Pair<AccountTicket?, String>, CardIdentifiers?>()
 
     /** Les identifiants de la carte déjà lue, sans attendre. */
     fun cached(key: String): CardIdentifiers? = synchronized(lock) { cards[key] }
@@ -71,8 +72,8 @@ class VCardCache internal constructor(
     suspend fun load(key: String, uri: String): CardIdentifiers? {
         cached(key)?.let { return it }
         if (!isLocal(uri)) return null
-        return flights.run(key) {
-            val ticket = fence?.currentTicket()
+        val ticket = fence?.currentTicket()
+        return flights.run(ticket to key) {
             val identifiers = withContext(dispatcher) { read(uri) }
             if (identifiers == null) return@run null
             fence.commitOrWrite(ticket) { synchronized(lock) { cards[key] = identifiers }; identifiers }

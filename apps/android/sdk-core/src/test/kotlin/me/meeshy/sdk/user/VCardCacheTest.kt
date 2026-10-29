@@ -111,6 +111,55 @@ class VCardCacheTest {
     }
 
     @Test
+    fun `B ne rejoint pas le vol encore ouvert de A et lit sa propre carte`() = runTest {
+        val owner = object : OutboxOwnerSource { var id: String? = "A"; override fun currentOwnerId() = id }
+        val fence = AccountFence(owner)
+        val gate = CompletableDeferred<Unit>()
+        val askedBy = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        val subject = VCardCache(
+            { _ ->
+                val asker = owner.id
+                askedBy += asker
+                kotlinx.coroutines.runBlocking { gate.await() }
+                ByteArrayInputStream(ada.replace("0001", if (asker == "A") "0001" else "0002").toByteArray())
+            },
+            Dispatchers.Unconfined, 10, fence,
+        )
+
+        val underA = async(Dispatchers.Default) { subject.load("1", "file:///1") }
+        Thread.sleep(50)
+        fence.close { subject.clear(); owner.id = null }
+        owner.id = "B"
+        val underB = async(Dispatchers.Default) { subject.load("1", "file:///1") }
+        Thread.sleep(50)
+        gate.complete(Unit)
+
+        assertThat(underA.await()).isNull()
+        assertThat(underB.await()?.phones).containsExactly("+33600000002")
+        assertThat(subject.cached("1")?.phones).containsExactly("+33600000002")
+        assertThat(askedBy).containsExactly("A", "B").inOrder()
+    }
+
+    @Test
+    fun `l'appelant qui part n'annule pas le vol de celui qui attend`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val subject = VCardCache(
+            { _ -> kotlinx.coroutines.runBlocking { gate.await() }; ByteArrayInputStream(ada.toByteArray()) },
+            Dispatchers.Unconfined, 10, null,
+        )
+
+        val leaving = async(Dispatchers.Default) { subject.load("1", "file:///1") }
+        Thread.sleep(50)
+        val waiting = async(Dispatchers.Default) { subject.load("1", "file:///1") }
+        Thread.sleep(50)
+        leaving.cancel()
+        Thread.sleep(50)
+        gate.complete(Unit)
+
+        assertThat(waiting.await()?.phones).containsExactly("+33600000001")
+    }
+
+    @Test
     fun `un fournisseur de contenu qui refuse l'adresse ne fait pas tomber le fil`() = runTest {
         val subject = VCardCache({ throw IllegalArgumentException("Invalid lookup id") }, Dispatchers.Unconfined, 10, null)
         val refusing = VCardCache({ throw UnsupportedOperationException("no") }, Dispatchers.Unconfined, 10, null)

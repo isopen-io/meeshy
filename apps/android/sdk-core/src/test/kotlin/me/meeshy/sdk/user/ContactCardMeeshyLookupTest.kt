@@ -11,6 +11,8 @@ import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ContactResolveRequest
 import me.meeshy.sdk.net.api.PublicContactAccount
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
 import org.junit.Test
 
 class ContactCardMeeshyLookupTest {
@@ -121,5 +123,41 @@ class ContactCardMeeshyLookupTest {
         assertThat(first.await()?.userId).isEqualTo("u1")
         assertThat(second.await()?.userId).isEqualTo("u1")
         assertThat(h.requests).hasSize(1)
+    }
+
+    private class Owner(var id: String?) : OutboxOwnerSource {
+        override fun currentOwnerId(): String? = id
+    }
+
+    @Test
+    fun `B ne rejoint pas le vol encore ouvert de A et resout ses propres comptes`() = runTest {
+        val owner = Owner("A")
+        val fence = AccountFence(owner)
+        val gate = CompletableDeferred<Unit>()
+        val adaOfB = ada.copy(userId = "u-b", displayName = "Ada B.")
+        val askedBy = mutableListOf<String?>()
+        val cards = VCardCache({ ByteArrayInputStream(card.toByteArray()) }, Dispatchers.Unconfined, 10, fence)
+        val resolver = ContactCardAccountResolver(
+            source = {
+                val asker = owner.id
+                askedBy += asker
+                gate.await()
+                NetworkResult.Success(listOf(if (asker == "A") ada else adaOfB))
+            },
+            freshnessMillis = 600_000, failureBackoffMillis = 120_000, capacity = 10, clock = { 0L }, fence = fence,
+        )
+        val lookup = ContactCardMeeshyLookup(cards, resolver, fence) { "FR" }
+
+        val underA = async { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.Clear) }
+        runCurrent()
+        fence.close { cards.clear(); resolver.clear(); owner.id = null }
+        owner.id = "B"
+        val underB = async { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.Clear) }
+        runCurrent()
+        gate.complete(Unit)
+
+        assertThat(underA.await()).isNull()
+        assertThat(underB.await()?.userId).isEqualTo("u-b")
+        assertThat(askedBy).containsExactly("A", "B").inOrder()
     }
 }
