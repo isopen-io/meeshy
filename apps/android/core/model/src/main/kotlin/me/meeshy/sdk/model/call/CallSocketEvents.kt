@@ -191,6 +191,8 @@ data class CallTranslatedSegmentPayload(
 /** The nested caption body a `call:translated-segment` frame carries. */
 @Serializable
 data class CallTranslatedSegmentRef(
+    /** #13333 — the cross-transport merge key minted by the speaker's device (absent from legacy peers). */
+    val id: String? = null,
     val text: String,
     val translatedText: String? = null,
     val speakerId: String? = null,
@@ -200,4 +202,8 @@ data class CallTranslatedSegmentRef(
     val sourceLanguage: String? = null,
     val targetLanguage: String? = null,
     val confidence: Double? = null,
+    /** Server-stamped speaker name (anti-spoof); the receiver still prefers its own roster. */
+    val speakerDisplayName: String? = null,
+    /** Wall-clock capture time (epoch ms) — the journal ordering key. */
+    val capturedAtMs: Long? = null,
 )
