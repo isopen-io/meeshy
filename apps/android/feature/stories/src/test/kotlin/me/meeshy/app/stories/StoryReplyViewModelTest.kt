@@ -18,7 +18,13 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
 import me.meeshy.sdk.conversation.MessageRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.currentCoroutineContext
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.AccountTicketContext
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
@@ -42,7 +48,7 @@ class StoryReplyViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = StoryReplyViewModel(conversations, messages, session, workManager)
+    private fun viewModel(fence: AccountFence? = null) = StoryReplyViewModel(conversations, messages, session, workManager, fence)
 
     private fun direct(id: String) = DirectConversationResolution.Found(mockk(relaxed = true) { every { this@mockk.id } returns id }, fromCache = false)
 
@@ -103,5 +109,28 @@ class StoryReplyViewModelTest {
 
         assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.IDLE)
         assertThat(vm.state.value.text).isEqualTo("trop bien")
+    }
+
+    @Test
+    fun `a reply belongs to the account that sent it, even when the conversation opens after another account signed in (#13501)`() = runTest(dispatcher) {
+        var owner: String? = "A"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val opened = CompletableDeferred<DirectConversationResolution>()
+        coEvery { conversations.directConversationWith("author") } coAnswers { opened.await() }
+        var queuedUnder: AccountTicket? = null
+        coEvery {
+            messages.sendOptimistic(conversationId = any(), content = any(), originalLanguage = any(), sender = any(), storyReplyToId = any())
+        } coAnswers {
+            queuedUnder = currentCoroutineContext()[AccountTicketContext]?.ticket
+            "cid"
+        }
+        val vm = viewModel(fence)
+        vm.onTextChange("les mots de A")
+
+        vm.send("story-1", "author")
+        owner = "B"
+        opened.complete(direct("c1"))
+
+        assertThat(queuedUnder?.ownerId).isEqualTo("A")
     }
 }
