@@ -34,6 +34,7 @@ public object MediaIntake {
         mimeType: String,
         maxBytes: Long = DEFAULT_MAX_BYTES,
         now: () -> Long = System::currentTimeMillis,
+        durationProbe: (File, String) -> Long? = MediaDurationProbe::probe,
     ): MediaUploadItem? {
         val directory = directory(cacheDir)
         if (!directory.isDirectory && !directory.mkdirs()) return null
@@ -50,7 +51,16 @@ public object MediaIntake {
             target.delete()
             return null
         }
-        return MediaUploadItem.onDisk(target, fileName, mimeType)
+        return MediaUploadItem.onDisk(target, fileName, mimeType, probedDuration(durationProbe, target, mimeType))
+    }
+
+    /**
+     * La durée d'une VIDÉO, sondée sur la copie ; `null` pour tout autre média, un échec ou une durée nulle (#13606).
+     * Un son n'est jamais sondé : la sonde est une lecture de fichier, et la fin d'un vocal (`adopt`) tourne sur le fil principal.
+     */
+    private fun probedDuration(probe: (File, String) -> Long?, file: File, mimeType: String): Long? {
+        if (!mimeType.startsWith("video", ignoreCase = true)) return null
+        return runCatching { probe(file, mimeType) }.getOrNull()?.takeIf { it > 0L }
     }
 
     /**
@@ -62,7 +72,7 @@ public object MediaIntake {
         val directory = directory(cacheDir)
         if (!directory.isDirectory && !directory.mkdirs()) return null
         val target = freshFile(directory)
-        if (file.renameTo(target)) return MediaUploadItem.onDisk(target, fileName, mimeType)
+        if (file.renameTo(target)) return MediaUploadItem.onDisk(target, fileName, mimeType, probedDuration(MediaDurationProbe::probe, target, mimeType))
         val copied = file.inputStream().use { copy(it, cacheDir, fileName, mimeType) }
         file.delete()
         return copied

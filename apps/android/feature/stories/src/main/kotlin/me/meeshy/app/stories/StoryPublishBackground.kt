@@ -9,7 +9,7 @@ internal object StoryPublishBackground {
      * wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
      * nothing is designated or the id names no media of the slide. A designated media still waiting on its
      * offline upload publishes its object anyway, URL-less and under its placeholder `cmid` (#13605): the
-     * framing and the loop travel with the outbox row and the write-back swaps in the real id. Carries
+     * duration probed at pick time (#13606), the framing and the loop travel with the outbox row and the write-back swaps in the real id. Carries
      * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video) and
      * the canvas pan/zoom — the plateau paints the designated media, so the gesture framed it (honoured for a framed image or video alike).
      */
@@ -31,7 +31,7 @@ internal object StoryPublishBackground {
             mediaId = pending.cmid,
             url = null,
             mimeType = pending.item.mimeType,
-            durationSeconds = null,
+            durationSeconds = pending.item.durationMs?.let { it / 1000.0 },
             loop = slide.backgroundLoop,
             framing = framing,
         )

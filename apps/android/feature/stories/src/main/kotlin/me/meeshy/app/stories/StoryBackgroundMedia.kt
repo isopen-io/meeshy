@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 
@@ -34,8 +35,9 @@ data class StoryBackgroundMedia(
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
 
-    /** The strictly-positive duration to publish (a video's loop period), or `null`. */
-    private val publishableDuration: Double? get() = durationSeconds?.takeIf { it > 0.0 }
+    /** The strictly-positive duration to publish (a video's loop period), held to the two hours a story may last (#13590), or `null`. */
+    private val publishableDuration: Double?
+        get() = durationSeconds?.takeIf { it.isFinite() && it > 0.0 }?.coerceAtMost(StoryLimits.TOTAL_SECONDS)
 
     /**
      * Builds the `isBackground` [StoryMediaObject] the reader honours. A video carries

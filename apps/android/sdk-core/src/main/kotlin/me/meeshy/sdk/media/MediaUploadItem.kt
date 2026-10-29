@@ -14,15 +14,19 @@ import java.io.File
  * [bytes] remain for the producers and scrubbers not yet moved to files; [bytes] on a file-backed item reads
  * the whole file, so the paths that send never call it.
  *
+ * [durationMs] is the length of a video or audio, probed once at intake (#13606): it rides with the item so an
+ * offline publication can publish the duration of a media the server has not yet measured. `null` = unknown.
+ *
  * Plain class (not a `data class`): the type is never compared by value.
  */
 public class MediaUploadItem(
     public val source: MediaUploadSource,
     public val fileName: String,
     public val mimeType: String,
+    public val durationMs: Long? = null,
 ) {
-    public constructor(bytes: ByteArray, fileName: String, mimeType: String) :
-        this(MediaUploadSource.InMemory(bytes), fileName, mimeType)
+    public constructor(bytes: ByteArray, fileName: String, mimeType: String, durationMs: Long? = null) :
+        this(MediaUploadSource.InMemory(bytes), fileName, mimeType, durationMs)
 
     /** The exact number of octets that leave — known without reading the media. */
     public val sizeBytes: Long get() = source.size
@@ -39,7 +43,7 @@ public class MediaUploadItem(
 
     public companion object {
         /** An item whose octets stay in [file] (the app's private storage) until they are sent. */
-        public fun onDisk(file: File, fileName: String, mimeType: String): MediaUploadItem =
-            MediaUploadItem(MediaUploadSource.OnDisk(file), fileName, mimeType)
+        public fun onDisk(file: File, fileName: String, mimeType: String, durationMs: Long? = null): MediaUploadItem =
+            MediaUploadItem(MediaUploadSource.OnDisk(file), fileName, mimeType, durationMs)
     }
 }
