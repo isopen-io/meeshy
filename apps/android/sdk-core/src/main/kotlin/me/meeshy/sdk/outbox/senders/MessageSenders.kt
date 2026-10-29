@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.EditMessageRequest
@@ -18,6 +19,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
+import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
@@ -33,6 +35,7 @@ public class SendMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
@@ -44,7 +47,7 @@ public class SendMessageHandler @Inject constructor(
                     messageRepository.reconcileSent(row.cmid, result.data)
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> SendResult.TransientFailure
+                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendResult.TransientFailure
             }
         }
 
@@ -57,12 +60,35 @@ public class SendMessageHandler @Inject constructor(
 public class EditMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<EditMessageRequest>(row) { body ->
-            apiCall { messageApi.edit(row.targetId, body) }.toSendResult()
+            val result = apiCall { messageApi.edit(row.targetId, body) }
+            (result as? NetworkResult.Failure)?.let { PlaintextRefusal.of(it, PlaintextRefusal.laneConversation(row.lane), ledger) }
+                ?: result.toSendResult()
         }
+}
+
+/**
+ * #13628 — la passerelle a refusé un CLAIR vers une conversation chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`, #11216) :
+ * l'appareil l'ignorait (événement d'activation manqué). Il l'apprend aussitôt — aucune ligne suivante ne part en clair — et la
+ * ligne est épuisée au lieu d'être renvoyée en clair à chaque essai.
+ */
+internal object PlaintextRefusal {
+    const val CODE: String = "E2EE_PLAINTEXT_REFUSED"
+
+    private const val MESSAGE_LANE_PREFIX: String = "message:"
+
+    fun of(failure: NetworkResult.Failure, conversationId: String?, ledger: EndToEndRegimeLedger): SendResult? {
+        if (failure.error.code != CODE) return null
+        conversationId?.takeIf { it.isNotBlank() }?.let(ledger::learn)
+        return SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END)
+    }
+
+    fun laneConversation(lane: String): String? =
+        lane.takeIf { it.startsWith(MESSAGE_LANE_PREFIX) }?.removePrefix(MESSAGE_LANE_PREFIX)?.takeIf { it.isNotBlank() }
 }
 
 /** `DELETE_MESSAGE`: deletes the message. */
