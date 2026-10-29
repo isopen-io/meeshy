@@ -1,6 +1,5 @@
 package me.meeshy.app.push
 
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -47,21 +46,11 @@ class PushActionReceiver : BroadcastReceiver() {
                     )
                     else -> return@launch
                 }
-                settle(context, notificationId, outcome)
+                PushActionSettlement.settle(context, notificationId, outcome)
             } finally {
                 pending.finish()
             }
         }
-    }
-
-    private fun settle(context: Context, notificationId: Int, outcome: PushNotificationActionHandler.Outcome) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (outcome.dismissesBanner) {
-            manager.cancel(notificationId)
-            return
-        }
-        manager.activeNotifications.firstOrNull { it.id == notificationId && it.tag == null }
-            ?.let { manager.notify(notificationId, it.notification) }
     }
 
     companion object {

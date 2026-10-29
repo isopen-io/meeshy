@@ -20,10 +20,13 @@ import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.outbox.UnsentCommentNotice
 import me.meeshy.sdk.outbox.withPayload
 import me.meeshy.sdk.post.PostComposerDraftStore
 import me.meeshy.sdk.post.PostPublishMediaWriteBack
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -81,12 +84,15 @@ public class CreatePostHandler @Inject constructor(
  * carrying `MUTATION_RESULT_GONE` (the first comment was deleted since) means the gesture WAS applied: success, never a second
  * insert. A refusal the same payload would meet again (a deleted or private post, a closed thread, a validation error
  * carried by the gateway envelope) exhausts the row at once and takes the optimistic count back; anything else (401 during
- * a session renewal, 408, 429, 5xx, network) is replayed.
+ * a session renewal, 408, 429, 5xx, network) is replayed. A row that gives up (#13693) keeps its text on the device
+ * ([UnsentCommentStore]) and tells the author ([UnsentCommentNotice]) — the banner left at COMMENT_QUEUED, so nothing else would.
  */
 public class CreateCommentHandler @Inject constructor(
     private val postApi: PostApi,
     private val json: Json,
     private val postRepository: PostRepository,
+    private val unsent: UnsentCommentStore,
+    private val notice: UnsentCommentNotice,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
@@ -105,6 +111,13 @@ public class CreateCommentHandler @Inject constructor(
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackQueuedComment(row.targetId)
+        val text = runCatching { json.decodeFromString<CommentPayload>(row.payload).content }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+        runCatching {
+            unsent.keep(row.targetId, text)
+            notice.commentNotSent(row.ownerId, row.targetId, text)
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     private fun ApiError.toCommentFailure(): SendResult = when {

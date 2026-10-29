@@ -66,4 +66,7 @@ interface PushModule {
     @Binds
     @IntoSet
     fun messageActionsEnricher(impl: MessageActionsEnricher): NotificationEnricher
+
+    @Binds
+    fun unsentCommentNotice(impl: UnsentCommentNotifier): me.meeshy.sdk.outbox.UnsentCommentNotice
 }

@@ -11,6 +11,8 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.post.InMemoryUnsentCommentStore
+import me.meeshy.sdk.outbox.UnsentCommentNotice
 import me.meeshy.sdk.post.PostRepository
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
@@ -22,7 +24,12 @@ class CreateCommentHandlerTest {
 
     private val postApi = mockk<PostApi>()
     private val postRepository = mockk<PostRepository>(relaxed = true)
-    private val handler = CreateCommentHandler(postApi, senderJson, postRepository)
+    private val unsent = InMemoryUnsentCommentStore()
+    private val notices = mutableListOf<Triple<String?, String, String>>()
+    private val handler = CreateCommentHandler(
+        postApi, senderJson, postRepository, unsent,
+        UnsentCommentNotice { owner, post, text -> notices += Triple(owner, post, text) },
+    )
 
     private fun row(payload: CommentPayload = CommentPayload("Bravo", parentId = "c9", originalLanguage = null)) =
         outboxRow(OutboxKind.CREATE_COMMENT, targetId = "p1", cmid = "cmid_c1", payload = encodedPayload(payload))
@@ -97,6 +104,44 @@ class CreateCommentHandlerTest {
     fun `un commentaire qui renonce rend le compteur du post`() = runTest {
         handler.onExhausted(row())
 
+        coVerify(exactly = 1) { postRepository.rollbackQueuedComment("p1") }
+    }
+
+    @Test
+    fun `un commentaire qui renonce previent son auteur et garde son texte recuperable`() = runTest {
+        handler.onExhausted(row().copy(ownerId = "me"))
+
+        assertThat(notices).containsExactly(Triple<String?, String, String>("me", "p1", "Bravo"))
+        assertThat(unsent.peek("p1")).isEqualTo("Bravo")
+    }
+
+    @Test
+    fun `une charge illisible ne previent personne, le compteur est tout de meme rendu`() = runTest {
+        handler.onExhausted(outboxRow(OutboxKind.CREATE_COMMENT, targetId = "p1", payload = "oops"))
+
+        assertThat(notices).isEmpty()
+        assertThat(unsent.peek("p1")).isNull()
+        coVerify(exactly = 1) { postRepository.rollbackQueuedComment("p1") }
+    }
+
+    @Test
+    fun `un refus passager ne previent pas, la ligne est rejouee`() = runTest {
+        coEvery { postApi.addComment(any(), any(), any()) } throws IOException("offline")
+        assertThat(handler.send(row())).isEqualTo(SendResult.TransientFailure)
+        coEvery { postApi.addComment(any(), any(), any()) } throws refusal(503)
+        assertThat(handler.send(row())).isEqualTo(SendResult.TransientFailure)
+
+        assertThat(notices).isEmpty()
+        assertThat(unsent.peek("p1")).isNull()
+    }
+
+    @Test
+    fun `un avis qui echoue ne defait pas le retour du compteur ni le texte garde`() = runTest {
+        val failing = CreateCommentHandler(postApi, senderJson, postRepository, unsent, UnsentCommentNotice { _, _, _ -> error("channel") })
+
+        failing.onExhausted(row())
+
+        assertThat(unsent.peek("p1")).isEqualTo("Bravo")
         coVerify(exactly = 1) { postRepository.rollbackQueuedComment("p1") }
     }
 }

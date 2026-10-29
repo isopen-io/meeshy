@@ -120,6 +120,13 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesUnsentCommentStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): me.meeshy.sdk.post.UnsentCommentStore = me.meeshy.sdk.post.SharedPrefsUnsentCommentStore(context, json)
+
+    @Provides
+    @Singleton
     fun providesSavedAccountsStore(
         @ApplicationContext context: Context,
         json: Json,

@@ -7,4 +7,7 @@
     <string name="push_message_you">Vous</string>
     <string name="push_channel_messages_name">Messages</string>
     <string name="push_channel_messages_description">Nouveaux messages et mentions</string>
+    <string name="push_comment_unsent_title">Commentaire non envoyé</string>
+    <string name="push_comment_unsent_hint">Touchez pour ouvrir la publication — votre texte est gardé</string>
+    <string name="push_reply_kept_as_draft">Réponse gardée en brouillon</string>
 </resources>

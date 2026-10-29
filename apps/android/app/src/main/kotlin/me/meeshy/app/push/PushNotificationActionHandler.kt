@@ -7,10 +7,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.model.KeptReplyDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.push.PushNotificationActions
 import me.meeshy.sdk.notification.NotificationRepository
@@ -39,8 +41,8 @@ import javax.inject.Singleton
  * Fail-closed en conversation chiffrée de bout en bout : ce natif ne sait pas chiffrer, donc
  * rien ne part en clair ([Outcome.END_TO_END]) — la même loi que le drainer de la file
  * ([EndToEndOutboxAdmission.verdictFor]), lue AVANT de créer une bulle condamnée. Un mode encore INCONNU est relu au
- * serveur ; toujours inconnu, on refuse proprement ([Outcome.MODE_UNKNOWN]) plutôt que de faire naître une bulle que le
- * drainer retiendrait. Une conversation verrouillée par code n'agit pas non plus ([Outcome.LOCKED]).
+ * serveur (borné) ; toujours inconnu, aucune bulle ne naît mais la réponse n'est pas perdue : elle est gardée comme
+ * brouillon de la conversation ([Outcome.DRAFT_KEPT], #13693), proposé à l'ouverture, jamais envoyé en clair. Une conversation verrouillée par code n'agit pas non plus ([Outcome.LOCKED]).
  *
  * Le compte de l'action est celui du GESTE : son ticket ([AccountFence.ticket]) est pris dès la session connue, doit
  * désigner le compte de la bannière, et porte toute écriture qui suit — la relecture du mode peut durer, et un autre
@@ -56,6 +58,7 @@ class PushNotificationActionHandler @Inject constructor(
     private val postRepository: PostRepository,
     private val notificationRepository: NotificationRepository,
     private val lockStore: ConversationLockStore,
+    private val draftStore: ConversationDraftStore,
     private val fence: AccountFence? = null,
 ) {
     /** [dismissesBanner] : l'action est prise en compte, la bannière s'en va ; sinon elle reste, intacte. */
@@ -66,8 +69,14 @@ class PushNotificationActionHandler @Inject constructor(
         NOT_SIGNED_IN(false),
         END_TO_END(false),
 
-        /** Le mode de la conversation est encore inconnu (hors ligne) : aucune bulle condamnée ne naît, la bannière reste. */
+        /** Le mode est inconnu et le brouillon n'a pas pu être gardé : aucune bulle condamnée ne naît, la bannière reste. */
         MODE_UNKNOWN(false),
+
+        /**
+         * Le mode de la conversation est inconnu (hors ligne) : le clair ne part pas, la réponse est gardée comme BROUILLON de
+         * la conversation (#13693) et revient dans son champ à l'ouverture. La bannière reste, et le dit.
+         */
+        DRAFT_KEPT(false),
 
         /** La conversation est verrouillée par code : aucune action rapide depuis la bannière. */
         LOCKED(false),
@@ -88,10 +97,11 @@ class PushNotificationActionHandler @Inject constructor(
         if (!isAddressedTo(user, accountId, gesture)) return Outcome.ACCOUNT_CHANGED
         if (lockStore.isLocked(conversationId)) return Outcome.LOCKED
         return guarded(gesture) {
-            when (admission.verdictFor(conversationId)) {
+            when (boundedVerdict(conversationId)) {
                 OutboxAdmissionVerdict.ADMIT -> Unit
                 OutboxAdmissionVerdict.WITHHOLD -> return@guarded Outcome.END_TO_END
-                OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE -> return@guarded Outcome.MODE_UNKNOWN
+                OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE ->
+                    return@guarded keepAsDraft(conversationId, content, replyToId, gesture)
             }
             messageRepository.sendOptimistic(
                 conversationId = conversationId,
@@ -105,6 +115,27 @@ class PushNotificationActionHandler @Inject constructor(
                 .onFailure { Timber.w(it, "Post-reply markRead failed") }
             Outcome.SENT
         }
+    }
+
+    /**
+     * La relecture du mode borne la durée du récepteur (`goAsync`, ~10 s) : [SESSION_BUDGET_MILLIS] + [MODE_READ_BUDGET_MILLIS]
+     * restent sous [GO_ASYNC_WINDOW_MILLIS] avec la marge d'écriture du brouillon. Une relecture qui n'aboutit pas à temps
+     * vaut un mode inconnu (fail-closed : rien ne part en clair, le texte est gardé).
+     */
+    private suspend fun boundedVerdict(conversationId: String): OutboxAdmissionVerdict =
+        withTimeoutOrNull(MODE_READ_BUDGET_MILLIS) { admission.verdictFor(conversationId) } ?: OutboxAdmissionVerdict.WAIT
+
+    /** Le texte reste local au compte (le magasin est vidé avec lui, et un compte changé pendant la relecture n'y écrit rien) ; jamais envoyé, jamais en file. */
+    private suspend fun keepAsDraft(conversationId: String, content: String, replyToId: String?, gesture: AccountTicket?): Outcome {
+        if (gesture != null && fence?.isCurrent(gesture) == false) return Outcome.ACCOUNT_CHANGED
+        val kept = runCatching {
+            val draft = KeptReplyDraft.keep(draftStore.load(conversationId), conversationId, content, replyToId, java.time.Instant.now().toString())
+            draftStore.save(draft)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Timber.w(it, "Offline reply could not be kept as a draft")
+        }
+        return if (kept.isSuccess) Outcome.DRAFT_KEPT else Outcome.MODE_UNKNOWN
     }
 
     /**
@@ -176,7 +207,11 @@ class PushNotificationActionHandler @Inject constructor(
         Outcome.FAILED
     }
 
-    private companion object {
+    internal companion object {
         const val SESSION_BUDGET_MILLIS = 6_000L
+        const val MODE_READ_BUDGET_MILLIS = 2_500L
+
+        /** Le délai que le système laisse à un récepteur resté ouvert par `goAsync()` (broadcast de premier plan). */
+        const val GO_ASYNC_WINDOW_MILLIS = 10_000L
     }
 }

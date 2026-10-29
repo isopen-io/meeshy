@@ -10,9 +10,12 @@ import io.mockk.mockk
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.outbox.EndToEndOutboxAdmission
@@ -38,6 +41,7 @@ class PushNotificationActionHandlerTest {
         verdict: OutboxAdmissionVerdict = OutboxAdmissionVerdict.ADMIT,
         locked: Set<String> = emptySet(),
         fence: AccountFence? = null,
+        val drafts: ConversationDraftStore = InMemoryConversationDraftStore(),
     ) {
         constructor(user: MeeshyUser?, sealed: Boolean) :
             this(user, if (sealed) OutboxAdmissionVerdict.WITHHOLD else OutboxAdmissionVerdict.ADMIT)
@@ -56,7 +60,7 @@ class PushNotificationActionHandlerTest {
         val notifications = mockk<NotificationRepository>(relaxed = true)
         val locks = InMemoryConversationLockStore().also { store -> locked.forEach { store.setLock(it, "1234") } }
         val handler = PushNotificationActionHandler(
-            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission, posts, notifications, locks, fence,
+            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission, posts, notifications, locks, drafts, fence,
         )
     }
 
@@ -147,17 +151,103 @@ class PushNotificationActionHandlerTest {
     }
 
     @Test
-    fun `un mode inconnu et illisible ne fait naitre aucune bulle condamnee et garde la banniere`() = runTest {
+    fun `un mode inconnu et illisible ne fait naitre aucune bulle, la reponse est gardee en brouillon et la banniere reste`() = runTest {
         listOf(OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE).forEach { verdict ->
             val f = Fixture(me, verdict)
 
-            val outcome = f.handler.reply("c1", "secret", replyToId = "m42")
+            val outcome = f.handler.reply("c1", "  ma reponse ", accountId = "me", replyToId = "m42")
 
-            assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.MODE_UNKNOWN)
+            assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.DRAFT_KEPT)
             assertThat(outcome.dismissesBanner).isFalse()
+            val draft = f.drafts.load("c1")
+            assertThat(draft?.text).isEqualTo("ma reponse")
+            assertThat(draft?.replyToId).isEqualTo("m42")
             coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
             coVerify(exactly = 0) { f.conversations.markReadOptimistic(any()) }
         }
+    }
+
+    @Test
+    fun `la reponse gardee s ajoute au brouillon deja commence sans l ecraser`() = runTest {
+        val drafts = InMemoryConversationDraftStore(mapOf("c1" to ConversationDraft("c1", text = "Salut,")))
+        val f = Fixture(me, OutboxAdmissionVerdict.WAIT, drafts = drafts)
+
+        f.handler.reply("c1", "je suis en route")
+
+        assertThat(drafts.load("c1")?.text).isEqualTo("Salut,\nje suis en route")
+    }
+
+    @Test
+    fun `une relecture du mode qui ne rend rien a temps vaut un mode inconnu, rien ne part en clair`() = runTest {
+        val f = Fixture(me, OutboxAdmissionVerdict.ADMIT)
+        coEvery { f.admission.verdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
+
+        val outcome = f.handler.reply("c1", "texte")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.DRAFT_KEPT)
+        assertThat(testScheduler.currentTime).isEqualTo(PushNotificationActionHandler.MODE_READ_BUDGET_MILLIS)
+        coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `une conversation chiffree ne garde rien en brouillon`() = runTest {
+        val f = Fixture(me, OutboxAdmissionVerdict.WITHHOLD)
+
+        assertThat(f.handler.reply("c1", "secret")).isEqualTo(PushNotificationActionHandler.Outcome.END_TO_END)
+        assertThat(f.drafts.load("c1")).isNull()
+    }
+
+    @Test
+    fun `un compte qui change pendant la relecture du mode ne recoit pas le brouillon de l autre`() = runTest {
+        var owner: String? = "me"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val f = Fixture(me, fence = fence)
+        coEvery { f.admission.verdictFor("c1") } coAnswers {
+            owner = "other"
+            OutboxAdmissionVerdict.WAIT
+        }
+
+        val outcome = f.handler.reply("c1", "les mots de me", accountId = "me")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(f.drafts.load("c1")).isNull()
+    }
+
+    @Test
+    fun `un brouillon qui ne s ecrit pas laisse la banniere intacte`() = runTest {
+        val broken = mockk<ConversationDraftStore>(relaxed = true) {
+            coEvery { load(any()) } throws IllegalStateException("disk")
+        }
+        val f = Fixture(me, OutboxAdmissionVerdict.WAIT, drafts = broken)
+
+        assertThat(f.handler.reply("c1", "texte")).isEqualTo(PushNotificationActionHandler.Outcome.MODE_UNKNOWN)
+    }
+
+    @Test
+    fun `le travail du recepteur tient sous le delai de goAsync, session et relecture du mode comprises`() = runTest {
+        val worst = PushNotificationActionHandler.SESSION_BUDGET_MILLIS + PushNotificationActionHandler.MODE_READ_BUDGET_MILLIS
+        assertThat(worst).isLessThan(PushNotificationActionHandler.GO_ASYNC_WINDOW_MILLIS - 1_000L)
+
+        val signedLate = MutableStateFlow<MeeshyUser?>(null)
+        val f = Fixture(me, OutboxAdmissionVerdict.ADMIT)
+        every { f.session.currentUser } returns signedLate
+        coEvery { f.session.refresh() } coAnswers { kotlinx.coroutines.delay(PushNotificationActionHandler.SESSION_BUDGET_MILLIS - 100); signedLate.value = me }
+        coEvery { f.admission.verdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
+
+        val outcome = f.handler.reply("c1", "texte")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.DRAFT_KEPT)
+        assertThat(testScheduler.currentTime).isAtMost(worst)
+        assertThat(testScheduler.currentTime).isLessThan(PushNotificationActionHandler.GO_ASYNC_WINDOW_MILLIS)
+    }
+
+    @Test
+    fun `une session qui ne revient pas rend la main au bout du budget`() = runTest {
+        val f = Fixture(null)
+        coEvery { f.session.refresh() } coAnswers { kotlinx.coroutines.awaitCancellation() }
+
+        assertThat(f.handler.reply("c1", "texte")).isEqualTo(PushNotificationActionHandler.Outcome.NOT_SIGNED_IN)
+        assertThat(testScheduler.currentTime).isEqualTo(PushNotificationActionHandler.SESSION_BUDGET_MILLIS)
     }
 
     @Test
