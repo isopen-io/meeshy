@@ -107,4 +107,19 @@ class StoryDraftReopeningTest {
         assertThat(reopened.slides.map { it.mediaIds }).containsExactly(listOf("t1"), listOf("cmid-b")).inOrder()
         assertThat(reopened.isAwaitingPublication).isFalse()
     }
+
+    @Test
+    fun `a placed media keeps its pose under the server id it received`() {
+        val kept = awaiting(
+            slide("s1", "cmid-a", "m2").copy(
+                placedMedia = listOf(StoryDraftPlacedMediaSnapshot("cmid-a", 0.2f, 0.7f, 1.5f, 12f), StoryDraftPlacedMediaSnapshot("m2")),
+            ),
+        )
+
+        val reopened = StoryDraftReopening.reopened(kept, publishedMediaIds = listOf(listOf("srv-a", "m2")))
+
+        assertThat(reopened.slides.single().placedMedia)
+            .containsExactly(StoryDraftPlacedMediaSnapshot("srv-a", 0.2f, 0.7f, 1.5f, 12f), StoryDraftPlacedMediaSnapshot("m2"))
+            .inOrder()
+    }
 }

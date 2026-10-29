@@ -16,6 +16,10 @@ internal object StoryComposerPlacedMediaReducer {
         return state.copy(deck = state.deck.updatePlacedMedia(slide.id) { it + placed.normalised() })
     }
 
+    /** Le geste de la vignette : poser un média qui ne l'est pas, reprendre la pose de celui qui l'est. */
+    fun toggled(state: StoryComposerUiState, mediaId: String): StoryComposerUiState =
+        if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) unplaced(state, mediaId) else placed(state, mediaId)
+
     /** Reprend la pose : le média reste attaché à la slide, il quitte la scène. */
     fun unplaced(state: StoryComposerUiState, mediaId: String): StoryComposerUiState {
         if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId } }) return state

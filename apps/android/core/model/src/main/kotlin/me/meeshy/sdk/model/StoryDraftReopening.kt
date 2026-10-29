@@ -34,6 +34,7 @@ object StoryDraftReopening {
                 slide.copy(
                     mediaIds = slide.mediaIds.map { it.served() },
                     backgroundMediaId = slide.backgroundMediaId?.served(),
+                    placedMedia = slide.placedMedia.map { it.copy(id = it.id.served()) },
                 )
             },
             annotations = kept.annotations.copy(
