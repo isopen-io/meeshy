@@ -402,6 +402,7 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(it)) }
+            confirmServedClear(carried)
             val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
@@ -425,6 +426,7 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = keepingEndToEnd(carryingKnownPeers(conversation))
+            confirmServedClear(listOf(carried))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
         }
@@ -451,6 +453,10 @@ internal class ConversationCacheSource(
         if (EndToEndRegime.isEndToEnd(served.encryptionMode)) endToEnd.learn(served.id)
         return EndToEndRegimeMemory.kept(served, seenEndToEnd = endToEnd.isSealed(served.id))
     }
+
+    /** #13628 — what the gateway just served without end-to-end has a KNOWN mode, even when it serves none (a clear conversation). */
+    private fun confirmServedClear(served: List<ApiConversation>) =
+        endToEnd.confirmClear(served.filterNot { EndToEndRegime.isEndToEnd(it.encryptionMode) }.map { it.id })
 
     /** Rows cached e2ee before the ledger existed are learned once per account. Must run inside the write transaction. */
     private suspend fun seedEndToEndFromCache() {

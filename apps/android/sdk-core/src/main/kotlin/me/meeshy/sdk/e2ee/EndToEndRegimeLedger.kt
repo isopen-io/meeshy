@@ -25,6 +25,12 @@ interface EndToEndRegimeLedger {
 
     fun learn(conversationId: String)
 
+    /** #13628 — la passerelle a SERVI cette conversation sans bout en bout : son mode est connu clair (un mode nul servi n'est plus « inconnu »). */
+    fun isClearConfirmed(conversationId: String): Boolean = false
+
+    /** Retient, en un seul lot, les conversations que la passerelle vient de servir sans bout en bout. Ne retient jamais une scellée. */
+    fun confirmClear(conversationIds: Collection<String>) = Unit
+
     companion object {
         /** Aucun registre (témoins, aperçus) : rien n'est appris, rien n'est retenu. */
         val None: EndToEndRegimeLedger = object : EndToEndRegimeLedger {
@@ -39,6 +45,18 @@ class InMemoryEndToEndRegimeLedger(
     private val account: SyncAccountProvider = SyncAccountProvider { "test" },
 ) : EndToEndRegimeLedger {
     private val byAccount = mutableMapOf<String, EndToEndSealedConversations>()
+    private val clearByAccount = mutableMapOf<String, Set<String>>()
+
+    @Synchronized
+    override fun isClearConfirmed(conversationId: String): Boolean =
+        account.activeAccountId()?.let { conversationId in clearByAccount[it].orEmpty() } == true
+
+    @Synchronized
+    override fun confirmClear(conversationIds: Collection<String>) {
+        val owner = account.activeAccountId() ?: return
+        val sealed = byAccount[owner] ?: EndToEndSealedConversations()
+        clearByAccount[owner] = clearByAccount[owner].orEmpty() + conversationIds.filterNot(sealed::isSealed)
+    }
 
     @Synchronized
     override fun isSealed(conversationId: String): Boolean =
@@ -73,6 +91,24 @@ class SharedPrefsEndToEndRegimeLedger(
         prefs.edit().putStringSet(keyOf(owner), next.ids).apply()
     }
 
+    @Synchronized
+    override fun isClearConfirmed(conversationId: String): Boolean =
+        account.activeAccountId()?.let { conversationId in clearOf(it) } == true
+
+    @Synchronized
+    override fun confirmClear(conversationIds: Collection<String>) {
+        val owner = account.activeAccountId() ?: return
+        val sealed = sealedOf(owner)
+        val current = clearOf(owner)
+        val added = conversationIds.filterNot { it in current || sealed.isSealed(it) }
+        if (added.isEmpty()) return
+        prefs.edit().putStringSet(clearKeyOf(owner), current + added).apply()
+    }
+
+    private fun clearOf(owner: String): Set<String> = prefs.getStringSet(clearKeyOf(owner), emptySet())?.toSet() ?: emptySet()
+
+    private fun clearKeyOf(owner: String): String = "$CLEAR_KEY_PREFIX$owner"
+
     private fun sealedOf(owner: String): EndToEndSealedConversations =
         EndToEndSealedConversations(prefs.getStringSet(keyOf(owner), emptySet())?.toSet() ?: emptySet())
 
@@ -81,6 +117,7 @@ class SharedPrefsEndToEndRegimeLedger(
     private companion object {
         const val FILE_NAME = "meeshy_e2ee_sealed_conversations"
         const val KEY_PREFIX = "sealed."
+        const val CLEAR_KEY_PREFIX = "clear."
     }
 }
 

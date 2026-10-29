@@ -140,11 +140,16 @@ public class OutboxDrainer(
                 exhausted++
                 continue
             }
-            if (!plaintextAdmission.admits(row)) {
-                outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_END_TO_END)
-                onExhausted(row)
-                exhausted++
-                continue
+            when (plaintextAdmission.judge(row)) {
+                OutboxAdmissionVerdict.ADMIT -> Unit
+                OutboxAdmissionVerdict.WITHHOLD -> {
+                    outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_END_TO_END)
+                    onExhausted(row)
+                    exhausted++
+                    continue
+                }
+                // #13628 — mode inconnu et illisible : la ligne reste PENDING (aucun essai compté), la file s'arrête et reprend au retour du réseau.
+                OutboxAdmissionVerdict.WAIT -> return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
             }
             when (val result = sendUnder(ticket, sender, row) ?: return blocked(delivered, exhausted)) {
                 SendResult.Success -> {
