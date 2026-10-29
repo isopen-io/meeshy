@@ -136,6 +136,8 @@ object FeedPostBuilder {
                 )
             }
         val isReel = post.type.equals("reel", ignoreCase = true)
+        // iOS `FeedPost.reelDisplayMedia` : un réel republié sans média propre montre le réel qu'il republie.
+        val reelMedia = if (isReel) media.ifEmpty { FeedMediaMapper.map(post.repostOf?.media, preferredLanguages, mediaBaseUrl) } else media
         val originalCode = post.originalLanguage.normalizedCode()
         val isTranslated = post.isTranslated(preferences)
         val activeCode = resolveActiveCode(post, preferences, activeLanguageCode)
@@ -179,8 +181,8 @@ object FeedPostBuilder {
             distanceMeters = post.distanceMeters,
             layout = post.storyEffects.resolvedLayout,
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
-            reelCover = if (isReel) ReelCoverResolver.resolve(media) { post.toStoryItem() } else null,
-            reelAspect = media.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
+            reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia) { post.toStoryItem() } else null,
+            reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
         )
     }
 

@@ -100,4 +100,17 @@ class ReelCoverTest {
         val plain = RepostEmbedBuilder.forPost(ApiPost(id = "o", type = "POST", repostOf = ApiRepostOf(id = "x", type = "POST")), Prefs, null)
         assertThat(plain!!.reelCover).isNull()
     }
+    /** iOS `FeedPost.reelDisplayMedia` : un réel republié sans média propre montre le réel qu'il republie. */
+    @Test
+    fun `un reel republie sans media propre montre la vignette et le cadre du reel source`() {
+        val landscape = video.copy(width = 1920, height = 1080)
+        val source = ApiRepostOf(id = "orig", type = "REEL", media = listOf(landscape), author = ApiAuthor(id = "u9", username = "orig"))
+        val republished = FeedPostBuilder.build(
+            ApiPost(id = "r2", type = "REEL", media = emptyList(), repostOf = source, author = ApiAuthor(id = "u1", username = "amina")),
+            Prefs,
+            mediaBaseUrl = "https://cdn.test",
+        )
+        assertThat((republished.reelCover as ReelCover.Poster).url).isEqualTo("https://cdn.test/u/v.jpg")
+        assertThat(republished.reelAspect).isEqualTo(4f / 3f)
+    }
 }
