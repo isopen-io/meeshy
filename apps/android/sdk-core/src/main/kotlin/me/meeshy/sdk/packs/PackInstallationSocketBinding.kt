@@ -16,9 +16,14 @@ import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
+import me.meeshy.sdk.socket.collectArrived
 import timber.log.Timber
 
-/** Branche `pack:installation-updated` sur mon compte : un pack acheté ou retiré ici ou ailleurs se voit aussitôt. */
+/**
+ * Branche `pack:installation-updated` sur mon compte : un pack acheté ou retiré ici ou ailleurs se voit aussitôt. Chaque
+ * événement s'écrit sous le compte auquel il est ARRIVÉ ([collectArrived]) : celui de A qui attend encore son collecteur
+ * quand B se connecte ne touche pas la vitrine de B.
+ */
 @Singleton
 class PackInstallationSocketBinding @Inject constructor(
     private val messages: MessageSocketManager,
@@ -33,7 +38,7 @@ class PackInstallationSocketBinding @Inject constructor(
         val live = CoroutineScope(SupervisorJob() + io).also { scope = it }
         live.launch {
             try {
-                messages.packInstallationUpdated.collect { event ->
+                messages.packInstallationUpdated.collectArrived { event ->
                     try {
                         repository.onInstallationUpdated(event, repository.installationTicket())
                     } catch (e: CancellationException) {
