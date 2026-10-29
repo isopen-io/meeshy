@@ -171,9 +171,10 @@ struct RiverBubbleContent: Equatable {
 /// n'est pas `Equatable` : l'égalité lit ce qui change le rendu d'une carte.
 struct RiverContactCards: Equatable {
     let items: [MessageAttachment]
+    var scope: ContactCardResolutionScope = .unknown
 
     static func == (lhs: RiverContactCards, rhs: RiverContactCards) -> Bool {
-        lhs.items.map(\.id) == rhs.items.map(\.id) && lhs.items.map(\.fileUrl) == rhs.items.map(\.fileUrl)
+        lhs.items.map(\.id) == rhs.items.map(\.id) && lhs.items.map(\.fileUrl) == rhs.items.map(\.fileUrl) && lhs.scope == rhs.scope
     }
 }
 
@@ -685,7 +686,7 @@ struct RiverBubbleView: View, Equatable {
                 BubbleLinkEmbed(text: linkEmbed, accentColor: colorHex, isDark: isDark)
             }
             ForEach(content.contactCards.items) { attachment in
-                BubbleAttachmentView(attachment: attachment, isMe: false, isDark: isDark, accentHex: colorHex)
+                BubbleAttachmentView(attachment: attachment, isMe: false, isDark: isDark, accentHex: colorHex, contactCardScope: content.contactCards.scope)
             }
 
             // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »

@@ -124,4 +124,13 @@ class ArrivalTicketsTest {
 
         assertThat(refs.count { it.first.get() == null && it.second.get() == null }).isGreaterThan(40)
     }
+
+    @Test
+    fun `a nested stamp gives back the ticket of the outer frame, not nothing`() {
+        ArrivalStamp.under(ticket("A")) {
+            ArrivalStamp.under(ticket("B")) { assertThat(ArrivalStamp.current()?.ownerId).isEqualTo("B") }
+            assertThat(ArrivalStamp.current()?.ownerId).isEqualTo("A")
+        }
+        assertThat(ArrivalStamp.current()).isNull()
+    }
 }

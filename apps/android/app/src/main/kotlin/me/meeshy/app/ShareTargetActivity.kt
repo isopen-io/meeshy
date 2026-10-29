@@ -6,11 +6,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.chat.IncomingShareScreen
+import me.meeshy.app.chat.IncomingShareSelection
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.composer.inbound.InboundShareIntake
@@ -45,14 +45,16 @@ class ShareTargetActivity : ComponentActivity() {
         val sharedText = intent?.getStringExtra(Intent.EXTRA_TEXT)
         // Le flux d'une autre app est du contenu NON FIABLE (#13527) : seule une URI `content://` d'une autre app est lue,
         // jamais un `file://` (lu avec NOS droits) ni un de nos propres fournisseurs — pour l'envoi comme pour le studio.
-        val sharedUris: List<Uri> = intent?.let(::streamsOf).orEmpty().filter { inboundIntake.admitsSource(it) }
+        // Le filtre accepte tout type (#13585) : seuls les flux d'EXTRA_STREAM sont lus, au plus 100, et ce qui est écarté est dit.
+        val selection = intent?.let { IncomingShareSelection.of(it, inboundIntake::admitsSource) } ?: IncomingShareSelection(emptyList(), 0, 0)
+        val sharedUris: List<Uri> = selection.admitted
         val sharedMimeType = intent?.type
         setContent {
             MeeshyTheme {
                 CompositionLocalProvider(LocalMediaBaseUrl provides config.apiBaseUrl) {
                     IncomingShareScreen(
                         sharedText = sharedText,
-                        sharedUris = sharedUris,
+                        selection = selection,
                         sharedMimeType = sharedMimeType,
                         onFinished = ::finish,
                         onOpenConversation = ::openConversation,
@@ -62,15 +64,6 @@ class ShareTargetActivity : ComponentActivity() {
             }
         }
     }
-
-    /** `ACTION_SEND` porte un flux, `ACTION_SEND_MULTIPLE` une liste : la même feuille reçoit les deux (#13476). */
-    private fun streamsOf(intent: Intent): List<Uri> = runCatching {
-        if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
-            IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
-        } else {
-            listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
-        }
-    }.getOrDefault(emptyList())
 
     /** « Envoyé à X · Ouvrir » : Meeshy s'ouvre sur la conversation servie, la feuille se ferme. */
     private fun openConversation(conversationId: String) {

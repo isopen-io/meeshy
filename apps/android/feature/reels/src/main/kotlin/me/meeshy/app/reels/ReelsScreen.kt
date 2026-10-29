@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -36,6 +37,7 @@ import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.ReelSwitchWork
+import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.fullscreen.FullscreenScrims
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -68,8 +70,10 @@ fun ReelsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
-    // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
-    var muted by rememberSaveable { mutableStateOf(true) }
+    // Le son est ouvert à l'entrée (iOS `ReelsPlayerView` : l'ouverture du lecteur est le geste) ; le bouton
+    // muet vaut pour tous les réels de la session, et n'existe que pour un réel qui porte du son.
+    var muted by rememberSaveable { mutableStateOf(false) }
+    val probedAudio = remember { mutableStateMapOf<String, Boolean>() }
     // Mode immersif : un appui long efface tout le chrome, un toucher le rend.
     var chromeHidden by rememberSaveable { mutableStateOf(false) }
     val shareContext = LocalContext.current
@@ -81,6 +85,8 @@ fun ReelsScreen(
     val pagerState = rememberPagerState(pageCount = { state.reels.size })
 
     LaunchedEffect(seed) { viewModel.load(seed) }
+    // Fond noir en plein cadre : heure et icônes claires, rendues à la fenêtre en quittant l'écran.
+    StatusBarIconsOverDark()
 
     // Leaving the reels thread closes the last dwell session (records its view if
     // it qualified) — the pager's per-settle end never fires for the final reel.
@@ -116,6 +122,7 @@ fun ReelsScreen(
                 reels = state.reels,
                 viewModel = viewModel,
                 muted = muted,
+                onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
                 chromeHidden = chromeHidden,
                 quickEmojis = quickEmojis,
                 railActions = railActions,
@@ -136,6 +143,7 @@ fun ReelsScreen(
             reel = state.reels.getOrNull(pagerState.currentPage),
             chromeHidden = chromeHidden,
             muted = muted,
+            showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
             viewModel = viewModel,
             onClose = onClose,
             onToggleMute = { muted = !muted },
@@ -180,6 +188,7 @@ private fun ReelsPager(
     reels: List<ReelPresentation>,
     viewModel: ReelsViewModel,
     muted: Boolean,
+    onSoundProbed: (String, Boolean) -> Unit,
     chromeHidden: Boolean,
     quickEmojis: List<String>,
     railActions: ReelRailActions,
@@ -216,7 +225,7 @@ private fun ReelsPager(
         state = pagerState,
         modifier = Modifier.fillMaxSize(),
         // Une page voisine est composee (donc son poster charge) ; son LECTEUR, lui, n'est cree que
-        // pour la page suivante (`loads` ci-dessous) — ni la precedente ni plus loin.
+        // pour la precedente et la suivante (`ReelPreload`) — retour comme avance sans attente, rien de plus loin.
         beyondViewportPageCount = 1,
         key = { index -> reels.getOrNull(index)?.id ?: index },
     ) { page ->
@@ -225,8 +234,11 @@ private fun ReelsPager(
         val isSettled by remember(pagerState, page) { derivedStateOf { pagerState.settledPage == page } }
         val loadsMedia by remember(pagerState, page) {
             derivedStateOf {
-                lifecycleState.isAtLeast(Lifecycle.State.STARTED) &&
-                    (page == pagerState.currentPage || page == pagerState.currentPage + 1)
+                ReelPreload.loads(
+                    page = page,
+                    currentPage = pagerState.currentPage,
+                    isForeground = lifecycleState.isAtLeast(Lifecycle.State.STARTED),
+                )
             }
         }
         ReelPage(
@@ -235,6 +247,7 @@ private fun ReelsPager(
             isEngaged = ReelSwitchWork.engages(isElected = isElected, isSettled = isSettled),
             loadsMedia = loadsMedia,
             muted = muted,
+            onSoundProbed = { hasTrack -> onSoundProbed(reel.id, hasTrack) },
             chromeHidden = chromeHidden,
             isOwn = viewModel.isOwn(reel),
             quickEmojis = quickEmojis,

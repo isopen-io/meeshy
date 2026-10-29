@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_repost_audience_kept">A story não foi repostada; o público dela agora é: %1$s</string>
+</resources>

@@ -5,9 +5,9 @@
     <string name="reels_close">Cerrar</string>
     <string name="reels_comments">Comentarios</string>
     <plurals name="reels_comments_count">
-        <item quantity="one">%d comentario</item>
-        <item quantity="many">%d comentarios</item>
-        <item quantity="other">%d comentarios</item>
+        <item quantity="one">%1$d comentario</item>
+        <item quantity="many">%1$d comentarios</item>
+        <item quantity="other">%1$d comentarios</item>
     </plurals>
     <string name="reels_comments_empty_subtitle">¡Sé el primero en comentar!</string>
     <string name="reels_comments_empty_title">Aún no hay comentarios</string>
@@ -23,7 +23,7 @@
     <string name="reels_menu_pin">Fijar</string>
     <string name="reels_menu_report">Denunciar</string>
     <string name="reels_menu_share">Compartir</string>
-    <string name="reels_mute">Silencio</string>
+    <string name="reels_mute">Silenciar</string>
     <string name="reels_open_failure_back">Volver</string>
     <string name="reels_repost">Republicar</string>
     <string name="reels_scrub">Avanzar o retroceder</string>
@@ -35,6 +35,6 @@
     <string name="reels_toast_report_failed">Error al denunciar la publicación</string>
     <string name="reels_toast_reported">Publicación denunciada</string>
     <string name="reels_unlike">Ya no me gusta</string>
-    <string name="reels_unmute">Activar sonido</string>
+    <string name="reels_unmute">Activar el sonido</string>
     <string name="reels_views">Vistas</string>
 </resources>

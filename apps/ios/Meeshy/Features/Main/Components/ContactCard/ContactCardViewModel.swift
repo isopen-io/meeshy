@@ -132,23 +132,31 @@ final class ContactCardViewModel: ObservableObject {
     private let resolver: ContactResolveServiceProviding
     private let performer: ContactCardActionPerforming
     private let defaultCountry: String?
+    private let resolutionScope: ContactCardResolutionScope
 
     init(
         attachment: MessageAttachment,
         loader: VCardAttachmentLoading = VCardAttachmentLoader.shared,
         resolver: ContactResolveServiceProviding = ContactResolveService.shared,
         performer: ContactCardActionPerforming? = nil,
-        defaultCountry: String? = ContactSyncService.deviceRegionCode()
+        defaultCountry: String? = ContactSyncService.deviceRegionCode(),
+        resolutionScope: ContactCardResolutionScope = .unknown
     ) {
         self.attachment = attachment
         self.loader = loader
         self.resolver = resolver
         self.performer = performer ?? ContactCardActionPerformer()
         self.defaultCountry = defaultCountry
+        let scope = resolutionScope.sealed(by: attachment)
+        self.resolutionScope = scope
         let cached = loader.cachedCard(for: attachment)
         self.card = cached
-        self.accounts = cached.flatMap { resolver.cachedAccounts(for: request(for: $0)) } ?? []
+        self.accounts = scope.mayResolveOnServer ? (cached.flatMap { resolver.cachedAccounts(for: request(for: $0)) } ?? []) : []
     }
+
+    /// La vérification « Sur Meeshy » n'existe pas dans une conversation
+    /// chiffrée : la fiche le dit au lieu de se taire.
+    var meeshyLookupIsUnavailable: Bool { resolutionScope == .endToEnd }
 
     /// Le compte montré dans la bulle : le premier rendu par le serveur.
     var primaryAccount: PublicContactAccount? { accounts.first }
@@ -171,6 +179,7 @@ final class ContactCardViewModel: ObservableObject {
             return
         }
         if card != loaded { card = loaded }
+        guard resolutionScope.mayResolveOnServer else { return }
         let resolved = await resolver.resolve(request(for: loaded))
         if resolved != accounts { accounts = resolved }
     }

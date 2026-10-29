@@ -36,7 +36,7 @@ import type { PushRoutingClient } from './push-type-routing';
  *   système sans toucher aux messages. Il n'est adressé qu'au jeton de la
  *   COQUE (`android-shell`, `pushRoutingClientOf`) : une coque qui ne l'a pas
  *   encore retombe sur le canal par défaut de son manifeste. L'application
- *   native (`me.meeshy.android`) ne crée pas ce canal et son manifeste ne
+ *   native (`me.meeshy.app`, #13619) ne crée pas ce canal et son manifeste ne
  *   déclare aucun canal par défaut : FCM y rangerait la bannière sous son canal
  *   générique, sans bannière. Elle reste donc sur `meeshy_notifications`, comme
  *   tout jeton Android dont le client n'est pas reconnu (#9223) ;

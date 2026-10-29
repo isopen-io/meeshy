@@ -83,6 +83,11 @@ class OnboardingViewModel @Inject constructor(
      * chaque lancement, pour toujours. Une panne réseau ne règle rien : la lecture sera retentée.
      */
     suspend fun start(user: MeeshyUser) {
+        val previous = this.user?.id
+        if (previous != null && previous != user.id) sessionEnded()
+        // L'hôte se recompose (activité recréée : thème, langue, densité) et relance ce démarrage : un parcours DÉJÀ
+        // montré pour ce compte garde sa carte et les choix en cours (iOS `startedForUserId`).
+        if (previous == user.id && (mutableState.value.isPresented || awaitsRoute)) return
         if (gateway.isSettled(user.id)) return
         prepare(user)
         val served = gateway.fetchState() ?: return
@@ -91,6 +96,23 @@ class OnboardingViewModel @Inject constructor(
             return
         }
         present(served)
+    }
+
+    /**
+     * La session s'est fermée (ou un autre compte l'a prise) : le parcours en cours n'appartient plus à personne. Sur
+     * iOS l'hôte quitte l'arbre avec la racine connectée ; ici le modèle vit avec l'activité, il s'oublie donc lui-même —
+     * sans quoi le calque recouvrirait l'écran de connexion et le compte suivant hériterait des cartes du précédent.
+     */
+    fun sessionEnded() {
+        user = null
+        composedGreeting = ""
+        initialLanguages = "" to null
+        rewardSequence = 0
+        awaitsRoute = false
+        knownScore = null
+        servedElanFactor = 1
+        servedRewards = null
+        mutableState.value = OnboardingUiState(ageBirthDate = OnboardingAgeRules.initialDate(today()))
     }
 
     /** Un deep link ou un push a mené AILLEURS que la racine : le calque attend le retour. */
@@ -274,6 +296,7 @@ class OnboardingViewModel @Inject constructor(
         if (!current.isPresented && !awaitsRoute) return
         val served = gateway.fetchState() ?: return
         mutableState.update { it.copy(storyNeedsEmailVerification = served.canPublishStory == false) }
+        adoptPublishedStory(served)
         if (served.emailVerified != true) return
         if (current.card == OnboardingCard.Step(OnboardingStepId.EMAIL)) {
             showNext()
@@ -397,14 +420,25 @@ class OnboardingViewModel @Inject constructor(
     /**
      * Le composeur de story s'est refermé : la passerelle relit l'état. Une story publiée est vue par l'engagement
      * (`prefilledSteps`) — c'est le SEUL moment où elle rapporte ses points et où l'étape s'écrit `done`.
+     *
+     * La publication part par la file d'envoi durable : elle atteint en général le serveur APRÈS la fermeture. La carte
+     * l'ATTEND donc ([OnboardingUiState.storyAwaitsPublication]) et chaque relecture suivante ([refreshVerification])
+     * la crédite dès qu'elle est vue. Un composeur ouvert hors du parcours ne demande rien au serveur.
      */
     suspend fun storyComposerClosed() {
         val current = mutableState.value
-        if (current.storyState == OnboardingStoryState.PUBLISHED) return
+        if (!current.isPresented || current.storyState == OnboardingStoryState.PUBLISHED) return
+        mutableState.update { it.copy(storyAwaitsPublication = true) }
         val served = gateway.fetchState() ?: return
         mutableState.update { it.copy(storyNeedsEmailVerification = served.canPublishStory == false) }
+        adoptPublishedStory(served)
+    }
+
+    private suspend fun adoptPublishedStory(served: ApiOnboardingState) {
+        val current = mutableState.value
+        if (!current.storyAwaitsPublication || current.storyState == OnboardingStoryState.PUBLISHED) return
         if (OnboardingStepId.STORY !in served.prefilledSteps) return
-        mutableState.update { it.copy(storyState = OnboardingStoryState.PUBLISHED) }
+        mutableState.update { it.copy(storyState = OnboardingStoryState.PUBLISHED, storyAwaitsPublication = false) }
         produce()
         val points = creditedPoints(OnboardingRewards.story, servedRewards?.story)
         mutableState.update { it.copy(storyReward = points) }

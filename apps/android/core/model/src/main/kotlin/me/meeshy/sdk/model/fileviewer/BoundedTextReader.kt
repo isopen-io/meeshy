@@ -1,12 +1,11 @@
 package me.meeshy.sdk.model.fileviewer
 
 import java.io.InputStream
-import java.nio.ByteBuffer
-import java.nio.charset.CodingErrorAction
 
 /**
  * La lecture BORNÉE d'un fichier reçu : jamais plus de [maxBytes] octets en mémoire, quelle que soit la taille
- * annoncée par l'expéditeur. Un contenu qui porte un octet nul est binaire (jamais affiché comme du texte).
+ * annoncée par l'expéditeur. L'encodage est détecté ([TextDecoding]) ; un contenu qui porte un octet nul sans marque
+ * UTF-16 est binaire (jamais affiché comme du texte).
  */
 object BoundedTextReader {
 
@@ -25,12 +24,7 @@ object BoundedTextReader {
         }
         val truncated = filled > maxBytes
         val used = minOf(filled, maxBytes)
-        if ((0 until used).any { buffer[it] == 0.toByte() }) return Result("", truncated, isBinary = true)
-        // Une coupe au milieu d'un caractère multi-octets : on s'arrête avant, sans caractère de remplacement.
-        val decoder = Charsets.UTF_8.newDecoder()
-            .onMalformedInput(if (truncated) CodingErrorAction.IGNORE else CodingErrorAction.REPLACE)
-            .onUnmappableCharacter(CodingErrorAction.REPLACE)
-        val text = decoder.decode(ByteBuffer.wrap(buffer, 0, used)).toString()
+        val text = TextDecoding.decode(buffer, used, truncated) ?: return Result("", truncated, isBinary = true)
         return Result(text, truncated, isBinary = false)
     }
 }

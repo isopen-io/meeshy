@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.scene.SceneFrame
@@ -37,6 +38,8 @@ data class StoryComposerDraft(
     val durationSecondsPin: Double? = null,
     val background: StoryBackgroundValue? = null,
     val backgroundMedia: StoryBackgroundMedia? = null,
+    /** Les médias de premier plan posés sur la scène, déjà résolus en objets du fil (#13630). */
+    val placedMedia: List<StoryMediaObject> = emptyList(),
     val repostOfId: String? = null,
     /** La liste « visible par » / « sauf » : n'a de sens que sous ONLY / EXCEPT. */
     val visibilityUserIds: List<String> = emptyList(),
@@ -158,7 +161,7 @@ data class StoryComposerDraft(
     private fun storyEffects(originalLanguage: String): StoryEffects? {
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
         val stickerObjects = publishableStickers.map { it.toSticker() }
-        val mediaObjects = listOfNotNull(backgroundMedia?.toMediaObject())
+        val mediaObjects = StoryPublishPlacedMedia.withinCaps(backgroundMedia?.toMediaObject(), placedMedia)
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
             audio.isEmpty() && frame.isNeutral
@@ -182,8 +185,8 @@ data class StoryComposerDraft(
     companion object {
         const val MAX_CHARS: Int = 5000
 
-        /** Maximum media attachments per story — matches the iOS composer cap. */
-        const val MAX_MEDIA: Int = 10
+        /** Maximum media attachments per story — 50, la décision porteur 2026-10-28 (#13590). */
+        const val MAX_MEDIA: Int = me.meeshy.sdk.model.composer.SceneObjectCaps.MEDIA
         private const val STORY_TYPE = "STORY"
     }
 }

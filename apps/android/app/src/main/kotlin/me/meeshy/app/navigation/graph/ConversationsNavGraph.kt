@@ -34,14 +34,14 @@ import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
+import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.Routes
-import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
+import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoriesViewModel
-import me.meeshy.app.stories.StoryTray
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
 internal fun NavGraphBuilder.conversationsNavGraph(
@@ -58,6 +58,8 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         // Une seule instance pour la barre et le geste « tirer » : tirer la liste recharge
         // aussi les stories (iOS `ConversationListView` : pullToRefresh + loadStories).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
+        // Le rail lit les humeurs de ce même ViewModel ; tirer la liste les recharge avec les stories (iOS `ConversationListView`).
+        val statusesViewModel: StatusesViewModel = hiltViewModel()
         // « Gérer les membres » d'une rangée (#12865) : la fiche des membres s'ouvre sur la liste,
         // sans entrer dans la conversation, comme iOS.
         var membersTarget by remember { mutableStateOf<Pair<String, Color>?>(null) }
@@ -78,15 +80,12 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
             onLogout = { authViewModel.logout() },
             header = {
-                StoryTray(
-                    onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
-                    onAddStory = { navController.navigate(storyDoor) },
-                    onManageStories = { navController.navigate(Routes.MY_STORIES) },
-                    onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-                    viewModel = storiesViewModel,
-                )
+                MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel, statusesViewModel = statusesViewModel)
             },
-            onRefresh = storiesViewModel::refresh,
+            onRefresh = {
+                storiesViewModel.refresh()
+                statusesViewModel.refresh()
+            },
             rowNavigation = ConversationRowNavigation(
                 onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
                 onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
@@ -221,6 +220,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
             locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
             onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
         )
     }
     composable(Routes.STARRED) {

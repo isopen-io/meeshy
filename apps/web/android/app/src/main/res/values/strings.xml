@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Meeshy</string>
     <string name="title_activity_main">Meeshy</string>
-    <string name="package_name">me.meeshy.app</string>
-    <string name="custom_url_scheme">me.meeshy.app</string>
+    <string name="package_name">me.meeshy.webapp</string>
+    <string name="custom_url_scheme">me.meeshy.webapp</string>
     <!-- #9530 — la réciproque de get_login_creds (public/.well-known/assetlinks.json) :
          le mot de passe enregistré sur meeshy.me est proposé dans la coque. -->
     <string name="asset_statements" translatable="false">[{\"include\": \"https://meeshy.me/.well-known/assetlinks.json\"}]</string>

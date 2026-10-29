@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -80,7 +81,7 @@ private sealed interface CardLoad {
  * autorisation d'accès au carnet n'est demandée.
  */
 @Composable
-internal fun ContactCardSheet(request: FileViewerRequest, accent: Color, onDismiss: () -> Unit) {
+internal fun ContactCardSheet(request: FileViewerRequest, accent: Color, onDismiss: () -> Unit, accounts: ContactCardAccountsUi? = null) {
     val context = LocalContext.current
     var load by remember(request.localUri) { mutableStateOf<CardLoad>(CardLoad.Loading) }
     LaunchedEffect(request.localUri) {
@@ -107,7 +108,7 @@ internal fun ContactCardSheet(request: FileViewerRequest, accent: Color, onDismi
                         CircularProgressIndicator(color = accent, strokeWidth = 2.dp)
                     }
                     CardLoad.Unreadable -> UnreadableCard(request.fileName, onDismiss)
-                    is CardLoad.Ready -> ReadyCard(state.card, accent, onDismiss)
+                    is CardLoad.Ready -> ReadyCard(state.card, accent, onDismiss, accounts)
                 }
             }
         }
@@ -125,13 +126,15 @@ private fun UnreadableCard(fileName: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ReadyCard(card: VCard, accent: Color, onDismiss: () -> Unit) {
+private fun ReadyCard(card: VCard, accent: Color, onDismiss: () -> Unit, accounts: ContactCardAccountsUi?) {
     val context = LocalContext.current
+    val bind = accounts?.bind
+    LaunchedEffect(card, bind) { bind?.invoke(card) }
     val fields = remember(card) { ContactCardField.fields(card) }
     val subtitle = listOfNotNull(card.title, card.organization).joinToString(" · ").takeIf { it.isNotBlank() }
-    CardHeader(name = card.displayName, subtitle = subtitle, accent = accent, onDismiss = onDismiss)
+    CardHeader(name = card.displayName, subtitle = subtitle, accent = accent, onDismiss = onDismiss, avatarUrl = accounts?.rows?.firstOrNull()?.account?.avatarUrl)
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()).padding(MeeshySpacing.lg),
+        modifier = Modifier.verticalScroll(rememberScrollState()).animateContentSize().padding(MeeshySpacing.lg),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
         if (fields.isNotEmpty()) {
@@ -146,6 +149,7 @@ private fun ReadyCard(card: VCard, accent: Color, onDismiss: () -> Unit) {
                 }
             }
         }
+        if (accounts != null) ContactCardAccountSections(accounts, accent)
         val draft = remember(card) { ContactInsertDraft.of(card) }
         Row(
             modifier = Modifier
@@ -170,13 +174,13 @@ private fun ReadyCard(card: VCard, accent: Color, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun CardHeader(name: String, subtitle: String?, accent: Color, onDismiss: () -> Unit) {
+private fun CardHeader(name: String, subtitle: String?, accent: Color, onDismiss: () -> Unit, avatarUrl: String? = null) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.lg, top = MeeshySpacing.lg, end = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = name, size = 52.dp, containerColor = accent)
+        MeeshyAvatar(name = name, size = 52.dp, containerColor = accent, imageUrl = avatarUrl)
         Column(Modifier.weight(1f)) {
             Text(
                 name,

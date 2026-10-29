@@ -19,18 +19,20 @@ internal fun StorySceneOverlays(
     slideDurationMs: Int,
     playing: Boolean,
     muted: Boolean,
+    rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
 
     slide.foregroundMedia.forEach { foreground ->
         if (foreground.isVisible(playheadSeconds)) {
-            key(foreground.url) {
+            key(foreground.id) {
                 StoryForegroundLayer(
                     media = foreground,
                     playheadSeconds = playheadSeconds,
                     playing = playing,
                     muted = muted,
+                    rewindWhenInactive = rewindWhenInactive,
                     onAudioFocusLost = onAudioFocusLost,
                 )
             }

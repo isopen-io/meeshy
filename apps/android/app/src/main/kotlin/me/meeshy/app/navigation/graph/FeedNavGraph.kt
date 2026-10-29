@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation.graph
 
 import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -16,15 +17,18 @@ import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
+import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.composer.host.ComposerHostRoute
 import me.meeshy.app.composer.host.ComposerHostScreen
 import me.meeshy.app.stories.StoryComposerScreen
+import me.meeshy.app.stories.StoryComposerSeedAudience
 import me.meeshy.app.stories.StoryViewersSheet
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
@@ -34,6 +38,8 @@ internal fun NavGraphBuilder.feedNavGraph(
     navController: NavHostController,
 ) {
     composable(Routes.FEED) {
+        // Une instance pour le rail et le geste « tirer » : tirer le fil recharge aussi les stories (iOS `FeedView`).
+        val storiesViewModel: StoriesViewModel = hiltViewModel()
         FeedScreen(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
@@ -43,6 +49,8 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
             onResumeStoryDraft = { navController.navigate(storyDoor) },
             onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
+            onRefreshRail = storiesViewModel::refresh,
+            storyRail = { MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel) },
         )
     }
     composable(
@@ -167,11 +175,17 @@ internal fun NavGraphBuilder.feedNavGraph(
                 nullable = true
                 defaultValue = null
             },
+            navArgument(Routes.STORY_COMPOSER_AUDIENCE_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
         ),
     ) { entry ->
         StoryComposerScreen(
             onClose = { navController.popBackStack() },
             repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
+            initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
         )
     }
 }

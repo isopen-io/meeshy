@@ -53,6 +53,8 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.api.CreatePostRequest
 import kotlinx.coroutines.test.advanceUntilIdle
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -101,7 +103,7 @@ class FeedViewModelTest {
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
 
-    private fun viewModel(hasMore: Boolean = true): FeedViewModel {
+    private fun viewModel(hasMore: Boolean = true, fence: AccountFence? = null): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
         every { socialSocket.postCreated } returns postCreated
@@ -115,7 +117,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue, fence)
     }
 
     @Test
@@ -1163,6 +1165,32 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `the caption of each media rides the post under PostMedia caption, beside the alt and never in the content`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.publishPost(
+            content = "le post",
+            visibility = "PUBLIC",
+            mediaIds = listOf("m1", "m2"),
+            mediaAlt = mapOf("m1" to "un vélo"),
+            mediaCaption = mapOf("m2" to "Au marché"),
+        )
+
+        coVerify(exactly = 1) {
+            publications.enqueuePost(
+                CreatePostRequest(
+                    content = "le post",
+                    visibility = "PUBLIC",
+                    mediaIds = listOf("m1", "m2"),
+                    mediaAlt = mapOf("m1" to "un vélo"),
+                    mediaCaption = mapOf("m2" to "Au marché"),
+                ),
+                null,
+            )
+        }
+    }
+
+    @Test
     fun `a post with a scene background publishes it as its story effects`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
 
@@ -1247,6 +1275,31 @@ class FeedViewModelTest {
         advanceUntilIdle()
         assertThat(composerDrafts.loadEditing()).isNull()
         assertThat(vm.restorableDraft()).isNull()
+    }
+
+    @Test
+    fun `a draft written under an account that closed before the save landed never reaches the next account (#13503)`() = runTest(dispatcher) {
+        var owner: String? = "A"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val vm = viewModel(fence = fence)
+
+        vm.persistComposerDraft(FeedComposerDraft(text = "les mots de A"))
+        fence.close { owner = null }
+        owner = "B"
+        advanceUntilIdle()
+
+        assertThat(composerDrafts.loadEditing()).isNull()
+    }
+
+    @Test
+    fun `a draft written and saved under the account still signed in lands`() = runTest(dispatcher) {
+        val fence = AccountFence(OutboxOwnerSource { "A" })
+        val vm = viewModel(fence = fence)
+
+        vm.persistComposerDraft(FeedComposerDraft(text = "les mots de A"))
+        advanceUntilIdle()
+
+        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("les mots de A")
     }
 
     @Test

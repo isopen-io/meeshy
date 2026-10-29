@@ -1,10 +1,12 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -19,8 +21,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
@@ -72,6 +78,8 @@ internal fun SoundTraceRow(
     onToggleMute: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onSelect: (() -> Unit)? = null,
 ) {
     val tint = if (sound.isMuted) MaterialTheme.colorScheme.outline else MeeshyPalette.Indigo400
     val role = stringResource(R.string.composer_sound_background_a11y)
@@ -87,8 +95,18 @@ internal fun SoundTraceRow(
         Row(
             modifier = Modifier
                 .weight(1f)
+                .heightIn(min = 44.dp)
+                .then(
+                    if (onSelect == null) Modifier
+                    else Modifier.clickable(role = Role.Button, onClick = onSelect),
+                )
                 .clearAndSetSemantics {
                     contentDescription = if (sound.isBackground == true && credit.isNotEmpty()) "$role, $credit" else credit.ifEmpty { role }
+                    if (onSelect != null) {
+                        this.selected = selected
+                        this.role = Role.Button
+                        onClick { onSelect(); true }
+                    }
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),

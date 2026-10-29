@@ -34,6 +34,7 @@ import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { withBackgroundMediaUrls } from './posts/storyBackgroundMediaUrl';
 import { storyEffectsWithoutCredits } from './posts/repostCreditChips';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
@@ -335,6 +336,11 @@ export class PostService {
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
       : (data.content ? await unclaimedContentLanguage(this.prisma, { content: data.content, detectedLanguage, authorId: userId }) : undefined);
 
+    // #13607 — un fond adressé par `postMediaId` seul reçoit l'adresse de sa pièce.
+    const storyEffects = data.storyEffects === undefined
+      ? undefined
+      : await withBackgroundMediaUrls(this.prisma, data.storyEffects, { ownerId: userId, within: data.mediaIds ?? [] });
+
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
@@ -345,7 +351,7 @@ export class PostService {
         originalLanguage,
         detectedLanguage,
         communityId: data.communityId,
-        storyEffects: (data.storyEffects as any) ?? undefined,
+        storyEffects: (storyEffects as any) ?? undefined,
         allowSoundExtraction: videoSoundExtractionAllowed(data.allowSoundExtraction),
         commentsDisabled: data.commentsDisabled ?? false,
         moodEmoji: data.moodEmoji,
@@ -1077,6 +1083,13 @@ export class PostService {
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
     const mediaIdsToAttach = withCanvasMedia(mediaIds, data.storyEffects, ownMediaIds) ?? [];
+    if (data.storyEffects !== undefined) {
+      updateData.storyEffects = await withBackgroundMediaUrls(
+        this.prisma,
+        updateData.storyEffects,
+        { ownerId: userId, postId, within: [...ownMediaIds, ...mediaIdsToAttach] },
+      );
+    }
     const finalType = requestedType ?? post.type;
 
     // Liste FINALE des médias après édition : (médias du post − retraits) +
@@ -2147,7 +2160,15 @@ export class PostService {
             }
           });
 
-          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap);
+          const urlMap: Record<string, string> = {};
+          originalMedia.forEach((om, idx) => {
+            const newMedia = repostMedia[idx];
+            if (!newMedia) return;
+            if (om.fileUrl && newMedia.fileUrl) urlMap[om.fileUrl] = newMedia.fileUrl;
+            if (om.thumbnailUrl && newMedia.thumbnailUrl) urlMap[om.thumbnailUrl] = newMedia.thumbnailUrl;
+          });
+
+          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap, urlMap);
           if (remapped.changed) {
             try {
               await this.prisma.post.update({

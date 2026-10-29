@@ -28,5 +28,6 @@
     <string name="signup_country_picker_title">اختر بلدًا</string>
     <string name="signup_password_too_short">6 أحرف على الأقل.</string>
     <string name="signup_submit">إنشاء حسابي</string>
+    <string name="signup_display_name_invalid_characters">يمكن أن يحتوي الاسم على حروف ومسافات وفواصل عليا ونقاط وشرطات فقط.</string>
     <string name="signup_error_invalid_field">تم رفض هذه القيمة.</string>
 </resources>

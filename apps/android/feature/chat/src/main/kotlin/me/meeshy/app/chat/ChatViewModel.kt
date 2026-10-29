@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.chat.piece.PieceCapabilities
 import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.util.resolveMediaUrl
@@ -697,6 +698,19 @@ class ChatViewModel @Inject constructor(
 
     /** "Partager" on a FILE attachment — same download, but the caller hands the
      * completed file to a share sheet instead of opening it. */
+    /** Les pièces-fichiers reçues pendant la session (badge « prêt » des rangées, #13492). */
+    val downloadedFileIds: StateFlow<Set<String>> get() = fileDownload.downloadedIds
+
+    /** L'adresse locale d'une pièce déjà reçue pendant la session ; `null` si elle n'a pas été téléchargée. */
+    fun downloadedFileUri(attachmentId: String): String? = fileDownload.localUriOf(attachmentId)
+
+    /** Le toucher d'une rangée de fichier du fil : télécharger puis ouvrir, annuler, ou retenter (#13492). */
+    fun onFileAttachmentTap(messageId: String, attachmentId: String? = null) =
+        fileDownload.tap(messageId, attachmentId)
+
+    /** « Enregistrer » une pièce seule (#13494). */
+    fun onPieceSave(messageId: String, attachmentId: String) = fileDownload.save(messageId, attachmentId)
+
     fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
         fileDownload.share(messageId, attachmentId)
 
@@ -706,11 +720,39 @@ class ChatViewModel @Inject constructor(
 
     fun dismissFileDownload() = fileDownload.dismiss()
 
+    /** « Réessayer » le transfert en échec, dans le mode demandé (ouvrir, partager, enregistrer). */
+    fun retryFileDownload() = fileDownload.retry()
+
     /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
     internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
         latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
-            PieceOverlayModel.of(message, attachmentId, canReply = _state.value.viewerMayWrite, conversationIsEndToEnd = _state.value.isEndToEnd) { resolveMediaUrl(it, config.apiBaseUrl) }
+            val snapshot = _state.value
+            PieceOverlayModel.of(
+                message, attachmentId,
+                canReply = snapshot.viewerMayWrite,
+                conversationIsEndToEnd = snapshot.isEndToEnd,
+                capabilities = PieceCapabilities.of(
+                    message, sessionRepository.currentUser.value?.id, snapshot.viewerMayWrite, snapshot.isEndToEnd,
+                ),
+            ) { resolveMediaUrl(it, config.apiBaseUrl) }
         }
+
+    /** Réagit à UNE pièce (#13596) : optimiste, confirmé par la socket, défait sur un refus. */
+    fun onPieceReact(messageId: String, attachmentId: String, emoji: String) {
+        controllers.find<ChatPieceController>()?.react(messageId, attachmentId, emoji)
+    }
+
+    /** Supprime UNE pièce (#13596) : la pièce seule, ou le message entier si c'était tout ce qu'il portait. */
+    fun onPieceDelete(messageId: String, attachmentId: String) {
+        controllers.find<ChatPieceController>()?.delete(messageId, attachmentId)
+    }
+
+    /** Les échecs d'un geste de pièce que l'écran doit dire. */
+    val pieceFailures: kotlinx.coroutines.flow.Flow<PieceFailure>
+        get() = controllers.find<ChatPieceController>()?.failures ?: kotlinx.coroutines.flow.emptyFlow()
+
+    /** Ouvre la feuille de partage sur UNE pièce (#13596) : seule elle part, sans le texte de son message. */
+    fun openForwardPiece(messageId: String, attachmentId: String) = forward.openPiece(messageId, attachmentId)
 
     // --- Forward --------------------------------------------------------------------------
 

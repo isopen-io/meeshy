@@ -8,11 +8,12 @@
  * atteint ce plancher. Un plancher `null` dit « ce client ne route pas encore ce type » : aucune version ne l'ouvre.
  * Un type absent de la table part partout, comme avant.
  *
- * Deux applications publient sur `platform: 'android'` : la coque Capacitor (`apps/web/android`, publiée sous
- * `me.meeshy.app`, qui pose la version de `@meeshy/web`) et l'application native (`apps/android`, publiée sous
- * `me.meeshy.android`, décision #11570). L'identifiant de publication les sépare, et chacune doit le DÉCLARER : un
- * jeton Android sans `bundleId` reconnu n'est d'aucune des deux, il ne reçoit aucun type à plancher. La coque le
- * déclare depuis la 2.23.0 (`apps/web/src/lib/push/shell-push.ts`) ; l'application native ne l'envoie pas encore.
+ * Deux applications publient sur `platform: 'android'` : l'application native (`apps/android`, publiée sous
+ * `me.meeshy.app` depuis qu'elle a repris la fiche Play de la coque, #13619 ; `me.meeshy.android` avant) et la coque
+ * Capacitor (`apps/web/android`, renommée `me.meeshy.webapp`, qui pose la version de `@meeshy/web`). Un jeton
+ * `me.meeshy.app` est donc lu NATIF, y compris celui qu'une coque 2.x avait déclaré : la mise à jour vers la native
+ * garde le jeton FCM et son `bundleId`, et la native ne crée pas les canaux propres à la coque. Un jeton Android sans
+ * `bundleId` reconnu n'est d'aucune des deux, il ne reçoit aucun type à plancher.
  * Le navigateur et la coque sont le MÊME code (`target.ts`, `sw-push.js`) : même plancher.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -37,8 +38,8 @@ export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
 ]);
 
-const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.android(\.|$)/;
-const ANDROID_SHELL_BUNDLE = /^me\.meeshy\.app(\.|$)/;
+const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;
+const ANDROID_SHELL_BUNDLE = /^me\.meeshy\.webapp(\.|$)/;
 const READABLE_VERSION = /^\d+(\.\d+){0,2}(?=$|[\s(+-])/;
 
 export function pushRoutingClientOf(token: Pick<RoutableToken, 'platform' | 'bundleId'>): PushRoutingClient | null {

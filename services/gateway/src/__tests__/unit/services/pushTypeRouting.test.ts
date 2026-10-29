@@ -31,7 +31,7 @@ jest.mock('../../../utils/logger-enhanced', () => {
 
 const PHOTO = 'game_photo_moment';
 
-const shell = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.app' });
+const shell = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.webapp' });
 const iphone = (appVersion: string | null): RoutableToken => ({ platform: 'ios', appVersion, bundleId: 'me.meeshy.app' });
 const browser = (appVersion: string | null): RoutableToken => ({ platform: 'web', appVersion, bundleId: null });
 const nativeAndroid = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.android' });
@@ -106,11 +106,17 @@ describe('tokenRoutesPushType — la loi', () => {
 
   it('distingue la coque et l’application native Android par l’identifiant de publication', () => {
     expect(pushRoutingClientOf(shell('2.23.0'))).toBe('android-shell');
-    expect(pushRoutingClientOf({ platform: 'android', bundleId: 'me.meeshy.app.debug' })).toBe('android-shell');
+    expect(pushRoutingClientOf({ platform: 'android', bundleId: 'me.meeshy.webapp.debug' })).toBe('android-shell');
     expect(pushRoutingClientOf(nativeAndroid('0.1.0'))).toBe('android-native');
     expect(pushRoutingClientOf(iphone('1.0'))).toBe('ios');
     expect(pushRoutingClientOf(browser('2.23.0'))).toBe('web');
     expect(pushRoutingClientOf({ platform: 'tv', bundleId: null })).toBeNull();
+  });
+
+  it('lit me.meeshy.app comme l’application native, qui a repris la fiche Play de la coque (#13619)', () => {
+    expect(pushRoutingClientOf({ platform: 'android', bundleId: 'me.meeshy.app' })).toBe('android-native');
+    expect(pushRoutingClientOf({ platform: 'android', bundleId: 'me.meeshy.app.debug' })).toBe('android-native');
+    expect(tokenRoutesPushType({ platform: 'android', appVersion: '2.25.0', bundleId: 'me.meeshy.app' }, PHOTO)).toBe(false);
   });
 });
 

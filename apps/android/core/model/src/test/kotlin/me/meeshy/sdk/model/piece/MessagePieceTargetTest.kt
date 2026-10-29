@@ -3,6 +3,8 @@ package me.meeshy.sdk.model.piece
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.MessageExitOffer
 import org.junit.Test
 
 class MessagePieceTargetTest {
@@ -83,5 +85,80 @@ class MessagePieceTargetTest {
     @Test
     fun `un lecteur sans le droit d'ecrire ne cite pas la piece`() {
         assertThat(MessagePieceTarget.actions(isProtected = false, canReply = false)).containsExactly(MessagePieceTarget.Action.WHOLE_MESSAGE)
+    }
+
+    private fun menu(
+        isProtected: Boolean = false,
+        exits: MessageExitOffer = MessageExitOffer.Unrestricted,
+        canDelete: Boolean = false,
+        canForward: Boolean = true,
+        canReply: Boolean = true,
+        canReact: Boolean = true,
+        canCopy: Boolean = true,
+    ) = MessagePieceTarget.MenuContext(isProtected, exits, canDelete, canForward, canReply, canReact, canCopy)
+
+    private val blurredExits = MessageExitOffer(ContentExitLaw.Ordinary, holdsBlur = true, isEncrypted = false)
+
+    @Test
+    fun `le menu complet d'une piece ordinaire suit l'ordre d'iOS puis ferme sur le message entier`() {
+        val actions = MessagePieceTarget.actions(menu(canDelete = true))
+        assertThat(actions).containsExactly(
+            MessagePieceTarget.Action.REPLY, MessagePieceTarget.Action.FORWARD, MessagePieceTarget.Action.SAVE,
+            MessagePieceTarget.Action.COPY, MessagePieceTarget.Action.DELETE, MessagePieceTarget.Action.WHOLE_MESSAGE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `une piece protegee n'offre ni citation, ni transfert, ni enregistrement, ni copie`() {
+        val actions = MessagePieceTarget.actions(menu(isProtected = true, canDelete = true))
+        assertThat(actions).containsExactly(MessagePieceTarget.Action.DELETE, MessagePieceTarget.Action.WHOLE_MESSAGE).inOrder()
+    }
+
+    @Test
+    fun `la suppression suit le droit de l'utilisateur, protegee ou non`() {
+        assertThat(MessagePieceTarget.actions(menu(canDelete = false))).doesNotContain(MessagePieceTarget.Action.DELETE)
+        assertThat(MessagePieceTarget.actions(menu(isProtected = true, canDelete = true))).contains(MessagePieceTarget.Action.DELETE)
+    }
+
+    @Test
+    fun `la loi de sortie du message ferme le transfert, l'enregistrement et la copie d'une piece`() {
+        val actions = MessagePieceTarget.actions(menu(exits = blurredExits, canDelete = true))
+        assertThat(actions).containsExactly(
+            MessagePieceTarget.Action.REPLY, MessagePieceTarget.Action.FORWARD, MessagePieceTarget.Action.DELETE, MessagePieceTarget.Action.WHOLE_MESSAGE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `le verdict canForward de la loi partagee ferme le transfert`() {
+        assertThat(MessagePieceTarget.actions(menu(canForward = false))).doesNotContain(MessagePieceTarget.Action.FORWARD)
+    }
+
+    @Test
+    fun `un lecteur sans le droit d'ecrire ne cite pas mais garde enregistrer et copier`() {
+        val actions = MessagePieceTarget.actions(menu(canReply = false))
+        assertThat(actions).doesNotContain(MessagePieceTarget.Action.REPLY)
+        assertThat(actions).contains(MessagePieceTarget.Action.SAVE)
+    }
+
+    @Test
+    fun `la bande de reactions suit le verdict canReact et ne se montre jamais sur une piece protegee`() {
+        assertThat(MessagePieceTarget.offersReaction(menu())).isTrue()
+        assertThat(MessagePieceTarget.offersReaction(menu(canReact = false))).isFalse()
+        assertThat(MessagePieceTarget.offersReaction(menu(isProtected = true))).isFalse()
+    }
+}
+
+class MessagePieceTargetSealedTest {
+    @Test
+    fun `un blob e2ee sans drapeau chiffre est protege et un message scelle n'ouvre aucun apercu`() {
+        val blob = ApiMessageAttachment(id = "a", mimeType = "image/png", fileUrl = "https://cdn/a", encryptionMode = "e2ee")
+        val m = ApiMessage(id = "m", conversationId = "c", senderId = "u", content = "", attachments = listOf(blob))
+        assertThat(MessagePieceTarget.isProtected(blob, m)).isTrue()
+        assertThat(MessagePieceTarget.piece("a", m)).isNull()
+        val sealedMessage = ApiMessage(
+            id = "m2", conversationId = "c", senderId = "u", content = "[Encrypted]", isEncrypted = true, encryptionMode = "e2ee",
+            attachments = listOf(ApiMessageAttachment(id = "b", mimeType = "image/png", fileUrl = "https://cdn/b")),
+        )
+        assertThat(MessagePieceTarget.messageIsProtected(sealedMessage)).isTrue()
     }
 }

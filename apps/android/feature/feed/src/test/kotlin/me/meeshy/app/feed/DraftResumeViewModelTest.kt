@@ -78,4 +78,21 @@ class DraftResumeViewModelTest {
 
         assertThat(stories.load()?.isAwaitingPublication).isTrue()
     }
+
+    @Test
+    fun `discarding a reel draft erases the composer slot it lives in`() = runTest {
+        val reel = PostComposerDraftSnapshot(
+            media = listOf(me.meeshy.sdk.model.UploadedMedia("v1", "", "video/mp4", 0L, null, null, 9_000L, null)),
+            updatedAtMillis = 10L,
+        )
+        val posts = InMemoryPostComposerDraftStore(editing = reel)
+        val vm = DraftResumeViewModel(posts, InMemoryStoryComposerDraftStore())
+
+        vm.entries.test {
+            assertThat(awaitItem().single().kind).isEqualTo(DraftResumeKind.REEL)
+            vm.discard(DraftResumeKind.REEL)
+            assertThat(awaitItem()).isEmpty()
+        }
+        assertThat(posts.loadEditing()).isNull()
+    }
 }

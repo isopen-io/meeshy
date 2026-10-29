@@ -74,7 +74,7 @@
     <string name="chat_forward_title">Reenviar a…</string>
     <string name="chat_forward_search_hint">Buscar una conversación</string>
     <string name="chat_forward_empty">Ninguna conversación</string>
-    <string name="chat_forward_members">%d miembros</string>
+    <string name="chat_forward_members">%1$d miembros</string>
     <string name="chat_forward_sent">Reenviado</string>
     <string name="chat_forward_send_a11y">Reenviar a %1$s</string>
     <string name="chat_replying_to">Respondiendo a %1$s</string>
@@ -292,4 +292,7 @@
         <item quantity="other">%1$d mensajes sin leer</item>
     </plurals>
     <string name="viewer_code_truncated">Archivo truncado: solo se muestran los primeros 512 KB.</string>
+    <string name="viewer_doc_open_with">Abrir con otra app</string>
+    <string name="viewer_text_show_source">Mostrar el origen</string>
+    <string name="viewer_text_show_rendered">Mostrar el resultado</string>
 </resources>

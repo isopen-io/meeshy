@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -29,11 +30,13 @@ import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
 import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
+import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -101,11 +104,16 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         val nowMillis = System.currentTimeMillis()
         val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
         bubbleFrames[actionTarget.messageId]?.let { frame ->
-            MessageOverlayPreviewHero(
-                frame = frame,
-                content = actionTarget,
-                accentColor = accentColor,
-            )
+            val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) {
+                bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds)
+            }
+            CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+                MessageOverlayPreviewHero(
+                    frame = frame,
+                    content = actionTarget,
+                    accentColor = accentColor,
+                )
+            }
         }
         MessageActionsSheet(
             bubble = actionTarget,
@@ -172,16 +180,14 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
-    FileViewerHost(fileViewer, accentColor) { fileViewer = null }
+    var hubContactSeeds by remember { mutableStateOf(emptyMap<String, ContactCardResolutionScope>()) }
+    val contactGate = LocalChatContactCardScope.current
+    FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
         onDismiss = actions.dismissFileDownload,
-        onRetry = { download ->
-            val attachmentId = download.attachmentId.takeIf { it.isNotBlank() }
-            if (download.openWhenDone) actions.onFileAttachmentOpen(download.messageId, attachmentId)
-            else actions.onFileAttachmentShare(download.messageId, attachmentId)
-        },
+        onRetry = { actions.retryFileDownload() },
     )
 
     if (sheets.info) {
@@ -305,7 +311,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 sheets.media = false
                 actions.scrollToMessage(messageId)
             },
-            onOpenFile = { messageId, attachment -> actions.onHubFileOpen(messageId, attachment) },
+            onOpenFile = { carrier, attachment ->
+                hubContactSeeds = hubContactSeeds + (attachment.id to hubContactSeed(carrier, attachment))
+                actions.onHubFileOpen(carrier.id, attachment)
+            },
             onDismiss = { sheets.media = false },
         )
     }

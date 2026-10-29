@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_piece_saved">تم الحفظ في التنزيلات</string>
+    <string name="piece_action_save">حفظ</string>
+    <string name="piece_action_delete">حذف</string>
+    <string name="chat_file_save_failed">تعذّر حفظ الملف في التنزيلات.</string>
+</resources>

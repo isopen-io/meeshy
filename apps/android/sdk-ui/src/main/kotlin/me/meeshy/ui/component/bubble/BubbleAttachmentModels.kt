@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 
 @Immutable
 public data class BubbleImage(
@@ -11,6 +12,11 @@ public data class BubbleImage(
     val height: Int? = null,
     /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Read by TalkBack as `contentDescription`. */
     val alt: String? = null,
+    /**
+     * Les réactions des membres sur CETTE pièce, en une étiquette compacte (« 👍❤️ 3 ») — `null` sans réaction, et
+     * pour une pièce protégée (#13596). Elle bouge en direct avec `attachment:reaction-added|removed`.
+     */
+    val reactionLabel: String? = null,
 )
 
 @Immutable
@@ -21,6 +27,14 @@ public data class BubbleFile(
     val url: String? = null,
     val isVideo: Boolean = false,
     val isContactCard: Boolean = false,
+    /** Chiffrée de bout en bout (#13493) : une rangée scellée, sans nom, sans adresse, qui ne se télécharge jamais. */
+    val isSealed: Boolean = false,
+    /** Déjà sur l'appareil (envoi local `file://` / `content://`) : aucun badge de téléchargement (#13492). */
+    val isOnDevice: Boolean = false,
+    /** À vue unique, floutée, éphémère ou retenue par la loi de sortie : la rangée n'offre ni badge ni appui (#13492). */
+    val isProtected: Boolean = false,
+    /** Où une carte de visite a le droit de résoudre ses identifiants ; FERMÉ par défaut (#13622). */
+    val contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
 )
 
 /**

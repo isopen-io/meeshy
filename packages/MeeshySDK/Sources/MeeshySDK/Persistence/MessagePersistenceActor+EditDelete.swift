@@ -232,9 +232,8 @@ extension MessagePersistenceActor {
                                         marksEdited: edit.marksEdited, noticeJson: edit.noticeJson,
                                         authorship: edit.authorship)
                 }
-                for change in events.reactions {
-                    try mutateReactions(localId: id, change: change)
-                }
+                for change in events.reactions { try mutateReactions(localId: id, change: change) }
+                for removal in events.attachmentRemovals { try MessageAttachmentRemovalStore.apply(removal, toMessage: id, on: self) }
                 if let tombstone = events.tombstone {
                     try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
                                     sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired,

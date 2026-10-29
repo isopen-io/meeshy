@@ -1,9 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="call_link_confirm_audio">Voice call %s?</string>
+    <string name="call_link_confirm_audio">Voice call %1$s?</string>
     <string name="call_link_confirm_call">Call</string>
     <string name="call_link_confirm_cancel">Cancel</string>
-    <string name="call_link_confirm_video">Video call %s?</string>
+    <string name="call_link_confirm_video">Video call %1$s?</string>
     <string name="call_link_refused_blocked">You\'ve blocked this contact</string>
     <string name="call_link_refused_unknown">This contact can\'t be found</string>
     <string name="composer_format_denied_mood">Text only</string>
@@ -15,6 +15,12 @@
     <string name="composer_format_reel">Reel</string>
     <string name="composer_format_status">Mood</string>
     <string name="composer_format_story">Story</string>
+    <string name="composer_mosaic_carousel">Image by image</string>
+    <string name="composer_mosaic_hero">One large, the others alongside</string>
+    <string name="composer_mosaic_reel">Continuous scrolling</string>
+    <string name="composer_mosaic_section">Scene layout</string>
+    <string name="composer_mosaic_sine">Zigzag</string>
+    <string name="composer_mosaic_wave">Wave</string>
     <string name="composer_publish_menu_a11y_hint">Opens the choice of format and layout</string>
     <string name="composer_publish_menu_title">Publish as</string>
 </resources>

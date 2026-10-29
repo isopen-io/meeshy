@@ -29,7 +29,7 @@ android {
     namespace = "me.meeshy.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "me.meeshy.app"
+        applicationId "me.meeshy.webapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Numéro de build LU à la construction (D-45) : `-PmeeshyBuildNumber=<n>`,

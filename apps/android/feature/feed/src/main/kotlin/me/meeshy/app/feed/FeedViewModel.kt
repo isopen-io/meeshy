@@ -27,7 +27,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.MosaicLayoutMode
+import me.meeshy.sdk.model.composer.PostPhotoScenes
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -43,7 +44,9 @@ import me.meeshy.sdk.post.writePostTranslationsTo
 import me.meeshy.sdk.post.writePostUpdatesTo
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
@@ -122,6 +125,7 @@ class FeedViewModel @Inject constructor(
     private val publications: PublicationOutbox,
     private val composerDrafts: PostComposerDraftStore,
     private val mediaUploadQueue: MediaUploadQueue,
+    private val accountFence: AccountFence? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -651,8 +655,11 @@ class FeedViewModel @Inject constructor(
         location: SharedPlace? = null,
         language: String? = null,
         mediaAlt: Map<String, String> = emptyMap(),
+        mediaCaption: Map<String, String> = emptyMap(),
         draft: PostComposerDraftSnapshot? = null,
         background: String? = null,
+        media: List<UploadedMedia> = emptyList(),
+        layout: MosaicLayoutMode? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -668,7 +675,8 @@ class FeedViewModel @Inject constructor(
                         originalLanguage = language,
                         location = location,
                         mediaAlt = mediaAlt.ifEmpty { null },
-                        storyEffects = background?.let { StoryEffects(background = it) },
+                        mediaCaption = mediaCaption.ifEmpty { null },
+                        storyEffects = PostPhotoScenes.storyEffects(type, media, language, layout, background),
                     ),
                     draft,
                 )
@@ -711,11 +719,16 @@ class FeedViewModel @Inject constructor(
      */
     fun persistComposerDraft(draft: FeedComposerDraft) {
         draftSave?.cancel()
+        // The account is the one signed in when the author typed: a save that waits out the debounce lands under
+        // it or not at all — A's words never reach B's slot once A's session closed (#13503).
+        val ticket = accountFence?.ticket()
         draftSave = viewModelScope.launch {
             delay(DRAFT_SAVE_DEBOUNCE_MS)
             val snapshot = draft.toSnapshot(System.currentTimeMillis())
             runCatching {
-                if (snapshot.isWorthRestoring) composerDrafts.saveEditing(snapshot) else composerDrafts.clearEditing()
+                accountFence.commitOrWrite(ticket) {
+                    if (snapshot.isWorthRestoring) composerDrafts.saveEditing(snapshot) else composerDrafts.clearEditing()
+                }
             }
         }
     }

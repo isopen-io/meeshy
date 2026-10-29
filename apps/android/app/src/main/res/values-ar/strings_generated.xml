@@ -1,9 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="call_link_confirm_audio">إجراء مكالمة صوتية مع %s؟</string>
+    <string name="call_link_confirm_audio">إجراء مكالمة صوتية مع %1$s؟</string>
     <string name="call_link_confirm_call">اتصال</string>
     <string name="call_link_confirm_cancel">إلغاء</string>
-    <string name="call_link_confirm_video">إجراء مكالمة فيديو مع %s؟</string>
+    <string name="call_link_confirm_video">إجراء مكالمة فيديو مع %1$s؟</string>
     <string name="call_link_refused_blocked">لقد حظرت جهة الاتصال هذه</string>
     <string name="call_link_refused_unknown">تعذّر العثور على جهة الاتصال هذه</string>
     <string name="composer_format_denied_mood">نص فقط</string>
@@ -15,6 +15,12 @@
     <string name="composer_format_reel">ريل</string>
     <string name="composer_format_status">مزاج</string>
     <string name="composer_format_story">قصة</string>
+    <string name="composer_mosaic_carousel">صورة تلو الأخرى</string>
+    <string name="composer_mosaic_hero">واحدة كبيرة والبقية بجانبها</string>
+    <string name="composer_mosaic_reel">تمرير متواصل</string>
+    <string name="composer_mosaic_section">تخطيط المشاهد</string>
+    <string name="composer_mosaic_sine">متعرّج</string>
+    <string name="composer_mosaic_wave">متموّج</string>
     <string name="composer_publish_menu_a11y_hint">يفتح اختيار التنسيق والتخطيط</string>
     <string name="composer_publish_menu_title">النشر بصفة</string>
 </resources>

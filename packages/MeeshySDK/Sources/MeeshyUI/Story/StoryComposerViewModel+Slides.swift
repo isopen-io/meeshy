@@ -39,7 +39,9 @@ extension StoryComposerViewModel {
         // retombe sur la durée auto du contenu tant qu'aucun pin n'est posé.
         get { Float(currentSlide.effects.timelineDuration ?? currentSlide.computedTotalDuration()) }
         set {
-            let clamped = max(2, min(600, newValue))
+            let ceiling = max(2, StoryComposerLimits.remainingDuration(excludingSceneAt: currentSlideIndex, of: slides))
+            let clamped = max(2, min(ceiling, newValue))
+            if newValue > ceiling { refuse(.duration) }
             var slide = currentSlide
             slide.duration = TimeInterval(clamped)            // miroir legacy
             slide.effects.timelineDuration = Double(clamped)  // autoritaire
@@ -71,7 +73,8 @@ extension StoryComposerViewModel {
         // on n'écrit PAS de pin ici (éviterait un pin obsolète après suppression du média).
         let current = Float(slides[targetIndex].duration)
         if end > current {
-            slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))
+            let room = StoryComposerLimits.remainingDuration(excludingSceneAt: targetIndex, of: slides)
+            slides[targetIndex].duration = TimeInterval(min(max(current, room), end + 0.5))
         }
     }
 

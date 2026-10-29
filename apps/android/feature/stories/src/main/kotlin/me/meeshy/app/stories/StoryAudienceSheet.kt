@@ -80,6 +80,9 @@ internal fun StoryAudienceSheet(
     onRemoveMention: (String) -> Unit,
     onRemoveHashtag: (String) -> Unit,
     onDismiss: () -> Unit,
+    republish: Boolean = false,
+    canApply: Boolean = true,
+    onApply: () -> Unit = onDismiss,
 ) {
     var page by rememberSaveable { mutableStateOf(AudiencePage.AUDIENCE) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -109,6 +112,9 @@ internal fun StoryAudienceSheet(
                     onRemoveMention = onRemoveMention,
                     onRemoveHashtag = onRemoveHashtag,
                     onClose = onDismiss,
+                    republish = republish,
+                    canApply = canApply,
+                    onApply = onApply,
                 )
             } else {
                 StoryAudiencePickerPage(
@@ -144,6 +150,9 @@ private fun AudiencePage(
     onRemoveMention: (String) -> Unit,
     onRemoveHashtag: (String) -> Unit,
     onClose: () -> Unit,
+    republish: Boolean,
+    canApply: Boolean,
+    onApply: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
         Row(
@@ -171,11 +180,13 @@ private fun AudiencePage(
             ComposerAudienceSelection.offered.forEach { candidate ->
                 AudienceRow(candidate, selected = candidate == visibility, count = userIds.size, onChoose = onChoose)
             }
-            MentionsSection(visibility, userIds, mentions, onAddMention, onRemoveMention)
-            HashtagsSection(hashtags, onRemoveHashtag)
-            ScopeNote()
+            if (!republish) {
+                MentionsSection(visibility, userIds, mentions, onAddMention, onRemoveMention)
+                HashtagsSection(hashtags, onRemoveHashtag)
+                ScopeNote()
+            }
         }
-        ApplyBar(visibility, onClose)
+        ApplyBar(visibility, onApply, enabled = canApply, labelRes = if (republish) R.string.my_stories_repost else R.string.composer_audience_apply)
     }
 }
 
@@ -325,12 +336,13 @@ private fun ScopeNote() {
 }
 
 @Composable
-private fun ApplyBar(visibility: StoryVisibility, onApply: () -> Unit) {
+private fun ApplyBar(visibility: StoryVisibility, onApply: () -> Unit, enabled: Boolean, labelRes: Int) {
     val label = stringResource(visibility.labelRes()).uppercase()
     Button(
         onClick = onApply,
+        enabled = enabled,
         modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
     ) {
-        Text("${stringResource(R.string.composer_audience_apply)} · $label")
+        Text("${stringResource(labelRes)} · $label")
     }
 }

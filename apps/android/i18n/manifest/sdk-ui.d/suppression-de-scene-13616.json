@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "composer.slide.rail.deleteConfirm.title", "androidName": "slide_rail_delete_confirm_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "composer.slide.rail.deleteConfirm.action", "androidName": "slide_rail_delete_confirm_action", "status": "adopted"},
+        {"catalog": "app", "iosKey": "composer.slide.rail.deleteConfirm.cancel", "androidName": "slide_rail_delete_cancel", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -21,7 +21,7 @@ const NOW = new Date('2026-10-14T12:00:00Z');
 const HOURS_AGO = (hours: number) => new Date(NOW.getTime() - hours * 60 * MINUTE);
 
 const IPHONE_ONLY = { platform: 'ios', type: 'apns', isActive: true, appVersion: '1.9.0', bundleId: 'me.meeshy.app' };
-const CAPABLE_SHELL = { platform: 'android', type: 'fcm', isActive: true, appVersion: '2.23.0', bundleId: 'me.meeshy.app' };
+const CAPABLE_SHELL = { platform: 'android', type: 'fcm', isActive: true, appVersion: '2.23.0', bundleId: 'me.meeshy.webapp' };
 
 const accountId = (prefix: string, index: number) => `${prefix.repeat(20)}${String(index).padStart(4, '0')}`;
 

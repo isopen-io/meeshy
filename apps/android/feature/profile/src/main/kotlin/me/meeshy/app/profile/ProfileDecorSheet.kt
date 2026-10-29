@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -62,6 +63,7 @@ import me.meeshy.sdk.model.ProfileDecorRef
 import me.meeshy.sdk.model.ProfileDecorSide
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.AppearanceDesign
+import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.appearance.BannerFrameDesign
 import me.meeshy.sdk.model.appearance.ProfileBannerPaint
@@ -104,6 +106,7 @@ fun ProfileDecorSheet(
     onDone: () -> Unit,
     viewModel: ProfileDecorViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
+    onOpenShop: ((AppearancePackDomain) -> Unit)? = null,
 ) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
     val upload by uploadViewModel.state.collectAsStateWithLifecycle()
@@ -129,12 +132,16 @@ fun ProfileDecorSheet(
             ) {
                 val catalog = ui.catalog
                 if (catalog != null) {
-                    RingSection(ui, catalog) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.AVATAR_RING) }
-                    BannerSection(ui, catalog, uploadingBanner, onPickImage = { haptics.light(); shownUploadError = null; pickBanner() }) { ref ->
+                    RingSection(ui, catalog, shop(AppearancePackDomain.AVATAR_RING, onOpenShop, haptics::light)) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.AVATAR_RING) }
+                    BannerSection(
+                        ui, catalog, uploadingBanner,
+                        onPickImage = { haptics.light(); shownUploadError = null; pickBanner() },
+                        shop = shop(AppearancePackDomain.BANNER, onOpenShop, haptics::light),
+                    ) { ref ->
                         haptics.light()
                         viewModel.equip(ref, ProfileDecorSide.BANNER)
                     }
-                    FrameSection(ui, catalog) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.BANNER_FRAME) }
+                    FrameSection(ui, catalog, shop(AppearancePackDomain.BANNER_FRAME, onOpenShop, haptics::light)) { ref -> haptics.light(); viewModel.equip(ref, ProfileDecorSide.BANNER_FRAME) }
                 }
                 listOfNotNull(errorText.takeIf { ui.failed }, shownUploadError).forEach { message ->
                     Text(message, style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium), color = MeeshyPalette.Error)
@@ -174,6 +181,26 @@ private fun rememberBannerPicker(uploadViewModel: AvatarBannerUploadViewModel): 
     return { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
 
+/** « Plus dans la boutique » d'une section, ou rien : sans destination qui l'accueille, le lien n'est pas posé (un contrôle existe s'il a un effet). */
+internal fun shop(domain: AppearancePackDomain, onOpenShop: ((AppearancePackDomain) -> Unit)?, haptic: () -> Unit): (() -> Unit)? =
+    onOpenShop?.let { open -> { haptic(); open(domain) } }
+
+/** Le lien vers la boutique du domaine (iOS `shopLink`) : 44 dp au moins, un bouton nommé pour TalkBack. */
+@Composable
+private fun ShopLink(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(MeeshyIcons.Shopping, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(16.dp))
+        Text(stringResource(R.string.profile_decor_shop), style = meeshyText(MeeshyFontSize.footnote, FontWeight.SemiBold), color = MeeshyPalette.Indigo500)
+    }
+}
+
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -186,7 +213,7 @@ private fun SectionHeader(title: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RingSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, onChoose: (ProfileDecorRef?) -> Unit) {
+private fun RingSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, shop: (() -> Unit)?, onChoose: (ProfileDecorRef?) -> Unit) {
     val language = remember { Locale.getDefault().language }
     val title = stringResource(R.string.profile_decor_ring_section)
     Column(Modifier.semantics(mergeDescendants = false) { contentDescription = title }, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
@@ -198,6 +225,7 @@ private fun RingSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, onC
                 RingTile(entry.design, label, ui.current(ProfileDecorSide.AVATAR_RING) == entry.ref, ui) { onChoose(entry.ref) }
             }
         }
+        shop?.let { ShopLink(it) }
     }
 }
 
@@ -205,8 +233,17 @@ private fun RingSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, onC
 private fun RingTile(design: AvatarRingDesign?, label: String, selected: Boolean, who: ProfileDecorUiState, onClick: () -> Unit) {
     val base = LocalMediaBaseUrl.current
     DecorTile(label, selected, Modifier.width(RING_TILE_WIDTH), onClick) {
-        AvatarRingLayer(design, footprint = RING_AVATAR, modifier = Modifier.size(RING_FOOTPRINT)) {
-            MeeshyAvatar(name = who.name, size = RING_AVATAR, imageUrl = resolveServedImageUrl(who.avatarUrl, base))
+        Box(
+            Modifier
+                .size(RING_FOOTPRINT)
+                .clip(CircleShape)
+                .background(MeeshyPalette.Indigo950)
+                .border(1.dp, MeeshyTheme.tokens.inputBorder, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            AvatarRingLayer(design, footprint = RING_AVATAR, modifier = Modifier.size(RING_FOOTPRINT)) {
+                MeeshyAvatar(name = who.name, size = RING_AVATAR, imageUrl = resolveServedImageUrl(who.avatarUrl, base))
+            }
         }
         TileLabel(label)
     }
@@ -214,7 +251,7 @@ private fun RingTile(design: AvatarRingDesign?, label: String, selected: Boolean
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, uploading: Boolean, onPickImage: () -> Unit, onChoose: (ProfileDecorRef) -> Unit) {
+private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, uploading: Boolean, onPickImage: () -> Unit, shop: (() -> Unit)?, onChoose: (ProfileDecorRef) -> Unit) {
     val language = remember { Locale.getDefault().language }
     val title = stringResource(R.string.profile_decor_banner_section)
     val choice = ui.bannerChoice
@@ -235,6 +272,7 @@ private fun BannerSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, u
         if (choice.photoHidesDesigns) {
             Text(stringResource(R.string.profile_decor_image_hides_designs), style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium), color = MeeshyTheme.tokens.textMuted)
         }
+        shop?.let { ShopLink(it) }
     }
 }
 
@@ -266,7 +304,7 @@ private fun BannerTile(design: AppearanceDesign, label: String, selected: Boolea
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FrameSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, onChoose: (ProfileDecorRef?) -> Unit) {
+private fun FrameSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, shop: (() -> Unit)?, onChoose: (ProfileDecorRef?) -> Unit) {
     val language = remember { Locale.getDefault().language }
     val title = stringResource(R.string.profile_decor_frame_section)
     val accent = ui.accentHex
@@ -284,6 +322,7 @@ private fun FrameSection(ui: ProfileDecorUiState, catalog: AppearanceCatalog, on
                 FrameTile(entry.design, ui.bannerPaint, accent, label, current == entry.ref, Modifier.weight(1f)) { onChoose(entry.ref) }
             }
         }
+        shop?.let { ShopLink(it) }
     }
 }
 

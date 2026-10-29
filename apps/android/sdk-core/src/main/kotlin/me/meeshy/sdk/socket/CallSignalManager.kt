@@ -1,9 +1,7 @@
 package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -23,7 +21,10 @@ import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import org.json.JSONObject
+import javax.inject.Provider
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -51,12 +52,25 @@ import kotlin.coroutines.resume
  * matching [MessageSocketManager]/[SocialSocketManager].
  */
 @Singleton
-class CallSignalManager @Inject constructor(
+class CallSignalManager internal constructor(
     private val socketManager: SocketManager,
     private val social: CallSocialSignalManager,
+    private val ticket: () -> AccountTicket?,
 ) {
-    private val _events = MutableSharedFlow<CallEvent>(replay = 0, extraBufferCapacity = 64)
-    val events: SharedFlow<CallEvent> = _events.asSharedFlow()
+    /** Le ticket du compte est pris À LA RÉCEPTION de chaque trame (#13588), comme la voie série des autres routes. */
+    @Inject
+    constructor(
+        socketManager: SocketManager,
+        social: CallSocialSignalManager,
+        fence: Provider<AccountFence>,
+    ) : this(socketManager, social, { fence.get().ticket() })
+
+    constructor(socketManager: SocketManager, social: CallSocialSignalManager) : this(socketManager, social, { null })
+
+    private fun arrivalTicket(): AccountTicket? = runCatching(ticket).getOrNull()
+
+    private val _events = SocketInboundRoute.subject<CallEvent>()
+    val events: SharedFlow<CallEvent> = _events.exposed()
 
     /**
      * The **identity** of each inbound `call:initiated` offer, alongside the
@@ -65,8 +79,8 @@ class CallSignalManager @Inject constructor(
      * arriving while a call is already active can be surfaced as a call-waiting
      * banner (and rejected / answered by its own id). Hot, no replay — like [events].
      */
-    private val _incomingOffers = MutableSharedFlow<WaitingCall>(replay = 0, extraBufferCapacity = 16)
-    val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.asSharedFlow()
+    private val _incomingOffers = SocketInboundRoute.subject<WaitingCall>()
+    val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.exposed()
 
     /**
      * The **identity-carrying** decode of each inbound teardown frame
@@ -81,8 +95,8 @@ class CallSignalManager @Inject constructor(
      * own end reduces it) and merely dismiss the banner when the waiting call ends.
      * Hot, no replay — like [events].
      */
-    private val _endedCalls = MutableSharedFlow<CallEndedSignal>(replay = 0, extraBufferCapacity = 16)
-    val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.asSharedFlow()
+    private val _endedCalls = SocketInboundRoute.subject<CallEndedSignal>()
+    val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.exposed()
 
     /**
      * The **data-carrying** decode of each inbound `call:signal` frame — the full
@@ -92,8 +106,8 @@ class CallSignalManager @Inject constructor(
      * parallel stream carries it so the app-side WebRTC coordinator can apply
      * remote descriptions and add candidates. Hot, no replay — like [events].
      */
-    private val _incomingSignals = MutableSharedFlow<CallSignalEnvelope>(replay = 0, extraBufferCapacity = 128)
-    val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.asSharedFlow()
+    private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
+    val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
 
     /**
      * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
@@ -101,8 +115,8 @@ class CallSignalManager @Inject constructor(
      * `call:initiated` frame carries none — requests them on accept and configures
      * the WebRTC engine once they land here. Hot, no replay.
      */
-    private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
-    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
+    private val _iceServersRefreshed = SocketInboundRoute.subject<List<SocketIceServer>>()
+    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.exposed()
 
     /**
      * A participant left the room WITHOUT ending the call (`call:participant-left`
@@ -110,24 +124,24 @@ class CallSignalManager @Inject constructor(
      * FSM-facing [events]; the consumer prunes the leaver's media by identity.
      * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
      */
-    private val _participantLeft = MutableSharedFlow<CallParticipantLeftPayload>(replay = 0, extraBufferCapacity = 16)
-    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.asSharedFlow()
+    private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
+    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
     /**
      * The gateway flagging the REMOTE peer's sustained bad network
      * (`call:quality-alert`). Drives the transient "your contact's connection is
      * unstable" indicator — iOS `isRemoteQualityDegraded` parity. Hot, no replay.
      */
-    private val _qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.asSharedFlow()
+    private val _qualityAlerts = SocketInboundRoute.subject<CallQualityAlertPayload>()
+    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.exposed()
 
     /**
      * The remote peer started/stopped capturing the call screen
      * (`call:screen-capture-alert`). Drives the privacy warning banner — iOS
      * `isRemoteScreenCapturing` parity. Hot, no replay.
      */
-    private val _screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.asSharedFlow()
+    private val _screenCaptureAlerts = SocketInboundRoute.subject<CallScreenCaptureAlertPayload>()
+    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.exposed()
 
     /**
      * Live caption segments from the remote speaker (`call:translated-segment`),
@@ -135,8 +149,8 @@ class CallSignalManager @Inject constructor(
      * the original `text`). Dense during speech — buffered like [incomingSignals].
      * Hot, no replay.
      */
-    private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
-    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
+    private val _translatedSegments = SocketInboundRoute.subject<CallTranslatedSegmentPayload>()
+    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.exposed()
 
     /**
      * The remote peer muted/unmuted the mic or turned the camera off/on
@@ -144,8 +158,8 @@ class CallSignalManager @Inject constructor(
      * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
      * parity. Hot, no replay.
      */
-    private val _mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(replay = 0, extraBufferCapacity = 16)
-    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.asSharedFlow()
+    private val _mediaToggles = SocketInboundRoute.subject<CallMediaTogglePayload>()
+    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.exposed()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -408,33 +422,37 @@ class CallSignalManager @Inject constructor(
     private fun listen(event: String) {
         socketManager.on(event) { args ->
             val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-            CallSignalMapper.map(event, raw)?.let(_events::tryEmit)
-            if (event == INITIATED_EVENT) {
-                CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
-            }
-            if (event == SIGNAL_EVENT) {
-                CallSignalMapper.signalEnvelope(raw)?.let(_incomingSignals::tryEmit)
-            }
-            if (event == ICE_SERVERS_REFRESHED_EVENT) {
-                CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
-            }
-            if (event == PARTICIPANT_LEFT_EVENT) {
-                CallSignalMapper.participantLeft(raw)?.let(_participantLeft::tryEmit)
-            }
-            if (event == QUALITY_ALERT_EVENT) {
-                CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::tryEmit)
-            }
-            if (event == SCREEN_CAPTURE_ALERT_EVENT) {
-                CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::tryEmit)
-            }
-            if (event == TRANSLATED_SEGMENT_EVENT) {
-                CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
-            }
-            if (event == MEDIA_TOGGLED_EVENT) {
-                CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::tryEmit)
-            }
-            CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
+            ArrivalStamp.under(arrivalTicket()) { publish(event, raw) }
         }
+    }
+
+    private fun publish(event: String, raw: String) {
+        CallSignalMapper.map(event, raw)?.let(_events::emitArrived)
+        if (event == INITIATED_EVENT) {
+            CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::emitArrived)
+        }
+        if (event == SIGNAL_EVENT) {
+            CallSignalMapper.signalEnvelope(raw)?.let(_incomingSignals::emitArrived)
+        }
+        if (event == ICE_SERVERS_REFRESHED_EVENT) {
+            CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
+        }
+        if (event == PARTICIPANT_LEFT_EVENT) {
+            CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)
+        }
+        if (event == QUALITY_ALERT_EVENT) {
+            CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::emitArrived)
+        }
+        if (event == SCREEN_CAPTURE_ALERT_EVENT) {
+            CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::emitArrived)
+        }
+        if (event == TRANSLATED_SEGMENT_EVENT) {
+            CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::emitArrived)
+        }
+        if (event == MEDIA_TOGGLED_EVENT) {
+            CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::emitArrived)
+        }
+        CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::emitArrived)
     }
 
     private companion object {

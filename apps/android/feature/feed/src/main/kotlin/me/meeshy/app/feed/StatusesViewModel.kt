@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -18,6 +21,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
 import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
@@ -79,13 +83,13 @@ class StatusesViewModel @Inject constructor(
     private val status = MutableStateFlow(StatusesStatus())
 
     /**
-     * Groups mood impressions before sending them (feature-parity §F) — the status-bar
-     * counterpart of the feed's own batcher. Port of iOS `StatusViewModel.impressions`
-     * (`source: "status"`).
+     * Groups the impressions of the moods painted on the story rail's rings before sending them —
+     * iOS `SharedImpressionBatchers.moodRail` (`source: "status"`, `surface: "story_rail"`, #13662),
+     * the rail being the only host of [trackImpression] since the status bar left (#13653).
      */
     private val impressionBatcher = ImpressionBatcher(
         source = ImpressionSource.STATUS,
-        surface = null,
+        surface = ContentSurface.STORY_RAIL,
         deliver = engagement::deliver,
     )
 
@@ -105,6 +109,18 @@ class StatusesViewModel @Inject constructor(
      * `duration` to its max (the enrichment).
      */
     private var sessions = EngagementSessions()
+
+    /**
+     * The reactions this account already placed in this session, as `(account, status, emoji)`. The gateway
+     * keeps one reaction per (reader, emoji) — a second tap on the same emoji is a server no-op — so a
+     * second optimistic bump would inflate the count until the next reload (#13662).
+     */
+    private var placedReactions: Set<Triple<String?, String, String>> = emptySet()
+
+    private val _reactFailed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** One event per refused reaction, after its rollback — iOS `status.reactError` toast (#13662). */
+    val reactFailed: SharedFlow<Unit> = _reactFailed.asSharedFlow()
 
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
@@ -179,7 +195,10 @@ class StatusesViewModel @Inject constructor(
      */
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
-    /** [statusId]'s pill just appeared on screen — call once per appearance. */
+    /**
+     * [statusId]'s mood just appeared on a rail ring — call once per APPEARANCE, never deduplicated: the
+     * porteur's counting rule (2026-10-13, iOS `countsImpression`) counts every display.
+     */
     fun trackImpression(statusId: String) {
         impressionBatcher.record(statusId)
     }
@@ -428,6 +447,7 @@ class StatusesViewModel @Inject constructor(
                 )
                 when (result) {
                     is NetworkResult.Success -> {
+                        if (statusBarCacheRepository.accountChanged(ticket)) return@launch
                         listState.update { it.created(result.data) }
                         statusBarCache.save(mode.value, listState.value.statuses)
                         statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
@@ -472,28 +492,36 @@ class StatusesViewModel @Inject constructor(
     }
 
     /**
-     * Optimistically bump a reaction on [statusId], persist it, and roll the bump back
-     * on failure. Port of iOS `reactToStatus`. Inert when the status is not in the bar.
+     * Optimistically bump a reaction on [statusId], persist it, and withdraw THAT bump on failure — never the
+     * whole list, so the socket deltas, the other reactions and the new moods that arrived meanwhile survive.
+     * Port of iOS `reactToStatus` (rollback + `status.reactError`). Inert when the status is not in the bar, and
+     * when this account already placed [emoji] on it in this session (the gateway would not count it twice).
      */
     fun react(statusId: String, emoji: String) {
-        val snapshot = listState.value
-        if (snapshot.statuses.none { it.id == statusId }) return
+        if (listState.value.statuses.none { it.id == statusId }) return
+        val placed = Triple(currentUserId(), statusId, emoji)
+        if (placed in placedReactions) return
+        placedReactions = placedReactions + placed
+        val ticket = statusBarCacheRepository.ticket()
         listState.update { it.reacted(statusId, emoji) }
         viewModelScope.launch {
-            try {
-                val result = statusRepository.react(statusId, emoji)
-                if (result is NetworkResult.Failure) {
-                    listState.value = snapshot
-                    status.update { it.copy(error = result.error.message) }
-                }
+            val failure = try {
+                (statusRepository.react(statusId, emoji) as? NetworkResult.Failure)?.let { ReactFailure(it.error.message) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                listState.value = snapshot
-                status.update { it.copy(error = e.message) }
+                ReactFailure(e.message)
             }
+            if (failure == null) return@launch
+            placedReactions = placedReactions - placed
+            if (statusBarCacheRepository.accountChanged(ticket)) return@launch
+            listState.update { it.unreacted(statusId, emoji) }
+            status.update { it.copy(error = failure.message) }
+            _reactFailed.tryEmit(Unit)
         }
     }
+
+    private class ReactFailure(val message: String?)
 
     private fun project(
         list: StatusBarListState,

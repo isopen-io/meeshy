@@ -16,7 +16,7 @@ class StoryComposerCarryReducerTest {
         remove: Set<String> = emptySet(),
         audience: StoryVisibility? = null,
     ): ComposerCarry {
-        val plan = ComposerMediaTransfer.plan(add, emptyList(), emptySet(), room = 10)
+        val plan = ComposerMediaTransfer.plan(add, emptyList(), emptySet(), room = 50)
         return ComposerCarry(ComposerCarry.Side.SCENE, plan.copy(remove = remove), audience, token = 1)
     }
 
@@ -30,6 +30,17 @@ class StoryComposerCarryReducerTest {
         assertThat(next.attachments.map { it.id }).containsExactly("a", "b")
         assertThat(next.draft.mediaAlt).containsExactly("a", "chat")
         assertThat(next.carriedMedia.map { it.media.id }).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `the caption of a post media lands on the scene and goes back with it, never mixed with its alt`() {
+        val next = StoryComposerCarryReducer.applied(
+            StoryComposerUiState(),
+            carry(listOf(CarriedMedia(media("a"), alt = "chat", caption = "Au marché"))),
+        )
+        assertThat(next.draft.mediaCaption).containsExactly("a", "Au marché")
+        assertThat(next.draft.mediaAlt).containsExactly("a", "chat")
+        assertThat(next.carriedMedia.single().caption).isEqualTo("Au marché")
     }
 
     @Test
@@ -59,10 +70,10 @@ class StoryComposerCarryReducerTest {
 
     @Test
     fun `a slide fuller than the host knew takes what fits and the rest is counted, not attached`() {
-        val full = StoryComposerCarryReducer.applied(StoryComposerUiState(), carry((1..9).map { CarriedMedia(media("own$it")) }))
+        val full = StoryComposerCarryReducer.applied(StoryComposerUiState(), carry((1..49).map { CarriedMedia(media("own$it")) }))
         val incoming = carry(listOf(CarriedMedia(media("x")), CarriedMedia(media("y"))))
         val next = StoryComposerCarryReducer.applied(full, incoming)
-        assertThat(next.deck.selectedSlide.mediaIds).hasSize(10)
+        assertThat(next.deck.selectedSlide.mediaIds).hasSize(50)
         assertThat(next.attachments.map { it.id }).doesNotContain("y")
         assertThat(StoryComposerCarryReducer.lost(next, incoming)).isEqualTo(1)
     }

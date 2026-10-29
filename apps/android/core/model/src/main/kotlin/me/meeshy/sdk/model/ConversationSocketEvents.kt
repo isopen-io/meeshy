@@ -157,6 +157,17 @@ data class AttachmentStatusUpdatedEvent(
     val complete: Boolean? = null,
 ) : SingleConversationSocketEvent
 
+/**
+ * `attachment:deleted` (#13608) : une pièce a été retirée d'un message, diffusée à la room de la conversation. Les trois
+ * identifiants sont requis : une charge incomplète ne se décode pas, donc n'atteint aucun collecteur (échec fermé).
+ */
+@Serializable
+data class AttachmentDeletedEvent(
+    val attachmentId: String,
+    val messageId: String,
+    override val conversationId: String,
+) : SingleConversationSocketEvent
+
 /** `attachment:ready` : un rendu différé (vignette, variantes) est fini — adressé à l'auteur. */
 @Serializable
 data class AttachmentReadyEvent(

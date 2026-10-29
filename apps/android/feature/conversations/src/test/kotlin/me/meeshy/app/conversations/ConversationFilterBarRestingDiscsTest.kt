@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** #12497 — « Tout », première puce de la liste, ne reste pas sous le disque flottant au repos (360 dp). */
+/** #13664 — iOS `ConversationListFilterChipRow` ne cède rien aux disques flottants : la rangée prend toute la largeur, « Tout » à la marge, pas décalée vers la droite (360 dp). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "fr-w360dp-h740dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -21,10 +21,10 @@ class ConversationFilterBarRestingDiscsTest {
     val compose = createComposeRule()
 
     @Test
-    fun `au repos la rangee de puces tient entre les deux disques`() {
+    fun `la rangee de puces prend toute la largeur comme iOS, sans reserve laterale`() {
         compose.setContentBesideRestingDiscs { ConversationFilterBar(selected = ConversationFilter.ALL, onSelect = {}) }
         val scroller = compose.scrollerBounds()
-        assertThat(scroller.left.value).isAtLeast(RestingDiscs.leadingEdge)
-        assertThat(scroller.right.value).isAtMost(RestingDiscs.trailingEdge)
+        assertThat(scroller.left.value).isEqualTo(0f)
+        assertThat(scroller.right.value).isEqualTo(360f)
     }
 }

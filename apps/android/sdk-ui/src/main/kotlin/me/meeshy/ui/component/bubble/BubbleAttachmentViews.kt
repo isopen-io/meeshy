@@ -32,11 +32,14 @@ internal fun BubbleAttachmentSections(
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }
+    content.sealedPieceIds.forEach { _ ->
+        BubbleSealedPieceRow(onColor = onColor, modifier = Modifier.padding(bottom = MeeshySpacing.xs))
+    }
     content.files.forEach { file ->
         BubbleFileRow(
             file = file,
             onColor = onColor,
-            onClick = callbacks.onFileClick?.takeIf { !file.url.isNullOrBlank() }
+            onClick = callbacks.onFileClick?.takeIf { !file.isSealed && !file.isProtected && !file.url.isNullOrBlank() }
                 ?.let { { it(file) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
@@ -65,4 +68,4 @@ internal fun BubbleAttachmentSections(
 
 /** True when the bubble carries at least one attachment of a kind the body renders. */
 internal val BubbleContent.hasRenderedAttachments: Boolean
-    get() = images.isNotEmpty() || files.isNotEmpty() || locations.isNotEmpty() || audios.isNotEmpty()
+    get() = images.isNotEmpty() || files.isNotEmpty() || sealedPieceIds.isNotEmpty() || locations.isNotEmpty() || audios.isNotEmpty()

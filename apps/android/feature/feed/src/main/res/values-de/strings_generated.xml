@@ -16,6 +16,7 @@
     <string name="feed_composer_background">Hintergrundfarbe</string>
     <string name="feed_composer_background_swatch">Farbe %1$s von %2$s</string>
     <string name="feed_composer_cancel">Abbrechen</string>
+    <string name="feed_composer_caption_placeholder">Bildunterschrift hinzufügen</string>
     <string name="feed_composer_language_search">Sprache suchen</string>
     <string name="feed_composer_language_title">Sprache des Beitrags</string>
     <string name="feed_composer_open_label">Etwas teilen</string>
@@ -25,6 +26,9 @@
     <string name="feed_composer_placeholder">Woran denkst du?</string>
     <string name="feed_composer_publish">Veröffentlichen</string>
     <string name="feed_composer_record_voice">Audio aufnehmen</string>
+    <string name="feed_composer_slide_rail">Szenen der Veröffentlichung</string>
+    <string name="feed_composer_slide_rail_delete">Szene %1$d löschen</string>
+    <string name="feed_composer_slide_rail_position">Szene %1$d von %2$d</string>
     <string name="feed_composer_socle_audience">Publikum</string>
     <string name="feed_composer_take_photo">Foto aufnehmen</string>
     <string name="feed_composer_title">Neuer Beitrag</string>
@@ -45,8 +49,8 @@
     <string name="feed_location_shared">Geteilter Standort</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
-        <item quantity="one">%d neuer Beitrag</item>
-        <item quantity="other">%d neue Beiträge</item>
+        <item quantity="one">%1$d neuer Beitrag</item>
+        <item quantity="other">%1$d neue Beiträge</item>
     </plurals>
     <string name="feed_notice_bookmark_failed">Fehler beim Speichern des Lesezeichens</string>
     <string name="feed_notice_delete_failed">Fehler beim Löschen des Beitrags</string>
@@ -58,6 +62,7 @@
     <string name="feed_notice_reported">Beitrag gemeldet</string>
     <string name="feed_notice_repost_failed">Fehler beim erneuten Teilen</string>
     <string name="feed_notice_translation_failed">Übersetzungsfehler</string>
+    <string name="feed_post_reposted_from">hat von @%1$s geteilt</string>
     <string name="feed_quote_cancel">Abbrechen</string>
     <string name="feed_quote_submit">Erneut teilen</string>
     <string name="feed_reel">Reel</string>
@@ -73,11 +78,12 @@
     <string name="feed_report_reason_spam">Spam</string>
     <string name="feed_report_reason_violence">Gewalt</string>
     <plurals name="feed_repost_likes_count">
-        <item quantity="one">%d Like</item>
-        <item quantity="other">%d Likes</item>
+        <item quantity="one">%1$d Like</item>
+        <item quantity="other">%1$d Likes</item>
     </plurals>
     <string name="feed_repost_reposted">Erneut geteilt</string>
     <string name="feed_repost_story">Story</string>
+    <string name="feed_repost_unavailable">Dieser Inhalt ist nicht mehr verfügbar</string>
     <string name="feed_reposts">Reposts</string>
     <string name="feed_retry">Erneut versuchen</string>
     <string name="feed_secondary_translation_a11y">Übersetzung auf %1$s: %2$s</string>
@@ -92,11 +98,13 @@
     <string name="feed_translations_badge_hint">Zeigt die verfügbaren Sprachen an</string>
     <string name="feed_unknown_author">Unbekannt</string>
     <string name="feed_unlike">Gefällt mir nicht mehr</string>
-    <string name="hashtag_results_empty">Keine Beiträge mit #%s</string>
+    <string name="hashtag_results_empty">Keine Beiträge mit #%1$s</string>
+    <string name="mood_bubble_react">Reaktion %1$s</string>
+    <string name="mood_bubble_reply">Antworten</string>
     <string name="mood_spotlight_close">Schließen</string>
     <string name="mood_spotlight_loading">Stimmung wird geladen</string>
     <string name="mood_spotlight_reply_failed">Die Antwort wurde nicht gesendet</string>
-    <string name="mood_spotlight_reply_placeholder">%s antworten…</string>
+    <string name="mood_spotlight_reply_placeholder">%1$s antworten…</string>
     <string name="mood_spotlight_reply_send">Antwort senden</string>
     <string name="mood_spotlight_reply_sent">Antwort gesendet</string>
     <string name="mood_spotlight_unavailable">Diese Stimmung ist nicht mehr verfügbar</string>
@@ -110,8 +118,8 @@
     <string name="post_comments_edit_media">Bearbeiten</string>
     <string name="post_comments_load_error">Fehler beim Laden der Kommentare</string>
     <plurals name="post_comments_load_more_replies">
-        <item quantity="one">%d weitere Antwort anzeigen</item>
-        <item quantity="other">%d weitere Antworten anzeigen</item>
+        <item quantity="one">%1$d weitere Antwort anzeigen</item>
+        <item quantity="other">%1$d weitere Antworten anzeigen</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Zeigt die restlichen Antworten in diesem Thread</string>
     <string name="post_comments_more_options">Weitere Optionen</string>
@@ -119,24 +127,20 @@
     <string name="post_comments_reply_action">Antworten</string>
     <string name="post_comments_reply_badge">Antworten</string>
     <string name="post_comments_reply_error">Fehler beim Senden der Antwort</string>
-    <string name="post_comments_replying_to">Antwort an %s</string>
+    <string name="post_comments_replying_to">Antwort an %1$s</string>
     <string name="post_comments_send">Senden</string>
     <string name="post_comments_send_error">Fehler beim Senden des Kommentars</string>
     <string name="post_comments_sending">Wird gesendet…</string>
     <string name="post_comments_title">Kommentare</string>
     <plurals name="post_comments_view_replies">
-        <item quantity="one">%d Antwort anzeigen</item>
-        <item quantity="other">%d Antworten anzeigen</item>
+        <item quantity="one">%1$d Antwort anzeigen</item>
+        <item quantity="other">%1$d Antworten anzeigen</item>
     </plurals>
     <string name="post_detail_back">Zurück</string>
     <string name="post_detail_title">Beitrag</string>
     <string name="post_detail_viewers">Aufrufe</string>
-    <string name="status_bar_add">Status</string>
-    <string name="status_bar_expired">Abgelaufen</string>
-    <string name="status_bar_me">Ich</string>
-    <string name="status_bar_republish">Erneut teilen</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">über @%s</string>
+    <string name="status_bubble_republish">Erneut posten</string>
+    <string name="status_bubble_via">über @%1$s</string>
     <string name="status_composer_bare_add">Ein Wort hinzufügen</string>
     <string name="status_composer_bare_publish">Trotzdem veröffentlichen</string>
     <string name="status_composer_bare_title">Deine Stimmung ohne ein paar Worte veröffentlichen?</string>
@@ -150,8 +154,7 @@
     <string name="status_composer_visibility_friends">Kontakte</string>
     <string name="status_composer_visibility_private">Privat</string>
     <string name="status_composer_visibility_public">Öffentlich</string>
-    <string name="status_feed_discover">Entdecken</string>
-    <string name="status_feed_friends">Freunde</string>
+    <string name="status_react_error">Fehler beim Reagieren auf den Status</string>
     <string name="user_posts_back">Zurück</string>
     <string name="user_posts_empty">Noch keine Beiträge</string>
     <string name="user_posts_title">Beiträge</string>

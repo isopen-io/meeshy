@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftAnnotations
@@ -103,6 +104,24 @@ object StoryComposerAutosave {
     }
 
     /**
+     * Les envois durables que le brouillon [previous] nommait et que [kept] ne nomme plus (#13621) : un brouillon
+     * rouvert (#13500) garde par leur `cmid` les envois épuisés de sa publication ; l'abandonner (ou en retirer le
+     * média) sans eux laissait la ligne et ses octets jusqu'à la déconnexion. Un brouillon qui attend sa publication
+     * ne libère rien : ses lignes sont celles de la publication.
+     */
+    fun orphanedUploads(previous: StoryComposerDraftSnapshot?, kept: StoryComposerDraftSnapshot?): Set<String> {
+        if (previous == null || previous.isAwaitingPublication) return emptySet()
+        return previous.uploadCmids() - kept?.uploadCmids().orEmpty()
+    }
+
+    /** Les envois durables que [snapshot] nomme par leur `cmid`. */
+    fun namedUploads(snapshot: StoryComposerDraftSnapshot?): Set<String> = snapshot?.uploadCmids().orEmpty()
+
+    private fun StoryComposerDraftSnapshot.uploadCmids(): Set<String> =
+        slides.flatMap { slide -> slide.mediaIds + listOfNotNull(slide.backgroundMediaId) }
+            .filterTo(mutableSetOf(), OutboxIds::isCmid)
+
+    /**
      * The snapshot to seed when the composer opens, or `null` to leave it untouched. A
      * stored draft is restored only when the composer is [deckIsPristine] — a single blank
      * slide with no content — so a restore never clobbers work already begun (the load is
@@ -172,6 +191,8 @@ fun StorySlideDeck.toDraftSnapshot(
             backdrop = it.frame.backdrop,
             opening = it.frame.opening?.let(SceneFrame::wire),
             closing = it.frame.closing?.let(SceneFrame::wire),
+            soundSources = it.soundSources,
+            placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
         )
     },
     selectedId = selectedId,
@@ -212,6 +233,8 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 backgroundMediaId = it.backgroundMediaId,
                 backgroundLoop = it.backgroundLoop,
                 audio = it.audio,
+                soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
+                placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

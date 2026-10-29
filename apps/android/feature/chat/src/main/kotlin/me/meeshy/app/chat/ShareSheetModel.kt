@@ -19,6 +19,8 @@ internal data class ShareSheetModel(
     val sourceMessageCount: Int = 0,
     /** Ce qui part quand ce n'est pas un message : le texte, le lien, le titre d'une carte, le nom des fichiers. */
     val contentLines: List<String> = emptyList(),
+    /** Ce qu'un partage entrant a laissé derrière lui, une ligne par sorte (miroir de `ShareShortfall`, iOS). */
+    val notices: List<String> = emptyList(),
     val caption: String = "",
     val chosenDurationSeconds: Int? = null,
     val query: String = "",

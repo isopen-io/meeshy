@@ -550,7 +550,8 @@ export function unclaimedCanvasMediaIds(
  */
 export function remapCanvasV3MediaIds(
   blob: CanvasV3,
-  idMap: Readonly<Record<string, string>>
+  idMap: Readonly<Record<string, string>>,
+  urlMap: Readonly<Record<string, string>> = {}
 ): { blob: CanvasV3; changed: boolean } {
   let changed = false;
   const scenes = (blob.scenes ?? []).map((scene) => ({
@@ -565,6 +566,11 @@ export function remapCanvasV3MediaIds(
           nextPayload[key] = idMap[id];
           objectChanged = true;
         }
+      }
+      const url = payload.mediaURL;
+      if (typeof url === 'string' && urlMap[url] !== undefined && urlMap[url] !== url) {
+        nextPayload.mediaURL = urlMap[url];
+        objectChanged = true;
       }
       if (!objectChanged) return object;
       changed = true;

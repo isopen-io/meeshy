@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_piece_saved">Saved to Downloads</string>
+    <string name="piece_action_save">Save</string>
+    <string name="piece_action_delete">Delete</string>
+    <string name="chat_file_save_failed">Couldn\'t save the file to Downloads.</string>
+</resources>

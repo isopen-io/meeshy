@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaUploadImageSize
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.UploadedMedia
@@ -37,9 +38,14 @@ internal class FeedComposerState(initialDraft: FeedComposerDraft) {
     var attachedMedia: List<UploadedMedia> by mutableStateOf(initialDraft.media)
     var isUploading: Boolean by mutableStateOf(false)
 
+    /** The slide being edited (iOS `currentSlideIndex`), by media id; resolved by [PostSlideLaw.current], so a stale id is harmless. */
+    var selectedMediaId: String? by mutableStateOf(null)
+
     fun attach(media: List<UploadedMedia>) {
         draft = draft.withMedia(media)
         attachedMedia = attachedMedia + media
+        // What the author just added is what they want to describe.
+        media.firstOrNull { it.id in draft.mediaIds }?.let { selectedMediaId = it.id }
     }
 
     /** An entry of the `⋯`: the pure draft answers, and the display-only previews follow when the document is emptied. */
@@ -49,6 +55,7 @@ internal class FeedComposerState(initialDraft: FeedComposerDraft) {
     }
 
     fun detach(id: String) {
+        selectedMediaId = PostSlideLaw.selectionAfterRemoval(draft.mediaIds, removed = id, current = PostSlideLaw.current(draft.mediaIds, selectedMediaId))
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
     }
@@ -101,7 +108,10 @@ internal fun rememberFeedComposerIntake(
                 when {
                     MediaLocationRefusal.isCode(result.error.code) -> reportError(locationRefusedMessage)
                     enqueue == null -> reportError(result.error.message ?: unusableMessage)
-                    else -> state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index)) })
+                    else -> {
+                        val sizes = withContext(Dispatchers.IO) { items.map(MediaUploadImageSize::of) }
+                        state.attach(items.mapIndexed { index, item -> FeedPendingMedia.placeholder(enqueue(item), item, previews.getOrNull(index), sizes[index]) })
+                    }
                 }
             }
         }

@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallPreviewPhase
 import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
@@ -56,6 +57,7 @@ class CallViewModel @Inject constructor(
     val extensions: CallExtensionPoints,
     private val ongoing: CallOngoingController,
     private val peerVisuals: CallPeerVisualSource,
+    private val preview: CallPreviewCoordinator,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -123,7 +125,11 @@ class CallViewModel @Inject constructor(
      */
     val activeConfig: CallConfig get() = config
 
+    /** L'aperçu avant décroché (#8480) : la vidéo de l'appelant chez l'appelé, l'exposition chez l'appelant. */
+    val previewUi: StateFlow<CallPreviewUi> get() = preview.ui
+
     init {
+        preview.attach(viewModelScope, ::onPreviewAudible)
         coordinator.onRemoteBye = { onRemoteBye() }
         coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         peers.attach(host)
@@ -175,6 +181,10 @@ class CallViewModel @Inject constructor(
      * room ([CallEvent.ParticipantJoined]) — offering earlier races the callee.
      */
     private fun onRemoteEvent(event: CallEvent) {
+        // An incoming call enters through start(config) only: the socket offer carries no
+        // identity here, and folding it first left the FSM ringing with a blank callId, so the
+        // screen's start() was inert and « Répondre » could never join the room.
+        if (event == CallEvent.ReceiveIncoming) return
         extensions.controllers.notifyRemoteEvent(event, session())
         dispatch(event)
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
@@ -182,6 +192,7 @@ class CallViewModel @Inject constructor(
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
+        preview.onIceServersRefreshed(iceServers)
         if (!awaitingIncomingIce) {
             if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
             return
@@ -251,6 +262,8 @@ class CallViewModel @Inject constructor(
                         viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
                         config.isVideo, ::onMediaConnected, ::onMediaStalled,
                     )
+                    preview.adoptIceServers(callId, result.ack.iceServers)
+                    syncPreview()
                 }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
                 CallInitiateResult.Timeout -> dispatch(CallEvent.ConnectionFailed(INITIATE_TIMED_OUT))
@@ -263,6 +276,7 @@ class CallViewModel @Inject constructor(
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
         if (callId.isBlank()) return
+        coordinator.holdIncomingSignals(viewModelScope, callId)
         // Join WITH the ACK (iOS emitCallJoinWithAck parity): it confirms this socket
         // is in the room AND carries the ICE servers, so media opens straight away.
         // A fire-and-forget join raced the room -> NOT_A_PARTICIPANT on answer.
@@ -272,7 +286,10 @@ class CallViewModel @Inject constructor(
                     viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
                     ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
                 )
-                is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
+                is CallJoinResult.Failure -> {
+                    coordinator.end()
+                    dispatch(CallEvent.ConnectionFailed(result.message))
+                }
             }
         }
     }
@@ -343,6 +360,40 @@ class CallViewModel @Inject constructor(
             }
         }
     }
+
+    /** « Activer l'audio » de l'écran entrant : entendre l'appelant avant de décrocher. */
+    fun togglePreviewSound() = preview.toggleSound()
+
+    /** Appelant : le micro que l'appelé entend avant de décrocher, retenu pour ce correspondant. */
+    fun togglePreviewAudio() = preview.togglePreviewAudio()
+
+    /** Appelant : la caméra que l'appelé voit avant de décrocher, retenue pour ce correspondant. */
+    fun togglePreviewVideo() = preview.togglePreviewVideo()
+
+    /**
+     * L'appelé entend l'appelant (ou plus) : la sonnerie se tait et la route audio s'ouvre sur le
+     * haut-parleur — l'écran de sonnerie est tenu devant soi, pas à l'oreille. La sonnerie ne reprend
+     * pas si l'on recoupe le son, comme iOS.
+     */
+    private fun onPreviewAudible(audible: Boolean) {
+        if (audible && activeLoop != CallSound.None) {
+            activeLoop = CallSound.None
+            toneController.setLoop(CallSound.None)
+        }
+        coordinator.routePreviewAudio(audible, isVideo = config.isVideo)
+    }
+
+    /** Ce que l'aperçu lit de l'appel : resynchronisé à chaque publication, inerte si rien n'a changé. */
+    private fun syncPreview() = preview.sync(
+        CallPreviewHostState(
+            callId = callId,
+            localUserId = selfId,
+            peerUserId = config.peerId,
+            phase = CallPreviewPhase.of(callState),
+            isMicMuted = media.isMuted,
+            isVideoEnabled = config.isVideo && media.isCameraOn,
+        ),
+    )
 
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
@@ -445,6 +496,7 @@ class CallViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        preview.release()
         ongoing.detach()
         toneController.release()
         telecomReporter.release()
@@ -500,6 +552,7 @@ class CallViewModel @Inject constructor(
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
         )
+        syncPreview()
     }
 
     private companion object {

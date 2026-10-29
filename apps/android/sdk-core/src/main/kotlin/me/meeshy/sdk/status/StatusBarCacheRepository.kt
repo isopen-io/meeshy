@@ -42,6 +42,9 @@ class StatusBarCacheRepository @Inject constructor(
     /** Le compte auquel appartient une requête ou un geste qui part MAINTENANT (#13560) ; `null` sans garde. */
     fun ticket(): AccountTicket? = fence?.ticket()
 
+    /** Vrai quand le compte de [ticket] n'est plus le compte courant : une réponse tardive ne touche plus la liste de l'autre (#13662). */
+    fun accountChanged(ticket: AccountTicket?): Boolean = ticket != null && fence?.isCurrent(ticket) == false
+
     /** Last-persisted bar for [mode], or `null` when never cached / undecodable. */
     suspend fun cachedBar(mode: StatusFeedMode): List<StatusEntry>? {
         val payload = dao.observe(barKey(mode)).first()?.payload ?: return null

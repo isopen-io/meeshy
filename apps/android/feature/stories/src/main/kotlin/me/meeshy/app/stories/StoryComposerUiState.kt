@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
@@ -102,6 +103,14 @@ data class StoryComposerUiState(
     val openObjectSection: me.meeshy.sdk.model.composer.ComposerObjectEditorSection? = null,
     /** Le réglage du pinceau déplié dans la colonne droite. */
     val openDrawingControl: DrawingControl = DrawingControl.COLOR,
+    /** Le média de la slide touché dans la rangée : ses sections s'ouvrent dans la colonne droite (jamais avec un texte ou un sticker). */
+    val selectedMediaId: String? = null,
+    /** La piste de la slide touchée dans la rangée du son. */
+    val selectedSoundId: String? = null,
+    /** La famille d'effets de scène dont le carrousel est ouvert au pied du plateau. */
+    val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
+    /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
+    val isFrameOpen: Boolean = false,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -112,13 +121,14 @@ data class StoryComposerUiState(
      */
     val canPublish: Boolean
         get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio) &&
-            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            deck.isWithinMediaLimit() &&
-            deck.isWithinTextElementLimit() &&
-            deck.isWithinStickerLimit() &&
+            publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
             !isUploadingMedia
+
+    /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
+    internal val publishBlock: StoryPublishBlock?
+        get() = deck.publishBlock(StoryComposerDraft.MAX_CHARS, isRepost = !draft.repostOfId.isNullOrBlank())
 
     /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides, jamais déclarés à côté. */
     val hashtags: List<String>
@@ -148,6 +158,23 @@ data class StoryComposerUiState(
     /** The offline-pending media of the **selected** slide, in slide order. */
     val selectedSlidePending: List<PendingMediaUpload>
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
+
+    /**
+     * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
+     * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
+     */
+    val selectedSlideBackdropModel: Any?
+        get() {
+            val designated = deck.selectedSlideBackgroundMediaId
+            val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
+            val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
+            return when {
+                uploaded != null -> uploaded.thumbnailUrl ?: uploaded.url
+                pending != null -> pending.item.previewModel
+                else -> selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
+                    ?: selectedSlidePending.firstOrNull()?.item?.previewModel
+            }
+        }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform
@@ -305,6 +332,8 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
         selectedTextElementId = if (stillSelected) elementId else null,
         selectedStickerId = if (stickerStillSelected) stickerId else null,
+        selectedMediaId = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds },
+        selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
     )
 }

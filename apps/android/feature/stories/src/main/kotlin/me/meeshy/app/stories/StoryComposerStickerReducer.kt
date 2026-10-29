@@ -21,6 +21,7 @@ internal object StoryComposerStickerReducer {
             ),
             selectedStickerId = id,
             selectedTextElementId = null,
+            selectedMediaId = null, selectedSoundId = null,
             errorMessage = null,
         )
     }
@@ -28,7 +29,7 @@ internal object StoryComposerStickerReducer {
     /** Selects [id] (inert when it is not on the selected slide); clears text editing. */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.stickers.none { it.id == id }) state
-        else state.copy(selectedStickerId = id, selectedTextElementId = null)
+        else state.copy(selectedStickerId = id, selectedTextElementId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Deselects the active sticker (inert when none is selected). */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =

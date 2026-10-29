@@ -21,6 +21,10 @@ import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
 import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftReopening
+import me.meeshy.sdk.net.api.CreateStoryRequest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,6 +43,7 @@ public class PublicationOutbox @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val mediaUploadQueue: MediaUploadQueue,
     private val postDraftStore: PostComposerDraftStore,
+    private val storyDraftStore: StoryComposerDraftStore,
     private val progressLedger: MediaUploadProgressLedger,
     private val ownerSource: OutboxOwnerSource,
 ) {
@@ -72,8 +77,8 @@ public class PublicationOutbox @Inject constructor(
      * each media with its own fate and, while it leaves, its own bytes in flight (#13429).
      */
     public fun unsent(): Flow<List<UnsentPublication>> =
-        combine(outboxRepository.observeAll(), progressLedger.progress) { rows, progress ->
-            UnsentPublications.from(rows, ownerSource.currentOwnerId(), progress)
+        combine(outboxRepository.observeAll(), progressLedger.progress, storyDraftStore.observe()) { rows, progress, storyDraft ->
+            UnsentPublications.from(rows, ownerSource.currentOwnerId(), progress, storyDraft = storyDraft)
         }.distinctUntilChanged()
 
     /** A failed publication goes back on its way, the uploads it waits on with it. */
@@ -113,6 +118,34 @@ public class PublicationOutbox @Inject constructor(
         return draft
     }
 
+    /**
+     * « Rouvrir » on a failed story (#13500): the draft kept until confirmation — slides, audience,
+     * mentions, alternative texts, captions — stops awaiting its publication and becomes the composer's
+     * own again, its media under the ids they have since received; the failed publications leave the
+     * queue. Their uploads stay: the republish waits on them, so no media is ever sent twice. `null`
+     * (and nothing changed) unless every story the draft awaits is still here, gave up, and belongs to the
+     * signed-in account (#13621: the check is its own, not the screen's).
+     */
+    public suspend fun reopenStory(cmid: String): StoryComposerDraftSnapshot? {
+        val kept = storyDraftStore.load()?.takeIf { cmid in it.awaitingPublication } ?: return null
+        val rows = kept.awaitingPublication.mapNotNull { outboxRepository.row(it) }
+        val owner = ownerSource.currentOwnerId() ?: return null
+        if (rows.any { it.ownerId != owner }) return null
+        if (UnsentPublications.reopenableStories(kept, rows.associateBy { it.cmid }).isEmpty()) return null
+        val requests = rows.map { row ->
+            runCatching { MeeshyApi.json.decodeFromString(CreateStoryRequest.serializer(), row.payload) }.getOrNull()
+        }
+        if (requests.any { it == null }) return null
+        val published = requests.map { it?.mediaIds.orEmpty() }
+        val reopened = StoryDraftReopening.reopened(kept, published)
+        storyDraftStore.save(reopened)
+        rows.forEach { row ->
+            outboxRepository.discard(row.cmid)
+            outboxRepository.cancelHeldFor(row.targetId)
+        }
+        return reopened
+    }
+
     /** Parked drafts whose publication is no longer queued (confirmed while the app was away) leave. */
     public suspend fun releaseSettledDrafts() {
         postDraftStore.parkedCmids()
@@ -127,6 +160,7 @@ public class PublicationOutbox @Inject constructor(
         location = location,
         language = originalLanguage,
         mediaAlt = mediaAlt.orEmpty(),
+        mediaCaption = mediaCaption.orEmpty(),
     )
 
     private fun PostComposerDraftSnapshot.withServedIds(ids: List<String>): PostComposerDraftSnapshot {
@@ -135,6 +169,7 @@ public class PublicationOutbox @Inject constructor(
         return copy(
             media = media.zip(ids) { item, id -> item.copy(id = id) },
             mediaAlt = mediaAlt.mapKeys { (key, _) -> renamed[key] ?: key },
+            mediaCaption = mediaCaption.mapKeys { (key, _) -> renamed[key] ?: key },
         )
     }
 }

@@ -256,7 +256,8 @@ struct ConversationMediaHubView: View {
                                visualAttachments: [], isDark: isDark, accentColor: accentColor)
                     .equatable()
             } else if rendering == .contactCard {
-                ContactCardView(attachment: attachment, isMe: item.isMe, accentHex: accentColor)
+                ContactCardView(attachment: attachment, isMe: item.isMe, accentHex: accentColor,
+                                scope: model.carrier(item.messageId).map(ContactCardResolutionScope.of(message:)) ?? .unknown)
                     .equatable()
             } else {
                 DocumentViewerView(attachment: attachment, context: .messageBubble,

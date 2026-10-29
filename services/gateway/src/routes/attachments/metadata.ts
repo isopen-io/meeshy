@@ -35,6 +35,8 @@ import {
   type SubtitleCarrier,
 } from '../../services/attachments/servedSubtitles';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -121,6 +123,64 @@ const conversationAttachmentListItemSchema = {
     isBlurred: { type: 'boolean', description: 'Attachment-level blur flag — the client must veil until the reader lifts it' },
   },
 } as const;
+
+/**
+ * #13608 — la suppression d'une pièce se voit chez tous les membres. Charge
+ * minimale (jamais le contenu de la pièce) ; un échec de diffusion ne défait pas
+ * une suppression déjà faite.
+ */
+async function broadcastAttachmentDeleted(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  target: { messageId: string | null; attachmentId: string }
+): Promise<void> {
+  if (!target.messageId) return;
+  try {
+    const io = fastify.socketIOHandler?.getManager()?.getIO();
+    if (!io) return;
+    const message = await prisma.message.findUnique({
+      where: { id: target.messageId },
+      select: { conversationId: true },
+    });
+    if (!message) return;
+    const payload: AttachmentDeletedEventData = {
+      conversationId: message.conversationId,
+      messageId: target.messageId,
+      attachmentId: target.attachmentId,
+    };
+    io.to(ROOMS.conversation(message.conversationId)).emit(SERVER_EVENTS.ATTACHMENT_DELETED, payload);
+  } catch (error: unknown) {
+    logger.warn('attachment:deleted broadcast failed', { error });
+  }
+}
+
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+/**
+ * #13608 — un téléversement pose `uploadedBy = User.id`, mais une copie transférée
+ * le pose à `Participant.id` de l'expéditeur. Le propriétaire est donc reconnu
+ * sous les DEUX identifiants, et seulement s'il s'agit de SON participant :
+ * l'identifiant d'un participant d'autrui, anonyme ou inconnu ne donne rien.
+ */
+async function ownsAsUploader(
+  prisma: PrismaClient,
+  uploadedBy: string | null | undefined,
+  userId: string
+): Promise<boolean> {
+  if (!uploadedBy) return false;
+  if (uploadedBy === userId) return true;
+  if (!OBJECT_ID_PATTERN.test(uploadedBy)) return false;
+  try {
+    const participant = await prisma.participant.findUnique({
+      where: { id: uploadedBy },
+      select: { userId: true },
+    });
+    return participant?.userId === userId;
+  } catch (error: unknown) {
+    logger.warn('uploader participant lookup failed', { error });
+    return false;
+  }
+}
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
@@ -481,15 +541,17 @@ export async function registerMetadataRoutes(
         } else {
           // Retirer le média d'autrui est un geste de modération de contenu :
           // la table des rôles de plateforme privilégiés le gouverne (#11217).
-          hasPermission = attachment.uploadedBy === userId ||
-            isPrivilegedPlatformRole(authContext.registeredUser?.role);
+          hasPermission = isPrivilegedPlatformRole(authContext.registeredUser?.role) ||
+            await ownsAsUploader(prisma, attachment.uploadedBy, userId);
         }
 
         if (!hasPermission) {
           return sendForbidden(reply, 'Insufficient permissions - You can only delete your own attachments');
         }
 
+        const messageId = attachment.messageId ?? null;
         await attachmentService.deleteAttachment(attachmentId);
+        await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
 
         return sendSuccess(reply, { message: 'Attachment deleted successfully' });
       } catch (error: unknown) {

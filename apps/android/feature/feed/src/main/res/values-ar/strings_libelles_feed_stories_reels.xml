@@ -29,12 +29,6 @@
     <string name="post_comments_replying_to_generic">ردّ…</string>
     <string name="post_comments_reply_hint">أضف ردًا…</string>
     <string name="post_comments_hide_replies">إخفاء الردود</string>
-    <string name="status_bar_add_label">إضافة حالة</string>
-    <string name="status_bar_my_status_label">حالتي %1$s</string>
-    <string name="status_bar_load_error">خطأ في التحميل</string>
-    <string name="status_bar_retry">إعادة تحميل الحالات</string>
-    <string name="status_bar_react">تفاعل بـ %1$s</string>
-    <string name="status_feed_toggle_label">موجز الحالات</string>
     <string name="status_composer_republishing">إعادة نشر @%1$s</string>
     <string name="status_composer_placeholder">كيف حالك؟</string>
     <string name="status_composer_mood_label">المزاج %1$s</string>

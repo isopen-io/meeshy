@@ -9,6 +9,9 @@ import PencilKit
 @MainActor
 public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
+    /// Appelé à CHAQUE refus d'un plafond (`StoryComposerLimits`, #13590) : l'hôte y branche haptique et message.
+    public var onLimitReached: ((StoryComposerLimit) -> Void)?
+
     // MARK: - Slides
 
     // `public internal(set)` (#4038) : le meuble app-side LIT les slides pour

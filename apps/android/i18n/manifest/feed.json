@@ -636,62 +636,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "communityLink.status",
-          "androidName": "status_bar_add",
-          "status": "adopted"
-        },
-        {
-          "androidName": "status_bar_add_label",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "voice.profile.status.expired.label",
-          "androidName": "status_bar_expired",
-          "status": "adopted"
-        },
-        {
-          "androidName": "status_bar_load_error",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "common.me",
-          "androidName": "status_bar_me",
-          "status": "adopted"
-        },
-        {
-          "androidName": "status_bar_my_status_label",
-          "status": "android-only"
-        },
-        {
-          "androidName": "status_bar_react",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.viewer.action.repost",
-          "androidName": "status_bar_republish",
-          "status": "adopted"
-        },
-        {
-          "androidName": "status_bar_retry",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "%@ %@",
-          "androidName": "status_bar_status_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "status.bubble.via",
-          "androidName": "status_bar_via",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "2fa_close",
           "androidName": "status_composer_close",
           "status": "adopted"
@@ -783,22 +727,6 @@
           "iosKey": "post.visibility.public",
           "androidName": "status_composer_visibility_public",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.nearby.mode.discover",
-          "androidName": "status_feed_discover",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.league.tab.friends",
-          "androidName": "status_feed_friends",
-          "status": "adopted"
-        },
-        {
-          "androidName": "status_feed_toggle_label",
-          "status": "android-only"
         },
         {
           "catalog": "app",

@@ -2,8 +2,11 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
 import java.time.Instant
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -66,6 +69,8 @@ internal class ConversationCacheSource(
     private val endToEnd: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
     /** #13558 — the sweep's pages land only while the account that asked for them is still the one signed in. */
     private val fence: AccountFence? = null,
+    /** #13647 — the cached payloads are decoded here, never on the thread of the screen that collects them. */
+    private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -83,7 +88,7 @@ internal class ConversationCacheSource(
             } else {
                 rows.map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
             }
-        }
+        }.flowOn(decodeOn)
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
@@ -402,6 +407,7 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(it)) }
+            confirmServedClear(carried)
             val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
@@ -415,16 +421,26 @@ internal class ConversationCacheSource(
      * or created for a story/mood reply or a profile's Message button), so the chat screen — which
      * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
      */
-    suspend fun remember(conversation: ApiConversation) {
+    suspend fun remember(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = false)
+
+    /**
+     * #13628 — [remember] for a conversation the gateway has JUST served (a `NetworkResult.Success` body): only such a row
+     * confirms a null mode as clear. A conversation rebuilt from the cache or composed locally goes through [remember] and
+     * confirms nothing — its null mode stays unknown, and the outbox re-reads it before any plaintext.
+     */
+    suspend fun rememberServed(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = true)
+
+    private suspend fun rememberAs(conversation: ApiConversation, servedByGateway: Boolean) {
         val ticket = fence?.currentTicket()
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { rememberNow(conversation, now) }
+        fence.commitOrWrite(ticket) { rememberNow(conversation, now, servedByGateway) }
     }
 
-    private suspend fun rememberNow(conversation: ApiConversation, now: Long) {
+    private suspend fun rememberNow(conversation: ApiConversation, now: Long, servedByGateway: Boolean) {
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = keepingEndToEnd(carryingKnownPeers(conversation))
+            if (servedByGateway) confirmServedClear(listOf(carried))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
         }
@@ -451,6 +467,10 @@ internal class ConversationCacheSource(
         if (EndToEndRegime.isEndToEnd(served.encryptionMode)) endToEnd.learn(served.id)
         return EndToEndRegimeMemory.kept(served, seenEndToEnd = endToEnd.isSealed(served.id))
     }
+
+    /** #13628 — what the gateway just served without end-to-end has a KNOWN mode, even when it serves none (a clear conversation). */
+    private fun confirmServedClear(served: List<ApiConversation>) =
+        endToEnd.confirmClear(served.filterNot { EndToEndRegime.isEndToEnd(it.encryptionMode) }.map { it.id })
 
     /** Rows cached e2ee before the ledger existed are learned once per account. Must run inside the write transaction. */
     private suspend fun seedEndToEndFromCache() {

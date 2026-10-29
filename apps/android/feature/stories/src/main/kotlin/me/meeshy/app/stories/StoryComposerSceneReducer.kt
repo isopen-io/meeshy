@@ -21,7 +21,7 @@ internal object StoryComposerSceneReducer {
 
     fun stickerMenuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.stickers.none { it.id == id }) state
-        else state.copy(stickerMenuId = id, selectedStickerId = id, selectedTextElementId = null, elementMenuId = null)
+        else state.copy(stickerMenuId = id, selectedStickerId = id, selectedTextElementId = null, elementMenuId = null, selectedMediaId = null, selectedSoundId = null)
 
     fun menuDismissed(state: StoryComposerUiState): StoryComposerUiState =
         if (state.stickerMenuId == null && state.elementMenuId == null) state

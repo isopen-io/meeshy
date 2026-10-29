@@ -38,6 +38,17 @@ class MediaIntakeTest {
     }
 
     @Test
+    fun `a provider stream that throws something other than an io error is unreadable and leaves nothing on disk`() {
+        val cache = folder.newFolder()
+        val hostile = object : InputStream() {
+            override fun read(): Int = throw UnsupportedOperationException("fournisseur hostile")
+        }
+
+        assertThat(MediaIntake.copy(hostile, cache, "a.pdf", "application/pdf")).isNull()
+        assertThat(MediaIntake.directory(cache).listFiles().orEmpty()).isEmpty()
+    }
+
+    @Test
     fun `a stream over the bound stops during the copy and leaves nothing on disk`() {
         val cache = folder.newFolder()
 
@@ -97,5 +108,55 @@ class MediaIntakeTest {
             assertThat(item.fileName).isEqualTo("../../shared_prefs/x.xml")
         }
         assertThat(escaped.exists()).isFalse()
+    }
+}
+
+/** #13606 — la durée d'une vidéo se sonde à la prise, pour que la file hors ligne la garde. */
+class MediaIntakeDurationTest {
+    @get:Rule val folder = TemporaryFolder()
+
+    private fun bytes() = java.io.ByteArrayInputStream(ByteArray(64))
+
+    @Test
+    fun `a picked video keeps the duration probed from its private copy`() {
+        val item = MediaIntake.copy(bytes(), folder.newFolder(), "v.mp4", "video/mp4", durationProbe = { file, _ -> if (file.isFile) 12_000L else null })
+
+        assertThat(item!!.durationMs).isEqualTo(12_000L)
+    }
+
+    @Test
+    fun `a sound is never probed, so ending a voice note does no extra file read`() {
+        var probed = false
+        val file = folder.newFile("take.m4a").also { it.writeBytes(ByteArray(8)) }
+
+        val item = MediaIntake.adopt(file, folder.newFolder(), "take.m4a", "audio/mp4")
+        MediaIntake.copy(bytes(), folder.newFolder(), "a.m4a", "audio/mp4", durationProbe = { _, _ -> probed = true; 1L })
+
+        assertThat(probed).isFalse()
+        assertThat(item!!.durationMs).isNull()
+    }
+
+    @Test
+    fun `an image is never probed`() {
+        var probed = false
+        val item = MediaIntake.copy(bytes(), folder.newFolder(), "a.jpg", "image/jpeg", durationProbe = { _, _ -> probed = true; 1L })
+
+        assertThat(probed).isFalse()
+        assertThat(item!!.durationMs).isNull()
+    }
+
+    @Test
+    fun `a probe that fails leaves the item without duration`() {
+        val item = MediaIntake.copy(bytes(), folder.newFolder(), "v.mp4", "video/mp4", durationProbe = { _, _ -> error("codec") })
+
+        assertThat(item).isNotNull()
+        assertThat(item!!.durationMs).isNull()
+    }
+
+    @Test
+    fun `a non positive probed duration is dropped`() {
+        val item = MediaIntake.copy(bytes(), folder.newFolder(), "v.mp4", "video/mp4", durationProbe = { _, _ -> 0L })
+
+        assertThat(item!!.durationMs).isNull()
     }
 }

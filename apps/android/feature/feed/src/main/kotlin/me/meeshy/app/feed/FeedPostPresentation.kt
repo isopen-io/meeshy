@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
 import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
+import me.meeshy.sdk.story.toStoryItem
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.PostLanguageStrip
 
@@ -84,7 +85,16 @@ data class FeedPostPresentation(
     val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
     /** L'explorateur de langues du post (iOS `PostTranslationSheet`), `null` sans traduction. */
     val languageExplorer: PostLanguageExplorer? = null,
+    /** Ce que le réel montre au repos (iOS `ReelFeedCard`) ; `null` pour tout autre post. */
+    val reelCover: ReelCover? = null,
+    /** Rapport largeur / hauteur de la carte du réel (`ReelCoverResolver.cardAspect`). */
+    val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
 ) {
+    /** Le pseudo de l'auteur d'origine, pour l'attribution `↻ @pseudo` de l'en-tête ; `null` sans repost servi. */
+    val repostAttribution: String?
+        get() = repostEmbed?.takeUnless { it.isUnavailable }
+            ?.let { it.authorUsername ?: it.authorName }
+
     /** Carrousel pour un post, diaporama horizontal pour un reel (iOS `PostMediaPresentation.default`). */
     val mediaPresentation: PostMediaPresentation
         get() = PostMediaPresentation.defaultFor(if (isReel) PostType.REEL else PostType.POST)
@@ -125,6 +135,9 @@ object FeedPostBuilder {
                     alt = item.alt,
                 )
             }
+        val isReel = post.type.equals("reel", ignoreCase = true)
+        // iOS `FeedPost.reelDisplayMedia` : un réel republié sans média propre montre le réel qu'il republie.
+        val reelMedia = if (isReel) media.ifEmpty { FeedMediaMapper.map(post.repostOf?.media, preferredLanguages, mediaBaseUrl) } else media
         val originalCode = post.originalLanguage.normalizedCode()
         val isTranslated = post.isTranslated(preferences)
         val activeCode = resolveActiveCode(post, preferences, activeLanguageCode)
@@ -159,8 +172,8 @@ object FeedPostBuilder {
             repostCount = post.repostCount ?: 0,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
-            isReel = post.type.equals("reel", ignoreCase = true),
-            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
+            isReel = isReel,
+            repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
@@ -168,6 +181,8 @@ object FeedPostBuilder {
             distanceMeters = post.distanceMeters,
             layout = post.storyEffects.resolvedLayout,
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
+            reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia) { post.toStoryItem() } else null,
+            reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
         )
     }
 

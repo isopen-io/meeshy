@@ -19,16 +19,18 @@ struct ContactCardView: View, Equatable {
     let attachment: MessageAttachment
     let isMe: Bool
     let accentHex: String
+    let scope: ContactCardResolutionScope
 
     @StateObject private var model: ContactCardViewModel
     @State private var isShowingDetail = false
     @Environment(\.colorScheme) private var colorScheme
 
-    init(attachment: MessageAttachment, isMe: Bool, accentHex: String, model: @autoclosure @escaping () -> ContactCardViewModel? = nil) {
+    init(attachment: MessageAttachment, isMe: Bool, accentHex: String, scope: ContactCardResolutionScope = .unknown, model: @autoclosure @escaping () -> ContactCardViewModel? = nil) {
         self.attachment = attachment
         self.isMe = isMe
         self.accentHex = accentHex
-        _model = StateObject(wrappedValue: model() ?? ContactCardViewModel(attachment: attachment))
+        self.scope = scope
+        _model = StateObject(wrappedValue: model() ?? ContactCardViewModel(attachment: attachment, resolutionScope: scope))
     }
 
     nonisolated static func == (lhs: ContactCardView, rhs: ContactCardView) -> Bool {
@@ -36,6 +38,7 @@ struct ContactCardView: View, Equatable {
             && lhs.attachment.fileUrl == rhs.attachment.fileUrl
             && lhs.isMe == rhs.isMe
             && lhs.accentHex == rhs.accentHex
+            && lhs.scope == rhs.scope
     }
 
     private var isDark: Bool { colorScheme == .dark }

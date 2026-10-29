@@ -242,6 +242,12 @@ extension StoryComposerViewModel {
         project.mediaObjects.removeAll { Self.isSyntheticTimelineClipId($0.id) }
         var slide = currentSlide
         project.apply(to: &slide)
+        // La timeline d'une scène ignore les autres : les deux heures de la story se bornent ici (#13590).
+        let room = max(2, StoryComposerLimits.remainingDuration(excludingSceneAt: currentSlideIndex, of: slides))
+        if let pin = slide.effects.timelineDuration, Float(pin) > room {
+            (slide.effects.timelineDuration, slide.duration) = (Double(room), TimeInterval(room))
+            refuse(.duration)
+        }
         currentSlide = slide
     }
 

@@ -56,6 +56,31 @@ public class PublishStoryHandler @Inject constructor(
         }
 }
 
+/**
+ * Ce que la file d'envoi d'un j'aime, d'un favori ou de leur retrait fait de la réponse de la passerelle (#13588, #13594).
+ * - 409 / 410 : le serveur dit DÉJÀ acquis le geste, succès idempotent. Seul `POST /posts/:id/like` rend 409
+ *   (`REACTION_LIMIT_REACHED` : cinq réactions déjà posées, donc le post est déjà aimé côté serveur). 410
+ *   `MUTATION_RESULT_GONE` n'est servi par aucune des quatre routes (`replayCost: 'converges'`), il est accepté par
+ *   prudence.
+ * - 400 / 403 / 404 / 422 PORTÉS PAR L'ENVELOPPE DE LA PASSERELLE (son `code` : `POST_NOT_FOUND` pour un post supprimé,
+ *   privé ou bloqué, `VALIDATION_ERROR`, accès refusé) : refus DÉFINITIF, échec immédiat, le geste est défait tout de suite.
+ *   Le même statut sans enveloppe (code synthétique `HTTP_<n>`) ne vient pas de la passerelle : le 404 de Traefik pendant
+ *   qu'elle redémarre en est un, et défaire le geste pour lui perdrait un j'aime que le serveur aurait accepté.
+ * - tout le reste (401 le temps d'un renouvellement de session, 408, 429, 5xx, réseau) : transitoire, réessayé.
+ */
+internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
+    val error = (this as? NetworkResult.Failure)?.error
+    val status = error?.httpStatus
+    return when {
+        status in ALREADY_APPLIED_STATUSES -> SendResult.Success
+        status in DEFINITIVE_REFUSALS && error?.code != "HTTP_$status" -> SendResult.PermanentFailure("Refused: HTTP $status ${error?.code}")
+        else -> toSendResult()
+    }
+}
+
+private val ALREADY_APPLIED_STATUSES = setOf(409, 410)
+private val DEFINITIVE_REFUSALS = setOf(400, 403, 404, 422)
+
 /** `LIKE_POST`: likes the post; an exhausted like rolls the optimistic flip back to unliked. */
 public class LikePostHandler @Inject constructor(
     private val postApi: PostApi,
@@ -63,10 +88,10 @@ public class LikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.like(row.targetId) }.toSendResult()
+        apiCall { postApi.like(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = false)
+        postRepository.rollbackLike(row.targetId, liked = false, cmid = row.cmid)
     }
 }
 
@@ -77,10 +102,10 @@ public class UnlikePostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.unlike(row.targetId) }.toSendResult()
+        apiCall { postApi.unlike(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = true)
+        postRepository.rollbackLike(row.targetId, liked = true, cmid = row.cmid)
     }
 }
 
@@ -91,10 +116,10 @@ public class BookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.bookmark(row.targetId) }.toSendResult()
+        apiCall { postApi.bookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = false)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = false, cmid = row.cmid)
     }
 }
 
@@ -105,10 +130,10 @@ public class UnbookmarkPostHandler @Inject constructor(
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { postApi.removeBookmark(row.targetId) }.toSendResult()
+        apiCall { postApi.removeBookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = true)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = true, cmid = row.cmid)
     }
 }
 

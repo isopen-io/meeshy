@@ -22,8 +22,8 @@
     <string name="profile_blocked_unblock">Desbloquear</string>
     <string name="profile_call_not_placed">Sin conexión: la llamada no se ha realizado</string>
     <string name="profile_close_hint">Cierra el perfil</string>
-    <string name="profile_connection_context_received">%s quiere conectar contigo. Acepta para intercambiar mensajes.</string>
-    <string name="profile_connection_context_sent">Enviaste una solicitud de conexión a %s. Esperando su respuesta.</string>
+    <string name="profile_connection_context_received">%1$s quiere conectar contigo. Acepta para intercambiar mensajes.</string>
+    <string name="profile_connection_context_sent">Enviaste una solicitud de conexión a %1$s. Esperando su respuesta.</string>
     <string name="profile_conversations_interactionsDisabled">Interacciones desactivadas</string>
     <string name="profile_conversations_noShared">Sin conversaciones en común</string>
     <string name="profile_decor_banner_section">Banner</string>
@@ -35,6 +35,7 @@
     <string name="profile_decor_image_hint">Elegir una imagen de portada</string>
     <string name="profile_decor_none">Ninguno</string>
     <string name="profile_decor_ring_section">Contorno del avatar</string>
+    <string name="profile_decor_shop">Más en la tienda</string>
     <string name="profile_decor_subtitle">Visibles para todos en tu perfil</string>
     <string name="profile_decor_title">Contorno y banner</string>
     <string name="profile_detail_country">País</string>

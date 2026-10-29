@@ -55,6 +55,8 @@ struct ComposerSlideRail: View {
 
     private static let height: CGFloat = 44
 
+    @State private var deletion = ComposerSceneDeletionPrompt()
+
     /// Le rail se monte dès qu'une scène existe (`ComposerHeaderTiles.showsRail`,
     /// décidé par l'hôte) ; une vignette SEULE est un aperçu, pas un bouton —
     /// elle ne navigue vers rien (loi 4).
@@ -82,6 +84,19 @@ struct ComposerSlideRail: View {
             }
             .padding(.vertical, MeeshySpacing.xxs)
         }
+        .confirmationDialog(ComposerSlideRailCopy.deleteConfirmTitle,
+                            isPresented: Binding(get: { deletion.isPresented },
+                                                 set: { if !$0 { deletion = deletion.cancelled() } }),
+                            titleVisibility: .visible) {
+            Button(ComposerSlideRailCopy.deleteConfirmAction, role: .destructive) {
+                let cible = deletion.confirmedIndex(sceneCount: slides.count)
+                deletion = deletion.cancelled()
+                if let cible { onDelete?(cible) }
+            }
+            Button(ComposerSlideRailCopy.deleteCancel, role: .cancel) {
+                deletion = deletion.cancelled()
+            }
+        }
     }
 
     /// La corbeille — sur la tuile COURANTE, et jamais sous deux scènes. La
@@ -92,7 +107,7 @@ struct ComposerSlideRail: View {
         if let onDelete, ComposerHeaderTiles.showsDelete(sceneIndex: index,
                                            currentIndex: currentIndex,
                                            sceneCount: slides.count) {
-            Button { onDelete(index) } label: {
+            Button { deletion = deletion.asking(index: index) } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(8, weight: .bold))
                     .foregroundStyle(.white)
@@ -202,6 +217,30 @@ nonisolated enum ComposerSceneAddition: Equatable {
     }
 }
 
+/// **La suppression d'une scène depuis le rail se CONFIRME toujours**, même
+/// vide : la corbeille arme l'invite, seule la confirmation rend l'index à
+/// retirer. Annuler ne change rien.
+nonisolated struct ComposerSceneDeletionPrompt: Equatable {
+    private(set) var pendingIndex: Int?
+
+    var isPresented: Bool { pendingIndex != nil }
+
+    func asking(index: Int) -> ComposerSceneDeletionPrompt {
+        ComposerSceneDeletionPrompt(pendingIndex: index)
+    }
+
+    func cancelled() -> ComposerSceneDeletionPrompt {
+        ComposerSceneDeletionPrompt(pendingIndex: nil)
+    }
+
+    /// L'index à retirer, ou `nil` si rien n'est demandé ou si la scène visée
+    /// n'est plus dans le rail.
+    func confirmedIndex(sceneCount: Int) -> Int? {
+        guard let pendingIndex, (0..<sceneCount).contains(pendingIndex) else { return nil }
+        return pendingIndex
+    }
+}
+
 /// Le libellé du rail, hors de la vue pour la raison habituelle du dépôt : une
 /// chaîne composée dans un corps de vue échappe au cliquet de complétude.
 @MainActor
@@ -223,6 +262,21 @@ enum ComposerSlideRailCopy {
     static func delete(index: Int) -> String {
         String(format: String(localized: "composer.slide.rail.delete",
                               defaultValue: "Supprimer la scène %1$d", bundle: .main), index)
+    }
+
+    static var deleteConfirmTitle: String {
+        String(localized: "composer.slide.rail.deleteConfirm.title",
+               defaultValue: "Supprimer cette scène ?", bundle: .main)
+    }
+
+    static var deleteConfirmAction: String {
+        String(localized: "composer.slide.rail.deleteConfirm.action",
+               defaultValue: "Supprimer", bundle: .main)
+    }
+
+    static var deleteCancel: String {
+        String(localized: "composer.slide.rail.deleteConfirm.cancel",
+               defaultValue: "Annuler", bundle: .main)
     }
 
     static func position(index: Int, total: Int) -> String {

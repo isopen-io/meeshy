@@ -26,6 +26,8 @@ import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.MeeshyUser
@@ -148,6 +150,37 @@ class AppShareSheetViewModelTest {
         }
         assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Sent)
         assertThat(h.model().firstServed?.conversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun one_piece_leaves_alone_naming_only_that_piece_and_never_a_sealed_one() = runTest(dispatcher) {
+        val photo = { id: String, sealed: Boolean? -> ApiMessageAttachment(id = id, mimeType = "image/jpeg", isEncrypted = sealed) }
+        val carrier = ApiMessage(
+            id = "m1", conversationId = "src", content = "le texte", originalLanguage = "fr",
+            attachments = listOf(photo("a", null), photo("b", null)),
+        )
+        val h = harness()
+        h.vm.bind(ShareSubject.Piece(carrier, "b", "src"))
+        advanceUntilIdle()
+        h.vm.toggle(h.model().sections.recents.first())
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1", content = "", originalLanguage = any(), sender = me, forwardedFromId = "m1",
+                forwardedFromConversationId = "src", effects = any(), forwardedAttachmentIds = listOf("b"),
+            )
+        }
+
+        val sealed = harness()
+        sealed.vm.bind(ShareSubject.Piece(carrier.copy(attachments = listOf(photo("a", true))), "a", "src"))
+        advanceUntilIdle()
+        sealed.vm.toggle(sealed.model().sections.recents.first())
+        sealed.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { sealed.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -284,6 +317,42 @@ class AppShareSheetViewModelTest {
         coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "d1", content = "regarde", originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
         coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = "", originalLanguage = any(), sender = me, messageType = "file", attachmentUploadCmids = any(), attachments = any()) }
         assertThat(h.model().deliveries.values).containsExactly(ShareDelivery.Sent, ShareDelivery.Sent)
+    }
+
+    @Test
+    fun a_mixed_selection_of_photo_video_and_document_leaves_one_typed_message_each_and_the_document_stays_a_file() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.bindIncoming(null, listOf(file("a.jpg", "image/jpeg"), file("b.mp4", "video/mp4"), file("contrat.pdf", "application/pdf"), file("notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "video", attachmentUploadCmids = any(), attachments = any()) }
+        coVerify(exactly = 2) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "file", attachmentUploadCmids = any(), attachments = match { it.single().mimeType in setOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") && it.single().fileName?.contains('.') == true }) }
+        assertThat(h.model().deliveries.values).containsExactly(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun a_document_in_the_selection_keeps_the_studio_offer_away_but_photos_and_videos_keep_it() {
+        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("b.mp4", "video/mp4")))).isTrue()
+        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("c.pdf", "application/pdf")))).isFalse()
+        assertThat(studioCanEdit(listOf(file("c.pdf", "application/pdf")))).isFalse()
+        assertThat(studioCanEdit(emptyList())).isFalse()
+    }
+
+    @Test
+    fun what_an_incoming_share_left_behind_is_said_in_the_sheet_and_forgotten_when_it_closes() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.bindIncoming(null, listOf(file("a.pdf", "application/pdf")), notices = listOf("enorme.mov dépasse 50 Mo"))
+        advanceUntilIdle()
+
+        assertThat(h.model().notices).containsExactly("enorme.mov dépasse 50 Mo")
+
+        h.vm.reset()
+        assertThat(h.vm.state.value.notices).isEmpty()
     }
 
     @Test

@@ -19,6 +19,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MeeshyUser
@@ -424,5 +425,79 @@ class ChatForwardControllerTest {
         r.controller.sendSelection()
         advanceUntilIdle()
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+    private fun photo(id: String, encrypted: Boolean? = null) = ApiMessageAttachment(id = id, mimeType = "image/jpeg", isEncrypted = encrypted)
+
+    private fun carrier(vararg pieces: ApiMessageAttachment, text: String = "le texte") = LocalMessage(
+        ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = text, originalLanguage = "fr", attachments = pieces.toList()),
+        sendState = LocalSendState.SYNCED,
+    )
+
+    @Test
+    fun `one piece leaves alone, without the text of its message, naming only that piece`() = runTest {
+        val r = rig(listOf(carrier(photo("a"), photo("b"))))
+        r.controller.openPiece("m1", "b")
+
+        assertThat(r.forward?.pieceAttachmentId).isEqualTo("b")
+        assertThat(r.forward?.refusal).isNull()
+        r.shareTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic("c2", "", "fr", me, null, null, "m1", "c1", forwardedAttachmentIds = listOf("b"))
+        }
+        assertThat(r.forward?.deliveries).containsExactly("c2", ShareDelivery.Sent)
+    }
+
+    @Test
+    fun `two pieces of the same message are two shares, one can be in flight while the other leaves`() = runTest {
+        val r = rig(listOf(carrier(photo("a"), photo("b"))))
+        val gate = CompletableDeferred<String>()
+        coEvery { r.repo.sendOptimistic("c2", any(), any(), any(), any(), any(), any(), any(), forwardedAttachmentIds = listOf("a")) } coAnswers { gate.await() }
+        r.controller.openPiece("m1", "a")
+        r.shareTo("c2")
+        runCurrent()
+
+        r.controller.close()
+        r.controller.openPiece("m1", "b")
+        assertThat(r.forward?.deliveries).isEmpty()
+        r.shareTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "", "fr", me, null, null, "m1", "c1", forwardedAttachmentIds = listOf("b")) }
+        gate.complete("cmid_a")
+    }
+
+    @Test
+    fun `a sealed piece, a piece the message does not carry, or an end to end conversation shows the refusal card`() = runTest {
+        val sealed = rig(listOf(carrier(photo("a", encrypted = true))))
+        sealed.controller.openPiece("m1", "a")
+        assertThat(sealed.forward?.refusal).isEqualTo(ForwardRefusalReason.ENCRYPTED_SOURCE)
+
+        val foreign = rig(listOf(carrier(photo("a"))))
+        foreign.controller.openPiece("m1", "ghost")
+        assertThat(foreign.forward?.refusal).isEqualTo(ForwardRefusalReason.ATTACHMENT_NOT_IN_SOURCE)
+
+        val e2ee = rig(listOf(carrier(photo("a"))))
+        e2ee.flow.value = e2ee.flow.value.copy(encryptionMode = "e2ee")
+        e2ee.controller.openPiece("m1", "a")
+        e2ee.controller.toggleRecipient("c2")
+        e2ee.controller.sendSelection()
+        advanceUntilIdle()
+        assertThat(e2ee.forward?.refusal).isEqualTo(ForwardRefusalReason.ENCRYPTED_SOURCE)
+        coVerify(exactly = 0) { e2ee.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a piece caption leaves as a separate message after the piece`() = runTest {
+        val r = rig(listOf(carrier(photo("a"))))
+        r.controller.openPiece("m1", "a")
+        r.controller.onCaptionChange("regarde")
+
+        r.shareTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "", "fr", me, null, null, "m1", "c1", forwardedAttachmentIds = listOf("a")) }
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "regarde", any(), any(), any(), any(), any(), any()) }
     }
 }

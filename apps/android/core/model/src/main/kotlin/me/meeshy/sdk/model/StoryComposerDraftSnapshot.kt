@@ -118,6 +118,23 @@ data class StoryDraftStickerElementSnapshot(
     val isPublishable: Boolean get() = emoji.isNotBlank()
 }
 
+/** Un média de la slide posé sur la scène : son id et sa pose normalisée (centre 0,5 ; échelle 1 ; droit). */
+@Serializable
+data class StoryDraftPlacedMediaSnapshot(
+    val id: String,
+    val x: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+    /** Le filtre propre du média (nom du fil, #13603) ; un blob d'avant ou un nom inconnu se lit « aucun filtre ». */
+    val filter: String? = null,
+    /** Les réglages et effets propres du média (#13599) ; un blob d'avant se lit « aucun réglage ». */
+    val adjustments: ImageAdjustments? = null,
+    /** La fenêtre de source d'une vidéo rognée (#13600), en secondes, les deux bornes ou aucune ; un blob d'avant se lit « source entière ». */
+    val sourceStart: Double? = null,
+    val sourceEnd: Double? = null,
+)
+
 /**
  * The durable form of one slide of an in-progress story composer draft — the fields this
  * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
@@ -161,6 +178,10 @@ data class StoryDraftSlideSnapshot(
     val backdrop: String? = null,
     val opening: String? = null,
     val closing: String? = null,
+    /** La durée de source de chaque piste (identifiant -> secondes), pour que la fenêtre propre d'un son survive au brouillon. */
+    val soundSources: Map<String, Float> = emptyMap(),
+    /** Les médias de premier plan posés sur la scène (#13630) ; un blob d'avant se lit « aucun ». */
+    val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a

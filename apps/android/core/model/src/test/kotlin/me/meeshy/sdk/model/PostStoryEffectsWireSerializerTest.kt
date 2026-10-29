@@ -77,4 +77,37 @@ class PostStoryEffectsWireSerializerTest {
         assertThat(wire(null).keys).isEmpty()
         assertThat(wire(StoryEffects())["storyEffects"]).isEqualTo(JsonObject(emptyMap()))
     }
+
+    @Test
+    fun `a layout never makes a canvas document of its own, a post's photos stay its media`() {
+        // iOS paints ANY canvasV3 in place of the post's media (FeedPostCard: « la scène le remplace entièrement »), so a
+        // scene-less `{v:3, layout}` would hide every photo from iOS readers; iOS writes `layout` only inside a document
+        // of two scenes or more (`ComposerStoryCanvas.publishedSlide`), which Android's post composer does not compose.
+        val document = wire(StoryEffects(layout = MosaicLayoutMode.WAVE))["storyEffects"]!!.jsonObject
+
+        assertThat(document.keys).doesNotContain("v")
+        assertThat(document.keys).doesNotContain("scenes")
+    }
+
+    @Test
+    fun `a layout beside a background does not ride the one-scene document either`() {
+        val document = wire(StoryEffects(background = "302B63", layout = MosaicLayoutMode.HERO))["storyEffects"]!!.jsonObject
+
+        assertThat(document.keys).doesNotContain("v")
+    }
+
+    @Test
+    fun `read back, the document gives the post its layout again and every wire value is one of the five`() {
+        MosaicLayoutMode.entries.forEach { mode ->
+            val text = json.encodeToString(Body(StoryEffects(layout = mode)))
+            assertThat(json.decodeFromString<Body>(text).storyEffects?.layout).isEqualTo(mode)
+        }
+    }
+
+    @Test
+    fun `a layout beside richer effects keeps the v1 wire, nothing is lost in translation`() {
+        val effects = StoryEffects(layout = MosaicLayoutMode.SINE, textObjects = listOf(StoryTextObject(id = "t", text = "x", x = 0.5, y = 0.5)))
+
+        assertThat(wire(effects)["storyEffects"]!!.jsonObject.keys).doesNotContain("v")
+    }
 }

@@ -52,6 +52,17 @@ export interface AttachmentUpdatedEventData {
 }
 
 /**
+ * Payload de `SERVER_EVENTS.ATTACHMENT_DELETED` (#13608) : une pièce a été retirée
+ * d'un message, diffusée à la room de la conversation. Aucun contenu de la pièce.
+ * Un ancien client ignore l'événement.
+ */
+export interface AttachmentDeletedEventData {
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly attachmentId: string;
+}
+
+/**
  * Où en est le traitement d'un média sorti de la requête HTTP (#11264).
  * Absent sur une ligne héritée ou traitée pendant la requête : elle est prête.
  */

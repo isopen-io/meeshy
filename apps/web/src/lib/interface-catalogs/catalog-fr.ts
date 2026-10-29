@@ -779,6 +779,8 @@ const fr = {
   'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
   'story.studio.refusal.media-max': 'Cette publication porte déjà dix médias — le plafond de la passerelle.',
   'story.studio.refusal.import-max': '{count} média(s) non importé(s) : une publication en porte dix au plus.',
+  'story.studio.refusal.text-max': 'Une scène porte au plus {count} textes.',
+  'story.studio.refusal.text-length': 'Un texte s’arrête à {count} caractères.',
   'story.studio.failure.network': 'Réseau indisponible.',
   'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
   'story.studio.failure.session': 'Session expirée — reconnectez-vous.',

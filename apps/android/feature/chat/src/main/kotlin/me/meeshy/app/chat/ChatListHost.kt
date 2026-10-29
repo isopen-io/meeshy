@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,6 +44,10 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.app.chat.piece.MessagePieceOverlay
+import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
+import me.meeshy.ui.component.permission.rememberPermissionFlow
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.app.chat.river.RiverPaneState
 import me.meeshy.app.chat.river.RiverScreen
@@ -273,7 +278,7 @@ internal fun ChatListHost(
                 if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
             },
             onFileClick = { messageId, attachmentId ->
-                actions.onFileAttachmentOpen(messageId, attachmentId)
+                actions.onFileAttachmentTap(messageId, attachmentId)
             },
             onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
@@ -321,14 +326,36 @@ internal fun ChatListHost(
             }
     }
 
+    val storageAccess = rememberPermissionFlow()
+    PermissionFlowHost(storageAccess)
     pieceOverlay?.let { overlay ->
         MessagePieceOverlay(
             model = overlay,
             accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
             onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
+            onSave = { attachmentId ->
+                // Dès l'API 29 la porte ne demande rien ; en 26–28 elle obtient WRITE_EXTERNAL_STORAGE avant d'écrire.
+                scope.launch {
+                    if (storageAccess.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = true)) {
+                        actions.onPieceSave(overlay.messageId, attachmentId)
+                    }
+                }
+            },
+            onForward = { attachmentId -> actions.openForwardPiece(overlay.messageId, attachmentId) },
+            onDelete = { attachmentId -> actions.onPieceDelete(overlay.messageId, attachmentId) },
+            quickReactions = state.quickReactions,
+            onReact = { attachmentId, emoji -> actions.onPieceReact(overlay.messageId, attachmentId, emoji) },
             onDismiss = { pieceOverlay = null },
         )
+    }
+    val pieceRemoveFailed = stringResource(R.string.piece_remove_failed)
+    LaunchedEffect(actions.pieceFailures) {
+        actions.pieceFailures.collect { failure ->
+            when (failure) {
+                PieceFailure.REMOVE -> Toast.makeText(selectionContext, pieceRemoveFailed, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     openedPlace?.let { opened ->
         LocationFullscreen(
@@ -338,6 +365,8 @@ internal fun ChatListHost(
             onDismiss = { openedPlace = null },
         )
     }
+    val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
+    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
             state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
@@ -458,6 +487,7 @@ internal fun ChatListHost(
         ) {
             RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset)
         }
+    }
     }
 }
 

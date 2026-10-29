@@ -138,6 +138,7 @@ extension ConversationSyncEngine {
         messageSocket.attachmentUpdated
             .relay(through: lane) { [weak self] in await self?.handleAttachmentUpdated($0) }
             .store(in: &socketSubscriptions)
+        messageSocket.attachmentDeleted.relay(through: lane) { [weak self] in await AttachmentDeletionApplier(engine: self)?.apply($0) }.store(in: &socketSubscriptions)
     }
 
     // UN TROU DE SÉQUENCE DÉCLENCHE LA RESYNCHRONISATION `/sync` (#4172
@@ -356,7 +357,6 @@ extension ConversationSyncEngine {
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
         let callId = await cache.messages.load(for: event.conversationId).snapshot()?
             .first(where: { $0.id == event.messageId })?.callSummary?.callId
-
         let deletedAt = Date()
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = deletedAt
@@ -499,27 +499,21 @@ extension ConversationSyncEngine {
     /// replacement (older messages never loaded), the row is left untouched — the
     /// next REST list refresh (which filters `deletedAt: null`) corrects it —
     /// rather than wrongly clearing a preview that should show an earlier message.
-    private func recomputeLastMessagePreviewAfterDeletion(
+    /* partagé entre les fichiers du moteur (#4172) */ func recomputeLastMessagePreviewAfterDeletion(
         conversationId: String, deletedMessageId: String
     ) async {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard list.first(where: { $0.id == conversationId })?.lastMessageId == deletedMessageId else { return }
         let messages = await cache.messages.load(for: conversationId).snapshot() ?? []
         if let newLast = Self.mostRecentSurvivor(in: messages, excluding: deletedMessageId) {
+            // Le survivant est ici TOUT ENTIER : la facette s'écrit donc en bloc, plutôt que quatre champs à la main.
+            // Les autres décrivaient encore le message SUPPRIMÉ (vignette, « Vue unique », expiration, carte de
+            // traductions que le résolveur PRÉFÈRE à l'aperçu). Sa propre carte lui est rendue, sauf protection.
+            let facet = await survivorFacet(newLast)
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                    // Le survivant est ici TOUT ENTIER : la facette s'écrit donc
-                    // en bloc, plutôt que quatre champs à la main. Les sept
-                    // autres décrivaient encore le message SUPPRIMÉ — sa
-                    // vignette, son « Vue unique », son expiration, sa carte de
-                    // traductions (que le résolveur PRÉFÈRE à l'aperçu, donc la
-                    // ligne rendait le texte traduit du disparu). Même défaut
-                    // que celui du chemin reçu, découvert localement.
-                    updated[idx].applyLastMessage(LastMessageFacet(
-                        message: newLast,
-                        preview: newLast.content
-                    ))
+                    updated[idx].applyLastMessage(facet)
                 }
                 return updated
             }

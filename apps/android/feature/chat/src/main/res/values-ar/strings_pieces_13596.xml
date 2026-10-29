@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="piece_delete_confirm_title">هذا العنصر</string>
+    <string name="piece_delete_confirm_action">حذف العنصر</string>
+    <string name="piece_remove_failed">تعذّر حذف هذا العنصر.</string>
+</resources>

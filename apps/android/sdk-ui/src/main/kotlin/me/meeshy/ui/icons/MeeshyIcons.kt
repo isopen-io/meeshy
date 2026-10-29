@@ -102,6 +102,7 @@ import androidx.compose.material.icons.filled.GridView as FiGridView
 import androidx.compose.material.icons.filled.Group as FiGroup
 import androidx.compose.material.icons.filled.GroupOff as FiGroupOff
 import androidx.compose.material.icons.filled.Groups as FiGroups
+import androidx.compose.material.icons.filled.Hearing as FiHearing
 import androidx.compose.material.icons.filled.History as FiHistory
 import androidx.compose.material.icons.filled.HourglassEmpty as FiHourglassEmpty
 import androidx.compose.material.icons.filled.HowToReg as FiHowToReg
@@ -398,6 +399,7 @@ public object MeeshyIcons {
     public val Groups: ImageVector get() = Icons.Outlined.OuGroups
     public val GroupsFilled: ImageVector get() = Icons.Filled.FiGroups
     public val Hand: ImageVector get() = Icons.Filled.FiPanTool
+    public val Hearing: ImageVector get() = Icons.Filled.FiHearing
     public val Heart: ImageVector get() = Icons.Outlined.OuFavoriteBorder
     public val HeartFilled: ImageVector get() = Icons.Filled.FiFavorite
     public val History: ImageVector get() = Icons.Filled.FiHistory

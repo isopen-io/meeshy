@@ -9,11 +9,13 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 import me.meeshy.feature.game.R
+import me.meeshy.sdk.model.game.AchievementRarity
 import me.meeshy.sdk.model.game.engagement.AchievementFamily
 import me.meeshy.sdk.model.game.engagement.EngagementAchievementKey
 import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
 import me.meeshy.sdk.model.game.engagement.EngagementRevealPlan
 import me.meeshy.sdk.model.game.engagement.RevealBanner
+import me.meeshy.sdk.model.game.engagement.RevealRim
 import me.meeshy.sdk.model.game.engagement.RevealSubtitle
 import me.meeshy.sdk.model.game.engagement.RevealTitle
 
@@ -53,9 +55,48 @@ internal object RevealCopy {
             ?: res.getString(R.string.reveal_badge_unlocked)
     }
 
-    /** La phrase lue d'un trait par le lecteur d'écran : « Succès débloqué. <titre>. <explication> ». */
-    fun spoken(res: Resources, locale: Locale, plan: EngagementRevealPlan): String =
-        "${banner(res, locale, plan.banner)}. ${title(res, locale, plan.title)}. ${subtitle(res, plan.subtitle)}"
+    /**
+     * La phrase lue d'un trait par le lecteur d'écran : « Succès débloqué. <titre>. <explication> », puis la rareté en
+     * toutes lettres quand elle se montre — la couleur du liseré n'est jamais la seule information.
+     */
+    fun spoken(res: Resources, locale: Locale, plan: EngagementRevealPlan, rarity: RevealRim.Line? = null): String {
+        val base = "${banner(res, locale, plan.banner)}. ${title(res, locale, plan.title)}. ${subtitle(res, plan.subtitle)}"
+        val named = (rarity as? RevealRim.Line.Measured)?.let { "$base. ${rarityName(res, it.rarity)}" }
+        return named ?: base
+    }
+
+    fun rarityName(res: Resources, rarity: AchievementRarity): String = res.getString(
+        when (rarity) {
+            AchievementRarity.Common -> R.string.game2_rarity_common
+            AchievementRarity.Rare -> R.string.game2_rarity_rare
+            AchievementRarity.Epic -> R.string.game2_rarity_epic
+            AchievementRarity.Legendary -> R.string.game2_rarity_legendary
+            AchievementRarity.Mythic -> R.string.game2_rarity_mythic
+        },
+    )
+
+    /** « Épique · 4 % des comptes », ou « Rareté en cours de mesure » (miroir de `GameRarityLine`, iOS). */
+    fun rarityLine(res: Resources, locale: Locale, line: RevealRim.Line): String = when (line) {
+        RevealRim.Line.Measuring -> res.getString(R.string.game2_rarity_measuring)
+        is RevealRim.Line.Measured -> "${rarityName(res, line.rarity)} · ${rarityShare(res, locale, line.sharePercent)}"
+    }
+
+    /** La lecture de la ligne par le lecteur d'écran : « Rareté : Épique, 4 % des comptes ». */
+    fun rarityAria(res: Resources, locale: Locale, line: RevealRim.Line.Measured): String =
+        res.getString(R.string.game2_rarity_aria, rarityName(res, line.rarity), rarityShare(res, locale, line.sharePercent))
+
+    private fun rarityShare(res: Resources, locale: Locale, share: Double): String =
+        res.getString(R.string.game2_rarity_share, rarityPercent(locale, share))
+
+    /** La part des comptes : entiers dès 1 %, une décimale sous 1 %, jamais sous 0,1 % (« < 0,1 % »). */
+    fun rarityPercent(locale: Locale, share: Double): String {
+        fun format(value: Double, digits: Int): String = NumberFormat.getNumberInstance(locale).apply {
+            minimumFractionDigits = digits
+            maximumFractionDigits = digits
+        }.format(value)
+        val (digits, rounded) = RevealRim.percentDigits(share)
+        return (if (RevealRim.isBelowTenth(share)) "< " else "") + format(rounded, digits) + " %"
+    }
 
     private fun obtainedOn(reachedAt: String, locale: Locale): String? = runCatching {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)

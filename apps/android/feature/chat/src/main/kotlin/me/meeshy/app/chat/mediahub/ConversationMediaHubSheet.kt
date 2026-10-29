@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.toArgb
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.app.chat.openChatLink
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
@@ -102,7 +103,7 @@ internal fun ConversationMediaHubSheet(
     isEndToEnd: Boolean,
     conversationTitle: String?,
     onGoToMessage: ((String) -> Unit)?,
-    onOpenFile: (messageId: String, attachment: ApiMessageAttachment) -> Unit,
+    onOpenFile: (carrier: ApiMessage, attachment: ApiMessageAttachment) -> Unit,
     onDismiss: () -> Unit,
     viewModel: ConversationMediaHubViewModel = hiltViewModel(),
 ) {
@@ -135,8 +136,9 @@ internal fun ConversationMediaHubSheet(
         when (val launch = viewModel.launchFor(item, isEndToEnd)) {
             is MediaHubLaunch.ChatLink -> openChatLink(context, launch.url, accentColor.toArgb())
             is MediaHubLaunch.GatewayFile ->
-                viewModel.carrier(item.messageId)?.attachments?.firstOrNull { it.id == item.attachment?.id }
-                    ?.let { onOpenFile(item.messageId, it) }
+                viewModel.carrier(item.messageId)?.let { carrier ->
+                    carrier.attachments.firstOrNull { it.id == item.attachment?.id }?.let { onOpenFile(carrier, it) }
+                }
             is MediaHubLaunch.Video -> video = launch
             MediaHubLaunch.Refused -> Toast.makeText(context, R.string.chat_exit_blocked_title, Toast.LENGTH_SHORT).show()
             MediaHubLaunch.Ignored -> Unit

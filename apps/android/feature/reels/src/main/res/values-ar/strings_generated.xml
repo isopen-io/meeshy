@@ -5,12 +5,12 @@
     <string name="reels_close">إغلاق</string>
     <string name="reels_comments">التعليقات</string>
     <plurals name="reels_comments_count">
-        <item quantity="zero">%d تعليقات</item>
-        <item quantity="one">%d تعليق</item>
-        <item quantity="two">%d تعليقان</item>
-        <item quantity="few">%d تعليقات</item>
-        <item quantity="many">%d تعليقات</item>
-        <item quantity="other">%d تعليقات</item>
+        <item quantity="zero">%1$d تعليقات</item>
+        <item quantity="one">%1$d تعليق</item>
+        <item quantity="two">%1$d تعليقان</item>
+        <item quantity="few">%1$d تعليقات</item>
+        <item quantity="many">%1$d تعليقات</item>
+        <item quantity="other">%1$d تعليقات</item>
     </plurals>
     <string name="reels_comments_empty_subtitle">كن أول من يعلّق!</string>
     <string name="reels_comments_empty_title">لا توجد تعليقات بعد</string>
@@ -26,7 +26,7 @@
     <string name="reels_menu_pin">تثبيت</string>
     <string name="reels_menu_report">إبلاغ</string>
     <string name="reels_menu_share">مشاركة</string>
-    <string name="reels_mute">كتم</string>
+    <string name="reels_mute">كتم الصوت</string>
     <string name="reels_open_failure_back">رجوع</string>
     <string name="reels_repost">إعادة النشر</string>
     <string name="reels_scrub">التقدّم أو الرجوع</string>
@@ -38,6 +38,6 @@
     <string name="reels_toast_report_failed">خطأ في الإبلاغ عن المنشور</string>
     <string name="reels_toast_reported">تم الإبلاغ عن المنشور</string>
     <string name="reels_unlike">إلغاء الإعجاب</string>
-    <string name="reels_unmute">إلغاء كتم الصوت</string>
+    <string name="reels_unmute">تفعيل الصوت</string>
     <string name="reels_views">المشاهدات</string>
 </resources>

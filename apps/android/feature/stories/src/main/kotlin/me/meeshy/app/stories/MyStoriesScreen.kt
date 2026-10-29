@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -110,6 +111,7 @@ fun MyStoriesScreen(
         republished = stringResource(R.string.my_stories_repost_success),
         republishFailed = stringResource(R.string.my_stories_repost_error),
     )
+    val context = LocalContext.current
     val bulkFailedFormat = stringResource(R.string.my_stories_delete_selected_error, 0)
 
     LaunchedEffect(viewModel) {
@@ -122,6 +124,8 @@ fun MyStoriesScreen(
                     bulkFailedFormat.replaceFirst("0", effect.failures.toString()).also { haptics.error() }
                 MyStoriesUiEffect.Republished -> messages.republished.also { haptics.success() }
                 MyStoriesUiEffect.RepublishFailed -> messages.republishFailed.also { haptics.error() }
+                is MyStoriesUiEffect.RepublishRefusedAudienceKept ->
+                    context.getString(R.string.my_stories_repost_audience_kept, context.getString(effect.visibility.labelRes())).also { haptics.error() }
             }
             snackbar.showSnackbar(message)
         }
@@ -204,7 +208,7 @@ fun MyStoriesScreen(
                         },
                         onViewers = { viewersStoryId = it.id },
                         onDelete = { viewModel.onEvent(MyStoriesUiEvent.RequestDelete(it.id)) },
-                        onRepublish = { viewModel.onEvent(MyStoriesUiEvent.Republish(it.id)) },
+                        onRepublish = { viewModel.onEvent(MyStoriesUiEvent.RequestRepublish(it.id)) },
                         onSelectStart = {
                             if (!state.isSelecting) viewModel.onEvent(MyStoriesUiEvent.ToggleSelecting)
                             viewModel.onEvent(MyStoriesUiEvent.ToggleSelected(it.id))
@@ -214,6 +218,27 @@ fun MyStoriesScreen(
                 }
             }
         }
+    }
+
+    state.pendingRepublish?.let { pending ->
+        StoryAudienceSheet(
+            visibility = pending.choice.visibility,
+            userIds = pending.choice.userIds,
+            mentions = emptyList(),
+            hashtags = emptyList(),
+            onChooseVisibility = { viewModel.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(it)) },
+            onUserIdsChange = { viewModel.onEvent(MyStoriesUiEvent.SetRepublishUserIds(it)) },
+            onAddMention = {},
+            onRemoveMention = {},
+            onRemoveHashtag = {},
+            onDismiss = { viewModel.onEvent(MyStoriesUiEvent.DismissRepublish) },
+            republish = true,
+            canApply = pending.canConfirm,
+            onApply = {
+                haptics.medium()
+                viewModel.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+            },
+        )
     }
 
     state.pendingDelete?.let { pending ->

@@ -230,6 +230,11 @@ class ConversationRepository @Inject constructor(
         cacheSource.remember(conversation)
     }
 
+    /** #13628 — [remember] for a body the gateway has just served: its null mode is confirmed clear. Never for a cached or built copy. */
+    suspend fun rememberServed(conversation: ApiConversation) {
+        cacheSource.rememberServed(conversation)
+    }
+
     suspend fun create(
         type: String,
         title: String?,
@@ -277,7 +282,7 @@ class ConversationRepository @Inject constructor(
         ) {
             is NetworkResult.Success -> {
                 val found = result.data.firstOrNull { it.isDirect }
-                found?.let { cacheSource.remember(it) }
+                found?.let { cacheSource.rememberServed(it) }
                 NetworkResult.Success(found)
             }
             is NetworkResult.Failure -> result
@@ -305,7 +310,7 @@ class ConversationRepository @Inject constructor(
         val request = directConversationRequest(userId)
         return when (val created = create(request.type, request.title, request.participantIds)) {
             is NetworkResult.Success -> {
-                cacheSource.remember(created.data)
+                cacheSource.rememberServed(created.data)
                 DirectConversationResolution.Created(created.data)
             }
             is NetworkResult.Failure -> failedOrQueued(userId, created.error, creationQueue)

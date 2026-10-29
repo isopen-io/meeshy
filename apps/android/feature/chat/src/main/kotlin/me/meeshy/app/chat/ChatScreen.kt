@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.ui.component.bubble.LocalBubbleContactCardAccounts
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.appearance.rememberConversationAppearance
@@ -52,6 +54,7 @@ fun ChatScreen(
     hasLocalLiveCall: Boolean = false,
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
+    onOpenConversation: (conversationId: String) -> Unit = {},
     /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
     locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
@@ -101,6 +104,7 @@ fun ChatScreen(
             summary = summaryBinding,
         )
     }
+    val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -114,6 +118,7 @@ fun ChatScreen(
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
             onOpenCitedPost = onOpenCitedPost,
+            onOpenConversation = onOpenConversation,
             callEntry = callEntry,
             mayInviteFriends = mayInviteFriends,
             locationSettingsSheet = locationSettingsSheet,
@@ -123,8 +128,21 @@ fun ChatScreen(
         pendingPlace = pendingPlace,
         selection = selection,
         engagement = engagement,
+        downloadedFileIds = downloadedFileIds,
     )
 
+    val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val isEndToEnd = state.isEndToEnd
+    val clearance = remember(cardsViewModel, state.conversationId, state.encryptionMode, isEndToEnd) {
+        cardsViewModel.clearance(state.conversationId, state.encryptionMode)
+    }
+    val contactCards = remember(cardsViewModel, viewModel, isEndToEnd, clearance) {
+        ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, clearance, viewModel::downloadedFileUri)
+    }
+    CompositionLocalProvider(
+        LocalBubbleContactCardAccounts provides contactCards,
+        LocalChatContactCardScope provides contactCards::underConversation,
+    ) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
@@ -172,6 +190,7 @@ fun ChatScreen(
             }
         }
         ChatSheetsHost(host)
+    }
     }
 }
 

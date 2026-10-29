@@ -95,6 +95,7 @@ internal fun NavGraphBuilder.authNavGraph(
         SignupScreen(
             onClose = dismiss,
             onRegistered = {
+                authViewModel.onExternalSessionOpened()
                 navController.navigate(Routes.CONVERSATIONS) {
                     popUpTo(Routes.LOGIN) { inclusive = true }
                 }

@@ -74,9 +74,10 @@ class StoryComposerViewModelTest {
         draftStore: StoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
         blobStore: MediaBlobStore = mockk(relaxed = true),
         confirmation: StoryDraftConfirmation = mockk(relaxed = true),
+        fence: me.meeshy.sdk.session.AccountFence? = null,
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation)
+        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation, accountFence = fence)
     }
 
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
@@ -529,11 +530,10 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `framing is not projected when the designated background is not the framed media`() = runTest {
+    fun `le cadrage suit le fond designe, celui que le plateau peint et que le geste cadre`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
         vm.onMediaPicked(listOf(item()))
-        // The canvas frames the FIRST slide media (m1); designate the SECOND (m2) as background.
         vm.onToggleSlideBackgroundMedia("m2")
         vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
         val request = slot<CreateStoryRequest>()
@@ -543,9 +543,30 @@ class StoryComposerViewModelTest {
 
         val obj = request.captured.storyEffects?.mediaObjects?.single()
         assertThat(obj?.postMediaId).isEqualTo("m2")
-        assertThat(obj?.x).isEqualTo(0.5)
-        assertThat(obj?.y).isEqualTo(0.5)
-        assertThat(obj?.scale).isEqualTo(1.0)
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+    }
+
+    @Test
+    fun `un fond designe encore en attente publie son objet avec son cadrage et sa boucle sous le cmid`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("up-1")
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "story-cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.postMediaId).isEqualTo("up-1")
+        assertThat(obj?.mediaURL).isNull()
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(request.captured.mediaIds).containsExactly("up-1")
     }
 
     @Test
@@ -800,7 +821,7 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `removing the pending upload cancels its durable upload row and blob`() = runTest {
+    fun `removing the pending upload holds its durable row while undo can bring it back, then cancels it on leaving`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
@@ -808,11 +829,59 @@ class StoryComposerViewModelTest {
 
         vm.onRemoveMedia("up-1")
 
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+        leaveComposer(vm)
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
     }
 
     @Test
-    fun `removing one of several pending uploads keeps the rest and cancels only that durable row`() = runTest {
+    fun `undoing the removal of a pending media gives it back, enqueued once and never cancelled`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `redoing the removal of a pending media sets it aside again and undo finds it once more`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+        vm.onUndo()
+
+        vm.onRedo()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
+        vm.onUndo()
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `a removed pending media is cancelled once no reachable history step shows it`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any(), any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveMedia("up-1")
+
+        repeat(60) { i -> vm.onSelectFilter(if (i % 2 == 0) StoryFilter.WARM else null) }
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing one of several pending uploads keeps the rest and, on leaving, cancels only that durable row`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
@@ -822,6 +891,7 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-2")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-2")
+        leaveComposer(vm)
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
         coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
     }
@@ -1317,20 +1387,84 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 0) { uploadQueue.cancel(any()) }
     }
 
-    @Test
-    fun `removing a slide cancels the durable uploads it carried`() = runTest {
+    private fun vmWithPendingSecondSlide(): Pair<StoryComposerViewModel, String> {
         val vm = viewModel()
         vm.onTextChange("keep")
         vm.onAddSlide()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
-        val secondSlideId = vm.state.value.deck.slides[1].id
+        return vm to vm.state.value.deck.slides[1].id
+    }
+
+    @Test
+    fun `removing a slide holds the durable uploads it carried while undo can still bring it back`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
 
         vm.onRemoveSlide(secondSlideId)
 
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.deck.size).isEqualTo(1)
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `undoing the removal of a slide gives back its pending media, enqueued once`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.size).isEqualTo(2)
+        assertThat(vm.state.value.deck.slides[1].mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `redoing the removal sets the pending media aside again, and undo finds them once more`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+        vm.onUndo()
+
+        vm.onRedo()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
+        vm.onUndo()
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `leaving the composer cancels the uploads of a removed slide, never those the draft still shows`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-2"
+        vm.onSelectSlide(vm.state.value.deck.slides[0].id)
+        vm.onMediaPicked(listOf(item()))
+        vm.onRemoveSlide(secondSlideId)
+        leaveComposer(vm)
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+        coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
+    }
+
+    private fun leaveComposer(vm: StoryComposerViewModel) {
+        val store = androidx.lifecycle.ViewModelStore()
+        androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = vm as T
+        })[StoryComposerViewModel::class.java]
+        store.clear()
+    }
+
+    @Test
+    fun `the held uploads are cancelled once no reachable history step shows them`() = runTest {
+        val (vm, secondSlideId) = vmWithPendingSecondSlide()
+        vm.onRemoveSlide(secondSlideId)
+
+        repeat(60) { i -> vm.onSelectFilter(if (i % 2 == 0) StoryFilter.WARM else null) }
+
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
     }
 
@@ -2781,6 +2915,145 @@ class StoryComposerViewModelTest {
         assertThat(saved).isNotNull()
         assertThat(saved!!.slides.single().text).isEqualTo("keep me")
         assertThat(saved.visibility).isEqualTo("PRIVATE")
+    }
+
+    @Test
+    fun `a composer unmounted after the account was purged writes no draft under the next account (#13621)`() = runTest {
+        var owner: String? = "A"
+        val fence = me.meeshy.sdk.session.AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { owner })
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store, fence = fence)
+        vm.onEnterComposer()
+        vm.onTextChange("les mots de A")
+        fence.close { store.clear() }
+        owner = "B"
+
+        vm.persistDraft()
+
+        assertThat(store.load()).isNull()
+    }
+
+    @Test
+    fun `a composer still under its own account saves its draft through the fence (#13621)`() = runTest {
+        val fence = me.meeshy.sdk.session.AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store, fence = fence)
+        vm.onEnterComposer()
+        vm.onTextChange("mes mots")
+
+        vm.persistDraft()
+
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("mes mots")
+    }
+
+    @Test
+    fun `abandoning a reopened draft cancels the exhausted uploads it named, bytes included (#13621)`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "", mediaIds = listOf("cmid_up1", "server-id"))),
+            selectedId = "s1",
+        )
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.onRemoveMedia("server-id")
+        vm.persistDraft()
+        leaveComposer(vm)
+
+        assertThat(store.load()).isNull()
+        io.mockk.coVerify(exactly = 1) { uploadQueue.cancel("cmid_up1") }
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("server-id") }
+    }
+
+    private fun reopenedDraftWithUpload(): InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(
+        StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "mes mots", mediaIds = listOf("cmid_up1"))),
+            selectedId = "s1",
+        ),
+    )
+
+    @Test
+    fun `undoing an edit on a reopened draft keeps the offline media it names (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onSelectFilter(StoryFilter.WARM)
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("cmid_up1")
+    }
+
+    @Test
+    fun `a format switch that saves the draft without a removed media keeps its upload while undo can bring it back (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+
+        vm.onUndo()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).contains("cmid_up1")
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `the upload of a media removed then brought back by undo survives the composer and rides the next save (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+        vm.onUndo()
+        vm.persistDraft()
+
+        leaveComposer(vm)
+
+        assertThat(store.load()?.slides?.single()?.mediaIds).containsExactly("cmid_up1")
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `a removed media whose save dropped it is cancelled when the composer is left for good (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+
+        leaveComposer(vm)
+
+        io.mockk.coVerify(exactly = 1) { uploadQueue.cancel("cmid_up1") }
+    }
+
+    @Test
+    fun `a media removed, saved away, then brought back and published keeps the upload its story waits on (#13621)`() = runTest {
+        val store = reopenedDraftWithUpload()
+        val blobs: MediaBlobStore = mockk(relaxed = true)
+        io.mockk.coEvery { blobs.has(any()) } returns true
+        coEvery { repo.enqueuePublish(any(), any()) } returns "story-cmid"
+        val vm = viewModel(draftStore = store, blobStore = blobs)
+        vm.onEnterComposer()
+        vm.onRemoveMedia("cmid_up1")
+        vm.persistDraft()
+        vm.onUndo()
+
+        vm.publish()
+        leaveComposer(vm)
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), listOf("cmid_up1")) }
+        io.mockk.coVerify(exactly = 0) { uploadQueue.cancel("cmid_up1") }
     }
 
     @Test

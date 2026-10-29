@@ -4,43 +4,25 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.dp
 import java.util.Locale
-import me.meeshy.feature.feed.R
-import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Emplacement médias de la carte : images, lieu, repost intégré et aperçu de reel.
+ * Emplacement médias de la carte : images, lieu, repost intégré et couverture du reel.
  */
 @Composable
 internal fun FeedPostCardMediaSlot(
     post: FeedPostPresentation,
     onImageTap: (Int) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
 ) {
     if (post.images.isNotEmpty()) {
         Spacer(Modifier.height(MeeshySpacing.md))
@@ -58,34 +40,17 @@ internal fun FeedPostCardMediaSlot(
 
     post.repostEmbed?.let { embed ->
         Spacer(Modifier.height(MeeshySpacing.md))
-        RepostEmbedCell(embed = embed, onOpen = onOpenPost)
+        RepostEmbedCell(embed = embed, onOpen = onOpenPost, onOpenReel = onOpenReel)
     }
 
-    if (post.isReel) {
+    post.reelCover?.takeIf { post.isReel }?.let { cover ->
         Spacer(Modifier.height(MeeshySpacing.md))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(MeeshyRadius.lg))
-                .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Filled.PlayCircle,
-                    contentDescription = null,
-                    tint = MeeshyPalette.Indigo500,
-                    modifier = Modifier.size(48.dp),
-                )
-                Text(
-                    text = stringResource(R.string.feed_reel),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.padding(top = MeeshySpacing.xs),
-                )
-            }
-        }
+        ReelCoverView(
+            cover = cover,
+            authorName = post.authorName,
+            onOpen = { onOpenReel(post.id) },
+            modifier = Modifier.fillMaxWidth().aspectRatio(post.reelAspect),
+        )
     }
 }
 

@@ -445,6 +445,12 @@ export const SERVER_EVENTS = {
    */
   ATTACHMENT_READY: 'attachment:ready',
   /**
+   * #13608 — une pièce a été supprimée seule d'un message. Adressé à la room de
+   * la conversation ; charge minimale, jamais le contenu de la pièce. Voir
+   * `AttachmentDeletedEventData`.
+   */
+  ATTACHMENT_DELETED: 'attachment:deleted',
+  /**
    * UNE seule traduction quand une seule langue est demandée
    */
   AUDIO_TRANSLATION_READY: 'audio:translation-ready',

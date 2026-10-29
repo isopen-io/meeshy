@@ -97,7 +97,6 @@ class CallPeerVisualRenderTest {
         renderPhase("incoming") {
             IncomingCallScreen(
                 state = CallPresenter.present(CallState.Ringing(false), config.copy(isOutgoing = false), CallMedia()),
-                accent = CallPalette.Brand,
                 peer = peer,
                 reduceMotion = true,
                 onAccept = {},

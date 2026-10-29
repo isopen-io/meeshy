@@ -108,6 +108,7 @@ fun CallScreen(
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
     val reduceMotion = rememberCallReduceMotion()
     val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
+    val preview by viewModel.previewUi.collectAsStateWithLifecycle()
     val avatarUrl = peer.avatarUrl
     val backdropUrl = if (remoteVideo == null) peer.backdropUrl else null
     val close = {
@@ -172,6 +173,11 @@ fun CallScreen(
                 )
             }
 
+            // L'aperçu avant décroché : la vidéo de l'appelant derrière la sonnerie, jusqu'au vrai lien.
+            preview.video?.takeIf { !state.showsConnectedLayout }?.let { track ->
+                CallPreviewBackdrop(track = track, eglContext = viewModel.eglBaseContext)
+            }
+
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
 
             // Cet ecran n'a pas de Scaffold : il pose lui-meme l'inset des barres systeme. Le fond
@@ -191,7 +197,6 @@ fun CallScreen(
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
-                    accent = accent,
                     peer = peer,
                     reduceMotion = reduceMotion,
                     onAccept = {
@@ -205,12 +210,24 @@ fun CallScreen(
                             viewModel.decline()
                         }
                     },
+                    preview = preview,
+                    onTogglePreviewSound = viewModel::togglePreviewSound,
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,
                     peer = peer,
                     reduceMotion = reduceMotion,
                     onHangUp = viewModel::hangUp,
+                    previewPanel = {
+                        CallPreviewOutgoingPanel(
+                            preview = preview,
+                            peerName = state.peerName,
+                            isVideoCall = state.isVideoCall,
+                            onToggleAudio = viewModel::togglePreviewAudio,
+                            onToggleVideo = viewModel::togglePreviewVideo,
+                            modifier = Modifier.padding(bottom = MeeshySpacing.xxl),
+                        )
+                    },
                 )
                 state.isEnded -> CallEndedPanel(
                     state = state,

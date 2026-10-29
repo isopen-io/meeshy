@@ -31,7 +31,7 @@
     <string name="email_gate_publish">Para publicar, valide seu endereço. Sua publicação fica guardada e será enviada assim que o código for validado.</string>
     <string name="email_gate_send">Receber o código</string>
     <string name="email_gate_sending">Enviando…</string>
-    <string name="email_gate_sent">Código enviado para %s. Digite-o abaixo.</string>
+    <string name="email_gate_sent">Código enviado para %1$s. Digite-o abaixo.</string>
     <string name="email_gate_title">Valide seu endereço de e-mail</string>
     <string name="email_verification_code_a11y_label">Código de verificação</string>
     <string name="email_verification_code_placeholder">000000</string>
@@ -46,9 +46,9 @@
     <string name="email_verification_no_code">Não recebeu o código?</string>
     <string name="email_verification_resend_button">Reenviar o código</string>
     <string name="email_verification_resend_confirmed">Código reenviado!</string>
-    <string name="email_verification_subtitle">Digite o código de 6 dígitos enviado para <b>%s</b></string>
-    <string name="email_verification_subtitle_account_created">Sua conta foi criada. Um código e um link de verificação foram enviados para <b>%s</b>.</string>
-    <string name="email_verification_subtitle_activation_required">Sua senha está correta, mas sua conta precisa primeiro ser ativada, comprovando que este endereço é seu. Acabamos de enviar um código para <b>%s</b>.</string>
+    <string name="email_verification_subtitle">Digite o código de 6 dígitos enviado para <b>%1$s</b></string>
+    <string name="email_verification_subtitle_account_created">Sua conta foi criada. Um código e um link de verificação foram enviados para <b>%1$s</b>.</string>
+    <string name="email_verification_subtitle_activation_required">Sua senha está correta, mas sua conta precisa primeiro ser ativada, comprovando que este endereço é seu. Acabamos de enviar um código para <b>%1$s</b>.</string>
     <string name="email_verification_title">Verifique seu e-mail</string>
     <string name="email_verification_verify_button">Verificar</string>
     <string name="guest_ended_expired_message">Este link não dá mais acesso à conversa. Peça um novo link à pessoa que o enviou.</string>
@@ -77,15 +77,15 @@
     <string name="guest_join_username">Nome de usuário</string>
     <string name="guest_join_username_optional">Usuário (opcional)</string>
     <string name="link_signin_cancel">Cancelar</string>
-    <string name="link_signin_claim">Este endereço será associado a %s e removido de qualquer outra conta Meeshy.</string>
+    <string name="link_signin_claim">Este endereço será associado a %1$s e removido de qualquer outra conta Meeshy.</string>
     <string name="link_signin_confirm">Entrar</string>
     <string name="link_signin_confirm_claim">Associar o endereço e entrar</string>
-    <string name="link_signin_message">Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %s.\n\nSó continue se esta conta for sua.</string>
+    <string name="link_signin_message">Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %1$s.\n\nSó continue se esta conta for sua.</string>
     <string name="link_signin_message_replacing">Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %1$s no lugar de %2$s, que está conectada (ela continua no seletor de contas).\n\nSó continue se esta conta for sua.</string>
-    <string name="link_signin_title">Entrar como %s?</string>
+    <string name="link_signin_title">Entrar como %1$s?</string>
     <string name="link_switch_confirm">Abrir esta conta</string>
     <string name="link_switch_message">Este link abre OUTRA conta, diferente da sua: %1$s.\n\nVocê está conectado como %2$s. Só abra esta conta se ela for sua.</string>
-    <string name="link_switch_message_unknown_current">Este link abre OUTRA conta, diferente da que está aberta: %s.\n\nSó abra esta conta se ela for sua.</string>
+    <string name="link_switch_message_unknown_current">Este link abre OUTRA conta, diferente da que está aberta: %1$s.\n\nSó abra esta conta se ela for sua.</string>
     <string name="link_switch_title">Abrir outra conta?</string>
     <string name="login_button">Entrar</string>
     <string name="login_forgot_password">Esqueceu a senha?</string>
@@ -95,7 +95,7 @@
     <string name="login_password_label">Senha</string>
     <string name="login_remove_account">Remover esta conta</string>
     <string name="login_saved_accounts">Contas salvas</string>
-    <string name="login_server_origin">Conectado a: %s</string>
+    <string name="login_server_origin">Conectado a: %1$s</string>
     <string name="login_signup_link">Cadastrar-me</string>
     <string name="login_signup_prompt">Não tem conta?</string>
     <string name="login_username_label">Usuário</string>
@@ -146,7 +146,7 @@
     <string name="onboarding_contacts_offer_promise">Ninguém é contatado em seu nome.</string>
     <string name="onboarding_contacts_offer_title">Seus amigos talvez já estejam aqui</string>
     <string name="onboarding_contacts_settings">Encontre seus amigos: permita o acesso aos contatos nos Ajustes</string>
-    <string name="onboarding_email_address">Enviado para %s</string>
+    <string name="onboarding_email_address">Enviado para %1$s</string>
     <string name="onboarding_email_body">Enviamos um link para você. Toque nele no seu e-mail: sua conta fica confirmada e todo o Meeshy se abre para você.</string>
     <string name="onboarding_email_failed">Não foi possível enviar o link. Tente de novo.</string>
     <string name="onboarding_email_resend">Reenviar o link</string>
@@ -154,14 +154,14 @@
     <string name="onboarding_email_title">Confirme seu endereço de e-mail</string>
     <string name="onboarding_email_waiting">Seguimos assim que seu endereço for confirmado.</string>
     <string name="onboarding_friends_add">Adicionar</string>
-    <string name="onboarding_friends_add_a11y">Adicionar %s como amigo</string>
+    <string name="onboarding_friends_add_a11y">Adicionar %1$s como amigo</string>
     <string name="onboarding_friends_added">Enviada</string>
-    <string name="onboarding_friends_added_a11y">Pedido enviado para %s</string>
-    <string name="onboarding_friends_badge">+%d cada</string>
-    <string name="onboarding_friends_body">Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham pelo menos +%d.</string>
+    <string name="onboarding_friends_added_a11y">Pedido enviado para %1$s</string>
+    <string name="onboarding_friends_badge">+%1$d cada</string>
+    <string name="onboarding_friends_body">Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham pelo menos +%1$d.</string>
     <string name="onboarding_friends_failed">O pedido não foi enviado. Tente de novo.</string>
     <string name="onboarding_friends_more">Ver mais perfis</string>
-    <string name="onboarding_friends_pending">Pelo menos +%d para cada um quando a pessoa aceitar</string>
+    <string name="onboarding_friends_pending">Pelo menos +%1$d para cada um quando a pessoa aceitar</string>
     <string name="onboarding_friends_row_a11y">%1$s, fala %2$s</string>
     <string name="onboarding_friends_title">Encontre sua turma</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d faíscas para o seu nível 1</string>
@@ -173,9 +173,9 @@
     <string name="onboarding_global_placeholder">Seu oi</string>
     <string name="onboarding_global_retry">Tentar de novo</string>
     <plurals name="onboarding_global_reward">
-        <item quantity="one">+%d faísca · primeira mensagem</item>
-        <item quantity="many">+%d faíscas · primeira mensagem</item>
-        <item quantity="other">+%d faíscas · primeira mensagem</item>
+        <item quantity="one">+%1$d faísca · primeira mensagem</item>
+        <item quantity="many">+%1$d faíscas · primeira mensagem</item>
+        <item quantity="other">+%1$d faíscas · primeira mensagem</item>
     </plurals>
     <string name="onboarding_global_sample_1">Oi de São Paulo 👋</string>
     <string name="onboarding_global_sample_2">Quem curte Nova Club? 🎧</string>
@@ -197,7 +197,7 @@
     <string name="onboarding_languages_demo_translated">Oi, tudo bem?</string>
     <string name="onboarding_languages_failed">Não foi possível salvar seu idioma. Você pode alterá-lo no seu perfil.</string>
     <string name="onboarding_languages_primary">Seu idioma</string>
-    <string name="onboarding_languages_primary_a11y">Seu idioma: %s. Alterar</string>
+    <string name="onboarding_languages_primary_a11y">Seu idioma: %1$s. Alterar</string>
     <string name="onboarding_languages_secondary">Um segundo idioma? (opcional)</string>
     <string name="onboarding_languages_title">Seu idioma, seu mundo</string>
     <string name="onboarding_later">Depois</string>
@@ -207,14 +207,14 @@
     <string name="onboarding_notifications_title">A gente avisa quando algo acontecer</string>
     <string name="onboarding_notifications_yes">Sim, me avise</string>
     <plurals name="onboarding_points_a11y">
-        <item quantity="one">%d faísca ganha</item>
-        <item quantity="many">%d faíscas ganhas</item>
-        <item quantity="other">%d faíscas ganhas</item>
+        <item quantity="one">%1$d faísca ganha</item>
+        <item quantity="many">%1$d faíscas ganhas</item>
+        <item quantity="other">%1$d faíscas ganhas</item>
     </plurals>
     <plurals name="onboarding_points_pill">
-        <item quantity="one">%d faísca</item>
-        <item quantity="many">%d faíscas</item>
-        <item quantity="other">%d faíscas</item>
+        <item quantity="one">%1$d faísca</item>
+        <item quantity="many">%1$d faíscas</item>
+        <item quantity="other">%1$d faíscas</item>
     </plurals>
     <string name="onboarding_progress_a11y">Etapa %1$d de %2$d</string>
     <string name="onboarding_recap_badges">Medalhas</string>
@@ -227,11 +227,11 @@
     <string name="onboarding_recap_points">Faíscas</string>
     <string name="onboarding_recap_streak">Chama (dias)</string>
     <string name="onboarding_recap_title">Muito bem!</string>
-    <string name="onboarding_recap_tomorrow">Amanhã, sua Chama vai arder há %d dias. Sem pressa: volte quando quiser.</string>
+    <string name="onboarding_recap_tomorrow">Amanhã, sua Chama vai arder há %1$d dias. Sem pressa: volte quando quiser.</string>
     <plurals name="onboarding_reward_announce">
-        <item quantity="one">Mais %d faísca</item>
-        <item quantity="many">Mais %d faíscas</item>
-        <item quantity="other">Mais %d faíscas</item>
+        <item quantity="one">Mais %1$d faísca</item>
+        <item quantity="many">Mais %1$d faíscas</item>
+        <item quantity="other">Mais %1$d faíscas</item>
     </plurals>
     <string name="onboarding_skipAll">Pular tudo</string>
     <string name="onboarding_story_audience_friends">Visível para seus amigos · dá para mudar antes de publicar</string>
@@ -241,9 +241,9 @@
     <string name="onboarding_story_create">Criar meu story</string>
     <string name="onboarding_story_published">Seu story está no ar!</string>
     <plurals name="onboarding_story_reward">
-        <item quantity="one">+%d faísca · primeiro story</item>
-        <item quantity="many">+%d faíscas · primeiro story</item>
-        <item quantity="other">+%d faíscas · primeiro story</item>
+        <item quantity="one">+%1$d faísca · primeiro story</item>
+        <item quantity="many">+%1$d faíscas · primeiro story</item>
+        <item quantity="other">+%1$d faíscas · primeiro story</item>
     </plurals>
     <string name="onboarding_story_title">Mostre quem você é</string>
     <string name="onboarding_story_verify">Confirme seu e-mail para publicar seu story</string>
@@ -261,10 +261,11 @@
     <string name="signup_email_taken">Já existe uma conta com este endereço.</string>
     <string name="signup_error_generic">Não foi possível criar a conta. Tente novamente.</string>
     <string name="signup_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
+    <string name="signup_error_rejected">O cadastro foi recusado — tente novamente em instantes.</string>
     <string name="signup_have_account">Já tem uma conta?</string>
     <string name="signup_language_change">Alterar</string>
     <string name="signup_language_picker_title">Idioma de leitura</string>
-    <string name="signup_language_pill">Você vai ler o Meeshy em %s</string>
+    <string name="signup_language_pill">Você vai ler o Meeshy em %1$s</string>
     <string name="signup_language_search_hint">Pesquisar um idioma…</string>
     <string name="signup_legal">Ao continuar, você aceita os termos de uso e a política de privacidade.</string>
     <string name="signup_legal_privacy">Política de privacidade</string>
@@ -274,7 +275,7 @@
     <string name="signup_password_show">Mostrar senha</string>
     <string name="signup_phone_implausible">Este número não parece real: confira-o.</string>
     <string name="signup_phone_label">Telefone</string>
-    <string name="signup_phone_too_short">Este número é curto demais: pelo menos %d dígitos.</string>
+    <string name="signup_phone_too_short">Este número é curto demais: pelo menos %1$d dígitos.</string>
     <string name="signup_sign_in">Entrar</string>
     <string name="signup_subtitle">Você vai ler todo mundo no seu idioma.</string>
     <string name="signup_title">Crie sua conta</string>
@@ -287,18 +288,18 @@
     <string name="visitor_refused_body">Ele não existe mais ou é reservado ao seu público. Entre para vê-lo se ele foi destinado a você.</string>
     <string name="visitor_refused_title">Este conteúdo não está disponível</string>
     <string name="visitor_retry">Tentar novamente</string>
-    <string name="visitor_shared_by_post">%s compartilhou esta publicação com você</string>
-    <string name="visitor_shared_by_reel">%s compartilhou este reel com você</string>
-    <string name="visitor_shared_by_story">%s compartilhou este story com você</string>
+    <string name="visitor_shared_by_post">%1$s compartilhou esta publicação com você</string>
+    <string name="visitor_shared_by_reel">%1$s compartilhou este reel com você</string>
+    <string name="visitor_shared_by_story">%1$s compartilhou este story com você</string>
     <string name="visitor_signup">Criar uma conta</string>
     <string name="visitor_title">Entre no Meeshy</string>
     <string name="world_entry_back">Voltar</string>
     <string name="world_entry_close">Fechar</string>
     <string name="world_entry_continue">Continuar</string>
-    <string name="world_entry_enter">Entrar no %s</string>
+    <string name="world_entry_enter">Entrar no %1$s</string>
     <string name="world_entry_error_enter">Não foi possível entrar agora. Tente novamente.</string>
     <string name="world_entry_error_offline">Sem conexão. Tente novamente quando estiver on-line.</string>
-    <string name="world_entry_language_greeting">Olá %s, você vai ler tudo em…</string>
+    <string name="world_entry_language_greeting">Olá %1$s, você vai ler tudo em…</string>
     <string name="world_entry_language_group">Idioma principal</string>
     <string name="world_entry_language_hint">Sugerido pelo seu dispositivo.</string>
     <string name="world_entry_name_label">Seu nome</string>

@@ -4,7 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -55,10 +63,7 @@ internal fun BubbleImageGrid(
         images.size == 1 -> {
             val image = images.first()
             val ratio = imageAspectRatio(image)
-            AsyncImage(
-                model = image.url,
-                contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = modifier
                     .width(GRID_WIDTH)
                     .aspectRatio(ratio)
@@ -69,7 +74,15 @@ internal fun BubbleImageGrid(
                         else base.pieceClickable(onClick = { onImageClick(0) }, onLongClick = onImageLongClick?.let { long -> { long(0) } })
                             .semantics { role = Role.Button }
                     },
-            )
+            ) {
+                AsyncImage(
+                    model = image.url,
+                    contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                TileReactions(image.reactionLabel)
+            }
         }
         else -> {
             val visible = images.take(MAX_GRID_IMAGES)
@@ -141,6 +154,7 @@ private fun BubbleImageCell(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+        if (hiddenCount == 0) TileReactions(image.reactionLabel)
         if (hiddenCount > 0) {
             val hiddenLabel = stringResource(R.string.bubble_hidden_images, hiddenCount)
             Box(
@@ -158,6 +172,31 @@ private fun BubbleImageCell(
                 )
             }
         }
+    }
+}
+
+/**
+ * La pastille des réactions d'une pièce, en bas à gauche de sa tuile (#13596) : elle apparaît et disparaît avec la
+ * dernière réaction reçue, sans rien déplacer — un fondu, pas un saut de mise en page.
+ */
+@Composable
+private fun BoxScope.TileReactions(label: String?) {
+    AnimatedVisibility(
+        visible = label != null,
+        enter = fadeIn() + scaleIn(initialScale = 0.8f),
+        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+        modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs),
+    ) {
+        Text(
+            text = label.orEmpty(),
+            color = MeeshyPalette.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }
 

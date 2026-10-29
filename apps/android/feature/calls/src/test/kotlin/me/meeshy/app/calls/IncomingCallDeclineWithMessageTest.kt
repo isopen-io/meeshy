@@ -29,7 +29,6 @@ class IncomingCallDeclineWithMessageTest {
         MeeshyTheme {
             IncomingCallScreen(
                 state = CallPresenter.present(CallState.Ringing(false), incoming, CallMedia()),
-                accent = CallPalette.Brand,
                 peer = CallPeerVisual.EMPTY,
                 reduceMotion = true,
                 onAccept = {},

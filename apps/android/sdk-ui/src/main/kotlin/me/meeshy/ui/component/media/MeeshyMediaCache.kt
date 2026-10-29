@@ -93,6 +93,15 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         cache.keys.toList().forEach { key -> runCatching { cache.removeResource(key) } }
     }
 
+    /** Retire de l'audio et de la vidéo la ressource de [url] (pièce supprimée) ; absente, rien ne se passe. */
+    public fun evict(url: String) {
+        val key = MeeshyMediaCacheKey.of(url)
+        listOf(MediaCacheCategory.AUDIO, MediaCacheCategory.VIDEO).forEach { category ->
+            val cache = cacheFor(category)
+            runCatching { cache.removeResource(key) }
+        }
+    }
+
     /**
      * Bail de lecture : tant qu'il n'est pas rendu, la ressource de [url] est à l'abri de
      * l'éviction. Rend la fonction qui le libère (idempotente).

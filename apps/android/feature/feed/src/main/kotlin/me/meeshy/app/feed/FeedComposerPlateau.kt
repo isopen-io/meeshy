@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -75,6 +76,7 @@ private val ServedTools = ComposerDocumentTool.servedRow(
 internal fun FeedComposerPlateau(
     draft: FeedComposerDraft,
     attachedMedia: List<UploadedMedia>,
+    currentMediaId: String?,
     isUploading: Boolean,
     isCapturingLocation: Boolean,
     voice: VoiceRecordingSession,
@@ -127,6 +129,8 @@ internal fun FeedComposerPlateau(
         PostCard(
             draft = draft,
             attachedMedia = attachedMedia,
+            currentMediaId = currentMediaId,
+            format = format,
             isUploading = isUploading,
             isCapturingLocation = isCapturingLocation,
             voice = voice,
@@ -145,6 +149,8 @@ internal fun FeedComposerPlateau(
 private fun PostCard(
     draft: FeedComposerDraft,
     attachedMedia: List<UploadedMedia>,
+    currentMediaId: String?,
+    format: ComposerFormat,
     isUploading: Boolean,
     isCapturingLocation: Boolean,
     voice: VoiceRecordingSession,
@@ -157,13 +163,28 @@ private fun PostCard(
     onKeyboardRaised: () -> Unit,
 ) {
     val contentFocus = rememberContentFocus(raiseKeyboard, onKeyboardRaised)
+    val captionMedia = PostSlideLaw.captionMedia(format, currentMediaId)
+    Column(Modifier.fillMaxSize()) {
+    PostSlideRail(
+        media = attachedMedia,
+        currentId = currentMediaId,
+        onSelect = actions.onSelectMedia,
+        onRemove = actions.onRemoveMedia,
+        modifier = Modifier.padding(start = MeeshySpacing.lg, top = MeeshySpacing.md),
+    )
     Column(
         modifier = Modifier
+            .weight(1f)
             .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.lg),
     ) {
         PostSceneBlock(background = draft.background, paletteOpen = paletteOpen, onPick = actions.onBackground)
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+            // The text of a slide is the caption of ITS media (iOS ComposerSlideTextRole.caption): one field per media, keyed so
+            // switching slides shows the caption of the one now current. Distinct from the post's content below and from the alt.
+            captionMedia?.let { mediaId ->
+                PostCaptionField(mediaId = mediaId, value = draft.mediaCaption[mediaId].orEmpty(), onChange = actions.onCaption)
+            }
             val field = rememberHostedTextField(draft.text, actions.onText)
             OutlinedTextField(
                 value = field.value,
@@ -201,10 +222,12 @@ private fun PostCard(
                     onAddLocation = actions.onLocation,
                     onRemove = actions.onRemoveMedia,
                     showAddTiles = false,
+                    showAttached = false,
                 )
                 MediaAltTextFields(media = attachedMedia, altById = draft.mediaAlt, onAltChange = actions.onAlt)
             }
         }
+    }
     }
 }
 

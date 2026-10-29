@@ -34,12 +34,6 @@
         <item quantity="other">Voir les %1$d réponses</item>
     </plurals>
     <!-- Mood status bar (Prisme: FR) -->
-    <string name="status_bar_add_label">Ajouter un statut</string>
-    <string name="status_bar_my_status_label">Mon statut %1$s</string>
-    <string name="status_bar_load_error">Erreur de chargement</string>
-    <string name="status_bar_retry">Réessayer de charger les statuts</string>
-    <string name="status_bar_react">Réagir avec %1$s</string>
-    <string name="status_feed_toggle_label">Fil des statuts</string>
     <string name="status_composer_republishing">Republication de @%1$s</string>
     <string name="status_composer_placeholder">Comment allez-vous ?</string>
     <string name="status_composer_mood_label">Humeur %1$s</string>

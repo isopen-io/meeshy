@@ -760,7 +760,7 @@ struct MeeshyComposerHost: View {
             }
         }
         if let repris { composer.adoptDraft(id: repris) }
-        _viewModel = StateObject(wrappedValue: composer)
+        _viewModel = StateObject(wrappedValue: ComposerLimitFeedback.attached(to: composer))
 
         // `openingFormat` est la table, SAUF si un geste a nommé un
         // format qu'elle offre (« Éditer et republier en post »). La borne

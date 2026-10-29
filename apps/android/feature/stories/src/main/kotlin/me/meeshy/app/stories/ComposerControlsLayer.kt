@@ -41,11 +41,6 @@ import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.ui.component.media.UploadProgressLine
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.StoryToolMode
-import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
-import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
-import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
-import me.meeshy.sdk.model.composer.scene.SceneFrame
-import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 
 /**
  * The open tool's panel under a resizable handle — parity with iOS, it slides over the
@@ -83,14 +78,6 @@ internal fun ComposerToolPanel(
     onToggleSoundMute: (String) -> Unit = {},
     onRemoveSound: (String) -> Unit = {},
     timeline: @Composable () -> Unit = {},
-    sceneBackground: ComposerSceneBackground? = null,
-    sceneFrame: SceneFrame = SceneFrame(),
-    objectSelected: Boolean = false,
-    sceneIsAnimated: Boolean = false,
-    onFitMode: (String) -> Unit = {},
-    onBackdrop: (StoryBackdrop) -> Unit = {},
-    onSceneEffect: (SceneEffectChoice) -> Unit = {},
-    onToggleAnimated: () -> Unit = {},
 ) {
     var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
     val activeTool = band.activeTool
@@ -150,30 +137,7 @@ internal fun ComposerToolPanel(
                         )
                         StoryToolMode.TEXTURE -> {
                             BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)
-                            if (sceneBackground != null) {
-                                ComposerFramePanel(
-                                    fitMode = ComposerBackdropFraming.fitMode(sceneFrame.toTransform()),
-                                    backdrop = ComposerBackdropFraming.backdrop(sceneFrame.toTransform()),
-                                    onPickFitMode = onFitMode,
-                                    onPickBackdrop = onBackdrop,
-                                )
-                                ComposerSceneEffectsPanel(
-                                    background = sceneBackground,
-                                    frame = sceneFrame,
-                                    objectSelected = objectSelected,
-                                    onChoose = onSceneEffect,
-                                    visual = {
-                                        FilterRow(
-                                            selected = selectedFilter,
-                                            intensity = filterIntensity,
-                                            onSelect = onSelectFilter,
-                                            onIntensityChange = onFilterIntensityChange,
-                                        )
-                                    },
-                                )
-                            }
                             DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
-                            AnimatedSceneToggle(isOn = sceneIsAnimated, onToggle = onToggleAnimated)
                         }
                         StoryToolMode.TIMELINE -> timeline()
                         else -> Unit
@@ -272,19 +236,4 @@ internal fun BandTile(
         icon()
         Text(label, modifier = Modifier.padding(start = 8.dp))
     }
-}
-
-/** Le cadre d'une slide, lu comme le transform du fond que les lois du panneau Cadre savent interpréter. */
-private fun SceneFrame.toTransform() = backgroundTransform()
-
-/** **Animé** (l'éclair du rail iOS) : la scène devient animée et ouvre sa frise ; l'éteindre la rend statique. */
-@Composable
-internal fun AnimatedSceneToggle(isOn: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    androidx.compose.material3.FilterChip(
-        selected = isOn,
-        onClick = onToggle,
-        label = { Text(stringResource(R.string.stories_scene_animated)) },
-        leadingIcon = { Icon(me.meeshy.ui.icons.MeeshyIcons.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
-        modifier = modifier,
-    )
 }

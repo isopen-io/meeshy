@@ -1,5 +1,8 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.FeedMedia
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.game.GameMomentPresence
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
@@ -59,14 +62,20 @@ class StoryViewerViewModel @Inject constructor(
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
+    private val gameMoment: GameMomentPresence = GameMomentPresence(),
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
+
+    private val projector = StorySlideProjector(config.apiBaseUrl)
 
     private var playback: StoryPlayback = StoryPlayback(groups = emptyList())
 
     /** Pause de l'appui long — portée par [emit] tant que la story n'a pas repris. */
     private var isHoldPaused = false
+
+    /** Une célébration du jeu recouvre l'écran : la story se fige dessous (iOS `isGameMomentShown`). */
+    private var isGameMomentShown = false
 
     /** Son coupé pour toute la session de lecture — porté par [emit]. */
     private var isMuted = false
@@ -127,6 +136,16 @@ class StoryViewerViewModel @Inject constructor(
         observeTranslationUpdates()
         observeStoryDeletions()
         observeStoryUpdates()
+        observeGameMoment()
+    }
+
+    private fun observeGameMoment() {
+        viewModelScope.launch {
+            gameMoment.isPresented.collect {
+                isGameMomentShown = it
+                _state.update { state -> state.copy(isPaused = isHoldPaused || it) }
+            }
+        }
     }
 
     /**
@@ -149,7 +168,7 @@ class StoryViewerViewModel @Inject constructor(
                     group.slides.firstOrNull { it.id == storyId }
                 } ?: return@collectEachSafely
                 val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
-                val newSlide = event.story.toStoryItem().toSlideView(existingSlide.accentHex, prefs)
+                val newSlide = event.story.toStoryItem().let { item -> rawItems[item.id] = item; projector.project(item, existingSlide.accentHex, prefs) }
                 playback = playback.replacingSlide(newSlide)
                 if (event.engagementReset == true) reactionStates.remove(storyId)
                 emit()
@@ -577,7 +596,7 @@ class StoryViewerViewModel @Inject constructor(
             } else {
                 null
             },
-            isPaused = isHoldPaused,
+            isPaused = isHoldPaused || isGameMomentShown,
             isMuted = isMuted,
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
             groupCount = playback.groups.size,
@@ -687,197 +706,12 @@ class StoryViewerViewModel @Inject constructor(
         return StoryGroupSlides(
             userId = id,
             authorName = username,
-            slides = stories.map { it.toSlideView(avatarColor, prefs) },
+            slides = stories.map { projector.project(it.also { item -> rawItems[item.id] = item }, avatarColor, prefs) },
             avatarUrl = resolveServedImageUrl(avatarURL, config.apiBaseUrl),
             authorPresence = authorPresence,
         )
     }
 
-    private fun StoryItem.toSlideView(
-        accentHex: String,
-        prefs: LanguageResolver.ContentLanguagePreferences,
-    ): StorySlideView {
-        rawItems[id] = this
-        val resolved = StoryContentResolver.resolve(this, prefs)
-        val background = resolveBackgroundMedia()
-        val clipTransitions = storyEffects?.clipTransitions.orEmpty()
-        val foreground = storyEffects?.mediaObjects.orEmpty()
-            .filterNot { it.isBackground }
-            .mapNotNull { it.toForegroundMediaView(clipTransitions) }
-            .let(SceneObjectNumbers::capped)
-        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
-        val textObjects = SceneObjectNumbers.capped(storyEffects?.textObjects.orEmpty())
-            .map { StoryTextObjectProjection.project(it, preferredLanguages) }
-        // UNE lecture par piste, deux faits chacune (#5129).
-        val backgroundTrack = resolveAudioTrack(preferBackground = true)
-        val foregroundTrack = resolveAudioTrack(preferBackground = false)
-        return StorySlideView(
-            id = id,
-            text = resolved.content,
-            isTranslated = resolved.isTranslated,
-            imageUrl = background.imageUrl,
-            accentHex = accentHex,
-            reactionCount = reactionCount,
-            languageCode = resolved.languageCode,
-            backgroundVideoUrl = background.videoUrl,
-            backgroundVideoWindow = background.window,
-            backgroundLoop = background.loop,
-            backgroundTransform = background.transform,
-            backgroundThumbHash = StorySlidePlaceholder.resolve(this),
-            foregroundMedia = foreground,
-            textObjects = textObjects,
-            backgroundAudioUrl = backgroundTrack?.url,
-            backgroundAudioWindow = backgroundTrack?.window,
-            foregroundAudioUrl = foregroundTrack?.url,
-            foregroundAudioWindow = foregroundTrack?.window,
-            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
-            background = storyEffects?.background
-                ?.takeIf { it.isNotBlank() }
-                ?.let { StoryBackgroundValue.parse(it) },
-            repostAttribution = StoryRepostAttribution.resolve(this),
-            // Un dessin compte légitimement des centaines de traits : seule leur épaisseur est bornée.
-            strokes = storyEffects?.drawingStrokes.orEmpty()
-                .map { it.copy(width = SceneObjectNumbers.strokeWidth(it.width)) },
-            lookRecipe = SceneLookRecipe.forEffects(storyEffects),
-            stickers = StorySceneObjectsProjection.stickers(storyEffects) { mediaId ->
-                media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-            },
-            audioChips = StorySceneObjectsProjection.audioChips(storyEffects),
-            isViewed = isViewed,
-            createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },
-        )
-    }
-
-    private data class BackgroundMedia(
-        val imageUrl: String?,
-        val videoUrl: String?,
-        val loop: Boolean,
-        val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
-        /** Fenêtre de lecture d'un fond VIDÉO (#5129) ; une image n'en a pas. */
-        val window: StorySourceWindowMs? = null,
-    )
-
-    /**
-     * Resolves the slide's single background layer. `storyEffects.mediaObjects`
-     * (the modern, RAW-publish wire shape) is authoritative when present: the
-     * object flagged `isBackground` carries its own `mediaURL` + kind, so no
-     * cross-referencing against the flat `media[]` list is needed. Legacy
-     * stories without `storyEffects.mediaObjects` fall back to the flat list,
-     * preferring a VIDEO item over an IMAGE one — critically, a video's own
-     * `.url` is only ever assigned to [BackgroundMedia.videoUrl], never to
-     * [BackgroundMedia.imageUrl] (the historical bug: Coil can't decode a video
-     * file as an image, so the slide painted nothing and no video ever played).
-     */
-    private fun StoryItem.resolveBackgroundMedia(): BackgroundMedia {
-        val backgroundObject = storyEffects?.mediaObjects?.firstOrNull { it.isBackground }
-        val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
-            ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
-
-        val isVideo = backgroundObject?.mediaType == "video" ||
-            (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
-        val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
-            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-
-        if (isVideo) {
-            // The framing rides only on a modern `isBackground` object whose OWN
-            // mediaURL produced the resolved url; a legacy/flat fallback video never
-            // carries one, so it stays a plain aspect-fill (IDENTITY). The viewer
-            // applies the projection to the player surface via `graphicsLayer`, the
-            // exact mirror of the image branch (iOS's "zoom inside the background").
-            val videoTransform = backgroundObject
-                ?.takeIf { it.mediaURL != null && resolvedUrl != null }
-                ?.let { StoryBackgroundObjectTransform.from(it) }
-                ?: StoryBackgroundObjectTransform.IDENTITY
-            return BackgroundMedia(
-                imageUrl = null,
-                videoUrl = resolvedUrl,
-                loop = backgroundObject?.loop ?: true,
-                transform = videoTransform,
-                // La fenêtre ne vient QUE d'un objet moderne : un fond hérité
-                // (plat, sans objet) n'a jamais porté de bornes, et lui en
-                // fabriquer une serait inventer une coupe.
-                window = StorySourceWindow.clippingMs(
-                    backgroundObject?.sourceStart, backgroundObject?.sourceEnd,
-                ),
-            )
-        }
-        val imageUrl = resolvedUrl
-            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-        // The framing rides only on a modern `isBackground` object; a legacy/flat
-        // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
-        val transform = backgroundObject
-            ?.takeIf { imageUrl == resolvedUrl && resolvedUrl != null }
-            ?.let { StoryBackgroundObjectTransform.from(it) }
-            ?: StoryBackgroundObjectTransform.IDENTITY
-        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true, transform = transform)
-    }
-
-    private fun StoryMediaObject.toForegroundMediaView(
-        clipTransitions: List<StoryClipTransition>,
-    ): StoryForegroundMediaView? {
-        val url = mediaURL?.let { resolveMediaUrl(it, config.apiBaseUrl) } ?: return null
-        return StoryForegroundMediaView(
-            id = id,
-            url = url,
-            isVideo = mediaType == "video",
-            x = x,
-            y = y,
-            scale = scale,
-            aspectRatio = servedAspectRatio,
-            startTime = startTime ?: 0.0,
-            duration = duration ?: 0.0,
-            fadeIn = fadeIn ?: 0.0,
-            fadeOut = fadeOut ?: 0.0,
-            keyframes = keyframes.orEmpty(),
-            clipTransitions = clipTransitions,
-            sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
-        ).bounded()
-    }
-
-    /**
-     * Resolves the URL of the slide's background (voice/library/effects track)
-     * or foreground (non-background) audio, per [preferBackground].
-     * `storyEffects.audioPlayerObjects` only carry a `postMediaId`, so the
-     * playable URL is cross-referenced from the flat `media[]` list by id. When
-     * no `audioPlayerObjects` exist at all, the background slot falls back to
-     * the story's direct `audioUrl` (voice attachment) then its library
-     * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
-     */
-    /**
-     * L'URL d'une piste ET sa fenêtre de lecture, résolues d'UNE SEULE lecture
-     * (#5129).
-     *
-     * **Deux fonctions auraient dû s'accorder sur l'objet élu**, et rien ne
-     * l'aurait garanti : `firstOrNull` sur une liste dont l'ordre n'est pas
-     * contractuel peut rendre deux objets différents à deux appels si la liste
-     * change entre-temps. Un seul parcours, deux faits.
-     *
-     * La fenêtre ne vient QUE de l'objet moderne : les replis hérités
-     * (`audioUrl`, `backgroundAudio.fileUrl`) n'ont jamais porté de bornes.
-     */
-    private fun StoryItem.resolveAudioTrack(preferBackground: Boolean): AudioTrack? {
-        val match = storyEffects?.audioPlayerObjects.orEmpty()
-            .firstOrNull { (it.isBackground == true) == preferBackground }
-        // Un son EMPRUNTÉ à la bibliothèque n'a aucun média de post (`postMediaId` vide) : il voyage par son
-        // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent — mais cette adresse est
-        // écrite par l'AUTEUR : seule la forme canonique d'un son de la bibliothèque est jouée.
-        val fromObject = match?.postMediaId
-            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-            ?: MediaRequestCredential.libraryAudioUrl(match?.mediaURL, config.apiBaseUrl)
-        if (fromObject != null) {
-            return AudioTrack(
-                url = fromObject,
-                window = StorySourceWindow.clippingMs(match?.sourceStart, match?.sourceEnd),
-            )
-        }
-        if (!preferBackground) return null
-        val legacy = audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-        return legacy?.let { AudioTrack(url = it, window = null) }
-    }
-
-    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?)
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
         override val systemLanguage: String? = null

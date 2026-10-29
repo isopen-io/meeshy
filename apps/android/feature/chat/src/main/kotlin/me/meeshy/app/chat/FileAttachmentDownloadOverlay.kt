@@ -55,12 +55,15 @@ internal fun FileAttachmentDownloadOverlay(
 ) {
     val context = LocalContext.current
     val openFailedMessage = stringResource(R.string.chat_file_open_failed)
+    val savedMessage = stringResource(R.string.chat_piece_saved)
 
     LaunchedEffect(download?.state, download?.attachmentId) {
         val completed = (download?.state as? FileAttachmentDownloadState.Completed) ?: return@LaunchedEffect
-        if (download.openWhenDone) {
+        if (download.saveOnly) {
+            Toast.makeText(context, savedMessage, Toast.LENGTH_SHORT).show()
+        } else if (download.openWhenDone) {
             // « Ouvrir » reste dans Meeshy : fiche de contact, code, PDF ou document (parité des visionneuses iOS).
-            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri))
+            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri, attachmentId = download.attachmentId))
         } else {
             val intent = FileAttachmentIntentResolver.shareIntent(completed.localUri.toUri(), completed.mimeType, download.fileName)
             if (runCatching { context.startActivity(intent) }.isFailure) {
@@ -75,7 +78,7 @@ internal fun FileAttachmentDownloadOverlay(
     // one of its own layout slots.
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
-            visible = download != null && download.state !is FileAttachmentDownloadState.Completed,
+            visible = download != null && FileDownloadBanner.shows(download),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
@@ -155,8 +158,21 @@ private fun fileAttachmentDownloadLabel(download: FileAttachmentDownloadUiState)
         FileAttachmentDownloadFailure.Expired -> stringResource(R.string.chat_file_download_expired)
         FileAttachmentDownloadFailure.NotAvailable -> stringResource(R.string.chat_file_download_not_available)
         FileAttachmentDownloadFailure.Protected -> stringResource(R.string.chat_exit_blocked_title)
+        FileAttachmentDownloadFailure.SaveFailed -> stringResource(R.string.chat_file_save_failed)
         FileAttachmentDownloadFailure.NetworkError -> stringResource(R.string.chat_file_download_failed_network)
         FileAttachmentDownloadFailure.ServerError -> stringResource(R.string.chat_file_download_failed_server)
     }
     is FileAttachmentDownloadState.Completed -> ""
+}
+
+/**
+ * Le bandeau du bas ne double plus la rangée : l'avancement d'un fichier du fil vit sur sa rangée (#13492). Il garde
+ * les échecs (que la rangée ne retente pas toujours) et l'avancement d'un « Enregistrer », dont la tuile n'a pas de badge.
+ */
+internal object FileDownloadBanner {
+    fun shows(download: FileAttachmentDownloadUiState): Boolean = when (download.state) {
+        is FileAttachmentDownloadState.Completed -> false
+        is FileAttachmentDownloadState.InProgress -> download.saveOnly
+        is FileAttachmentDownloadState.Failed -> true
+    }
 }

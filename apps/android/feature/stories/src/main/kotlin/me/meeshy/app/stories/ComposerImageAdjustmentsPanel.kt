@@ -22,12 +22,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.AdjustmentFamily
 import me.meeshy.sdk.model.AdjustmentKind
 import me.meeshy.sdk.model.ImageAdjustments
 
 /**
  * Le panneau de curseurs du média sélectionné : il écrit les [ImageAdjustments] de l'objet, et le
  * même rendu (`SceneLookChain` / `SceneLookBaker`) sert l'aperçu, la couverture et l'export. Une
+ * sous-outil ([family] : Réglages ou Effets) ne montre que ses curseurs, et le « Réinitialiser » ne remet que lui au neutre. Une
  * vidéo ne montre que les réglages qu'elle peint ([AdjustmentKind.isServedForVideo]). L'accent est
  * un PARAMÈTRE (couleur de contexte), jamais une couleur écrite ici. Toucher le libellé d'un réglage
  * actif le remet au neutre.
@@ -36,19 +38,20 @@ import me.meeshy.sdk.model.ImageAdjustments
 internal fun ComposerImageAdjustmentsPanel(
     adjustments: ImageAdjustments,
     isVideo: Boolean,
+    family: AdjustmentFamily,
     accent: Color,
     onAdjust: (AdjustmentKind, Float) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val kinds = AdjustmentKind.entries.filter { !isVideo || it.isServedForVideo }
+    val kinds = AdjustmentKind.entries.filter { it.family == family && (!isVideo || it.isServedForVideo) }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onReset, enabled = !adjustments.isNeutral) {
+            TextButton(onClick = onReset, enabled = adjustments.activeCount(family) > 0, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
                 Text(stringResource(R.string.composer_object_editor_adjust_reset))
             }
         }

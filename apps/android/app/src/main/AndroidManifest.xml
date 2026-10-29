@@ -191,8 +191,9 @@
             </intent-filter>
         </activity>
 
-        <!-- "Share to Meeshy" target (feature-parity §O — text/URL lot 1, image/video lot 2,
-             mirrors the iOS MeeshyShareExtension's own phased scope). android:excludeFromRecents
+        <!-- "Share to Meeshy" target (feature-parity §O, #13585) : texte, lien, images, vidéos et FICHIERS quelconques,
+             seul ou en sélection mêlée (SEND / SEND_MULTIPLE en type générique), comme l'extension iOS MeeshyShareExtension.
+             L'admission d'une source reste jugée dans l'activité (InboundMediaPolicy.admitsSource), pas par ce filtre. android:excludeFromRecents
              keeps it out of the task switcher — it is a single-purpose relay, not a real screen. -->
         <activity
             android:name=".ShareTargetActivity"
@@ -208,22 +209,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 

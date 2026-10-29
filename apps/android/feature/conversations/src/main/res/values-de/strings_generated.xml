@@ -1,7 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="accessibility_conversation_with">Unterhaltung mit %s</string>
-    <string name="accessibility_last_message_preview">letzte Nachricht: %s</string>
+    <string name="accessibility_conversation_with">Unterhaltung mit %1$s</string>
+    <string name="accessibility_last_message_preview">letzte Nachricht: %1$s</string>
     <string name="accessibility_muted">stummgeschaltet</string>
     <string name="accessibility_pinned">angeheftet</string>
     <string name="accessibility_search_list_hint">Öffnet die Unterhaltungssuche und deine Communitys</string>
@@ -12,7 +12,7 @@
     <string name="common_share">Teilen</string>
     <string name="conversationCard_expired">Link abgelaufen</string>
     <string name="conversations_action_archive">Archivieren</string>
-    <string name="conversations_action_create_category">„%s\" erstellen</string>
+    <string name="conversations_action_create_category">„%1$s\" erstellen</string>
     <string name="conversations_action_delete_for_all">Für alle löschen</string>
     <string name="conversations_action_delete_for_me">Für mich löschen</string>
     <string name="conversations_action_favorite">Favorit</string>
@@ -62,14 +62,14 @@
     <string name="conversations_lock_error_master_incorrect">Master-PIN falsch</string>
     <string name="conversations_lock_error_pin_mismatch">Die PINs stimmen nicht überein</string>
     <string name="conversations_lock_subtitle_change_verify">Geben Sie Ihre aktuelle Master-PIN ein</string>
-    <string name="conversations_lock_subtitle_confirm_code">Bestätigen Sie den Code für %s</string>
+    <string name="conversations_lock_subtitle_confirm_code">Bestätigen Sie den Code für %1$s</string>
     <string name="conversations_lock_subtitle_confirm_master">Geben Sie Ihre Master-PIN erneut ein, um zu bestätigen</string>
     <string name="conversations_lock_subtitle_confirm_new">Bestätigen Sie Ihre neue Master-PIN</string>
     <string name="conversations_lock_subtitle_create_master">Wählen Sie eine 6-stellige Master-PIN, um Ihre Sperren zu sichern</string>
-    <string name="conversations_lock_subtitle_enter_code">Wählen Sie einen 4-stelligen Code für %s</string>
+    <string name="conversations_lock_subtitle_enter_code">Wählen Sie einen 4-stelligen Code für %1$s</string>
     <string name="conversations_lock_subtitle_new_master">Wählen Sie eine neue 6-stellige Master-PIN</string>
     <string name="conversations_lock_subtitle_remove_master">Geben Sie Ihre Master-PIN ein, um das Entfernen zu bestätigen</string>
-    <string name="conversations_lock_subtitle_unlock">Geben Sie den Code für %s ein, um sie zu entsperren</string>
+    <string name="conversations_lock_subtitle_unlock">Geben Sie den Code für %1$s ein, um sie zu entsperren</string>
     <string name="conversations_lock_title_confirm_code">Code bestätigen</string>
     <string name="conversations_lock_title_confirm_master">Master-PIN bestätigen</string>
     <string name="conversations_lock_title_confirm_new">Neuen PIN bestätigen</string>
@@ -89,7 +89,7 @@
     <string name="conversations_preview_hidden">Verborgene Nachricht</string>
     <string name="conversations_preview_loading">Wird geladen…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
-    <string name="conversations_preview_typing">%s schreibt</string>
+    <string name="conversations_preview_typing">%1$s schreibt</string>
     <string name="conversations_preview_view_once">Einmal-Nachricht</string>
     <string name="conversations_preview_you">Du</string>
     <string name="conversations_remove_master_pin">Master-PIN entfernen</string>
@@ -101,7 +101,7 @@
     <string name="conversations_search_hint">Unterhaltungen suchen</string>
     <string name="conversations_tags_dialog_title">Tags</string>
     <string name="conversations_tags_field_hint">Tag hinzufügen…</string>
-    <string name="conversations_tags_remove_content_description">Tag %s entfernen</string>
+    <string name="conversations_tags_remove_content_description">Tag %1$s entfernen</string>
     <string name="dashboard_action_contacts">Kontakte</string>
     <string name="dashboard_action_new_conversation">Neue Unterhaltung</string>
     <string name="dashboard_action_share_links">Freigabelinks</string>
@@ -124,7 +124,7 @@
     <string name="dialogs_master_pin_title">Master-PIN erforderlich</string>
     <string name="dialogs_removal_delete">Löschen</string>
     <string name="dialogs_removal_hide">Chat ausblenden</string>
-    <string name="dialogs_removal_message">„%s“ wird für dich ausgeblendet. Die anderen Teilnehmer behalten sie.</string>
+    <string name="dialogs_removal_message">„%1$s“ wird für dich ausgeblendet. Die anderen Teilnehmer behalten sie.</string>
     <string name="dialogs_rename_placeholder">Name</string>
     <string name="dialogs_rename_title">Unterhaltung umbenennen</string>
     <string name="dialogs_report_details_label">Details (optional)</string>
@@ -145,8 +145,8 @@
     <string name="dialogs_unblock_error">Dieser Benutzer konnte nicht entsperrt werden</string>
     <string name="global_search_back">Zurück</string>
     <plurals name="global_search_members">
-        <item quantity="one">%d Mitglied</item>
-        <item quantity="other">%d Mitglieder</item>
+        <item quantity="one">%1$d Mitglied</item>
+        <item quantity="other">%1$d Mitglieder</item>
     </plurals>
     <string name="global_search_no_results">Keine Ergebnisse</string>
     <string name="global_search_online">Online</string>
@@ -176,12 +176,12 @@
     <string name="links_affiliate_stat_signups">Registrierungen</string>
     <string name="links_affiliate_title">Empfehlung</string>
     <plurals name="links_affiliate_token_clicks">
-        <item quantity="one">%d Klick</item>
-        <item quantity="other">%d Klicks</item>
+        <item quantity="one">%1$d Klick</item>
+        <item quantity="other">%1$d Klicks</item>
     </plurals>
     <plurals name="links_affiliate_token_signups">
-        <item quantity="one">%d Anmeldung</item>
-        <item quantity="other">%d Anmeldungen</item>
+        <item quantity="one">%1$d Anmeldung</item>
+        <item quantity="other">%1$d Anmeldungen</item>
     </plurals>
     <string name="links_common_active">Aktiv</string>
     <string name="links_common_cancel">Abbrechen</string>
@@ -249,7 +249,7 @@
     <string name="links_tracking_detail_delete">Löschen</string>
     <string name="links_tracking_detail_destination_url">Ziel-URL</string>
     <string name="links_tracking_detail_devices">GERÄTE</string>
-    <string name="links_tracking_detail_last_click">Letzter Klick: %s</string>
+    <string name="links_tracking_detail_last_click">Letzter Klick: %1$s</string>
     <string name="links_tracking_detail_no_data">Keine Daten</string>
     <string name="links_tracking_detail_qr">QR-Code</string>
     <string name="links_tracking_detail_recent_clicks">LETZTE KLICKS</string>
@@ -262,12 +262,12 @@
     <string name="links_tracking_empty_subtitle">Erstelle einen Link, um Klicks und Kampagnen zu verfolgen</string>
     <string name="links_tracking_empty_title">Keine Tracking-Links</string>
     <plurals name="links_tracking_row_clicks">
-        <item quantity="one">%d Klick</item>
-        <item quantity="other">%d Klicks</item>
+        <item quantity="one">%1$d Klick</item>
+        <item quantity="other">%1$d Klicks</item>
     </plurals>
     <plurals name="links_tracking_row_uniques">
-        <item quantity="one">· %d eindeutig</item>
-        <item quantity="other">· %d eindeutige</item>
+        <item quantity="one">· %1$d eindeutig</item>
+        <item quantity="other">· %1$d eindeutige</item>
     </plurals>
     <string name="links_tracking_section_my_links">MEINE LINKS</string>
     <string name="links_tracking_stats_active">Aktiv</string>
@@ -286,8 +286,8 @@
     <string name="my_share_links_expiry_3m">3 Monate</string>
     <string name="my_share_links_expiry_7d">7 Tage</string>
     <plurals name="my_share_links_joined_count">
-        <item quantity="one">%d beigetreten</item>
-        <item quantity="other">%d beigetreten</item>
+        <item quantity="one">%1$d beigetreten</item>
+        <item quantity="other">%1$d beigetreten</item>
     </plurals>
     <string name="my_share_links_retry">Erneut versuchen</string>
     <string name="my_share_links_section">Meine Links</string>
@@ -312,14 +312,14 @@
     <string name="new_conversation_selected">Ausgewählt</string>
     <string name="new_conversation_title">Neue Unterhaltung</string>
     <string name="participantProfile_linkExpires">Läuft ab am</string>
-    <string name="row_a11y_conversation_with">Unterhaltung mit %s</string>
-    <string name="row_a11y_last_message">letzte Nachricht: %s</string>
+    <string name="row_a11y_conversation_with">Unterhaltung mit %1$s</string>
+    <string name="row_a11y_last_message">letzte Nachricht: %1$s</string>
     <string name="row_a11y_muted">stummgeschaltet</string>
     <string name="row_a11y_pending_sync">Synchronisierung ausstehend</string>
     <string name="row_a11y_pinned">angeheftet</string>
     <plurals name="row_a11y_unread_count">
         <item quantity="one">1 ungelesene Nachricht</item>
-        <item quantity="other">%d ungelesene Nachrichten</item>
+        <item quantity="other">%1$d ungelesene Nachrichten</item>
     </plurals>
     <string name="row_join_call">Beitreten</string>
     <string name="row_join_call_a11y">Anruf läuft, zum Beitreten tippen</string>
@@ -331,12 +331,12 @@
     <string name="shareLink_arrivals_loading">Beitritte werden geladen</string>
     <string name="shareLink_arrivals_moreFailed">Der Rest konnte nicht geladen werden.</string>
     <plurals name="shareLink_arrivals_seeAll">
-        <item quantity="one">%d Beitritt ansehen</item>
-        <item quantity="other">Alle %d Beitritte ansehen</item>
+        <item quantity="one">%1$d Beitritt ansehen</item>
+        <item quantity="other">Alle %1$d Beitritte ansehen</item>
     </plurals>
     <plurals name="shareLink_arrivals_total">
-        <item quantity="one">%d Beitritt insgesamt</item>
-        <item quantity="other">%d Beitritte insgesamt</item>
+        <item quantity="one">%1$d Beitritt insgesamt</item>
+        <item quantity="other">%1$d Beitritte insgesamt</item>
     </plurals>
     <string name="shareLink_detail_allLanguages">Alle Sprachen</string>
     <string name="shareLink_detail_allowedLanguages">Zugelassene Sprachen</string>
@@ -344,9 +344,9 @@
     <string name="shareLink_detail_arrivals">Beitritte</string>
     <string name="shareLink_detail_askedOnArrival">Beim Beitritt abgefragt</string>
     <string name="shareLink_detail_concurrent">Gleichzeitig</string>
-    <string name="shareLink_detail_concurrentMax">max. %d</string>
+    <string name="shareLink_detail_concurrentMax">max. %1$d</string>
     <string name="shareLink_detail_configuration">Einstellungen</string>
-    <string name="shareLink_detail_createdOn">Link erstellt am %s</string>
+    <string name="shareLink_detail_createdOn">Link erstellt am %1$s</string>
     <string name="shareLink_detail_edit">Bearbeiten</string>
     <string name="shareLink_detail_editTitle">Link bearbeiten</string>
     <string name="shareLink_detail_entryConditions">Beitrittsbedingungen</string>
@@ -382,7 +382,7 @@
     <string name="shareLink_detail_statsUnavailable">Die Statistiken dieses Links sind noch nicht verfügbar.</string>
     <string name="shareLink_detail_unlimited">Unbegrenzt</string>
     <string name="shareLink_detail_uses">Nutzungen</string>
-    <string name="shareLink_detail_usesUnlimited">%d / unbegrenzt</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / unbegrenzt</string>
     <string name="shareLink_detail_visits">Besuche</string>
     <string name="shareLink_detail_withoutAccount">Ohne Konto</string>
     <string name="share_link_access_account">Konto erforderlich</string>
@@ -428,8 +428,8 @@
     <string name="share_link_field_slug_placeholder">z. B. meine-gruppe-2025</string>
     <string name="share_link_limit_uses">Nutzungen begrenzen</string>
     <plurals name="share_link_max_uses">
-        <item quantity="one">maximal %d Nutzung</item>
-        <item quantity="other">maximal %d Nutzungen</item>
+        <item quantity="one">maximal %1$d Nutzung</item>
+        <item quantity="other">maximal %1$d Nutzungen</item>
     </plurals>
     <string name="share_link_permission_files">Dateien senden</string>
     <string name="share_link_permission_files_subtitle">Gäste können Dokumente senden</string>

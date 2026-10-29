@@ -57,7 +57,7 @@ internal fun DraftResumeSection(
     entries.forEach { entry ->
         DraftResumeCard(
             entry = entry,
-            onResume = if (entry.kind == DraftResumeKind.POST) onResumePost else onResumeStory,
+            onResume = if (entry.kind == DraftResumeKind.STORY) onResumeStory else onResumePost,
             onDiscard = { pendingDiscard = entry.kind },
         )
     }
@@ -136,5 +136,6 @@ private fun DraftResumeCard(entry: DraftResumeEntry, onResume: () -> Unit, onDis
 
 private fun DraftResumeKind.labelRes(): Int = when (this) {
     DraftResumeKind.POST -> R.string.feed_unsent_kind_post
+    DraftResumeKind.REEL -> R.string.feed_unsent_kind_reel
     DraftResumeKind.STORY -> R.string.feed_unsent_kind_story
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
+import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.ui.component.MeeshyNotificationToast
 
 /**
@@ -40,7 +41,9 @@ fun NotificationBannerHost(
     activePostId: String? = null,
     onOpenConversation: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenGame: (GameTarget) -> Unit = {},
     viewModel: NotificationBannerViewModel = hiltViewModel(),
+    revealTap: EngagementRevealTapViewModel = hiltViewModel(),
 ) {
     val banner by viewModel.banner.collectAsStateWithLifecycle()
 
@@ -85,7 +88,11 @@ fun NotificationBannerHost(
                     avatarUrl = shown.avatarUrl,
                     onTap = {
                         viewModel.dismiss()
-                        shown.conversationId?.let(onOpenConversation)
+                        shown.game?.let { game ->
+                            // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
+                            revealTap.onOpened(game)
+                            (NotificationDestinationResolver.resolve(game) as? NotificationDestination.Game)?.let { onOpenGame(it.target) }
+                        } ?: shown.conversationId?.let(onOpenConversation)
                             ?: shown.postId?.let(onOpenPost)
                     },
                 )

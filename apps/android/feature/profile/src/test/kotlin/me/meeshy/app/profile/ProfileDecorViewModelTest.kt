@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
@@ -26,7 +27,9 @@ import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.InstalledPackList
 import me.meeshy.sdk.model.appearance.InstalledPackSummary
+import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.net.api.PackApi
+import me.meeshy.sdk.packs.PackShopRepository
 import me.meeshy.sdk.profile.ProfileDecorError
 import me.meeshy.sdk.profile.ProfileDecorOutcome
 import me.meeshy.sdk.profile.ProfileDecorRepository
@@ -62,6 +65,8 @@ class ProfileDecorViewModelTest {
         val viewModel: ProfileDecorViewModel,
         val repository: ProfileDecorRepository,
         val session: SessionRepository,
+        val installations: kotlinx.coroutines.flow.MutableSharedFlow<PackInstallationUpdatedEvent>,
+        val packs: PackApi,
     )
 
     private fun scenario(
@@ -83,7 +88,10 @@ class ProfileDecorViewModelTest {
             val list = installed(firstArg()) ?: throw java.io.IOException("offline")
             me.meeshy.sdk.model.ApiResponse(success = true, data = list)
         }
-        return Scenario(ProfileDecorViewModel(repository, session, loader, packs), repository, session)
+        val installations = kotlinx.coroutines.flow.MutableSharedFlow<PackInstallationUpdatedEvent>(extraBufferCapacity = 8)
+        val shop = mockk<PackShopRepository>()
+        every { shop.installations } returns installations
+        return Scenario(ProfileDecorViewModel(repository, session, loader, packs, shop), repository, session, installations, packs)
     }
 
     @Test
@@ -168,5 +176,88 @@ class ProfileDecorViewModelTest {
         advanceUntilIdle()
 
         assertThat(s.viewModel.state.value.rings.map { it.pack }).doesNotContain(locked.slug)
+    }
+
+    private val lockedRing get() = catalog.ringPacks.first { !it.installedByDefault }
+
+    private fun ringEvent(slug: String, installed: Boolean = true, owned: Boolean? = true, domain: String = "avatar-ring") =
+        PackInstallationUpdatedEvent(domain, slug, installed, owned, at = "t")
+
+    @Test
+    fun `a pack bought elsewhere appears in the sheet from the event alone, without reading the server again`() = runTest(dispatcher) {
+        val s = scenario(installed = { InstalledPackList(emptyList()) })
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).doesNotContain(lockedRing.slug)
+
+        s.installations.emit(ringEvent(lockedRing.slug))
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
+        coVerify(exactly = 1) { s.packs.installed("avatar-ring") }
+    }
+
+    @Test
+    fun `a pack removed elsewhere leaves the sheet`() = runTest(dispatcher) {
+        val s = scenario(installed = { InstalledPackList(listOf(InstalledPackSummary(lockedRing.slug, installed = true, owned = true))) })
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
+
+        s.installations.emit(ringEvent(lockedRing.slug, installed = false))
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).doesNotContain(lockedRing.slug)
+    }
+
+    @Test
+    fun `when the installed list was never read the event costs one single reread of its domain`() = runTest(dispatcher) {
+        var online = false
+        val s = scenario(installed = { if (online) InstalledPackList(listOf(InstalledPackSummary(lockedRing.slug, installed = true, owned = true))) else null })
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+        online = true
+
+        s.installations.emit(ringEvent(lockedRing.slug))
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
+        coVerify(exactly = 2) { s.packs.installed("avatar-ring") }
+    }
+
+    @Test
+    fun `a pack bought while the lists are still being read survives the read that left before it`() = runTest(dispatcher) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val s = scenario(installed = { InstalledPackList(emptyList()) })
+        coEvery { s.packs.installed("avatar-ring") } coAnswers {
+            gate.await()
+            me.meeshy.sdk.model.ApiResponse(success = true, data = InstalledPackList(emptyList()))
+        }
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        runCurrent()
+
+        s.installations.emit(ringEvent(lockedRing.slug))
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
+        coVerify(exactly = 1) { s.packs.installed("avatar-ring") }
+    }
+
+    @Test
+    fun `an event of a domain the decor does not use reads and changes nothing`() = runTest(dispatcher) {
+        val s = scenario(installed = { InstalledPackList(emptyList()) })
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+        val before = s.viewModel.state.value
+
+        s.installations.emit(ringEvent("heritages", domain = "wallpaper"))
+        s.installations.emit(ringEvent("chats", domain = "sticker"))
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value).isEqualTo(before)
+        coVerify(exactly = 1) { s.packs.installed("avatar-ring") }
+        coVerify(exactly = 0) { s.packs.installed("wallpaper") }
     }
 }

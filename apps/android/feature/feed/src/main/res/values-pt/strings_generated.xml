@@ -16,6 +16,7 @@
     <string name="feed_composer_background">Cor de fundo</string>
     <string name="feed_composer_background_swatch">Cor %1$s de %2$s</string>
     <string name="feed_composer_cancel">Cancelar</string>
+    <string name="feed_composer_caption_placeholder">Adicionar uma legenda</string>
     <string name="feed_composer_language_search">Buscar um idioma</string>
     <string name="feed_composer_language_title">Idioma da publicação</string>
     <string name="feed_composer_open_label">Compartilhar algo</string>
@@ -25,6 +26,9 @@
     <string name="feed_composer_placeholder">No que você está pensando?</string>
     <string name="feed_composer_publish">Publicar</string>
     <string name="feed_composer_record_voice">Gravar um áudio</string>
+    <string name="feed_composer_slide_rail">Cenas da publicação</string>
+    <string name="feed_composer_slide_rail_delete">Excluir a cena %1$d</string>
+    <string name="feed_composer_slide_rail_position">Cena %1$d de %2$d</string>
     <string name="feed_composer_socle_audience">Público</string>
     <string name="feed_composer_take_photo">Tirar uma foto</string>
     <string name="feed_composer_title">Nova publicação</string>
@@ -45,9 +49,9 @@
     <string name="feed_location_shared">Localização compartilhada</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
-        <item quantity="one">%d nova publicação</item>
-        <item quantity="many">%d novas publicações</item>
-        <item quantity="other">%d novas publicações</item>
+        <item quantity="one">%1$d nova publicação</item>
+        <item quantity="many">%1$d novas publicações</item>
+        <item quantity="other">%1$d novas publicações</item>
     </plurals>
     <string name="feed_notice_bookmark_failed">Erro ao salvar o favorito</string>
     <string name="feed_notice_delete_failed">Erro ao excluir a publicação</string>
@@ -59,6 +63,7 @@
     <string name="feed_notice_reported">Publicação denunciada</string>
     <string name="feed_notice_repost_failed">Erro ao republicar</string>
     <string name="feed_notice_translation_failed">Erro de tradução</string>
+    <string name="feed_post_reposted_from">repostou de @%1$s</string>
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
@@ -74,12 +79,13 @@
     <string name="feed_report_reason_spam">Spam</string>
     <string name="feed_report_reason_violence">Violência</string>
     <plurals name="feed_repost_likes_count">
-        <item quantity="one">%d curtida</item>
-        <item quantity="many">%d curtidas</item>
-        <item quantity="other">%d curtidas</item>
+        <item quantity="one">%1$d curtida</item>
+        <item quantity="many">%1$d curtidas</item>
+        <item quantity="other">%1$d curtidas</item>
     </plurals>
     <string name="feed_repost_reposted">Republicado</string>
     <string name="feed_repost_story">Story</string>
+    <string name="feed_repost_unavailable">Este conteúdo não está mais disponível</string>
     <string name="feed_reposts">Recompartilhamentos</string>
     <string name="feed_retry">Tentar novamente</string>
     <string name="feed_secondary_translation_a11y">Tradução em %1$s: %2$s</string>
@@ -94,11 +100,13 @@
     <string name="feed_translations_badge_hint">Mostra os idiomas disponíveis</string>
     <string name="feed_unknown_author">Desconhecido</string>
     <string name="feed_unlike">Descurtir</string>
-    <string name="hashtag_results_empty">Nenhuma postagem com #%s</string>
+    <string name="hashtag_results_empty">Nenhuma postagem com #%1$s</string>
+    <string name="mood_bubble_react">Reação %1$s</string>
+    <string name="mood_bubble_reply">Responder</string>
     <string name="mood_spotlight_close">Fechar</string>
     <string name="mood_spotlight_loading">Carregando o humor</string>
     <string name="mood_spotlight_reply_failed">A resposta não foi enviada</string>
-    <string name="mood_spotlight_reply_placeholder">Responder a %s…</string>
+    <string name="mood_spotlight_reply_placeholder">Responder a %1$s…</string>
     <string name="mood_spotlight_reply_send">Enviar resposta</string>
     <string name="mood_spotlight_reply_sent">Resposta enviada</string>
     <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
@@ -112,9 +120,9 @@
     <string name="post_comments_edit_media">Editar</string>
     <string name="post_comments_load_error">Erro ao carregar os comentários</string>
     <plurals name="post_comments_load_more_replies">
-        <item quantity="one">Ver mais %d resposta</item>
-        <item quantity="many">Ver mais %d respostas</item>
-        <item quantity="other">Ver mais %d respostas</item>
+        <item quantity="one">Ver mais %1$d resposta</item>
+        <item quantity="many">Ver mais %1$d respostas</item>
+        <item quantity="other">Ver mais %1$d respostas</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Mostra as respostas restantes deste tópico</string>
     <string name="post_comments_more_options">Mais opções</string>
@@ -122,25 +130,21 @@
     <string name="post_comments_reply_action">Responder</string>
     <string name="post_comments_reply_badge">Responder</string>
     <string name="post_comments_reply_error">Erro ao enviar a resposta</string>
-    <string name="post_comments_replying_to">Em resposta a %s</string>
+    <string name="post_comments_replying_to">Em resposta a %1$s</string>
     <string name="post_comments_send">Enviar</string>
     <string name="post_comments_send_error">Erro ao enviar o comentário</string>
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_title">Comentários</string>
     <plurals name="post_comments_view_replies">
-        <item quantity="one">Ver %d resposta</item>
-        <item quantity="many">Ver %d respostas</item>
-        <item quantity="other">Ver %d respostas</item>
+        <item quantity="one">Ver %1$d resposta</item>
+        <item quantity="many">Ver %1$d respostas</item>
+        <item quantity="other">Ver %1$d respostas</item>
     </plurals>
     <string name="post_detail_back">Voltar</string>
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
-    <string name="status_bar_add">Status</string>
-    <string name="status_bar_expired">Expirado</string>
-    <string name="status_bar_me">Eu</string>
-    <string name="status_bar_republish">Republicar</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">via @%s</string>
+    <string name="status_bubble_republish">Republicar</string>
+    <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Adicionar uma palavra</string>
     <string name="status_composer_bare_publish">Publicar mesmo assim</string>
     <string name="status_composer_bare_title">Publicar seu humor sem uma palavrinha?</string>
@@ -154,8 +158,7 @@
     <string name="status_composer_visibility_friends">Contatos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
-    <string name="status_feed_discover">Descobrir</string>
-    <string name="status_feed_friends">Amigos</string>
+    <string name="status_react_error">Erro ao reagir ao status</string>
     <string name="user_posts_back">Voltar</string>
     <string name="user_posts_empty">Nenhuma publicação</string>
     <string name="user_posts_title">Publicações</string>

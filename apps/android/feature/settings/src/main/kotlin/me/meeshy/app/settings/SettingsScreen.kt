@@ -116,6 +116,7 @@ fun SettingsScreen(
     onOpenNotificationSettings: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
     onOpenMediaCache: () -> Unit = {},
+    onOpenPacks: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
     onOpenBlockedUsers: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
@@ -182,6 +183,7 @@ fun SettingsScreen(
                 DataSection(
                     onOpenMediaCache = onOpenMediaCache,
                     onOpenAutoDownload = onOpenAutoDownload,
+                    onOpenPacks = onOpenPacks,
                     onOpenDataExport = onOpenDataExport,
                 )
                 ToolsSection(
@@ -393,6 +395,7 @@ private fun NotificationsSection(
 private fun DataSection(
     onOpenMediaCache: () -> Unit,
     onOpenAutoDownload: () -> Unit,
+    onOpenPacks: () -> Unit,
     onOpenDataExport: () -> Unit,
 ) {
     val tint = MeeshyPalette.Warning
@@ -400,6 +403,8 @@ private fun DataSection(
         SettingsChevronRow(Icons.Filled.Storage, stringResource(R.string.settings_storage), tint, onOpenMediaCache)
         SettingsSeparator(tint)
         SettingsChevronRow(Icons.Filled.Download, stringResource(R.string.settings_media_download), tint, onOpenAutoDownload)
+        SettingsSeparator(tint)
+        SettingsChevronRow(MeeshyIcons.Shopping, stringResource(R.string.settings_packs_title), tint, onOpenPacks)
         SettingsSeparator(tint)
         SettingsChevronRow(Icons.Filled.IosShare, stringResource(R.string.settings_export_data), tint, onOpenDataExport)
     }

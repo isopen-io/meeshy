@@ -288,6 +288,41 @@ public struct AttachmentUpdatedEvent: Decodable, Sendable {
     public let attachment: APIMessageAttachment
 }
 
+// MARK: - Attachment Deleted Event Data (`attachment:deleted`)
+
+/// Payload de `attachment:deleted` : une pièce a été retirée d'un message, diffusée à la room de la conversation.
+///
+/// Les trois identifiants sont REQUIS et non vides : une charge incomplète ne se décode pas, donc n'atteint aucun
+/// consommateur (échec fermé). Le client ne retire la pièce que si le message appartient bien à `conversationId`.
+public struct AttachmentDeletedEvent: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let messageId: String
+    public let attachmentId: String
+
+    public init(conversationId: String, messageId: String, attachmentId: String) {
+        self.conversationId = conversationId
+        self.messageId = messageId
+        self.attachmentId = attachmentId
+    }
+
+    private enum CodingKeys: String, CodingKey { case conversationId, messageId, attachmentId }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        conversationId = try Self.identifier(.conversationId, in: c)
+        messageId = try Self.identifier(.messageId, in: c)
+        attachmentId = try Self.identifier(.attachmentId, in: c)
+    }
+
+    private static func identifier(_ key: CodingKeys, in container: KeyedDecodingContainer<CodingKeys>) throws -> String {
+        let value = try container.decode(String.self, forKey: key)
+        guard !value.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: container, debugDescription: "identifiant vide")
+        }
+        return value
+    }
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {

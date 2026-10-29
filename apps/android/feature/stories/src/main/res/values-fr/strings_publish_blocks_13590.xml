@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_block_caption">La légende est trop longue — raccourcissez-la pour publier</string>
+    <string name="composer_publish_block_text">Un texte tient 1000 caractères au maximum — raccourcissez-le pour publier</string>
+    <string name="composer_publish_block_texts">Plus de 50 textes sur une scène — supprimez-en pour publier</string>
+    <string name="composer_publish_block_stickers">Plus de 50 stickers sur une scène — supprimez-en pour publier</string>
+    <string name="composer_publish_block_media">Plus de 50 médias sur une scène — retirez-en pour publier</string>
+    <string name="composer_publish_block_sounds">Plus de 50 sons sur une scène — retirez-en pour publier</string>
+    <string name="composer_publish_block_duration">La story dure plus de 2 heures — raccourcissez une slide pour publier</string>
+</resources>

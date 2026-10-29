@@ -100,6 +100,14 @@ class OutgoingMediaSanitizerTest {
     }
 
     @Test
+    fun `un JPEG renommé en PDF est reconnu à ses octets et nettoyé de son lieu (#13591)`() = runTest {
+        val sent = clean(photoWithMetadata(), name = "facture.pdf", mime = "application/pdf").bytes
+
+        assertThat(ExifInterface(ByteArrayInputStream(sent)).getLatLong(FloatArray(2))).isFalse()
+        listOf("ns.adobe.com", "GPSLatitude", "Paris").forEach { assertThat(it.occursIn(sent)).isFalse() }
+    }
+
+    @Test
     fun `la prise garde son appareil sa date et son orientation`() = runTest {
         val exif = ExifInterface(ByteArrayInputStream(clean(photoWithMetadata()).bytes))
 

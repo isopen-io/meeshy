@@ -9,12 +9,17 @@ public struct RulerView: View, Equatable {
             && lhs.geometry == rhs.geometry
             && lhs.isDark == rhs.isDark
             && lhs.height == rhs.height
+            && lhs.visibleWindow == rhs.visibleWindow
     }
 
     public let totalDuration: Float
     public let geometry: TimelineGeometry
     public let isDark: Bool
     public let height: CGFloat
+    /// Abscisses de la piste (en points) dont les graduations sont montées ;
+    /// `nil` monte toutes celles de la durée. Hors fenêtre, rien n'existe : le
+    /// nombre de vues reste borné quelle que soit la durée de la scène.
+    public let visibleWindow: ClosedRange<CGFloat>?
     public let onTapTime: (Float) -> Void
     /// Called once when a drag on the ruler starts. Hosts wire this to
     /// `TimelineViewModel.beginScrub()` so continuous `onTapTime` callbacks
@@ -30,6 +35,7 @@ public struct RulerView: View, Equatable {
         geometry: TimelineGeometry,
         isDark: Bool,
         height: CGFloat = 24,
+        visibleWindow: ClosedRange<CGFloat>? = nil,
         onTapTime: @escaping (Float) -> Void,
         onScrubBegan: @escaping () -> Void = {},
         onScrubEnded: @escaping () -> Void = {}
@@ -38,6 +44,7 @@ public struct RulerView: View, Equatable {
         self.geometry = geometry
         self.isDark = isDark
         self.height = height
+        self.visibleWindow = visibleWindow
         self.onTapTime = onTapTime
         self.onScrubBegan = onScrubBegan
         self.onScrubEnded = onScrubEnded
@@ -79,6 +86,38 @@ public struct RulerView: View, Equatable {
         return tickLadder.first { $0 >= required } ?? (tickLadder.last ?? 1)
     }
 
+    /// Plus petite largeur de tranche : tant que la vue n'est pas mesurée, la
+    /// fenêtre reste bornée au lieu de retomber sur toute la piste.
+    private nonisolated static let minimumWindowChunk: CGFloat = 400
+
+    /// Fenêtre à monter autour du défilement : la tranche visible, plus une
+    /// tranche de chaque côté. Quantifiée par tranche, elle ne change qu'au
+    /// franchissement d'une frontière — la règle n'est pas recalculée à chaque
+    /// image de défilement.
+    public nonisolated static func visibleWindow(scrollX: CGFloat, viewportWidth: CGFloat) -> ClosedRange<CGFloat> {
+        let chunk = max(viewportWidth, minimumWindowChunk)
+        let index = (scrollX / chunk).rounded(.down)
+        return ((index - 1) * chunk)...((index + 2) * chunk)
+    }
+
+    /// Indices des graduations à monter : ceux dont l'abscisse tombe dans la
+    /// fenêtre, bornés à la durée. Pure — la mesure « combien de traits » se
+    /// fait ici, sans rendre la vue.
+    public nonisolated static func tickIndices(
+        totalDuration: Float,
+        interval: Double,
+        pixelsPerSecond: CGFloat,
+        window: ClosedRange<CGFloat>?
+    ) -> Range<Int> {
+        let count = max(1, Int((Double(totalDuration) / interval).rounded(.up)) + 1)
+        guard let window else { return 0..<count }
+        let spacing = interval * Double(pixelsPerSecond)
+        guard spacing > 0 else { return 0..<count }
+        let first = max(0, Int((Double(window.lowerBound) / spacing).rounded(.down)))
+        let last = min(count - 1, Int((Double(window.upperBound) / spacing).rounded(.up)))
+        return first <= last ? first..<(last + 1) : 0..<0
+    }
+
     public static func formatTick(_ seconds: Double) -> String {
         // The 0 mark always reads as "0s" to stay coherent with the
         // surrounding "2s / 4s / 6s" labels (mixing "0ms" with whole-second
@@ -105,12 +144,13 @@ public struct RulerView: View, Equatable {
 
     public var body: some View {
         let interval = Self.tickInterval(for: geometry.zoomScale)
-        let count = max(1, Int((Double(totalDuration) / interval).rounded(.up)) + 1)
+        let indices = Self.tickIndices(totalDuration: totalDuration, interval: interval,
+                                       pixelsPerSecond: geometry.pixelsPerSecond, window: visibleWindow)
 
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(isDark ? Color.black.opacity(0.4) : Color.white.opacity(0.7))
-            ForEach(0..<count, id: \.self) { i in
+            ForEach(indices, id: \.self) { i in
                 let t = Double(i) * interval
                 let x = CGFloat(t) * geometry.pixelsPerSecond
                 tick(lineX: x, labelX: max(x, Self.labelHalfWidth), label: Self.formatTick(t))

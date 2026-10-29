@@ -66,6 +66,7 @@ internal fun MediaAttachmentsRow(
     onAddLocation: () -> Unit,
     onRemove: (String) -> Unit,
     showAddTiles: Boolean = true,
+    showAttached: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -107,7 +108,7 @@ internal fun MediaAttachmentsRow(
         }
         }
 
-        media.forEach { item ->
+        if (showAttached) media.forEach { item ->
             Box(modifier = Modifier.size(56.dp)) {
                 if (item.hasThumbnailPreview) {
                     AsyncImage(

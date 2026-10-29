@@ -68,8 +68,14 @@ class RouteManifestRatchetTest {
          * `ConversationEncryptionApi.kt`.
          * 237 : moins `GET /conversations/:id/engagement` (#13297 : la Flamme de l'en-tête du fil), que porte
          * `ConversationEngagementApi.kt`.
+         * 236 : moins `DELETE /attachments/:attachmentId` (#13596 : supprimer UNE pièce d'un message), que porte
+         * `MediaApi.delete`.
+         * 235 : moins `GET /users/:userId/game` (#13498 : le niveau et le rang d'un autre membre sur sa bannière, selon
+         * SES réglages), que porte `GameApi.userGame`.
+         * 230 : moins `GET /packs/shop` et les quatre `POST /packs/<domaine>/:slug/purchase` (#13625 : la Boutique des packs,
+         * achat confirmé par le serveur), que porte `PackApi`.
          */
-        const val TO_PORT_CEILING = 237
+        const val TO_PORT_CEILING = 230
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

@@ -768,6 +768,8 @@ const de = {
   'story.studio.refusal.door.sound': 'Wähle eine Audiodatei.',
   'story.studio.refusal.media-max': 'Diese Veröffentlichung trägt bereits zehn Medien – die Obergrenze der Plattform.',
   'story.studio.refusal.import-max': '{count} Medien nicht importiert: Eine Veröffentlichung trägt höchstens zehn.',
+  'story.studio.refusal.text-max': 'Eine Szene trägt höchstens {count} Texte.',
+  'story.studio.refusal.text-length': 'Ein Text endet bei {count} Zeichen.',
   'story.studio.failure.network': 'Netzwerk nicht verfügbar.',
   'story.studio.failure.timeout': 'Der Server hat nicht geantwortet.',
   'story.studio.failure.session': 'Sitzung abgelaufen — bitte erneut anmelden.',

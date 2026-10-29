@@ -14,7 +14,7 @@
     <string name="composer_audience_mentions">MENZIONI</string>
     <string name="composer_audience_scope">Il pubblico appartiene alla pubblicazione, mai a una slide: cambiare profilo lo conserva.</string>
     <string name="composer_audience_sub_community">I membri delle tue community</string>
-    <string name="composer_audience_sub_count">%d selezionate</string>
+    <string name="composer_audience_sub_count">%1$d selezionate</string>
     <string name="composer_audience_sub_friends">I tuoi contatti accettati</string>
     <string name="composer_audience_sub_pick">Scegli delle persone</string>
     <string name="composer_audience_sub_private">Solo tu — non viene pubblicato nulla</string>
@@ -24,18 +24,22 @@
     <string name="composer_capture_sound_mute">Disattiva l’audio</string>
     <string name="composer_capture_sound_unmute">Riattiva l’audio</string>
     <string name="composer_capture_tool_sound">Audio</string>
-    <string name="composer_chip_align">ALLINEA · %s</string>
+    <string name="composer_chip_align">ALLINEA · %1$s</string>
     <string name="composer_chip_align_center">CENTRO</string>
     <string name="composer_chip_align_left">SINISTRA</string>
     <string name="composer_chip_align_right">DESTRA</string>
-    <string name="composer_chip_rotation">ROTAZIONE %s°</string>
-    <string name="composer_chip_size">DIMENSIONE %s</string>
-    <string name="composer_chip_style">STILE · %s</string>
+    <string name="composer_chip_rotation">ROTAZIONE %1$s°</string>
+    <string name="composer_chip_size">DIMENSIONE %1$s</string>
+    <string name="composer_chip_style">STILE · %1$s</string>
     <string name="composer_chip_style_bold">GRASSETTO</string>
     <string name="composer_chip_style_classic">CLASSICO</string>
     <string name="composer_chip_style_handwriting">CORSIVO</string>
     <string name="composer_chip_style_neon">NEON</string>
     <string name="composer_chip_style_typewriter">MACCHINA</string>
+    <string name="composer_column_media_adjust">Regolazioni</string>
+    <string name="composer_column_media_alt_text">Descrivi</string>
+    <string name="composer_column_media_filter">Filtri</string>
+    <string name="composer_column_media_trim">Taglia</string>
     <string name="composer_column_text_frame">Cornice del testo</string>
     <string name="composer_column_text_language">Lingua del testo</string>
     <string name="composer_column_text_plan">TIMELINE</string>
@@ -81,13 +85,13 @@
     <string name="my_stories_archive_empty_title">Nessun archivio</string>
     <string name="my_stories_back">Indietro</string>
     <string name="my_stories_cancel">Annulla</string>
-    <string name="my_stories_card_expired">Storia scaduta, %s</string>
+    <string name="my_stories_card_expired">Storia scaduta, %1$s</string>
     <string name="my_stories_create">Crea una storia</string>
     <string name="my_stories_delete">Elimina</string>
     <string name="my_stories_delete_error">Eliminazione non riuscita</string>
     <string name="my_stories_delete_message">Questa azione è definitiva. La storia non sarà più visibile a nessuno.</string>
-    <string name="my_stories_delete_selected">Elimina (%d)</string>
-    <string name="my_stories_delete_selected_error">%d eliminazioni non riuscite</string>
+    <string name="my_stories_delete_selected">Elimina (%1$d)</string>
+    <string name="my_stories_delete_selected_error">%1$d eliminazioni non riuscite</string>
     <string name="my_stories_delete_selected_message">Questa azione è definitiva. Queste storie non saranno più visibili a nessuno.</string>
     <string name="my_stories_delete_selected_success">Storie eliminate</string>
     <string name="my_stories_delete_selected_title">Eliminare le storie selezionate?</string>
@@ -112,6 +116,7 @@
     <string name="share_story_text">🔗 Storia di %1$s: %2$s</string>
     <string name="stories_action_delete">Elimina</string>
     <string name="stories_action_react">Reagisci</string>
+    <string name="stories_action_reply">Rispondi</string>
     <string name="stories_action_report">Segnala</string>
     <string name="stories_action_repost">Ricondividi</string>
     <string name="stories_action_translations">Traduzioni</string>
@@ -122,9 +127,9 @@
     <string name="stories_caption_see_less">mostra meno</string>
     <string name="stories_caption_see_more">mostra di più</string>
     <plurals name="stories_comments_count">
-        <item quantity="one">%d commento</item>
-        <item quantity="many">%d commenti</item>
-        <item quantity="other">%d commenti</item>
+        <item quantity="one">%1$d commento</item>
+        <item quantity="many">%1$d commenti</item>
+        <item quantity="other">%1$d commenti</item>
     </plurals>
     <string name="stories_comments_empty_subtitle">Sii il primo a commentare!</string>
     <string name="stories_comments_empty_title">Ancora nessun commento</string>
@@ -148,7 +153,7 @@
     <string name="stories_composer_outline">Contorno del testo</string>
     <string name="stories_composer_remove_media">Rimuovi</string>
     <string name="stories_composer_size">Dimensione del testo</string>
-    <string name="stories_composer_slide_duration_value">%ds</string>
+    <string name="stories_composer_slide_duration_value">%1$ds</string>
     <string name="stories_composer_sticker_cat_activities">Attività</string>
     <string name="stories_composer_sticker_cat_animals">Animali</string>
     <string name="stories_composer_sticker_cat_flags">Bandiere</string>
@@ -166,7 +171,13 @@
     <string name="stories_composer_text_finish">Fatto</string>
     <string name="stories_composer_text_finish_a11y">Termina la modifica del testo</string>
     <string name="stories_delete_confirm_title">Eliminare la storia?</string>
+    <string name="stories_mood_kind">Stato d\'animo</string>
     <string name="stories_publish_retry">Riprova</string>
+    <string name="stories_reply_failed">La risposta non è stata inviata</string>
+    <string name="stories_reply_placeholder">Rispondi a %1$s…</string>
+    <string name="stories_reply_send">Invia risposta</string>
+    <string name="stories_reply_sent">Risposta inviata</string>
+    <string name="stories_reply_to">Risposta a %1$s</string>
     <string name="stories_report_reason_harassment">Molestie</string>
     <string name="stories_report_reason_hate_speech">Incitamento all\'odio</string>
     <string name="stories_report_reason_impersonation">Furto d\'identità</string>
@@ -174,6 +185,7 @@
     <string name="stories_report_reason_other">Altro</string>
     <string name="stories_report_reason_spam">Spam</string>
     <string name="stories_report_reason_violence">Violenza</string>
+    <string name="stories_repost_by">Storia di</string>
     <string name="stories_reposted">Ricondiviso</string>
     <string name="stories_scene_animated">Animata</string>
     <string name="stories_scene_background_menu_bring_forward">Porta in primo piano</string>
@@ -215,13 +227,13 @@
     <string name="stories_viewer_not_found_description">Impossibile caricare questa storia. Riprova o chiudi.</string>
     <string name="stories_viewer_not_found_title">Storia non trovata</string>
     <string name="stories_viewer_previous">Storia precedente</string>
-    <string name="stories_viewer_profile_of">Profilo di %s</string>
+    <string name="stories_viewer_profile_of">Profilo di %1$s</string>
     <string name="stories_viewer_retry">Riprova</string>
     <string name="stories_viewer_unmute">Riattiva audio di sottofondo</string>
     <plurals name="stories_viewers_count">
-        <item quantity="one">%d visualizzazione</item>
-        <item quantity="many">%d visualizzazioni</item>
-        <item quantity="other">%d visualizzazioni</item>
+        <item quantity="one">%1$d visualizzazione</item>
+        <item quantity="many">%1$d visualizzazioni</item>
+        <item quantity="other">%1$d visualizzazioni</item>
     </plurals>
     <string name="stories_viewers_empty_subtitle">Le persone che guardano la tua storia appariranno qui.</string>
     <string name="stories_viewers_empty_title">Ancora nessuna visualizzazione</string>
@@ -239,11 +251,12 @@
     <string name="story_canvas_action_leaveScene">Togli dalla scena</string>
     <string name="story_canvas_action_sendBackward">Porta indietro</string>
     <string name="story_composer_cancel">Annulla</string>
-    <string name="story_composer_fab_badge">%d elemento/i attivo/i</string>
+    <string name="story_composer_edit_slide_background">Modifica sfondo</string>
+    <string name="story_composer_fab_badge">%1$d elemento/i attivo/i</string>
     <string name="story_composer_fab_badge_none">Nessun elemento</string>
     <string name="story_composer_fab_hint_close">Tocca due volte per chiudere.</string>
     <string name="story_composer_fab_hint_open">Tocca due volte per aprire.</string>
-    <string name="story_composer_fab_open">Apri lo strumento %s</string>
+    <string name="story_composer_fab_open">Apri lo strumento %1$s</string>
     <string name="story_composer_grabber">Maniglia della barra strumenti</string>
     <string name="story_composer_grabber_hint_dismiss">Trascina verso il basso per ridurre o chiudere.</string>
     <string name="story_composer_grabber_hint_resize">Trascina verso l\'alto per ingrandire, verso il basso per ridurre o chiudere.</string>
@@ -269,9 +282,9 @@
     <string name="story_send_caption_hint">Aggiungi un messaggio…</string>
     <string name="story_send_loading">Caricamento delle conversazioni…</string>
     <plurals name="story_send_members">
-        <item quantity="one">%d membro</item>
-        <item quantity="many">%d membri</item>
-        <item quantity="other">%d membri</item>
+        <item quantity="one">%1$d membro</item>
+        <item quantity="many">%1$d membri</item>
+        <item quantity="other">%1$d membri</item>
     </plurals>
     <string name="story_send_search_hint">Cerca una conversazione...</string>
     <string name="story_send_sent">Inviato</string>
@@ -282,14 +295,14 @@
     <string name="story_sound_library_mine">I miei suoni</string>
     <string name="story_sound_library_play">Ascolta</string>
     <plurals name="story_sound_library_playCount">
-        <item quantity="one">%d riproduzione</item>
-        <item quantity="many">%d riproduzioni</item>
-        <item quantity="other">%d riproduzioni</item>
+        <item quantity="one">%1$d riproduzione</item>
+        <item quantity="many">%1$d riproduzioni</item>
+        <item quantity="other">%1$d riproduzioni</item>
     </plurals>
     <plurals name="story_sound_library_postCount">
-        <item quantity="one">%d post</item>
-        <item quantity="many">%d post</item>
-        <item quantity="other">%d post</item>
+        <item quantity="one">%1$d post</item>
+        <item quantity="many">%1$d post</item>
+        <item quantity="other">%1$d post</item>
     </plurals>
     <string name="story_sound_library_preparing">Preparazione…</string>
     <string name="story_sound_library_remove">Rimuovi dalla mia libreria</string>
@@ -297,9 +310,9 @@
     <string name="story_sound_library_removeFailed">Non è stato possibile rimuovere il suono. Riprova.</string>
     <string name="story_sound_library_removeMessageUnused">Questo suono scomparirà dalla tua libreria e non potrà più essere aggiunto a un post.</string>
     <plurals name="story_sound_library_removeMessageUsed">
-        <item quantity="one">%d post lo usa ancora e continuerà a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
-        <item quantity="many">%d post lo usano ancora e continueranno a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
-        <item quantity="other">%d post lo usano ancora e continueranno a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
+        <item quantity="one">%1$d post lo usa ancora e continuerà a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
+        <item quantity="many">%1$d post lo usano ancora e continueranno a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
+        <item quantity="other">%1$d post lo usano ancora e continueranno a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post.</item>
     </plurals>
     <string name="story_sound_library_removeTitle">Rimuovere questo suono dalla tua libreria?</string>
     <string name="story_sound_library_rename">Rinomina</string>
@@ -319,6 +332,7 @@
     <string name="story_tool_text">Testo</string>
     <string name="story_tool_texture">Sfondo</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_a11y_changeMood">Cambia il mio stato d\'animo</string>
     <string name="story_tray_menu_profile">Vedi il profilo</string>
     <string name="story_tray_menu_viewStories">Vedi le storie</string>
 </resources>

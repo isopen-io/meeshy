@@ -759,6 +759,60 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `un fond sans adresse lit la piece que son identifiant designe, jamais la premiere de la story`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/designated.jpg", mimeType = "image/jpeg"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/designated.jpg")
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(1.5f)
+    }
+
+    @Test
+    fun `un fond video sans adresse lit sa piece et garde le cadrage de l auteur`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/other.mp4", mimeType = "video/mp4"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "video", isBackground = true, loop = false, x = 0.7, scale = 2.0),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundLoop).isFalse()
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(2.0f)
+    }
+
+    @Test
+    fun `un fond qui ne designe aucune piece de la story ne prete pas son cadrage a une autre`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "up-1", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform?.isIdentity).isTrue()
+    }
+
+    @Test
     fun `a background image with author framing projects that transform onto the slide`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
@@ -874,16 +928,16 @@ class StoryViewerViewModelTest {
 
     @Test
     fun `a background VIDEO object without its own url does not project framing from a fallback video`() = runTest {
-        // The framing rides only on the object's OWN mediaURL. A modern isBackground
-        // object with a null mediaURL but a matching fallback video item must NOT
-        // steal that item's pixels to reframe with an unrelated object's transform.
+        // The framing rides only on the object's OWN address — its mediaURL or the piece
+        // its postMediaId names. An object naming a piece the story does not carry must
+        // NOT reframe the fallback video with an unrelated object's transform.
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/fallback.mp4", mimeType = "video/mp4")),
             storyEffects = StoryEffects(
                 mediaObjects = listOf(
                     StoryMediaObject(
                         id = "obj1",
-                        postMediaId = "m1",
+                        postMediaId = "unrelated",
                         mediaURL = null,
                         mediaType = "video",
                         isBackground = true,

@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextLanguage
@@ -16,6 +17,8 @@ internal object StoryComposerTextReducer {
     /** Offset given to a duplicated element so the copy is visibly clear of its source. */
     const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
 
+    private fun exceedsLimit(text: String): Boolean = text.codePointCount(0, text.length) > StoryLimits.TEXT_LENGTH
+
     /**
      * Routes the text field: while a text element is selected the keystrokes rewrite that
      * element; otherwise they rewrite the selected slide's caption.
@@ -23,9 +26,14 @@ internal object StoryComposerTextReducer {
     fun typed(state: StoryComposerUiState, text: String): StoryComposerUiState {
         val editingId = state.selectedTextElement?.id
         if (editingId != null) {
+            val previous = state.selectedTextElement?.text.orEmpty()
+            val tooLong = exceedsLimit(text)
+            // Un texte restauré déjà trop long est GARDÉ tel quel : le couper à la première frappe détruirait ce que
+            // l'auteur a écrit. La saisie qui FRANCHIT le plafond est coupée, avec son message.
+            val kept = if (tooLong && !exceedsLimit(previous)) StoryLimits.clampText(text) else text
             return state.copy(
-                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = text) },
-                errorMessage = null,
+                deck = state.deck.updateTextElement(editingId) { element -> element.copy(text = kept) },
+                errorMessage = if (tooLong) StoryComposerViewModel.TEXT_LENGTH_LIMIT else null,
             )
         }
         return state.copy(
@@ -45,6 +53,7 @@ internal object StoryComposerTextReducer {
             deck = state.deck.addTextElementToSelected(StoryTextElement(id = id, x = at.x.toFloat(), y = at.y.toFloat())),
             selectedTextElementId = id,
             selectedStickerId = null,
+            selectedMediaId = null, selectedSoundId = null,
             errorMessage = null,
         )
     }
@@ -52,7 +61,7 @@ internal object StoryComposerTextReducer {
     /** Begins editing [id] (inert when it is not on the selected slide). */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(selectedTextElementId = id, selectedStickerId = null)
+        else state.copy(selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Stops editing the active element — the field returns to the slide caption. */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =
@@ -61,7 +70,7 @@ internal object StoryComposerTextReducer {
     /** Opens the long-press menu on [id], selecting it (inert when it is not on the selected slide). */
     fun menuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null)
+        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Dismisses the element context menu without touching the deck or the selection. */
     fun menuDismissed(state: StoryComposerUiState): StoryComposerUiState =

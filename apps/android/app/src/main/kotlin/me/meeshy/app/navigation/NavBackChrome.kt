@@ -121,6 +121,7 @@ internal object NavBackChrome {
         sheet("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, IosPresentation.SHEET, settings("AccountDeletionScreen.kt")),
         sheet("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, IosPresentation.SHEET, settings("MediaDownloadScreen.kt")),
         sheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("MediaCacheScreen.kt")),
+        sheet("Routes.PACK_SHOP", "${Routes.PACK_SHOP}?domain={domain}&pack={pack}", IosPresentation.SHEET, settings("PackShopScreen.kt")),
         sheet("Routes.DATA_EXPORT", Routes.DATA_EXPORT, IosPresentation.SHEET, settings("DataExportScreen.kt")),
         sheet("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, IosPresentation.SHEET, settings("CrashReportScreen.kt")),
         sheet("Routes.ABOUT", Routes.ABOUT, IosPresentation.SHEET, settings("AboutScreen.kt")),

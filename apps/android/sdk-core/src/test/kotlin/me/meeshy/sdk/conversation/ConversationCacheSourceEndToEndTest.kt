@@ -74,6 +74,24 @@ class ConversationCacheSourceEndToEndTest {
     }
 
     @Test
+    fun `servie sans mode par la passerelle, la conversation est confirmee claire, servie e2ee, jamais`() = runTest {
+        source().rememberServed(ApiConversation(id = "c-clear", encryptionMode = null))
+        source().rememberServed(ApiConversation(id = "c-sealed", encryptionMode = "e2ee"))
+
+        assertThat(ledger.isClearConfirmed("c-clear")).isTrue()
+        assertThat(ledger.isClearConfirmed("c-sealed")).isFalse()
+        assertThat(ledger.isClearConfirmed("c-jamais-servie")).isFalse()
+    }
+
+    @Test
+    fun `une conversation remise sans venir de la passerelle (copie du cache, objet construit) n'est jamais confirmee claire`() = runTest {
+        source().remember(ApiConversation(id = "c-copie", encryptionMode = null))
+
+        assertThat(ledger.isClearConfirmed("c-copie")).isFalse()
+        assertThat(cachedMode("c-copie")).isNull()
+    }
+
+    @Test
     fun `apprise par le registre, une rétrogradation vers server est ignorée`() = runTest {
         ledger.learn("c2")
         source().remember(ApiConversation(id = "c2", encryptionMode = "server"))

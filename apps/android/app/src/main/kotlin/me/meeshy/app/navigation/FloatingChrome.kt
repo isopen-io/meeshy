@@ -100,5 +100,5 @@ internal fun leftButtonTapTarget(currentRoute: String?): String =
 internal val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 /** Masques sur toute route profonde, pendant les Reels (une route profonde) et l'onboarding. */
-internal fun floatingChromeVisible(currentRoute: String?): Boolean =
-    RootChromeVisibility.showsFloatingChrome(currentRoute, tabRoutes)
+internal fun floatingChromeVisible(currentRoute: String?, isOnboardingPresented: Boolean = false): Boolean =
+    RootChromeVisibility.showsFloatingChrome(currentRoute, tabRoutes, isOnboardingPresented = isOnboardingPresented)

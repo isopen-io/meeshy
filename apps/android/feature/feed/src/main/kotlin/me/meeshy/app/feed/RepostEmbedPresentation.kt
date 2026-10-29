@@ -2,9 +2,14 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
+import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.story.toStoryItem
 
 /**
  * A reposted/quoted post projected for the embedded quote cell rendered inside a
@@ -46,9 +51,68 @@ data class RepostEmbedPresentation(
     val location: FeedLocationPresentation? = null,
     /** Le compte de l'auteur cité : sa présence servie se lit sur la carte unique. */
     val authorId: String? = null,
+    /** Le pseudo de l'auteur cité : l'attribution de l'en-tête (`↻ @pseudo`, iOS `FeedPostCard+Header`). */
+    val authorUsername: String? = null,
+    /**
+     * La story citée, quand le repost en est une : la scène se lit alors par le MÊME lecteur que les stories
+     * (iOS `StoryRepostEmbedCell`), pas par un bloc de citation vide. `null` pour tout autre repost.
+     */
+    val storyItem: StoryItem? = null,
+    /**
+     * L'original n'est plus servi (supprimé, retiré, hors de portée) : la carte dessine cet état au lieu
+     * d'un bloc vide, et n'ouvre rien.
+     */
+    val isUnavailable: Boolean = false,
+    /** Ce que le réel cité montre au repos (iOS `ReelRepostEmbedCell.poster`) ; `null` pour tout autre repost. */
+    val reelCover: ReelCover? = null,
 )
 
 object RepostEmbedBuilder {
+
+    /**
+     * L'incrustation d'un POST du fil : la citation de [ApiPost.repostOf], la scène de la story citée, ou l'état
+     * « plus disponible » quand le post se déclare republication ([ApiPost.originalRepostOfId] / [ApiPost.isQuote])
+     * mais que le serveur ne sert plus l'original. `null` pour un post qui n'en est pas un.
+     */
+    fun forPost(
+        post: ApiPost,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+        mediaBaseUrl: String?,
+    ): RepostEmbedPresentation? {
+        val quoted = build(post.repostOf, preferences, mediaBaseUrl) ?: return unavailable(post)
+        return when {
+            quoted.isStory -> quoted.copy(storyItem = post.toStoryItem())
+            quoted.isReel -> quoted.copy(reelCover = quoted.reelCover.orScene { post.toStoryItem() })
+            else -> quoted
+        }
+    }
+
+    /** Un réel cité sans visuel se rejoue par sa scène — celle que la republication sert, `playedEffects` — quand il en est une. */
+    private fun ReelCover?.orScene(scene: () -> StoryItem): ReelCover? {
+        if (this !is ReelCover.Backdrop || isVideo) return this
+        return scene().takeIf { it.storyEffects.composesScene() }?.let { ReelCover.Scene(it) } ?: this
+    }
+
+    private fun unavailable(post: ApiPost): RepostEmbedPresentation? {
+        val declaresRepost = !post.originalRepostOfId.isNullOrBlank() || post.isQuote == true
+        if (!declaresRepost) return null
+        return RepostEmbedPresentation(
+            id = post.originalRepostOfId.orEmpty(),
+            authorName = null,
+            authorAvatarUrl = null,
+            createdAtIso = null,
+            content = "",
+            isTranslated = false,
+            previewImageUrl = null,
+            extraMediaCount = 0,
+            likeCount = 0,
+            moodEmoji = null,
+            isQuote = post.isQuote == true,
+            isStory = false,
+            isReel = false,
+            isUnavailable = true,
+        )
+    }
 
     /**
      * Project [repost] for the embedded quote cell, or `null` when the post is not
@@ -65,6 +129,7 @@ object RepostEmbedBuilder {
         return RepostEmbedPresentation(
             id = repost.id,
             authorId = repost.author?.id?.takeIf { it.isNotBlank() },
+            authorUsername = repost.author?.username?.takeIf { it.isNotBlank() },
             authorName = (repost.author?.displayName ?: repost.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = repost.author?.avatar
@@ -85,6 +150,11 @@ object RepostEmbedBuilder {
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
             location = FeedPostLocationBuilder.build(repost.location),
+            reelCover = repost.takeIf { it.type.equals("reel", ignoreCase = true) }?.let {
+                ReelCoverResolver.resolve(
+                    FeedMediaMapper.map(it.media, preferredContentLanguages(preferences), mediaBaseUrl),
+                ) { null }
+            },
         )
     }
 }

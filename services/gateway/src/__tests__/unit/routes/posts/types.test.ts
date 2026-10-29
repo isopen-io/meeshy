@@ -153,7 +153,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'EXCEPT',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -168,7 +168,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'ONLY',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -337,12 +337,12 @@ describe('UpdatePostSchema', () => {
   });
 
   it('accepts EXCEPT visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
   it('accepts ONLY visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
@@ -358,8 +358,8 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects mediaIds beyond 10 entries', () => {
-    const mediaIds = Array.from({ length: 11 }, (_, i) => i.toString(16).padStart(24, '0'));
+  it('rejects mediaIds beyond the widest bound (a story\'s 200) — the route narrows to 10 for non-stories', () => {
+    const mediaIds = Array.from({ length: 201 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
@@ -370,10 +370,10 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
+  it('accepts MAX_POST_MEDIA + 1 media ids at the schema (the post type is stored, the route decides)', () => {
     const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('accepts mediaAlt alongside newly attached mediaIds', () => {
@@ -408,14 +408,14 @@ describe('StoryEffectsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects mediaObjects array exceeding 32 entries', () => {
-    const mediaObjects = Array.from({ length: 33 }, (_, i) => ({ id: `media-${i}` }));
+  it('rejects more than 50 images in mediaObjects (#13590)', () => {
+    const mediaObjects = Array.from({ length: 51 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(false);
   });
 
-  it('accepts mediaObjects array at max cap (32 entries)', () => {
-    const mediaObjects = Array.from({ length: 32 }, (_, i) => ({ id: `media-${i}` }));
+  it('accepts mediaObjects array at max cap (50 entries)', () => {
+    const mediaObjects = Array.from({ length: 50 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(true);
   });

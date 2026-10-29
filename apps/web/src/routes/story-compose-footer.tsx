@@ -1,3 +1,4 @@
+import { STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind, PublicationRefusal } from '@/lib/stories/publication-kind';
@@ -24,7 +25,7 @@ export const publicationRefusalText = (lang: InterfaceLanguage, refusal: Publica
 
 /** `count` : les fichiers écartés d'un import multiple (#8533) — le pied dit
  * combien, jamais un refus muet. */
-export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' | 'import-max'; readonly count?: number };
+export type StudioPlaceRefusalNotice = { readonly door?: StudioDoor; readonly reason: 'door' | 'media-max' | 'import-max' | 'text-max' | 'text-length'; readonly count?: number };
 
 /** La carte des médias a-t-elle une ligne à montrer ? */
 export const studioAssetsShown = (page: StudioPage): boolean =>
@@ -137,6 +138,10 @@ export function StudioFooterMessage({
             ? translate(lang, 'story.studio.refusal.import-max', { count: String(placeRefusal.count ?? 0) })
             : placeRefusal.reason === 'media-max'
             ? translate(lang, 'story.studio.refusal.media-max')
+            : placeRefusal.reason === 'text-max'
+            ? translate(lang, 'story.studio.refusal.text-max', { count: String(STORY_LIMITS.maxTextsPerScene) })
+            : placeRefusal.reason === 'text-length'
+            ? translate(lang, 'story.studio.refusal.text-length', { count: String(STORY_LIMITS.maxTextCharacters) })
             : translate(lang, placeRefusal.door === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
         </p>
       ) : kindRefusal !== null ? (

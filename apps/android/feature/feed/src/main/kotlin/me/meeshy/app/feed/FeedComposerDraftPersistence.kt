@@ -15,6 +15,7 @@ internal fun FeedComposerDraft.toSnapshot(nowMillis: Long): PostComposerDraftSna
     location = location,
     language = language,
     mediaAlt = mediaAlt,
+    mediaCaption = mediaCaption,
     background = background,
     updatedAtMillis = nowMillis,
 )
@@ -27,5 +28,6 @@ internal fun PostComposerDraftSnapshot.toComposerDraft(): FeedComposerDraft = Fe
     location = location,
     language = language ?: ComposerLanguage.DEFAULT,
     mediaAlt = mediaAlt,
+    mediaCaption = mediaCaption,
     background = background,
 )

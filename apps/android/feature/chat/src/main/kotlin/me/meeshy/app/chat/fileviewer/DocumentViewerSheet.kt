@@ -6,9 +6,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -41,6 +46,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +60,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.fileviewer.DocumentHandOff
 import me.meeshy.sdk.model.fileviewer.SavedDocument
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -66,7 +73,8 @@ private enum class SaveState { IDLE, SAVING, SAVED, FAILED }
 
 /**
  * La visionneuse de document (miroir de `DocumentFullSheet`, iOS). Un PDF montre ses pages, rendues à la demande par
- * le moteur du système ; tout autre document dit « Aperçu non disponible » sans pour autant fermer l'accès au fichier.
+ * le moteur du système ; tout autre document (Office…) dit « Aperçu non disponible » et propose de l'ouvrir avec une autre
+ * app (aucun aperçu sûr n'existe dans le système : le fichier téléchargé, jamais un fichier chiffré en clair, est prêté).
  * Barre : croix à gauche, enregistrer (sélecteur de dossier du système) et partager à droite.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -120,7 +128,7 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
                     BarButton(MeeshyIcons.Share, shareLabel, accent) { share(context, request) }
                 },
             )
-            if (isPdf) PdfBody(request, accent) else NoPreviewBody(title, accent)
+            if (isPdf) PdfBody(request, accent) else NoPreviewBody(request, title, accent)
         }
     }
 }
@@ -134,8 +142,23 @@ private fun share(context: Context, request: FileViewerRequest) {
     if (!launched) Toast.makeText(context, R.string.chat_file_open_failed, Toast.LENGTH_SHORT).show()
 }
 
+/**
+ * Aucun aperçu sûr dans l'app (Office…) : l'utilisateur confie le fichier téléchargé à l'app de son choix, sous le type
+ * que son EXTENSION implique ([DocumentHandOff]) — jamais sous celui que l'expéditeur a déclaré.
+ */
+private fun openWithAnotherApp(context: Context, request: FileViewerRequest, mimeType: String) {
+    val launched = runCatching {
+        context.startActivity(FileAttachmentIntentResolver.viewIntent(request.localUri.toUri(), mimeType, request.fileName))
+    }.isSuccess
+    if (!launched) Toast.makeText(context, R.string.chat_file_open_failed, Toast.LENGTH_SHORT).show()
+}
+
 @Composable
-private fun NoPreviewBody(title: String, accent: Color) {
+private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Color) {
+    val context = LocalContext.current
+    val uri = remember(request.localUri) { request.localUri.toUri() }
+    val handOffMime = remember(request.fileName) { DocumentHandOff.mimeFor(request.fileName) }
+        ?.takeIf { FileAttachmentIntentResolver.canHandOff(uri.scheme) }
     Column(
         Modifier.fillMaxSize().padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.CenterVertically),
@@ -144,6 +167,23 @@ private fun NoPreviewBody(title: String, accent: Color) {
         Icon(MeeshyIcons.Document, null, tint = accent, modifier = Modifier.size(64.dp))
         Text(title, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.callout, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(stringResource(R.string.viewer_doc_preview_unavailable), color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.label)
+        if (handOffMime != null) {
+            val openWith = stringResource(R.string.viewer_doc_open_with)
+            Row(
+                modifier = Modifier
+                    .padding(top = MeeshySpacing.sm)
+                    .heightIn(min = 48.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.15f))
+                    .clickable(role = Role.Button) { openWithAnotherApp(context, request, handOffMime) }
+                    .padding(horizontal = MeeshySpacing.lg),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                Icon(MeeshyIcons.Share, null, tint = accent, modifier = Modifier.size(18.dp))
+                Text(openWith, color = accent, fontSize = MeeshyFontSize.label, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 

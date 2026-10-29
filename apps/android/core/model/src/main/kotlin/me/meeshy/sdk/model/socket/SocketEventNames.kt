@@ -152,6 +152,12 @@ object SocketEventNames {
     const val PRESENCE_APP_STATE = "presence:app-state"
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
+    // game
+    const val GAME_UPDATED = "game:updated"
+
+    // pack
+    const val PACK_INSTALLATION_UPDATED = "pack:installation-updated"
+
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
     const val REACTION_ADDED = "reaction:added"
@@ -196,6 +202,7 @@ object SocketEventNames {
     const val ATTACHMENT_REACTION_ADDED = "attachment:reaction-added"
     const val ATTACHMENT_REACTION_REMOVE = "attachment:reaction-remove"
     const val ATTACHMENT_REACTION_REMOVED = "attachment:reaction-removed"
+    const val ATTACHMENT_DELETED = "attachment:deleted"
     const val ATTACHMENT_READY = "attachment:ready"
     const val ATTACHMENT_STATUS_UPDATED = "attachment-status:updated"
     const val AUDIO_TRANSCRIPTION_FAILED = "audio:transcription-failed"
@@ -301,6 +308,7 @@ object SocketEventNames {
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
         ENGAGEMENT_CONVERSATION_UPDATED,
+        GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
         LOCATION_LIVE_STOP,
@@ -334,6 +342,7 @@ object SocketEventNames {
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,
         POST_UPDATED,
+        PACK_INSTALLATION_UPDATED,
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,
@@ -365,6 +374,7 @@ object SocketEventNames {
         ATTACHMENT_REACTION_ADDED,
         ATTACHMENT_REACTION_REMOVE,
         ATTACHMENT_REACTION_REMOVED,
+        ATTACHMENT_DELETED,
         ATTACHMENT_READY,
         ATTACHMENT_STATUS_UPDATED,
         AUDIO_TRANSCRIPTION_FAILED,

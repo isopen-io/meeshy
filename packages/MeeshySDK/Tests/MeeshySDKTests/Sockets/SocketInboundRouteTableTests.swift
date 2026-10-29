@@ -22,7 +22,7 @@ private final class FakeRegistrar: SocketEventRegistering {
 final class SocketInboundRouteTableTests: XCTestCase {
 
     private static let messageEventsOfDev: Set<String> = [
-        "attachment-status:updated", "attachment:reaction-added", "attachment:reaction-removed",
+        "attachment-status:updated", "attachment:deleted", "attachment:reaction-added", "attachment:reaction-removed",
         "audio:transcription-failed", "audio:transcription-ready", "audio:translation-failed",
         "audio:translation-ready", "audio:translations-completed", "audio:translations-progressive",
         "auth:session-revoked", "auth:token-expired", "call:already-answered", "call:ended", "call:error",
@@ -124,6 +124,24 @@ final class SocketInboundRouteTableTests: XCTestCase {
 
         await expectOneValue(from: MessageSocketManager.shared.messageReceived, where: { $0.id == id }) {
             registrar.deliver("message:new", payload)
+        }
+    }
+
+    func test_attachmentDeletedRoute_deliversTheRemovalToItsChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "removal-\(UUID().uuidString)"
+
+        await expectOneValue(from: MessageSocketManager.shared.attachmentDeleted, where: { $0.attachmentId == id && $0.messageId == "m1" && $0.conversationId == "c1" }) {
+            registrar.deliver("attachment:deleted", ["conversationId": "c1", "messageId": "m1", "attachmentId": id])
+        }
+    }
+
+    func test_attachmentDeletedRoute_ignoresAnIncompletePayload() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectNoValue(from: MessageSocketManager.shared.attachmentDeleted) {
+            registrar.deliver("attachment:deleted", ["conversationId": "c1", "messageId": "m1"])
+            registrar.deliver("attachment:deleted", ["conversationId": "", "messageId": "m1", "attachmentId": "a1"])
         }
     }
 

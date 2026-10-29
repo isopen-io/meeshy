@@ -46,7 +46,7 @@ class StorySlideSoundsTest {
     fun `a refused placement leaves the deck untouched`() {
         val full = deck("a").let { d ->
             d.copy(slides = d.slides.map { s ->
-                s.copy(audio = (1..5).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) })
+                s.copy(audio = (1..50).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) })
             })
         }
         assertThat(full.borrowSoundOnSelected(shelfSound)).isSameInstanceAs(full)
@@ -86,8 +86,8 @@ class StorySlideSoundsTest {
         fun stateWith(audio: List<StoryAudioPlayerObject>) = StoryComposerUiState(
             deck = StorySlideDeck(slides = listOf(StorySlide(id = "a", audio = audio)), selectedId = "a"),
         )
-        val fiveForeground = (1..5).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) }
-        val fourPlusBackground = (1..4).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) } +
+        val fiveForeground = (1..50).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) }
+        val fourPlusBackground = (1..49).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) } +
             StoryAudioPlayerObject(id = "bg", isBackground = true)
         assertThat(stateWith(emptyList()).canBorrowSound).isTrue()
         assertThat(stateWith(fiveForeground).canBorrowSound).isFalse()
@@ -99,7 +99,7 @@ class StorySlideSoundsTest {
     }
 
     @Test
-    fun `media and sounds count together against the ten cap on both gates`() {
+    fun `media and sounds have their own fifty buckets and no longer share a cap`() {
         fun deckWith(media: Int, sounds: Int) = StorySlideDeck(
             slides = listOf(
                 StorySlide(
@@ -110,14 +110,15 @@ class StorySlideSoundsTest {
             ),
             selectedId = "a",
         )
-        val imagesFull = deckWith(media = 10, sounds = 0)
-        assertThat(StoryComposerUiState(deck = imagesFull).canBorrowSound).isFalse()
-        assertThat(imagesFull.borrowSoundOnSelected(shelfSound)).isSameInstanceAs(imagesFull)
-        val soundsAndImages = deckWith(media = 5, sounds = 5)
-        assertThat(soundsAndImages.selectedCanAddMedia).isFalse()
-        assertThat(soundsAndImages.addMediaToSelected("new")).isSameInstanceAs(soundsAndImages)
-        assertThat(deckWith(media = 6, sounds = 3).selectedRemainingMediaSlots).isEqualTo(1)
-        assertThat(deckWith(media = 6, sounds = 3).addMediaToSelected("new").selectedSlide.mediaIds).hasSize(7)
+        val imagesFull = deckWith(media = 50, sounds = 0)
+        assertThat(StoryComposerUiState(deck = imagesFull).canBorrowSound).isTrue()
+        assertThat(imagesFull.selectedCanAddMedia).isFalse()
+        assertThat(imagesFull.addMediaToSelected("new")).isSameInstanceAs(imagesFull)
+        val soundsFull = deckWith(media = 0, sounds = 50)
+        assertThat(soundsFull.selectedCanAddMedia).isTrue()
+        assertThat(soundsFull.borrowSoundOnSelected(shelfSound)).isSameInstanceAs(soundsFull)
+        assertThat(deckWith(media = 6, sounds = 30).selectedRemainingMediaSlots).isEqualTo(44)
+        assertThat(deckWith(media = 6, sounds = 30).addMediaToSelected("new").selectedSlide.mediaIds).hasSize(7)
     }
 
     private fun slideWith(media: Int, sounds: Int) = StorySlideDeck(
@@ -132,28 +133,26 @@ class StorySlideSoundsTest {
     )
 
     @Test
-    fun `a story composed past the shared cap still publishes, every media and sound kept`() {
+    fun `a story composed past the old ten cap still publishes, every media and sound kept`() {
         val legacy = slideWith(media = 10, sounds = 3)
         val state = StoryComposerUiState(deck = legacy)
         assertThat(state.canPublish).isTrue()
         assertThat(legacy.publishableSlides.single().mediaIds).hasSize(10)
         assertThat(legacy.publishableSlides.single().audio).hasSize(3)
-        assertThat(legacy.selectedCanAddMedia).isFalse()
-        assertThat(state.canBorrowSound).isFalse()
+        assertThat(legacy.selectedCanAddMedia).isTrue()
+        assertThat(state.canBorrowSound).isTrue()
     }
 
     @Test
     fun `the sound door names the cap it hit`() {
-        assertThat(StoryComposerUiState(deck = slideWith(media = 10, sounds = 0)).soundCapRefusal)
-            .isEqualTo(me.meeshy.feature.stories.R.string.composer_scene_cap_media)
-        assertThat(StoryComposerUiState(deck = slideWith(media = 0, sounds = 5)).soundCapRefusal)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 0, sounds = 50)).soundCapRefusal)
             .isEqualTo(me.meeshy.feature.stories.R.string.composer_scene_cap_sound)
     }
 
     @Test
-    fun `the gallery opens with the places left once the sounds are counted`() {
-        assertThat(StoryComposerUiState(deck = slideWith(media = 8, sounds = 1)).mediaPickMode).isEqualTo(StoryMediaPickMode.Single)
-        assertThat(StoryComposerUiState(deck = slideWith(media = 5, sounds = 5)).mediaPickMode).isEqualTo(StoryMediaPickMode.None)
-        assertThat(StoryComposerUiState(deck = slideWith(media = 3, sounds = 2)).mediaPickMode).isEqualTo(StoryMediaPickMode.Multiple)
+    fun `the gallery opens with the places left, sounds not counted`() {
+        assertThat(StoryComposerUiState(deck = slideWith(media = 49, sounds = 5)).mediaPickMode).isEqualTo(StoryMediaPickMode.Single)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 50, sounds = 0)).mediaPickMode).isEqualTo(StoryMediaPickMode.None)
+        assertThat(StoryComposerUiState(deck = slideWith(media = 3, sounds = 20)).mediaPickMode).isEqualTo(StoryMediaPickMode.Multiple)
     }
 }

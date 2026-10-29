@@ -31,7 +31,7 @@
     <string name="email_gate_publish">Para publicar, valida tu dirección. Tu publicación se conserva y saldrá en cuanto se valide el código.</string>
     <string name="email_gate_send">Recibir el código</string>
     <string name="email_gate_sending">Enviando…</string>
-    <string name="email_gate_sent">Código enviado a %s. Introdúcelo a continuación.</string>
+    <string name="email_gate_sent">Código enviado a %1$s. Introdúcelo a continuación.</string>
     <string name="email_gate_title">Valida tu dirección de correo</string>
     <string name="email_verification_code_a11y_label">Código de verificación</string>
     <string name="email_verification_code_placeholder">000000</string>
@@ -46,9 +46,9 @@
     <string name="email_verification_no_code">¿No has recibido el código?</string>
     <string name="email_verification_resend_button">Reenviar el código</string>
     <string name="email_verification_resend_confirmed">¡Código reenviado!</string>
-    <string name="email_verification_subtitle">Introduce el código de 6 dígitos enviado a <b>%s</b></string>
-    <string name="email_verification_subtitle_account_created">Tu cuenta ha sido creada. Se han enviado un código y un enlace de verificación a <b>%s</b>.</string>
-    <string name="email_verification_subtitle_activation_required">Tu contraseña es correcta, pero primero debes activar tu cuenta demostrando que esta dirección es tuya. Acabamos de enviar un código a <b>%s</b>.</string>
+    <string name="email_verification_subtitle">Introduce el código de 6 dígitos enviado a <b>%1$s</b></string>
+    <string name="email_verification_subtitle_account_created">Tu cuenta ha sido creada. Se han enviado un código y un enlace de verificación a <b>%1$s</b>.</string>
+    <string name="email_verification_subtitle_activation_required">Tu contraseña es correcta, pero primero debes activar tu cuenta demostrando que esta dirección es tuya. Acabamos de enviar un código a <b>%1$s</b>.</string>
     <string name="email_verification_title">Revisa tu correo</string>
     <string name="email_verification_verify_button">Verificar</string>
     <string name="guest_ended_expired_message">Este enlace ya no da acceso a la conversación. Pide un enlace nuevo a la persona que te lo envió.</string>
@@ -77,15 +77,15 @@
     <string name="guest_join_username">Nombre de usuario</string>
     <string name="guest_join_username_optional">Usuario (opcional)</string>
     <string name="link_signin_cancel">Cancelar</string>
-    <string name="link_signin_claim">Esta dirección se vinculará a %s y se retirará de cualquier otra cuenta de Meeshy.</string>
+    <string name="link_signin_claim">Esta dirección se vinculará a %1$s y se retirará de cualquier otra cuenta de Meeshy.</string>
     <string name="link_signin_confirm">Iniciar sesión</string>
     <string name="link_signin_confirm_claim">Vincular la dirección e iniciar sesión</string>
-    <string name="link_signin_message">Este enlace de inicio de sesión no se solicitó desde este dispositivo. Abre la cuenta %s.\n\nContinúa solo si esta cuenta te pertenece.</string>
+    <string name="link_signin_message">Este enlace de inicio de sesión no se solicitó desde este dispositivo. Abre la cuenta %1$s.\n\nContinúa solo si esta cuenta te pertenece.</string>
     <string name="link_signin_message_replacing">Este enlace de inicio de sesión no se solicitó desde este dispositivo. Abre la cuenta %1$s en lugar de %2$s, que está abierta (seguirá en el selector de cuentas).\n\nContinúa solo si esta cuenta te pertenece.</string>
-    <string name="link_signin_title">¿Iniciar sesión como %s?</string>
+    <string name="link_signin_title">¿Iniciar sesión como %1$s?</string>
     <string name="link_switch_confirm">Abrir esta cuenta</string>
     <string name="link_switch_message">Este enlace abre OTRA cuenta distinta de la tuya: %1$s.\n\nHas iniciado sesión como %2$s. Abre esta cuenta solo si te pertenece.</string>
-    <string name="link_switch_message_unknown_current">Este enlace abre OTRA cuenta distinta de la que está abierta: %s.\n\nAbre esta cuenta solo si te pertenece.</string>
+    <string name="link_switch_message_unknown_current">Este enlace abre OTRA cuenta distinta de la que está abierta: %1$s.\n\nAbre esta cuenta solo si te pertenece.</string>
     <string name="link_switch_title">¿Abrir otra cuenta?</string>
     <string name="login_button">Iniciar sesión</string>
     <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
@@ -95,7 +95,7 @@
     <string name="login_password_label">Contraseña</string>
     <string name="login_remove_account">Eliminar esta cuenta</string>
     <string name="login_saved_accounts">Cuentas guardadas</string>
-    <string name="login_server_origin">Conectado a: %s</string>
+    <string name="login_server_origin">Conectado a: %1$s</string>
     <string name="login_signup_link">Registrarse</string>
     <string name="login_signup_prompt">¿No tienes cuenta?</string>
     <string name="login_username_label">Usuario</string>
@@ -146,7 +146,7 @@
     <string name="onboarding_contacts_offer_promise">Nadie recibe mensajes en tu nombre.</string>
     <string name="onboarding_contacts_offer_title">Puede que tus amigos ya estén aquí</string>
     <string name="onboarding_contacts_settings">Encuentra a tus amigos: permite el acceso a los contactos en Ajustes</string>
-    <string name="onboarding_email_address">Enviado a %s</string>
+    <string name="onboarding_email_address">Enviado a %1$s</string>
     <string name="onboarding_email_body">Te enviamos un enlace. Tócalo en tu correo: tu cuenta queda confirmada y todo Meeshy se abre para ti.</string>
     <string name="onboarding_email_failed">No se pudo enviar el enlace. Inténtalo de nuevo.</string>
     <string name="onboarding_email_resend">Reenviar el enlace</string>
@@ -154,14 +154,14 @@
     <string name="onboarding_email_title">Confirma tu correo electrónico</string>
     <string name="onboarding_email_waiting">Seguimos en cuanto tu dirección esté confirmada.</string>
     <string name="onboarding_friends_add">Añadir</string>
-    <string name="onboarding_friends_add_a11y">Añadir a %s como amigo</string>
+    <string name="onboarding_friends_add_a11y">Añadir a %1$s como amigo</string>
     <string name="onboarding_friends_added">Enviada</string>
-    <string name="onboarding_friends_added_a11y">Solicitud enviada a %s</string>
-    <string name="onboarding_friends_badge">+%d cada uno</string>
-    <string name="onboarding_friends_body">Añade a 3 personas afines a ti. Cuando acepten, ganan al menos +%d los dos.</string>
+    <string name="onboarding_friends_added_a11y">Solicitud enviada a %1$s</string>
+    <string name="onboarding_friends_badge">+%1$d cada uno</string>
+    <string name="onboarding_friends_body">Añade a 3 personas afines a ti. Cuando acepten, ganan al menos +%1$d los dos.</string>
     <string name="onboarding_friends_failed">La solicitud no se envió. Inténtalo de nuevo.</string>
     <string name="onboarding_friends_more">Ver más perfiles</string>
-    <string name="onboarding_friends_pending">Al menos +%d cada uno cuando la persona acepte</string>
+    <string name="onboarding_friends_pending">Al menos +%1$d cada uno cuando la persona acepte</string>
     <string name="onboarding_friends_row_a11y">%1$s, habla %2$s</string>
     <string name="onboarding_friends_title">Encuentra a tu gente</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
@@ -173,9 +173,9 @@
     <string name="onboarding_global_placeholder">Tu saludo</string>
     <string name="onboarding_global_retry">Reintentar</string>
     <plurals name="onboarding_global_reward">
-        <item quantity="one">+%d chispa · primer mensaje</item>
-        <item quantity="many">+%d chispas · primer mensaje</item>
-        <item quantity="other">+%d chispas · primer mensaje</item>
+        <item quantity="one">+%1$d chispa · primer mensaje</item>
+        <item quantity="many">+%1$d chispas · primer mensaje</item>
+        <item quantity="other">+%1$d chispas · primer mensaje</item>
     </plurals>
     <string name="onboarding_global_sample_1">Hola desde São Paulo 👋</string>
     <string name="onboarding_global_sample_2">¿Quién escucha Nova Club? 🎧</string>
@@ -197,7 +197,7 @@
     <string name="onboarding_languages_demo_translated">Hola, ¿qué tal?</string>
     <string name="onboarding_languages_failed">No se pudo guardar tu idioma. Puedes cambiarlo en tu perfil.</string>
     <string name="onboarding_languages_primary">Tu idioma</string>
-    <string name="onboarding_languages_primary_a11y">Tu idioma: %s. Cambiar</string>
+    <string name="onboarding_languages_primary_a11y">Tu idioma: %1$s. Cambiar</string>
     <string name="onboarding_languages_secondary">¿Un segundo idioma? (opcional)</string>
     <string name="onboarding_languages_title">Tu idioma, tu mundo</string>
     <string name="onboarding_later">Más tarde</string>
@@ -207,14 +207,14 @@
     <string name="onboarding_notifications_title">Te avisamos cuando pase algo</string>
     <string name="onboarding_notifications_yes">Sí, avísame</string>
     <plurals name="onboarding_points_a11y">
-        <item quantity="one">%d chispa ganada</item>
-        <item quantity="many">%d chispas ganadas</item>
-        <item quantity="other">%d chispas ganadas</item>
+        <item quantity="one">%1$d chispa ganada</item>
+        <item quantity="many">%1$d chispas ganadas</item>
+        <item quantity="other">%1$d chispas ganadas</item>
     </plurals>
     <plurals name="onboarding_points_pill">
-        <item quantity="one">%d chispa</item>
-        <item quantity="many">%d chispas</item>
-        <item quantity="other">%d chispas</item>
+        <item quantity="one">%1$d chispa</item>
+        <item quantity="many">%1$d chispas</item>
+        <item quantity="other">%1$d chispas</item>
     </plurals>
     <string name="onboarding_progress_a11y">Paso %1$d de %2$d</string>
     <string name="onboarding_recap_badges">Medallas</string>
@@ -227,11 +227,11 @@
     <string name="onboarding_recap_points">Chispas</string>
     <string name="onboarding_recap_streak">Llama (días)</string>
     <string name="onboarding_recap_title">¡Bien hecho!</string>
-    <string name="onboarding_recap_tomorrow">Mañana, tu Llama arderá desde hace %d días. Sin prisa: vuelve cuando quieras.</string>
+    <string name="onboarding_recap_tomorrow">Mañana, tu Llama arderá desde hace %1$d días. Sin prisa: vuelve cuando quieras.</string>
     <plurals name="onboarding_reward_announce">
-        <item quantity="one">Más %d chispa</item>
-        <item quantity="many">Más %d chispas</item>
-        <item quantity="other">Más %d chispas</item>
+        <item quantity="one">Más %1$d chispa</item>
+        <item quantity="many">Más %1$d chispas</item>
+        <item quantity="other">Más %1$d chispas</item>
     </plurals>
     <string name="onboarding_skipAll">Saltar todo</string>
     <string name="onboarding_story_audience_friends">Visible para tus amigos · puedes cambiarlo antes de publicar</string>
@@ -241,9 +241,9 @@
     <string name="onboarding_story_create">Crear mi story</string>
     <string name="onboarding_story_published">¡Tu story está publicada!</string>
     <plurals name="onboarding_story_reward">
-        <item quantity="one">+%d chispa · primera story</item>
-        <item quantity="many">+%d chispas · primera story</item>
-        <item quantity="other">+%d chispas · primera story</item>
+        <item quantity="one">+%1$d chispa · primera story</item>
+        <item quantity="many">+%1$d chispas · primera story</item>
+        <item quantity="other">+%1$d chispas · primera story</item>
     </plurals>
     <string name="onboarding_story_title">Muéstrate</string>
     <string name="onboarding_story_verify">Confirma tu correo para publicar tu historia</string>
@@ -261,10 +261,11 @@
     <string name="signup_email_taken">Ya existe una cuenta con esta dirección.</string>
     <string name="signup_error_generic">No se pudo crear la cuenta. Inténtalo de nuevo.</string>
     <string name="signup_error_network">Sin conexión. Comprueba tu red e inténtalo de nuevo.</string>
+    <string name="signup_error_rejected">El registro fue rechazado — inténtalo de nuevo en un momento.</string>
     <string name="signup_have_account">¿Ya tienes una cuenta?</string>
     <string name="signup_language_change">Cambiar</string>
     <string name="signup_language_picker_title">Idioma de lectura</string>
-    <string name="signup_language_pill">Leerás Meeshy en %s</string>
+    <string name="signup_language_pill">Leerás Meeshy en %1$s</string>
     <string name="signup_language_search_hint">Buscar un idioma…</string>
     <string name="signup_legal">Al continuar, aceptas las condiciones de uso y la política de privacidad.</string>
     <string name="signup_legal_privacy">Política de privacidad</string>
@@ -274,7 +275,7 @@
     <string name="signup_password_show">Mostrar contraseña</string>
     <string name="signup_phone_implausible">Este número no parece real: compruébalo.</string>
     <string name="signup_phone_label">Teléfono</string>
-    <string name="signup_phone_too_short">Este número es demasiado corto: al menos %d dígitos.</string>
+    <string name="signup_phone_too_short">Este número es demasiado corto: al menos %1$d dígitos.</string>
     <string name="signup_sign_in">Iniciar sesión</string>
     <string name="signup_subtitle">Leerás a todos en tu idioma.</string>
     <string name="signup_title">Crea tu cuenta</string>
@@ -287,18 +288,18 @@
     <string name="visitor_refused_body">Ya no existe, o está reservado a su audiencia. Inicia sesión para verlo si va dirigido a ti.</string>
     <string name="visitor_refused_title">Este contenido no está disponible</string>
     <string name="visitor_retry">Reintentar</string>
-    <string name="visitor_shared_by_post">%s te ha compartido esta publicación</string>
-    <string name="visitor_shared_by_reel">%s te ha compartido este reel</string>
-    <string name="visitor_shared_by_story">%s te ha compartido esta historia</string>
+    <string name="visitor_shared_by_post">%1$s te ha compartido esta publicación</string>
+    <string name="visitor_shared_by_reel">%1$s te ha compartido este reel</string>
+    <string name="visitor_shared_by_story">%1$s te ha compartido esta historia</string>
     <string name="visitor_signup">Crear una cuenta</string>
     <string name="visitor_title">Únete a Meeshy</string>
     <string name="world_entry_back">Atrás</string>
     <string name="world_entry_close">Cerrar</string>
     <string name="world_entry_continue">Continuar</string>
-    <string name="world_entry_enter">Entrar en %s</string>
+    <string name="world_entry_enter">Entrar en %1$s</string>
     <string name="world_entry_error_enter">No se pudo entrar por ahora. Inténtalo de nuevo.</string>
     <string name="world_entry_error_offline">Sin conexión. Inténtalo de nuevo cuando estés en línea.</string>
-    <string name="world_entry_language_greeting">Hola %s, leerás todo en…</string>
+    <string name="world_entry_language_greeting">Hola %1$s, leerás todo en…</string>
     <string name="world_entry_language_group">Idioma principal</string>
     <string name="world_entry_language_hint">Sugerido por tu dispositivo.</string>
     <string name="world_entry_name_label">Tu nombre</string>

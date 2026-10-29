@@ -23,7 +23,7 @@ class SceneObjectDuplicationTest {
 
     @Test
     fun `le plafond texte refuse la copie`() {
-        val full = SceneLists(texts = (1..5).map { text("t$it") })
+        val full = SceneLists(texts = (1..50).map { text("t$it") })
         assertThat(SceneObjectDuplication.duplicate(full, "t1", "x")).isNull()
     }
 
@@ -41,8 +41,8 @@ class SceneObjectDuplicationTest {
     }
 
     @Test
-    fun `la scene pleine de dix medias refuse la copie`() {
-        val full = SceneLists(medias = (1..10).map { media("m$it") })
+    fun `la scene pleine de cinquante medias refuse la copie`() {
+        val full = SceneLists(medias = (1..50).map { media("m$it") })
         assertThat(SceneObjectDuplication.duplicate(full, "m1", "x")).isNull()
     }
 

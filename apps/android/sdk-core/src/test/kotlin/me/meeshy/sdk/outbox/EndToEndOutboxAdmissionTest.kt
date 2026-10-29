@@ -12,6 +12,7 @@ import me.meeshy.sdk.conversation.MessageEntityFactory
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.net.MeeshyApi
 import org.junit.After
 import org.junit.Before
@@ -44,7 +45,20 @@ class EndToEndOutboxAdmissionTest {
         db.close()
     }
 
-    private val admission get() = EndToEndOutboxAdmission(ledger, db.conversationDao(), db.messageDao(), outbox)
+    private val reads = mutableListOf<String>()
+    private var served: ApiConversation? = null
+    private var refusal: ConversationModeRead = ConversationModeRead.Unreadable
+
+    private val admission get() = EndToEndOutboxAdmission(
+        ledger, db.conversationDao(), db.messageDao(), outbox,
+        modeReader = { id ->
+            reads += id
+            served
+                ?.also { if (EndToEndRegime.isEndToEnd(it.encryptionMode)) ledger.learn(id) else ledger.confirmClear(listOf(id)) }
+                ?.let { ConversationModeRead.Served(it) }
+                ?: refusal
+        },
+    )
 
     private suspend fun cache(id: String, mode: String?) {
         db.conversationDao().upsertAll(
@@ -144,6 +158,7 @@ class EndToEndOutboxAdmissionTest {
     @Test
     fun `une conversation en clair, ou une pièce sans message (story, profil), part`() = runTest {
         cache("c-plain", null)
+        ledger.confirmClear(listOf("c-plain"))
         enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-plain")
         enqueue(OutboxKind.UPLOAD_MEDIA, "up-story", targetId = "up-story", lane = OutboxLanes.MEDIA)
         val sent = mutableListOf<String>()
@@ -152,5 +167,145 @@ class EndToEndOutboxAdmissionTest {
         drainer(sent).drainLane(OutboxLanes.MEDIA)
 
         assertThat(sent).containsExactly("m1", "up-story")
+    }
+
+    @Test
+    fun `mode inconnu et serveur e2ee, aucun envoi en clair et la ligne est epuisee`() = runTest {
+        cache("c-stale", null)
+        served = ApiConversation(id = "c-stale", encryptionMode = "e2ee")
+        enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-stale")
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.forMessage("c-stale"))
+
+        assertThat(sent).isEmpty()
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(ledger.isSealed("c-stale")).isTrue()
+    }
+
+    @Test
+    fun `mode inconnu et serveur clair, une relecture puis l'envoi, et plus jamais de relecture`() = runTest {
+        served = ApiConversation(id = "c-unseen", encryptionMode = null)
+        enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-unseen")
+        enqueue(OutboxKind.SEND_MESSAGE, "m2", "c-unseen")
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-unseen"))
+
+        assertThat(sent).containsExactly("m1", "m2").inOrder()
+        assertThat(reads).containsExactly("c-unseen")
+    }
+
+    @Test
+    fun `mode inconnu et hors ligne, la ligne reste en attente sans essai compte puis part au retour si clair`() = runTest {
+        cache("c-stale", null)
+        enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-stale")
+        val sent = mutableListOf<String>()
+
+        val offline = drainer(sent).drainLane(OutboxLanes.forMessage("c-stale"))
+
+        assertThat(sent).isEmpty()
+        assertThat(offline.stoppedOnTransientFailure).isTrue()
+        val waiting = outbox.observeAll().first().single()
+        assertThat(waiting.stateEnum).isEqualTo(OutboxState.PENDING)
+        assertThat(waiting.attempts).isEqualTo(0)
+
+        served = ApiConversation(id = "c-stale", encryptionMode = null)
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-stale"))
+
+        assertThat(sent).containsExactly("m1")
+    }
+
+    @Test
+    fun `mode inconnu et hors ligne, la piece n'est pas televersee`() = runTest {
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up1",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-unseen")),
+                cmid = "up1",
+            ),
+        )
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `mode clair connu en cache, aucun appel supplementaire`() = runTest {
+        cache("c-server", "server")
+        enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-server")
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-server"))
+
+        assertThat(sent).containsExactly("m1")
+        assertThat(reads).isEmpty()
+    }
+
+    @Test
+    fun `mode nul servi par le serveur, clair autorise sans relecture`() = runTest {
+        cache("c-plain", null)
+        ledger.confirmClear(listOf("c-plain"))
+        enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-plain")
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-plain"))
+
+        assertThat(sent).containsExactly("m1")
+        assertThat(reads).isEmpty()
+    }
+
+    @Test
+    fun `une conversation scellee n'est jamais confirmee claire`() = runTest {
+        ledger.learn("c-sealed")
+        ledger.confirmClear(listOf("c-sealed"))
+
+        assertThat(ledger.isClearConfirmed("c-sealed")).isFalse()
+    }
+
+    @Test
+    fun `mode inconnu et conversation refusee par la passerelle, la piece est epuisee sans clair et la file media repart`() = runTest {
+        refusal = ConversationModeRead.Inaccessible
+        cache("c-known", "server")
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up-gone",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-gone")),
+                cmid = "up-gone",
+            ),
+        )
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up-ok",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-known")),
+                cmid = "up-ok",
+            ),
+        )
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(sent).containsExactly("up-ok")
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(report.stoppedOnTransientFailure).isFalse()
+        assertThat(outbox.row("up-gone")?.lastError).isEqualTo(OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE)
+    }
+
+    @Test
+    fun `seuls 403, 404 et 410 sont definitifs, tout autre echec de relecture se reessaie`() {
+        listOf(403, 404, 410).forEach {
+            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Inaccessible)
+        }
+        listOf(null, 401, 408, 429, 500, 503).forEach {
+            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Unreadable)
+        }
     }
 }

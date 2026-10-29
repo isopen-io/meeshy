@@ -58,6 +58,8 @@ internal data class AppShareState(
     val conversations: List<ShareRecipient> = emptyList(),
     val people: List<ShareRecipient> = emptyList(),
     val contentLines: List<String> = emptyList(),
+    /** Ce que le partage entrant a laissé derrière lui (source refusée, trop lourd, illisible, au-delà du plafond), une ligne par sorte. */
+    val notices: List<String> = emptyList(),
     val isLoading: Boolean = true,
     val isOffline: Boolean = false,
     /** La session se restaure encore (démarrage à froid d'un partage entrant) : un chargement, jamais « connectez-vous » à tort. */
@@ -137,26 +139,26 @@ internal class AppShareSheetViewModel @Inject constructor(
      * [me.meeshy.app.composer.inbound.InboundShareIntake] côté activité). Un partage sans texte ni fichier ne
      * s'ouvre pas : la feuille n'a rien à envoyer.
      */
-    fun bindIncoming(text: String?, items: List<MediaUploadItem>) {
+    fun bindIncoming(text: String?, items: List<MediaUploadItem>, notices: List<String> = emptyList()) {
         release(incomingItems.filterNot { it in items })
         incomingItems = items
         val media = items.mapIndexed { index, item ->
             ShareMedia(id = "incoming:$index", mimeType = item.mimeType, bytes = item.sizeBytes)
         }
         val subject = ShareSubject.Incoming(text?.trim()?.takeIf { it.isNotEmpty() }, media)
-        open(subject, lines = listOfNotNull(subject.text) + items.map { it.fileName })
+        open(subject, lines = listOfNotNull(subject.text) + items.map { it.fileName }, notices = notices)
     }
 
     /** La feuille est fermée : rien n'est gardé, la prochaine porte repart d'un état neuf. */
     fun reset() {
         loadJob?.cancel()
         inFlight.clear()
-        _state.update { it.copy(subject = null, sheet = ShareSheetState(), contentLines = emptyList()) }
+        _state.update { it.copy(subject = null, sheet = ShareSheetState(), contentLines = emptyList(), notices = emptyList()) }
     }
 
-    private fun open(subject: ShareSubject, lines: List<String>) {
+    private fun open(subject: ShareSubject, lines: List<String>, notices: List<String> = emptyList()) {
         inFlight.clear()
-        _state.update { it.copy(subject = subject, sheet = ShareSheetState(), contentLines = lines) }
+        _state.update { it.copy(subject = subject, sheet = ShareSheetState(), contentLines = lines, notices = notices) }
         recompute()
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -313,6 +315,7 @@ internal class AppShareSheetViewModel @Inject constructor(
                 sender = user,
                 forwardedFromId = post.forwardedFromId,
                 forwardedFromConversationId = post.forwardedFromConversationId,
+                forwardedAttachmentIds = post.forwardedAttachmentIds,
                 effects = MessageEffects(flags = post.effectFlags, ephemeralDuration = post.ephemeralDuration),
             )
         }
@@ -403,6 +406,7 @@ internal class AppShareSheetViewModel @Inject constructor(
         return ShareSheetModel(
             plan = plan,
             contentLines = state.contentLines,
+            notices = state.notices,
             caption = state.sheet.caption,
             chosenDurationSeconds = state.sheet.chosenDurationSeconds ?: plan?.flameMaxDurationSeconds,
             query = state.sheet.query,

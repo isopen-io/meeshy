@@ -77,7 +77,8 @@ final class ContactCardViewModelTests: XCTestCase {
         cachedCard: VCard? = nil,
         loadedCard: VCard? = nil,
         cachedAccounts: [PublicContactAccount]? = nil,
-        resolved: [PublicContactAccount] = []
+        resolved: [PublicContactAccount] = [],
+        scope: ContactCardResolutionScope = .clear
     ) -> (ContactCardViewModel, MockVCardAttachmentLoader, MockContactResolveService, MockContactCardActionPerformer) {
         let loader = MockVCardAttachmentLoader()
         loader.cachedResult = cachedCard
@@ -87,7 +88,7 @@ final class ContactCardViewModelTests: XCTestCase {
         resolver.resolveResult = resolved
         let performer = MockContactCardActionPerformer()
         let attachment = MessageAttachment(id: "a1", fileName: "Awa.vcf", originalName: "Awa.vcf", mimeType: "text/vcard", fileUrl: "https://x/a.vcf")
-        let sut = ContactCardViewModel(attachment: attachment, loader: loader, resolver: resolver, performer: performer, defaultCountry: "FR")
+        let sut = ContactCardViewModel(attachment: attachment, loader: loader, resolver: resolver, performer: performer, defaultCountry: "FR", resolutionScope: scope)
         return (sut, loader, resolver, performer)
     }
 
@@ -131,6 +132,55 @@ final class ContactCardViewModelTests: XCTestCase {
         await sut.load()
         XCTAssertTrue(sut.didFailToRead)
         XCTAssertEqual(resolver.resolveCallCount, 0)
+    }
+
+    // MARK: - Une conversation chiffrée ne transmet rien au serveur (#13622)
+
+    func test_load_endToEndConversation_neverResolvesAndKeepsTheLocalCard() async {
+        let (sut, _, resolver, _) = makeSUT(loadedCard: makeCard(), resolved: [makeAccount()], scope: .endToEnd)
+        await sut.load()
+        XCTAssertEqual(resolver.resolveCallCount, 0)
+        XCTAssertEqual(sut.card?.displayName, "Awa Diallo")
+        XCTAssertNil(sut.primaryAccount)
+        XCTAssertTrue(sut.meeshyLookupIsUnavailable)
+    }
+
+    func test_load_unknownConversationMode_neverResolves() async {
+        let (sut, _, resolver, _) = makeSUT(loadedCard: makeCard(), resolved: [makeAccount()], scope: .unknown)
+        await sut.load()
+        XCTAssertEqual(resolver.resolveCallCount, 0)
+        XCTAssertFalse(sut.meeshyLookupIsUnavailable)
+    }
+
+    func test_init_endToEndConversation_ignoresCachedAccounts() {
+        let (sut, _, _, _) = makeSUT(cachedCard: makeCard(), cachedAccounts: [makeAccount()], scope: .endToEnd)
+        XCTAssertNil(sut.primaryAccount)
+    }
+
+    func test_load_clearConversation_resolvesAsBefore() async {
+        let (sut, _, resolver, _) = makeSUT(loadedCard: makeCard(), resolved: [makeAccount()], scope: .clear)
+        await sut.load()
+        XCTAssertEqual(resolver.resolveCallCount, 1)
+        XCTAssertFalse(sut.meeshyLookupIsUnavailable)
+    }
+
+    func test_scope_ofMessage_sealedOrDecryptedIsEndToEnd_otherwiseClear() {
+        var sealed = MeeshyMessage(id: "m1", conversationId: "c1", content: "")
+        sealed.encryptionMode = "e2ee"
+        XCTAssertEqual(ContactCardResolutionScope.of(message: sealed), .endToEnd)
+        var flagged = MeeshyMessage(id: "m2", conversationId: "c1", content: "")
+        flagged.isEncrypted = true
+        XCTAssertEqual(ContactCardResolutionScope.of(message: flagged), .endToEnd)
+        let plain = MeeshyMessage(id: "m3", conversationId: "c1", content: "")
+        XCTAssertEqual(ContactCardResolutionScope.of(message: plain), .clear)
+    }
+
+    func test_scope_ofEncryptedAttachment_isEndToEnd() {
+        var attachment = MessageAttachment(id: "a", fileName: "a.vcf", originalName: "a.vcf", mimeType: "text/vcard", fileUrl: "https://x/a.vcf")
+        XCTAssertEqual(ContactCardResolutionScope.clear.sealed(by: attachment), .clear)
+        attachment.isEncrypted = true
+        XCTAssertEqual(ContactCardResolutionScope.clear.sealed(by: attachment), .endToEnd)
+        XCTAssertEqual(ContactCardResolutionScope.unknown.sealed(by: attachment), .endToEnd)
     }
 
     // MARK: - Un visage par personne sur la fiche (#12568)

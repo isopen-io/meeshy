@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "profile.decor.shop", "androidName": "profile_decor_shop", "status": "adopted" }
+      ]
+    }
+  }
+}

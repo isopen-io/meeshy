@@ -538,6 +538,12 @@
    "reason": "Icons.Filled.Sensors"
   },
   {
+   "symbol": "ear.fill",
+   "status": "mapped",
+   "role": "Hearing",
+   "reason": "Icons.Filled.Hearing; variante .fill rendue en Filled"
+  },
+  {
    "symbol": "ellipsis",
    "status": "mapped",
    "role": "MoreHorizontal",
@@ -2383,6 +2389,10 @@
    "directional": false
   },
   "Hand": {
+   "origin": "material",
+   "directional": false
+  },
+  "Hearing": {
    "origin": "material",
    "directional": false
   },

@@ -62,6 +62,7 @@ struct FocalNonMediaBlock: View, Equatable {
     var location: SharedPlace? = nil
     var accentHex: String = MeeshyColors.brandPrimaryHex
     var isMe: Bool = false
+    var contactCardScope: ContactCardResolutionScope = .unknown
     var onTapLocation: ((SharedPlace) -> Void)? = nil
     var onShareFile: ((URL) -> Void)? = nil
 
@@ -73,6 +74,7 @@ struct FocalNonMediaBlock: View, Equatable {
         lhs.showsPlace == rhs.showsPlace
             && lhs.items.map(\.id) == rhs.items.map(\.id)
             && lhs.isDark == rhs.isDark
+            && lhs.contactCardScope == rhs.contactCardScope
             && lhs.accentHex == rhs.accentHex
             && lhs.isMe == rhs.isMe
     }
@@ -113,7 +115,8 @@ struct FocalNonMediaBlock: View, Equatable {
                             longitude: lon,
                             name: tapped.originalName.isEmpty ? nil : tapped.originalName
                         ))
-                    }
+                    },
+                    contactCardScope: contactCardScope
                 )
             }
         }

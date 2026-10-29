@@ -89,4 +89,40 @@ class EngagementProgressRepositoryTest {
 
         assertThat(cache().get("engagement", "me", JsonElement.serializer())).isNull()
     }
+
+    private fun payloadWithRarities(): JsonElement = buildJsonObject {
+        put("counters", JsonArray(emptyList()))
+        put("milestones", JsonArray(emptyList()))
+        put("streak", buildJsonObject { put("currentStreakDays", 2); put("longestStreakDays", 5) })
+        put("level", buildJsonObject { put("engagementScore", 9) })
+        put(
+            "game",
+            buildJsonObject {
+                put(
+                    "achievementRarities",
+                    buildJsonObject {
+                        put("achievement.first_content", buildJsonObject { put("rarity", "epic"); put("holders", 4000); put("population", 100000) })
+                    },
+                )
+            },
+        )
+    }
+
+    @Test fun `les raretes du dernier bloc se lisent au disque seul, sans aucun appel reseau`() = runTest {
+        coEvery { api.progress() } returns ApiResponse(success = true, data = payloadWithRarities())
+        repository().refresh()
+        coEvery { api.progress() } throws IOException("hors ligne")
+
+        val rarities = repository().cachedRarities()
+
+        assertThat(rarities!!.getValue("achievement.first_content").holders).isEqualTo(4000)
+    }
+
+    @Test fun `a froid ou sans bloc de jeu, aucune rarete`() = runTest {
+        assertThat(repository().cachedRarities()).isNull()
+        coEvery { api.progress() } returns ApiResponse(success = true, data = payload(1))
+        repository().refresh()
+
+        assertThat(repository().cachedRarities()).isNull()
+    }
 }

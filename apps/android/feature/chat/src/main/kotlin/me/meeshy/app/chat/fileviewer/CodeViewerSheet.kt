@@ -46,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.fileviewer.CodeLanguage
@@ -81,7 +80,7 @@ internal fun CodeViewerSheet(request: FileViewerRequest, language: CodeLanguage,
             if (read.isBinary) {
                 CodeLoad.Failed
             } else {
-                val lines = withContext(Dispatchers.Default) { SyntaxTokenizer.tokenize(read.text, language).map(SyntaxTokenizer::clampLine) }
+                val lines = withContext(FileViewerDispatchers.default) { SyntaxTokenizer.tokenize(read.text, language).map(SyntaxTokenizer::clampLine) }
                 CodeLoad.Ready(lines, read.truncated, read.text)
             }
         }.getOrElse { CodeLoad.Failed }

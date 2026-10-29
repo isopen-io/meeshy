@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -120,19 +119,22 @@ import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 
-/** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
-private const val FOREGROUND_WIDTH_FRACTION = 0.45f
+/** L'arrondi d'un média de premier plan, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
+private const val FOREGROUND_CORNER_FRACTION = 0.06f
 
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
- * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
- * canvas width scaled by the object's own `scale`. The [playheadSeconds] clock
+ * (canvas-normalised, 0..1) as its center anchor, framed by [ForegroundMediaFrame] (the iOS
+ * `baseMediaDesignSize` envelope, the one the composer paints) scaled by the object's own
+ * `scale`, tilted by its [StoryForegroundMediaView.rotation] and filled like iOS. The [playheadSeconds] clock
  * drives keyframe animation via the pure [StoryForegroundMediaView.animated]:
  * position/scale/opacity follow the clip's keyframes for the current instant, or
- * hold their static base when the clip has none. Rotation and inter-slide
- * transitions are still not applied in this projection.
+ * hold their static base when the clip has none. Inter-slide transitions are still
+ * not applied in this projection.
  */
 @Composable
 internal fun StoryForegroundLayer(
@@ -141,25 +143,31 @@ internal fun StoryForegroundLayer(
     playing: Boolean,
     muted: Boolean,
     modifier: Modifier = Modifier,
+    rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
 ) {
     val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val aspectRatio = animated.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
-        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * animated.scale.toFloat().coerceIn(0.2f, 3f)
-        val targetHeight = targetWidth / aspectRatio
+        val frame = ForegroundMediaFrame.renderedSize(
+            aspectRatio = animated.aspectRatio,
+            scale = animated.scale.coerceIn(0.2, 3.0),
+            canvasWidth = maxWidth.value.toDouble(),
+        )
+        val targetWidth = frame.width.toFloat().dp
+        val targetHeight = frame.height.toFloat().dp
         val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
         val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
         val layerModifier = Modifier
             .offset(x = offsetX, y = offsetY)
-            .width(targetWidth)
-            .aspectRatio(aspectRatio)
+            .size(targetWidth, targetHeight)
+            .graphicsLayer { rotationZ = media.rotation.toFloat() }
+            .clip(RoundedCornerShape(minOf(targetWidth, targetHeight) * FOREGROUND_CORNER_FRACTION))
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo) {
             ReelVideoSurface(
                 mediaUrl = media.url,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 muted = muted,
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
@@ -171,6 +179,7 @@ internal fun StoryForegroundLayer(
                 model = media.url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
                 modifier = layerModifier,
             )
         }

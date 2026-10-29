@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -57,8 +57,11 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * Horizontal story-ring carousel rendered atop the conversation list — the
- * Android port of `StoryTrayView`. Hidden entirely when there is nothing to
- * show (no blocking skeleton; cache-first behaviour stays instant).
+ * Android port of `StoryTrayView`. UN SEUL rail, monté en tête du fil ET de la liste des
+ * conversations (#13653) : « Votre story » (ajout) reste toujours là, comme le `MyStoryButton`
+ * d'iOS, même sans aucune story ; l'humeur (statut) vit sur l'avatar — badge, appui, menu —
+ * et non dans une barre de pastilles à part. L'humeur d'un anneau ([moodIdOf]) est annoncée à [onMoodShown] à CHAQUE
+ * apparition à l'écran et à chaque nouvelle humeur, jamais à une recomposition — iOS `countsImpression` (#13662).
  */
 @Composable
 fun StoryTray(
@@ -68,14 +71,19 @@ fun StoryTray(
     onManageStories: () -> Unit = {},
     onShowProfile: ((String) -> Unit)? = null,
     moodEmojiOf: (String) -> String? = { null },
+    myMoodEmoji: String? = null,
+    onAddStatus: (() -> Unit)? = null,
+    onMoodTap: ((String) -> Unit)? = null,
+    moodIdOf: (String) -> String? = { null },
+    onMoodShown: ((String) -> Unit)? = null,
     viewModel: StoriesViewModel = hiltViewModel(),
     impressions: StoryTrayImpressionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
     val failures = state.failedPublishes
-    if (tray.isEmpty && failures.isEmpty()) {
-        if (state.showSkeleton) StoryTraySkeleton(modifier)
+    if (tray.isEmpty && failures.isEmpty() && state.showSkeleton) {
+        StoryTraySkeleton(modifier)
         return
     }
 
@@ -87,23 +95,27 @@ fun StoryTray(
                 onDiscard = viewModel::discardPublish,
             )
         }
-        if (!tray.isEmpty) {
-            StoryTrayRail(
-                tray = tray,
-                moodEmojiOf = moodEmojiOf,
-                onOpenStory = onOpenStory,
-                onAddStory = onAddStory,
-                onManageStories = onManageStories,
-                onShowProfile = onShowProfile,
-                onAppeared = impressions::onRingAppeared,
-            )
-        }
+        StoryTrayRail(
+            tray = tray,
+            moodEmojiOf = moodEmojiOf,
+            myMoodEmoji = myMoodEmoji,
+            onOpenStory = onOpenStory,
+            onAddStory = onAddStory,
+            onManageStories = onManageStories,
+            onShowProfile = onShowProfile,
+            onAppeared = impressions::onRingAppeared,
+            onAddStatus = onAddStatus,
+            onMoodTap = onMoodTap,
+            moodIdOf = moodIdOf,
+            onMoodShown = onMoodShown,
+        )
     }
 }
 
 /**
- * La rangée d'anneaux : elle cède, de chaque côté, la place des disques flottants parqués à sa hauteur — « Votre story »
- * ne reste pas sous le disque de gauche (#12497) ; les anneaux défilent dans ce qui reste.
+ * La rangée d'anneaux, collée au bord comme le `LazyHStack` d'iOS (`StoryTrayView`) : elle ne cède rien aux disques
+ * flottants — iOS réserve la bande de stories au-dessus de leur zone de parcage (`FloatingButtonSafeZone.storyBand`),
+ * il ne décale pas le rail. Au fil comme en tête de la liste des conversations, « Votre story » est à la même place (#13665).
  */
 @Composable
 internal fun StoryTrayRail(
@@ -114,11 +126,14 @@ internal fun StoryTrayRail(
     onManageStories: () -> Unit,
     onShowProfile: ((String) -> Unit)?,
     onAppeared: (String?) -> Unit,
+    myMoodEmoji: String? = null,
+    onAddStatus: (() -> Unit)? = null,
+    onMoodTap: ((String) -> Unit)? = null,
+    moodIdOf: (String) -> String? = { null },
+    onMoodShown: ((String) -> Unit)? = null,
 ) {
     LazyRow(
-        modifier = Modifier
-            .floatingChromeLateralReserve(yieldsBothSides = true)
-            .heightIn(min = StoryEntryMetrics.height),
+        modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
         horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
         contentPadding = PaddingValues(
             horizontal = StoryEntryMetrics.paddingHorizontal,
@@ -132,30 +147,43 @@ internal fun StoryTrayRail(
                     ring = selfRing,
                     label = stringResource(R.string.stories_my_story),
                     cascadeIndex = 0,
-                    moodEmoji = moodEmojiOf(selfRing.userId),
+                    moodEmoji = myMoodEmoji ?: moodEmojiOf(selfRing.userId),
                     showAddBadge = true,
                     onOpen = { onOpenStory(selfRing.userId) },
                     onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                     onAdd = onAddStory,
                     onManage = onManageStories,
                     onAppeared = onAppeared,
+                    onAddStatus = onAddStatus,
+                    onMoodTap = onAddStatus,
                 )
             }
         } else {
             item(key = "add", contentType = ADD_CONTENT_TYPE) {
-                AddStoryItem(onClick = onAddStory, onManage = onManageStories)
+                AddStoryItem(
+                    moodEmoji = myMoodEmoji,
+                    onClick = onAddStory,
+                    onManage = onManageStories,
+                    onAddStatus = onAddStatus,
+                )
             }
         }
         itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
+            val moodEmoji = moodEmojiOf(ring.userId)
+            val moodId = moodIdOf(ring.userId)
+            if (onMoodShown != null && moodId != null && !moodEmoji.isNullOrEmpty()) {
+                LaunchedEffect(moodId) { onMoodShown(moodId) }
+            }
             StoryRingCell(
                 ring = ring,
                 label = ring.displayName,
                 cascadeIndex = index + 1,
-                moodEmoji = moodEmojiOf(ring.userId),
+                moodEmoji = moodEmoji,
                 showAddBadge = false,
                 onOpen = { onOpenStory(ring.userId) },
                 onShowProfile = onShowProfile?.let { open -> { open(ring.userId) } },
                 onAppeared = onAppeared,
+                onMoodTap = onMoodTap?.let { tap -> { tap(ring.userId) } },
             )
         }
     }
@@ -286,7 +314,12 @@ private const val SKELETON_PLACEHOLDER_COUNT = 4
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun AddStoryItem(onClick: () -> Unit, onManage: () -> Unit) {
+private fun AddStoryItem(
+    moodEmoji: String?,
+    onClick: () -> Unit,
+    onManage: () -> Unit,
+    onAddStatus: (() -> Unit)?,
+) {
     val addLabel = stringResource(R.string.stories_my_story)
     var menuOpen by remember { mutableStateOf(false) }
     Column(
@@ -301,9 +334,10 @@ private fun AddStoryItem(onClick: () -> Unit, onManage: () -> Unit) {
             onDismiss = { menuOpen = false },
             onViewStories = { menuOpen = false },
             onShowProfile = null,
-            selfActions = StoryTraySelfMenu.actions(null),
+            selfActions = StoryTraySelfMenu.actions(null, canChangeMood = onAddStatus != null),
             onAdd = { menuOpen = false; onClick() },
             onManage = { menuOpen = false; onManage() },
+            onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
         )
         Box(
             modifier = Modifier
@@ -318,6 +352,7 @@ private fun AddStoryItem(onClick: () -> Unit, onManage: () -> Unit) {
                 tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.size(26.dp),
             )
+            if (onAddStatus != null) StatusBadge(moodEmoji = moodEmoji, onClick = onAddStatus)
         }
         StoryLabel(addLabel, unread = false)
     }

@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
@@ -24,17 +23,14 @@ import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
-import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.VideoTrack
 import org.webrtc.audio.JavaAudioDeviceModule
+import java.util.concurrent.CopyOnWriteArraySet
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /** La pile WebRTC native : le contexte EGL et la fabrique de pairs, nés ENSEMBLE au premier appel. */
 internal class WebRtcStack(val eglBase: EglBase, val factory: PeerConnectionFactory)
@@ -67,6 +63,7 @@ class WebRtcEngine internal constructor(
     private val dataMessages = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64)
 
     private var peerConnection: PeerConnection? = null
+    private val previewPeers = CopyOnWriteArraySet<CallPreviewPeer>()
     private var configuration: PeerConnection.RTCConfiguration? = null
     private var dataChannel: CallDataChannel? = null
 
@@ -105,13 +102,7 @@ class WebRtcEngine internal constructor(
      */
     fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
         close()
-        val config = PeerConnection.RTCConfiguration(iceServers.map { it.toIceServer() }).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
-            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
-            iceCandidatePoolSize = ICE_CANDIDATE_POOL_SIZE
-        }
+        val config = rtcConfiguration(iceServers, ICE_CANDIDATE_POOL_SIZE)
         val peer = stack.value.factory.createPeerConnection(config, engineEvents.observer)
             ?: throw WebRtcError.ConfigureFailed("PeerConnectionFactory returned no peer connection")
         peerConnection = peer
@@ -178,21 +169,8 @@ class WebRtcEngine internal constructor(
             peerConnection?.let { media.attachForOffer(it) }
             ensureDataChannel()
         }
-        val created = suspendCancellableCoroutine<SessionDescription> { cont ->
-            val pc = peerConnection ?: return@suspendCancellableCoroutine cont.resumeWithException(
-                WebRtcError.NoPeerConnection(),
-            )
-            val observer = object : SdpObserver {
-                override fun onCreateSuccess(desc: SessionDescription) = cont.resume(desc)
-                override fun onCreateFailure(error: String?) =
-                    cont.resumeWithException(WebRtcError.FailedToCreateSdp(error.orEmpty()))
-                override fun onSetSuccess() = Unit
-                override fun onSetFailure(error: String?) = Unit
-            }
-            val constraints = MediaConstraints()
-            if (isOffer) pc.createOffer(observer, constraints) else pc.createAnswer(observer, constraints)
-        }
-        return localSdpTransformer.transform(created)
+        val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        return localSdpTransformer.transform(pc.awaitCreate(isOffer))
     }
 
     suspend fun setLocalDescription(desc: SessionDescription) {
@@ -220,20 +198,10 @@ class WebRtcEngine internal constructor(
         remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
 
-    private suspend fun applyDescription(desc: SessionDescription, local: Boolean): Unit =
-        suspendCancellableCoroutine { cont ->
-            val pc = peerConnection ?: return@suspendCancellableCoroutine cont.resumeWithException(
-                WebRtcError.NoPeerConnection(),
-            )
-            val observer = object : SdpObserver {
-                override fun onCreateSuccess(desc: SessionDescription?) = Unit
-                override fun onCreateFailure(error: String?) = Unit
-                override fun onSetSuccess() = cont.resume(Unit)
-                override fun onSetFailure(error: String?) =
-                    cont.resumeWithException(WebRtcError.SetDescriptionFailed(error.orEmpty()))
-            }
-            if (local) pc.setLocalDescription(observer, desc) else pc.setRemoteDescription(observer, desc)
-        }
+    private suspend fun applyDescription(desc: SessionDescription, local: Boolean) {
+        val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        pc.awaitApply(desc, local)
+    }
 
     /** Candidat du pair : refusé hors bornes, gardé tant que la description distante manque, sinon posé. */
     fun addIceCandidate(candidate: IceCandidate) {
@@ -253,7 +221,28 @@ class WebRtcEngine internal constructor(
         peerConnection?.restartIce()
     }
 
+    /**
+     * Ouvre un lien d'aperçu avant décroché, À CÔTÉ du pair de l'appel (qu'il ne touche jamais). Chez
+     * l'appelant, ses pistes sont tirées des sources de l'appel en cours ; un lien en réception seule
+     * n'en tire aucune et survit à [close] (au décroché, il tient jusqu'à la connexion du vrai lien).
+     * @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     */
+    fun openPreviewPeer(config: CallPreviewPeerConfig, listener: CallPreviewPeerListener): CallPreviewPeer {
+        val peer = CallPreviewPeer(
+            factory = stack.value.factory,
+            config = config,
+            listener = listener,
+            audioSource = media.sharedAudioSource,
+            videoSource = media.sharedVideoSource,
+            onClosed = { previewPeers.remove(it) },
+        )
+        previewPeers += peer
+        return peer
+    }
+
     fun close() {
+        // Un aperçu qui émet tire ses pistes des sources de l'appel : il meurt AVANT elles.
+        previewPeers.filter { it.usesCallSources }.forEach { it.close() }
         dataChannel?.close()
         dataChannel = null
         remoteDescriptions.reset()
@@ -268,12 +257,6 @@ class WebRtcEngine internal constructor(
         engineEvents.reset()
         activityGate.setActive(false)
     }
-
-    private fun SocketIceServer.toIceServer(): PeerConnection.IceServer =
-        PeerConnection.IceServer.builder(urls)
-            .setUsername(username.orEmpty())
-            .setPassword(credential.orEmpty())
-            .createIceServer()
 
     private companion object {
         const val ICE_CANDIDATE_POOL_SIZE = 4

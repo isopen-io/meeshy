@@ -26,7 +26,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerLeadingSceneToggles
 import me.meeshy.sdk.model.composer.ComposerRailDoor
+import me.meeshy.sdk.model.composer.ComposerSceneToggle
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.composer.ComposerPlateau
 import me.meeshy.ui.component.composer.ComposerRailBadge
@@ -89,6 +91,25 @@ internal fun StoryComposerPlateau(
                     badge = ComposerRailBadge(count, stringResource(R.string.story_composer_fab_badge, count))
                         .takeIf { count > 0 },
                 )
+            }
+            // Après les portes : l'éclair (mode Animé), puis le Cadre — des réglages de la scène, pas des portes.
+            ComposerLeadingSceneToggles.served(animated = true, frame = state.selectedSlideSceneBackground != null).forEach { toggle ->
+                when (toggle) {
+                    ComposerSceneToggle.ANIMATED -> ComposerRailButton(
+                        icon = MeeshyIcons.Bolt,
+                        label = stringResource(R.string.stories_scene_animated),
+                        onClick = { viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled) },
+                        enabled = !state.isDrawingActive,
+                        active = state.sceneIsAnimated,
+                    )
+                    ComposerSceneToggle.FRAME -> ComposerRailButton(
+                        icon = MeeshyIcons.Crop,
+                        label = stringResource(R.string.stories_scene_frame_title),
+                        onClick = { viewModel.onSceneReduce(StoryComposerSelectionReducer::frameToggled) },
+                        enabled = !state.isDrawingActive,
+                        active = state.frameOpen,
+                    )
+                }
             }
         },
         trailingRail = { StoryTrailingColumn(state, viewModel) },

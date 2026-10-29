@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 
@@ -14,6 +15,10 @@ import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
  * it already tracks, so the wire mapping ([toMediaObject]) stays a pure, unit-tested
  * function rather than reaching into upload state.
  *
+ * [url] is `null` for a background still waiting on its offline upload: the object then names the
+ * placeholder `cmid`, travels with its framing and loop in the outbox row, and the drainer's write-back
+ * swaps in the real media id once it lands (#13605).
+ *
  * Mirrors iOS designating exactly one canvas media object `isBackground: true` per
  * slide; the produced object is what the Android viewer's `resolveBackgroundMedia`
  * (`firstOrNull { it.isBackground }`) and the `StorySlideDuration` `bgVideoDur` branch
@@ -21,7 +26,7 @@ import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
  */
 data class StoryBackgroundMedia(
     val mediaId: String,
-    val url: String,
+    val url: String?,
     val mimeType: String,
     val durationSeconds: Double?,
     val loop: Boolean = true,
@@ -30,8 +35,9 @@ data class StoryBackgroundMedia(
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
 
-    /** The strictly-positive duration to publish (a video's loop period), or `null`. */
-    private val publishableDuration: Double? get() = durationSeconds?.takeIf { it > 0.0 }
+    /** The strictly-positive duration to publish (a video's loop period), held to the two hours a story may last (#13590), or `null`. */
+    private val publishableDuration: Double?
+        get() = durationSeconds?.takeIf { it.isFinite() && it > 0.0 }?.coerceAtMost(StoryLimits.TOTAL_SECONDS)
 
     /**
      * Builds the `isBackground` [StoryMediaObject] the reader honours. A video carries

@@ -76,44 +76,7 @@ extension StoryComposerViewModel {
     /// `"fit"` (letterbox) : dans ces cas le fond ne couvre pas le canvas et on
     /// matérialise ses contours (directive user 2026-07-14).
     var backgroundFillsCanvas: Bool {
-        Self.backgroundFillsCanvas(for: currentEffects)
-    }
-
-    /// Résolution pure (testable) : un fond visuel remplit le canvas sauf en
-    /// mode `"fit"`. Le double-tap du fond cycle `nil` (auto = aspectFill) →
-    /// `"fit"` (aspectFit) → `"fill"` (aspectFill) — seul `"fit"` laisse des
-    /// bandes vides. Le fit-mode du fond vit sur `backgroundTransform`.
-    static func backgroundFillsCanvas(for effects: StoryEffects) -> Bool {
-        guard effects.resolvedBackgroundMedia != nil else { return false }
-        return effects.backgroundTransform?.videoFitMode != "fit"
-    }
-
-    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme
-    /// (directive porteur, 2026-08-31).**
-    ///
-    /// Elle suivait le ratio CONTINU du fond, clampé à [9/21, 21/9] : « l'import
-    /// du fond impose le cadre et forme du Canvas » (directive du 2026-07-14).
-    /// Une photo paysage donnait donc un canvas 16:9 — ce que le porteur a
-    /// mesuré sur capture, là où toutes les planches du document montrent une
-    /// scène verticale.
-    ///
-    /// **Ce que la règle d'avant coûtait, au-delà de la forme** : le canvas
-    /// changeait de proportion SOUS la composition. Un texte posé sur une scène
-    /// verticale se retrouvait ailleurs dès qu'on ajoutait un fond paysage, et
-    /// l'outil de dessin traçait sur un cadre qui n'était plus celui de la carte
-    /// (#4515). Une scène qui change de forme n'est plus une scène : c'est un
-    /// cadre qui suit son contenu, quand c'est au contenu de trouver sa place
-    /// dans le cadre.
-    ///
-    /// `nil` veut dire « portrait 9:16 » — la valeur par défaut de
-    /// `StoryCanvasAspect.from(ratio:)`. On n'écrit donc pas un nombre : **on
-    /// s'abstient d'en imposer un**, ce qui laisse le défaut du modèle décider.
-    ///
-    /// Ce qui est déjà PUBLIÉ garde son ratio : cette règle ne gouverne que ce
-    /// qui se compose maintenant. Et le média qui ne remplit pas la scène laisse
-    /// des bandes — elles se peignent, elles ne restent pas noires.
-    static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
-        nil
+        StorySceneFrame.backgroundFillsCanvas(for: currentEffects)
     }
 
     var isContentToolActive: Bool {
@@ -223,26 +186,26 @@ extension StoryComposerViewModel {
         (currentEffects.audioPlayerObjects?.count ?? 0)
     }
 
-    var canAddText: Bool { textCount < 5 }
+    var canAddText: Bool { textCount < StoryComposerLimits.maxTextsPerScene }
 
-    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
-    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
-    /// collage que la pose refuserait ensuite en silence.
-    public var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène ne peut
+    /// plus recevoir AUCUN média (images, vidéos et audios pleins). Sans ce
+    /// plafond lu de l'extérieur, il proposerait un collage que la pose
+    /// refuserait ensuite en silence.
+    public var canAddMedia: Bool { canAddImage || canAddVideo || canAddAudio }
 
-    var canAddImage: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .image }.count ?? 0) < 5
-    }
+    var canAddImage: Bool { StoryComposerLimits.canAdd(.image, to: currentEffects) }
+    var canAddVideo: Bool { StoryComposerLimits.canAdd(.video, to: currentEffects) }
+    var canAddAudio: Bool { StoryComposerLimits.canAdd(.audio, to: currentEffects) }
+    public var canAddSticker: Bool { StoryComposerLimits.canAdd(.sticker, to: currentEffects) }
 
-    var canAddVideo: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .video }.count ?? 0) < 4
-    }
+    /// Dit au composeur qu'un plafond vient de refuser un geste.
+    func refuse(_ limit: StoryComposerLimit) { onLimitReached?(limit) }
 
-    var canAddAudio: Bool {
-        canAddMedia &&
-        (currentEffects.audioPlayerObjects?.count ?? 0) < 5
+    /// `effects` reçoit-il un objet de plus de `limit` ? Sinon le refus se DIT.
+    func admits(_ limit: StoryComposerLimit, in effects: StoryEffects) -> Bool {
+        guard StoryComposerLimits.canAdd(limit, to: effects) else { refuse(limit); return false }
+        return true
     }
 
     @discardableResult
@@ -267,7 +230,7 @@ extension StoryComposerViewModel {
     }
 
     public func addText() -> StoryTextObject? {
-        guard canAddText else { return nil }
+        guard canAddText else { refuse(.text); return nil }
         let center = nextObjectPosition(in: currentEffects)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
@@ -324,7 +287,7 @@ extension StoryComposerViewModel {
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
         // Retirer l'image de fond rend au canvas sa forme verticale par défaut.
-        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
+        effects.canvasAspectRatio = StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects)
         currentEffects = effects
         if selectedElementId == id { selectedElementId = nil }
         // Si on supprime le texte en cours d'édition flottante, sortir du mode.
@@ -384,7 +347,9 @@ extension StoryComposerViewModel {
         var effects = currentEffects
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
-        texts[index].text = text
+        let fitted = StoryComposerLimits.clampedText(text)
+        if fitted != text { refuse(.textLength) }
+        texts[index].text = fitted
         effects.textObjects = texts
         currentEffects = effects
     }
@@ -514,7 +479,7 @@ extension StoryComposerViewModel {
             }
             // Promotion → le canvas épouse la forme du nouveau fond ; rétrogradation
             // → retour au canvas vertical par défaut (plus aucune image de fond).
-            effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
+            effects.canvasAspectRatio = StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
             refreshStaleCropPreviews(of: effects.mediaObjects ?? [])   // fond ⇄ posé : le bitmap suit (#9499)
             return

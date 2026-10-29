@@ -430,4 +430,53 @@ class WebRtcCallCoordinatorTest {
         verify(exactly = 2) { audioManager.isSpeakerphoneOn = true }
         coordinator.end()
     }
+
+    @Test
+    fun `an offer that lands between the join and the connection opening is still answered`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+
+        startAsCallee()
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(match { it.type == SessionDescription.Type.OFFER && it.description == "v=0-offer" }) }
+        verify(exactly = 1) { signals.emitAnswer("call-9", "v=0-answer", to = "peer", from = "me", negotiationId = 0) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `held signals keep their order and the live ones follow them once`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        incomingSignals.emit(remoteSignal("ice-candidate", candidate = "held"))
+
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("ice-candidate", candidate = "live"))
+
+        coVerify(exactly = 1) { engine.addIceCandidate(match { it.sdp == "held" }) }
+        coVerify(exactly = 1) { engine.addIceCandidate(match { it.sdp == "live" }) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a held signal of another call is never applied`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer").copy(callId = "call-other"))
+
+        startAsCallee()
+
+        coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending before the connection opens drops what was held`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        coordinator.end()
+
+        startAsCallee()
+
+        coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
+        coordinator.end()
+    }
 }

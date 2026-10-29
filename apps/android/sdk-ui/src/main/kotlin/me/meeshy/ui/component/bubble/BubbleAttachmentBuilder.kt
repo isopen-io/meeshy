@@ -1,12 +1,14 @@
 package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.piece.PieceSealing
 import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -28,6 +30,7 @@ internal object BubbleAttachmentBuilder {
 
     /** Largeur (dp) de la case d'une image SEULE dans la bulle — celle de `BubbleImageGrid`. */
     private const val SOLO_IMAGE_WIDTH_DP = 252
+    private const val MAX_TILE_EMOJIS = 3
 
     /** Largeur (dp) d'une case de la grille de 2 à 4 images — celle de `BubbleImageGrid`. */
     private const val GRID_IMAGE_CELL_WIDTH_DP = 124
@@ -38,10 +41,11 @@ internal object BubbleAttachmentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         displayDensity: Float,
+        contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
     ): BubbleAttachments {
         // #13106 — un blob chiffré de bout en bout n'est aucun genre de pièce : ni nom, ni lien.
         val openable = visibleAttachments.filterNot { it.isEndToEndBlob }
-        return project(openable, effects, preferences, mediaBaseUrl, displayDensity)
+        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope)
     }
 
     private fun project(
@@ -50,17 +54,22 @@ internal object BubbleAttachmentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         displayDensity: Float,
+        contactScope: ContactCardResolutionScope,
     ): BubbleAttachments {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
             .map { attachment ->
+                val sealed = PieceSealing.isSealed(attachment)
                 BubbleFile(
                     attachmentId = attachment.id,
-                    name = attachment.originalName ?: attachment.fileName,
-                    sizeBytes = attachment.fileSize,
-                    url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    name = if (sealed) null else attachment.originalName ?: attachment.fileName,
+                    sizeBytes = if (sealed) null else attachment.fileSize,
+                    url = if (sealed) null else attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     isVideo = attachment.isVideo,
-                    isContactCard = attachment.isContactCard,
+                    isContactCard = attachment.isContactCard && !sealed,
+                    isSealed = sealed,
+                    isOnDevice = attachment.fileUrl.isLocalUri(),
+                    contactScope = if (attachment.isContactCard) contactScope.sealedBy(attachment) else ContactCardResolutionScope.Unknown,
                 )
             }
         return BubbleAttachments(
@@ -119,8 +128,23 @@ internal object BubbleAttachmentBuilder {
                     width = attachment.width,
                     height = attachment.height,
                     alt = attachment.alt?.trim()?.ifBlank { null },
+                    reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
                 )
             }
+    }
+
+    /** Une pièce à vue unique, floutée ou à effets ne montre rien d'elle, réactions comprises. */
+    private fun ApiMessageAttachment.showsItsContent(): Boolean =
+        isViewOnce != true && isBlurred != true && (effectFlags ?: 0L) == 0L && isEncrypted != true
+
+    /** Les trois emojis les plus posés, puis le total s'il dépasse un : « 👍❤️ 3 » ; `null` sans réaction. */
+    internal fun tileReactionLabel(summary: Map<String, Int>?): String? {
+        val posted = summary.orEmpty().entries.filter { it.value > 0 }
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        if (posted.isEmpty()) return null
+        val total = posted.sumOf { it.value }
+        val emojis = posted.take(MAX_TILE_EMOJIS).joinToString("") { it.key }
+        return if (total > 1) "$emojis $total" else emojis
     }
 
     /**
@@ -239,6 +263,8 @@ internal object BubbleAttachmentBuilder {
         if (isEncrypted == true || isProtected) return null
         return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
+
+    private fun String?.isLocalUri(): Boolean = this != null && (startsWith("file://") || startsWith("content://"))
 
     private const val LOCATION_MIME = "application/x-location"
 
