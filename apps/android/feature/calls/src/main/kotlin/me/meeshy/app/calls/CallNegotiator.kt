@@ -1,6 +1,8 @@
 package me.meeshy.app.calls
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -30,6 +32,34 @@ internal class CallNegotiator(
     /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
     private var isCaller: Boolean = false
 
+    /** Signals kept for a call whose connection is not open yet (see [hold]). */
+    private var held: HeldSignals? = null
+
+    private class HeldSignals(val callId: String, val collector: Job, val queue: Channel<CallSignalEnvelope>)
+
+    /**
+     * Keep [callId]'s incoming signals, in arrival order, until [observe] drains them —
+     * the offer may arrive before the connection exists to receive it.
+     */
+    fun hold(scope: CoroutineScope, callId: String) {
+        release()
+        val queue = Channel<CallSignalEnvelope>(Channel.UNLIMITED)
+        val collector = signals.incomingSignals
+            .filter { it.callId == callId }
+            .onEach { queue.trySend(it) }
+            .launchIn(scope)
+        held = HeldSignals(callId, collector, queue)
+    }
+
+    /** Drop whatever [hold] kept: the call ended before its connection opened. */
+    fun release() {
+        held?.let {
+            it.collector.cancel()
+            it.queue.close()
+        }
+        held = null
+    }
+
     /** A call opens: forget the previous one's epoch and addressees. */
     fun begin(callId: String, peerId: String, selfId: String, isCaller: Boolean) {
         this.callId = callId
@@ -41,10 +71,23 @@ internal class CallNegotiator(
 
     /** Relay the remote signals into the engine and the local ICE candidates to the peer, in [scope]. */
     fun observe(scope: CoroutineScope) {
-        signals.incomingSignals
-            .filter { it.callId == callId }
-            .onEach { onRemoteSignal(it) }
-            .launchIn(scope)
+        val kept = held?.takeIf { it.callId == callId }
+        if (kept != null) {
+            held = null
+            scope.launch {
+                try {
+                    for (envelope in kept.queue) onRemoteSignal(envelope)
+                } finally {
+                    kept.collector.cancel()
+                }
+            }
+        } else {
+            release()
+            signals.incomingSignals
+                .filter { it.callId == callId }
+                .onEach { onRemoteSignal(it) }
+                .launchIn(scope)
+        }
 
         engine.localIceCandidates
             .onEach { candidate ->

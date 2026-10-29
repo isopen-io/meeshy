@@ -64,6 +64,14 @@ class WebRtcCallCoordinator @Inject constructor(
     /** The remote video track stream, for the full-screen remote renderer. */
     val remoteVideoTracks get() = engine.remoteVideoTracks
 
+    /**
+     * Callee, BEFORE the join: start keeping [callId]'s signals. The gateway relays the
+     * caller's offer right after the join ACK, while the connection is still opening, and
+     * the incoming flow replays nothing — without this hold the offer was lost and the
+     * answered call stayed on « Connexion… » until the caller gave up.
+     */
+    fun holdIncomingSignals(scope: CoroutineScope, callId: String) = negotiator.hold(scope, callId)
+
     /** Caller: opens the connection now; the SDP offer is sent on [onParticipantJoined]. */
     fun startOutgoing(
         scope: CoroutineScope,
@@ -108,7 +116,7 @@ class WebRtcCallCoordinator @Inject constructor(
         onMediaStalled: () -> Unit,
         speakerOn: Boolean,
     ) {
-        end()
+        teardown()
         negotiator.begin(callId, peerId, selfId, isCaller)
         iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
@@ -175,6 +183,11 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     fun end() {
+        teardown()
+        negotiator.release()
+    }
+
+    private fun teardown() {
         callScope?.cancel()
         callScope = null
         interrupted = false

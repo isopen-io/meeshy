@@ -276,6 +276,7 @@ class CallViewModel @Inject constructor(
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
         if (callId.isBlank()) return
+        coordinator.holdIncomingSignals(viewModelScope, callId)
         // Join WITH the ACK (iOS emitCallJoinWithAck parity): it confirms this socket
         // is in the room AND carries the ICE servers, so media opens straight away.
         // A fire-and-forget join raced the room -> NOT_A_PARTICIPANT on answer.
@@ -285,7 +286,10 @@ class CallViewModel @Inject constructor(
                     viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
                     ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
                 )
-                is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
+                is CallJoinResult.Failure -> {
+                    coordinator.end()
+                    dispatch(CallEvent.ConnectionFailed(result.message))
+                }
             }
         }
     }

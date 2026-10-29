@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -523,6 +524,18 @@ class CallViewModelTest {
 
         assertThat(vm.activeConfig).isEqualTo(incomingAudio)
         coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
+    fun `accepting listens for the caller's offer before joining the room`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+
+        coVerifyOrder {
+            coordinator.holdIncomingSignals(any(), "call-9")
+            signalManager.emitJoinAwaitingAck("call-9")
+        }
     }
 
     @Test
