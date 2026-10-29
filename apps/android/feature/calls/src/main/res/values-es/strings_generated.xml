@@ -13,6 +13,8 @@
     <string name="call_capture_style_redcarpet">Alfombra roja</string>
     <string name="call_capture_style_screen">Pantalla</string>
     <string name="call_capture_style_strip">Fotomatón</string>
+    <string name="call_control_add_people">Añadir personas a la llamada</string>
+    <string name="call_control_add_people_caption">Añadir</string>
     <string name="call_control_camera">Elegir cámara</string>
     <string name="call_control_camera_rail">Opciones de mi cámara</string>
     <string name="call_control_capture">Capturar la llamada</string>
@@ -55,6 +57,13 @@
     <string name="call_frames_mood_signature">Sello propio</string>
     <string name="call_frames_more">Más ambientes</string>
     <string name="call_frames_more_hint">Muestra todos los ambientes y todos los marcos</string>
+    <string name="call_group_stage">Participantes de la llamada</string>
+    <string name="call_group_tile_unknown">Participante</string>
+    <string name="call_group_tile_you">Tú</string>
+    <string name="call_invite_failed">No se pudo invitar a esta persona</string>
+    <string name="call_invite_ringing">Sonando…</string>
+    <string name="call_invite_sheet_empty">No hay amigos para añadir</string>
+    <string name="call_invite_sheet_title">Añadir a la llamada</string>
     <string name="call_journal_cancel">Cancelar</string>
     <string name="call_journal_clear_action">Borrar</string>
     <string name="call_journal_clear_all">Borrar todo</string>
@@ -81,6 +90,7 @@
     <string name="call_mode_quit">Salir</string>
     <string name="call_mode_quit_montage_hint">Vuelve a la llamada</string>
     <string name="call_mode_recording">Grabando</string>
+    <string name="call_moderation_cancel">Cancelar</string>
     <string name="call_open_conversation">Conversación</string>
     <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>

@@ -13,6 +13,8 @@
     <string name="call_capture_style_redcarpet">Roter Teppich</string>
     <string name="call_capture_style_screen">Bildschirm</string>
     <string name="call_capture_style_strip">Fotoautomat</string>
+    <string name="call_control_add_people">Personen zum Anruf hinzufügen</string>
+    <string name="call_control_add_people_caption">Hinzufügen</string>
     <string name="call_control_camera">Kamera auswählen</string>
     <string name="call_control_camera_rail">Optionen meiner Kamera</string>
     <string name="call_control_capture">Anruf festhalten</string>
@@ -55,6 +57,13 @@
     <string name="call_frames_mood_signature">Markenzeichen</string>
     <string name="call_frames_more">Mehr Stimmungen</string>
     <string name="call_frames_more_hint">Zeigt alle Stimmungen und alle Rahmen</string>
+    <string name="call_group_stage">Anrufteilnehmer</string>
+    <string name="call_group_tile_unknown">Teilnehmer</string>
+    <string name="call_group_tile_you">Du</string>
+    <string name="call_invite_failed">Diese Person konnte nicht eingeladen werden</string>
+    <string name="call_invite_ringing">Klingelt …</string>
+    <string name="call_invite_sheet_empty">Keine Freunde zum Hinzufügen</string>
+    <string name="call_invite_sheet_title">Zum Anruf hinzufügen</string>
     <string name="call_journal_cancel">Abbrechen</string>
     <string name="call_journal_clear_action">Löschen</string>
     <string name="call_journal_clear_all">Alle löschen</string>
@@ -81,6 +90,7 @@
     <string name="call_mode_quit">Beenden</string>
     <string name="call_mode_quit_montage_hint">Kehrt zum Anruf zurück</string>
     <string name="call_mode_recording">Aufnahme läuft</string>
+    <string name="call_moderation_cancel">Abbrechen</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>

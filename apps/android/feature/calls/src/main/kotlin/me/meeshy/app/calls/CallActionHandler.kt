@@ -16,6 +16,8 @@ data class CallActionPresentation(
     val isActive: Boolean = false,
     /** What TalkBack says after the label — a state, an invitation, why it does not open. */
     @StringRes val hintRes: Int? = null,
+    /** The short word under the button in the unfolded rows; the label when `null`. */
+    @StringRes val captionRes: Int? = null,
 )
 
 /**

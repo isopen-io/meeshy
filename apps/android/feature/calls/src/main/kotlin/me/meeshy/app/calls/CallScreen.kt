@@ -115,6 +115,8 @@ fun CallScreen(
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+    val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
+    val groupShown = groupStageShown(state, groupMesh)
     val reduceMotion = rememberCallReduceMotion()
     val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
     val preview by viewModel.previewUi.collectAsStateWithLifecycle()
@@ -179,7 +181,9 @@ fun CallScreen(
             )
             // Le mode « Effets » pose lui-même les deux vidéos (la mienne en plein écran, l'autre en vignette) : la
             // scène du duo s'efface, sa vignette de soi en `SurfaceView` superposée percerait le mode.
-            val stageShown = videoStage && chromeState.layer.activeMode != CallScreenMode.Effects
+            // Un appel de groupe à deux membres distants ou plus pose sa grille entre l'en-tête et la pilule (#13740) :
+            // la scène du duo s'efface, la vidéo du principal passe dans sa vignette.
+            val stageShown = videoStage && chromeState.layer.activeMode != CallScreenMode.Effects && !groupShown
             // La permutation vit ICI, pas dans la scène : la pilule lit la même disposition pour ne pas répéter les
             // commandes de mon image que la vignette ou le rail du haut portent (iOS `CallCameraRail.placement`).
             val callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId }
@@ -241,6 +245,21 @@ fun CallScreen(
                     cameraPlacement = stageLayout.controlsPlacement,
                     modifier = content,
                     inPip = inPip,
+                    groupStage = if (groupShown) {
+                        { stageModifier ->
+                            CallGroupStage(
+                                state = state,
+                                mesh = groupMesh,
+                                localTrack = localTrack,
+                                primaryTrack = remoteVideo,
+                                eglContext = viewModel.eglBaseContext,
+                                onStageTap = sceneTap,
+                                modifier = stageModifier,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
@@ -358,6 +377,16 @@ fun CallScreen(
                     eglContext = viewModel.eglBaseContext,
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
+                )
+            }
+
+            // « Ajouter à l'appel » : une feuille, comme iOS ; la fermer rend le menu de la pilule.
+            if (chromeState.layer.openPanel == CallScreenPanel.People) {
+                CallAddPeopleSheet(
+                    selfId = groupMesh.roster.localUserId,
+                    primaryUserId = groupMesh.primaryUserId ?: config.peerId,
+                    mesh = groupMesh,
+                    onDismiss = chrome::backToMenu,
                 )
             }
 

@@ -99,6 +99,7 @@ internal class GroupCallMesh(
         val from = signal.from
         if (primaryUserId == null && !isOutgoing && signal.type == OFFER && !from.isNullOrBlank() && from != selfId) {
             primaryUserId = from
+            publish()
         }
         if (!isGroupCall && GroupCallEvidence.fromSignal(signal.type, from, selfId, primaryUserId)) becomeGroup()
         return when (val destination = GroupSignalRouting.destination(from, selfId, primaryUserId, isGroupCall, primaryVacated)) {
@@ -118,7 +119,10 @@ internal class GroupCallMesh(
     fun claimsArrival(userId: String?): Boolean {
         if (scope == null || userId.isNullOrBlank() || userId == selfId) return false
         if (primaryUserId == null) {
-            if (isOutgoing) primaryUserId = userId
+            if (isOutgoing) {
+                primaryUserId = userId
+                publish()
+            }
             return false
         }
         if (!isGroupCall && GroupCallEvidence.fromArrival(userId, selfId, primaryUserId)) becomeGroup()

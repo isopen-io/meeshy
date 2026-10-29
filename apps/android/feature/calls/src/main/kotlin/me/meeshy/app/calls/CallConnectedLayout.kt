@@ -135,6 +135,8 @@ internal fun CallConnectedColumn(
     cameraPlacement: CallCameraControlsPlacement,
     modifier: Modifier = Modifier,
     inPip: Boolean = false,
+    /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
+    groupStage: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val extensions = viewModel.extensions
     val explore = rememberCallTouchExploration()
@@ -164,7 +166,9 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
+            if (groupStage != null) {
+                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
+            } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
                 CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())

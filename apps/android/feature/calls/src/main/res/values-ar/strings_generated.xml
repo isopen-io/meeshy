@@ -13,6 +13,8 @@
     <string name="call_capture_style_redcarpet">السجادة الحمراء</string>
     <string name="call_capture_style_screen">الشاشة</string>
     <string name="call_capture_style_strip">كشك الصور</string>
+    <string name="call_control_add_people">إضافة أشخاص إلى المكالمة</string>
+    <string name="call_control_add_people_caption">إضافة</string>
     <string name="call_control_camera">اختيار الكاميرا</string>
     <string name="call_control_camera_rail">خيارات الكاميرا الخاصة بي</string>
     <string name="call_control_capture">التقاط المكالمة</string>
@@ -55,6 +57,13 @@
     <string name="call_frames_mood_signature">بصمة</string>
     <string name="call_frames_more">المزيد من الأجواء</string>
     <string name="call_frames_more_hint">يعرض كل الأجواء وكل الإطارات</string>
+    <string name="call_group_stage">المشاركون في المكالمة</string>
+    <string name="call_group_tile_unknown">مشارك</string>
+    <string name="call_group_tile_you">أنت</string>
+    <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
+    <string name="call_invite_ringing">يرنّ…</string>
+    <string name="call_invite_sheet_empty">لا يوجد أصدقاء لإضافتهم</string>
+    <string name="call_invite_sheet_title">إضافة إلى المكالمة</string>
     <string name="call_journal_cancel">إلغاء</string>
     <string name="call_journal_clear_action">مسح</string>
     <string name="call_journal_clear_all">مسح الكل</string>
@@ -81,6 +90,7 @@
     <string name="call_mode_quit">خروج</string>
     <string name="call_mode_quit_montage_hint">يعود إلى المكالمة</string>
     <string name="call_mode_recording">جارٍ التسجيل</string>
+    <string name="call_moderation_cancel">إلغاء</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>

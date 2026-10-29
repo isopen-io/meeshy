@@ -13,6 +13,8 @@
     <string name="call_capture_style_redcarpet">Tapete vermelho</string>
     <string name="call_capture_style_screen">Tela</string>
     <string name="call_capture_style_strip">Cabine de fotos</string>
+    <string name="call_control_add_people">Adicionar pessoas à chamada</string>
+    <string name="call_control_add_people_caption">Adicionar</string>
     <string name="call_control_camera">Escolher câmera</string>
     <string name="call_control_camera_rail">Opções da minha câmera</string>
     <string name="call_control_capture">Capturar a chamada</string>
@@ -55,6 +57,13 @@
     <string name="call_frames_mood_signature">Assinatura</string>
     <string name="call_frames_more">Mais climas</string>
     <string name="call_frames_more_hint">Mostra todos os climas e todas as molduras</string>
+    <string name="call_group_stage">Participantes da chamada</string>
+    <string name="call_group_tile_unknown">Participante</string>
+    <string name="call_group_tile_you">Você</string>
+    <string name="call_invite_failed">Não foi possível convidar esta pessoa</string>
+    <string name="call_invite_ringing">Chamando…</string>
+    <string name="call_invite_sheet_empty">Nenhum amigo para adicionar</string>
+    <string name="call_invite_sheet_title">Adicionar à chamada</string>
     <string name="call_journal_cancel">Cancelar</string>
     <string name="call_journal_clear_action">Apagar</string>
     <string name="call_journal_clear_all">Apagar tudo</string>
@@ -81,6 +90,7 @@
     <string name="call_mode_quit">Sair</string>
     <string name="call_mode_quit_montage_hint">Volta para a chamada</string>
     <string name="call_mode_recording">Gravando</string>
+    <string name="call_moderation_cancel">Cancelar</string>
     <string name="call_open_conversation">Conversa</string>
     <string name="call_open_conversation_hint">Abre a conversa mantendo a chamada ativa</string>
     <string name="call_recording_accept">Aceitar</string>
