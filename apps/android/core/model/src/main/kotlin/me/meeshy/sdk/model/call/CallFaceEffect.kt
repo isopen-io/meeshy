@@ -44,7 +44,7 @@ fun VideoFilterConfig.selectingFaceEffect(effect: CallFaceEffect): VideoFilterCo
 
 /**
  * Applies a colour [preset] (`null` = no look, the neutral colorimetry disabled) and KEEPS
- * everything that is not colour: blur, smoothing, face effect. iOS `applyingPreset`.
+ * everything that is not colour: blur, smoothing, face effect, natural complexion. iOS `applyingPreset`.
  */
 fun VideoFilterConfig.applyingPreset(preset: VideoFilterPreset?): VideoFilterConfig {
     val look = preset?.config ?: VideoFilterPreset.Natural.config.copy(isEnabled = false)
@@ -54,6 +54,7 @@ fun VideoFilterConfig.applyingPreset(preset: VideoFilterPreset?): VideoFilterCon
         skinSmoothingEnabled = skinSmoothingEnabled,
         skinSmoothingIntensity = skinSmoothingIntensity,
         faceEffect = faceEffect,
+        naturalComplexionEnabled = naturalComplexionEnabled,
     )
 }
 

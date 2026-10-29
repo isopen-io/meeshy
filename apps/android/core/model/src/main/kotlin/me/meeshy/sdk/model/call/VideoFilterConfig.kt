@@ -19,6 +19,9 @@ package me.meeshy.sdk.model.call
  * @property backgroundBlurRadius blur radius when [backgroundBlurEnabled].
  * @property skinSmoothingEnabled apply the face-detected skin-smoothing pass.
  * @property skinSmoothingIntensity smoothing strength (0..1) when enabled.
+ * @property naturalComplexionEnabled « Teint naturel » (#9196): on by default, imperceptible, cut as soon as the
+ *   device protects itself. Not a filter one CHOSE — the base quality of the image — so it counts neither in
+ *   [hasAdvancedFilters] nor in [hasChosenFilters].
  */
 data class VideoFilterConfig(
     val temperature: Float = 6500f,
@@ -33,6 +36,7 @@ data class VideoFilterConfig(
     val skinSmoothingEnabled: Boolean = false,
     val skinSmoothingIntensity: Float = 0.4f,
     val faceEffect: CallFaceEffect = CallFaceEffect.None,
+    val naturalComplexionEnabled: Boolean = true,
 ) {
     /**
      * `true` when a GPU-heavy advanced pass is requested (blur, smoothing, a stylized
