@@ -36,6 +36,7 @@ import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.authNavGraph
 import me.meeshy.app.navigation.graph.callNavGraph
 import me.meeshy.app.navigation.graph.conversationsNavGraph
@@ -256,6 +257,7 @@ fun MeeshyApp(
             activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
             onOpenConversation = { navController.navigate(Routes.chat(it)) },
             onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+            onOpenGame = { navController.navigate(GameRoutes.route(it)) },
         )
 
         AppOverlayStack(extensions.overlays, navController)

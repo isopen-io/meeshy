@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -52,11 +54,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import me.meeshy.feature.game.R
+import me.meeshy.sdk.model.game.GameRarityEntry
 import me.meeshy.sdk.model.game.engagement.BadgeMaterialKey
 import me.meeshy.sdk.model.game.engagement.EngagementReveal
 import me.meeshy.sdk.model.game.engagement.EngagementRevealPlan
+import me.meeshy.sdk.model.game.engagement.RarityBorder
 import me.meeshy.sdk.model.game.engagement.RevealMedalSpec
 import me.meeshy.sdk.model.game.engagement.RevealOccasion
+import me.meeshy.sdk.model.game.engagement.RevealPhotoMoment
+import me.meeshy.sdk.model.game.engagement.RevealPhotoOffer
+import me.meeshy.sdk.model.game.engagement.RevealRim
 import me.meeshy.sdk.model.game.engagement.RevealSymbol
 import me.meeshy.sdk.model.game.engagement.RevealTint
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -95,8 +102,19 @@ fun AchievementRevealScreen(
     modifier: Modifier = Modifier,
     occasion: RevealOccasion = RevealOccasion.Celebration,
     onSeeProgression: (() -> Unit)? = null,
+    rarity: GameRarityEntry? = null,
+    onPhoto: ((RevealPhotoMoment) -> Unit)? = null,
 ) {
     val plan = remember(reveal, occasion) { EngagementRevealPlan.of(reveal, occasion) }
+    // La rareté ne se montre que sur ce qui est OBTENU, et seulement si elle a le droit de se montrer (fail-closed).
+    val shownRarity = remember(rarity, occasion) { rarity?.takeIf { occasion.isObtained } }
+    val rarityLine = remember(shownRarity) { RevealRim.line(shownRarity) }
+    val rim = remember(shownRarity) { RevealRim.border(shownRarity) }
+    val res = LocalContext.current.resources
+    val locale = LocalConfiguration.current.locales[0]
+    val photoMoment = remember(reveal, occasion, onPhoto != null, shownRarity, plan, res, locale) {
+        RevealPhotoOffer.of(reveal, occasion, offersPhotos = onPhoto != null, title = RevealCopy.title(res, locale, plan.title), entry = shownRarity)
+    }
     val reduceMotion = LocalReduceMotion.current
     val haptics = rememberMeeshyHaptics()
     val appeared = remember { Animatable(if (reduceMotion) 1f else 0f) }
@@ -134,8 +152,11 @@ fun AchievementRevealScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
             ) {
-                RevealCard(plan, appeared.asValue(), halo.asValue(), reduceMotion)
-                RevealExit(plan, appeared.asValue(), onContinue, onSeeProgression.takeIf { plan.leadsToProgression })
+                RevealCard(plan, appeared.asValue(), halo.asValue(), reduceMotion, rim, rarityLine)
+                RevealExit(
+                    plan, appeared.asValue(), onContinue, onSeeProgression.takeIf { plan.leadsToProgression },
+                    onPhoto = photoMoment?.let { moment -> { onPhoto?.invoke(moment) } },
+                )
             }
         }
     }
@@ -144,11 +165,18 @@ fun AchievementRevealScreen(
 private fun Animatable<Float, *>.asValue(): () -> Float = { value }
 
 @Composable
-private fun RevealCard(plan: EngagementRevealPlan, appeared: () -> Float, halo: () -> Float, reduceMotion: Boolean) {
+private fun RevealCard(
+    plan: EngagementRevealPlan,
+    appeared: () -> Float,
+    halo: () -> Float,
+    reduceMotion: Boolean,
+    rim: RarityBorder?,
+    rarityLine: RevealRim.Line?,
+) {
     val res = LocalContext.current.resources
     val locale = LocalConfiguration.current.locales[0]
     val tint = plan.tint.color()
-    val spoken = remember(plan, res, locale) { RevealCopy.spoken(res, locale, plan) }
+    val spoken = remember(plan, rarityLine, res, locale) { RevealCopy.spoken(res, locale, plan, rarityLine) }
     Column(
         Modifier
             .width(CARD_WIDTH)
@@ -171,15 +199,15 @@ private fun RevealCard(plan: EngagementRevealPlan, appeared: () -> Float, halo: 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
-        RevealEmblem(plan, tint, appeared, halo, showRays = !reduceMotion && plan.raysWhenMotionAllowed)
-        RevealTexts(plan, res, locale)
+        RevealEmblem(plan, tint, appeared, halo, showRays = !reduceMotion && plan.raysWhenMotionAllowed, rim = rim)
+        RevealTexts(plan, res, locale, rarityLine)
     }
 }
 
 @Composable
-private fun RevealEmblem(plan: EngagementRevealPlan, tint: Color, appeared: () -> Float, halo: () -> Float, showRays: Boolean) {
+private fun RevealEmblem(plan: EngagementRevealPlan, tint: Color, appeared: () -> Float, halo: () -> Float, showRays: Boolean, rim: RarityBorder?) {
     Box(
-        Modifier.size(RAYS_BOX).graphicsLayer {
+        Modifier.size(if (rim == null) RAYS_BOX else RAYS_BOX_RIMMED).graphicsLayer {
             val scale = 0.4f + 0.6f * appeared()
             scaleX = scale
             scaleY = scale
@@ -187,21 +215,32 @@ private fun RevealEmblem(plan: EngagementRevealPlan, tint: Color, appeared: () -
         }.clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        if (showRays) Rays(tint, appeared, halo)
+        if (showRays) Rays(tint, appeared, halo, if (rim == null) RAY_RADIUS else RAY_RADIUS_RIMMED)
         val medal = plan.medal
-        if (medal != null) Medal(medal) else Disc(plan.symbol, tint)
+        if (rim == null) {
+            if (medal != null) Medal(medal) else Disc(plan.symbol, tint)
+        } else {
+            // Le disque dans la plaque que le liseré de rareté cerne : la plaque précède les rayons, qui tournent plus loin.
+            val plate = RoundedCornerShape(PLATE_RADIUS)
+            Box(
+                Modifier.clip(plate).background(tint.copy(alpha = PLATE_ALPHA)).rarityRim(rim, plate).padding(MeeshySpacing.xl),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (medal != null) Medal(medal) else Disc(plan.symbol, tint)
+            }
+        }
     }
 }
 
 /** Douze rayons autour de l'emblème : un seul calque de dessin, lu dans la phase de dessin (aucune recomposition). */
 @Composable
-private fun Rays(tint: Color, appeared: () -> Float, halo: () -> Float) {
+private fun Rays(tint: Color, appeared: () -> Float, halo: () -> Float, radius: Int) {
     Canvas(Modifier.fillMaxSize()) {
         val scale = 0.6f + 0.55f * halo()
         val ray = Size(3.dp.toPx(), 18.dp.toPx())
         repeat(RAY_COUNT) { index ->
             rotate(index * (360f / RAY_COUNT), pivot = center) {
-                val top = center.y - RAY_RADIUS.dp.toPx() * scale
+                val top = center.y - radius.dp.toPx() * scale
                 drawRoundRect(tint, topLeft = Offset(center.x - ray.width / 2, top), size = ray, cornerRadius = CornerRadius(ray.width / 2), alpha = 0.35f * appeared())
             }
         }
@@ -232,7 +271,7 @@ private fun Disc(symbol: RevealSymbol, tint: Color) {
 }
 
 @Composable
-private fun RevealTexts(plan: EngagementRevealPlan, res: android.content.res.Resources, locale: java.util.Locale) {
+private fun RevealTexts(plan: EngagementRevealPlan, res: android.content.res.Resources, locale: java.util.Locale, rarityLine: RevealRim.Line?) {
     val obtained = plan.tint != RevealTint.Locked
     Column(Modifier.fillMaxWidth().clearAndSetSemantics { }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Text(
@@ -253,12 +292,27 @@ private fun RevealTexts(plan: EngagementRevealPlan, res: android.content.res.Res
             color = MeeshyPalette.Indigo200,
             textAlign = TextAlign.Center,
         )
+        // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
+        if (rarityLine != null) {
+            Text(
+                RevealCopy.rarityLine(res, locale, rarityLine),
+                style = meeshyText(MeeshyFontSize.footnote, if (rarityLine is RevealRim.Line.Measured) FontWeight.SemiBold else FontWeight.Medium),
+                color = MeeshyPalette.Indigo200,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
 /** L'action OFFERTE en premier, pleine ; la fermeture pleine quand elle est SEULE, en retrait sinon. */
 @Composable
-private fun RevealExit(plan: EngagementRevealPlan, appeared: () -> Float, onContinue: () -> Unit, onSeeProgression: (() -> Unit)?) {
+private fun RevealExit(
+    plan: EngagementRevealPlan,
+    appeared: () -> Float,
+    onContinue: () -> Unit,
+    onSeeProgression: (() -> Unit)?,
+    onPhoto: (() -> Unit)?,
+) {
     val tint = plan.tint.color()
     Column(
         Modifier.widthIn(max = CARD_WIDTH).graphicsLayer { alpha = appeared().coerceIn(0f, 1f) },
@@ -267,8 +321,28 @@ private fun RevealExit(plan: EngagementRevealPlan, appeared: () -> Float, onCont
         if (onSeeProgression != null) {
             ExitButton(stringResource(R.string.reveal_continue), filled = true, tint = tint, onClick = onSeeProgression)
         }
+        if (onPhoto != null) PhotoButton(onPhoto)
         val label = stringResource(if (plan.leadsToProgression) R.string.reveal_ok else R.string.reveal_close)
         ExitButton(label, filled = onSeeProgression == null, tint = tint, onClick = onContinue)
+    }
+}
+
+/** « En faire une carte » : la carte 9:16 du succès, offerte sous l'action proposée, en retrait. */
+@Composable
+private fun PhotoButton(onClick: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button) { haptics.light(); onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(MeeshyIcons.Camera, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        Text(stringResource(R.string.reveal_achievement_photo), style = meeshyText(MeeshyFontSize.callout, FontWeight.SemiBold), color = MeeshyPalette.White)
     }
 }
 
@@ -316,7 +390,11 @@ private fun BadgeMaterialKey.toGameMaterial(): GameMaterial = when (this) {
 }
 
 private val RAYS_BOX = 180.dp
+private val RAYS_BOX_RIMMED = 216.dp
+private val PLATE_RADIUS = 36.dp
+private const val PLATE_ALPHA = 0.14f
 private const val RAY_RADIUS = 64
+private const val RAY_RADIUS_RIMMED = 86
 private const val GLOW_RADIUS = 260
 private const val SCRIM_DARK = 0.62f
 private const val SCRIM_LIGHT = 0.45f

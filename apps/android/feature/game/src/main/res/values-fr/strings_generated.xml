@@ -167,6 +167,14 @@
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
     <string name="game2_prestige_stay">Continuer à briller</string>
     <string name="game2_prestige_title">Renaissance</string>
+    <string name="game2_rarity_aria">Rareté : %1$s, %2$s</string>
+    <string name="game2_rarity_common">Commun</string>
+    <string name="game2_rarity_epic">Épique</string>
+    <string name="game2_rarity_legendary">Légendaire</string>
+    <string name="game2_rarity_measuring">Rareté en cours de mesure</string>
+    <string name="game2_rarity_mythic">Mythique</string>
+    <string name="game2_rarity_rare">Rare</string>
+    <string name="game2_rarity_share">%1$s des comptes</string>
     <string name="game2_retry">Réessayer</string>
     <string name="game2_season_claim">Réclamer la halte %1$s</string>
     <string name="game2_season_completed">Voyage accompli : une coupe, une médaille datée et %1$s de gloire.</string>
@@ -568,7 +576,11 @@
     <string name="game_missions_prism_day">Jour du Prisme : un des actes se joue dans une autre langue que la tienne.</string>
     <string name="game_missions_prism_hour">Heure du Prisme : %1$s – %2$s — chaque acte compte double.</string>
     <string name="game_missions_title">Le rêve de cette nuit</string>
+    <string name="game_photo_author_label_achievement">Haut fait de %1$s</string>
+    <string name="game_photo_failed">La photo n’a pas pu être composée.</string>
+    <string name="game_photo_kicker_achievement">Haut fait</string>
     <string name="game_photo_offer_start">Photographier</string>
+    <string name="game_photo_share">Partager</string>
     <string name="game_progression_empty">Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.</string>
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Progression en cours de chargement</string>
@@ -696,6 +708,7 @@
         <item quantity="many">%1$d jours d’affilée</item>
         <item quantity="other">%1$d jours d’affilée</item>
     </plurals>
+    <string name="reveal_achievement_photo">En faire une carte</string>
     <string name="reveal_badge_achievement">Succès débloqué</string>
     <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe. Le suivant se débloque en continuant.</string>
     <string name="reveal_badge_badge">Badge gagné</string>

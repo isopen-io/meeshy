@@ -42,6 +42,12 @@ data class InAppBanner(
      * le même libellé, d'où le drapeau explicite plutôt qu'une inférence sur `body == null`.
      */
     val previewHidden: Boolean = false,
+    /**
+     * La notification d'un palier ou d'un événement du JEU (succès, badge, série, niveau, ligue…) : la toucher ouvre
+     * l'écran que la carte de navigation du jeu nomme, et un palier SE CÉLÈBRE d'abord (iOS `RootNotificationNavigator`,
+     * `pendingEngagementReveal`). `null` pour tout autre contenu.
+     */
+    val game: ApiNotification? = null,
 )
 
 /**
@@ -187,6 +193,7 @@ class NotificationBannerViewModel @Inject constructor(
             conversationId = conversationId,
             postId = shown.context?.postId ?: shown.metadata?.postId,
             previewHidden = !prefs.showPreview,
+            game = shown.takeIf { NotificationDestinationResolver.resolve(it) is NotificationDestination.Game },
         )
         dismissJob = viewModelScope.launch {
             delay(VISIBLE_MS)

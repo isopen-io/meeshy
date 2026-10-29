@@ -106,6 +106,33 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun theBannerOfAMilestoneCarriesItsNotificationSoTouchingItCanCelebrateIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        val milestone = ApiNotification(
+            id = "g1",
+            type = "streak_milestone",
+            metadata = me.meeshy.sdk.model.NotificationMetadata(threshold = 7),
+        )
+
+        received.emit(milestone)
+        runCurrent()
+
+        assertThat(vm.banner.value?.game).isEqualTo(milestone)
+    }
+
+    @Test
+    fun theBannerOfAMessageIsNotAGameBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "m1"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.game).isNull()
+    }
+
+    @Test
     fun aDuplicateDeliveryWithinTheWindowDoesNotSurfaceAgain() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()
