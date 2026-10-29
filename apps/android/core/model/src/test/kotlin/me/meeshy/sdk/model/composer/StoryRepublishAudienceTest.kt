@@ -52,15 +52,34 @@ class StoryRepublishAudienceTest {
     }
 
     @Test
-    fun `le serveur n'est pas ecrit quand l'audience ne change pas, l'ordre de la liste n'y change rien`() {
-        val before = Choice(StoryVisibility.ONLY, listOf("a", "b"))
-        assertThat(StoryRepublishAudience.change(before, Choice(StoryVisibility.ONLY, listOf("b", "a")))).isEqualTo(Change.None)
+    fun `le serveur n'est pas ecrit quand l'audience brute ne change pas, l'ordre de la liste n'y change rien`() {
+        val chosen = Choice(StoryVisibility.ONLY, listOf("a", "b"))
+        assertThat(StoryRepublishAudience.change("ONLY", listOf("b", "a"), chosen)).isEqualTo(Change.None)
     }
 
     @Test
     fun `un changement part avec sa liste, vide quand le mode n'en a pas`() {
-        val before = Choice(StoryVisibility.ONLY, listOf("a"))
-        assertThat(StoryRepublishAudience.change(before, Choice(StoryVisibility.FRIENDS)))
+        assertThat(StoryRepublishAudience.change("ONLY", listOf("a"), Choice(StoryVisibility.FRIENDS)))
+            .isEqualTo(Change.Apply(StoryVisibility.FRIENDS, emptyList()))
+    }
+
+    @Test
+    fun `une visibilite brute inconnue ou absente est ecrite meme si l'auteur garde PRIVATE`() {
+        val chosen = Choice(StoryVisibility.PRIVATE)
+        assertThat(StoryRepublishAudience.change("GALAXY", null, chosen)).isEqualTo(Change.Apply(StoryVisibility.PRIVATE, emptyList()))
+        assertThat(StoryRepublishAudience.change(null, null, chosen)).isEqualTo(Change.Apply(StoryVisibility.PRIVATE, emptyList()))
+    }
+
+    @Test
+    fun `une liste brute que le nettoyage a changee est ecrite`() {
+        val chosen = StoryRepublishAudience.proposal("ONLY", listOf("a", "me", "bad"), "me", setOf("bad"))
+        assertThat(StoryRepublishAudience.change("ONLY", listOf("a", "me", "bad"), chosen))
+            .isEqualTo(Change.Apply(StoryVisibility.ONLY, listOf("a")))
+    }
+
+    @Test
+    fun `une liste orpheline sous un mode sans liste est effacee`() {
+        assertThat(StoryRepublishAudience.change("FRIENDS", listOf("a"), Choice(StoryVisibility.FRIENDS)))
             .isEqualTo(Change.Apply(StoryVisibility.FRIENDS, emptyList()))
     }
 }
