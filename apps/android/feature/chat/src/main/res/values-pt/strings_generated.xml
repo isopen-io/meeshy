@@ -62,6 +62,7 @@
     <string name="contact_card_a11y_on_meeshy">No Meeshy: %1$s</string>
     <string name="contact_card_action_connect">Conectar</string>
     <string name="contact_card_action_write">Escrever</string>
+    <string name="contact_card_lookup_unavailable_encrypted">Verificação «No Meeshy» indisponível em uma conversa criptografada</string>
     <string name="contact_card_on_meeshy">No Meeshy</string>
     <string name="contact_card_open_failed">Não foi possível abrir a conversa</string>
     <string name="contact_card_shared">Contato compartilhado</string>

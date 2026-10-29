@@ -23,6 +23,7 @@ import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendConnectionCoordinator
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.contacts.ContactRelation
 import me.meeshy.sdk.model.contacts.vcard.VCard
 import me.meeshy.sdk.model.contacts.vcard.VCardEntry
@@ -83,7 +84,7 @@ class ContactCardAccountsViewModelTest {
     @Test
     fun `les comptes du cache sont montres avant tout reseau puis revalides`() = runTest(dispatcher) {
         val f = fixture(cached = listOf(account("a")), resolved = listOf(account("a"), account("b")))
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         assertThat(f.vm.rows.value.map { it.account.userId }).containsExactly("a", "b").inOrder()
         coVerify { f.resolver.resolve(request) }
@@ -92,7 +93,7 @@ class ContactCardAccountsViewModelTest {
     @Test
     fun `seul le premier compte garde son visage dans l entete`() = runTest(dispatcher) {
         val f = fixture(resolved = listOf(account("a"), account("b")))
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         assertThat(f.vm.rows.value.map { it.showsFace }).containsExactly(false, true).inOrder()
     }
@@ -100,7 +101,7 @@ class ContactCardAccountsViewModelTest {
     @Test
     fun `une carte sans numero ni e-mail ne part pas au serveur`() = runTest(dispatcher) {
         val f = fixture()
-        f.vm.bind(VCard(formattedName = "Sans identifiant"))
+        f.vm.bind(VCard(formattedName = "Sans identifiant"), ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         coVerify(exactly = 0) { f.resolver.resolve(any()) }
         assertThat(f.vm.rows.value).isEmpty()
@@ -109,7 +110,7 @@ class ContactCardAccountsViewModelTest {
     @Test
     fun `soi n a aucune action et un ami peut seulement ecrire`() = runTest(dispatcher) {
         val f = fixture(resolved = listOf(account("me", "self"), account("fr", "friend"), account("no")))
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         val rows = f.vm.rows.value.associateBy { it.account.userId }
         assertThat(rows.getValue("me").actions.canWrite).isFalse()
@@ -121,7 +122,7 @@ class ContactCardAccountsViewModelTest {
     @Test
     fun `une demande envoyee bascule la relation servie sans attendre le reseau`() = runTest(dispatcher) {
         val f = fixture(resolved = listOf(account("a")))
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         f.friendship.didSendRequest("a", "r1")
         advanceUntilIdle()
@@ -133,7 +134,7 @@ class ContactCardAccountsViewModelTest {
         val f = fixture(resolved = listOf(account("a")))
         val job: Job = launch { }
         every { f.connections.connect("a") } returns job
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         val events = mutableListOf<ContactCardAccountEvent>()
         val collector = launch(Dispatchers.Unconfined) { f.vm.events.collect { events += it } }
         advanceUntilIdle()
@@ -162,7 +163,7 @@ class ContactCardAccountsViewModelTest {
         f.blocks.setBlocked("a", true)
         val events = mutableListOf<ContactCardAccountEvent>()
         val collector = launch(Dispatchers.Unconfined) { f.vm.events.collect { events += it } }
-        f.vm.bind(card)
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
         advanceUntilIdle()
         f.vm.write("a")
         advanceUntilIdle()
@@ -181,5 +182,47 @@ class ContactCardAccountsViewModelTest {
         advanceUntilIdle()
         assertThat(events).containsExactly(ContactCardAccountEvent.OpenFailed)
         collector.cancel()
+    }
+
+    @Test
+    fun `une fiche en bout en bout ne lit ni ne requete rien et dit la verification indisponible`() = runTest(dispatcher) {
+        val f = fixture(cached = listOf(account("a")), resolved = listOf(account("a")))
+        f.vm.bind(card, ContactCardResolutionScope.EndToEnd)
+        advanceUntilIdle()
+        coVerify(exactly = 0) { f.resolver.resolve(any()) }
+        verify(exactly = 0) { f.resolver.cached(any()) }
+        assertThat(f.vm.rows.value).isEmpty()
+        assertThat(f.vm.lookupUnavailable.value).isTrue()
+    }
+
+    @Test
+    fun `une fiche au mode inconnu ferme comme le bout en bout`() = runTest(dispatcher) {
+        val f = fixture(resolved = listOf(account("a")))
+        f.vm.bind(card, ContactCardResolutionScope.Unknown)
+        advanceUntilIdle()
+        coVerify(exactly = 0) { f.resolver.resolve(any()) }
+        assertThat(f.vm.rows.value).isEmpty()
+        assertThat(f.vm.lookupUnavailable.value).isTrue()
+    }
+
+    @Test
+    fun `une fiche en clair resout et ne dit rien d'indisponible`() = runTest(dispatcher) {
+        val f = fixture(resolved = listOf(account("a")))
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { f.resolver.resolve(request) }
+        assertThat(f.vm.rows.value).hasSize(1)
+        assertThat(f.vm.lookupUnavailable.value).isFalse()
+    }
+
+    @Test
+    fun `la meme carte rouverte sous une portee fermee efface les comptes deja montres`() = runTest(dispatcher) {
+        val f = fixture(resolved = listOf(account("a")))
+        f.vm.bind(card, ContactCardResolutionScope.Clear)
+        advanceUntilIdle()
+        f.vm.bind(card, ContactCardResolutionScope.EndToEnd)
+        advanceUntilIdle()
+        assertThat(f.vm.rows.value).isEmpty()
+        assertThat(f.vm.lookupUnavailable.value).isTrue()
     }
 }

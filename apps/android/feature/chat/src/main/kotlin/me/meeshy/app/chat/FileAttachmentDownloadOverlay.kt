@@ -63,7 +63,7 @@ internal fun FileAttachmentDownloadOverlay(
             Toast.makeText(context, savedMessage, Toast.LENGTH_SHORT).show()
         } else if (download.openWhenDone) {
             // « Ouvrir » reste dans Meeshy : fiche de contact, code, PDF ou document (parité des visionneuses iOS).
-            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri))
+            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri, attachmentId = download.attachmentId))
         } else {
             val intent = FileAttachmentIntentResolver.shareIntent(completed.localUri.toUri(), completed.mimeType, download.fileName)
             if (runCatching { context.startActivity(intent) }.isFailure) {

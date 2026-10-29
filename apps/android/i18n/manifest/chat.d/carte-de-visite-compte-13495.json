@@ -51,6 +51,12 @@
           "iosKey": "link.error.open-conversation",
           "androidName": "contact_card_open_failed",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.lookup-unavailable-encrypted",
+          "androidName": "contact_card_lookup_unavailable_encrypted",
+          "status": "adopted"
         }
       ]
     }

@@ -65,6 +65,7 @@
     <string name="contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="contact_card_action_connect">تواصل</string>
     <string name="contact_card_action_write">مراسلة</string>
+    <string name="contact_card_lookup_unavailable_encrypted">التحقق «على Meeshy» غير متاح في محادثة مشفّرة</string>
     <string name="contact_card_on_meeshy">على Meeshy</string>
     <string name="contact_card_open_failed">تعذّر فتح المحادثة</string>
     <string name="contact_card_shared">جهة اتصال مشتركة</string>

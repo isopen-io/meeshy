@@ -1,6 +1,9 @@
 package me.meeshy.sdk.user
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.contacts.ContactRelation
 import me.meeshy.sdk.net.ApiError
@@ -110,5 +113,25 @@ class ContactCardAccountResolverTest {
         h.resolver.resolve(req)
         h.resolver.clear()
         assertThat(h.resolver.cached(req)).isNull()
+    }
+
+    @Test
+    fun `deux resolutions simultanees de la meme requete ne font qu'un vol`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val requests = mutableListOf<ContactResolveRequest>()
+        val resolver = ContactCardAccountResolver(
+            source = { request -> requests += request; gate.await(); ok(account("a")) },
+            freshnessMillis = 1_000, failureBackoffMillis = 500, capacity = 2, clock = { 0L },
+        )
+        val req = request("+33600000001")
+
+        val first = async { resolver.resolve(req) }
+        val second = async { resolver.resolve(req) }
+        runCurrent()
+        gate.complete(Unit)
+
+        assertThat(first.await()).hasSize(1)
+        assertThat(second.await()).hasSize(1)
+        assertThat(requests).hasSize(1)
     }
 }

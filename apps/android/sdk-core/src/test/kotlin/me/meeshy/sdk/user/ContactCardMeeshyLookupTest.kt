@@ -107,4 +107,19 @@ class ContactCardMeeshyLookupTest {
 
         assertThat(second.await()?.userId).isEqualTo("u1")
     }
+
+    @Test
+    fun `deux pieces portant la meme carte ne font qu'une requete`() = runTest {
+        val h = Harness(card, listOf(ada))
+        h.gate = CompletableDeferred()
+
+        val first = async { h.lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.Clear) }
+        val second = async { h.lookup.lookup("a2", "content://dl/2", ContactCardResolutionScope.Clear) }
+        runCurrent()
+        h.gate!!.complete(Unit)
+
+        assertThat(first.await()?.userId).isEqualTo("u1")
+        assertThat(second.await()?.userId).isEqualTo("u1")
+        assertThat(h.requests).hasSize(1)
+    }
 }

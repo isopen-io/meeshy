@@ -63,6 +63,8 @@ internal class ContactCardAccountsUi(
     val bind: (VCard) -> Unit,
     val onConnect: (userId: String) -> Unit,
     val onWrite: (userId: String) -> Unit,
+    /** La portée interdit de rapprocher la carte : la fiche le dit (#13633). */
+    val lookupUnavailable: Boolean = false,
 )
 
 /**
@@ -78,6 +80,7 @@ internal fun ContactCardHost(
 ) {
     val viewModel: ContactCardAccountsViewModel = hiltViewModel()
     val rows by viewModel.rows.collectAsStateWithLifecycle()
+    val lookupUnavailable by viewModel.lookupUnavailable.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberMeeshyHaptics()
     val connectFailed = stringResource(R.string.contact_card_toast_request_failed)
@@ -101,8 +104,9 @@ internal fun ContactCardHost(
             }
         }
     }
-    val ui = remember(rows, viewModel) {
-        ContactCardAccountsUi(rows, viewModel::bind, viewModel::connect, viewModel::write)
+    val scope = request.contactScope
+    val ui = remember(rows, viewModel, scope, lookupUnavailable) {
+        ContactCardAccountsUi(rows, { card -> viewModel.bind(card, scope) }, viewModel::connect, viewModel::write, lookupUnavailable)
     }
     ContactCardSheet(request, accent, onDismiss, ui)
 }
@@ -245,6 +249,14 @@ private fun StatePill(label: String, icon: ImageVector, modifier: Modifier) {
 /** Les sections apparaissent et disparaissent en douceur quand la résolution revient (jamais de saut de la fiche). */
 @Composable
 internal fun ContactCardAccountSections(accounts: ContactCardAccountsUi, accent: Color) {
+    if (accounts.lookupUnavailable) {
+        Text(
+            text = stringResource(R.string.contact_card_lookup_unavailable_encrypted),
+            fontSize = MeeshyFontSize.label,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     accounts.rows.forEach { row ->
         key(row.account.userId) {
             AnimatedVisibility(

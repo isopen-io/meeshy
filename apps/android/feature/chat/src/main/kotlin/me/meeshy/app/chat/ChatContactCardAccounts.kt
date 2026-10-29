@@ -1,13 +1,16 @@
 package me.meeshy.app.chat
 
 import androidx.lifecycle.ViewModel
+import androidx.compose.runtime.staticCompositionLocalOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.user.ContactCardMeeshyAccount
 import me.meeshy.sdk.user.ContactCardMeeshyLookup
 import me.meeshy.ui.component.bubble.BubbleContactCardAccounts
+import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleFile
 
 /** Porte le service de rapprochement jusqu'à l'écran du fil (un singleton : tous les fils partagent les caches). */
@@ -54,5 +57,19 @@ internal class ChatContactCardAccounts(
         return lookup.lookup(file.attachmentId, uri, scopeOf(file))
     }
 
+    /** La portée d'une carte : celle de la rangée sous la bulle ET de la fiche (#13633) — seul le clair CONFIRMÉ ouvre. */
+    fun scopeFor(file: BubbleFile): ContactCardResolutionScope = scopeOf(file)
+
     private fun scopeOf(file: BubbleFile) = file.contactScope.inConversation(conversationIsEndToEnd).under(clearance)
 }
+
+/** La portée que l'hôte du fil donne à la fiche d'une carte ; FERMÉE tant qu'aucun hôte n'en fournit. */
+internal val LocalChatContactCardScope = staticCompositionLocalOf<(BubbleFile) -> ContactCardResolutionScope> { { ContactCardResolutionScope.Unknown } }
+
+/** La portée de la pièce [attachmentId] parmi les bulles du fil ; une pièce introuvable ferme ([ContactCardResolutionScope.Unknown]). */
+internal fun List<BubbleContent>.contactScopeOf(
+    attachmentId: String,
+    scopeFor: (BubbleFile) -> ContactCardResolutionScope,
+): ContactCardResolutionScope =
+    asSequence().flatMap { it.files.asSequence() }.firstOrNull { it.attachmentId == attachmentId }?.let(scopeFor)
+        ?: ContactCardResolutionScope.Unknown

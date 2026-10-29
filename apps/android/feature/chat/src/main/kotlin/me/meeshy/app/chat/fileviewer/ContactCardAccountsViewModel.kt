@@ -21,6 +21,7 @@ import me.meeshy.sdk.friend.FriendConnectionCoordinator
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.contacts.ContactAccountActions
 import me.meeshy.sdk.model.contacts.ContactCardRelation
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.contacts.ContactRelation
 import me.meeshy.sdk.model.contacts.vcard.VCard
 import me.meeshy.sdk.model.friend.FriendshipStatus
@@ -55,6 +56,9 @@ internal sealed interface ContactCardAccountEvent {
  * - **Cache d'abord** : [bind] pose les comptes déjà résolus sans attendre ; la revalidation est silencieuse.
  * - **Optimiste** : la demande d'amitié passe par [FriendConnectionCoordinator], qui bascule le cache d'amitié
  *   AVANT le réseau et le restaure sur refus ; la relation servie suit ce cache.
+ * - **Échec fermé** (#13633, miroir de #13622) : seule une conversation CONNUE claire ouvre la résolution ([ContactCardResolutionScope.mayResolveOnServer]) ;
+ *   chiffrée de bout en bout, mode inconnu ou protocole futur ⇒ ni lecture du cache ni requête, coordonnées locales seules, et la fiche dit
+ *   que la vérification « Sur Meeshy » est indisponible ([lookupUnavailable]).
  * - **Vie privée** (#9225) : la résolution est faite par la passerelle, qui ne rend que des comptes inscrits
  *   (profil public, jamais la présence) ; rien du carnet n'est conservé ici.
  */
@@ -79,7 +83,11 @@ internal class ContactCardAccountsViewModel internal constructor(
 
     private val accounts = MutableStateFlow<List<PublicContactAccount>>(emptyList())
     private val writing = MutableStateFlow<Set<String>>(emptySet())
-    private var boundRequest: ContactResolveRequest? = null
+    private var bound: Pair<ContactResolveRequest, ContactCardResolutionScope>? = null
+    private val _lookupUnavailable = MutableStateFlow(false)
+
+    /** La portée interdit de rapprocher la carte : la fiche le dit, sans dire pourquoi. */
+    val lookupUnavailable: StateFlow<Boolean> = _lookupUnavailable.asStateFlow()
 
     private val _events = MutableSharedFlow<ContactCardAccountEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<ContactCardAccountEvent> = _events.asSharedFlow()
@@ -118,16 +126,24 @@ internal class ContactCardAccountsViewModel internal constructor(
         }
     }
 
-    /** Résout la carte : le cache sert tout de suite, le réseau revalide ; une carte sans identifiant ne part pas. */
-    fun bind(card: VCard) {
+    /**
+     * Résout la carte sous la portée de sa conversation : le cache sert tout de suite, le réseau revalide ; une carte sans
+     * identifiant ne part pas, et hors d'une portée claire rien ne part ni ne se lit.
+     */
+    fun bind(card: VCard, scope: ContactCardResolutionScope) {
         val request = ContactResolveRequest.bounded(card.phones.map { it.value }, card.emails.map { it.value }, defaultCountry())
-        if (request == boundRequest) return
-        boundRequest = request
+        if (bound == request to scope) return
+        bound = request to scope
+        _lookupUnavailable.value = !scope.mayResolveOnServer
+        if (!scope.mayResolveOnServer) {
+            accounts.value = emptyList()
+            return
+        }
         accounts.value = resolver.cached(request).orEmpty()
         if (request.isEmpty) return
         viewModelScope.launch {
             val resolved = resolver.resolve(request)
-            if (boundRequest == request && resolved != accounts.value) accounts.value = resolved
+            if (bound == request to scope && resolved != accounts.value) accounts.value = resolved
         }
     }
 

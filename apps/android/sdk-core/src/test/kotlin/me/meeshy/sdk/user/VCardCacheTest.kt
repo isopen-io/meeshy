@@ -33,8 +33,8 @@ class VCardCacheTest {
         val files = Files(mutableMapOf("content://dl/1" to ada.toByteArray()))
         val subject = cache(files)
 
-        assertThat(subject.load("a1", "content://dl/1")?.displayName).isEqualTo("Ada Lovelace")
-        assertThat(subject.cached("a1")?.displayName).isEqualTo("Ada Lovelace")
+        assertThat(subject.load("a1", "content://dl/1")?.phones).containsExactly("+33600000001")
+        assertThat(subject.cached("a1")?.phones).containsExactly("+33600000001")
         subject.load("a1", "content://dl/1")
 
         assertThat(files.opened).hasSize(1)
@@ -117,5 +117,23 @@ class VCardCacheTest {
 
         assertThat(subject.load("a1", "content://com.android.contacts/contacts/as_vcard/x")).isNull()
         assertThat(refusing.load("a2", "content://x/2")).isNull()
+    }
+
+    @Test
+    fun `seule la requete bornee reste en memoire, jamais la vCard entiere`() = runTest {
+        val phones = (1..15).joinToString("") { "TEL:+3360000%04d\n".format(it) }
+        val emails = (1..15).joinToString("") { "EMAIL:u$it@example.com\n" }
+        val body = "BEGIN:VCARD\nVERSION:3.0\nFN:Ada\nNOTE:" + "x".repeat(100_000) + "\n" + phones + emails + "END:VCARD\n"
+        val files = Files(mutableMapOf("file:///1" to body.toByteArray()))
+        val subject = cache(files)
+
+        val kept = subject.load("1", "file:///1")
+
+        assertThat(kept).isInstanceOf(CardIdentifiers::class.java)
+        assertThat(kept!!.phones).hasSize(10)
+        assertThat(kept.emails).hasSize(10)
+        assertThat(subject.cached("1")!!.request("FR")).isEqualTo(
+            me.meeshy.sdk.net.api.ContactResolveRequest.bounded(kept.phones, kept.emails, "FR"),
+        )
     }
 }

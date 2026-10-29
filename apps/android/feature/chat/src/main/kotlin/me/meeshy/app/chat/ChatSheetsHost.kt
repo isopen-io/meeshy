@@ -179,10 +179,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
+    val contactScopeFor = LocalChatContactCardScope.current
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactScopeFor)) },
         onDismiss = actions.dismissFileDownload,
         onRetry = { actions.retryFileDownload() },
     )

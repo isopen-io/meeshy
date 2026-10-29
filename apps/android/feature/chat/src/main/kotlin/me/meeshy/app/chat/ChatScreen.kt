@@ -139,7 +139,10 @@ fun ChatScreen(
     val contactCards = remember(cardsViewModel, viewModel, isEndToEnd, clearance) {
         ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, clearance, viewModel::downloadedFileUri)
     }
-    CompositionLocalProvider(LocalBubbleContactCardAccounts provides contactCards) {
+    CompositionLocalProvider(
+        LocalBubbleContactCardAccounts provides contactCards,
+        LocalChatContactCardScope provides contactCards::scopeFor,
+    ) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.

@@ -119,4 +119,34 @@ class ChatContactCardAccountsTest {
         provider(downloaded = mapOf("a1" to "content://media/external/downloads/7")).lookup(served)
         coVerify(exactly = 1) { lookup.lookup("a1", "content://media/external/downloads/7", ContactCardResolutionScope.Clear) }
     }
+
+    @Test
+    fun `la portee de la fiche suit celle de la rangee, seul le clair ouvre`() {
+        assertThat(provider().scopeFor(file())).isEqualTo(ContactCardResolutionScope.Clear)
+        assertThat(provider(e2ee = true).scopeFor(file())).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(provider(clearance = ConversationClearance.UNKNOWN).scopeFor(file())).isEqualTo(ContactCardResolutionScope.Unknown)
+        assertThat(provider(clearance = ConversationClearance.END_TO_END).scopeFor(file())).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(provider().scopeFor(file(ContactCardResolutionScope.EndToEnd))).isEqualTo(ContactCardResolutionScope.EndToEnd)
+    }
+
+    @Test
+    fun `la portee d'une piece du fil se lit dans ses bulles et une piece introuvable ferme`() {
+        val bubble = me.meeshy.ui.component.bubble.BubbleContent(
+            messageId = "m1",
+            text = "",
+            isOutgoing = false,
+            isTranslated = false,
+            originalText = null,
+            senderName = "Ada",
+            showSenderName = false,
+            isEdited = false,
+            isDeleted = false,
+            createdAtIso = "2026-10-29T10:00:00Z",
+            files = listOf(file()),
+        )
+        val scopeFor = provider(e2ee = true)::scopeFor
+
+        assertThat(listOf(bubble).contactScopeOf("a1", scopeFor)).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(listOf(bubble).contactScopeOf("zz", scopeFor)).isEqualTo(ContactCardResolutionScope.Unknown)
+    }
 }

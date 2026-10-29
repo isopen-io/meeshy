@@ -61,6 +61,7 @@
     <string name="contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
     <string name="contact_card_action_connect">Connect</string>
     <string name="contact_card_action_write">Message</string>
+    <string name="contact_card_lookup_unavailable_encrypted">“On Meeshy” check unavailable in an encrypted conversation</string>
     <string name="contact_card_on_meeshy">On Meeshy</string>
     <string name="contact_card_open_failed">Couldn\'t open the conversation</string>
     <string name="contact_card_shared">Shared contact</string>
