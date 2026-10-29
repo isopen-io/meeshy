@@ -51,6 +51,7 @@ class MoodBubbleTest {
         currentUserId: String = "me",
         lifecycleOwner: LifecycleOwner = FakeLifecycleOwner(),
         shown: () -> Boolean = { true },
+        rotating: Boolean = false,
     ) {
         val entry = StatusEntry(id = "s1", userId = "u1", username = "amina", moodEmoji = "🔥", content = "En feu")
         compose.setContent {
@@ -64,6 +65,7 @@ class MoodBubbleTest {
                             onReply = { replied++ },
                             onDismiss = { dismissed++ },
                             onDwellEnd = { dwellEnded++ },
+                            isChangingConfigurations = { rotating },
                         )
                     }
                 }
@@ -118,6 +120,15 @@ class MoodBubbleTest {
         compose.runOnIdle { owner.registry.currentState = Lifecycle.State.CREATED }
         compose.waitForIdle()
         assertThat(dismissed).isEqualTo(1)
+    }
+
+    @Test
+    fun `une rotation ne ferme pas la bulle, l arriere plan de la recreation n en est pas un`() {
+        val owner = FakeLifecycleOwner()
+        show(lifecycleOwner = owner, rotating = true)
+        compose.runOnIdle { owner.registry.currentState = Lifecycle.State.CREATED }
+        compose.waitForIdle()
+        assertThat(dismissed).isEqualTo(0)
     }
 
     @Test

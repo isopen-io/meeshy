@@ -1,7 +1,5 @@
 package me.meeshy.app.notifications
 
-import androidx.compose.foundation.layout.PaddingValues
-import me.meeshy.ui.component.chrome.floatingChromeBottomReserve
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -257,7 +255,6 @@ private fun NotificationPanes(
             ListPane.Rows -> LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = floatingChromeBottomReserve()),
             ) {
                 items(rows, key = { it.id }, contentType = { "notification" }) { notification ->
                     NotificationRow(

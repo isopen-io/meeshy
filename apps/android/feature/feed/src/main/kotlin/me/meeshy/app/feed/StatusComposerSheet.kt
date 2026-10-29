@@ -135,6 +135,7 @@ fun StatusComposerSheet(
 
             VisibilityRow(
                 selected = draft.visibility,
+                offered = draft.offeredVisibilities,
                 onSelect = { visibility -> draft = draft.withVisibility(visibility) },
             )
 
@@ -220,7 +221,7 @@ private fun MoodPlateau(
             )
             EmojiGrid(selected = draft.selectedEmoji, onToggle = { onChange(draft.toggleEmoji(it)) }, onMore = { isPicking = true })
             if (ComposerRailPlan.publicationControls(ComposerFormat.STATUS)[PublicationControl.AUDIENCE] == PublicationControlPlace.SURFACE) {
-                VisibilityRow(selected = draft.visibility, onSelect = { onChange(draft.withVisibility(it)) })
+                VisibilityRow(selected = draft.visibility, offered = draft.offeredVisibilities, onSelect = { onChange(draft.withVisibility(it)) })
             }
             TextInput(draft = draft, onTextChange = { onChange(draft.withText(it)) }, focusRequester = wordFocus)
         }
@@ -369,6 +370,7 @@ private fun EmojiButton(
 @Composable
 private fun VisibilityRow(
     selected: StatusVisibility,
+    offered: List<StatusVisibility>,
     onSelect: (StatusVisibility) -> Unit,
 ) {
     Row(
@@ -377,7 +379,7 @@ private fun VisibilityRow(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        StatusVisibility.entries.forEach { visibility ->
+        offered.forEach { visibility ->
             val active = visibility == selected
             Text(
                 text = visibilityLabel(visibility),

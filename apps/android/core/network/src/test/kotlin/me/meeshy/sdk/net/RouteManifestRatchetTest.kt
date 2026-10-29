@@ -74,8 +74,10 @@ class RouteManifestRatchetTest {
          * SES réglages), que porte `GameApi.userGame`.
          * 230 : moins `GET /packs/shop` et les quatre `POST /packs/<domaine>/:slug/purchase` (#13625 : la Boutique des packs,
          * achat confirmé par le serveur), que porte `PackApi`.
+         * 229 : moins `GET /conversations/:id/card` (#13672 : la carte d'un lien direct de conversation dans
+         * une bulle), que porte `LinkDetailApi.directCard`.
          */
-        const val TO_PORT_CEILING = 230
+        const val TO_PORT_CEILING = 229
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

@@ -70,8 +70,7 @@ internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
         stack.visible.forEachIndexed { index, chip ->
             Box(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(ringColor)
+                    .background(ringColor, CircleShape)
                     .padding(1.5.dp),
             ) {
                 MeeshyAvatar(

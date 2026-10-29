@@ -37,6 +37,29 @@ internal fun PostCard(
     onSelectLanguage: (String) -> Unit = onFlagTap,
     modifier: Modifier = Modifier,
 ) {
+    val reelCover = post.reelCover?.takeIf { post.showsReelCard }
+    if (reelCover != null) {
+        ReelPostCard(
+            post = post,
+            cover = reelCover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            isOwn = isOwn,
+            onLike = onLike,
+            onBookmark = onBookmark,
+            onComments = onComments,
+            onRepost = onRepost,
+            onQuote = onQuote,
+            onShare = onShare,
+            onCopyLink = onCopyLink,
+            onCopyText = onCopyText,
+            onPin = onPin,
+            onReport = onReport,
+            onDelete = onDelete,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
         modifier = modifier

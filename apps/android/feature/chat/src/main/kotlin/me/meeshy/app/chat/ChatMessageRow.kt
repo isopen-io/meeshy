@@ -15,7 +15,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import me.meeshy.app.chat.conversationcard.ConversationLinkCard
+import me.meeshy.app.chat.conversationcard.LocalConversationLinkCards
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.deeplink.ConversationLinkTarget
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewCache
 import me.meeshy.sdk.link.LinkPreviewOutcome
@@ -70,6 +73,8 @@ internal class ChatMessageRowActions(
     val onStoryCitationOpen: (postId: String) -> Unit = {},
     /** Un toucher sur une rangée en mode sélection (#13294) : la coche ou la décoche. */
     val onToggleSelection: (messageId: String) -> Unit = {},
+    /** « Ouvrir » ou une jonction confirmée depuis la carte d'un lien de conversation (#13672). */
+    val onOpenConversation: (conversationId: String) -> Unit = {},
 )
 
 /**
@@ -187,6 +192,11 @@ internal fun ChatMessageRow(
             )
         } ?: LinkPreviewOutcome.Empty,
     )
+    // Une URL qui désigne une conversation Meeshy devient sa carte (iOS `ConversationLinkCard`, #13672).
+    val conversationCards = LocalConversationLinkCards.current
+    val conversationCardTarget = remember(linkUrl, conversationCards) {
+        conversationCards?.let { cards -> linkUrl?.let { ConversationLinkTarget.target(it, cards.webOrigin) } }
+    }
     // iOS rend l'aperçu de lien DANS la bulle, sous le texte (`BubbleLinkEmbed`).
     val linkAccessory: (@Composable (Color) -> Unit)? = if (linkUrl == null) {
         null
@@ -194,14 +204,27 @@ internal fun ChatMessageRow(
         { ink ->
             // La rangée plate n'a pas de fond : son aperçu prend l'accent, comme une bulle reçue.
             val onTint = bubble.isOutgoing && !flat
-            LinkPreviewCard(
-                state = linkState,
-                isOutgoing = false,
-                accentColor = if (onTint) ink else accentColor,
-                ink = if (onTint) ink else null,
-                inBubble = true,
-                onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
-            )
+            val preview: @Composable () -> Unit = {
+                LinkPreviewCard(
+                    state = linkState,
+                    isOutgoing = false,
+                    accentColor = if (onTint) ink else accentColor,
+                    ink = if (onTint) ink else null,
+                    inBubble = true,
+                    onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
+                )
+            }
+            if (conversationCards != null && conversationCardTarget != null) {
+                ConversationLinkCard(
+                    target = conversationCardTarget,
+                    cards = conversationCards,
+                    fallbackAccent = accentColor,
+                    onOpenConversation = actions.onOpenConversation,
+                    fallback = preview,
+                )
+            } else {
+                preview()
+            }
         }
     }
     SelectableRowFrame(

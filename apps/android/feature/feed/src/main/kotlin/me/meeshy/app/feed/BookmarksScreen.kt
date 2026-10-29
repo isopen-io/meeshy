@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -148,6 +147,7 @@ fun BookmarksScreen(
                                 onRemove = { viewModel.removeBookmark(post.id) },
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -174,14 +174,26 @@ fun BookmarksScreen(
 }
 
 @Composable
-private fun SavedPostCard(
+internal fun SavedPostCard(
     modifier: Modifier = Modifier,
     onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onRemove: () -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit,
 ) {
+    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+        ReelPostCard(
+            post = post,
+            cover = cover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            onBookmark = onRemove,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -243,33 +255,7 @@ private fun SavedPostCard(
                 )
             }
 
-            post.repostEmbed?.let { embed ->
-                Spacer(Modifier.height(MeeshySpacing.md))
-                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-            }
-
-            if (post.isReel) {
-                Spacer(Modifier.height(MeeshySpacing.md))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.semantics {
-                        contentDescription = post.authorName ?: unknownAuthor
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = null,
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.xs))
-                    Text(
-                        text = stringResource(R.string.feed_reel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-            }
+            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
         }
     }
 }

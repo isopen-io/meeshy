@@ -50,7 +50,9 @@ internal fun PostStatsRow(
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     modifier: Modifier = Modifier,
+    overMedia: Boolean = false,
 ) {
+    val neutral = if (overMedia) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
@@ -61,19 +63,21 @@ internal fun PostStatsRow(
             icon = if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
             count = post.likeCount,
             contentDescription = likeLabel,
-            tint = if (post.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            tint = if (post.isLiked) MeeshyPalette.Error else neutral,
             active = post.isLiked,
             heart = true,
+            countColor = neutral,
             onClick = onLike,
         )
         StatAction(
             icon = Icons.Outlined.ChatBubbleOutline,
             count = post.commentCount,
             contentDescription = stringResource(R.string.feed_comments),
-            tint = MeeshyTheme.tokens.textSecondary,
+            tint = neutral,
+            countColor = neutral,
             onClick = onComments,
         )
-        RepostStatAction(count = post.repostCount, onRepost = onRepost, onQuote = onQuote)
+        RepostStatAction(count = post.repostCount, tint = neutral, onRepost = onRepost, onQuote = onQuote)
         Spacer(Modifier.weight(1f))
         val bookmarkLabel =
             stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
@@ -81,8 +85,9 @@ internal fun PostStatsRow(
             icon = if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
             count = post.bookmarkCount,
             contentDescription = bookmarkLabel,
-            tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+            tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else neutral,
             active = post.isBookmarked,
+            countColor = neutral,
             onClick = onBookmark,
         )
     }
@@ -97,6 +102,7 @@ private fun StatAction(
     onClick: (() -> Unit)?,
     active: Boolean = false,
     heart: Boolean = false,
+    countColor: Color = MeeshyTheme.tokens.textSecondary,
 ) {
     val haptics = rememberMeeshyHaptics()
     Row(
@@ -113,7 +119,7 @@ private fun StatAction(
             .semantics { this.contentDescription = contentDescription },
     ) {
         EngagementIcon(icon = icon, active = active, tint = tint, burst = heart, tilt = heart)
-        EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
+        EngagementCount(count = count, color = countColor)
     }
 }
 
@@ -125,14 +131,15 @@ private val MIN_ACTION_TARGET = 44.dp
  * and the post detail (iOS `FeedPostActionsBar` repost confirmation).
  */
 @Composable
-private fun RepostStatAction(count: Int, onRepost: () -> Unit, onQuote: () -> Unit) {
+private fun RepostStatAction(count: Int, tint: Color, onRepost: () -> Unit, onQuote: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         StatAction(
             icon = Icons.Filled.Repeat,
             count = count,
             contentDescription = stringResource(R.string.feed_reposts),
-            tint = MeeshyTheme.tokens.textSecondary,
+            tint = tint,
+            countColor = tint,
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

@@ -4,12 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.media.AudioAttributes
 import android.media.AudioManager
-import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +35,7 @@ import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleAudioPlayback
 
 /**
- * The screen-scoped voice-note player of the thread: ONE [MediaPlayer] for every bubble,
+ * The screen-scoped voice-note player of the thread: ONE [VoiceNoteEngine] for every bubble,
  * released when the thread leaves composition. It mirrors the pure [ChatAudioPlayback] onto
  * the platform player and back — coverage-exempt glue, like [OverlayMediaPreview].
  *
@@ -50,7 +47,7 @@ import me.meeshy.ui.component.bubble.BubbleAudioPlayback
  */
 @Stable
 internal class ChatAudioPlayer internal constructor(
-    private val player: MediaPlayer,
+    private val player: VoiceNoteEngine,
     private val host: VoicePlaybackHost = NoVoicePlaybackHost,
     audioManager: AudioManager? = null,
     conversationTitle: String? = null,
@@ -71,12 +68,7 @@ internal class ChatAudioPlayer internal constructor(
     private val releaseFocus = Runnable { if (!playback.transport.isPlaying) focus?.abandon() }
 
     init {
-        player.setOnPreparedListener { onPrepared() }
-        player.setOnCompletionListener { onCompleted() }
-        player.setOnErrorListener { _, _, _ ->
-            onError()
-            true
-        }
+        player.listen(onPrepared = ::onPrepared, onCompleted = ::onCompleted, onError = ::onError)
     }
 
     /** Touch on a bubble's voice note: load it, pause it, resume it, or switch to it. */
@@ -89,14 +81,7 @@ internal class ChatAudioPlayer internal constructor(
             next.transport.isLoading && url != null && switched ->
                 runCatching {
                     player.reset()
-                    player.setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build(),
-                    )
-                    player.setDataSource(url)
-                    player.prepareAsync()
+                    player.load(url)
                 }.onFailure { playback = next.failed(); return }
             next.transport.isPlaying && !prev.transport.isPlaying -> {
                 if (!startPlayer()) {
@@ -154,7 +139,7 @@ internal class ChatAudioPlayer internal constructor(
     internal fun onPrepared() {
         if (startPlayer()) {
             playback = playback.ready()
-            card = card?.copy(durationMs = runCatching { player.duration }.getOrDefault(0).toLong().coerceAtLeast(0L))
+            card = card?.copy(durationMs = player.durationMs)
         } else {
             playback = playback.ready().paused()
         }
@@ -178,8 +163,8 @@ internal class ChatAudioPlayer internal constructor(
     }
 
     internal fun tick() {
-        val duration = runCatching { player.duration }.getOrDefault(0)
-        val position = runCatching { player.currentPosition }.getOrDefault(0)
+        val duration = player.durationMs
+        val position = player.positionMs
         if (duration > 0) playback = playback.tick(position / 1000.0, duration / 1000.0)
     }
 
@@ -222,15 +207,14 @@ internal class ChatAudioPlayer internal constructor(
     }
 
     private fun seekTo(positionMs: Long) {
-        val duration = runCatching { player.duration }.getOrDefault(0).toLong()
-        val target = VoicePlaybackCardRules.clamp(positionMs, duration)
-        runCatching { player.seekTo(target.toInt()) }
+        val target = VoicePlaybackCardRules.clamp(positionMs, player.durationMs)
+        runCatching { player.seekTo(target) }
         playback = playback.seekedTo(target / 1000.0)
         publish()
     }
 
     private fun currentPositionMs(): Long =
-        runCatching { player.currentPosition }.getOrDefault(0).toLong()
+        player.positionMs
 
     private fun scheduleFocusRelease() {
         handler.removeCallbacks(releaseFocus)
@@ -273,7 +257,7 @@ internal fun rememberChatAudioPlayer(conversationTitle: String? = null): ChatAud
     val host = LocalVoicePlaybackHost.current
     val audioPlayer = remember(host) {
         ChatAudioPlayer(
-            player = MediaPlayer().apply { setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK) },
+            player = ExoVoiceNoteEngine(context),
             host = host,
             audioManager = context.getSystemService(AudioManager::class.java),
             conversationTitle = conversationTitle,

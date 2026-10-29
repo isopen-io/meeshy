@@ -37,7 +37,6 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -63,7 +62,7 @@ internal fun FeedPostCardBody(
             onDismiss = { explorerOpen = false },
         )
     }
-    Column(Modifier.floatingChromeLateralReserve()) {
+    Column {
         if (post.content.isNotBlank()) {
             Spacer(Modifier.height(MeeshySpacing.md))
             HashtagAwareLinks(onOpenHashtag) {

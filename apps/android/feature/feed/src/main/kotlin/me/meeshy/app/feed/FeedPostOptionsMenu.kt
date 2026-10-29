@@ -49,6 +49,7 @@ internal fun PostOptionsButton(
     onPin: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    tint: androidx.compose.ui.graphics.Color = MeeshyTheme.tokens.textSecondary,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
@@ -57,7 +58,7 @@ internal fun PostOptionsButton(
             Icon(
                 imageVector = Icons.Filled.MoreVert,
                 contentDescription = stringResource(R.string.feed_post_options),
-                tint = MeeshyTheme.tokens.textSecondary,
+                tint = tint,
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

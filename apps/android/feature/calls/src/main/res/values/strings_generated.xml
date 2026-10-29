@@ -21,6 +21,8 @@
     <string name="call_decline_reply_meeting">I’m in a meeting.</string>
     <string name="call_decline_reply_write_me">Text me, I’ll reply soon.</string>
     <string name="call_decline_title">Decline with a message</string>
+    <string name="call_detail_participants">Participants</string>
+    <string name="call_detail_transcript">Transcript</string>
     <string name="call_frames_mood_corporate">Corporate</string>
     <string name="call_frames_mood_deconnecte">Unplugged</string>
     <string name="call_frames_mood_distingue">Distinguished</string>
@@ -82,6 +84,9 @@
     <string name="call_recording_stopped_timeout">Not everyone answered: no recording</string>
     <string name="call_recording_unavailable">Recording is not available right now</string>
     <string name="call_recording_waiting">Waiting for everyone’s consent…</string>
+    <string name="call_transcript_participant">Participant</string>
+    <string name="call_transcript_show_original">Show original text</string>
+    <string name="call_transcript_show_translated">Show translation</string>
     <string name="call_zoom_hint">Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×</string>
     <string name="call_zoom_label">My camera zoom</string>
 </resources>

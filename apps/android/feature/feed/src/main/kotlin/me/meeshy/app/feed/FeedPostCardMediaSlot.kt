@@ -38,7 +38,22 @@ internal fun FeedPostCardMediaSlot(
         )
     }
 
-    post.repostEmbed?.let { embed ->
+    FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+}
+
+/**
+ * La citation d'un repost et la couverture du réel, partagées par la carte du fil et par Enregistrés, Publications d'un
+ * utilisateur, Proximité et Détail du post : même composant, même toucher. Un appui sur la couverture du réel ouvre le
+ * lecteur de réels sur CE réel ; celui d'un réel cité l'ouvre sur le réel cité (iOS `ReelFeedCard`, `ReelRepostEmbedCell`).
+ * Un réel republié ne porte qu'UNE couverture, celle du réel source, qui ouvre le réel cité : sa citation ne se répète pas.
+ */
+@Composable
+internal fun FeedPostQuoteAndReel(
+    post: FeedPostPresentation,
+    onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
+) {
+    post.repostEmbed?.takeIf { post.republishedReel == null }?.let { embed ->
         Spacer(Modifier.height(MeeshySpacing.md))
         RepostEmbedCell(embed = embed, onOpen = onOpenPost, onOpenReel = onOpenReel)
     }
@@ -47,8 +62,8 @@ internal fun FeedPostCardMediaSlot(
         Spacer(Modifier.height(MeeshySpacing.md))
         ReelCoverView(
             cover = cover,
-            authorName = post.authorName,
-            onOpen = { onOpenReel(post.id) },
+            authorName = post.republishedReel?.authorName ?: post.authorName,
+            onOpen = { onOpenReel(post.reelOpenId) },
             modifier = Modifier.fillMaxWidth().aspectRatio(post.reelAspect),
         )
     }

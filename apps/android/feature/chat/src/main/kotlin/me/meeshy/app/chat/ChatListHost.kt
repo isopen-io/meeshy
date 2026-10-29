@@ -291,6 +291,7 @@ internal fun ChatListHost(
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
             onStoryCitationOpen = { postId -> host.navigation.onOpenCitedPost(postId) },
+            onOpenConversation = { conversationId -> host.navigation.onOpenConversation(conversationId) },
             onToggleSelection = { messageId ->
                 when (actions.toggleSelection(messageId)) {
                     is MessageSelection.Toggle.Changed -> haptics.light()

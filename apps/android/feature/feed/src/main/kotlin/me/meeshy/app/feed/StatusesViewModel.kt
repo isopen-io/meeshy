@@ -122,6 +122,11 @@ class StatusesViewModel @Inject constructor(
     /** One event per refused reaction, after its rollback — iOS `status.reactError` toast (#13662). */
     val reactFailed: SharedFlow<Unit> = _reactFailed.asSharedFlow()
 
+    private val _repostAudienceRefused = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** One event per republication the gateway refused as wider than its source (403 `REPOST_AUDIENCE_WIDENING`, #13667). */
+    val repostAudienceRefused: SharedFlow<Unit> = _repostAudienceRefused.asSharedFlow()
+
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
 
@@ -170,6 +175,7 @@ class StatusesViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.statusDeleted.collect { payload ->
                 listState.update { it.removed(payload.statusId) }
+                placedReactions = placedReactions.filterNotTo(mutableSetOf()) { it.second == payload.statusId }
             }
         }
         viewModelScope.launch {
@@ -183,6 +189,8 @@ class StatusesViewModel @Inject constructor(
             socialSocket.statusUnreacted.collect { payload ->
                 if (payload.userId != currentUserId()) {
                     listState.update { it.unreacted(payload.statusId, payload.emoji) }
+                } else {
+                    placedReactions = placedReactions - Triple(payload.userId, payload.statusId, payload.emoji)
                 }
             }
         }
@@ -452,7 +460,10 @@ class StatusesViewModel @Inject constructor(
                         statusBarCache.save(mode.value, listState.value.statuses)
                         statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                     }
-                    is NetworkResult.Failure -> status.update { it.copy(error = result.error.message) }
+                    is NetworkResult.Failure -> {
+                        status.update { it.copy(error = result.error.message) }
+                        if (result.error.code == REPOST_AUDIENCE_WIDENING) _repostAudienceRefused.tryEmit(Unit)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -499,6 +510,7 @@ class StatusesViewModel @Inject constructor(
      */
     fun react(statusId: String, emoji: String) {
         if (listState.value.statuses.none { it.id == statusId }) return
+        forgetReactionsTheServedBarNoLongerCarries()
         val placed = Triple(currentUserId(), statusId, emoji)
         if (placed in placedReactions) return
         placedReactions = placedReactions + placed
@@ -518,6 +530,18 @@ class StatusesViewModel @Inject constructor(
             listState.update { it.unreacted(statusId, emoji) }
             status.update { it.copy(error = failure.message) }
             _reactFailed.tryEmit(Unit)
+        }
+    }
+
+    /**
+     * A placed reaction is remembered to stop a second tap inflating the count; it must not outlive what it
+     * describes. Once the served bar no longer carries that emoji on that status (withdrawn elsewhere, status
+     * deleted and back, a refresh), the reaction is placeable again (#13667).
+     */
+    private fun forgetReactionsTheServedBarNoLongerCarries() {
+        val statuses = listState.value.statuses.associateBy { it.id }
+        placedReactions = placedReactions.filterTo(mutableSetOf()) { (_, statusId, emoji) ->
+            (statuses[statusId]?.reactionSummary?.get(emoji) ?: 0) > 0
         }
     }
 
@@ -554,6 +578,7 @@ class StatusesViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 3
+        const val REPOST_AUDIENCE_WIDENING = "REPOST_AUDIENCE_WIDENING"
     }
 }
 

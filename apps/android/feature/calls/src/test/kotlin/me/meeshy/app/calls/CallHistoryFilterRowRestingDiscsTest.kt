@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** #12497 — au repos, les puces du journal des appels et « Tout effacer » restent entre les deux disques flottants (360 dp). */
+/** #13671 — comme iOS, les puces du journal des appels ne cèdent rien aux disques flottants : la rangée passe dessous (360 dp). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "fr-w360dp-h740dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -21,13 +21,15 @@ class CallHistoryFilterRowRestingDiscsTest {
     val compose = createComposeRule()
 
     @Test
-    fun `au repos les puces et Tout effacer tiennent entre les deux disques`() {
+    fun `les puces et Tout effacer gardent leur place sous les disques`() {
         compose.setContentBesideRestingDiscs {
             CallHistoryFilterRow(missedOnly = false, videoOnly = false, canClear = true, onMissed = {}, onVideo = {}, onClearAll = {})
         }
+        val (leftDisc, rightDisc) = compose.restingDiscBounds()
         val scroller = compose.scrollerBounds()
         val clear = compose.onNodeWithText("Tout effacer").getBoundsInRoot()
-        assertThat(scroller.left.value).isAtLeast(RestingDiscs.leadingEdge)
-        assertThat(clear.right.value).isAtMost(RestingDiscs.trailingEdge)
+        assertThat(scroller.sharesHeightWith(leftDisc)).isTrue()
+        assertThat(scroller.left.value).isLessThan(leftDisc.right.value)
+        assertThat(clear.right.value).isGreaterThan(rightDisc.left.value)
     }
 }

@@ -40,6 +40,12 @@ class MoodRailBubbleWiringTest {
     }
 
     @Test
+    fun `la bulle ouverte survit a la rotation, et un refus d audience se dit`() {
+        assertThat(host).contains("var bubbleUserId by rememberSaveable")
+        assertThat(host).contains("MoodRepostRefusedToast(statusesViewModel.repostAudienceRefused)")
+    }
+
+    @Test
     fun `sa propre humeur ouvre le composeur d humeur, jamais la bulle`() {
         assertThat(host).contains("onAddStatus = { Routes.composer(ComposerOrigin.MoodChip)")
     }

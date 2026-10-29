@@ -31,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -107,6 +106,7 @@ import java.util.Locale
 fun PostDetailScreen(
     onBack: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = onOpenPost,
     onOpenProfile: ((String) -> Unit)? = null,
     onOpenHashtag: (String) -> Unit = {},
     viewersSheet: @Composable (postId: String, onDismiss: () -> Unit) -> Unit = { _, _ -> },
@@ -185,6 +185,7 @@ fun PostDetailScreen(
                         onFlagTap = viewModel::onFlagTap,
                         onSelectLanguage = viewModel::onLanguageSelected,
                         onOpenPost = onOpenPost,
+                        onOpenReel = onOpenReel,
                         onOpenProfile = onOpenProfile,
                         onOpenHashtag = onOpenHashtag,
                         onOpenViewers = if (state.canListViewers) ({ viewersOpen = true }) else null,
@@ -212,7 +213,7 @@ fun PostDetailScreen(
 }
 
 @Composable
-private fun PostDetailContent(
+internal fun PostDetailContent(
     post: FeedPostPresentation,
     isReposted: Boolean,
     secondaryTranslation: PostSecondaryTranslation?,
@@ -221,6 +222,7 @@ private fun PostDetailContent(
     onFlagTap: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit,
     onOpenProfile: ((String) -> Unit)?,
     onOpenHashtag: (String) -> Unit,
     onOpenViewers: (() -> Unit)?,
@@ -231,6 +233,7 @@ private fun PostDetailContent(
     onReact: (PostReactionPick) -> Unit,
     onBookmark: () -> Unit,
     onCommentNotice: suspend (CommentNotice) -> Unit,
+    commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice) },
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
@@ -293,7 +296,7 @@ private fun PostDetailContent(
                     }
                 }
 
-                if (post.content.isNotBlank()) {
+                if (post.content.isNotBlank() && !post.showsReelCard) {
                     Spacer(Modifier.height(MeeshySpacing.md))
                     HashtagAwareLinks(onOpenHashtag) {
                         SelectionContainer {
@@ -328,28 +331,17 @@ private fun PostDetailContent(
                     )
                 }
 
-                post.repostEmbed?.let { embed ->
+                post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-                }
-
-                if (post.isReel) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayCircle,
-                            contentDescription = null,
-                            tint = MeeshyPalette.Indigo500,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(MeeshySpacing.xs))
-                        Text(
-                            text = stringResource(R.string.feed_reel),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
-                }
+                    ReelPostCard(
+                        post = post,
+                        cover = cover,
+                        onOpenReel = onOpenReel,
+                        showsActions = false,
+                        captionLines = DETAIL_CAPTION_LINES,
+                        onOpenProfile = onOpenProfile,
+                    )
+                } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
 
                 Spacer(Modifier.height(MeeshySpacing.md))
                 DetailStatsRow(
@@ -366,9 +358,11 @@ private fun PostDetailContent(
         }
 
         Spacer(Modifier.height(MeeshySpacing.lg))
-        PostCommentsSection(onNotice = onCommentNotice)
+        commentsSection()
     }
 }
+
+private const val DETAIL_CAPTION_LINES = 6
 
 /** « Vues » : l'entrée de la liste de qui a vu (ADMIN/BIGBOSS), même libellé qu'iOS. */
 @Composable

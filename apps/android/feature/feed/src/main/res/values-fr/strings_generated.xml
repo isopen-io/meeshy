@@ -67,10 +67,12 @@
     <string name="feed_quote_cancel">Annuler</string>
     <string name="feed_quote_submit">Repartager</string>
     <string name="feed_reel">Réel</string>
+    <string name="feed_reel_card_a11y">Réel de %1$s</string>
     <string name="feed_reel_offer_body">Votre post n’a qu’une vidéo : en réel, elle s’ouvre en plein écran dans les Réels.</string>
     <string name="feed_reel_offer_post">C’est un Post</string>
     <string name="feed_reel_offer_reel">C’est un Réel</string>
     <string name="feed_reel_offer_title">Publier en réel ?</string>
+    <string name="feed_reel_republished_by">Republié par %1$s</string>
     <string name="feed_report_reason_harassment">Harcèlement</string>
     <string name="feed_report_reason_hate_speech">Discours haineux</string>
     <string name="feed_report_reason_impersonation">Usurpation d\'identité</string>

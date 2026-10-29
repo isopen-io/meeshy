@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.NearMe
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -202,6 +201,8 @@ fun NearbyScreen(
                                 onOpenProfile = onOpenProfile,
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -266,12 +267,24 @@ private fun NearbyStatusCard(
 }
 
 @Composable
-private fun NearbyPostCard(
+internal fun NearbyPostCard(
     modifier: Modifier = Modifier,
     onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onClick: () -> Unit,
+    onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = onOpenPost,
 ) {
+    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+        ReelPostCard(
+            post = post,
+            cover = cover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -296,14 +309,6 @@ private fun NearbyPostCard(
                     color = MeeshyTheme.tokens.textPrimary,
                     modifier = Modifier.weight(1f).then(profileTap),
                 )
-                if (post.isReel) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = stringResource(R.string.feed_reel),
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
             }
 
             if (post.content.isNotBlank()) {
@@ -316,6 +321,8 @@ private fun NearbyPostCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
+            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
 
             post.distanceMeters?.let { meters ->
                 Spacer(Modifier.height(MeeshySpacing.sm))
