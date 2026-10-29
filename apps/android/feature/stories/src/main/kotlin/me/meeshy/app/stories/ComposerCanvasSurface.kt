@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +97,8 @@ internal fun StoryCanvasSurface(
     onStickerDrag: (String, Float, Float) -> Unit,
     onStickerDragEnd: () -> Unit,
     onStickerTransform: (String, Float, Float) -> Unit,
+    placedMedia: List<PlacedMediaFrame>,
+    placedMediaGestures: PlacedMediaGestures,
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
@@ -253,6 +256,11 @@ internal fun StoryCanvasSurface(
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onTextChange = onElementTextChange,
                 )
+            }
+            placedMedia.forEach { frame ->
+                key(frame.key) {
+                    PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures)
+                }
             }
             stickers.forEach { sticker ->
                 StickerLayer(

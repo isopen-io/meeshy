@@ -68,4 +68,13 @@ class StoryComposerPlacedMediaReducerTest {
         assertThat(after.deck.selectedSlide.mediaIds).containsExactly("m1")
         assertThat(StoryComposerPlacedMediaReducer.unplaced(after, "m1")).isSameInstanceAs(after)
     }
+
+    @Test
+    fun `toggling places then unplaces`() {
+        val on = StoryComposerPlacedMediaReducer.toggled(withMedia("m1"), "m1")
+        val off = StoryComposerPlacedMediaReducer.toggled(on, "m1")
+
+        assertThat(on.placedMedia().map { it.mediaId }).containsExactly("m1")
+        assertThat(off.placedMedia()).isEmpty()
+    }
 }

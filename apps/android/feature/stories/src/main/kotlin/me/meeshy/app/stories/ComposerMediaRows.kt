@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +51,8 @@ internal fun MediaPreviewRow(
     onToggleBackgroundLoop: () -> Unit,
     selectedMediaId: String? = null,
     onSelect: ((String) -> Unit)? = null,
+    placedMediaIds: Set<String> = emptySet(),
+    onTogglePlaced: ((String) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -65,6 +68,8 @@ internal fun MediaPreviewRow(
                 onSelect = onSelect?.let { select -> { select(media.id) } },
                 onRemove = { onRemove(media.id) },
                 onToggleBackground = { onToggleBackground(media.id) },
+                isPlaced = media.id in placedMediaIds,
+                onTogglePlaced = onTogglePlaced?.takeIf { !isBackground }?.let { toggle -> { toggle(media.id) } },
                 // The loop toggle appears only on the designated background VIDEO — the
                 // one media whose looping is authorable — so the control is never a no-op.
                 backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
@@ -93,6 +98,8 @@ internal fun MediaThumbnail(
     onToggleBackgroundLoop: (() -> Unit)? = null,
     selected: Boolean = false,
     onSelect: (() -> Unit)? = null,
+    isPlaced: Boolean = false,
+    onTogglePlaced: (() -> Unit)? = null,
 ) {
     val selectLabel = stringResource(R.string.composer_column_media_select)
     Box {
@@ -135,6 +142,26 @@ internal fun MediaThumbnail(
                         },
                     ),
                     tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    modifier = Modifier.padding(3.dp),
+                )
+            }
+        }
+        if (onTogglePlaced != null) {
+            Surface(
+                onClick = onTogglePlaced,
+                shape = RoundedCornerShape(50),
+                color = if (isPlaced) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(2.dp)
+                    .size(22.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Layers,
+                    contentDescription = stringResource(
+                        if (isPlaced) R.string.composer_media_unplace_from_scene else R.string.composer_media_place_on_scene,
+                    ),
+                    tint = if (isPlaced) MaterialTheme.colorScheme.onPrimary else Color.White,
                     modifier = Modifier.padding(3.dp),
                 )
             }
