@@ -4,7 +4,10 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
 import java.io.IOException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.KeyedJsonCache
@@ -67,6 +70,20 @@ class PackShopRepositoryTest {
         assertThat(served.balance).isEqualTo(340)
     }
 
+    @Test fun `an open shop reads the server once, not again after each answer it writes`() = kotlinx.coroutines.runBlocking {
+        val ticking = object : me.meeshy.sdk.cache.CacheClock {
+            var now = 1_000_000L
+            override fun nowMillis(): Long = now++
+        }
+        val repository = PackShopRepository(api, KeyedJsonCache(db.keyedJsonCacheDao(), ticking), ticking)
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = shop())
+
+        val burst = kotlinx.coroutines.withTimeoutOrNull(1_500) { repository.shop().take(6).toList() }
+
+        assertThat(burst).isNull()
+        io.mockk.coVerify(exactly = 1) { api.shop(domains) }
+    }
+
     @Test fun `on a non empty cache the shop paints the cached value and a network failure empties nothing`() = runTest {
         coEvery { api.shop(domains) } returns ApiResponse(success = true, data = shop())
         repository().refresh()
@@ -94,6 +111,33 @@ class PackShopRepositoryTest {
         assertThat(cached.packs(AppearancePackDomain.WALLPAPER).single().isOwned).isTrue()
     }
 
+    @Test fun `a shop read that left before a confirmed purchase never paints the pack back as unbought`() = kotlinx.coroutines.runBlocking {
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = shop())
+        val repository = repository()
+        repository.refresh()
+        val asked = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { api.shop(domains) } coAnswers {
+            asked.complete(Unit)
+            gate.await()
+            ApiResponse(success = true, data = shop())
+        }
+        coEvery { api.purchase("wallpaper", "animes", PackPurchaseRequest("r1")) } returns ApiResponse(
+            success = true,
+            data = PackPurchaseResponse(ShopPack(slug = "animes", price = 90, owned = true, installed = true), balance = 250),
+        )
+
+        val read = async(kotlinx.coroutines.Dispatchers.Default) { repository.refresh() }
+        asked.await()
+        repository.purchase(AppearancePackDomain.WALLPAPER, "animes", "r1")
+        gate.complete(Unit)
+        read.await()
+
+        val cached = cache().get("pack-shop", "offered", PackShopResponse.serializer())!!.value
+        assertThat(cached.balance).isEqualTo(250)
+        assertThat(cached.packs(AppearancePackDomain.WALLPAPER).single().isOwned).isTrue()
+    }
+
     @Test fun `a refused purchase leaves the cache exactly as the server last served it`() = runTest {
         coEvery { api.shop(domains) } returns ApiResponse(success = true, data = shop())
         val repository = repository()
@@ -114,6 +158,30 @@ class PackShopRepositoryTest {
         val outcome = repository().purchase(AppearancePackDomain.WALLPAPER, "animes", "r1")
 
         assertThat((outcome as PackPurchaseOutcome.Refused).refusal.definitive).isFalse()
+    }
+
+    private class Owner(var id: String?) : me.meeshy.sdk.outbox.OutboxOwnerSource {
+        override fun currentOwnerId(): String? = id
+    }
+
+    @Test fun `a purchase answered after the account changed writes nothing into the next account's shop`() = runTest {
+        val owner = Owner("A")
+        val fence = me.meeshy.sdk.session.AccountFence(owner, me.meeshy.sdk.net.SessionTransitionFlags())
+        val fenced = KeyedJsonCache(db.keyedJsonCacheDao(), clock, fence)
+        val repository = PackShopRepository(api, fenced, clock)
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = shop())
+        repository.refresh()
+        coEvery { api.purchase("wallpaper", "animes", PackPurchaseRequest("r1")) } answers {
+            owner.id = "B"
+            ApiResponse(
+                success = true,
+                data = PackPurchaseResponse(ShopPack(slug = "animes", price = 90, owned = true, installed = true), balance = 250),
+            )
+        }
+
+        repository.purchase(AppearancePackDomain.WALLPAPER, "animes", "r1")
+
+        assertThat(cache().get("pack-shop", "offered", PackShopResponse.serializer())!!.value).isEqualTo(shop())
     }
 
     @Test fun `sign out wipes the shop of the account`() = runTest {
