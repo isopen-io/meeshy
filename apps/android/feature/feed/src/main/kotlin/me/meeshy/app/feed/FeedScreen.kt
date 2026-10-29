@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -103,26 +104,19 @@ fun FeedScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
-            // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
-            // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
-            FeedComposerPlaceholder(
-                onClick = {
-                    if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
-                    else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
-                },
-            )
-            // « Reprendre votre brouillon » (#13430): the drafts this account left, at the head of the feed.
-            DraftResumeSection(
-                onResumePost = {
-                    if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
-                    else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
-                },
-                onResumeStory = onResumeStoryDraft,
-            )
-            // « Publications non envoyées » (#13417): visible only while the device holds a
-            // publication the server has not confirmed; « Rouvrir » opens the composer on it.
-            UnsentPublicationsEntry(onReopen = { draft -> composerDraft = draft }, onReopenStory = onResumeStoryDraft)
+            // La porte du composeur (iOS `FeedView.composerPlaceholder`) SOUS le rail de stories, dans le contenu qui
+            // défile (#13653) — tapping it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
+            // Then « Reprendre votre brouillon » (#13430) and « Publications non envoyées » (#13417).
+            val composerHead: @Composable () -> Unit = {
+                FeedComposerHead(
+                    onCompose = {
+                        if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
+                        else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
+                    },
+                    onResumeStory = onResumeStoryDraft,
+                    onReopen = { draft -> composerDraft = draft },
+                )
+            }
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
             val shareContext = context
@@ -158,17 +152,21 @@ fun FeedScreen(
                     .weight(1f),
             ) {
             when {
-                state.showSkeleton -> Column { storyRail(); FeedSkeleton() }
-                state.posts.isEmpty() && state.loadFailed -> Column { storyRail(); FeedErrorState(onRetry = viewModel::refresh) }
-                state.posts.isEmpty() -> Column { storyRail(); FeedEmptyState() }
+                state.showSkeleton -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
+                state.posts.isEmpty() && state.loadFailed -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
+                state.posts.isEmpty() -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
                 else -> LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(MeeshySpacing.lg),
+                    // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des
+                    // conversations ; chaque carte porte sa propre marge.
+                    contentPadding = PaddingValues(bottom = MeeshySpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
                     // Le rail de stories d'iOS (`StoryTrayView`, `FeedView` : dans le contenu défilant), le MÊME composable que
-                    // la liste des conversations (#13653) : il défile avec le fil et porte aussi l'humeur.
+                    // la liste des conversations (#13653) : il défile avec le fil et porte aussi l'humeur. La tête compte
+                    // `FeedListLayout.HEAD_ITEMS` lignes.
                     item(key = FEED_STORY_RAIL_KEY, contentType = FEED_STORY_RAIL_KEY) { storyRail() }
+                    item(key = FEED_COMPOSER_HEAD_KEY, contentType = FEED_COMPOSER_HEAD_KEY) { composerHead() }
                     items(state.posts, key = { it.id }, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
@@ -217,11 +215,11 @@ fun FeedScreen(
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
                             onComments = { onOpenPost(post.id) },
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier.animateItem().padding(horizontal = MeeshySpacing.lg),
                         )
                     }
                     if (state.isLoadingMore) {
-                        item(key = "feed_load_more") { FeedLoadingMoreCards() }
+                        item(key = "feed_load_more") { Box(Modifier.padding(horizontal = MeeshySpacing.lg)) { FeedLoadingMoreCards() } }
                     }
                 }
             }
@@ -281,5 +279,25 @@ fun FeedScreen(
     }
 }
 
+@Composable
+private fun FeedComposerHead(onCompose: () -> Unit, onResumeStory: () -> Unit, onReopen: (FeedComposerDraft) -> Unit) {
+    Column {
+        FeedComposerPlaceholder(onClick = onCompose)
+        DraftResumeSection(onResumePost = onCompose, onResumeStory = onResumeStory)
+        UnsentPublicationsEntry(onReopen = onReopen, onReopenStory = onResumeStory)
+    }
+}
+
+/** La tête du fil hors liste peuplée (squelette, erreur, vide) : le rail puis la porte du composeur, au même pas que la liste. */
+@Composable
+private fun FeedHeadColumn(storyRail: @Composable () -> Unit, composerHead: @Composable () -> Unit, body: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+        storyRail()
+        composerHead()
+        body()
+    }
+}
+
 private const val FEED_POST_CONTENT_TYPE = "feed_post"
 private const val FEED_STORY_RAIL_KEY = "feed_story_rail"
+private const val FEED_COMPOSER_HEAD_KEY = "feed_composer_head"
