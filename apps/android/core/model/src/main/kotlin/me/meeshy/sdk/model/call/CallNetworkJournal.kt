@@ -74,7 +74,7 @@ data class CallNetworkJournal(
     companion object {
         const val EVENT_CEILING = 240
 
-        internal fun bounded(events: List<CallNetworkEvent>): List<CallNetworkEvent> {
+        fun bounded(events: List<CallNetworkEvent>): List<CallNetworkEvent> {
             if (events.size <= EVENT_CEILING) return events
             val overflow = events.size - EVENT_CEILING
             val dropped = events.indices.filter { events[it].kind is CallNetworkEventKind.Sample }.take(overflow).toSet()
