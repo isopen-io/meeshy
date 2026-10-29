@@ -85,6 +85,7 @@ class ProfileDecorViewModel @Inject constructor(
 
     private val installed = MutableStateFlow<Installed?>(null)
     private val failed = MutableStateFlow(false)
+    private var heardDuringLoad: List<PackInstallationUpdatedEvent> = emptyList()
 
     private class Installed(
         val rings: List<InstalledPackSummary>?,
@@ -122,14 +123,19 @@ class ProfileDecorViewModel @Inject constructor(
 
     /**
      * Un pack s'installe ou se retire sur mon compte (`pack:installation-updated`, achat compris) : la charge suffit à
-     * tenir la liste du domaine. Seule une liste jamais lue (panne) coûte UNE relecture de CE domaine.
+     * tenir la liste du domaine. Seule une liste jamais lue (panne) coûte UNE relecture de CE domaine. Pendant la
+     * première lecture, l'événement attend qu'elle aboutisse puis s'y applique : une lecture partie avant l'achat ne
+     * l'efface pas.
      */
     private suspend fun follow(event: PackInstallationUpdatedEvent) {
         val domain = event.appearanceDomain?.takeIf { it in DECOR_DOMAINS } ?: return
         val current = installed.value
-        val known = current?.let { list(it, domain) }
-        val next = known?.applying(event) ?: read(domain) ?: return
-        installed.update { latest -> (latest ?: Installed(null, null, null)).with(domain, next) }
+        if (current == null) {
+            heardDuringLoad = heardDuringLoad + event
+            return
+        }
+        val next = list(current, domain)?.applying(event) ?: read(domain) ?: return
+        installed.update { latest -> (latest ?: current).with(domain, next) }
     }
 
     private fun list(lists: Installed, domain: AppearancePackDomain) = when (domain) {
@@ -149,6 +155,9 @@ class ProfileDecorViewModel @Inject constructor(
         val banners = viewModelScope.async { read(AppearancePackDomain.BANNER) }
         val frames = viewModelScope.async { read(AppearancePackDomain.BANNER_FRAME) }
         installed.value = Installed(rings.await(), banners.await(), frames.await())
+        val heard = heardDuringLoad
+        heardDuringLoad = emptyList()
+        heard.forEach { follow(it) }
     }
 
     /** Une panne ne conclut rien (`null` : les packs installés d'office) ; un 404 (ancien serveur) ⇒ aucun pack. */

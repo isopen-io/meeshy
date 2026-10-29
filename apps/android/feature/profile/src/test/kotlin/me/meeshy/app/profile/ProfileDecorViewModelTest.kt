@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
@@ -222,7 +223,27 @@ class ProfileDecorViewModelTest {
 
         assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
         coVerify(exactly = 2) { s.packs.installed("avatar-ring") }
-            }
+    }
+
+    @Test
+    fun `a pack bought while the lists are still being read survives the read that left before it`() = runTest(dispatcher) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val s = scenario(installed = { InstalledPackList(emptyList()) })
+        coEvery { s.packs.installed("avatar-ring") } coAnswers {
+            gate.await()
+            me.meeshy.sdk.model.ApiResponse(success = true, data = InstalledPackList(emptyList()))
+        }
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        runCurrent()
+
+        s.installations.emit(ringEvent(lockedRing.slug))
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).contains(lockedRing.slug)
+        coVerify(exactly = 1) { s.packs.installed("avatar-ring") }
+    }
 
     @Test
     fun `an event of a domain the decor does not use reads and changes nothing`() = runTest(dispatcher) {
