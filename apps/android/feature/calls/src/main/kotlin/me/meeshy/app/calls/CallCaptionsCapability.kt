@@ -22,7 +22,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -58,9 +62,15 @@ import javax.inject.Singleton
 /** The regime of the call's conversation: `true` sealed end to end, `false` clear, `null` not known (yet). */
 fun interface CallConversationRegime {
     suspend fun isEndToEnd(conversationId: String): Boolean?
+
+    /** Ticks when what [isEndToEnd] would say may have changed — the call reads it again (#13725). */
+    fun changes(conversationId: String): Flow<Unit> = emptyFlow()
 }
 
-/** The ledger first (a sealed conversation is never forgotten), then what the gateway served. */
+/**
+ * The ledger first (a sealed conversation is never forgotten), then what the gateway served. The cached
+ * conversation changing its regime — or landing in the cache at all — is a change worth reading again.
+ */
 @Singleton
 class LedgerCallConversationRegime @Inject constructor(
     private val ledger: EndToEndRegimeLedger,
@@ -74,6 +84,17 @@ class LedgerCallConversationRegime @Inject constructor(
             ?: return null
         return EndToEndRegime.isEndToEnd(known.encryptionMode)
     }
+
+    override fun changes(conversationId: String): Flow<Unit> =
+        if (conversationId.isBlank()) {
+            emptyFlow()
+        } else {
+            conversations.conversationStream(conversationId)
+                .map { it?.let { known -> known.encryptionMode.orEmpty() } }
+                .distinctUntilChanged()
+                .drop(1)
+                .map { }
+        }
 }
 
 /** Tells the user why the captions do not open (a local-action feedback). */
@@ -110,7 +131,8 @@ class CallCaptionsWires(
  *
  * Fail-closed (#9224): an end-to-end conversation never opens the captions — announcing the
  * panel would make the peer send its words in clear to the gateway — and a regime not read yet
- * neither. The state lives for one call and dies with it.
+ * neither. A regime that could not be read is read again on a tap of « Sous-titres » (once per tap)
+ * and when it changes during the call (#13725). The state lives for one call and dies with it.
  *
  * My own words are captured by [CallOwnSpeechController] (#13718), which reads this state and
  * hands my lines back through [receiveOwn].
@@ -163,6 +185,10 @@ class CallCaptionsController internal constructor(
     private var publishedListening = false
     private var listening: List<Job> = emptyList()
     private var resolving: Job? = null
+    private var regimeChanges: Job? = null
+
+    /** A tap asked for the captions while the regime was being read again: open them if it reads clear. */
+    private var opensOnRead = false
 
     /** Who reads, for the projection of the lines. */
     val reader: CallCaptionReader
@@ -201,11 +227,16 @@ class CallCaptionsController internal constructor(
 
     override fun onCleared() = reset()
 
-    /** One tap on « Sous-titres ». A closed gate says why instead of opening. */
+    /**
+     * One tap on « Sous-titres ». A regime that could not be read is read again first (#13725); a closed gate
+     * says why instead of opening.
+     */
     fun advance() {
         val before = _state.value
         if (before.mode == CaptionsMode.Off && !before.gate.allowsCaptions) {
-            notice.refused(before.gate)
+            if (!before.gate.readsAgainOnTap) return notice.refused(before.gate)
+            opensOnRead = true
+            if (resolving?.isActive != true) readRegime()
             return
         }
         _state.update { it.advanced() }
@@ -262,20 +293,46 @@ class CallCaptionsController internal constructor(
 
     private fun resolveGate(conversationId: String) {
         if (conversationId == this.conversationId && (_state.value.gate != CallCaptionsGate.Unresolved || resolving?.isActive == true)) return
+        if (conversationId != this.conversationId) watchRegime(conversationId)
         this.conversationId = conversationId
+        readRegime()
+    }
+
+    /** The conversation's regime changed (or landed) during the call: read it again, unless end to end closed it. */
+    private fun watchRegime(conversationId: String) {
+        regimeChanges?.cancel()
+        regimeChanges = regime.changes(conversationId)
+            .onEach { if (_state.value.gate != CallCaptionsGate.EndToEnd) readRegime() }
+            .launchIn(scope)
+    }
+
+    private fun readRegime() {
+        val conversation = conversationId
         resolving?.cancel()
         resolving = scope.launch {
             val sealed = try {
-                regime.isEndToEnd(conversationId)
+                regime.isEndToEnd(conversation)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
                 Timber.w(failure, "captions: conversation regime unreadable — closed")
                 null
             }
-            _state.update { it.gated(CallCaptionsGate.of(conversationId, sealed)) }
+            _state.update { it.gated(it.gate.reading(conversation, sealed)) }
             publishListening()
+            settleTap()
         }
+    }
+
+    /** The read a tap asked for has landed: the captions open if the gate did, otherwise the tap is told why. */
+    private fun settleTap() {
+        if (!opensOnRead) return
+        opensOnRead = false
+        val gate = _state.value.gate
+        if (!gate.allowsCaptions) return notice.refused(gate)
+        if (_state.value.mode != CaptionsMode.Off) return
+        _state.update { it.advanced() }
+        publishListening()
     }
 
     /**
@@ -295,6 +352,9 @@ class CallCaptionsController internal constructor(
         listening = emptyList()
         resolving?.cancel()
         resolving = null
+        regimeChanges?.cancel()
+        regimeChanges = null
+        opensOnRead = false
         callId = ""
         peerName = ""
         peerId = ""

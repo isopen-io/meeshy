@@ -44,11 +44,25 @@ class CallCaptionsControllerTest {
     }
     private val info = CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY.copy(peerId = "peer", peerName = "Ada", conversationId = "conv-1"))
 
-    private fun runController(endToEnd: Boolean? = false, block: suspend TestScope.(CallCaptionsController) -> Unit) = runTest {
+    private fun runController(endToEnd: Boolean? = false, block: suspend TestScope.(CallCaptionsController) -> Unit) =
+        runController(CallConversationRegime { endToEnd }, block)
+
+    /** A regime read again during the call (#13725): [answer] is what the next read says, [reads] counts them. */
+    private inner class ChangingRegime(var answer: Boolean?) : CallConversationRegime {
+        val changed = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+        var reads = 0
+        override suspend fun isEndToEnd(conversationId: String): Boolean? {
+            reads += 1
+            return answer
+        }
+        override fun changes(conversationId: String) = changed
+    }
+
+    private fun runController(regime: CallConversationRegime, block: suspend TestScope.(CallCaptionsController) -> Unit) = runTest {
         val controller = CallCaptionsController(
             wires = CallCaptionsWires(relayed, dataChannel, listening, left) { id, active -> announced += id to active },
             session = session,
-            regime = CallConversationRegime { endToEnd },
+            regime = regime,
             notice = CallCaptionsRefusalNotice { refusals += it },
             clock = { 5_000L },
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
@@ -187,5 +201,84 @@ class CallCaptionsControllerTest {
         assertThat(sealed.hintRes).isEqualTo(R.string.call_captions_end_to_end)
         assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.EndToEnd))).isNull()
         assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.Open))).isNotNull()
+    }
+
+    @Test
+    fun `a regime unreadable at the start is read again on a tap, and the captions open once it reads clear`() {
+        val regime = ChangingRegime(answer = null)
+        runController(regime) { controller ->
+            controller.connected()
+            regime.answer = false
+
+            controller.advance()
+
+            assertThat(controller.state.value.gate).isEqualTo(CallCaptionsGate.Open)
+            assertThat(controller.state.value.mode).isEqualTo(CaptionsMode.Translated)
+            assertThat(announced).containsExactly("call-1" to true)
+            assertThat(refusals).isEmpty()
+        }
+    }
+
+    @Test
+    fun `each tap on a regime still unreadable reads once and says why, never in a loop`() {
+        val regime = ChangingRegime(answer = null)
+        runController(regime) { controller ->
+            controller.connected()
+
+            controller.advance()
+            controller.advance()
+
+            assertThat(regime.reads).isEqualTo(3)
+            assertThat(refusals).containsExactly(CallCaptionsGate.Unresolved, CallCaptionsGate.Unresolved)
+            assertThat(announced).isEmpty()
+        }
+    }
+
+    @Test
+    fun `the regime landing during the call reopens the gate without waiting for the next call`() {
+        val regime = ChangingRegime(answer = null)
+        runController(regime) { controller ->
+            controller.connected()
+
+            regime.answer = false
+            regime.changed.tryEmit(Unit)
+
+            assertThat(controller.state.value.gate).isEqualTo(CallCaptionsGate.Open)
+            assertThat(controller.state.value.mode).isEqualTo(CaptionsMode.Off)
+            assertThat(announced).isEmpty()
+        }
+    }
+
+    @Test
+    fun `an end-to-end conversation stays closed whatever is read again, and a tap reads nothing`() {
+        val regime = ChangingRegime(answer = true)
+        runController(regime) { controller ->
+            controller.connected()
+
+            regime.answer = false
+            regime.changed.tryEmit(Unit)
+            controller.advance()
+
+            assertThat(controller.state.value.gate).isEqualTo(CallCaptionsGate.EndToEnd)
+            assertThat(regime.reads).isEqualTo(1)
+            assertThat(refusals).containsExactly(CallCaptionsGate.EndToEnd)
+            assertThat(announced).isEmpty()
+        }
+    }
+
+    @Test
+    fun `an open panel closes when the update reads the conversation sealed, and the peers are told`() {
+        val regime = ChangingRegime(answer = false)
+        runController(regime) { controller ->
+            controller.connected()
+            controller.advance()
+
+            regime.answer = true
+            regime.changed.tryEmit(Unit)
+
+            assertThat(controller.state.value.gate).isEqualTo(CallCaptionsGate.EndToEnd)
+            assertThat(controller.state.value.mode).isEqualTo(CaptionsMode.Off)
+            assertThat(announced).containsExactly("call-1" to true, "call-1" to false).inOrder()
+        }
     }
 }

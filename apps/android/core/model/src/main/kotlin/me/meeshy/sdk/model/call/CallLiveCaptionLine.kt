@@ -121,7 +121,8 @@ data class CallCaptionLabels(val you: String, val unknown: String)
  * Whether this call may carry live captions at all. Captions travel through the gateway in clear
  * (`call:transcription-segment` is relayed, translated and persisted): an end-to-end encrypted
  * conversation must never ask a peer to send them (fail-closed, #9224). A conversation whose regime
- * is not known yet is closed too — it opens once the regime is read as clear.
+ * is not known yet is closed too — it opens once the regime is read as clear, read again on a tap or when the
+ * regime changes during the call ([reading]).
  */
 enum class CallCaptionsGate {
     Open,
@@ -130,6 +131,19 @@ enum class CallCaptionsGate {
     ;
 
     val allowsCaptions: Boolean get() = this == Open
+
+    /** A tap on « Sous-titres » reads the regime again only when it could not be read (#13725), once per tap. */
+    val readsAgainOnTap: Boolean get() = this == Unresolved
+
+    /**
+     * The gate after a new read of the regime during the call (#13725): end to end never reopens (#12949), a
+     * read that fails never closes a gate a clear regime opened, and anything else takes the new read.
+     */
+    fun reading(conversationId: String, isEndToEnd: Boolean?): CallCaptionsGate {
+        if (this == EndToEnd) return EndToEnd
+        val read = of(conversationId, isEndToEnd)
+        return if (this == Open && read == Unresolved) Open else read
+    }
 
     companion object {
         fun of(conversationId: String, isEndToEnd: Boolean?): CallCaptionsGate = when {
