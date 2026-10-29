@@ -56,6 +56,8 @@ fun FeedScreen(
     onOpenHashtag: (String) -> Unit = {},
     onResumeStoryDraft: () -> Unit = {},
     onOpenComposer: ((ComposerOrigin) -> Unit)? = null,
+    onRefreshRail: () -> Unit = {},
+    storyRail: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -101,10 +103,6 @@ fun FeedScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
-            // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
-            // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
-            StatusBarView(onOpenMoodComposer = onOpenComposer?.let { open -> { open(ComposerOrigin.MoodChip) } })
             // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
             // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
@@ -151,20 +149,26 @@ fun FeedScreen(
             }
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
-                onRefresh = viewModel::refresh,
+                onRefresh = {
+                    viewModel.refresh()
+                    onRefreshRail()
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),
             ) {
             when {
-                state.showSkeleton -> FeedSkeleton()
-                state.posts.isEmpty() && state.loadFailed -> FeedErrorState(onRetry = viewModel::refresh)
-                state.posts.isEmpty() -> FeedEmptyState()
+                state.showSkeleton -> Column { storyRail(); FeedSkeleton() }
+                state.posts.isEmpty() && state.loadFailed -> Column { storyRail(); FeedErrorState(onRetry = viewModel::refresh) }
+                state.posts.isEmpty() -> Column { storyRail(); FeedEmptyState() }
                 else -> LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(MeeshySpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
+                    // Le rail de stories d'iOS (`StoryTrayView`, `FeedView` : dans le contenu défilant), le MÊME composable que
+                    // la liste des conversations (#13653) : il défile avec le fil et porte aussi l'humeur.
+                    item(key = FEED_STORY_RAIL_KEY, contentType = FEED_STORY_RAIL_KEY) { storyRail() }
                     items(state.posts, key = { it.id }, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
@@ -278,3 +282,4 @@ fun FeedScreen(
 }
 
 private const val FEED_POST_CONTENT_TYPE = "feed_post"
+private const val FEED_STORY_RAIL_KEY = "feed_story_rail"

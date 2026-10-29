@@ -85,6 +85,11 @@ data class FeedPostPresentation(
     /** L'explorateur de langues du post (iOS `PostTranslationSheet`), `null` sans traduction. */
     val languageExplorer: PostLanguageExplorer? = null,
 ) {
+    /** Le pseudo de l'auteur d'origine, pour l'attribution `↻ @pseudo` de l'en-tête ; `null` sans repost servi. */
+    val repostAttribution: String?
+        get() = repostEmbed?.takeUnless { it.isUnavailable }
+            ?.let { it.authorUsername ?: it.authorName }
+
     /** Carrousel pour un post, diaporama horizontal pour un reel (iOS `PostMediaPresentation.default`). */
     val mediaPresentation: PostMediaPresentation
         get() = PostMediaPresentation.defaultFor(if (isReel) PostType.REEL else PostType.POST)
@@ -160,7 +165,7 @@ object FeedPostBuilder {
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
             isReel = post.type.equals("reel", ignoreCase = true),
-            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
+            repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,

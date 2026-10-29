@@ -29,12 +29,6 @@
     <string name="post_comments_replying_to_generic">Antwort …</string>
     <string name="post_comments_reply_hint">Antwort hinzufügen …</string>
     <string name="post_comments_hide_replies">Antworten ausblenden</string>
-    <string name="status_bar_add_label">Status hinzufügen</string>
-    <string name="status_bar_my_status_label">Mein Status %1$s</string>
-    <string name="status_bar_load_error">Ladefehler</string>
-    <string name="status_bar_retry">Status erneut laden</string>
-    <string name="status_bar_react">Mit %1$s reagieren</string>
-    <string name="status_feed_toggle_label">Status-Feed</string>
     <string name="status_composer_republishing">\@%1$s wird erneut veröffentlicht</string>
     <string name="status_composer_placeholder">Wie geht es dir?</string>
     <string name="status_composer_mood_label">Stimmung %1$s</string>

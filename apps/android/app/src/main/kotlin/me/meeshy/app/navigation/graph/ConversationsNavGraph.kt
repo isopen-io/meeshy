@@ -34,14 +34,13 @@ import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
+import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.Routes
-import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.stories.StoriesViewModel
-import me.meeshy.app.stories.StoryTray
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
 internal fun NavGraphBuilder.conversationsNavGraph(
@@ -78,13 +77,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
             onLogout = { authViewModel.logout() },
             header = {
-                StoryTray(
-                    onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
-                    onAddStory = { navController.navigate(storyDoor) },
-                    onManageStories = { navController.navigate(Routes.MY_STORIES) },
-                    onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-                    viewModel = storiesViewModel,
-                )
+                MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel)
             },
             onRefresh = storiesViewModel::refresh,
             rowNavigation = ConversationRowNavigation(

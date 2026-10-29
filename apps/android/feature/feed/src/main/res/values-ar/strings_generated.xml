@@ -66,6 +66,7 @@
     <string name="feed_notice_reported">تم الإبلاغ عن المنشور</string>
     <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
     <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
+    <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
@@ -90,6 +91,7 @@
     </plurals>
     <string name="feed_repost_reposted">تمت إعادة النشر</string>
     <string name="feed_repost_story">قصة</string>
+    <string name="feed_repost_unavailable">لم يعد هذا المحتوى متاحًا</string>
     <string name="feed_reposts">إعادات النشر</string>
     <string name="feed_retry">إعادة المحاولة</string>
     <string name="feed_secondary_translation_a11y">الترجمة إلى %1$s: %2$s</string>
@@ -151,12 +153,6 @@
     <string name="post_detail_back">رجوع</string>
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
-    <string name="status_bar_add">الحالة</string>
-    <string name="status_bar_expired">منتهٍ</string>
-    <string name="status_bar_me">أنا</string>
-    <string name="status_bar_republish">إعادة نشر</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">عبر @%1$s</string>
     <string name="status_composer_bare_add">إضافة كلمة</string>
     <string name="status_composer_bare_publish">النشر على أي حال</string>
     <string name="status_composer_bare_title">هل تريد نشر مزاجك دون كلمة قصيرة؟</string>
@@ -170,8 +166,6 @@
     <string name="status_composer_visibility_friends">جهات الاتصال</string>
     <string name="status_composer_visibility_private">خاص</string>
     <string name="status_composer_visibility_public">عام</string>
-    <string name="status_feed_discover">استكشاف</string>
-    <string name="status_feed_friends">الأصدقاء</string>
     <string name="user_posts_back">رجوع</string>
     <string name="user_posts_empty">لا توجد منشورات</string>
     <string name="user_posts_title">المنشورات</string>

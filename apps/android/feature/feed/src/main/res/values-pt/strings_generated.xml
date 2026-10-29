@@ -63,6 +63,7 @@
     <string name="feed_notice_reported">Publicação denunciada</string>
     <string name="feed_notice_repost_failed">Erro ao republicar</string>
     <string name="feed_notice_translation_failed">Erro de tradução</string>
+    <string name="feed_post_reposted_from">repostou de @%1$s</string>
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
@@ -84,6 +85,7 @@
     </plurals>
     <string name="feed_repost_reposted">Republicado</string>
     <string name="feed_repost_story">Story</string>
+    <string name="feed_repost_unavailable">Este conteúdo não está mais disponível</string>
     <string name="feed_reposts">Recompartilhamentos</string>
     <string name="feed_retry">Tentar novamente</string>
     <string name="feed_secondary_translation_a11y">Tradução em %1$s: %2$s</string>
@@ -139,12 +141,6 @@
     <string name="post_detail_back">Voltar</string>
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
-    <string name="status_bar_add">Status</string>
-    <string name="status_bar_expired">Expirado</string>
-    <string name="status_bar_me">Eu</string>
-    <string name="status_bar_republish">Republicar</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">via @%1$s</string>
     <string name="status_composer_bare_add">Adicionar uma palavra</string>
     <string name="status_composer_bare_publish">Publicar mesmo assim</string>
     <string name="status_composer_bare_title">Publicar seu humor sem uma palavrinha?</string>
@@ -158,8 +154,6 @@
     <string name="status_composer_visibility_friends">Contatos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
-    <string name="status_feed_discover">Descobrir</string>
-    <string name="status_feed_friends">Amigos</string>
     <string name="user_posts_back">Voltar</string>
     <string name="user_posts_empty">Nenhuma publicação</string>
     <string name="user_posts_title">Publicações</string>

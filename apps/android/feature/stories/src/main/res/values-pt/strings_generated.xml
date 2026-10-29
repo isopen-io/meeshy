@@ -171,6 +171,7 @@
     <string name="stories_composer_text_finish">Concluído</string>
     <string name="stories_composer_text_finish_a11y">Terminar a edição do texto</string>
     <string name="stories_delete_confirm_title">Excluir esta story?</string>
+    <string name="stories_mood_kind">Humor</string>
     <string name="stories_publish_retry">Tentar novamente</string>
     <string name="stories_reply_failed">A resposta não foi enviada</string>
     <string name="stories_reply_placeholder">Responder a %1$s…</string>
@@ -184,6 +185,7 @@
     <string name="stories_report_reason_other">Outro</string>
     <string name="stories_report_reason_spam">Spam</string>
     <string name="stories_report_reason_violence">Violência</string>
+    <string name="stories_repost_by">Story de</string>
     <string name="stories_reposted">Republicado</string>
     <string name="stories_scene_animated">Animada</string>
     <string name="stories_scene_background_menu_bring_forward">Trazer para frente</string>
@@ -330,6 +332,7 @@
     <string name="story_tool_text">Texto</string>
     <string name="story_tool_texture">Fundo</string>
     <string name="story_tool_timeline">Linha do tempo</string>
+    <string name="story_tray_a11y_changeMood">Mudar meu humor</string>
     <string name="story_tray_menu_profile">Ver o perfil</string>
     <string name="story_tray_menu_viewStories">Ver os stories</string>
 </resources>

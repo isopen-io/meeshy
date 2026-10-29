@@ -34,4 +34,13 @@ class StoryTraySelfMenuTest {
         assertThat(StoryTraySelfMenu.actions(null))
             .containsExactly(StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory).inOrder()
     }
+
+    @Test
+    fun `with the mood door wired the menu offers to change it, then to see the profile - the avatar menu of iOS`() {
+        assertThat(StoryTraySelfMenu.actions(ring(count = 1), canChangeMood = true, canViewProfile = true))
+            .containsExactly(
+                StoryTraySelfAction.ViewMyStory, StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory,
+                StoryTraySelfAction.ChangeMood, StoryTraySelfAction.ViewProfile,
+            ).inOrder()
+    }
 }

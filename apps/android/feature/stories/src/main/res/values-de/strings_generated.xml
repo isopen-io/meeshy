@@ -170,6 +170,7 @@
     <string name="stories_composer_text_finish">Fertig</string>
     <string name="stories_composer_text_finish_a11y">Textbearbeitung beenden</string>
     <string name="stories_delete_confirm_title">Story löschen?</string>
+    <string name="stories_mood_kind">Stimmung</string>
     <string name="stories_publish_retry">Erneut versuchen</string>
     <string name="stories_reply_failed">Die Antwort wurde nicht gesendet</string>
     <string name="stories_reply_placeholder">%1$s antworten…</string>
@@ -183,6 +184,7 @@
     <string name="stories_report_reason_other">Andere</string>
     <string name="stories_report_reason_spam">Spam</string>
     <string name="stories_report_reason_violence">Gewalt</string>
+    <string name="stories_repost_by">Story von</string>
     <string name="stories_reposted">Erneut gepostet</string>
     <string name="stories_scene_animated">Animiert</string>
     <string name="stories_scene_background_menu_bring_forward">Nach vorne holen</string>
@@ -324,6 +326,7 @@
     <string name="story_tool_text">Text</string>
     <string name="story_tool_texture">Hintergrund</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_a11y_changeMood">Meine Stimmung ändern</string>
     <string name="story_tray_menu_profile">Profil ansehen</string>
     <string name="story_tray_menu_viewStories">Storys ansehen</string>
 </resources>

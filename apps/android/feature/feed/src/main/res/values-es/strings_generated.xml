@@ -63,6 +63,7 @@
     <string name="feed_notice_reported">Publicación denunciada</string>
     <string name="feed_notice_repost_failed">Error al republicar</string>
     <string name="feed_notice_translation_failed">Error de traducción</string>
+    <string name="feed_post_reposted_from">ha republicado de @%1$s</string>
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
@@ -84,6 +85,7 @@
     </plurals>
     <string name="feed_repost_reposted">Republicado</string>
     <string name="feed_repost_story">Historia</string>
+    <string name="feed_repost_unavailable">Este contenido ya no está disponible</string>
     <string name="feed_reposts">Republicaciones</string>
     <string name="feed_retry">Reintentar</string>
     <string name="feed_secondary_translation_a11y">Traducción en %1$s: %2$s</string>
@@ -139,12 +141,6 @@
     <string name="post_detail_back">Volver</string>
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
-    <string name="status_bar_add">Estado</string>
-    <string name="status_bar_expired">Caducado</string>
-    <string name="status_bar_me">Yo</string>
-    <string name="status_bar_republish">Republicar</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">vía @%1$s</string>
     <string name="status_composer_bare_add">Añadir unas palabras</string>
     <string name="status_composer_bare_publish">Publicar igualmente</string>
     <string name="status_composer_bare_title">¿Publicar tu estado de ánimo sin unas palabras?</string>
@@ -158,8 +154,6 @@
     <string name="status_composer_visibility_friends">Contactos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
-    <string name="status_feed_discover">Descubrir</string>
-    <string name="status_feed_friends">Amigos</string>
     <string name="user_posts_back">Atrás</string>
     <string name="user_posts_empty">Ninguna publicación</string>
     <string name="user_posts_title">Publicaciones</string>

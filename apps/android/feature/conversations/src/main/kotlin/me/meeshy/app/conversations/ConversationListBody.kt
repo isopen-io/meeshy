@@ -40,6 +40,7 @@ internal fun ConversationListBody(
     viewModel: ConversationListViewModel,
     onRefresh: () -> Unit = {},
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
+    header: @Composable () -> Unit = {},
 ) {
     val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
@@ -60,6 +61,7 @@ internal fun ConversationListBody(
         val nowMillis by rememberMinuteClock()
         val tailHeight = maxOf(LIST_TAIL_HEIGHT, floatingChromeBottomReserve())
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            item(key = "list-story-rail", contentType = "story-rail") { header() }
             if (!ConversationSections.showsHeaders(sections)) {
                 sections.forEach { section ->
                     items(section.items, key = { "row-${it.id}" }) { conversation ->

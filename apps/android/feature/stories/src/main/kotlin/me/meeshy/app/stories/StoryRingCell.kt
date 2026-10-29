@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,6 +54,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -76,6 +78,8 @@ internal fun StoryRingCell(
     onAppeared: (String?) -> Unit,
     onAdd: (() -> Unit)? = null,
     onManage: (() -> Unit)? = null,
+    onAddStatus: (() -> Unit)? = null,
+    onMoodTap: (() -> Unit)? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -116,16 +120,25 @@ internal fun StoryRingCell(
             StoryRingFrame(ring) {
                 StoryAvatar(ring)
                 if (showAddBadge) AddBadge(onClick = onAdd)
-                if (!moodEmoji.isNullOrEmpty()) MoodBadge(moodEmoji) else PresenceDot(ring)
+                when {
+                    showAddBadge && onAddStatus != null -> StatusBadge(moodEmoji, onClick = onAddStatus)
+                    !moodEmoji.isNullOrEmpty() -> MoodBadge(moodEmoji, onClick = onMoodTap)
+                    else -> PresenceDot(ring)
+                }
             }
             StoryRingMenu(
                 expanded = menuOpen,
                 onDismiss = { menuOpen = false },
                 onViewStories = { menuOpen = false; onOpen() },
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
-                selfActions = if (onAdd != null) StoryTraySelfMenu.actions(ring) else null,
+                selfActions = if (onAdd != null) {
+                    StoryTraySelfMenu.actions(ring, canChangeMood = onAddStatus != null, canViewProfile = onShowProfile != null)
+                } else {
+                    null
+                },
                 onAdd = { menuOpen = false; onAdd?.invoke() },
                 onManage = { menuOpen = false; onManage?.invoke() },
+                onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
             )
         }
         StoryCountDotsRow(
@@ -147,6 +160,7 @@ internal fun StoryRingMenu(
     selfActions: List<StoryTraySelfAction>? = null,
     onAdd: () -> Unit = {},
     onManage: () -> Unit = {},
+    onChangeMood: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (selfActions != null) {
@@ -166,6 +180,16 @@ internal fun StoryRingMenu(
                         text = { Text(stringResource(R.string.stories_tray_add_story)) },
                         leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         onClick = onAdd,
+                    )
+                    StoryTraySelfAction.ChangeMood -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.story_tray_a11y_changeMood)) },
+                        leadingIcon = { Icon(MeeshyIcons.Emoji, contentDescription = null) },
+                        onClick = onChangeMood,
+                    )
+                    StoryTraySelfAction.ViewProfile -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.story_tray_menu_profile)) },
+                        leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        onClick = { onShowProfile?.invoke() },
                     )
                 }
             }
@@ -201,7 +225,7 @@ private fun BoxScope.AddBadge(onClick: (() -> Unit)? = null) {
     val addLabel = stringResource(R.string.stories_tray_add_story)
     Box(
         modifier = Modifier
-            .align(Alignment.BottomEnd)
+            .align(Alignment.TopStart)
             .size(StoryEntryMetrics.badge * 0.625f)
             .then(
                 if (onClick != null) {
@@ -218,17 +242,58 @@ private fun BoxScope.AddBadge(onClick: (() -> Unit)? = null) {
     }
 }
 
+/** L'humeur posée sur l'avatar ; appuyée, elle ouvre le statut (cible de 48 dp, pastille de 32 dp). */
 @Composable
-private fun BoxScope.MoodBadge(emoji: String) {
+private fun BoxScope.MoodBadge(emoji: String, onClick: (() -> Unit)? = null) {
+    val moodLabel = "${stringResource(R.string.stories_mood_kind)} $emoji"
+    BadgeTarget(
+        onClick = onClick,
+        contentDescription = moodLabel,
+    ) {
+        Text(text = emoji, fontSize = 18.sp)
+    }
+}
+
+/**
+ * Le badge d'humeur du compte courant — iOS `MyStoryButton` : l'humeur posée quand il y en a une,
+ * le « 💭 » d'invite sinon. Toujours un bouton qui mène au composeur d'humeur.
+ */
+@Composable
+internal fun BoxScope.StatusBadge(moodEmoji: String?, onClick: () -> Unit) {
+    val changeLabel = stringResource(R.string.story_tray_a11y_changeMood)
+    BadgeTarget(onClick = onClick, contentDescription = changeLabel) {
+        Text(text = moodEmoji?.takeIf { it.isNotEmpty() } ?: MOOD_PROMPT_GLYPH, fontSize = 18.sp)
+    }
+}
+
+@Composable
+private fun BoxScope.BadgeTarget(
+    onClick: (() -> Unit)?,
+    contentDescription: String,
+    content: @Composable () -> Unit,
+) {
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
-            .size(StoryEntryMetrics.badge)
-            .clip(CircleShape)
-            .background(MeeshyTheme.tokens.backgroundTertiary),
+            .offset(x = BADGE_TARGET_BLEED, y = BADGE_TARGET_BLEED)
+            .size(BADGE_TARGET)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                        .semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = emoji, fontSize = 18.sp)
+        Box(
+            modifier = Modifier
+                .size(StoryEntryMetrics.badge)
+                .clip(CircleShape)
+                .background(MeeshyTheme.tokens.backgroundTertiary),
+            contentAlignment = Alignment.Center,
+        ) { content() }
     }
 }
 
@@ -326,6 +391,9 @@ internal fun StoryLabel(label: String, unread: Boolean) {
     )
 }
 
+private val BADGE_TARGET = 48.dp
+private val BADGE_TARGET_BLEED = (BADGE_TARGET - StoryEntryMetrics.badge) / 2
+private const val MOOD_PROMPT_GLYPH = "\uD83D\uDCAD"
 private val DOT_SIZE = 4.dp
 private val DOT_SPACING = 3.dp
 private val PRESENCE_DOT_SIZE = 22.dp

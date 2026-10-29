@@ -63,6 +63,7 @@
     <string name="feed_notice_reported">Post segnalato</string>
     <string name="feed_notice_repost_failed">Errore durante la ripubblicazione</string>
     <string name="feed_notice_translation_failed">Errore di traduzione</string>
+    <string name="feed_post_reposted_from">ha ricondiviso da @%1$s</string>
     <string name="feed_quote_cancel">Annulla</string>
     <string name="feed_quote_submit">Ripubblica</string>
     <string name="feed_reel">Reel</string>
@@ -84,6 +85,7 @@
     </plurals>
     <string name="feed_repost_reposted">Ripubblicato</string>
     <string name="feed_repost_story">Storia</string>
+    <string name="feed_repost_unavailable">Questo contenuto non è più disponibile</string>
     <string name="feed_reposts">Ricondivisioni</string>
     <string name="feed_retry">Riprova</string>
     <string name="feed_secondary_translation_a11y">Traduzione in %1$s: %2$s</string>
@@ -139,12 +141,6 @@
     <string name="post_detail_back">Indietro</string>
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
-    <string name="status_bar_add">Stato</string>
-    <string name="status_bar_expired">Scaduto</string>
-    <string name="status_bar_me">Io</string>
-    <string name="status_bar_republish">Ricondividi</string>
-    <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">via @%1$s</string>
     <string name="status_composer_bare_add">Aggiungi una parola</string>
     <string name="status_composer_bare_publish">Pubblica comunque</string>
     <string name="status_composer_bare_title">Pubblicare il tuo umore senza due parole?</string>
@@ -158,8 +154,6 @@
     <string name="status_composer_visibility_friends">Contatti</string>
     <string name="status_composer_visibility_private">Privato</string>
     <string name="status_composer_visibility_public">Pubblico</string>
-    <string name="status_feed_discover">Scopri</string>
-    <string name="status_feed_friends">Amici</string>
     <string name="user_posts_back">Indietro</string>
     <string name="user_posts_empty">Nessun post</string>
     <string name="user_posts_title">Post</string>

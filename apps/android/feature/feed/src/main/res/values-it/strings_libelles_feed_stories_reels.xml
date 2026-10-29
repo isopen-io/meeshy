@@ -29,12 +29,6 @@
     <string name="post_comments_replying_to_generic">In risposta…</string>
     <string name="post_comments_reply_hint">Aggiungi una risposta…</string>
     <string name="post_comments_hide_replies">Nascondi risposte</string>
-    <string name="status_bar_add_label">Aggiungi uno stato</string>
-    <string name="status_bar_my_status_label">Il mio stato %1$s</string>
-    <string name="status_bar_load_error">Errore di caricamento</string>
-    <string name="status_bar_retry">Riprova a caricare gli stati</string>
-    <string name="status_bar_react">Reagisci con %1$s</string>
-    <string name="status_feed_toggle_label">Feed degli stati</string>
     <string name="status_composer_republishing">Ripubblicazione di @%1$s</string>
     <string name="status_composer_placeholder">Come va?</string>
     <string name="status_composer_mood_label">Umore %1$s</string>

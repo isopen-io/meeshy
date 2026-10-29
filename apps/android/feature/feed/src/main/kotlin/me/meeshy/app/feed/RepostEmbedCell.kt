@@ -43,6 +43,7 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -69,6 +70,16 @@ fun RepostEmbedCell(
     embed: RepostEmbedPresentation,
     onOpen: (String) -> Unit,
 ) {
+    if (embed.isUnavailable) {
+        UnavailableRepostCell(embed)
+        return
+    }
+    val sceneRenderer = LocalRepostSceneRenderer.current
+    val scene = embed.storyItem
+    if (scene != null && sceneRenderer != null) {
+        sceneRenderer(scene, embed.authorName, { onOpen(embed.id) }, Modifier.fillMaxWidth())
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val header = stringResource(
         if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
@@ -236,6 +247,53 @@ fun RepostEmbedCell(
                     color = MeeshyPalette.Indigo500.copy(alpha = 0.7f),
                 )
             }
+        }
+    }
+}
+
+/**
+ * L'original d'un repost n'est plus servi (supprimé, retiré, hors de portée) : un état dessiné, de la même
+ * silhouette que la citation, qui n'ouvre rien — pas un bloc vide qui promet un contenu.
+ */
+@Composable
+private fun UnavailableRepostCell(embed: RepostEmbedPresentation) {
+    val message = stringResource(R.string.feed_repost_unavailable)
+    val header = stringResource(
+        if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .border(
+                width = 1.dp,
+                color = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(MeeshyRadius.md),
+            )
+            .background(MeeshyTheme.tokens.textSecondary.copy(alpha = 0.05f))
+            .padding(MeeshySpacing.md)
+            .semantics(mergeDescendants = true) { contentDescription = "$header. $message" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Block,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+        Column {
+            Text(
+                text = header,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }
