@@ -45,16 +45,24 @@ data class CallJournalSegment(
     val translatedLanguage: String? = null,
 ) {
     companion object {
-        /** iOS `makeTranscriptionSegment(from: DataChannelTranscriptEntry)`: no translation on this path. */
-        fun fromPeerEntry(entry: CallTranscriptEntry): CallJournalSegment = CallJournalSegment(
-            wireId = entry.id,
-            speakerId = entry.speakerId,
-            speakerDisplayName = entry.speakerDisplayName.ifBlank { null },
-            text = entry.text,
-            language = entry.language.ifBlank { null },
-            isFinal = entry.isFinal,
-            capturedAtMs = entry.capturedAtMs,
-        )
+        /**
+         * iOS `makeTranscriptionSegment(from: DataChannelTranscriptEntry)`: no translation on this path.
+         * The data channel of a duo carries ONE peer, so its lines speak for [channelPeerId] whatever
+         * `speakerId` the payload declares (a peer could otherwise put words in my mouth); no known
+         * peer, or a peer that is me, and the entry is dropped.
+         */
+        fun fromPeerEntry(entry: CallTranscriptEntry, channelPeerId: String, selfId: String?): CallJournalSegment? {
+            if (channelPeerId.isBlank() || channelPeerId == selfId) return null
+            return CallJournalSegment(
+                wireId = entry.id,
+                speakerId = channelPeerId,
+                speakerDisplayName = entry.speakerDisplayName.ifBlank { null },
+                text = entry.text,
+                language = entry.language.ifBlank { null },
+                isFinal = entry.isFinal,
+                capturedAtMs = entry.capturedAtMs,
+            )
+        }
 
         /**
          * iOS `makeTranscriptionSegment(from: CallTranslatedSegmentData)`. The language tag is the one
@@ -118,8 +126,9 @@ object CallTranscriptMergeRules {
  * The live journal of a call, the single source the captions band and the journal sheet read —
  * iOS `CallTranscriptionService` (`receivePeerEntry` / `receiveTranslatedSegment` /
  * `appendSegment`) with `CallTranscriptJournal`:
- *  - an utterance already in the journal (same [CallJournalSegment.wireId]) is MERGED in place,
- *    never duplicated, whichever transport arrives first;
+ *  - an utterance already in the journal (same [CallJournalSegment.wireId] AND same speaker) is
+ *    MERGED in place, never duplicated, whichever transport arrives first; a line of another speaker
+ *    never rewrites it;
  *  - a new utterance first drops that speaker's in-progress line (at most one live partial per
  *    speaker), every finalized line is kept;
  *  - the lines stay sorted by capture clock (a later equal clock lands after), and the journal
@@ -136,7 +145,7 @@ data class CallLiveJournal(
 
     fun receive(segment: CallJournalSegment): CallLiveJournal {
         val wireId = segment.wireId
-        val index = if (wireId == null) -1 else segments.indexOfFirst { it.wireId == wireId }
+        val index = if (wireId == null) -1 else segments.indexOfFirst { it.wireId == wireId && it.speakerId == segment.speakerId }
         if (index < 0) return append(segment)
         val merged = CallTranscriptMergeRules.merged(segments[index], segment)
         val others = segments.filterIndexed { i, _ -> i != index }

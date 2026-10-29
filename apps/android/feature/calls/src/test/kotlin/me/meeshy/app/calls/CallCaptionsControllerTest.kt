@@ -42,7 +42,7 @@ class CallCaptionsControllerTest {
     private val session = mockk<SessionRepository> {
         every { currentUser } returns MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
     }
-    private val info = CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY.copy(peerName = "Ada", conversationId = "conv-1"))
+    private val info = CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY.copy(peerId = "peer", peerName = "Ada", conversationId = "conv-1"))
 
     private fun runController(endToEnd: Boolean? = false, block: suspend TestScope.(CallCaptionsController) -> Unit) = runTest {
         val controller = CallCaptionsController(

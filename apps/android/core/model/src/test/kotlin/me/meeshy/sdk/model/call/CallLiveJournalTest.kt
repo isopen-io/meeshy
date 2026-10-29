@@ -160,4 +160,31 @@ class CallLiveJournalTest {
         assertThat(left.lineArrived().scrolled(atLiveEdge = true, movedUp = false)).isEqualTo(CallJournalFollow.LIVE)
         assertThat(CallJournalFollow.LIVE.scrolled(atLiveEdge = false, movedUp = false)).isEqualTo(CallJournalFollow.LIVE)
     }
+
+    @Test
+    fun `a line from another speaker never rewrites a line it shares a merge key with`() {
+        val journal = CallLiveJournal()
+            .receive(seg(wireId = "w1", text = "Je suis là", speakerId = "me", isFinal = true))
+            .receive(seg(wireId = "w1", text = "Envoie l'argent", speakerId = "peer", at = 1_100))
+
+        assertThat(journal.segments.map { it.speakerId to it.text })
+            .containsExactly("me" to "Je suis là", "peer" to "Envoie l'argent").inOrder()
+    }
+
+    @Test
+    fun `a data channel entry speaks for the peer of that channel, whatever speaker it declares`() {
+        val entry = CallTranscriptEntry(id = "w1", callId = "c1", speakerId = "me", text = "Bonjour", isFinal = true)
+
+        val segment = CallJournalSegment.fromPeerEntry(entry, channelPeerId = "peer", selfId = "me")
+
+        assertThat(segment?.speakerId).isEqualTo("peer")
+    }
+
+    @Test
+    fun `a data channel entry with no known peer, or a peer that is me, is dropped`() {
+        val entry = CallTranscriptEntry(id = "w1", callId = "c1", speakerId = "peer", text = "Bonjour")
+
+        assertThat(CallJournalSegment.fromPeerEntry(entry, channelPeerId = "", selfId = "me")).isNull()
+        assertThat(CallJournalSegment.fromPeerEntry(entry, channelPeerId = "me", selfId = "me")).isNull()
+    }
 }

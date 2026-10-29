@@ -155,6 +155,7 @@ class CallCaptionsController internal constructor(
 
     @Volatile private var callId: String = ""
     private var peerName: String = ""
+    @Volatile private var peerId: String = ""
     private var conversationId: String = ""
     private var publishedListening = false
     private var listening: List<Job> = emptyList()
@@ -180,6 +181,7 @@ class CallCaptionsController internal constructor(
             else -> {
                 callId = session.callId.ifBlank { callId }
                 peerName = session.config.peerName
+                peerId = session.config.peerId.ifBlank { peerId }
                 if (listening.isEmpty()) listening = listen()
                 resolveGate(session.config.conversationId)
             }
@@ -189,6 +191,7 @@ class CallCaptionsController internal constructor(
     /** The gateway does not replay `transcription-active` to a newcomer: say it again. */
     override fun onRemoteEvent(event: CallEvent, session: CallSessionInfo) {
         if (event !is CallEvent.ParticipantJoined) return
+        peerId = peerId.ifBlank { event.peerId.orEmpty() }
         val target = callId.ifBlank { return }
         if (publishedListening) wires.announceListening(target, true)
     }
@@ -222,7 +225,8 @@ class CallCaptionsController internal constructor(
             },
             wires.dataChannel.onEach { bytes ->
                 val entry = (DataChannelCodec.decode(bytes) as? DataChannelInbound.TranscriptEntry)?.entry ?: return@onEach
-                if (entry.callId == callId) receive(CallJournalSegment.fromPeerEntry(entry))
+                if (entry.callId != callId) return@onEach
+                CallJournalSegment.fromPeerEntry(entry, peerId, session.currentUser.value?.id)?.let(::receive)
             },
             wires.listeningPeers.onEach { event ->
                 if (event.callId != callId) return@onEach
@@ -275,6 +279,7 @@ class CallCaptionsController internal constructor(
         resolving = null
         callId = ""
         peerName = ""
+        peerId = ""
         conversationId = ""
         publishedListening = false
         _state.value = CallCaptionsState()
