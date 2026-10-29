@@ -220,25 +220,33 @@ private fun StoryAvatar(ring: StoryRing) {
     )
 }
 
+/** Le « + » de « Votre story », en coin haut-gauche (iOS `MyStoryButton`) : pastille de 20 dp, cible de 48 dp. */
 @Composable
 private fun BoxScope.AddBadge(onClick: (() -> Unit)? = null) {
     val addLabel = stringResource(R.string.stories_tray_add_story)
     Box(
         modifier = Modifier
             .align(Alignment.TopStart)
-            .size(StoryEntryMetrics.badge * 0.625f)
+            .offset(x = -ADD_TARGET_BLEED, y = -ADD_TARGET_BLEED)
+            .size(BADGE_TARGET)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(onClick = onClick).semantics { role = Role.Button; contentDescription = addLabel }
                 } else {
                     Modifier
                 },
-            )
-            .clip(CircleShape)
-            .background(MeeshyPalette.Indigo500),
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Add, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
+        Box(
+            modifier = Modifier
+                .size(ADD_BADGE)
+                .clip(CircleShape)
+                .background(MeeshyPalette.Indigo500),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
+        }
     }
 }
 
@@ -393,6 +401,8 @@ internal fun StoryLabel(label: String, unread: Boolean) {
 
 private val BADGE_TARGET = 48.dp
 private val BADGE_TARGET_BLEED = (BADGE_TARGET - StoryEntryMetrics.badge) / 2
+private val ADD_BADGE = StoryEntryMetrics.badge * 0.625f
+private val ADD_TARGET_BLEED = (BADGE_TARGET - ADD_BADGE) / 2
 private const val MOOD_PROMPT_GLYPH = "\uD83D\uDCAD"
 private val DOT_SIZE = 4.dp
 private val DOT_SPACING = 3.dp

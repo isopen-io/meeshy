@@ -7,6 +7,10 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
@@ -92,6 +96,23 @@ class StoryTrayRailMoodTest {
         }
         compose.onNodeWithContentDescription("Mood 🔥").performClick()
         assertThat(tapped).containsExactly("u2")
+    }
+
+    @Test
+    fun `le badge plus de Votre story offre une cible de 48 dp, comme le badge d humeur`() {
+        compose.setContent {
+            StoryTrayRail(
+                tray = tray("me", "u2"),
+                moodEmojiOf = { null },
+                onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {},
+                onAddStatus = {},
+            )
+        }
+        val add = compose.onNodeWithContentDescription("Add a story").getUnclippedBoundsInRoot()
+        assertThat(add.width).isAtLeast(48.dp)
+        assertThat(add.height).isAtLeast(48.dp)
+        val mood = compose.onNodeWithContentDescription("Change my mood").getUnclippedBoundsInRoot()
+        assertThat(mood.width).isAtLeast(48.dp)
     }
 
     @Test
