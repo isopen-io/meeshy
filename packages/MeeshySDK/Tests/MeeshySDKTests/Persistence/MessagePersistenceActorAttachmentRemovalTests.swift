@@ -92,6 +92,35 @@ final class MessagePersistenceActorAttachmentRemovalTests: XCTestCase {
         XCTAssertEqual(outcome, .unchanged)
     }
 
+    func test_removeAttachment_announcedBeforeItsRow_isAppliedWhenTheRowLands() async throws {
+        _ = try await remove("a", from: "m1", in: "c1", at: Date())
+
+        try await insert(content: "légende", pieces: ["a", "b"])
+        await actor.replayPendingRowEvents(for: ["m1"])
+
+        XCTAssertEqual(try attachmentIds(try row()), ["b"], "le message arrivé après l'annonce ne ramène pas la pièce retirée")
+    }
+
+    func test_removeAttachment_announcedBeforeItsRow_lastPieceWithoutText_tombstonesTheRow() async throws {
+        let at = Date(timeIntervalSince1970: 1_800_000_000)
+        _ = try await remove("a", from: "m1", in: "c1", at: at)
+
+        try await insert(content: nil, pieces: ["a"])
+        await actor.replayPendingRowEvents(for: ["m1"])
+
+        XCTAssertEqual(try row().deletedAt, at)
+    }
+
+    func test_removeAttachment_announcedBeforeItsRow_forgedConversation_leavesTheRowIntact() async throws {
+        _ = try await remove("a", from: "m1", in: "autre", at: Date())
+
+        try await insert(conversationId: "c1", content: nil, pieces: ["a"])
+        await actor.replayPendingRowEvents(for: ["m1"])
+
+        XCTAssertEqual(try attachmentIds(try row()), ["a"])
+        XCTAssertNil(try row().deletedAt)
+    }
+
     func test_removeAttachment_encryptedMessage_neverBecomesATombstone() async throws {
         try await insert(content: nil, pieces: ["a"], encrypted: true)
 
