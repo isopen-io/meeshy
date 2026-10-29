@@ -290,7 +290,6 @@
     "GET /api/v1/conversations/:conversationId/links",
     "GET /api/v1/conversations/:conversationId/read-statuses",
     "GET /api/v1/conversations/:conversationId/receipts",
-    "GET /api/v1/conversations/:id/card",
     "GET /api/v1/conversations/:id/pinned-messages",
     "GET /api/v1/conversations/:id/reactions",
     "GET /api/v1/conversations/:id/shared-translations",
