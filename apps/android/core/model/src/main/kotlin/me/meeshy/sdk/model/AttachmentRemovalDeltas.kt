@@ -19,9 +19,23 @@ object AttachmentRemovalDeltas {
         if (message.attachments.none { it.id == attachmentId }) return message
         val remaining = message.attachments.filterNot { it.id == attachmentId }
         val stripped = message.copy(attachments = remaining)
-        val keepsSomething = remaining.isNotEmpty() || message.content.isNotBlank()
+        val keepsSomething = remaining.isNotEmpty() || message.content.isNotBlank() ||
+            message.location != null || message.servedSticker != null || message.isEndToEndSealed
         return if (keepsSomething) stripped else ConversationEventDeltas.deleted(stripped, deletedAtIso)
     }
+
+    /**
+     * Tout ce que [piece] a posé sur l'appareil, par URL : le fichier, sa vignette, ses variantes réduites et les pistes
+     * traduites (clé des caches disque des images, des fichiers et des tronçons audio / vidéo).
+     */
+    fun fileUrls(piece: ApiMessageAttachment): Set<String> =
+        (
+            listOfNotNull(piece.fileUrl, piece.thumbnailUrl) +
+                piece.imageVariants.orEmpty().map { it.url } +
+                piece.translations.orEmpty().values.mapNotNull { it.url }
+            )
+            .filter { it.isNotBlank() }
+            .toSet()
 
     /**
      * L'aperçu de la ligne de liste quand [messageId] est son dernier message. [previous] est le message qui le précède

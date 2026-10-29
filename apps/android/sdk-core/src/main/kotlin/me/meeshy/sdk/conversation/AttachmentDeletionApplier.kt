@@ -11,6 +11,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentDeletedEvent
 import me.meeshy.sdk.model.AttachmentRemovalDeltas
 import me.meeshy.sdk.net.MeeshyApi
@@ -22,7 +23,8 @@ import me.meeshy.sdk.session.commitOrWrite
  * Applique `attachment:deleted` (#13609) au cache Room, SANS appel réseau : la pièce quitte la ligne du message (qui
  * devient une pierre tombale s'il ne lui reste ni texte ni pièce, comme la suppression locale) et l'aperçu de la ligne
  * de liste dont c'est le dernier message. Idempotent : un événement rejoué, ou pour une pièce que l'auteur a déjà
- * retirée localement, ne change rien et n'écrit rien. S'exécute sous le ticket posé par `collectArrived`.
+ * retirée localement, ne change rien et n'écrit rien. Les fichiers de la pièce quittent aussi les caches disque
+ * ([DeletedAttachmentFilePurger]). S'exécute sous le ticket posé par `collectArrived`.
  */
 @Singleton
 class AttachmentDeletionApplier internal constructor(
@@ -31,6 +33,7 @@ class AttachmentDeletionApplier internal constructor(
     private val clock: CacheClock,
     private val fence: AccountFence?,
     private val mediaHub: ConversationMediaHubIndex,
+    private val filePurger: DeletedAttachmentFilePurger = DeletedAttachmentFilePurger.None,
 ) {
     @Inject
     constructor(
@@ -39,21 +42,32 @@ class AttachmentDeletionApplier internal constructor(
         clock: CacheClock,
         fence: AccountFence?,
         mediaHub: ConversationMediaHubIndex,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence, mediaHub)
+        filePurger: DeletedAttachmentFilePurger = DeletedAttachmentFilePurger.None,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence, mediaHub, filePurger)
 
     suspend fun apply(event: AttachmentDeletedEvent) {
         if (event.messageId.isBlank() || event.attachmentId.isBlank()) return
         val ticket = updater.ticket()
         val deletedAt = Instant.ofEpochMilli(clock.nowMillis()).toString()
         var tombstoned = false
+        var removed: ApiMessageAttachment? = null
         updater.update(ticket, event.messageId, requireSynced = false) { message ->
             AttachmentRemovalDeltas.message(message, event.conversationId, event.attachmentId, deletedAt).also {
                 tombstoned = it !== message && it.deletedAt != null && message.deletedAt == null
+                if (it !== message) removed = message.attachments.firstOrNull { piece -> piece.id == event.attachmentId }
             }
         }
+        removed?.let { purgeFiles(it, ticket) }
         if (tombstoned) database.editRevisionDao().deleteForMessage(event.messageId)
         patchListPreview(event, ticket)
         mediaHub.forgetAttachment(event.conversationId, event.messageId, event.attachmentId, ticket)
+    }
+
+    /** Les copies disque de la pièce partent avec elle, sous le compte auquel l'événement est arrivé et à lui seul. */
+    private suspend fun purgeFiles(piece: ApiMessageAttachment, ticket: AccountTicket?) {
+        val urls = AttachmentRemovalDeltas.fileUrls(piece)
+        if (urls.isEmpty()) return
+        fence.commitOrWrite(ticket) { filePurger.purge(urls) }
     }
 
     private suspend fun patchListPreview(event: AttachmentDeletedEvent, ticket: AccountTicket?) {
