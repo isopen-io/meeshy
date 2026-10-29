@@ -50,6 +50,8 @@ data class StorySlide(
     val frame: SceneFrame = SceneFrame(),
     /** La durée de SOURCE de chaque piste (identifiant -> secondes), retenue à l'emprunt : le Temps remplace `duration`, pas elle. */
     val soundSources: Map<String, Float> = emptyMap(),
+    /** Les médias de la slide POSÉS sur la scène (hors fond), chacun avec sa pose ; ils partent en `mediaObjects[]`. */
+    val placedMedia: List<StoryPlacedMedia> = emptyList(),
 )
 
 /**
@@ -191,6 +193,7 @@ data class StorySlideDeck(
                 val clearsBackground = slide.backgroundMediaId == mediaId
                 slide.copy(
                     mediaIds = slide.mediaIds - mediaId,
+                    placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
                 )

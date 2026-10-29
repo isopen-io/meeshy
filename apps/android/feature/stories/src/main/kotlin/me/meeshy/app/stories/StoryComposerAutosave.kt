@@ -192,6 +192,7 @@ fun StorySlideDeck.toDraftSnapshot(
             opening = it.frame.opening?.let(SceneFrame::wire),
             closing = it.frame.closing?.let(SceneFrame::wire),
             soundSources = it.soundSources,
+            placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
         )
     },
     selectedId = selectedId,
@@ -233,6 +234,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 backgroundLoop = it.backgroundLoop,
                 audio = it.audio,
                 soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
+                placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,
