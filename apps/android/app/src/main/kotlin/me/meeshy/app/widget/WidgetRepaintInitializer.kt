@@ -15,18 +15,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.app.startup.AppInitializer
+import kotlinx.coroutines.flow.map
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.net.TokenStore
+import me.meeshy.sdk.socket.PresenceStore
 
 /**
  * Repeint les widgets dès que ce qu'ils montrent change : une conversation de la fenêtre qu'ils
- * lisent (message reçu par socket ou par push, lecture, épingle, changement de compte), la langue
- * du lecteur, le mode nuit du système. Aucune lecture réseau : tout vient du cache local, comme le
+ * lisent (message reçu par socket ou par push, lecture, épingle, changement de compte), le palier
+ * de présence d'un contact affiché (jamais chaque événement), la langue du lecteur, le mode nuit
+ * du système. Aucune lecture réseau : tout vient du cache local, comme le
  * widget lui-même. `updatePeriodMillis` n'est plus que le filet.
  */
 class WidgetRepaintInitializer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val conversations: ConversationRepository,
     private val refresher: WidgetRefresher,
+    private val presence: PresenceStore,
+    private val tokenStore: TokenStore,
 ) : AppInitializer {
     override fun initialize() {
         val nightMode = NightModeChange(context.resources.configuration.uiMode)
@@ -40,9 +46,13 @@ class WidgetRepaintInitializer @Inject constructor(
                 override fun onLowMemory() = Unit
             },
         )
+        val displayedPeers = conversations.recentCachedFingerprint().map {
+            WidgetPresenceTiers.displayedPeerIds(conversations.recentCachedConversations(), tokenStore.userId)
+        }
+        val presenceTiers = WidgetPresenceTiers.changes(displayedPeers, presence.entries, presence.decayTicks, presence::nowMillis)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             WidgetRepaintPolicy
-                .triggers(conversations.recentCachedFingerprint(), refresher.requests)
+                .triggers(conversations.recentCachedFingerprint(), refresher.requests, presenceTiers)
                 .collect { refresher.repaintAll() }
         }
     }

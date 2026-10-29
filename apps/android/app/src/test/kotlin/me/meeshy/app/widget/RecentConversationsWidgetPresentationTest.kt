@@ -268,4 +268,33 @@ class RecentConversationsWidgetPresentationTest {
 
         assertThat(presentation.rows.single().preview).isEqualTo("Hello from c1")
     }
+
+    @Test
+    fun `a direct row carries the presence token of its peer, a group row never does`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(
+                conversation(id = "d1"),
+                conversation(id = "g1", type = "group", title = "Team"),
+            ),
+            currentUserId = "me",
+            previewLabels = labels,
+            presence = mapOf(
+                "other-d1" to me.meeshy.sdk.model.PresenceState.ONLINE,
+                "other-g1" to me.meeshy.sdk.model.PresenceState.ONLINE,
+            ),
+        )
+
+        assertThat(presentation.rows.associate { it.id to it.presence }).containsExactly("d1", "online", "g1", null)
+    }
+
+    @Test
+    fun `a peer nobody served has no presence token`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "d1")),
+            currentUserId = "me",
+            previewLabels = labels,
+        )
+
+        assertThat(presentation.rows.single().presence).isNull()
+    }
 }

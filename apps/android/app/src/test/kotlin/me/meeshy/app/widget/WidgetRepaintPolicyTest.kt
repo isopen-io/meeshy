@@ -45,6 +45,18 @@ class WidgetRepaintPolicyTest {
     }
 
     @Test
+    fun `a change of presence tier repaints without any cache change`() = runTest {
+        val tiers = MutableSharedFlow<Map<String, me.meeshy.sdk.model.PresenceState>>()
+
+        WidgetRepaintPolicy.triggers(flowOf(), MutableSharedFlow(), tiers, burstWindowMillis = 400).test {
+            tiers.emit(mapOf("a" to me.meeshy.sdk.model.PresenceState.AWAY))
+            advanceTimeBy(500)
+            assertThat(awaitItem()).isEqualTo(Unit)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `switching the system to night mode is a change, staying in it is not`() {
         val change = NightModeChange(initialUiMode = Configuration.UI_MODE_NIGHT_NO)
 

@@ -129,4 +129,25 @@ class FavoriteContactsWidgetPresentationTest {
 
         assertThat(presentation.rows.map { it.id }).containsExactly("fav")
     }
+
+    @Test
+    fun `a row carries the presence token of the served state of its peer`() {
+        val presentation = FavoriteContactsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "c1"), conversation(id = "c2")),
+            currentUserId = "me",
+            presence = mapOf("other-c1" to me.meeshy.sdk.model.PresenceState.AWAY),
+        )
+
+        assertThat(presentation.rows.map { it.presence }).containsExactly("away", null).inOrder()
+    }
+
+    @Test
+    fun `without anything served no row has a presence token`() {
+        val presentation = FavoriteContactsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "c1")),
+            currentUserId = "me",
+        )
+
+        assertThat(presentation.rows.single().presence).isNull()
+    }
 }
