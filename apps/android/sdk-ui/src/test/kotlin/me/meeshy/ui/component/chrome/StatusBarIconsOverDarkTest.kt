@@ -38,4 +38,25 @@ class StatusBarIconsOverDarkTest {
         compose.waitForIdle()
         assertThat(lightIcons()).isTrue()
     }
+    @Test
+    fun `deux ecrans sombres qui se relaient gardent les icones claires jusqu au depart du dernier`() {
+        val window = compose.activity.window
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+        var first by mutableStateOf(true)
+        var second by mutableStateOf(false)
+        compose.setContent {
+            if (first) StatusBarIconsOverDark()
+            if (second) StatusBarIconsOverDark()
+        }
+        compose.waitForIdle()
+        second = true
+        compose.waitForIdle()
+        first = false
+        compose.waitForIdle()
+        assertThat(lightIcons()).isFalse()
+
+        second = false
+        compose.waitForIdle()
+        assertThat(lightIcons()).isTrue()
+    }
 }
