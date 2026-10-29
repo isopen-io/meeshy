@@ -155,6 +155,10 @@ public object CallFrameMotionPlan {
         }
     }
 
+    /** Les couches de scène que l'hôte joue telles quelles : lumières et boucles vidéo (#13695). */
+    public fun ambientLayers(look: CallFrameLook): List<CallFrameSceneLayer> =
+        look.scene.filter { it.kind == CallFrameSceneLayerKind.LIGHT || it.kind == CallFrameSceneLayerKind.VIDEO_LOOP }
+
     /** Les rangs retirés des couches fixes parce qu'ils se peignent animés. */
     public fun animatedRanks(look: CallFrameLook): Set<Int> = tracks(look).map { it.rank }.toSet()
 }

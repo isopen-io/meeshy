@@ -91,6 +91,10 @@ public object CallFrameMotionCurve {
         }
     }
 
+    /** L'opacité d'une respiration de [period] à l'instant [t] — celle d'une lumière de scène (#13695). */
+    public fun breathe(t: Double, period: Double, phase: Double = 0.0): Double =
+        smooth(BREATHE, null, fraction(t, period, phase))
+
     /** La position (0…1) dans une boucle de [period], décalée de [phase] période — le `timeOffset` de Core Animation. */
     public fun fraction(t: Double, period: Double, phase: Double): Double {
         if (period <= 0) return 0.0

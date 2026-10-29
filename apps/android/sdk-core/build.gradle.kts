@@ -31,6 +31,13 @@ android {
             isReturnDefaultValues = true
         }
     }
+    // Les illustrations des cadres d'appel (#13695) : les MÊMES fichiers que iOS et le web, versés tels quels
+    // dans les actifs (`call-frames/<nom>.webp`), sans copie dans le dépôt Android.
+    sourceSets["main"].assets.srcDir(
+        generateSequence(projectDir) { it.parentFile }
+            .map { File(it, "packages/shared/design/call-capture-frames/assets") }
+            .first { it.isDirectory },
+    )
 }
 
 dependencies {

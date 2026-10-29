@@ -193,6 +193,7 @@ internal object CallFrameLookDecoder {
         color = json.str("color"),
         amount = json.num("amount"),
         maxParticles = json.prim("max")?.takeIf { !it.isString }?.intOrNull,
+        slice = json.num("slice"),
     )
     }
 

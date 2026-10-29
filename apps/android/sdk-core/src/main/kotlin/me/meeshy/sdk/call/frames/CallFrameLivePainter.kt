@@ -2,9 +2,12 @@ package me.meeshy.sdk.call.frames
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import me.meeshy.sdk.call.frames.CallFrameRendererKit.rectF
 import me.meeshy.sdk.call.frames.CallFrameRendererKit.toPath
 import me.meeshy.sdk.model.call.frames.CallFrameLayer
@@ -15,12 +18,23 @@ import me.meeshy.sdk.model.call.frames.CallFrameOrnamentPartition
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentStage
 import me.meeshy.sdk.model.call.frames.CallFrameRect
 import me.meeshy.sdk.model.call.frames.CallFrameRenderKit
+import me.meeshy.sdk.model.call.frames.CallFrameSceneArt
+import me.meeshy.sdk.model.call.frames.CallFrameSceneLayer
 import me.meeshy.sdk.model.call.frames.CallFrameShapeGeometry
 import me.meeshy.sdk.model.call.frames.CallFrameTextLayout
 import kotlin.math.roundToInt
 
 /** Un ornement animé, peint une fois : une image transparente par groupe, à la taille de la toile des ornements. */
 class CallFrameMotionSprite(val track: CallFrameMotionTrack, val images: List<Bitmap>)
+
+/**
+ * Une lumière de scène (#13695, miroir de la couche radiale de iOS `CallFrameMotionLayer.ambientLayer`) : un halo
+ * qui couvre la toile, plein au centre et éteint aux bords, peint une fois ; l'hôte le fait respirer
+ * ([CallFrameSceneArt.lightAlpha]). [masked] : `back` et `front` restent hors des visages, `effects` passe dessus.
+ */
+class CallFrameMotionLight(val layer: CallFrameSceneLayer, val image: Bitmap) {
+    val masked: Boolean get() = CallFrameSceneArt.isMasked(layer)
+}
 
 /**
  * Ce qui bouge dans un cadre (#13687, miroir de iOS `CallFrameMotionScene`) : ses ornements animés, peints à la
@@ -33,6 +47,7 @@ class CallFrameMotionScene(
     val unit: Double,
     val mask: Bitmap,
     val sprites: List<CallFrameMotionSprite>,
+    val lights: List<CallFrameMotionLight> = emptyList(),
 )
 
 /**
@@ -65,7 +80,8 @@ object CallFrameLivePainter {
         val extras = CallFrameFramePainter(stage.look.ornaments, excluded = excluded)
         val layers = CallFrameRenderer.layers(stage, extras) ?: return null
         val backdrop = faces(stage, layers.backdrop) ?: return null
-        val motion = if (tracks.isEmpty()) null else motion(stage, tracks)
+        val lights = if (animates) CallFrameSceneArt.lights(stage.look) else emptyList()
+        val motion = if (tracks.isEmpty() && lights.isEmpty()) null else motion(stage, tracks, lights)
         return CallFrameLiveScene(stage.width, stage.height, backdrop, layers.overlay, motion)
     }
 
@@ -84,13 +100,27 @@ object CallFrameLivePainter {
     fun spriteSize(stage: CallFrameStage): Pair<Int, Int> =
         (stage.width * SPRITE_SCALE).roundToInt().coerceAtLeast(1) to (stage.height * SPRITE_SCALE).roundToInt().coerceAtLeast(1)
 
-    private fun motion(stage: CallFrameStage, tracks: List<CallFrameMotionTrack>): CallFrameMotionScene? {
+    private fun motion(stage: CallFrameStage, tracks: List<CallFrameMotionTrack>, lights: List<CallFrameSceneLayer>): CallFrameMotionScene? {
         val (width, height) = spriteSize(stage)
         val scale = width.toDouble() / stage.width
         val layout = CallFrameRendererText.layout(stage)
         val sprites = tracks.map { track -> sprite(stage, track, layout, width, height, scale) ?: return null }
         val mask = mask(stage, layout, width, height, scale) ?: return null
-        return CallFrameMotionScene(width, height, stage.unit * scale, mask, sprites)
+        val halos = lights.map { layer -> CallFrameMotionLight(layer, light(layer, width, height) ?: return null) }
+        return CallFrameMotionScene(width, height, stage.unit * scale, mask, sprites, halos)
+    }
+
+    /** Le halo d'une lumière : sa couleur pleine au centre, transparente sur l'ellipse inscrite dans la toile. */
+    private fun light(layer: CallFrameSceneLayer, width: Int, height: Int): Bitmap? {
+        val image = bitmap(width, height) ?: return null
+        val ink = CallFrameRenderKit.color(layer.color ?: "#FFFFFF")
+        val cx = width / 2f
+        val cy = height / 2f
+        val shader = RadialGradient(
+            cx, cy, cx, intArrayOf(CallFrameRendererKit.argb(ink), CallFrameRendererKit.argb(ink.copy(alpha = 0.0))), null, Shader.TileMode.CLAMP,
+        ).apply { setLocalMatrix(Matrix().apply { setScale(1f, height.toFloat() / width, cx, cy) }) }
+        Canvas(image).drawRect(0f, 0f, width.toFloat(), height.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader })
+        return image
     }
 
     private fun sprite(
