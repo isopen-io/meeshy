@@ -45,6 +45,7 @@
     <string name="composer_a11y_recentPhoto">Recent photo</string>
     <string name="composer_a11y_recentVideo">Recent video</string>
     <string name="composer_a11y_selectedState">Selected</string>
+    <string name="composer_attach_contact">Contact</string>
     <string name="composer_chip_kind_location">PLACE</string>
     <string name="composer_drop_unnamedItem">unnamed item</string>
     <string name="composer_recent_accessDenied">Photo access denied</string>

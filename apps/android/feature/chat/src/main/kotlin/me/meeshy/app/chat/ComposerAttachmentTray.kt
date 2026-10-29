@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -120,6 +121,7 @@ private fun AttachmentTileKind.icon(): ImageVector = when (this) {
     AttachmentTileKind.Photo -> Icons.Filled.PhotoLibrary
     AttachmentTileKind.Camera -> Icons.Filled.PhotoCamera
     AttachmentTileKind.File -> Icons.AutoMirrored.Filled.InsertDriveFile
+    AttachmentTileKind.Contact -> MeeshyIcons.AccountFilled
     AttachmentTileKind.Location -> Icons.Filled.LocationOn
     AttachmentTileKind.Voice -> Icons.Filled.Mic
     AttachmentTileKind.Emoji -> Icons.Filled.EmojiEmotions
@@ -129,6 +131,7 @@ private fun AttachmentTileKind.labelRes(): Int = when (this) {
     AttachmentTileKind.Photo -> R.string.composer_attach_photo
     AttachmentTileKind.Camera -> R.string.composer_attach_camera
     AttachmentTileKind.File -> R.string.composer_attach_file_tile
+    AttachmentTileKind.Contact -> R.string.composer_attach_contact
     AttachmentTileKind.Location -> R.string.composer_attach_location
     AttachmentTileKind.Voice -> R.string.composer_attach_voice
     AttachmentTileKind.Emoji -> R.string.composer_attach_emoji

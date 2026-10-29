@@ -49,6 +49,7 @@
     <string name="composer_a11y_recentPhoto">صورة حديثة</string>
     <string name="composer_a11y_recentVideo">فيديو حديث</string>
     <string name="composer_a11y_selectedState">محدّد</string>
+    <string name="composer_attach_contact">جهة اتصال</string>
     <string name="composer_chip_kind_location">موقع</string>
     <string name="composer_drop_unnamedItem">عنصر بلا اسم</string>
     <string name="composer_recent_accessDenied">تم رفض الوصول إلى الصور</string>

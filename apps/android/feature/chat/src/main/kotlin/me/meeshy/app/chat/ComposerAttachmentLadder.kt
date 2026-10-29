@@ -6,7 +6,7 @@ import me.meeshy.sdk.composer.ComposerAffordances
  * The kinds of entry the composer's attachment ladder ("+") can offer, in the
  * fixed order iOS lists them (`UniversalComposerBar+Attachments.carouselTiles`).
  */
-enum class AttachmentTileKind { Photo, Camera, File, Location, Voice, Emoji }
+enum class AttachmentTileKind { Photo, Camera, File, Contact, Location, Voice, Emoji }
 
 /**
  * One ladder entry — its [kind] and the deterministic gradient [colorHex] iOS
@@ -36,6 +36,11 @@ data class AttachmentTile(
  *    "this screen can actually handle this action yet" through the defaulted flags,
  *    so a tile is never a dead end.
  *
+ * The Contact tile (#13703) sends a `.vcf` through the file path, so it rides
+ * `canSendFiles` — an end-to-end conversation, whose affordances are closed, never
+ * offers it, and no card leaves in clear. [showContact] carries iOS's
+ * `offersContactsAndPlaces` gate (a link guest whose kinds are restricted).
+ *
  * The dedicated Photo tile is suppressed when a recent-media strip is present
  * (the strip already exposes library picking) — iOS's
  * `onPhotoLibrary != nil && onRecentMediaSelected == nil` branch, kept even though
@@ -46,6 +51,7 @@ object ComposerAttachmentLadder {
         affordances: ComposerAffordances,
         hasRecentMediaStrip: Boolean = false,
         showCamera: Boolean = true,
+        showContact: Boolean = true,
         showLocation: Boolean = true,
         showVoice: Boolean = true,
         showEmoji: Boolean = true,
@@ -58,6 +64,8 @@ object ComposerAttachmentLadder {
                 .takeIf { canCapture && showCamera },
             AttachmentTile(AttachmentTileKind.File, COLOR_FILE)
                 .takeIf { affordances.canSendFiles },
+            AttachmentTile(AttachmentTileKind.Contact, COLOR_CONTACT)
+                .takeIf { affordances.canSendFiles && showContact },
             AttachmentTile(AttachmentTileKind.Location, COLOR_LOCATION)
                 .takeIf { affordances.canSendLocations && showLocation },
             AttachmentTile(AttachmentTileKind.Voice, COLOR_VOICE)
@@ -70,6 +78,7 @@ object ComposerAttachmentLadder {
     private const val COLOR_PHOTO = "9B59B6"
     private const val COLOR_CAMERA = "F8B500"
     private const val COLOR_FILE = "45B7D1"
+    private const val COLOR_CONTACT = "5B8DEF"
     private const val COLOR_LOCATION = "2ECC71"
     private const val COLOR_VOICE = "E74C3C"
     private const val COLOR_EMOJI = "FF9F43"

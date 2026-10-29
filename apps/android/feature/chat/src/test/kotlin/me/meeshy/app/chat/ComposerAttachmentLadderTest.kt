@@ -35,13 +35,14 @@ class ComposerAttachmentLadderTest {
     private fun kinds(tiles: List<AttachmentTile>) = tiles.map { it.kind }
 
     @Test
-    fun `registered user with every capability offers all six tiles in iOS order`() {
+    fun `registered user with every capability offers all seven tiles in iOS order`() {
         val tiles = ComposerAttachmentLadder.tiles(ComposerAttachmentPolicy.affordances(null))
 
         assertThat(kinds(tiles)).containsExactly(
             AttachmentTileKind.Photo,
             AttachmentTileKind.Camera,
             AttachmentTileKind.File,
+            AttachmentTileKind.Contact,
             AttachmentTileKind.Location,
             AttachmentTileKind.Voice,
             AttachmentTileKind.Emoji,
@@ -152,6 +153,7 @@ class ComposerAttachmentLadderTest {
         // Only files + audios permitted → File then Voice, never reordered.
         val tiles = ComposerAttachmentLadder.tiles(
             affordances(images = false, videos = false, locations = false, text = false),
+            showContact = false,
         )
 
         assertThat(kinds(tiles)).containsExactly(AttachmentTileKind.File, AttachmentTileKind.Voice).inOrder()
@@ -175,6 +177,7 @@ class ComposerAttachmentLadderTest {
             AttachmentTileKind.Photo,
             AttachmentTileKind.Camera,
             AttachmentTileKind.File,
+            AttachmentTileKind.Contact,
             AttachmentTileKind.Voice,
             AttachmentTileKind.Emoji,
         ).inOrder()
@@ -188,8 +191,26 @@ class ComposerAttachmentLadderTest {
         assertThat(byKind[AttachmentTileKind.Photo]).isEqualTo("9B59B6")
         assertThat(byKind[AttachmentTileKind.Camera]).isEqualTo("F8B500")
         assertThat(byKind[AttachmentTileKind.File]).isEqualTo("45B7D1")
+        assertThat(byKind[AttachmentTileKind.Contact]).isEqualTo("5B8DEF")
         assertThat(byKind[AttachmentTileKind.Location]).isEqualTo("2ECC71")
         assertThat(byKind[AttachmentTileKind.Voice]).isEqualTo("E74C3C")
         assertThat(byKind[AttachmentTileKind.Emoji]).isEqualTo("FF9F43")
+    }
+
+    @Test
+    fun `the contact tile rides the file capability since the card travels as a file`() {
+        val noFiles = ComposerAttachmentLadder.tiles(affordances(files = false))
+        val hostOff = ComposerAttachmentLadder.tiles(affordances(), showContact = false)
+
+        assertThat(kinds(noFiles)).doesNotContain(AttachmentTileKind.Contact)
+        assertThat(kinds(hostOff)).doesNotContain(AttachmentTileKind.Contact)
+        assertThat(kinds(hostOff)).contains(AttachmentTileKind.File)
+    }
+
+    @Test
+    fun `an end-to-end conversation never offers the contact tile so no card reaches the server in clear`() {
+        val state = ChatUiState(encryptionMode = "e2ee")
+
+        assertThat(kinds(ComposerAttachmentLadder.tiles(state.composerAffordances))).doesNotContain(AttachmentTileKind.Contact)
     }
 }
