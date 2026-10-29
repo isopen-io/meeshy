@@ -57,6 +57,12 @@ public object GamePalette {
     public val gold: Color = gameHex(0xfbbf24)
     public val laurel: Color = gameHex(0x10b981)
 
+    /** Les quatre traits francs du liseré de rareté (miroir de `RarityBorder.stroke`, iOS). */
+    public val raritySlate: Color = gameHex(0x94a3b8)
+    public val rarityBlue: Color = gameHex(0x3b82f6)
+    public val rarityViolet: Color = gameHex(0x8b5cf6)
+    public val rarityGold: Color = gameHex(0xf59e0b)
+
     /** L'ombre portée de la Signature frappée ou gravée. */
     public val signatureShadow: Color = gameHex(0x2b3342)
 

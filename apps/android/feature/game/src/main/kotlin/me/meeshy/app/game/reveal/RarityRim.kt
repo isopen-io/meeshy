@@ -11,10 +11,10 @@ import me.meeshy.ui.component.game.GamePalette
 
 /** La couleur franche du liseré (miroir de `RarityBorder.stroke`, iOS) ; `null` pour le prisme, qui est un balayage. */
 internal fun RarityBorder.solidColor(): Color? = when (this) {
-    RarityBorder.Slate -> Color(0xFF94A3B8)
-    RarityBorder.Blue -> Color(0xFF3B82F6)
-    RarityBorder.Violet -> Color(0xFF8B5CF6)
-    RarityBorder.Gold -> Color(0xFFF59E0B)
+    RarityBorder.Slate -> GamePalette.raritySlate
+    RarityBorder.Blue -> GamePalette.rarityBlue
+    RarityBorder.Violet -> GamePalette.rarityViolet
+    RarityBorder.Gold -> GamePalette.rarityGold
     RarityBorder.Prism -> null
 }
 
