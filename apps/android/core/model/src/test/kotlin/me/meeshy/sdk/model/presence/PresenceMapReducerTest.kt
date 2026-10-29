@@ -153,16 +153,44 @@ class PresenceMapReducerTest {
     }
 
     @Test
-    fun `a masked row never withdraws a live entry, and a page never replaces one`() {
-        val live: PresenceMap = mapOf("u1" to UserPresence(true, iso(0)), "u2" to UserPresence(false, iso(-10)))
+    fun `a page never replaces a live entry`() {
+        val live: PresenceMap = mapOf("u2" to UserPresence(false, iso(-10)))
         val after = PresenceMapReducer.seed(
             live,
             emptySet(),
-            ServedPresencePage(served = mapOf("u2" to UserPresence(true, iso(-5000))), masked = setOf("u1")),
+            ServedPresencePage(served = mapOf("u2" to UserPresence(true, iso(-5000)))),
             "me",
         )
 
         assertThat(after.entries).isSameInstanceAs(live)
+    }
+
+    @Test
+    fun `a masked row withdraws the entry whatever gave it, a previous page or the socket`() {
+        val map: PresenceMap = mapOf(
+            "seeded" to UserPresence(false, iso(-3 * 3_600_000)),
+            "live" to UserPresence(true, iso(0)),
+            "other" to UserPresence(false, iso(-10)),
+        )
+
+        val after = PresenceMapReducer.seed(map, emptySet(), ServedPresencePage(masked = setOf("seeded", "live")), "me")
+
+        assertThat(after.entries.keys).containsExactly("other")
+    }
+
+    @Test
+    fun `a masked row spares only what the socket said after the page was received`() {
+        val map: PresenceMap = mapOf("before" to UserPresence(true, iso(-1000)), "after" to UserPresence(true, iso(0)))
+
+        val after = PresenceMapReducer.seed(
+            map,
+            emptySet(),
+            ServedPresencePage(masked = setOf("before", "after")),
+            "me",
+            newerThanPage = setOf("after"),
+        )
+
+        assertThat(after.entries.keys).containsExactly("after")
     }
 
     @Test

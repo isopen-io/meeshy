@@ -100,7 +100,7 @@ class PresenceStorePersistenceTest {
         val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
         val f = fixture(disk)
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 60_000)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch - 60_000)))
     }
 
     @Test
@@ -108,7 +108,7 @@ class PresenceStorePersistenceTest {
         val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(true, iso(epoch - 30_000))) }
         val f = fixture(disk)
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 30_000)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch - 30_000)))
     }
 
     @Test
@@ -122,7 +122,7 @@ class PresenceStorePersistenceTest {
         }
         val f = fixture(disk)
 
-        assertThat(f.store.entries.value.keys).containsExactly("ok")
+        assertThat(f.store.entriesNow().keys).containsExactly("ok")
     }
 
     @Test
@@ -133,14 +133,14 @@ class PresenceStorePersistenceTest {
         val live = f.store.entryOf("u1").first()
 
         assertThat(ProfileLivePresence.line(live, null, null, f.clock.nowMillis())).isNull()
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
     }
 
     @Test
     fun `what was read back leaves the map and the disk when its dot goes out, without any page`() = runTest {
         val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
         val f = fixture(disk)
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
 
         testScheduler.advanceTimeBy(61_000)
         testScheduler.runCurrent()
@@ -148,7 +148,7 @@ class PresenceStorePersistenceTest {
         testScheduler.runCurrent()
 
         assertThat(f.store.entryOf("u1").first()).isNull()
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
     }
 
@@ -156,12 +156,12 @@ class PresenceStorePersistenceTest {
     fun `after a deep sleep what was read back is gone on the very first read, before any timer runs`() = runTest {
         val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
         val f = fixture(disk)
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
 
         f.slept = 3 * hour
 
         assertThat(ProfileLivePresence.line(f.store.entryOf("u1").first(), null, null, f.clock.nowMillis())).isNull()
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
         assertThat(f.store.entries.first()).doesNotContainKey("u1")
         assertThat(f.store.currentStateOf("u1")).isNull()
         assertThat(f.store.presenceOf("u1").first()).isNull()
@@ -193,7 +193,7 @@ class PresenceStorePersistenceTest {
         f.slept = -hour
 
         assertThat(f.store.entryOf("u1").first()).isNull()
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
         assertThat(f.store.currentStateOf("u1")).isNull()
     }
 
@@ -206,7 +206,7 @@ class PresenceStorePersistenceTest {
 
         f.slept = 3 * hour
 
-        assertThat(f.store.entries.value.keys).containsExactly("u2")
+        assertThat(f.store.entriesNow().keys).containsExactly("u2")
         assertThat(f.store.entryOf("u2").first()).isEqualTo(UserPresence(false, iso(epoch - 60_000)))
     }
 
@@ -236,7 +236,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(2 * 60_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
     }
 
     @Test
@@ -252,8 +252,8 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
-        assertThat(f.store.entries.value).containsKey("u2")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u2")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
     }
 
@@ -267,7 +267,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value.keys).containsExactly("u7")
+        assertThat(f.store.entriesNow().keys).containsExactly("u7")
         assertThat(f.disk.file?.first).isEqualTo("B")
         assertThat(f.disk.file?.second?.keys).containsExactly("u7")
     }
@@ -277,7 +277,7 @@ class PresenceStorePersistenceTest {
         val disk = FakePersistence().apply { file = "autre" to mapOf("u1" to UserPresence(false, iso(epoch - 1000))) }
         val f = fixture(disk)
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
     }
 
     @Test
@@ -292,8 +292,8 @@ class PresenceStorePersistenceTest {
         disk.gate!!.complete(Unit)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(true, iso(epoch)))
-        assertThat(f.store.entries.value).containsKey("u2")
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(true, iso(epoch)))
+        assertThat(f.store.entriesNow()).containsKey("u2")
     }
 
     @Test
@@ -310,9 +310,9 @@ class PresenceStorePersistenceTest {
             ),
         )
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 5000)))
-        assertThat(f.store.entries.value["u2"]).isEqualTo(UserPresence(true, iso(epoch - 10_000)))
-        assertThat(f.store.entries.value).doesNotContainKey("me")
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch - 5000)))
+        assertThat(f.store.entriesNow()["u2"]).isEqualTo(UserPresence(true, iso(epoch - 10_000)))
+        assertThat(f.store.entriesNow()).doesNotContainKey("me")
     }
 
     @Test
@@ -365,7 +365,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
         assertThat(f.disk.file).isNull()
         assertThat(f.disk.saves).isEqualTo(savesBefore)
     }
@@ -374,13 +374,13 @@ class PresenceStorePersistenceTest {
     fun `switching account never shows account A under account B, on screen or on disk`() = runTest {
         val disk = FakePersistence().apply { file = "A" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
         val f = fixture(disk, account = "A")
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
 
         switchTo(f, "B")
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
         assertThat(f.disk.file?.first).isNotEqualTo("A")
     }
@@ -409,7 +409,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).doesNotContainKey("u9")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u9")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u9")
     }
 
@@ -417,7 +417,7 @@ class PresenceStorePersistenceTest {
     fun `a cold start read back for A whose session is refused never reaches B`() = runTest {
         val disk = FakePersistence().apply { file = "A" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000))) }
         val f = fixture(disk, account = "A", session = null)
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
 
         f.account = null
         f.userStatus.emit(UserStatusEvent("u9", "z", true, iso(epoch)))
@@ -427,7 +427,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value.keys).containsExactly("u7")
+        assertThat(f.store.entriesNow().keys).containsExactly("u7")
         assertThat(f.disk.file?.first).isEqualTo("B")
         assertThat(f.disk.file?.second?.keys).containsExactly("u7")
     }
@@ -446,7 +446,7 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
     }
 
@@ -461,7 +461,7 @@ class PresenceStorePersistenceTest {
         f.account = null
         cache.clear()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
         assertThat(f.disk.file).isNull()
     }
 
@@ -481,7 +481,7 @@ class PresenceStorePersistenceTest {
         testScheduler.runCurrent()
 
         assertThat(wiped).isTrue()
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
         assertThat(f.disk.file).isNull()
     }
 
@@ -493,7 +493,7 @@ class PresenceStorePersistenceTest {
 
         PresenceMapPersistenceModule.providePresenceAccountCache { f.store }.clear()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
         assertThat(f.disk.file).isNull()
     }
 
@@ -519,9 +519,72 @@ class PresenceStorePersistenceTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 600_000)))
-        assertThat(f.store.entries.value).doesNotContainKey("u2")
-        assertThat(f.store.entries.value["u3"]).isEqualTo(UserPresence(true, iso(epoch)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch - 600_000)))
+        assertThat(f.store.entriesNow()).doesNotContainKey("u2")
+        assertThat(f.store.entriesNow()).doesNotContainKey("u3")
         assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u2")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u3")
+    }
+
+    @Test
+    fun `a page that masks a peer seeded three hours ago withdraws it, and the profile no longer dates it`() = runTest {
+        val f = fixture()
+        f.store.seed(ServedPresencePage(served = mapOf("u1" to UserPresence(false, iso(epoch - 3 * hour)))))
+        assertThat(f.store.entriesNow()).containsKey("u1")
+
+        f.store.seed(ServedPresencePage(masked = setOf("u1")))
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
+        assertThat(ProfileLivePresence.line(f.store.entryOf("u1").first(), null, null, f.clock.nowMillis())).isNull()
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `a user status received after the masking page puts the peer back`() = runTest {
+        val f = fixture()
+        f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
+        f.store.seed(ServedPresencePage(masked = setOf("u1")))
+        assertThat(f.store.entriesNow()).doesNotContainKey("u1")
+
+        f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch + 1_000)))
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(true, iso(epoch + 1_000)))
+    }
+
+    @Test
+    fun `a page masks what the socket said before it was received and spares what the socket said after`() = runTest {
+        val f = fixture()
+        f.userStatus.emit(UserStatusEvent("before", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
+        val received = f.store.receipt()
+        f.userStatus.emit(UserStatusEvent("after", "b", true, iso(epoch - 60_000)))
+        f.typing.emit(me.meeshy.sdk.model.TypingEvent(conversationId = "c", userId = "typist"))
+        testScheduler.runCurrent()
+
+        f.store.seed(ServedPresencePage(masked = setOf("before", "after", "typist"), receipt = received))
+
+        assertThat(f.store.entriesNow().keys).containsExactly("after", "typist")
+    }
+
+    @Test
+    fun `a collector of the map stops the shared clock once what was read back is gone`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        val maps = mutableListOf<PresenceMap>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { f.store.entries.collect { maps += it } }
+        testScheduler.runCurrent()
+        assertThat(f.store.isTicking.value).isTrue()
+
+        testScheduler.advanceTimeBy(61_000)
+        testScheduler.runCurrent()
+        testScheduler.advanceTimeBy(PresenceDecayClock.TICK_MS + 1)
+        testScheduler.runCurrent()
+
+        assertThat(maps.last()).doesNotContainKey("u1")
+        assertThat(f.store.isTicking.value).isFalse()
     }
 }

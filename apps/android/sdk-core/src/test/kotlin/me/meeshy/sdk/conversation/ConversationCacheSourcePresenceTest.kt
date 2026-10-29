@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.presence.ServedPresencePage
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.search.LocalSearchIndex
@@ -57,9 +58,12 @@ class ConversationCacheSourcePresenceTest {
         ),
     )
 
+    private var responses = 0L
+
     private fun api(): ConversationApi {
         val api = mockk<ConversationApi>()
         coEvery { api.listConditional(any(), any(), any(), any()) } answers {
+            responses++
             Response.success(
                 ApiResponse(
                     success = true,
@@ -78,6 +82,16 @@ class ConversationCacheSourcePresenceTest {
         }
     }
 
+    /** Sa marque de réception est le nombre de réponses déjà arrivées : une marque prise avant la réponse vaudrait 0. */
+    private inner class ReceiptSink : ServedPresenceSink {
+        val pages = mutableListOf<ServedPresencePage>()
+        override fun seed(served: Map<String, UserPresence>) = Unit
+        override fun seed(page: ServedPresencePage) {
+            pages += page
+        }
+        override fun receipt(): Long = responses
+    }
+
     private fun source(sink: ServedPresenceSink) = ConversationCacheSource(
         db, db.conversationDao(), db.syncMetaDao(), api(), clock, LocalSearchIndex(SearchIndexDao(db)),
         accountProvider = SyncAccountProvider { "me" },
@@ -91,6 +105,16 @@ class ConversationCacheSourcePresenceTest {
         source(sink).revalidate()
 
         assertThat(sink.seeded).containsExactly(mapOf("u1" to UserPresence(true, "2026-10-29T10:00:00Z")))
+    }
+
+    @Test
+    fun `the page carries the receipt taken once its response came back, and names what it masked`() = runTest {
+        val sink = ReceiptSink()
+
+        source(sink).revalidate()
+
+        assertThat(sink.pages.single().receipt).isEqualTo(1L)
+        assertThat(sink.pages.single().masked).containsExactly("u2")
     }
 
     @Test

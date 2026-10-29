@@ -78,7 +78,7 @@ class ConversationViewingBindingTest {
         assertEquals(ConversationHere.ABSENT, h.binding.viewers.value.here("u1", "c1"))
     }
 
-    private fun Harness.datedAt(userId: String): UserPresence? = presence.entries.value[userId]
+    private fun Harness.datedAt(userId: String): UserPresence? = presence.entriesNow()[userId]
 
     private fun Harness.stamp() = java.time.Instant.ofEpochMilli(epoch).toString()
 

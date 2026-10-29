@@ -67,6 +67,7 @@ class ConversationRowPresenceDotTest {
         every { presenceOf("ali") } returns live
         every { currentStateOf("ali", null) } answers { live.value }
         every { entries } returns MutableStateFlow(listOfNotNull(entry?.let { "ali" to it }).toMap())
+        every { entriesNow() } returns listOfNotNull(entry?.let { "ali" to it }).toMap()
         every { nowMillis() } returns now
     }
 

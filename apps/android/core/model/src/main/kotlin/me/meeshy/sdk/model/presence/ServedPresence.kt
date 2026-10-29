@@ -8,11 +8,14 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
  * Ce qu'une page de conversations a dit de la présence de chacun : [served], ce qu'elle a SERVI
  * (`isOnline` + `lastActiveAt`) ; [masked], ceux qu'elle a MASQUÉS (`false` et pas de date — la loi de
  * visibilité ne permet plus de les voir : ami retiré, `showOnlineStatus` coupé). Un masqué ne sème
- * rien, mais il retire ce que la carte n'avait que du disque.
+ * rien, mais il retire ce que la carte savait de lui, sauf ce que le socket a dit après la réception de
+ * la page. [receipt] : la marque de réception que la carte a donnée quand la réponse est arrivée
+ * ([me.meeshy.sdk.socket.ServedPresenceSink.receipt]) ; `null` = reçue à l'instant où elle est semée.
  */
 data class ServedPresencePage(
     val served: Map<String, UserPresence> = emptyMap(),
     val masked: Set<String> = emptySet(),
+    val receipt: Long? = null,
 )
 
 /**

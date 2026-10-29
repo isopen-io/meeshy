@@ -3,12 +3,9 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -103,10 +100,16 @@ class PresenceStore internal constructor(
 
     /**
      * La carte tenue et, avec elle, les comptes dont l'entrée ne vient encore que de la relecture du disque
-     * ([restored]) : une page servie les remplace, une source vivante les confirme. Rien de ce qui est tenu ne
-     * se lit tel quel — toute lecture passe par [visibleAt].
+     * ([restored]) : une page servie les remplace, une source vivante les confirme. [heard] : la marque de
+     * réception du dernier événement du socket pour chaque compte de la carte — une page qui le masque ne
+     * l'épargne que si cette marque est postérieure à la sienne. Rien de ce qui est tenu ne se lit tel quel —
+     * toute lecture passe par [visibleAt].
      */
-    private data class Held(val entries: PresenceMap = emptyMap(), val restored: Set<String> = emptySet()) {
+    private data class Held(
+        val entries: PresenceMap = emptyMap(),
+        val restored: Set<String> = emptySet(),
+        val heard: Map<String, Long> = emptyMap(),
+    ) {
         /**
          * Ce que la carte montre à [nowMillis] (#13774) : une entrée relue dont le point s'est éteint, ou datée dans
          * le futur, ne se montre plus — à la lecture, quelle que soit l'avance du minuteur de ménage, qui ne compte
@@ -139,8 +142,6 @@ class PresenceStore internal constructor(
         }
     }.shareIn(scope, SharingStarted.WhileSubscribed())
 
-    private fun visibleNow(): PresenceMap = held.value.visibleAt(clock.nowMillis())
-
     /**
      * Ce que la carte montre, à chaque changement : la carte tenue, et — tant qu'une entrée n'est que relue — à chaque
      * tick de l'horloge partagée, pour qu'un écran déjà ouvert perde une entrée relue éteinte au premier tick suivant
@@ -152,8 +153,18 @@ class PresenceStore internal constructor(
         else decayTicks.onStart { emit(Unit) }.map { current.visibleAt(clock.nowMillis()) }
     }.distinctUntilChanged()
 
-    /** La carte unique `userId` -> présence servie, lue à l'instant de la lecture. Vide tant que le serveur n'a rien servi. */
-    val entries: StateFlow<PresenceMap> = ReadTimeStateFlow(::visibleNow, visible)
+    /** La carte unique `userId` -> présence servie, à chaque changement. Vide tant que le serveur n'a rien servi. */
+    val entries: Flow<PresenceMap> = visible
+
+    /** La carte telle qu'elle se montre À CET INSTANT, sans abonnement — jamais une copie que l'horloge a pu dépasser. */
+    fun entriesNow(): PresenceMap = held.value.visibleAt(clock.nowMillis())
+
+    /**
+     * La marque de réception, posée par l'appelant sur la page dont la réponse vient d'arriver : chaque
+     * événement du socket reçu ensuite porte une marque strictement plus grande. Un ordinal du process, pas
+     * une heure : ni la veille profonde, ni un recul de l'horloge murale, ni l'horloge du serveur ne le faussent.
+     */
+    override fun receipt(): Long = synchronized(lock) { receipts }
 
     /** Abonne la carte aux flux socket. Idempotent ; à appeler au démarrage du process. */
     @Synchronized
@@ -187,14 +198,17 @@ class PresenceStore internal constructor(
 
     /**
      * Semis d'une page entière : comme ci-dessus, et une entrée qui ne venait que du DISQUE cède à la
-     * page — remplacée par ce qu'elle sert, retirée si elle la masque. Le socket l'emporte toujours.
+     * page, remplacée par ce qu'elle sert. Une ligne masquée retire l'entrée quelle que soit son origine
+     * (#13783), sauf si le socket en a parlé après la réception de la page ([ServedPresencePage.receipt]).
      */
     override fun seed(page: ServedPresencePage) {
         if (page.served.isEmpty() && page.masked.isEmpty()) return
         mutate { map, current ->
-            val seeded = PresenceMapReducer.seed(map.entries, map.restored, page, current.owner)
+            val received = page.receipt ?: receipts
+            val newer = map.heard.filterValues { it > received }.keys
+            val seeded = PresenceMapReducer.seed(map.entries, map.restored, page, current.owner, newer)
             val withheld = if (current.readBack) current.withheld else current.withheld - page.served.keys + page.masked
-            Held(seeded.entries, seeded.restored) to current.copy(withheld = withheld)
+            Held(seeded.entries, seeded.restored, map.heard.filterKeys { it in seeded.entries }) to current.copy(withheld = withheld)
         }
     }
 
@@ -216,6 +230,9 @@ class PresenceStore internal constructor(
     /** Garde la génération et la carte ensemble : un événement, un semis, une relecture ou un vidage à la fois. */
     private val lock = Any()
     private var generation = Generation()
+
+    /** La dernière marque de réception donnée, sous [lock] ; elle ne revient jamais en arrière, même au changement de compte. */
+    private var receipts = 0L
 
     /** Un seul à la fois écrit, relit ou efface le disque : un effacement n'est jamais rattrapé par une écriture tardive. */
     private val disk = Mutex()
@@ -256,10 +273,16 @@ class PresenceStore internal constructor(
         }
     }
 
-    /** Une source vivante (socket, frappe, `viewing:*`) : les comptes [touched] ne sont plus « relus du disque ». */
+    /**
+     * Une source vivante (socket, frappe, `viewing:*`) : les comptes [touched] ne sont plus « relus du disque »,
+     * et ils sont entendus sous une marque de réception neuve.
+     */
     private inline fun applyLive(touched: Collection<String>, crossinline transform: (PresenceMap, String) -> PresenceMap) =
         mutate { map, current ->
-            Held(transform(map.entries, current.owner.orEmpty()), map.restored - touched.toSet()) to current
+            receipts += 1
+            val entries = transform(map.entries, current.owner.orEmpty())
+            val heard = (map.heard + touched.associateWith { receipts }).filterKeys { it in entries }
+            Held(entries, map.restored - touched.toSet(), heard) to current
         }
 
     /**
@@ -281,7 +304,7 @@ class PresenceStore internal constructor(
                 val before = held.value
                 val after = PresenceMapReducer.restore(before.entries, readBack, generation.withheld)
                 generation = generation.copy(readBack = true, withheld = emptySet())
-                held.value = Held(after, before.restored + (after.keys - before.entries.keys))
+                held.value = before.copy(entries = after, restored = before.restored + (after.keys - before.entries.keys))
                 true
             }
             if (merged) onDisk = persisted
@@ -308,7 +331,7 @@ class PresenceStore internal constructor(
                 if (generation.id != id) return
                 val current = held.value
                 val expired = PresenceMapReducer.expireReadBack(current.entries, current.restored, clock.nowMillis())
-                held.value = Held(expired.entries, expired.restored)
+                held.value = current.copy(entries = expired.entries, restored = expired.restored)
             }
         }
     }
@@ -439,19 +462,5 @@ class PresenceStore internal constructor(
     private companion object {
         /** Au plus une écriture disque toutes les 1,5 s (comme iOS), la dernière carte gagnant. */
         const val PERSIST_INTERVAL_MS = 1_500L
-    }
-}
-
-/**
- * Une [StateFlow] dont la valeur se calcule À LA LECTURE ([read]) — jamais une copie que l'horloge a pu dépasser —
- * et dont les collecteurs suivent [changes], qui émet la même valeur à chaque changement.
- */
-@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
-private class ReadTimeStateFlow<T>(private val read: () -> T, private val changes: Flow<T>) : StateFlow<T> {
-    override val value: T get() = read()
-    override val replayCache: List<T> get() = listOf(read())
-    override suspend fun collect(collector: FlowCollector<T>): Nothing {
-        changes.distinctUntilChanged().collect(collector)
-        awaitCancellation()
     }
 }

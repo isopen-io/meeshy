@@ -82,14 +82,22 @@ object PresenceMapReducer {
     /**
      * Semis d'une page servie sur une carte dont [restored] ne vient que de la relecture du disque :
      * la page comble les inconnus ET remplace ce qui n'était que relu (le serveur parle maintenant,
-     * le disque parlait d'avant) ; une ligne masquée RETIRE ce qui n'était que relu (la visibilité a
-     * changé depuis l'écriture). Une entrée vivante — socket, frappe — n'est jamais touchée.
+     * le disque parlait d'avant). Une ligne masquée RETIRE l'entrée QUELLE QUE SOIT son origine — page
+     * précédente, socket, frappe, disque (#13783) : la visibilité a changé, et le serveur n'émet plus
+     * rien pour ce compte qui la corrigerait. Seuls [newerThanPage], ceux dont un événement du socket est
+     * arrivé APRÈS la réception de la page, gardent la leur : le serveur les a autorisés depuis.
      */
-    fun seed(map: PresenceMap, restored: Set<String>, page: ServedPresencePage, currentUserId: String?): Seeded {
+    fun seed(
+        map: PresenceMap,
+        restored: Set<String>,
+        page: ServedPresencePage,
+        currentUserId: String?,
+        newerThanPage: Set<String> = emptySet(),
+    ): Seeded {
         val accepted = page.served.filter { (userId, _) ->
             userId.isNotBlank() && userId != currentUserId && (userId !in map || userId in restored)
         }
-        val withdrawn = page.masked.filter { it in restored && it !in page.served }.toSet()
+        val withdrawn = page.masked.filter { it in map && it !in page.served && it !in newerThanPage }.toSet()
         if (accepted.isEmpty() && withdrawn.isEmpty()) return Seeded(map, restored)
         return Seeded(map - withdrawn + accepted, restored - accepted.keys - withdrawn)
     }

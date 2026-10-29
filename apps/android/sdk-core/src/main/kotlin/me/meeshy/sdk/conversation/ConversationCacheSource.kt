@@ -323,6 +323,7 @@ internal class ConversationCacheSource(
         val ifNoneMatch = currentEtag?.takeIf { currentEtagScope == requestScope }
 
         val outcome = sweepPages(updatedSince, ifNoneMatch)
+        val presenceReceipt = presenceSink.receipt()
 
         // The account left during the sweep: its pages must not land in the next account's cache.
         if (!ownership.owns(account)) return
@@ -340,7 +341,7 @@ internal class ConversationCacheSource(
         if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
         fence.commitOrWrite(ticket) {
-            presenceSink.seed(outcome.conversations.servedPresence())
+            presenceSink.seed(outcome.conversations.servedPresence().copy(receipt = presenceReceipt))
             persist(
                 conversations = outcome.conversations,
                 prune = !useDelta && outcome.isComplete,

@@ -64,7 +64,7 @@ internal fun rememberLastSeenTip(peerUserId: String?): LastSeenTipState {
     val state = remember(store, peerUserId) {
         LastSeenTipState(read = {
             if (store == null || peerUserId == null) null
-            else ConversationRowLastSeen.of(store.entries.value[peerUserId], store.nowMillis())
+            else ConversationRowLastSeen.of(store.entriesNow()[peerUserId], store.nowMillis())
         })
     }
     val tip = state.tip

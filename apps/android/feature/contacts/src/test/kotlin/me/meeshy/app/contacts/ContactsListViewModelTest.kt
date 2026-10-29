@@ -73,6 +73,7 @@ class ContactsListViewModelTest {
 
     private fun socketManager(): PresenceStore = mockk<PresenceStore> {
         every { entries } returns presenceEntries
+        every { entriesNow() } answers { presenceEntries.value }
     }
 
     private fun user(

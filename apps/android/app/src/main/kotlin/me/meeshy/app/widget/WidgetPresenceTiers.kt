@@ -41,7 +41,7 @@ internal object WidgetPresenceTiers {
 
     /** Les paliers à peindre MAINTENANT, depuis la carte vivante de l'app. */
     fun forDisplay(store: PresenceStore, conversations: List<ApiConversation>, currentUserId: String?): Map<String, PresenceState> =
-        tiers(store.entries.value, displayedPeerIds(conversations, currentUserId), store.nowMillis())
+        tiers(store.entriesNow(), displayedPeerIds(conversations, currentUserId), store.nowMillis())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun changes(

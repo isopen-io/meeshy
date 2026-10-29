@@ -228,7 +228,7 @@ class ContactsListViewModel @Inject constructor(
     }
 
     private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
-        PresenceOverlay.apply(friends, presenceStore.entries.value)
+        PresenceOverlay.apply(friends, presenceStore.entriesNow())
 
     private suspend fun onFriendshipCacheChanged() {
         val cacheIds = friendshipCache.currentFriendIds

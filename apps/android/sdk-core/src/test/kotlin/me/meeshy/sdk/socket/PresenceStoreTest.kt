@@ -74,7 +74,7 @@ class PresenceStoreTest {
         f.typing.emit(TypingEvent(conversationId = "c", userId = "u1"))
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch)))
     }
 
     @Test
@@ -83,7 +83,7 @@ class PresenceStoreTest {
         f.typing.emit(TypingEvent(conversationId = "c", userId = "me"))
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
     }
 
     @Test
@@ -95,11 +95,11 @@ class PresenceStoreTest {
 
         f.connection.value = SocketConnectionState.CONNECTING
         testScheduler.runCurrent()
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch - 10_000)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch - 10_000)))
 
         f.snapshot.emit(PresenceSnapshotEvent(listOf(UserStatusEvent("u1", "a", true, iso(epoch)))))
         testScheduler.runCurrent()
-        assertThat(f.store.entries.value["u1"]?.isOnline).isTrue()
+        assertThat(f.store.entriesNow()["u1"]?.isOnline).isTrue()
     }
 
     @Test
@@ -114,7 +114,7 @@ class PresenceStoreTest {
 
             f.connection.value = SocketConnectionState.DISCONNECTED
             testScheduler.runCurrent()
-            assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(false, iso(epoch)))
+            assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(false, iso(epoch)))
             expectNoEvents()
 
             testScheduler.advanceTimeBy(61_000)
@@ -136,7 +136,7 @@ class PresenceStoreTest {
         f.snapshot.emit(PresenceSnapshotEvent(listOf(UserStatusEvent("u1", "a", true, iso(epoch + 5_000)))))
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value["u1"]).isEqualTo(UserPresence(true, iso(epoch + 5_000)))
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(true, iso(epoch + 5_000)))
     }
 
     @Test
@@ -147,7 +147,7 @@ class PresenceStoreTest {
         testScheduler.runCurrent()
         val served = UserPresence(isOnline = true, lastActiveAt = iso(epoch))
 
-        assertThat(f.store.entries.value.keys).containsExactly("u1")
+        assertThat(f.store.entriesNow().keys).containsExactly("u1")
         f.store.presenceOf("me").test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
         f.store.presenceOf("me", served).test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
         f.store.entryOf("me").test { assertThat(awaitItem()).isNull(); cancelAndIgnoreRemainingEvents() }
@@ -186,7 +186,7 @@ class PresenceStoreTest {
         f.sessionUser.value = "other"
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
     }
 
     @Test
@@ -202,7 +202,7 @@ class PresenceStoreTest {
         f.sessionUser.value = "other"
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).isEmpty()
+        assertThat(f.store.entriesNow()).isEmpty()
     }
 
     @Test
@@ -214,7 +214,7 @@ class PresenceStoreTest {
         f.sessionUser.value = "me"
         testScheduler.runCurrent()
 
-        assertThat(f.store.entries.value).containsKey("u1")
+        assertThat(f.store.entriesNow()).containsKey("u1")
     }
 
     @Test
