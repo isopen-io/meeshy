@@ -21,7 +21,7 @@ import javax.inject.Inject
 /**
  * « Publications non envoyées » (#13417, iso iOS #13415): every post, reel and story the device
  * holds and the server has not confirmed, read live from the outbox. A failed one is retried
- * (its refused uploads with it), a failed post or reel reopens in the composer, and only the
+ * (its refused uploads with it), a failed post, reel or story reopens in its composer, and only the
  * author's explicit « Supprimer » removes a publication and its media from the device.
  */
 @HiltViewModel
@@ -43,6 +43,11 @@ class UnsentPublicationsViewModel @Inject constructor(
     /** A failed post the author reopened: the composer opens on it. */
     val reopened: SharedFlow<FeedComposerDraft> = _reopened.asSharedFlow()
 
+    private val _reopenedStory = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** A failed story the author reopened (#13500): its draft is the story composer's again, which opens on it. */
+    val reopenedStory: SharedFlow<Unit> = _reopenedStory.asSharedFlow()
+
     init {
         viewModelScope.launch { runCatching { publications.releaseSettledDrafts() } }
     }
@@ -59,7 +64,12 @@ class UnsentPublicationsViewModel @Inject constructor(
 
     fun reopen(cmid: String) {
         viewModelScope.launch {
-            publications.reopenPost(cmid)?.let { _reopened.tryEmit(it.toComposerDraft()) }
+            val post = publications.reopenPost(cmid)
+            if (post != null) {
+                _reopened.tryEmit(post.toComposerDraft())
+                return@launch
+            }
+            if (publications.reopenStory(cmid) != null) _reopenedStory.tryEmit(Unit)
         }
     }
 

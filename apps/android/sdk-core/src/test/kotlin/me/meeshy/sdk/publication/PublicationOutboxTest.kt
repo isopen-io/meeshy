@@ -25,6 +25,11 @@ import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.post.InMemoryPostComposerDraftStore
+import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
+import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftAnnotations
+import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +44,7 @@ class PublicationOutboxTest {
     private lateinit var blobs: MediaBlobStore
     private lateinit var uploads: MediaUploadQueue
     private lateinit var drafts: InMemoryPostComposerDraftStore
+    private lateinit var storyDrafts: InMemoryStoryComposerDraftStore
     private lateinit var publications: PublicationOutbox
 
     private val photo = MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = "a.heic", mimeType = "image/heic")
@@ -52,7 +58,8 @@ class PublicationOutboxTest {
         blobs = MediaBlobStore(db.mediaBlobDao(), me.meeshy.sdk.media.MediaBlobFiles(kotlin.io.path.createTempDirectory("blobs").toFile()) { me.meeshy.core.crypto.primitives.StreamingSeal.ephemeral() })
         uploads = MediaUploadQueue(blobs, outbox)
         drafts = InMemoryPostComposerDraftStore()
-        publications = PublicationOutbox(outbox, uploads, drafts, MediaUploadProgressLedger(), OutboxOwnerSource { "me" })
+        storyDrafts = InMemoryStoryComposerDraftStore()
+        publications = PublicationOutbox(outbox, uploads, drafts, storyDrafts, MediaUploadProgressLedger(), OutboxOwnerSource { "me" })
     }
 
     @After
@@ -219,11 +226,104 @@ class PublicationOutboxTest {
     fun `a publication of another account stays out of the list while it is signed in`() = runTest {
         publications.enqueuePost(CreatePostRequest(content = "mine", mediaIds = emptyList()))
         val other = OutboxRepository(db, db.outboxDao(), OutboxOwnerSource { "someone-else" })
-        val foreign = PublicationOutbox(other, uploads, drafts, MediaUploadProgressLedger(), OutboxOwnerSource { "someone-else" })
+        val foreign = PublicationOutbox(other, uploads, drafts, storyDrafts, MediaUploadProgressLedger(), OutboxOwnerSource { "someone-else" })
         foreign.enqueuePost(CreatePostRequest(content = "theirs", mediaIds = emptyList()))
 
         val seen = publications.unsent().first().map { it.text }
 
         assertThat(seen).containsExactly("mine")
+    }
+
+    private suspend fun failedStory(cmid: String, request: CreateStoryRequest, dependsOn: Set<String> = emptySet()) {
+        outbox.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.PUBLISH_STORY,
+                lane = OutboxLanes.STORY,
+                targetId = "pending_$cmid",
+                payload = MeeshyApi.json.encodeToString(request),
+                dependsOn = dependsOn,
+                cmid = cmid,
+            ),
+        )
+        outbox.markExhausted(cmid, "HTTP 500")
+    }
+
+    private fun keptStory(vararg awaiting: String, media: List<String> = listOf("m1")) = StoryComposerDraftSnapshot(
+        slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "ma story", mediaIds = media)),
+        selectedId = "s1",
+        annotations = StoryDraftAnnotations(
+            mentions = listOf(PostMentionInput(userId = "u1", username = "ana", display = "PINNED")),
+            mediaAlt = mapOf(media.first() to "un chat"),
+            mediaCaption = mapOf(media.first() to "Minou"),
+        ),
+        awaitingPublication = awaiting.toList(),
+    )
+
+    @Test
+    fun `a failed story whose draft is kept reopens, one whose draft is gone does not`() = runTest {
+        failedStory("story-1", CreateStoryRequest(content = "ma story", mediaIds = listOf("m1")))
+        assertThat(publications.unsent().first().single().canReopen).isFalse()
+
+        storyDrafts.save(keptStory("story-1"))
+
+        assertThat(publications.unsent().first().single().canReopen).isTrue()
+    }
+
+    @Test
+    fun `reopening a failed story gives the composer its draft with mentions, alt texts and captions, and the queue loses the story`() = runTest {
+        failedStory("story-1", CreateStoryRequest(content = "ma story", mediaIds = listOf("m1")))
+        storyDrafts.save(keptStory("story-1"))
+
+        val reopened = publications.reopenStory("story-1")
+
+        assertThat(reopened?.isAwaitingPublication).isFalse()
+        assertThat(storyDrafts.load()).isEqualTo(reopened)
+        assertThat(reopened?.annotations?.mentions?.single()?.username).isEqualTo("ana")
+        assertThat(reopened?.annotations?.mediaAlt).containsExactly("m1", "un chat")
+        assertThat(reopened?.annotations?.mediaCaption).containsExactly("m1", "Minou")
+        assertThat(outbox.row("story-1")).isNull()
+        assertThat(publications.unsent().first()).isEmpty()
+    }
+
+    @Test
+    fun `a reopened story keeps the upload it waits on and names its media by the id they received`() = runTest {
+        val upload = uploads.enqueue(photo, TusUploadContext.STORY)
+        failedStory("story-1", CreateStoryRequest(content = "ma story", mediaIds = listOf(upload)), dependsOn = setOf(upload))
+        storyDrafts.save(keptStory("story-1", media = listOf(upload)))
+        outbox.rewriteDependents(upload) { it.replace(upload, "media-real") }
+
+        val reopened = publications.reopenStory("story-1")
+
+        assertThat(reopened?.slides?.single()?.mediaIds).containsExactly("media-real")
+        assertThat(reopened?.annotations?.mediaAlt).containsExactly("media-real", "un chat")
+        assertThat(outbox.row(upload)).isNotNull()
+        assertThat(blobs.has(upload)).isTrue()
+    }
+
+    @Test
+    fun `a draft owing a story that is still on its way or already gone is not reopened`() = runTest {
+        failedStory("story-1", CreateStoryRequest(content = "a"))
+        outbox.enqueue(
+            OutboxMutation(OutboxKind.PUBLISH_STORY, OutboxLanes.STORY, "pending_2", MeeshyApi.json.encodeToString(CreateStoryRequest(content = "b")), cmid = "story-2"),
+        )
+        storyDrafts.save(keptStory("story-1", "story-2"))
+
+        assertThat(publications.reopenStory("story-1")).isNull()
+        assertThat(publications.unsent().first().none { it.canReopen }).isTrue()
+
+        storyDrafts.save(keptStory("story-1", "story-gone"))
+
+        assertThat(publications.reopenStory("story-1")).isNull()
+        assertThat(outbox.row("story-1")).isNotNull()
+        assertThat(storyDrafts.load()?.isAwaitingPublication).isTrue()
+    }
+
+    @Test
+    fun `a story the draft does not await is left alone`() = runTest {
+        failedStory("story-1", CreateStoryRequest(content = "a"))
+        storyDrafts.save(keptStory("other"))
+
+        assertThat(publications.reopenStory("story-1")).isNull()
+        assertThat(outbox.row("story-1")).isNotNull()
     }
 }

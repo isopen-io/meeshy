@@ -270,8 +270,11 @@ class StoryRepository @Inject constructor(
      *   gate the publish on multiple offline uploads at once.
      * @return the queued row's `cmid` (drives optimistic-rollback observation).
      */
-    suspend fun enqueuePublish(request: CreateStoryRequest, dependsOn: List<String> = emptyList()): String? =
-        outboxRepository.enqueue(
+    suspend fun enqueuePublish(request: CreateStoryRequest, dependsOn: List<String> = emptyList()): String? {
+        // A story reopened from « Publications non envoyées » (#13500) waits on the uploads of its first
+        // publication: one that gave up is revived — the author publishes again — never sent a second time.
+        dependsOn.filter { outboxRepository.stateOf(it) == OutboxState.EXHAUSTED }.forEach { outboxRepository.retry(it) }
+        return outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.PUBLISH_STORY,
                 lane = OutboxLanes.STORY,
@@ -280,6 +283,7 @@ class StoryRepository @Inject constructor(
                 dependsOn = dependsOn.toSet(),
             ),
         )
+    }
 
     /**
      * A published canvas may only designate media the post owns (#5280): a canvas

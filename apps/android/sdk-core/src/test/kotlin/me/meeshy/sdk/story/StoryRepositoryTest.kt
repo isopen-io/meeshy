@@ -36,6 +36,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
 import org.junit.Before
@@ -386,6 +387,18 @@ class StoryRepositoryTest {
         assertThat(rows).hasSize(1)
         assertThat(rows.single().cmid).isEqualTo(cmid)
         assertThat(rows.single().kindEnum).isEqualTo(OutboxKind.PUBLISH_STORY)
+    }
+
+    @Test
+    fun `enqueuePublish revives an upload that gave up, the reopened story publishes again without a second upload`() = runTest {
+        val outbox = outbox()
+        outbox.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "up-1", "{}", cmid = "up-1"))
+        outbox.markExhausted("up-1", "HTTP 500")
+
+        val cmid = repository(outbox).enqueuePublish(CreateStoryRequest(content = "x", mediaIds = listOf("up-1")), dependsOn = listOf("up-1"))
+
+        assertThat(outbox.stateOf("up-1")).isEqualTo(OutboxState.PENDING)
+        assertThat(outbox.row(cmid!!)?.dependsOn).contains("up-1")
     }
 
     @Test

@@ -459,4 +459,31 @@ class StoryComposerPublicationViewModelTest {
 
         assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("mon brouillon")
     }
+
+    @Test
+    fun `une story rouverte attend l'envoi encore en file de son media, qui n'est jamais televerse deux fois (#13500)`() = runTest {
+        val queued = me.meeshy.sdk.outbox.OutboxIds.cmid()
+        val blobs = mockk<MediaBlobStore>(relaxed = true)
+        coEvery { blobs.has(queued) } returns true
+        val reopened = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "ma story", mediaIds = listOf(queued))),
+            selectedId = "s1",
+            annotations = me.meeshy.sdk.model.StoryDraftAnnotations(mediaAlt = mapOf(queued to "un chat")),
+        )
+        every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
+        val vm = StoryComposerViewModel(
+            repo, session, media, uploadQueue, workManager, InMemoryStoryComposerDraftStore(reopened), blobs,
+            mockk<StoryDraftConfirmation>(relaxed = true), blocks,
+        )
+        vm.onEnterComposer()
+        val dependsOn = slot<List<String>>()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(dependsOn.captured).containsExactly(queued)
+        assertThat(request.captured.mediaAlt).containsExactly(queued, "un chat")
+        io.mockk.coVerify(exactly = 0) { uploadQueue.enqueue(any(), any()) }
+    }
 }

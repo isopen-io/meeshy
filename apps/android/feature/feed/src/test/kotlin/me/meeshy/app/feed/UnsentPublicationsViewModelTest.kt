@@ -108,6 +108,35 @@ class UnsentPublicationsViewModelTest {
     }
 
     @Test
+    fun `reopening a failed story opens the story composer, not the post one`() = runTest(dispatcher) {
+        coEvery { publications.reopenPost("cmid_s") } returns null
+        coEvery { publications.reopenStory("cmid_s") } returns
+            me.meeshy.sdk.model.StoryComposerDraftSnapshot(slides = listOf(me.meeshy.sdk.model.StoryDraftSlideSnapshot(id = "s1", text = "ma story")), selectedId = "s1")
+        val vm = viewModel()
+
+        vm.reopenedStory.test {
+            vm.reopen("cmid_s")
+            awaitItem()
+        }
+        vm.reopened.test {
+            vm.reopen("cmid_s")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a publication that cannot be reopened opens nothing`() = runTest(dispatcher) {
+        coEvery { publications.reopenPost("gone") } returns null
+        coEvery { publications.reopenStory("gone") } returns null
+        val vm = viewModel()
+
+        vm.reopenedStory.test {
+            vm.reopen("gone")
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `the offline reading follows the connection`() = runTest(dispatcher) {
         val vm = viewModel()
 

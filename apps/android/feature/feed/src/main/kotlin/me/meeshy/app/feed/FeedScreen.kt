@@ -124,7 +124,7 @@ fun FeedScreen(
             )
             // « Publications non envoyées » (#13417): visible only while the device holds a
             // publication the server has not confirmed; « Rouvrir » opens the composer on it.
-            UnsentPublicationsEntry(onReopen = { draft -> composerDraft = draft })
+            UnsentPublicationsEntry(onReopen = { draft -> composerDraft = draft }, onReopenStory = onResumeStoryDraft)
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
             val shareContext = context
