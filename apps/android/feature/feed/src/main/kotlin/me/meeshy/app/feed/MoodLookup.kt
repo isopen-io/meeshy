@@ -1,12 +1,17 @@
 package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
 
 /**
  * L'humeur de chacun, lue par le rail de stories — iOS `statusViewModel.statusForUser(userId:)` :
  * l'humeur vit SUR l'avatar (badge, appui), plus dans une barre de pastilles à part (#13653).
  * Pur et immuable : le rail reçoit un instantané, jamais le flux.
+ *
+ * Deux règles d'iOS : la liste servie est la plus récente d'abord et un auteur peut y figurer plusieurs
+ * fois — sa PREMIÈRE entrée est son humeur ; et une humeur expirée que le cache sert encore (démarrage
+ * hors ligne, application restée au premier plan) ne se pose plus sur l'avatar.
  */
 @Immutable
 data class MoodLookup(
@@ -23,16 +28,15 @@ data class MoodLookup(
     val myEmoji: String? get() = mine?.moodEmoji?.takeIf { it.isNotBlank() }
 
     companion object {
-        fun from(state: StatusesUiState): MoodLookup {
-            val mine = state.myStatus
-            val entries = buildList {
-                addAll(state.statuses)
-                mine?.let(::add)
-            }
-            return MoodLookup(
-                byUser = entries.filter { it.userId.isNotBlank() }.associateBy { it.userId },
-                mine = mine,
-            )
+        fun from(state: StatusesUiState, nowMillis: Long = System.currentTimeMillis()): MoodLookup {
+            val live = { entry: StatusEntry -> !MoodStatusExpiry.isExpired(entry.createdAt, entry.expiresAt, nowMillis) }
+            val mine = state.myStatus?.takeIf(live)
+            val newestFirst = listOfNotNull(mine) + state.statuses
+            val byUser = newestFirst
+                .filter { it.userId.isNotBlank() && live(it) }
+                .groupBy { it.userId }
+                .mapValues { (_, entries) -> entries.first() }
+            return MoodLookup(byUser = byUser, mine = mine)
         }
     }
 }

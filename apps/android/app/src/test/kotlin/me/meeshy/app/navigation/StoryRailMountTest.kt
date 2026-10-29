@@ -30,6 +30,15 @@ class StoryRailMountTest {
     }
 
     @Test
+    fun `tirer la liste des conversations recharge aussi les humeurs du rail, comme iOS`() {
+        val graph = File(graph, "ConversationsNavGraph.kt").readText()
+        val refresh = graph.substringAfter("onRefresh = ").substringBefore("rowNavigation")
+        assertThat(refresh).contains("storiesViewModel.refresh()")
+        assertThat(refresh).contains("statusesViewModel.refresh()")
+        assertThat(graph).contains("MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel, statusesViewModel = statusesViewModel)")
+    }
+
+    @Test
     fun `l humeur et l ajout de statut passent par le rail et non par une barre a part`() {
         val host = File(navigation, "MeeshyStoryRail.kt").readText()
         assertThat(host).contains("onAddStatus")
