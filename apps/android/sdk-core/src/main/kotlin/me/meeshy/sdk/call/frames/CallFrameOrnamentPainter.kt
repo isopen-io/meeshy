@@ -21,6 +21,8 @@ class CallFrameOrnamentPainter(
     private val headline: CallFrameRect? = null,
     private val elapsed: Double = 0.0,
     private val reduceMotion: Boolean = false,
+    /** Les rangs que ces couches ne peignent pas : ils se jouent animés au-dessus (#13687). */
+    private val excluded: Set<Int> = emptySet(),
 ) : CallFrameExtraPainter {
 
     private val animating = ornaments.any { CallFrameOrnamentMotionPlan.animates(it.motion, elapsed, reduceMotion) }
@@ -29,7 +31,7 @@ class CallFrameOrnamentPainter(
         ornaments.joinToString(",") { "${it.kind.raw}/${it.color}/${it.density.raw}/${it.layer.raw}/${it.motion.raw}" }
 
     override val cacheKey: String =
-        "orn:$signature:${text.hashCode()}:${headline.hashCode()}:" +
+        "orn:$signature:${text.hashCode()}:${headline.hashCode()}:${excluded.sorted().joinToString("-")}:" +
             if (animating) "t${(elapsed * FRAMES_PER_SECOND).toLong()}" else "still"
 
     override fun paintBack(canvas: Canvas, stage: CallFrameStage) = paint(canvas, stage, CallFrameLayer.BACK)
@@ -37,7 +39,7 @@ class CallFrameOrnamentPainter(
     override fun paintFront(canvas: Canvas, stage: CallFrameStage) = paint(canvas, stage, CallFrameLayer.FRONT)
 
     private fun paint(canvas: Canvas, stage: CallFrameStage, layer: CallFrameLayer) =
-        CallFrameRendererOrnaments.paintAll(canvas, stage, layer, text, headline, elapsed, reduceMotion)
+        CallFrameRendererOrnaments.paintAll(canvas, stage, layer, text, headline, elapsed, reduceMotion, excluded)
 
     companion object {
         /** Le pas d'animation du cadre en direct : au plus quinze images d'ornement par seconde, jamais plus que le budget de trame. */
