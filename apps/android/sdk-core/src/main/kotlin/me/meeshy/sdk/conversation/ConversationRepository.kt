@@ -524,6 +524,11 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun markReadOptimistic(id: String): Boolean {
         if (!markReadLocally(id)) return false
+        queueReadReceipt(id)
+        return true
+    }
+
+    private suspend fun queueReadReceipt(id: String) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
@@ -532,6 +537,19 @@ class ConversationRepository @Inject constructor(
                 payload = "{}",
             ),
         )
+    }
+
+    /**
+     * The open conversation's read receipt (#13793): the decision to acknowledge was taken by the
+     * screen on what it captured at opening, so the receipt joins the outbox WHATEVER the cached
+     * badge says now. A list sync can zero the badge of the open conversation between the capture
+     * and this call ([markReadOptimistic] would then queue nothing and the server would keep
+     * counting unread). The coalescer keeps a single pending `READ_RECEIPT` per conversation, and
+     * the route is idempotent, so a repeated acknowledgement costs nothing.
+     */
+    suspend fun acknowledgeRead(id: String): Boolean {
+        markReadLocally(id)
+        queueReadReceipt(id)
         return true
     }
 

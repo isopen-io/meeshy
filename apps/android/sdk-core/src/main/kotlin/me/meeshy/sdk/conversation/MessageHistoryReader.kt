@@ -68,6 +68,24 @@ internal class MessageHistoryReader(
     }
 
     /**
+     * Targeted completion of ONE message by its id (#13797): the socket payload of a received forward
+     * carries `forwardedFromId` without the `forwardedFrom` preview the list route serves, so the
+     * thread asks the server for that single message instead of re-reading the page. Best effort —
+     * returns whether the row was merged; a failure or a revoked account changes nothing.
+     */
+    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean {
+        val ticket = fence?.currentTicket()
+        val response = when (val result = rawApiCall { messageApi.listAround(conversationId, messageId) }) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> return false
+        }
+        val served = response.data?.firstOrNull { it.id == messageId }?.takeIf { response.success } ?: return false
+        val now = clock.nowMillis()
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(listOf(served), now) } ?: return false
+        return true
+    }
+
+    /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest
      * first — a "peek" surface (hard-press preview card) that must render
      * instantly without a network round-trip. Deliberately skips the

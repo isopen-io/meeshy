@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -168,6 +169,9 @@ class ChatViewModel @Inject constructor(
      * (a translation landing → new content).
      */
     private val latestMessages = MutableStateFlow<List<LocalMessage>>(emptyList())
+
+    /** Latches once the first load of the window answered (cache, revalidation, or its failure) — #13793. */
+    private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
     /**
@@ -253,8 +257,10 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
             initialUnreadCount.value = unread
-            if (unread > 0) latestMessages.first { it.isNotEmpty() }
-            markConversationRead()
+            if (unread > 0) {
+                withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
+            }
+            markConversationReadOnOpening(unreadAtOpening = unread)
         }
 
         // Latch the "new messages" boundary once, when both the initial unread
@@ -339,6 +345,7 @@ class ChatViewModel @Inject constructor(
                 messageRepository.messagesStream(
                     conversationId,
                     onSyncError = { error ->
+                        windowAnswered.value = true
                         _state.update {
                             it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
                         }
@@ -372,6 +379,7 @@ class ChatViewModel @Inject constructor(
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages.value = result.windowOrNull() ?: latestMessages.value
+                    if (ReadAcknowledgement.windowAnswered(result)) windowAnswered.value = true
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.apiBaseUrl, recipients, hidden, starredIds,
@@ -392,7 +400,7 @@ class ChatViewModel @Inject constructor(
             launch {
                 messageSocketManager.messageReceived.collectArrived { event ->
                     if (event.conversationId == conversationId) {
-                        if (IncomingMessageCompletion.needsRest(event)) messageRepository.refresh(conversationId)
+                        if (IncomingMessageCompletion.needsRest(event)) completeIncoming(event)
                         markConversationRead(arrived = event)
                     }
                 }
@@ -512,14 +520,45 @@ class ChatViewModel @Inject constructor(
      * queued receipt retries with the outbox on reconnect. An unreadable sealed message is never
      * acknowledged « read » ([ReadAcknowledgement], #13793) : the conversation is simply left unread.
      */
-    private suspend fun markConversationRead(arrived: ApiMessage? = null) {
+    private suspend fun markConversationRead(arrived: ApiMessage? = null) = quietly {
+        val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+        if (!mayAcknowledge(unread, arrived)) return@quietly
+        if (conversationRepository.markReadOptimistic(conversationId)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
+    /**
+     * The opening decides on what it CAPTURED, not on what the cache says by the time the window has
+     * loaded : a list sync zeroes the badge of the open conversation without any receipt (#13793), so a
+     * later read of the counter would find 0 and queue nothing while the server keeps counting. An
+     * unread opening therefore sends its receipt whatever the badge reads now ; a conversation that was
+     * already read keeps the plain optimistic path (a no-op on a zero badge).
+     */
+    private suspend fun markConversationReadOnOpening(unreadAtOpening: Int) = quietly {
+        if (!mayAcknowledge(unreadAtOpening, arrived = null)) return@quietly
+        val queued = if (unreadAtOpening > 0) {
+            conversationRepository.acknowledgeRead(conversationId)
+        } else {
+            conversationRepository.markReadOptimistic(conversationId)
+        }
+        if (queued) workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
+    private fun mayAcknowledge(unread: Int, arrived: ApiMessage?): Boolean =
+        ReadAcknowledgement.mayAcknowledge(
+            latestMessages.value.map { it.message },
+            sessionRepository.currentUser.value?.id,
+            unread,
+            arrived,
+        )
+
+    /** The one thing a received forward lacks (#13797) : its provenance. Best effort, one message. */
+    private suspend fun completeIncoming(message: ApiMessage) = quietly {
+        messageRepository.refreshMessage(conversationId, message.id)
+    }
+
+    private suspend inline fun quietly(block: () -> Unit) {
         try {
-            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
-            val window = latestMessages.value.map { it.message }
-            if (!ReadAcknowledgement.mayAcknowledge(window, sessionRepository.currentUser.value?.id, unread, arrived)) return
-            if (conversationRepository.markReadOptimistic(conversationId)) {
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            }
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

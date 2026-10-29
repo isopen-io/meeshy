@@ -77,6 +77,13 @@ class MessageRepository internal constructor(
     suspend fun refresh(conversationId: String) = history.refresh(conversationId)
 
     /**
+     * Targeted read of one message by its id, merged into Room (#13797) — see
+     * [MessageHistoryReader.refreshMessage]. Never throws; returns whether the row was merged.
+     */
+    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
+        history.refreshMessage(conversationId, messageId)
+
+    /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
      * surface that renders instantly, without a network round-trip or a background revalidate.
      */

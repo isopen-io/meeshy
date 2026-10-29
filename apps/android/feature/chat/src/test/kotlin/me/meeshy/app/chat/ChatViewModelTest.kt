@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -636,27 +637,151 @@ class ChatViewModelTest {
     fun opening_a_conversation_of_unreadable_sealed_messages_does_not_mark_it_read() = runTest(dispatcher) {
         val h = harness(sealedStream(), currentUser = me, conversation = unreadConversation(unread = 2))
         coEvery { h.conversations.markReadOptimistic(any()) } returns true
+        coEvery { h.conversations.acknowledgeRead(any()) } returns true
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
         coVerify(exactly = 0) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     @Test
     fun opening_a_conversation_of_unread_clear_messages_still_marks_it_read() = runTest(dispatcher) {
         val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
-        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        coEvery { h.conversations.acknowledgeRead("c1") } returns true
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+        coVerify(exactly = 1) { h.conversations.acknowledgeRead("c1") }
+        coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    /**
+     * The real rule of [ConversationRepository.markReadOptimistic] (#13793): `markReadLocally` answers
+     * false on a badge already at zero, so nothing joins the outbox. [receipts] counts the READ_RECEIPTs
+     * that actually reach the outbox, by either door.
+     */
+    private class ReceiptLedger(val conversation: MutableStateFlow<ApiConversation?>) {
+        var receipts = 0
+
+        fun listSyncZeroesTheBadge() {
+            conversation.value = conversation.value?.copy(unreadCount = 0)
+        }
+    }
+
+    private fun Harness.withRealUnreadRule(unread: Int): ReceiptLedger {
+        val ledger = ReceiptLedger(MutableStateFlow(unreadConversation(unread)))
+        every { conversations.conversationStream("c1") } returns ledger.conversation
+        coEvery { conversations.markReadOptimistic("c1") } coAnswers {
+            val shown = ledger.conversation.value?.unreadCount ?: 0
+            if (shown == 0) {
+                false
+            } else {
+                ledger.listSyncZeroesTheBadge()
+                ledger.receipts += 1
+                true
+            }
+        }
+        coEvery { conversations.acknowledgeRead("c1") } coAnswers {
+            ledger.listSyncZeroesTheBadge()
+            ledger.receipts += 1
+            true
+        }
+        return ledger
     }
 
     @Test
-    fun an_unread_conversation_whose_messages_are_not_loaded_yet_waits_before_marking_read() = runTest(dispatcher) {
+    fun an_unread_conversation_whose_messages_are_not_loaded_yet_waits_then_marks_read_at_the_bound() = runTest(dispatcher) {
         val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = unreadConversation(unread = 2))
+        val ledger = h.withRealUnreadRule(unread = 2)
+
+        advanceTimeBy(ReadAcknowledgement.WINDOW_WAIT_MILLIS - 1)
+        runCurrent()
+        assertThat(ledger.receipts).isEqualTo(0)
+
+        advanceUntilIdle()
+        assertThat(ledger.receipts).isEqualTo(1)
+        coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun a_list_sync_zeroing_the_badge_while_the_window_loads_does_not_swallow_the_read_receipt() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<LocalMessage>>>(CacheResult.Empty)
+        val h = harness(stream, currentUser = me, conversation = unreadConversation(unread = 2))
+        val ledger = h.withRealUnreadRule(unread = 2)
+        advanceTimeBy(100)
+        runCurrent()
+
+        ledger.listSyncZeroesTheBadge()
+        stream.value = CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "a")),
+                synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "b")),
+            ),
+            ageMillis = 0,
+        )
+        advanceTimeBy(ReadAcknowledgement.WINDOW_WAIT_MILLIS - 200)
+        runCurrent()
+
+        assertThat(ledger.receipts).isEqualTo(1)
+    }
+
+    @Test
+    fun a_list_sync_zeroing_the_badge_never_lets_unread_sealed_messages_be_acknowledged() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<LocalMessage>>>(CacheResult.Empty)
+        val h = harness(stream, currentUser = me, conversation = unreadConversation(unread = 2))
+        val ledger = h.withRealUnreadRule(unread = 2)
+        advanceTimeBy(100)
+        runCurrent()
+
+        ledger.listSyncZeroesTheBadge()
+        stream.value = CacheResult.Fresh(listOf(synced(sealedMessage("m1")), synced(sealedMessage("m2"))), ageMillis = 0)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+        assertThat(ledger.receipts).isEqualTo(0)
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
+    }
+
+    @Test
+    fun a_window_the_server_answered_empty_is_acknowledged_without_waiting_for_the_bound() = runTest(dispatcher) {
+        val stream = flow {
+            emit(CacheResult.Empty)
+            emit(CacheResult.Fresh(emptyList<LocalMessage>(), ageMillis = 0))
+        }
+        val h = harness(stream, currentUser = me, conversation = unreadConversation(unread = 3))
+        val ledger = h.withRealUnreadRule(unread = 3)
+
+        advanceTimeBy(500)
+        runCurrent()
+
+        assertThat(ledger.receipts).isEqualTo(1)
+    }
+
+    @Test
+    fun an_offline_cold_cache_queues_the_read_receipt_as_soon_as_the_first_load_fails() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = unreadConversation(unread = 2))
+        val ledger = h.withRealUnreadRule(unread = 2)
+        every { h.repo.messagesStream(any(), any(), any()) } answers {
+            val onSyncError = thirdArg<(Throwable) -> Unit>()
+            flow {
+                emit(CacheResult.Empty)
+                onSyncError(java.io.IOException("offline"))
+            }
+        }
+
+        advanceTimeBy(500)
+        runCurrent()
+
+        assertThat(ledger.receipts).isEqualTo(1)
+    }
+
+    @Test
+    fun an_already_read_conversation_opens_without_a_new_read_receipt() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 0))
+        val ledger = h.withRealUnreadRule(unread = 0)
+        advanceUntilIdle()
+
+        assertThat(ledger.receipts).isEqualTo(0)
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
     }
 
     @Test
@@ -695,7 +820,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun a_forwarded_message_arriving_without_its_provenance_keeps_one_targeted_refresh() = runTest(dispatcher) {
+    fun a_forwarded_message_arriving_without_its_provenance_reads_just_that_message() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
@@ -704,7 +829,19 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.refresh("c1") }
+        coVerify(exactly = 1) { h.repo.refreshMessage("c1", "m9") }
+        coVerify(exactly = 0) { h.repo.refresh(any()) }
+    }
+
+    @Test
+    fun a_plain_message_arriving_does_not_read_the_server_at_all() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", senderId = "other", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.refreshMessage(any(), any()) }
     }
 
     @Test

@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiForwardedFrom
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -91,5 +93,32 @@ class ReadAcknowledgementTest {
     fun `un transfert dont la provenance est arrivée n'appelle pas le REST`() {
         val message = plain("m1").copy(forwardedFromId = "src", forwardedFrom = ApiForwardedFrom(id = "src"))
         assertThat(IncomingMessageCompletion.needsRest(message)).isFalse()
+    }
+
+    private fun window(vararg ids: String) = ids.map { LocalMessage(plain(it)) }
+
+    @Test
+    fun `la fenêtre a répondu quand le serveur a servi, même une page vide`() {
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Fresh(emptyList(), ageMillis = 0))).isTrue()
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Fresh(window("m1"), ageMillis = 0))).isTrue()
+    }
+
+    @Test
+    fun `un cache non vide a répondu, même périmé ou en revalidation`() {
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Stale(window("m1"), ageMillis = 9))).isTrue()
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Syncing(window("m1")))).isTrue()
+    }
+
+    @Test
+    fun `un cache vide, froid ou en revalidation n'a pas encore répondu`() {
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Empty)).isFalse()
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Syncing(null))).isFalse()
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Syncing(emptyList()))).isFalse()
+        assertThat(ReadAcknowledgement.windowAnswered(CacheResult.Stale(emptyList(), ageMillis = 9))).isFalse()
+    }
+
+    @Test
+    fun `l'attente de la fenêtre est courte`() {
+        assertThat(ReadAcknowledgement.WINDOW_WAIT_MILLIS).isEqualTo(3_000L)
     }
 }

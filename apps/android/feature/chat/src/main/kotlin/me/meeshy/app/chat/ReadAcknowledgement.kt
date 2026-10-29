@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.piece.PieceSealing
 
@@ -24,6 +26,25 @@ internal object ReadAcknowledgement {
             .filter { it.isFromOthers(ownUserId) }
             .take(unreadCount.coerceAtLeast(0))
             .none(PieceSealing::messageIsSealed)
+    }
+
+    /**
+     * How long the opening waits for the thread's window before acknowledging anyway (#13793). The wait
+     * only exists to SEE the unread messages (a sealed one withholds the receipt) : a server that serves
+     * none (expired ephemerals, hidden history, a stale counter) or an offline cold cache must not keep
+     * the conversation unread forever. An empty window then holds no known seal.
+     */
+    const val WINDOW_WAIT_MILLIS: Long = 3_000L
+
+    /**
+     * Whether the window has said what the thread holds : the server answered ([CacheResult.Fresh], an
+     * empty page included) or the cache already shows messages. A cold, still-revalidating cache has not.
+     */
+    fun windowAnswered(result: CacheResult<List<LocalMessage>>): Boolean = when (result) {
+        is CacheResult.Fresh -> true
+        is CacheResult.Stale -> result.value.isNotEmpty()
+        is CacheResult.Syncing -> result.value.orEmpty().isNotEmpty()
+        CacheResult.Empty -> false
     }
 
     private fun ApiMessage.isFromOthers(ownUserId: String?): Boolean = senderId != ownUserId
