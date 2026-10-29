@@ -2,8 +2,11 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
 import java.time.Instant
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -66,6 +69,8 @@ internal class ConversationCacheSource(
     private val endToEnd: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
     /** #13558 — the sweep's pages land only while the account that asked for them is still the one signed in. */
     private val fence: AccountFence? = null,
+    /** #13647 — the cached payloads are decoded here, never on the thread of the screen that collects them. */
+    private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -83,7 +88,7 @@ internal class ConversationCacheSource(
             } else {
                 rows.map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
             }
-        }
+        }.flowOn(decodeOn)
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
