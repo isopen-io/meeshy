@@ -36,6 +36,8 @@ import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.authNavGraph
 import me.meeshy.app.navigation.graph.callNavGraph
@@ -113,7 +115,14 @@ fun MeeshyApp(
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
-    val showMenuFab = floatingChromeVisible(currentRoute)
+    // Le calque d'accueil recouvre le contenu et le chrome flottant (iOS `onboardingPresence.isPresented`) : seule la
+    // BOOLÉENNE est lue ici, la racine ne se recompose pas à chaque carte.
+    val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+    val onboardingPresented by remember(onboardingViewModel) {
+        onboardingViewModel.state.map { it.isPresented }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = onboardingViewModel.isPresented)
+    val onboardingCovers = OnboardingRootRules.coversRoot(onboardingPresented, currentRoute)
+    val showMenuFab = floatingChromeVisible(currentRoute, isOnboardingPresented = onboardingCovers)
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
@@ -183,7 +192,7 @@ fun MeeshyApp(
             // insets, ce qui laisse le fond de marque plein ecran (edge-to-edge).
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
+            Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
                 CompositionLocalProvider(LocalFloatingChromeReserve provides remember { FloatingChromeReserveState() }) {
                     val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
                     // The minimised-call pill PUSHES the destination down instead of floating
@@ -272,6 +281,15 @@ fun MeeshyApp(
         )
 
         ArrivalCelebrationHost()
+
+        // Dernier calque du chrome, au-dessus de tout sauf du rideau de démarrage (iOS `.onboardingHost`).
+        OnboardingHost(
+            navController = navController,
+            onboarding = onboardingViewModel,
+            authViewModel = authViewModel,
+            isAuthenticated = authState.isAuthenticated,
+            currentRoute = currentRoute,
+        )
 
         guestEnded?.let { ended ->
             GuestSessionEndedScreen(
