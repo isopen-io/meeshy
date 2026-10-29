@@ -22,8 +22,8 @@
     <string name="profile_blocked_unblock">Entsperren</string>
     <string name="profile_call_not_placed">Keine Verbindung: Der Anruf wurde nicht gestartet</string>
     <string name="profile_close_hint">Schließt das Profil</string>
-    <string name="profile_connection_context_received">%s möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen.</string>
-    <string name="profile_connection_context_sent">Du hast %s eine Verbindungsanfrage gesendet. Warten auf Antwort.</string>
+    <string name="profile_connection_context_received">%1$s möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen.</string>
+    <string name="profile_connection_context_sent">Du hast %1$s eine Verbindungsanfrage gesendet. Warten auf Antwort.</string>
     <string name="profile_conversations_interactionsDisabled">Interaktionen deaktiviert</string>
     <string name="profile_conversations_noShared">Keine gemeinsamen Unterhaltungen</string>
     <string name="profile_decor_banner_section">Banner</string>

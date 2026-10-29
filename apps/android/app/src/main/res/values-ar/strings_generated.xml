@@ -1,9 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="call_link_confirm_audio">إجراء مكالمة صوتية مع %s؟</string>
+    <string name="call_link_confirm_audio">إجراء مكالمة صوتية مع %1$s؟</string>
     <string name="call_link_confirm_call">اتصال</string>
     <string name="call_link_confirm_cancel">إلغاء</string>
-    <string name="call_link_confirm_video">إجراء مكالمة فيديو مع %s؟</string>
+    <string name="call_link_confirm_video">إجراء مكالمة فيديو مع %1$s؟</string>
     <string name="call_link_refused_blocked">لقد حظرت جهة الاتصال هذه</string>
     <string name="call_link_refused_unknown">تعذّر العثور على جهة الاتصال هذه</string>
     <string name="composer_format_denied_mood">نص فقط</string>

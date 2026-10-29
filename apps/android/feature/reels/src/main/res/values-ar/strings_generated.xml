@@ -5,12 +5,12 @@
     <string name="reels_close">إغلاق</string>
     <string name="reels_comments">التعليقات</string>
     <plurals name="reels_comments_count">
-        <item quantity="zero">%d تعليقات</item>
-        <item quantity="one">%d تعليق</item>
-        <item quantity="two">%d تعليقان</item>
-        <item quantity="few">%d تعليقات</item>
-        <item quantity="many">%d تعليقات</item>
-        <item quantity="other">%d تعليقات</item>
+        <item quantity="zero">%1$d تعليقات</item>
+        <item quantity="one">%1$d تعليق</item>
+        <item quantity="two">%1$d تعليقان</item>
+        <item quantity="few">%1$d تعليقات</item>
+        <item quantity="many">%1$d تعليقات</item>
+        <item quantity="other">%1$d تعليقات</item>
     </plurals>
     <string name="reels_comments_empty_subtitle">كن أول من يعلّق!</string>
     <string name="reels_comments_empty_title">لا توجد تعليقات بعد</string>

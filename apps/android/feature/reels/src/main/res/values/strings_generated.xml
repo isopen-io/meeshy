@@ -5,8 +5,8 @@
     <string name="reels_close">Close</string>
     <string name="reels_comments">Comments</string>
     <plurals name="reels_comments_count">
-        <item quantity="one">%d comment</item>
-        <item quantity="other">%d comments</item>
+        <item quantity="one">%1$d comment</item>
+        <item quantity="other">%1$d comments</item>
     </plurals>
     <string name="reels_comments_empty_subtitle">Be the first to comment!</string>
     <string name="reels_comments_empty_title">No comments yet</string>

@@ -73,10 +73,10 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(self.project.generated("values")["already_positional"], "%1$s of %2$s")
 
     def test_markdown_bold_becomes_a_bold_tag(self):
-        self.assertEqual(self.project.generated("values")["bold_code"], "Enter the code sent to <b>%s</b>")
+        self.assertEqual(self.project.generated("values")["bold_code"], "Enter the code sent to <b>%1$s</b>")
 
     def test_escaped_percent_is_kept(self):
-        self.assertEqual(self.project.generated("values")["percent_done"], "%d%% done")
+        self.assertEqual(self.project.generated("values")["percent_done"], "%1$d%% done")
 
     def test_prose_percent_is_marked_unformatted(self):
         text = self.project.res("values").read_text(encoding="utf-8")
@@ -99,7 +99,7 @@ class GenerationTests(unittest.TestCase):
 
     def test_french_plural_has_exactly_the_catalog_categories(self):
         self.assertEqual(self.project.generated("values-fr")["unread_complete"],
-                         {"one": "%d non lue", "many": "%d de non lues", "other": "%d non lues"})
+                         {"one": "%1$d non lue", "many": "%1$d de non lues", "other": "%1$d non lues"})
         self.assertEqual(list(self.project.generated("values")["unread_complete"]), ["one", "other"])
 
     def test_entries_are_sorted_by_name(self):

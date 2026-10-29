@@ -37,7 +37,7 @@
     <string name="audio_split_handle_start">Beginn des Schnitts</string>
     <string name="audio_trim_handle_end">Auswahlende</string>
     <string name="audio_trim_handle_start">Auswahlbeginn</string>
-    <string name="avatar_a11y_mood">Stimmung %s</string>
+    <string name="avatar_a11y_mood">Stimmung %1$s</string>
     <string name="bubble_contact_card_shared">Geteilter Kontakt</string>
     <string name="bubble_story_citation_answer">Antwort auf die Story</string>
     <string name="bubble_story_citation_open_hint">Öffnet die zitierte Story</string>
@@ -87,29 +87,29 @@
     <string name="media_crop_a11y_position">Horizontal %1$s, vertikal %2$s</string>
     <string name="media_crop_a11y_size">Breite %1$s, Höhe %2$s</string>
     <string name="media_trim_loading">Vorschau wird geladen</string>
-    <string name="media_trim_of_total">von %s</string>
+    <string name="media_trim_of_total">von %1$s</string>
     <string name="media_trim_window">Beibehaltener Ausschnitt</string>
     <string name="message_long_collapse">Weniger anzeigen</string>
     <string name="message_long_read_more">Weiterlesen</string>
-    <string name="notification_date_ago">vor %s</string>
-    <string name="notification_date_hours">%d Std.</string>
-    <string name="notification_date_minutes">%d Min.</string>
+    <string name="notification_date_ago">vor %1$s</string>
+    <string name="notification_date_hours">%1$d Std.</string>
+    <string name="notification_date_minutes">%1$d Min.</string>
     <string name="notification_date_now">gerade eben</string>
-    <string name="notification_date_yesterdayAt">gestern %s</string>
+    <string name="notification_date_yesterdayAt">gestern %1$s</string>
     <string name="presence_away">Abwesend</string>
     <string name="presence_here">Im Gespräch</string>
     <string name="presence_idle">Inaktiv</string>
     <plurals name="presence_lastSeen_days">
-        <item quantity="one">Zuletzt vor %dT.</item>
-        <item quantity="other">Zuletzt vor %dT.</item>
+        <item quantity="one">Zuletzt vor %1$dT.</item>
+        <item quantity="other">Zuletzt vor %1$dT.</item>
     </plurals>
     <plurals name="presence_lastSeen_hours">
-        <item quantity="one">Zuletzt vor %dStd.</item>
-        <item quantity="other">Zuletzt vor %dStd.</item>
+        <item quantity="one">Zuletzt vor %1$dStd.</item>
+        <item quantity="other">Zuletzt vor %1$dStd.</item>
     </plurals>
     <plurals name="presence_lastSeen_minutes">
-        <item quantity="one">Zuletzt vor %dMin.</item>
-        <item quantity="other">Zuletzt vor %dMin.</item>
+        <item quantity="one">Zuletzt vor %1$dMin.</item>
+        <item quantity="other">Zuletzt vor %1$dMin.</item>
     </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
@@ -174,7 +174,7 @@
     <string name="retouch_tool_sound">Ton</string>
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Kürzen</string>
-    <string name="settings_info_button_label">Mehr über %s erfahren</string>
+    <string name="settings_info_button_label">Mehr über %1$s erfahren</string>
     <string name="slide_rail_delete_cancel">Abbrechen</string>
     <string name="slide_rail_delete_confirm_action">Löschen</string>
     <string name="slide_rail_delete_confirm_title">Diese Szene löschen?</string>
@@ -215,13 +215,13 @@
     <string name="sticker_sheet_tab_shop">Shop</string>
     <string name="sticker_sheet_tab_smileys">Smileys</string>
     <string name="sticker_sheet_unpin">Aus Favoriten entfernen</string>
-    <string name="story_sticker_a11y">Sticker %s</string>
+    <string name="story_sticker_a11y">Sticker %1$s</string>
     <string name="story_sticker_title">Sticker</string>
-    <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %s gesehen</string>
+    <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>
     <string name="time_lastSeen_dateAt">Am %1$s um %2$s gesehen</string>
     <string name="time_lastSeen_online">Online</string>
-    <string name="time_lastSeen_seen">Gesehen %s</string>
-    <string name="time_lastSeen_yesterdayAt">Gestern um %s gesehen</string>
+    <string name="time_lastSeen_seen">Gesehen %1$s</string>
+    <string name="time_lastSeen_yesterdayAt">Gestern um %1$s gesehen</string>
     <string name="viewer_caption_see_less">weniger anzeigen</string>
     <string name="viewer_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
     <string name="viewer_caption_see_more">mehr anzeigen</string>

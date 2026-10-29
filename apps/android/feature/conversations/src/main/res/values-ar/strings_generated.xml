@@ -1,7 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="accessibility_conversation_with">محادثة مع %s</string>
-    <string name="accessibility_last_message_preview">آخر رسالة: %s</string>
+    <string name="accessibility_conversation_with">محادثة مع %1$s</string>
+    <string name="accessibility_last_message_preview">آخر رسالة: %1$s</string>
     <string name="accessibility_muted">مكتومة</string>
     <string name="accessibility_pinned">مثبَّتة</string>
     <string name="accessibility_search_list_hint">يفتح بحث المحادثات ومجتمعاتك</string>
@@ -12,7 +12,7 @@
     <string name="common_share">مشاركة</string>
     <string name="conversationCard_expired">انتهت صلاحية الرابط</string>
     <string name="conversations_action_archive">أرشفة</string>
-    <string name="conversations_action_create_category">إنشاء «%s»</string>
+    <string name="conversations_action_create_category">إنشاء «%1$s»</string>
     <string name="conversations_action_delete_for_all">الحذف للجميع</string>
     <string name="conversations_action_delete_for_me">حذف عندي</string>
     <string name="conversations_action_favorite">مفضّل</string>
@@ -62,14 +62,14 @@
     <string name="conversations_lock_error_master_incorrect">رمز PIN الرئيسي غير صحيح</string>
     <string name="conversations_lock_error_pin_mismatch">رمزا PIN غير متطابقين</string>
     <string name="conversations_lock_subtitle_change_verify">أدخل رمز PIN الرئيسي الحالي</string>
-    <string name="conversations_lock_subtitle_confirm_code">أكّد الرمز لـ %s</string>
+    <string name="conversations_lock_subtitle_confirm_code">أكّد الرمز لـ %1$s</string>
     <string name="conversations_lock_subtitle_confirm_master">أدخل رمز PIN الرئيسي مرة أخرى للتأكيد</string>
     <string name="conversations_lock_subtitle_confirm_new">أكّد رمز PIN الرئيسي الجديد</string>
     <string name="conversations_lock_subtitle_create_master">اختر رمز PIN رئيسيًا من 6 أرقام لتأمين أقفالك</string>
-    <string name="conversations_lock_subtitle_enter_code">اختر رمزًا من 4 أرقام لـ %s</string>
+    <string name="conversations_lock_subtitle_enter_code">اختر رمزًا من 4 أرقام لـ %1$s</string>
     <string name="conversations_lock_subtitle_new_master">اختر رمز PIN رئيسيًا جديدًا من 6 أرقام</string>
     <string name="conversations_lock_subtitle_remove_master">أدخل رمز PIN الرئيسي لتأكيد الحذف</string>
-    <string name="conversations_lock_subtitle_unlock">أدخل رمز %s لإلغاء قفلها</string>
+    <string name="conversations_lock_subtitle_unlock">أدخل رمز %1$s لإلغاء قفلها</string>
     <string name="conversations_lock_title_confirm_code">تأكيد الرمز</string>
     <string name="conversations_lock_title_confirm_master">تأكيد رمز PIN الرئيسي</string>
     <string name="conversations_lock_title_confirm_new">تأكيد رمز PIN الجديد</string>
@@ -89,7 +89,7 @@
     <string name="conversations_preview_hidden">رسالة مخفية</string>
     <string name="conversations_preview_loading">جارٍ التحميل…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
-    <string name="conversations_preview_typing">%s يكتب</string>
+    <string name="conversations_preview_typing">%1$s يكتب</string>
     <string name="conversations_preview_view_once">رسالة للعرض مرة واحدة</string>
     <string name="conversations_preview_you">أنت</string>
     <string name="conversations_remove_master_pin">حذف رمز PIN الرئيسي</string>
@@ -101,7 +101,7 @@
     <string name="conversations_search_hint">البحث عن محادثات</string>
     <string name="conversations_tags_dialog_title">الوسوم</string>
     <string name="conversations_tags_field_hint">إضافة وسم…</string>
-    <string name="conversations_tags_remove_content_description">إزالة الوسم %s</string>
+    <string name="conversations_tags_remove_content_description">إزالة الوسم %1$s</string>
     <string name="dashboard_action_contacts">جهات الاتصال</string>
     <string name="dashboard_action_new_conversation">محادثة جديدة</string>
     <string name="dashboard_action_share_links">روابط المشاركة</string>
@@ -124,7 +124,7 @@
     <string name="dialogs_master_pin_title">رمز PIN رئيسي مطلوب</string>
     <string name="dialogs_removal_delete">حذف</string>
     <string name="dialogs_removal_hide">إخفاء المحادثة</string>
-    <string name="dialogs_removal_message">ستُخفى «%s» بالنسبة إليك. أما بقية المشاركين فتبقى لديهم.</string>
+    <string name="dialogs_removal_message">ستُخفى «%1$s» بالنسبة إليك. أما بقية المشاركين فتبقى لديهم.</string>
     <string name="dialogs_rename_placeholder">الاسم</string>
     <string name="dialogs_rename_title">إعادة تسمية المحادثة</string>
     <string name="dialogs_report_details_label">تفاصيل (اختياري)</string>
@@ -148,9 +148,9 @@
         <item quantity="zero">لا أعضاء</item>
         <item quantity="one">عضو واحد</item>
         <item quantity="two">عضوان</item>
-        <item quantity="few">%d أعضاء</item>
-        <item quantity="many">%d عضوًا</item>
-        <item quantity="other">%d عضو</item>
+        <item quantity="few">%1$d أعضاء</item>
+        <item quantity="many">%1$d عضوًا</item>
+        <item quantity="other">%1$d عضو</item>
     </plurals>
     <string name="global_search_no_results">لا نتائج</string>
     <string name="global_search_online">متصل</string>
@@ -180,20 +180,20 @@
     <string name="links_affiliate_stat_signups">المسجّلون</string>
     <string name="links_affiliate_title">الإحالة</string>
     <plurals name="links_affiliate_token_clicks">
-        <item quantity="zero">%d نقرات</item>
-        <item quantity="one">%d نقرة</item>
-        <item quantity="two">%d نقرتان</item>
-        <item quantity="few">%d نقرات</item>
-        <item quantity="many">%d نقرات</item>
-        <item quantity="other">%d نقرات</item>
+        <item quantity="zero">%1$d نقرات</item>
+        <item quantity="one">%1$d نقرة</item>
+        <item quantity="two">%1$d نقرتان</item>
+        <item quantity="few">%1$d نقرات</item>
+        <item quantity="many">%1$d نقرات</item>
+        <item quantity="other">%1$d نقرات</item>
     </plurals>
     <plurals name="links_affiliate_token_signups">
-        <item quantity="zero">%d تسجيلات</item>
-        <item quantity="one">%d تسجيل</item>
-        <item quantity="two">%d تسجيلان</item>
-        <item quantity="few">%d تسجيلات</item>
-        <item quantity="many">%d تسجيلات</item>
-        <item quantity="other">%d تسجيلات</item>
+        <item quantity="zero">%1$d تسجيلات</item>
+        <item quantity="one">%1$d تسجيل</item>
+        <item quantity="two">%1$d تسجيلان</item>
+        <item quantity="few">%1$d تسجيلات</item>
+        <item quantity="many">%1$d تسجيلات</item>
+        <item quantity="other">%1$d تسجيلات</item>
     </plurals>
     <string name="links_common_active">نشط</string>
     <string name="links_common_cancel">إلغاء</string>
@@ -265,7 +265,7 @@
     <string name="links_tracking_detail_delete">حذف</string>
     <string name="links_tracking_detail_destination_url">رابط الوجهة</string>
     <string name="links_tracking_detail_devices">الأجهزة</string>
-    <string name="links_tracking_detail_last_click">آخر نقرة: %s</string>
+    <string name="links_tracking_detail_last_click">آخر نقرة: %1$s</string>
     <string name="links_tracking_detail_no_data">لا توجد بيانات</string>
     <string name="links_tracking_detail_qr">رمز QR</string>
     <string name="links_tracking_detail_recent_clicks">آخر النقرات</string>
@@ -278,20 +278,20 @@
     <string name="links_tracking_empty_subtitle">أنشئ رابطًا لتتبُّع نقراتك وحملاتك</string>
     <string name="links_tracking_empty_title">لا توجد روابط تتبُّع</string>
     <plurals name="links_tracking_row_clicks">
-        <item quantity="zero">%d نقرات</item>
-        <item quantity="one">%d نقرة</item>
-        <item quantity="two">%d نقرتان</item>
-        <item quantity="few">%d نقرات</item>
-        <item quantity="many">%d نقرات</item>
-        <item quantity="other">%d نقرات</item>
+        <item quantity="zero">%1$d نقرات</item>
+        <item quantity="one">%1$d نقرة</item>
+        <item quantity="two">%1$d نقرتان</item>
+        <item quantity="few">%1$d نقرات</item>
+        <item quantity="many">%1$d نقرات</item>
+        <item quantity="other">%1$d نقرات</item>
     </plurals>
     <plurals name="links_tracking_row_uniques">
-        <item quantity="zero">· %d فريدة</item>
-        <item quantity="one">· %d فريدة</item>
-        <item quantity="two">· %d فريدتان</item>
-        <item quantity="few">· %d فريدة</item>
-        <item quantity="many">· %d فريدة</item>
-        <item quantity="other">· %d فريدة</item>
+        <item quantity="zero">· %1$d فريدة</item>
+        <item quantity="one">· %1$d فريدة</item>
+        <item quantity="two">· %1$d فريدتان</item>
+        <item quantity="few">· %1$d فريدة</item>
+        <item quantity="many">· %1$d فريدة</item>
+        <item quantity="other">· %1$d فريدة</item>
     </plurals>
     <string name="links_tracking_section_my_links">روابطي</string>
     <string name="links_tracking_stats_active">النشطون</string>
@@ -310,12 +310,12 @@
     <string name="my_share_links_expiry_3m">3 أشهر</string>
     <string name="my_share_links_expiry_7d">7 أيام</string>
     <plurals name="my_share_links_joined_count">
-        <item quantity="zero">%d انضموا</item>
-        <item quantity="one">%d انضم</item>
-        <item quantity="two">%d انضما</item>
-        <item quantity="few">%d انضموا</item>
-        <item quantity="many">%d انضموا</item>
-        <item quantity="other">%d انضموا</item>
+        <item quantity="zero">%1$d انضموا</item>
+        <item quantity="one">%1$d انضم</item>
+        <item quantity="two">%1$d انضما</item>
+        <item quantity="few">%1$d انضموا</item>
+        <item quantity="many">%1$d انضموا</item>
+        <item quantity="other">%1$d انضموا</item>
     </plurals>
     <string name="my_share_links_retry">إعادة المحاولة</string>
     <string name="my_share_links_section">روابطي</string>
@@ -340,8 +340,8 @@
     <string name="new_conversation_selected">محدَّد</string>
     <string name="new_conversation_title">محادثة جديدة</string>
     <string name="participantProfile_linkExpires">ينتهي في</string>
-    <string name="row_a11y_conversation_with">محادثة مع %s</string>
-    <string name="row_a11y_last_message">آخر رسالة: %s</string>
+    <string name="row_a11y_conversation_with">محادثة مع %1$s</string>
+    <string name="row_a11y_last_message">آخر رسالة: %1$s</string>
     <string name="row_a11y_muted">مكتومة</string>
     <string name="row_a11y_pending_sync">بانتظار المزامنة</string>
     <string name="row_a11y_pinned">مثبَّتة</string>
@@ -349,9 +349,9 @@
         <item quantity="zero">لا رسائل غير مقروءة</item>
         <item quantity="one">رسالة واحدة غير مقروءة</item>
         <item quantity="two">رسالتان غير مقروءتين</item>
-        <item quantity="few">%d رسائل غير مقروءة</item>
-        <item quantity="many">%d رسالة غير مقروءة</item>
-        <item quantity="other">%d رسالة غير مقروءة</item>
+        <item quantity="few">%1$d رسائل غير مقروءة</item>
+        <item quantity="many">%1$d رسالة غير مقروءة</item>
+        <item quantity="other">%1$d رسالة غير مقروءة</item>
     </plurals>
     <string name="row_join_call">الانضمام</string>
     <string name="row_join_call_a11y">مكالمة جارية، انقر للانضمام</string>
@@ -366,17 +366,17 @@
         <item quantity="zero">لا توجد انضمامات</item>
         <item quantity="one">عرض انضمام واحد</item>
         <item quantity="two">عرض الانضمامين</item>
-        <item quantity="few">عرض الانضمامات الـ%d</item>
-        <item quantity="many">عرض الانضمامات الـ%d</item>
-        <item quantity="other">عرض الانضمامات الـ%d</item>
+        <item quantity="few">عرض الانضمامات الـ%1$d</item>
+        <item quantity="many">عرض الانضمامات الـ%1$d</item>
+        <item quantity="other">عرض الانضمامات الـ%1$d</item>
     </plurals>
     <plurals name="shareLink_arrivals_total">
         <item quantity="zero">لا انضمامات</item>
         <item quantity="one">انضمام واحد إجمالًا</item>
         <item quantity="two">انضمامان إجمالًا</item>
-        <item quantity="few">%d انضمامات إجمالًا</item>
-        <item quantity="many">%d انضمامًا إجمالًا</item>
-        <item quantity="other">%d انضمام إجمالًا</item>
+        <item quantity="few">%1$d انضمامات إجمالًا</item>
+        <item quantity="many">%1$d انضمامًا إجمالًا</item>
+        <item quantity="other">%1$d انضمام إجمالًا</item>
     </plurals>
     <string name="shareLink_detail_allLanguages">جميع اللغات</string>
     <string name="shareLink_detail_allowedLanguages">اللغات المسموح بها</string>
@@ -384,9 +384,9 @@
     <string name="shareLink_detail_arrivals">المنضمّون</string>
     <string name="shareLink_detail_askedOnArrival">يُطلب عند الانضمام</string>
     <string name="shareLink_detail_concurrent">في الوقت نفسه</string>
-    <string name="shareLink_detail_concurrentMax">%d كحد أقصى</string>
+    <string name="shareLink_detail_concurrentMax">%1$d كحد أقصى</string>
     <string name="shareLink_detail_configuration">الإعدادات</string>
-    <string name="shareLink_detail_createdOn">أُنشئ الرابط في %s</string>
+    <string name="shareLink_detail_createdOn">أُنشئ الرابط في %1$s</string>
     <string name="shareLink_detail_edit">تعديل</string>
     <string name="shareLink_detail_editTitle">تعديل الرابط</string>
     <string name="shareLink_detail_entryConditions">شروط الانضمام</string>
@@ -422,7 +422,7 @@
     <string name="shareLink_detail_statsUnavailable">إحصاءات هذا الرابط غير متاحة بعد.</string>
     <string name="shareLink_detail_unlimited">غير محدود</string>
     <string name="shareLink_detail_uses">الاستخدامات</string>
-    <string name="shareLink_detail_usesUnlimited">%d / غير محدود</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / غير محدود</string>
     <string name="shareLink_detail_visits">الزيارات</string>
     <string name="shareLink_detail_withoutAccount">دون حساب</string>
     <string name="share_link_access_account">الحساب مطلوب</string>
@@ -471,9 +471,9 @@
         <item quantity="zero">بدون استخدامات</item>
         <item quantity="one">استخدام واحد كحد أقصى</item>
         <item quantity="two">استخدامان كحد أقصى</item>
-        <item quantity="few">%d استخدامات كحد أقصى</item>
-        <item quantity="many">%d استخدامًا كحد أقصى</item>
-        <item quantity="other">%d استخدام كحد أقصى</item>
+        <item quantity="few">%1$d استخدامات كحد أقصى</item>
+        <item quantity="many">%1$d استخدامًا كحد أقصى</item>
+        <item quantity="other">%1$d استخدام كحد أقصى</item>
     </plurals>
     <string name="share_link_permission_files">إرسال الملفات</string>
     <string name="share_link_permission_files_subtitle">يمكن للضيوف إرسال المستندات</string>

@@ -33,7 +33,7 @@
     <string name="account_contact_phone_current_label">Current phone</string>
     <string name="account_contact_phone_implausible">This number doesn’t look real — please check it.</string>
     <string name="account_contact_phone_section">Phone</string>
-    <string name="account_contact_phone_too_short">This number is too short: at least %d digits.</string>
+    <string name="account_contact_phone_too_short">This number is too short: at least %1$d digits.</string>
     <string name="account_contact_phone_verify">Verify</string>
     <string name="account_contact_send">Send</string>
     <string name="account_contact_verified">Verified</string>
@@ -147,7 +147,7 @@
     <string name="sessions_revoke_all_action">Sign out other devices</string>
     <string name="sessions_revoke_all_confirm_message">Only this device will stay signed in. The others will have to sign in again.</string>
     <string name="sessions_revoke_confirm_action">Sign out</string>
-    <string name="sessions_revoke_confirm_message">%s will have to sign in again to access your account.</string>
+    <string name="sessions_revoke_confirm_message">%1$s will have to sign in again to access your account.</string>
     <string name="sessions_revoke_confirm_title">Sign out this device?</string>
     <string name="settings_about_meeshy">About Meeshy</string>
     <string name="settings_active_sessions">Active sessions</string>
