@@ -224,8 +224,11 @@ object CallSignalMapper {
      * `missed` reason carries [CallEvent.RingTimeout] (parity with the dedicated
      * `call:missed` event the gateway emits alongside).
      */
-    private fun endedEvent(payload: CallEndedPayload): CallEvent =
-        when (payload.reason) {
+    private fun endedEvent(payload: CallEndedPayload): CallEvent = endedEvent(payload.reason)
+
+    /** The FSM event of a call ended server-side for [reason] — `call:ended`, or a rejoin refused `CALL_ENDED` (#13765). */
+    fun endedEvent(reason: String?): CallEvent =
+        when (reason) {
             "missed" -> CallEvent.RingTimeout
             // A server/peer-signalled TRANSIENT failure must reach the FSM as a
             // ConnectionFailed (→ retryable Ended(Failed)), NOT a RemoteHangUp
@@ -233,7 +236,7 @@ object CallSignalMapper {
             // (`failed`/`connectionlost` → `.connectionLost`, retryable) so the
             // « Réessayer » affordance appears on all three platforms even when a
             // peer-signalled drop beats the caller's own reconnect-budget cutoff.
-            "failed", "connectionLost" -> CallEvent.ConnectionFailed(payload.reason ?: "failed")
+            "failed", "connectionLost" -> CallEvent.ConnectionFailed(reason ?: "failed")
             else -> CallEvent.RemoteHangUp
         }
 

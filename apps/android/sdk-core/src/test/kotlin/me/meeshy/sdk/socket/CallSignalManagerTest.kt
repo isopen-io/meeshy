@@ -725,4 +725,20 @@ class CallSignalManagerTest {
             expectNoEvents()
         }
     }
+
+    @Test
+    fun `the signalling socket's connection is published once per edge, for a call to rejoin on its return`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTED)
+        val (managerAndSocket, _) = managerWithHandlers(connectionState = state)
+
+        managerAndSocket.first.socketConnected.test {
+            assertThat(awaitItem()).isTrue()
+            state.value = SocketConnectionState.CONNECTING
+            assertThat(awaitItem()).isFalse()
+            state.value = SocketConnectionState.DISCONNECTED
+            state.value = SocketConnectionState.CONNECTED
+            assertThat(awaitItem()).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.call.screenshare
 
+import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
+
 /**
  * La projection d'écran vue du partage (#13332), indépendamment de la plateforme : la brique
  * Android (`MediaProjectionSession`) se projette sur ces cas avant d'interroger la loi.
@@ -55,7 +57,8 @@ object CallScreenShareLaw {
      * La passerelle oublie l'état de média d'un socket qui tombe ; iOS réannonce donc le partage au RETOUR
      * du socket de signalisation (`CallSignalingRouter`). La première connexion n'est pas un retour.
      */
-    fun reannouncesOnSocket(wasConnected: Boolean?, isConnected: Boolean): Boolean = wasConnected == false && isConnected
+    fun reannouncesOnSocket(wasConnected: Boolean?, isConnected: Boolean): Boolean =
+        CallSignalingRejoinLaw.returns(wasConnected, isConnected)
 
     /** Offert sur un appel établi ; un partage en cours garde toujours son bouton d'arrêt. */
     fun isOffered(isEstablished: Boolean, phase: CallScreenSharePhase): Boolean =

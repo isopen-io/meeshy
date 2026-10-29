@@ -15,9 +15,12 @@ import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallPreviewPhase
+import me.meeshy.sdk.model.call.CallRejoinMedia
+import me.meeshy.sdk.model.call.CallRejoinStep
 import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
+import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -94,6 +97,10 @@ class CallViewModel @Inject constructor(
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
 
+    /** The signalling socket's last known edge (`null` before the first), and the rejoin it started (#13765). */
+    private var socketWasConnected: Boolean? = null
+    private var rejoinJob: Job? = null
+
     /** What the collaborators may read of this session, and the one door back into it. */
     private val host = object : CallSessionHost {
         override val scope: CoroutineScope get() = viewModelScope
@@ -162,6 +169,38 @@ class CallViewModel @Inject constructor(
         }
         viewModelScope.launch {
             extensions.videoHealth.isVideoAutoPaused.collect(::onVideoHealthChanged)
+        }
+        viewModelScope.launch {
+            signalManager.socketConnected.collect(::onSocketConnection)
+        }
+    }
+
+    /**
+     * The signalling socket came back during a call (#13765, iOS `CallSignalingRouter.observeSocketReconnect`):
+     * the gateway took the dropped socket out of the room and forgot its media, so the call joins again WITH the
+     * ACK and only then says its camera and microphone and takes the ACK's fresh TURN set
+     * ([CallSignalingRejoinLaw]). The media path is the ICE restart's; the screen share re-announces itself.
+     */
+    private fun onSocketConnection(connected: Boolean) {
+        val returned = CallSignalingRejoinLaw.returns(socketWasConnected, connected)
+        socketWasConnected = connected
+        if (!returned || !CallSignalingRejoinLaw.rejoins(callState, callId)) return
+        val joining = callId
+        rejoinJob?.cancel()
+        rejoinJob = viewModelScope.launch {
+            val result = signalManager.emitJoinAwaitingAck(joining)
+            if (!callState.isActive || callId != joining) return@launch
+            CallSignalingRejoinLaw.plan(result, CallRejoinMedia(isMuted = media.isMuted, isCameraOn = media.isCameraOn))
+                .forEach { applyRejoin(joining, it) }
+        }
+    }
+
+    private fun applyRejoin(joined: String, step: CallRejoinStep) {
+        when (step) {
+            is CallRejoinStep.End -> onRemoteEnded(CallEndedSignal(joined, step.event))
+            is CallRejoinStep.AnnounceVideo -> signalManager.emitToggleVideo(joined, enabled = step.enabled)
+            is CallRejoinStep.AnnounceAudio -> signalManager.emitToggleAudio(joined, enabled = step.enabled)
+            is CallRejoinStep.RefreshIceServers -> coordinator.updateIceServers(step.servers)
         }
     }
 

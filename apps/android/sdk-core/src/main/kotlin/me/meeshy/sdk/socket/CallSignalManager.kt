@@ -1,8 +1,11 @@
 package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -109,6 +112,13 @@ class CallSignalManager internal constructor(
      */
     private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
     val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
+
+    /**
+     * `true` while the signalling socket is connected, one value per edge. The gateway takes a dropped socket
+     * out of the call room and forgets its media: a call rejoins on each return (#13765, iOS `didReconnect`).
+     */
+    val socketConnected: Flow<Boolean> =
+        socketManager.connectionState.map { it == SocketConnectionState.CONNECTED }.distinctUntilChanged()
 
     /**
      * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
