@@ -64,6 +64,7 @@ import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
 import me.meeshy.sdk.model.call.montage.CallCaptureSubject
+import me.meeshy.sdk.model.call.montage.CallModeGestureRule
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -84,7 +85,8 @@ class CallEffectsViewModel @Inject constructor(val effects: CallVideoEffectsCont
  * plein écran — telle qu'elle part, effet compris —, l'autre en vignette pour rester avec lui, et en bas
  * le choix d'UN effet à la fois : « Visage · Couleur », le carrousel, puis Quitter (rend l'image d'avant),
  * Réglages (luminosité, flou du fond, force du lissage) et Valider. Chaque essai part aussitôt à l'autre.
- * Deux tapes sur la scène photographient mon image, un appui long la filme, comme le mode Montage.
+ * Comme le Montage, la prise se déclenche sur l'effet CENTRÉ du carrousel (#13737) : deux tapes photographient
+ * mon image, un appui long la filme ; la scène ne porte aucun geste.
  */
 @Composable
 internal fun CallEffectsMode(
@@ -117,12 +119,19 @@ internal fun CallEffectsMode(
     }
     val tracks = remember(self, localTrack) { self.subjects.associate { it.id to localTrack } }
     val title = stringResource(R.string.call_effects_title)
+    val capture = captureViewModel.controller
+    val captureState by capture.state.collectAsStateWithLifecycle()
+    val hints = rememberCaptureHint()
+    val shooter = rememberCallCaptureShooter(capture, self, hints)
+    val shots = CallModeShots(captureState.isRecording, shooter.shoot, shooter.film)
+    val hint = stringResource(R.string.call_mode_gesture_hint)
+        .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) }
 
     Box(Modifier.fillMaxSize().background(Color.Black).semantics { paneTitle = title }) {
         localTrack?.let {
             CallLiveFrameVideo(CallLiveFrameVideoSource(it, isMirrored = state.isFrontCamera), eglContext, Modifier.fillMaxSize())
         }
-        CallMontageCaptureLayer(captureViewModel.controller, self, tracks, reduceMotion, Modifier.fillMaxSize())
+        CallMontageCaptureLayer(capture, tracks, reduceMotion, Modifier.fillMaxSize())
         remoteTrack?.takeIf { !state.isPeerCameraOff }?.let {
             CallLiveFrameVideo(
                 CallLiveFrameVideoSource(it, isMirrored = false),
@@ -156,7 +165,7 @@ internal fun CallEffectsMode(
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
                         CategoryPicker(mode.category) { mode = mode.showing(it) }
-                        EffectsCarousel(mode, reduceMotion, onChange = { mode = it })
+                        EffectsCarousel(mode, reduceMotion, shots, hint, onChange = { mode = it })
                     }
                 }
             }
@@ -195,8 +204,15 @@ private fun CategoryPicker(selected: CallEffectsCategory, onSelect: (CallEffects
     }
 }
 
+/** Le carrousel de la catégorie montrée : l'effet centré est choisi, et SE déclenche avec [shots] (iOS `CallEffectsModeControls.carousel`). */
 @Composable
-private fun EffectsCarousel(mode: CallEffectsModeState, reduceMotion: Boolean, onChange: (CallEffectsModeState) -> Unit) {
+internal fun EffectsCarousel(
+    mode: CallEffectsModeState,
+    reduceMotion: Boolean,
+    shots: CallModeShots?,
+    hint: String?,
+    onChange: (CallEffectsModeState) -> Unit,
+) {
     when (mode.category) {
         CallEffectsCategory.Face -> CallModeCarousel(
             items = CallEffectsModeRule.faces(CallVideoEffectsPlan.DRAWABLE_FACES),
@@ -206,6 +222,8 @@ private fun EffectsCarousel(mode: CallEffectsModeState, reduceMotion: Boolean, o
             glyph = ::faceGlyph,
             reduceMotion = reduceMotion,
             onSelect = { onChange(mode.selecting(it)) },
+            hint = hint,
+            shots = shots,
         )
         CallEffectsCategory.Color -> CallModeCarousel(
             items = CallEffectsModeRule.colors,
@@ -215,6 +233,8 @@ private fun EffectsCarousel(mode: CallEffectsModeState, reduceMotion: Boolean, o
             glyph = ::presetGlyph,
             reduceMotion = reduceMotion,
             onSelect = { onChange(mode.selecting(it)) },
+            hint = hint,
+            shots = shots,
         )
     }
 }

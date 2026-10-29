@@ -8,7 +8,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,16 +36,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -64,8 +58,6 @@ import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
-import me.meeshy.sdk.model.call.montage.CallModeGesture
-import me.meeshy.sdk.model.call.montage.CallModeGestureOutcome
 import me.meeshy.sdk.model.call.montage.CallModeGestureRule
 import me.meeshy.sdk.model.call.montage.CallMontagePickRule
 import me.meeshy.sdk.model.call.montage.CallMontageStage
@@ -127,7 +119,7 @@ internal fun CallMontageMode(
         is CallMontageStage.Live -> CallMontageLiveStage(stage.design, people, state, localTrack, remoteTrack, eglContext, frameViewModel, reduceMotion, constrained)
         CallMontageStage.Painted -> CallMontagePaintedStage(capture, scene.look, Modifier.fillMaxSize())
     }
-    CallMontageCaptureLayer(capture, scene, tracks, reduceMotion, Modifier.fillMaxSize(), shotsOnStage = false)
+    CallMontageCaptureLayer(capture, tracks, reduceMotion, Modifier.fillMaxSize())
     CallMontagePicker(
         live = frameViewModel.controller,
         capture = capture,
@@ -194,69 +186,38 @@ internal object CallMontageStageImage {
 }
 
 /**
- * **LA PRISE DU MODE MONTAGE** — la scène de l'appel SE déclenche, comme le choix affiché du carrousel
- * iOS (`CallModeGestureRule`) : deux tapes photographient le montage en cours, un appui long filme ; pendant
- * le film, seul le bouton stop au centre l'arrête, sous son chrono. Un flash blanc salue chaque prise ;
- * l'astuce des gestes se montre jusqu'au premier usage. TalkBack trouve les deux prises dans les actions
- * de la scène. La couche se pose SOUS le choix du cadre : celui-ci garde ses touchers.
+ * **LA COUCHE DE PRISE D'UN MODE** (Montage, Effets) — elle tient la capture ouverte sur les pistes de l'appel,
+ * salue chaque prise d'un flash blanc et, pendant le film, montre seul le bouton stop au centre, sous son chrono.
+ * Elle ne porte AUCUN geste : la photo (deux tapes) et le film (appui long) se déclenchent sur l'élément centré du
+ * carrousel du mode (`CallModeShots`, iOS `CallModeGestureRule`, #13733, #13737), qui porte aussi l'astuce. La
+ * quitter marque l'astuce comme vue (iOS `onDisappear`).
  */
 @Composable
 internal fun CallMontageCaptureLayer(
     controller: CallCaptureController,
-    scene: CallCaptureScene,
     tracks: Map<String, VideoTrack?>,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
-    shotsOnStage: Boolean = true,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val hints = rememberCaptureHint()
-    val shooter = rememberCallCaptureShooter(controller, scene, hints)
 
     DisposableEffect(controller) { onDispose { controller.stop(); hints.seen() } }
     LaunchedEffect(controller, tracks) { controller.start(tracks) }
 
-    fun shoot() = shooter.shoot()
-
-    fun film() = shooter.film()
-
-    val listens = shotsOnStage && CallModeGestureRule.listensForShots(isSelected = true, isRecording = state.isRecording)
-    val photoLabel = stringResource(R.string.call_mode_photo)
-    val recordLabel = stringResource(R.string.call_mode_record)
     val previewLabel = stringResource(R.string.call_capture_preview)
     val workingLabel = stringResource(R.string.call_capture_working)
-    val baseConfiguration = LocalViewConfiguration.current
-    val configuration = remember(baseConfiguration) { CaptureViewConfiguration(baseConfiguration) }
 
     Box(modifier) {
-        CompositionLocalProvider(LocalViewConfiguration provides configuration) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(listens) {
-                        if (!listens) return@pointerInput
-                        detectTapGestures(
-                            onDoubleTap = { if (outcome(CallModeGesture.DOUBLE_TAP, state.isRecording) == CallModeGestureOutcome.CAPTURE_PHOTO) shoot() },
-                            onLongPress = { if (outcome(CallModeGesture.LONG_PRESS, state.isRecording) == CallModeGestureOutcome.START_RECORDING) film() },
-                        )
-                    }
-                    .semantics {
-                        contentDescription = previewLabel
-                        if (state.isWorking) stateDescription = workingLabel
-                        if (listens) {
-                            customActions = listOf(
-                                CustomAccessibilityAction(photoLabel) { shoot(); true },
-                                CustomAccessibilityAction(recordLabel) { film(); true },
-                            )
-                        }
-                    },
-            )
-        }
-
-        if (shotsOnStage && CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = state.isRecording)) {
-            CaptureHint(Modifier.align(Alignment.Center))
-        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = previewLabel
+                    if (state.isWorking) stateDescription = workingLabel
+                },
+        )
 
         CaptureFlash(flashCount = state.flashCount, reduceMotion = reduceMotion)
 
@@ -293,9 +254,6 @@ internal fun rememberCallCaptureShooter(controller: CallCaptureController, scene
     }
 }
 
-private fun outcome(gesture: CallModeGesture, isRecording: Boolean): CallModeGestureOutcome =
-    CallModeGestureRule.outcome(gesture, isSelected = true, isRecording = isRecording)
-
 /** L'appui long d'iOS (0,45 s) au lieu de celui du système. */
 internal class CaptureViewConfiguration(base: ViewConfiguration) : ViewConfiguration by base {
     override val longPressTimeoutMillis: Long = CallModeGestureRule.LONG_PRESS_MILLIS
@@ -319,20 +277,6 @@ internal fun rememberCaptureHint(): CaptureHintMemory {
         val seen = context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_SEEN_KEY, false)
         CaptureHintMemory(context, seen)
     }
-}
-
-@Composable
-private fun CaptureHint(modifier: Modifier) {
-    Text(
-        text = stringResource(R.string.call_mode_gesture_hint),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = CallPalette.Ink,
-        modifier = modifier
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-    )
 }
 
 /** Le flash blanc d'une prise (iOS `CallCaptureFlash`) : plus doux et plus court sous « Réduire les animations ». */

@@ -64,7 +64,7 @@ private const val NEIGHBOUR_ALPHA = 0.6f
 /** Ce qu'un carrousel déclenche sur son élément centré (#13733) : deux tapes photographient, un appui long filme. */
 internal class CallModeShots(val isRecording: Boolean, val onCapturePhoto: () -> Unit, val onStartRecording: () -> Unit)
 
-/** Le carrousel des effets : un glyphe rond par élément. */
+/** Le carrousel des effets : un glyphe rond par élément ; avec [shots], l'effet centré se photographie et se filme (#13737). */
 @Composable
 internal fun <T> CallModeCarousel(
     items: List<T>,
@@ -74,6 +74,8 @@ internal fun <T> CallModeCarousel(
     glyph: (T) -> String,
     reduceMotion: Boolean,
     onSelect: (T) -> Unit,
+    hint: String? = null,
+    shots: CallModeShots? = null,
 ) {
     CallModeCarousel(
         items = items,
@@ -84,6 +86,8 @@ internal fun <T> CallModeCarousel(
         onSelect = onSelect,
         nextLabel = stringResource(R.string.call_effects_next),
         previousLabel = stringResource(R.string.call_effects_previous),
+        hint = hint,
+        shots = shots,
     ) { item, isShown ->
         Box(
             contentAlignment = Alignment.Center,
