@@ -30,6 +30,9 @@ public interface OutboxPlaintextAdmission {
     public companion object {
         public const val REASON_END_TO_END: String = "E2EE_PLAINTEXT_WITHHELD: end-to-end encrypted conversation"
 
+        /** #13628 — la passerelle refuse de servir la conversation (404, 403, 410) : son mode ne sera jamais connu, la ligne est épuisée. */
+        public const val REASON_CONVERSATION_UNREACHABLE: String = "CONVERSATION_UNREACHABLE: mode cannot be learned, plaintext withheld"
+
         public val AdmitAll: OutboxPlaintextAdmission = object : OutboxPlaintextAdmission {
             override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict = OutboxAdmissionVerdict.ADMIT
         }
@@ -45,28 +48,52 @@ public enum class OutboxAdmissionVerdict {
 
     /** Mode inconnu et relecture impossible (hors ligne, erreur) : la ligne reste en attente, sans coûter d'essai. */
     WAIT,
+
+    /** Mode inconnu et la passerelle refuse définitivement de servir la conversation : la ligne est épuisée, sans clair. */
+    UNREACHABLE,
+}
+
+/** Ce que la relecture du mode a appris (#13628). */
+public sealed interface ConversationModeRead {
+    public data class Served(val conversation: ApiConversation) : ConversationModeRead
+
+    /** Illisible maintenant (hors ligne, 5xx, délai, session non prête) : on réessaiera. */
+    public data object Unreadable : ConversationModeRead
+
+    /** La passerelle refuse définitivement de la servir (introuvable, plus membre) : son mode ne sera jamais connu. */
+    public data object Inaccessible : ConversationModeRead
 }
 
 /**
  * La relecture du mode d'une conversation au serveur (#13628) : une lecture qui ne transporte aucun contenu, dont le résultat est
- * mis en cache (et le mode appris au registre). `null` ⇒ illisible maintenant (hors ligne, erreur, session fermée).
+ * mis en cache (et le mode appris au registre) ; sinon [ConversationModeRead.Unreadable] (on réessaiera) ou
+ * [ConversationModeRead.Inaccessible] (la passerelle ne la servira jamais).
  */
 public fun interface ConversationModeReader {
-    public suspend fun read(conversationId: String): ApiConversation?
+    public suspend fun read(conversationId: String): ConversationModeRead
 
     public companion object {
-        public val Unavailable: ConversationModeReader = ConversationModeReader { null }
+        public val Unavailable: ConversationModeReader = ConversationModeReader { ConversationModeRead.Unreadable }
+
+        private val PERMANENT_STATUSES: Set<Int> = setOf(403, 404, 410)
+
+        /** Le statut d'une lecture refusée : 403/404/410 sont définitifs, tout le reste (réseau, 401, 5xx, 429) se réessaie. */
+        public fun refusalOf(httpStatus: Int?): ConversationModeRead =
+            if (httpStatus in PERMANENT_STATUSES) ConversationModeRead.Inaccessible else ConversationModeRead.Unreadable
     }
 }
 
 public class RepositoryConversationModeReader @Inject constructor(
     private val conversations: ConversationRepository,
 ) : ConversationModeReader {
-    override suspend fun read(conversationId: String): ApiConversation? {
-        val fresh = (conversations.getById(conversationId) as? NetworkResult.Success)?.data ?: return null
-        conversations.remember(fresh)
-        return fresh
-    }
+    override suspend fun read(conversationId: String): ConversationModeRead =
+        when (val result = conversations.getById(conversationId)) {
+            is NetworkResult.Success -> {
+                conversations.rememberServed(result.data)
+                ConversationModeRead.Served(result.data)
+            }
+            is NetworkResult.Failure -> ConversationModeReader.refusalOf(result.error.httpStatus)
+        }
 }
 
 /**
@@ -94,7 +121,11 @@ public class EndToEndOutboxAdmission @Inject constructor(
         if (clearances.values.any { it == ConversationClearance.END_TO_END }) return OutboxAdmissionVerdict.WITHHOLD
         for ((id, clearance) in clearances) {
             if (clearance != ConversationClearance.UNKNOWN) continue
-            val served = modeReader.read(id) ?: return OutboxAdmissionVerdict.WAIT
+            val served = when (val read = modeReader.read(id)) {
+                is ConversationModeRead.Served -> read.conversation
+                ConversationModeRead.Unreadable -> return OutboxAdmissionVerdict.WAIT
+                ConversationModeRead.Inaccessible -> return OutboxAdmissionVerdict.UNREACHABLE
+            }
             if (ConversationClearance.ofServed(served.encryptionMode) == ConversationClearance.END_TO_END) {
                 return OutboxAdmissionVerdict.WITHHOLD
             }

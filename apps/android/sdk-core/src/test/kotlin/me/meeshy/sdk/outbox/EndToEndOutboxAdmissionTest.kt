@@ -47,12 +47,16 @@ class EndToEndOutboxAdmissionTest {
 
     private val reads = mutableListOf<String>()
     private var served: ApiConversation? = null
+    private var refusal: ConversationModeRead = ConversationModeRead.Unreadable
 
     private val admission get() = EndToEndOutboxAdmission(
         ledger, db.conversationDao(), db.messageDao(), outbox,
         modeReader = { id ->
             reads += id
-            served?.also { if (EndToEndRegime.isEndToEnd(it.encryptionMode)) ledger.learn(id) else ledger.confirmClear(listOf(id)) }
+            served
+                ?.also { if (EndToEndRegime.isEndToEnd(it.encryptionMode)) ledger.learn(id) else ledger.confirmClear(listOf(id)) }
+                ?.let { ConversationModeRead.Served(it) }
+                ?: refusal
         },
     )
 
@@ -261,5 +265,47 @@ class EndToEndOutboxAdmissionTest {
         ledger.confirmClear(listOf("c-sealed"))
 
         assertThat(ledger.isClearConfirmed("c-sealed")).isFalse()
+    }
+
+    @Test
+    fun `mode inconnu et conversation refusee par la passerelle, la piece est epuisee sans clair et la file media repart`() = runTest {
+        refusal = ConversationModeRead.Inaccessible
+        cache("c-known", "server")
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up-gone",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-gone")),
+                cmid = "up-gone",
+            ),
+        )
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up-ok",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-known")),
+                cmid = "up-ok",
+            ),
+        )
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(sent).containsExactly("up-ok")
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(report.stoppedOnTransientFailure).isFalse()
+        assertThat(outbox.row("up-gone")?.lastError).isEqualTo(OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE)
+    }
+
+    @Test
+    fun `seuls 403, 404 et 410 sont definitifs, tout autre echec de relecture se reessaie`() {
+        listOf(403, 404, 410).forEach {
+            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Inaccessible)
+        }
+        listOf(null, 401, 408, 429, 500, 503).forEach {
+            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Unreadable)
+        }
     }
 }
