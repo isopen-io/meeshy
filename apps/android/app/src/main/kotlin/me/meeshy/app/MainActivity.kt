@@ -148,6 +148,7 @@ class MainActivity : ComponentActivity() {
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
+            owner = this,
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
             dismiss = { moveTaskToBack(false) },
@@ -244,7 +245,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        callPictureInPicture.detachActivity()
+        callPictureInPicture.detachActivity(this)
         super.onDestroy()
     }
 

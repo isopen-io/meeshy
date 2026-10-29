@@ -35,6 +35,7 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     @Volatile private var enter: (() -> Boolean)? = null
     @Volatile private var dismiss: (() -> Unit)? = null
     @Volatile private var heldByInAppLaunch = false
+    @Volatile private var owner: Any? = null
 
     private val _inPip = MutableStateFlow(false)
 
@@ -55,15 +56,20 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     /**
      * [enter] fait entrer l'activité dans la fenêtre flottante ; [dismiss] la retire quand l'appel
      * finit pendant qu'elle y est (iOS arrête son PiP avec l'appel) — sans lui, la fenêtre
-     * resterait ouverte sur l'écran d'en dessous.
+     * resterait ouverte sur l'écran d'en dessous. [owner] est l'activité qui s'inscrit : l'app se
+     * relance elle-même au démarrage par lien, et l'instance remplacée meurt APRÈS sa remplaçante.
      */
-    fun attachActivity(supportsPip: Boolean, dismiss: () -> Unit = {}, enter: () -> Boolean) {
+    fun attachActivity(owner: Any, supportsPip: Boolean, dismiss: () -> Unit = {}, enter: () -> Boolean) {
+        this.owner = owner
         deviceSupportsPip = supportsPip
         this.enter = enter
         this.dismiss = dismiss
     }
 
-    fun detachActivity() {
+    /** Retire l'inscription de [owner] seulement : celle d'une remplaçante déjà inscrite reste. */
+    fun detachActivity(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
         enter = null
         dismiss = null
         _inPip.value = false
