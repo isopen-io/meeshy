@@ -11,6 +11,7 @@ import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.stories.StoryViewerViewModel
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
@@ -171,7 +172,8 @@ object Routes {
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
+    const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}"
     /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
@@ -185,6 +187,10 @@ object Routes {
     /** Opens the story composer as a repost of [storyId] — the source id rides as an optional arg. */
     fun storyComposerRepost(storyId: String): String =
         "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
+
+    /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
+    fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =
+        if (audience == OnboardingStoryVisibility.FRIENDS) "story_composer?$STORY_COMPOSER_AUDIENCE_ARG=FRIENDS" else STORY_COMPOSER
 
     fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String, highlightMessageId: String? = null): String =

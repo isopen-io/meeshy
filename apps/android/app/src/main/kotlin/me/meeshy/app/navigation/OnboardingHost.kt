@@ -65,7 +65,7 @@ internal fun OnboardingHost(
         isStoryComposerOpen = OnboardingRootRules.isStoryComposer(currentRoute),
         isCallOpen = OnboardingRootRules.isCallOpen(currentRoute),
         navigation = OnboardingNavigation(
-            openStoryComposer = { navController.navigate(Routes.STORY_COMPOSER) },
+            openStoryComposer = { audience -> navController.navigate(Routes.storyComposerFromOnboarding(audience)) },
             openConversation = { navController.navigate(Routes.chat(it)) },
             openProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
             signOut = { authViewModel.logout() },

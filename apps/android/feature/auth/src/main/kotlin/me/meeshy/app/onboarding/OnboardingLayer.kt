@@ -24,13 +24,14 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.onboarding.OnboardingCard
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
+import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 
 /** Les portes qui sortent du calque : le composeur de story, Meeshy Global, le jeu, la fin de session sous 13 ans. */
 class OnboardingNavigation(
-    val openStoryComposer: () -> Unit = {},
+    val openStoryComposer: (OnboardingStoryVisibility) -> Unit = {},
     val openConversation: (String) -> Unit = {},
     val openProgression: () -> Unit = {},
     val signOut: () -> Unit = {},
@@ -116,7 +117,8 @@ fun OnboardingLayer(
     BackHandler(enabled = visible) { }
     if (!visible) return
 
-    val actions = remember(viewModel, navigation, context) {
+    val storyVisibility = state.storyVisibility
+    val actions = remember(viewModel, navigation, context, storyVisibility) {
         OnboardingCardActions(
             later = { scope.launch { viewModel.later() } },
             advance = { scope.launch { viewModel.advance() } },
@@ -126,7 +128,7 @@ fun OnboardingLayer(
             resendVerificationLink = { scope.launch { viewModel.resendVerificationLink() } },
             editGreeting = viewModel::editGreeting,
             sendGreeting = { scope.launch { viewModel.sendGreeting() } },
-            openStory = navigation.openStoryComposer,
+            openStory = { navigation.openStoryComposer(storyVisibility) },
             addFriend = { id -> scope.launch { viewModel.addFriend(id) } },
             findFriends = {
                 scope.launch { viewModel.findFriendsInContacts { permissions.ensure(PermissionNature.CONTACTS, announcesRefusal = false) } }

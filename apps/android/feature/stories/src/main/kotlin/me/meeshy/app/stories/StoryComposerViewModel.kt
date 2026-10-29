@@ -120,8 +120,9 @@ class StoryComposerViewModel @Inject constructor(
      * Silent and pristine-only: it never clobbers work begun in the async gap, a corrupt blob is
      * inert, and audience, repost link and annotations are re-armed with the slides.
      */
-    fun onEnterComposer(seededByDoor: Boolean = false) {
+    fun onEnterComposer(seededByDoor: Boolean = false, initialVisibility: StoryVisibility? = null) {
         this.seededByDoor = seededByDoor
+        initialVisibility?.let { audience -> _state.update { it.copy(draft = it.draft.withVisibility(audience)) } }
         restoring = viewModelScope.launch {
             draftConfirmation.settle()
             val stored = draftStore.load()
