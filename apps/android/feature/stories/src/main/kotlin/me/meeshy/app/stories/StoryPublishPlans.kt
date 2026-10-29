@@ -1,0 +1,46 @@
+package me.meeshy.app.stories
+
+import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.outbox.OutboxIds
+
+/** One publishable slide's wire request paired with the offline uploads it must wait on. */
+internal data class PublishPlan(val request: CreateStoryRequest, val dependsOn: List<String>)
+
+/**
+ * Maps the deck to one wire request **per publishable slide** (non-blank text or
+ * attached media), in deck order. Each story carries **its own** slide's media —
+ * media now belongs to the slide it was added to, not the whole story — and
+ * `dependsOn` only the offline uploads staged on that same slide (a draft restored or reopened
+ * names its still-queued uploads by their `cmid` alone, #13500), so the drainer
+ * gates each story on exactly its own prerequisites and grafts the real ids in.
+ */
+internal fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
+    val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
+    return current.deck.publishableSlides.map { slide ->
+        val draft = StoryComposerDraft(
+            text = slide.text,
+            visibility = current.draft.visibility,
+            mediaIds = slide.mediaIds,
+            textElements = slide.elements,
+            stickers = slide.stickers,
+            strokes = slide.strokes,
+            filter = slide.filter,
+            filterIntensity = slide.filterIntensity,
+            durationSecondsPin = slide.durationSecondsPin,
+            background = slide.background,
+            backgroundMedia = StoryPublishBackground.resolve(slide, current),
+            repostOfId = current.draft.repostOfId,
+            visibilityUserIds = current.draft.visibilityUserIds,
+            mentions = current.draft.mentions,
+            mediaAlt = current.draft.mediaAlt,
+            mediaCaption = current.draft.mediaCaption,
+            allowSoundExtraction = current.draft.allowSoundExtraction,
+            audio = slide.audio,
+            frame = slide.frame,
+        )
+        PublishPlan(
+            request = draft.toCreateStoryRequest(language),
+            dependsOn = slide.mediaIds.filter { it in pendingCmids || OutboxIds.isCmid(it) },
+        )
+    }
+}
