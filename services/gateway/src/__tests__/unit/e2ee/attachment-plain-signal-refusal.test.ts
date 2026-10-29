@@ -1,7 +1,7 @@
 /**
  * #13802 — dans une conversation chiffrée de bout en bout, une réaction en clair
  * à une PIÈCE JOINTE est refusée comme celle d'un message (#13142) : ni l'ajout
- * ni le retrait n'écrivent en base ni ne diffusent l'emoji, et l'accusé socket
+ * n'écrit en base ni ne diffuse l'emoji (le RETRAIT reste permis : il efface une ligne dont l'emoji est déjà connu, #13802), et l'accusé socket
  * porte le même code stable que `reaction:add`. Hors bout en bout (clair,
  * `server`, `hybrid`), rien ne change.
  *
@@ -71,34 +71,17 @@ describe('une réaction en clair à une pièce jointe (#13802) — le service', 
     expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
   });
 
-  it('refuse le retrait dans une conversation e2ee, et aucune ligne ne part', async () => {
+  it("laisse retirer une réaction existante en e2ee : la ligne s'efface, sans lire le régime", async () => {
     const prisma = attachmentReactionPrisma('e2ee');
     const service = new AttachmentReactionService(prisma as never);
 
-    const refusal = await service.removeAttachmentReaction(removeOptions).catch((error: unknown) => error);
+    await expect(service.removeAttachmentReaction(removeOptions)).resolves.toBe(true);
 
-    expect(refusal).toBeInstanceOf(E2eeSignalChannelRequiredError);
-    expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
-  });
-
-  it('juge le retrait sur la conversation de la PIÈCE elle-même, lue par son identifiant', async () => {
-    const prisma = attachmentReactionPrisma('e2ee');
-    const service = new AttachmentReactionService(prisma as never);
-
-    await service.removeAttachmentReaction(removeOptions).catch(() => undefined);
-
-    expect(prisma.messageAttachment.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: ATTACHMENT_ID } }),
-    );
-  });
-
-  it("refuse le retrait quand la lecture du régime échoue : rien n'est effacé sur un doute", async () => {
-    const prisma = attachmentReactionPrisma('server');
-    prisma.messageAttachment.findUnique.mockRejectedValueOnce(new Error('base illisible'));
-    const service = new AttachmentReactionService(prisma as never);
-
-    await expect(service.removeAttachmentReaction(removeOptions)).rejects.toThrow();
-    expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.attachmentReaction.deleteMany).toHaveBeenCalledWith({
+      where: { attachmentId: ATTACHMENT_ID, participantId: PARTICIPANT_ID, emoji: EMOJI },
+    });
+    expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
   });
 
   it.each(PLAIN_MODES)("laisse l'ajout et le retrait inchangés hors bout en bout (%s)", async (mode) => {
@@ -151,13 +134,11 @@ describe('une réaction en clair à une pièce jointe (#13802) — le socket', (
     mockResolveParticipantFromMessage.mockResolvedValue({ participantId: PARTICIPANT_ID, userId: USER_ID, isAnonymous: false });
   });
 
-  it.each(['add', 'remove'] as const)(
-    "refuse attachment:reaction-%s en e2ee avec le code des réactions de message, sans rien diffuser",
-    async (action) => {
+  it('refuse attachment:reaction-add en e2ee avec le code des réactions de message, sans rien diffuser', async () => {
       const { handler, prisma, io, deliveryQueue } = makeHandler('e2ee');
       const ack = jest.fn();
 
-      await (action === 'add' ? handler.handleAdd(socket, payload, ack) : handler.handleRemove(socket, payload, ack));
+      await handler.handleAdd(socket, payload, ack);
 
       expect(ack).toHaveBeenCalledWith({
         success: false,
@@ -168,8 +149,18 @@ describe('une réaction en clair à une pièce jointe (#13802) — le socket', (
       expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
       expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
       expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
-    },
-  );
+  });
+
+  it('laisse attachment:reaction-remove effacer en e2ee et le diffuse comme avant', async () => {
+    const { handler, prisma, io } = makeHandler('e2ee');
+    const ack = jest.fn();
+
+    await handler.handleRemove(socket, payload, ack);
+
+    expect(ack).toHaveBeenCalledWith({ success: true });
+    expect(prisma.attachmentReaction.deleteMany).toHaveBeenCalledTimes(1);
+    expect(io.to).toHaveBeenCalledTimes(1);
+  });
 
   it('refuse un non-membre comme non-membre : le refus ne lui dit pas le régime', async () => {
     mockResolveParticipantFromMessage.mockResolvedValue(null);

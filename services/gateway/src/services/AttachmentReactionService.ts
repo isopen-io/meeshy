@@ -150,18 +150,9 @@ export class AttachmentReactionService {
     const emoji = sanitizeEmoji(o.emoji);
     if (!emoji) throw new Error('Invalid emoji format');
 
-    // #13802 — retirer un emoji le dit aussi : refusé en clair dans une
-    // conversation e2ee, jugé sur la conversation de la PIÈCE elle-même (le
-    // retrait ne reçoit pas de `messageId`). Une lecture en échec lève : rien
-    // ne s'efface sur un doute. La clôture, elle, laisse toujours retirer.
-    const carrier = await this.prisma.messageAttachment.findUnique({
-      where: { id: o.attachmentId },
-      select: { message: { select: { conversation: { select: { encryptionMode: true } } } } },
-    });
-    if (conversationRefusesPlainSignal(carrier?.message?.conversation)) {
-      throw new E2eeSignalChannelRequiredError();
-    }
-
+    // #13802 — le retrait ne juge PAS le régime : il efface une ligne dont
+    // l'emoji est déjà connu du serveur, et le passé en clair doit rester
+    // supprimable (`e2ee-signal-channel.ts`, comme `ReactionService.removeReaction`).
     const result = await this.prisma.attachmentReaction.deleteMany({
       where: {
         attachmentId: o.attachmentId,

@@ -61,9 +61,6 @@ function makePrisma(overrides: Record<string, any> = {}) {
     message: {
       findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
     },
-    messageAttachment: {
-      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
-    },
     ...overrides,
   } as any;
 }

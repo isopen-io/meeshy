@@ -266,11 +266,6 @@ function buildAttachmentReactionPrisma(conversationRow: {
         conversation: { ...conversationRow },
       })),
     },
-    messageAttachment: {
-      findUnique: jest.fn<any>(async () => ({
-        message: { conversation: { ...conversationRow } },
-      })),
-    },
     attachmentReaction: {
       findUnique: jest.fn<any>(async () => null),
       count: jest.fn<any>(async () => 0),
