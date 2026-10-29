@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -53,6 +55,8 @@ import coil.compose.AsyncImage
 import me.meeshy.sdk.model.MediaCaptionRule
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.ui.R
+import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenCloseButton
@@ -61,6 +65,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
+private val AUTHOR_AVATAR_SIZE = 28.dp
 private val CAPTION_SHADOW = Shadow(color = MeeshyPalette.Ink.copy(alpha = 0.65f), offset = Offset(0f, 1f), blurRadius = 6f)
 
 /** La pellicule (iOS `FilmstripMetrics`) : vignettes de 54, espacées de 6. */
@@ -147,8 +152,14 @@ private fun ImageViewerMoreMenu(
 }
 
 /**
- * Le bas du cadre : l'auteur et la date, puis la légende, alignés à gauche (iOS
- * `GalleryMediaMetadataBlock` au-dessus de `MediaCaptionOverlay`).
+ * Le visage de l'auteur d'une page, tel que la galerie le sert : son compte (d'où se lit le point de
+ * présence vivant) et sa photo. `userId` nul — mon propre média, un auteur sans compte — ne donne aucun point.
+ */
+public data class ImageViewerAuthor(val userId: String?, val avatarUrl: String? = null)
+
+/**
+ * Le bas du cadre : l'auteur (son avatar vivant quand la galerie le sert) et la date, puis la légende,
+ * alignés à gauche (iOS `GalleryMediaMetadataBlock` au-dessus de `MediaCaptionOverlay`).
  */
 @Composable
 internal fun ImageViewerMetadataBlock(
@@ -157,6 +168,7 @@ internal fun ImageViewerMetadataBlock(
     caption: String?,
     captionKey: Any,
     modifier: Modifier = Modifier,
+    identity: ImageViewerAuthor? = null,
 ) {
     if (author == null && timestamp == null && caption == null) return
     Column(
@@ -166,14 +178,25 @@ internal fun ImageViewerMetadataBlock(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         if (author != null || timestamp != null) {
-            Text(
-                text = listOfNotNull(author, timestamp).joinToString("  ·  "),
-                style = MaterialTheme.typography.labelLarge.copy(shadow = CAPTION_SHADOW),
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyPalette.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (identity != null && author != null) {
+                    MeeshyAvatar(
+                        name = author,
+                        size = AUTHOR_AVATAR_SIZE,
+                        imageUrl = identity.avatarUrl,
+                        presence = rememberPresence(identity.userId),
+                    )
+                    Spacer(Modifier.width(MeeshySpacing.sm))
+                }
+                Text(
+                    text = listOfNotNull(author, timestamp).joinToString("  ·  "),
+                    style = MaterialTheme.typography.labelLarge.copy(shadow = CAPTION_SHADOW),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyPalette.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (caption != null) {
             ImageViewerCaption(text = caption, captionKey = captionKey)

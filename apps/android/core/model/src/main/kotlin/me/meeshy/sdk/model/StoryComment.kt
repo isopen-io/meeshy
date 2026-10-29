@@ -32,6 +32,8 @@ data class StoryComment(
     val isTranslated: Boolean,
     val createdAt: String?,
     val status: StoryCommentStatus,
+    /** Le compte de l'auteur, d'où se lit son point de présence ; `null` pour un envoi encore optimiste. */
+    val authorId: String? = null,
 )
 
 /**
@@ -56,6 +58,7 @@ fun ApiPostComment.toStoryComment(prefs: ContentLanguagePreferences): StoryComme
         isTranslated = match != null,
         createdAt = createdAt,
         status = StoryCommentStatus.Sent,
+        authorId = author?.id?.takeIf { it.isNotBlank() },
     )
 }
 

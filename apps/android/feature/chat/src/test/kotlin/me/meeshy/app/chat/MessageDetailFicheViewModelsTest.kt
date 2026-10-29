@@ -7,12 +7,14 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.EditRevisionLedger
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.conversation.ReadStatusRepository
 import me.meeshy.sdk.conversation.ReadStatusState
 import me.meeshy.sdk.model.EditRevision
@@ -32,6 +34,10 @@ class MessageDetailFicheViewModelsTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
+    private fun noCachedRoster() = mockk<ParticipantCacheRepository> {
+        every { observe(any()) } returns flowOf(null)
+    }
+
     private fun data(readers: Int, received: Int) = ReadStatusData(
         messageId = "m1", totalMembers = 3, receivedCount = received, readCount = readers,
         readBy = List(readers) { ReadByUser("p$it", "P$it") },
@@ -41,7 +47,7 @@ class MessageDetailFicheViewModelsTest {
     fun `the sheet opens on the most advanced tab with someone to show`() = runTest(dispatcher) {
         val flow = MutableStateFlow(ReadStatusState(isLoading = true))
         val repository = mockk<ReadStatusRepository> { every { observe("m1", "c1") } returns flow }
-        val vm = MessageViewsViewModel(repository)
+        val vm = MessageViewsViewModel(repository, noCachedRoster())
 
         vm.bind("m1", "c1")
         advanceUntilIdle()
@@ -57,7 +63,7 @@ class MessageDetailFicheViewModelsTest {
     fun `a chosen tab wins over the served counts and a revalidation keeps the data`() = runTest(dispatcher) {
         val flow = MutableStateFlow(ReadStatusState(data = data(1, 2)))
         val repository = mockk<ReadStatusRepository> { every { observe("m1", "c1") } returns flow }
-        val vm = MessageViewsViewModel(repository)
+        val vm = MessageViewsViewModel(repository, noCachedRoster())
         vm.bind("m1", "c1")
         advanceUntilIdle()
 
@@ -75,7 +81,7 @@ class MessageDetailFicheViewModelsTest {
         val repository = mockk<ReadStatusRepository>(relaxed = true) {
             every { observe(any(), any()) } returns MutableStateFlow(ReadStatusState())
         }
-        val vm = MessageViewsViewModel(repository)
+        val vm = MessageViewsViewModel(repository, noCachedRoster())
         vm.bind("m1", "c1")
         vm.select(MessageViewsFilter.NotSeen)
         vm.bind("m2", "c1")
@@ -103,7 +109,7 @@ class MessageDetailFicheViewModelsTest {
     fun `a closed sheet stops listening and reopening serves the last read before revalidating`() = runTest(dispatcher) {
         val flow = MutableStateFlow(ReadStatusState(data = data(1, 2)))
         val repository = mockk<ReadStatusRepository> { every { observe("m1", "c1") } returns flow }
-        val vm = MessageViewsViewModel(repository)
+        val vm = MessageViewsViewModel(repository, noCachedRoster())
         vm.bind("m1", "c1")
         advanceUntilIdle()
         vm.select(MessageViewsFilter.Delivered)

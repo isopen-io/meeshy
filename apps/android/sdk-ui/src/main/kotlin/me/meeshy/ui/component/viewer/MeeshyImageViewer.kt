@@ -68,6 +68,8 @@ public fun MeeshyImageViewer(
     onDismiss: () -> Unit,
     captions: List<String?> = emptyList(),
     authors: List<String?> = emptyList(),
+    /** Per page, the author's face (account + photo) for the live presence dot; a page past the end shows the name alone. */
+    authorIdentities: List<ImageViewerAuthor?> = emptyList(),
     timestamps: List<String?> = emptyList(),
     /**
      * Per-page low-res thumbnail, positionally aligned with [imageUrls] (#3878) — the blurred
@@ -200,6 +202,7 @@ public fun MeeshyImageViewer(
                         timestamp = timestamps.getOrNull(page)?.takeIf { it.isNotBlank() },
                         caption = captions.getOrNull(page)?.takeIf { it.isNotBlank() },
                         captionKey = page,
+                        identity = authorIdentities.getOrNull(page),
                     )
                     ImageViewerFilmstrip(
                         thumbnails = imageUrls.indices.map { thumbnailUrls.getOrNull(it) ?: imageUrls[it] },

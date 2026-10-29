@@ -85,6 +85,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onDismiss = actions.dismissImageViewer,
             captions = gallery.captions,
             authors = gallery.senderNames,
+            authorIdentities = gallery.authorIdentities,
             timestamps = galleryTimestamps,
             thumbnailUrls = gallery.thumbnailUrls,
             altTexts = gallery.altTexts,

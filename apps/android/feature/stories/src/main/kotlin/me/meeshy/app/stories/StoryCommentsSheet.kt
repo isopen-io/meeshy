@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.StoryComment
 import me.meeshy.sdk.model.StoryCommentStatus
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -114,7 +115,7 @@ private fun CommentList(comments: List<StoryComment>, onRetry: (String) -> Unit)
 }
 
 @Composable
-private fun CommentRow(comment: StoryComment, onRetry: (String) -> Unit) {
+internal fun CommentRow(comment: StoryComment, onRetry: (String) -> Unit) {
     val isPending = comment.status == StoryCommentStatus.Pending
     Row(
         modifier = Modifier
@@ -128,6 +129,7 @@ private fun CommentRow(comment: StoryComment, onRetry: (String) -> Unit) {
             size = 36.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(comment.authorName)),
             imageUrl = comment.avatarUrl,
+            presence = rememberPresence(comment.authorId),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(

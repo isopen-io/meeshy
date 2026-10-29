@@ -20,6 +20,8 @@ data class ReelCommentPresentation(
     val content: String,
     val createdAt: String?,
     val status: ReelCommentStatus = ReelCommentStatus.Sent,
+    /** Le compte de l'auteur, d'où se lit son point de présence ; `null` pour un envoi encore optimiste. */
+    val authorId: String? = null,
 )
 
 /** Maps a server comment through the Prisme (§ CLAUDE.md `resolveUserLanguage`) into its row. */
@@ -31,4 +33,5 @@ fun ApiPostComment.toReelComment(prefs: LanguageResolver.ContentLanguagePreferen
         content = displayContent(prefs),
         createdAt = createdAt,
         status = ReelCommentStatus.Sent,
+        authorId = author?.id?.takeIf { it.isNotBlank() },
     )

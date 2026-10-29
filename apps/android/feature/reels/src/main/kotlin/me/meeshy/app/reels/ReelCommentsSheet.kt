@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -162,7 +163,7 @@ private fun ReelCommentList(
 }
 
 @Composable
-private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -> Unit) {
+internal fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -> Unit) {
     val isPending = comment.status == ReelCommentStatus.Pending
     Row(
         modifier = Modifier
@@ -176,6 +177,7 @@ private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -
             size = 36.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(comment.authorName)),
             imageUrl = comment.avatarUrl,
+            presence = rememberPresence(comment.authorId),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
