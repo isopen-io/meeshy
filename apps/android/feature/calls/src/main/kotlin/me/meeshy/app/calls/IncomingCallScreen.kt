@@ -49,7 +49,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * L'appel entrant plein écran (iOS `IncomingCallView`) : anneaux et avatar qui rebondit, le nom,
  * « Appel (vidéo) entrant », la pastille de type, puis Refuser (rouge) et Répondre (vert, comme
  * iOS `MeeshyColors.success`), chacun avec un retour haptique. Le tri des permissions est fait par l'hôte
- * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack.
+ * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack. Un appel vidéo
+ * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]).
  */
 @Composable
 internal fun IncomingCallScreen(
@@ -60,6 +61,8 @@ internal fun IncomingCallScreen(
     onDecline: () -> Unit,
     modifier: Modifier = Modifier,
     onDeclineWithMessage: ((String) -> Unit)? = null,
+    preview: CallPreviewUi = CallPreviewUi(),
+    onTogglePreviewSound: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -102,6 +105,10 @@ internal fun IncomingCallScreen(
             ),
         )
         Spacer(Modifier.weight(1f))
+        if (preview.offersSound) {
+            CallPreviewSoundButton(isAudible = preview.isAudible, onToggle = onTogglePreviewSound)
+            Spacer(Modifier.height(MeeshySpacing.xl))
+        }
         if (onDeclineWithMessage != null) {
             DeclineWithMessageButton(
                 onClick = {

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_preview_sound_on">Turn on sound</string>
+    <string name="call_preview_sound_off">Mute sound</string>
+    <string name="call_preview_sound_hint">Hear the caller before answering</string>
+    <string name="call_preview_seen_by">%1$s sees you before answering</string>
+    <string name="call_preview_heard_by">%1$s hears you before answering</string>
+    <string name="call_preview_heard_and_seen_by">%1$s hears and sees you before answering</string>
+    <string name="call_preview_mic_a11y">Mic before answering</string>
+    <string name="call_preview_mic_hint">Choose whether %1$s hears you before answering</string>
+    <string name="call_preview_camera_a11y">Camera before answering</string>
+    <string name="call_preview_camera_hint">Choose whether %1$s sees you before answering</string>
+</resources>
