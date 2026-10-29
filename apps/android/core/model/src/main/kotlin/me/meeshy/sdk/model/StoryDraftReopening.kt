@@ -9,7 +9,9 @@ package me.meeshy.sdk.model
  * their placeholder. The publications list the slide's media first and in the slide's order
  * (sounds and stickers follow), so a slide takes the prefix of its own publication: the n-th media
  * of the slide is the n-th id of the publication. The alternative texts, captions and backdrop
- * follow their media. A slide the publication cannot account for keeps its ids — nothing is invented.
+ * follow their media. A slide the publication cannot account for keeps its ids — nothing is invented. A slide
+ * carrying only a sound queues a list too (its sound): it is paired with it, so the next slide never takes it. When the
+ * publications and the slides do not pair one to one, no slide can be told its own list: nothing is renamed.
  */
 object StoryDraftReopening {
 
@@ -19,7 +21,8 @@ object StoryDraftReopening {
      */
     fun reopened(kept: StoryComposerDraftSnapshot, publishedMediaIds: List<List<String>>): StoryComposerDraftSnapshot {
         val carriers = publishedMediaIds.filter { it.isNotEmpty() }
-        val withMedia = kept.slides.filter { it.mediaIds.isNotEmpty() }
+        val withMedia = kept.slides.filter { it.publishesMedia }
+        if (carriers.size != withMedia.size) return kept.copy(awaitingPublication = emptyList())
         val renames: Map<String, String> = withMedia.zip(carriers)
             .filter { (slide, carried) -> carried.size >= slide.mediaIds.size }
             .flatMap { (slide, carried) -> slide.mediaIds.zip(carried) }
@@ -40,4 +43,8 @@ object StoryDraftReopening {
             awaitingPublication = emptyList(),
         )
     }
+
+    /** A slide queues a non-empty media list when it carries media OR a sound: a sound-only slide owns its publication too. */
+    private val StoryDraftSlideSnapshot.publishesMedia: Boolean
+        get() = mediaIds.isNotEmpty() || audio.any { it.postMediaId.isNotBlank() }
 }
