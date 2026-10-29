@@ -36,6 +36,8 @@ internal class ChatNavigationActions(
     val hasLocalLiveCall: Boolean,
     /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
     val onOpenCitedPost: (postId: String) -> Unit = {},
+    /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */
+    val onOpenConversation: (conversationId: String) -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
     /** [ChatViewModel.mayInviteFriends]: whether the info sheet offers « Inviter mes amis ». */

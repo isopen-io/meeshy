@@ -52,6 +52,7 @@ fun ChatScreen(
     hasLocalLiveCall: Boolean = false,
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
+    onOpenConversation: (conversationId: String) -> Unit = {},
     /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
     locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
@@ -115,6 +116,7 @@ fun ChatScreen(
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
             onOpenCitedPost = onOpenCitedPost,
+            onOpenConversation = onOpenConversation,
             callEntry = callEntry,
             mayInviteFriends = mayInviteFriends,
             locationSettingsSheet = locationSettingsSheet,

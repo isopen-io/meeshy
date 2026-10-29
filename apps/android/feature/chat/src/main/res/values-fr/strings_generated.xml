@@ -59,7 +59,15 @@
     <string name="composer_recent_grantAccess_hint">Pour retrouver vos médias récents ici</string>
     <string name="composer_recent_select">Sélectionner</string>
     <string name="contact_card_a11y_label">Contact partagé : %s</string>
+    <string name="contact_card_a11y_on_meeshy">Sur Meeshy : %s</string>
+    <string name="contact_card_action_connect">Se connecter</string>
+    <string name="contact_card_action_write">Écrire</string>
+    <string name="contact_card_on_meeshy">Sur Meeshy</string>
+    <string name="contact_card_open_failed">Impossible d\'ouvrir la conversation</string>
     <string name="contact_card_shared">Contact partagé</string>
+    <string name="contact_card_state_request_received">Vous a envoyé une demande</string>
+    <string name="contact_card_state_request_sent">Demande envoyée</string>
+    <string name="contact_card_toast_request_failed">Impossible d\'envoyer la demande</string>
     <string name="context_invite_friends">Inviter mes amis</string>
     <string name="conversation_appearance_accent_auto">Automatique</string>
     <string name="conversation_appearance_entry_title">Fond de la conversation</string>

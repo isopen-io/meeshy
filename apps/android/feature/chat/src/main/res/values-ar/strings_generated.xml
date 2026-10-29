@@ -62,7 +62,15 @@
     <string name="composer_recent_grantAccess_hint">لعرض وسائطك الأخيرة هنا</string>
     <string name="composer_recent_select">تحديد</string>
     <string name="contact_card_a11y_label">جهة اتصال مشتركة: %s</string>
+    <string name="contact_card_a11y_on_meeshy">على Meeshy: %s</string>
+    <string name="contact_card_action_connect">تواصل</string>
+    <string name="contact_card_action_write">مراسلة</string>
+    <string name="contact_card_on_meeshy">على Meeshy</string>
+    <string name="contact_card_open_failed">تعذّر فتح المحادثة</string>
     <string name="contact_card_shared">جهة اتصال مشتركة</string>
+    <string name="contact_card_state_request_received">أرسل إليك طلبًا</string>
+    <string name="contact_card_state_request_sent">تم إرسال الطلب</string>
+    <string name="contact_card_toast_request_failed">تعذر إرسال الطلب</string>
     <string name="context_invite_friends">دعوة أصدقائي</string>
     <string name="conversation_appearance_accent_auto">تلقائي</string>
     <string name="conversation_appearance_entry_title">خلفية المحادثة</string>
