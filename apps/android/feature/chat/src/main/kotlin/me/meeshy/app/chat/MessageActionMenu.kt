@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.MessageExit
 import me.meeshy.sdk.model.MessageExitOffer
+import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
 
 /**
@@ -44,6 +45,22 @@ enum class MessageAction {
     Select,
     /** Exports the message as a shareable card. */
     ExportCard,
+    /** Opens the message's first link (iOS `.openLink`). */
+    OpenLink,
+    /** Copies the message's first link (iOS `.copyLink`). */
+    CopyLink,
+    /** Opens the reply thread of the message (iOS `.thread`). */
+    Thread,
+    /** Opens the language explorer on an untranslated text, which translates on demand (iOS `.translate`). */
+    Translate,
+    /** Saves the message's only photo or video to the gallery (iOS `.saveMedia`). */
+    SaveMedia,
+    /** Hands the message's text, or its only photo or sound, to the system share sheet (iOS `.share`). */
+    Share,
+    /** Opens the transcription fiche of an audio or video message (iOS `.transcription`). */
+    Transcription,
+    /** Opens the who-reacted fiche (iOS `.reactions`). */
+    Reactions,
 }
 
 /**
@@ -87,6 +104,8 @@ data class MessageActionContext(
     val canWrite: Boolean = true,
     /** End-to-end encrypted and unopened here (#13110): nothing of it is copied or forwarded. */
     val isEndToEndSealed: Boolean = false,
+    /** The iOS entries the law offers ([MessageMenuEntries]) — each still needs its host ([hostedEntries]). */
+    val entries: Set<MessageMenuEntries.Entry> = emptySet(),
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -116,15 +135,24 @@ data class MessageActionContext(
  */
 object MessageActionMenu {
     fun actions(ctx: MessageActionContext): List<MessageAction> = buildList {
+        fun addEntry(action: MessageAction) {
+            if (action in ctx.hostedEntries && ENTRY_OF.getValue(action) in ctx.entries) add(action)
+        }
         if (ctx.offersReply) add(MessageAction.Reply)
+        addEntry(MessageAction.OpenLink)
+        addEntry(MessageAction.CopyLink)
         if (ctx.offersForward) add(MessageAction.Forward)
+        addEntry(MessageAction.Thread)
         if (ctx.isTranslated) {
             add(if (ctx.isShowingOriginal) MessageAction.ShowTranslation else MessageAction.ShowOriginal)
             add(MessageAction.ExploreLanguages)
         }
+        addEntry(MessageAction.Translate)
         if (!ctx.isDeleted && !ctx.isEndToEndSealed && ctx.exitOffer.offers(MessageExit.COPY)) {
             add(MessageAction.Copy)
         }
+        addEntry(MessageAction.SaveMedia)
+        addEntry(MessageAction.Share)
         if (ctx.hasOpenableFile && ctx.exitOffer.offers(MessageExit.SHARE)) {
             add(MessageAction.OpenFile)
             add(MessageAction.ShareFile)
@@ -150,7 +178,9 @@ object MessageActionMenu {
         if (ctx.isActionable) {
             add(MessageAction.DeleteForMe)
         }
-        // Information entries come after every action.
+        // Information entries come after every action, in iOS's order: transcription, reactions, views…
+        addEntry(MessageAction.Transcription)
+        addEntry(MessageAction.Reactions)
         if (!ctx.isDeleted) {
             if (MessageAction.Views in ctx.hostedEntries) add(MessageAction.Views)
             if (MessageAction.History in ctx.hostedEntries && ctx.isEdited) add(MessageAction.History)
@@ -164,4 +194,15 @@ object MessageActionMenu {
             add(MessageAction.Report)
         }
     }
+
+    private val ENTRY_OF: Map<MessageAction, MessageMenuEntries.Entry> = mapOf(
+        MessageAction.OpenLink to MessageMenuEntries.Entry.OPEN_LINK,
+        MessageAction.CopyLink to MessageMenuEntries.Entry.COPY_LINK,
+        MessageAction.Thread to MessageMenuEntries.Entry.THREAD,
+        MessageAction.Translate to MessageMenuEntries.Entry.TRANSLATE,
+        MessageAction.SaveMedia to MessageMenuEntries.Entry.SAVE_MEDIA,
+        MessageAction.Share to MessageMenuEntries.Entry.SHARE,
+        MessageAction.Transcription to MessageMenuEntries.Entry.TRANSCRIPTION,
+        MessageAction.Reactions to MessageMenuEntries.Entry.REACTIONS,
+    )
 }

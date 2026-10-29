@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">shared location</string>
+    <string name="chat_action_copy_link">Copy link</string>
+    <string name="chat_action_open_link">Open link</string>
+    <string name="chat_action_reactions">Reactions</string>
+    <string name="chat_action_save_media">Save</string>
+    <string name="chat_action_share">Share</string>
+    <string name="chat_action_thread">Thread</string>
+    <string name="chat_action_transcription">Transcription</string>
+    <string name="chat_action_translate">Translate</string>
     <string name="chat_composer_edit_title">Edit the message</string>
     <string name="chat_composer_reply_a11y">Replying to %1$s: %2$s</string>
     <string name="chat_composer_reply_file">File</string>
@@ -30,6 +38,7 @@
     <string name="chat_exit_blocked_understood">Got it</string>
     <string name="chat_exit_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
     <string name="chat_header_flame_hint">Hides the flame until the header is expanded again</string>
+    <string name="chat_menu_e2ee_notice">End-to-end encrypted: server translation and transcription aren\'t available in this conversation.</string>
     <string name="chat_selection_cap_reached">Maximum 100 messages</string>
     <string name="chat_selection_count">%1$d selected</string>
     <string name="chat_selection_toggle_message">Message</string>
@@ -404,6 +413,15 @@
     <string name="summary_resume_thread">Back to the thread</string>
     <string name="summary_resume_thread_a11y_label">Back to the thread, return to the conversation</string>
     <string name="summary_skeleton_a11y_label">Loading the summary</string>
+    <string name="transcription_fiche_a11y_cloned_voice">cloned voice</string>
+    <string name="transcription_fiche_a11y_confidence">%1$d%% confidence</string>
+    <string name="transcription_fiche_a11y_in_language">Transcription in %1$s</string>
+    <string name="transcription_fiche_a11y_in_progress">Transcribing</string>
+    <string name="transcription_fiche_cloned">Clone</string>
+    <string name="transcription_fiche_empty">No transcription</string>
+    <string name="transcription_fiche_speakers">%1$d speakers detected</string>
+    <string name="transcription_fiche_transcribe">Transcribe</string>
+    <string name="transcription_fiche_translations">Audio translations</string>
     <string name="viewer_code_loading">Loading...</string>
     <string name="viewer_contact_add">Add to Contacts</string>
     <string name="viewer_contact_close">Close contact card</string>

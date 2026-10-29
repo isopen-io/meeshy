@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">geteilter Standort</string>
+    <string name="chat_action_copy_link">Link kopieren</string>
+    <string name="chat_action_open_link">Link öffnen</string>
+    <string name="chat_action_reactions">Reaktionen</string>
+    <string name="chat_action_save_media">Speichern</string>
+    <string name="chat_action_share">Teilen</string>
+    <string name="chat_action_thread">Diskussion</string>
+    <string name="chat_action_transcription">Transkription</string>
+    <string name="chat_action_translate">Übersetzen</string>
     <string name="chat_composer_edit_title">Nachricht bearbeiten</string>
     <string name="chat_composer_reply_a11y">Antwort an %1$s: %2$s</string>
     <string name="chat_composer_reply_file">Datei</string>
@@ -30,6 +38,7 @@
     <string name="chat_exit_blocked_understood">Verstanden</string>
     <string name="chat_exit_blocked_view_once">Sie ist einmalig ansehbar: Sie kann nicht weitergeleitet, gesichert oder geteilt werden. Sie bleibt im Chat, bis sie gesehen wurde.</string>
     <string name="chat_header_flame_hint">Blendet die Flamme bis zum nächsten Aufklappen der Kopfzeile aus</string>
+    <string name="chat_menu_e2ee_notice">Ende-zu-Ende-verschlüsselt: Übersetzung und Transkription durch den Server sind in dieser Unterhaltung nicht verfügbar.</string>
     <string name="chat_selection_cap_reached">Maximal 100 Nachrichten</string>
     <string name="chat_selection_count">%1$d ausgewählt</string>
     <string name="chat_selection_toggle_message">Nachricht</string>
@@ -404,6 +413,15 @@
     <string name="summary_resume_thread">Zurück zum Verlauf</string>
     <string name="summary_resume_thread_a11y_label">Zurück zum Verlauf, zur Unterhaltung zurückkehren</string>
     <string name="summary_skeleton_a11y_label">Zusammenfassung wird geladen</string>
+    <string name="transcription_fiche_a11y_cloned_voice">geklonte Stimme</string>
+    <string name="transcription_fiche_a11y_confidence">%1$d%% Konfidenz</string>
+    <string name="transcription_fiche_a11y_in_language">Transkription auf %1$s</string>
+    <string name="transcription_fiche_a11y_in_progress">Transkription läuft</string>
+    <string name="transcription_fiche_cloned">Klon</string>
+    <string name="transcription_fiche_empty">Keine Transkription</string>
+    <string name="transcription_fiche_speakers">%1$d Sprecher erkannt</string>
+    <string name="transcription_fiche_transcribe">Transkribieren</string>
+    <string name="transcription_fiche_translations">Audio-Übersetzungen</string>
     <string name="viewer_code_loading">Laden...</string>
     <string name="viewer_contact_add">Zu Kontakten hinzufügen</string>
     <string name="viewer_contact_close">Karte schließen</string>

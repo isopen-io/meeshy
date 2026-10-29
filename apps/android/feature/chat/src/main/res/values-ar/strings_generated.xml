@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">موقع مشارَك</string>
+    <string name="chat_action_copy_link">نسخ الرابط</string>
+    <string name="chat_action_open_link">فتح الرابط</string>
+    <string name="chat_action_reactions">التفاعلات</string>
+    <string name="chat_action_save_media">حفظ</string>
+    <string name="chat_action_share">مشاركة</string>
+    <string name="chat_action_thread">المناقشة</string>
+    <string name="chat_action_transcription">النسخ النصي</string>
+    <string name="chat_action_translate">ترجمة</string>
     <string name="chat_composer_edit_title">تعديل الرسالة</string>
     <string name="chat_composer_reply_a11y">رد على %1$s: %2$s</string>
     <string name="chat_composer_reply_file">ملف</string>
@@ -34,6 +42,7 @@
     <string name="chat_exit_blocked_understood">حسنًا</string>
     <string name="chat_exit_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="chat_header_flame_hint">يُخفي الشعلة حتى يُفتح الرأس مرة أخرى</string>
+    <string name="chat_menu_e2ee_notice">مشفّرة من طرف إلى طرف: الترجمة والنسخ عبر الخادم غير متاحين في هذه المحادثة.</string>
     <string name="chat_selection_cap_reached">الحد الأقصى 100 رسالة</string>
     <string name="chat_selection_count">تم تحديد %1$d</string>
     <string name="chat_selection_toggle_message">رسالة</string>
@@ -408,6 +417,15 @@
     <string name="summary_resume_thread">العودة إلى المحادثة</string>
     <string name="summary_resume_thread_a11y_label">العودة إلى سير المحادثة</string>
     <string name="summary_skeleton_a11y_label">جارٍ تحميل الملخص</string>
+    <string name="transcription_fiche_a11y_cloned_voice">صوت مستنسَخ</string>
+    <string name="transcription_fiche_a11y_confidence">الثقة %1$d %%</string>
+    <string name="transcription_fiche_a11y_in_language">نسخ نصي بـ %1$s</string>
+    <string name="transcription_fiche_a11y_in_progress">جارٍ النسخ النصي</string>
+    <string name="transcription_fiche_cloned">نسخة</string>
+    <string name="transcription_fiche_empty">لا يوجد نص منسوخ</string>
+    <string name="transcription_fiche_speakers">تم اكتشاف %1$d متحدثين</string>
+    <string name="transcription_fiche_transcribe">نسخ نصي</string>
+    <string name="transcription_fiche_translations">ترجمات صوتية</string>
     <string name="viewer_code_loading">جارٍ التحميل...</string>
     <string name="viewer_contact_add">إضافة إلى جهات الاتصال</string>
     <string name="viewer_contact_close">إغلاق البطاقة</string>

@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.viewer.GalleryImageSaver
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
 import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
@@ -101,6 +102,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val actionTarget = state.actionMessageId?.let { id ->
         state.messages.firstOrNull { it.messageId == id }
     }
+    val saveMessageMedia = rememberSaveMessageMedia()
     if (actionTarget != null) {
         val nowMillis = System.currentTimeMillis()
         val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
@@ -167,6 +169,14 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 actions.beginSelection(actionTarget.messageId)
             },
             canWrite = state.viewerMayWrite,
+            hasThread = ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
+                .threadFor(actionTarget.messageId) != null,
+            conversationIsEndToEnd = state.isEndToEnd,
+            onThread = { actions.openReplyThread(actionTarget.messageId) },
+            onSaveMedia = { saveMessageMedia(actionTarget) },
+            onSharePiece = { pieceId -> actions.onFileAttachmentShare(actionTarget.messageId, pieceId) },
+            onTranscription = { localRoute.open(MessageDetailRoute.Transcription(actionTarget.messageId)) },
+            onReactions = { actions.openReactionDetails(actionTarget.messageId) },
         )
     }
 
@@ -353,6 +363,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
+                    is MessageDetailRoute.Transcription ->
+                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
                     else -> Unit
                 }
             }
@@ -493,12 +505,18 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
     setOf(
         MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select,
-        MessageAction.ExportCard,
+        MessageAction.ExportCard, MessageAction.OpenLink, MessageAction.CopyLink, MessageAction.Thread, MessageAction.Translate,
+        MessageAction.Share, MessageAction.Transcription, MessageAction.Reactions,
     )
 
 /**
  * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
  * ne voit pas qui a lu — l'entrée « Vu par » disparaît du menu.
  */
-internal fun hostedDetailEntries(showReadReceipts: Boolean): Set<MessageAction> =
-    if (showReadReceipts) HOSTED_DETAIL_ENTRIES else HOSTED_DETAIL_ENTRIES - MessageAction.Views
+internal fun hostedDetailEntries(
+    showReadReceipts: Boolean,
+    gallerySaveSupported: Boolean = GalleryImageSaver.isSupported,
+): Set<MessageAction> {
+    val served = if (gallerySaveSupported) HOSTED_DETAIL_ENTRIES + MessageAction.SaveMedia else HOSTED_DETAIL_ENTRIES
+    return if (showReadReceipts) served else served - MessageAction.Views
+}

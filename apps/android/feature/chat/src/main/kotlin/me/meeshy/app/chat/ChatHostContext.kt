@@ -199,6 +199,8 @@ internal class ChatHostActions(
     val onFileAttachmentTap: (String, String?) -> Unit,
     val onPieceSave: (String, String) -> Unit,
     val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
+    /** Les pièces d'un message chargé, telles que le serveur les sert : la fiche Transcription les lit (#13779). */
+    val attachmentsOf: (String) -> List<ApiMessageAttachment> = { emptyList() },
     val onPieceReact: (String, String, String) -> Unit,
     val onPieceDelete: (String, String) -> Unit,
     val openForwardPiece: (String, String) -> Unit,
@@ -310,6 +312,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onFileAttachmentTap = this::onFileAttachmentTap,
     onPieceSave = this::onPieceSave,
     pieceOverlayFor = this::pieceOverlayFor,
+    attachmentsOf = this::attachmentsOf,
     onPieceReact = this::onPieceReact,
     onPieceDelete = this::onPieceDelete,
     openForwardPiece = this::openForwardPiece,

@@ -58,7 +58,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,9 +72,11 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -117,16 +121,30 @@ internal fun MessageActionsSheet(
     onSelect: () -> Unit = {},
     onExportCard: () -> Unit = {},
     canWrite: Boolean = true,
+    hasThread: Boolean = false,
+    conversationIsEndToEnd: Boolean = false,
+    onThread: () -> Unit = {},
+    onSaveMedia: () -> Unit = {},
+    onSharePiece: (attachmentId: String) -> Unit = {},
+    onTranscription: () -> Unit = {},
+    onReactions: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var confirmingDelete by remember { mutableStateOf(false) }
+    val nowMillis = remember(bubble.messageId) { System.currentTimeMillis() }
     val ctx = bubble.actionContext(
         canWrite = canWrite,
         canEdit = canEdit,
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
         hostedEntries = hostedEntries,
+        hasThread = hasThread,
+        conversationIsEndToEnd = conversationIsEndToEnd,
+        nowMillis = nowMillis,
     )
+    val entryFacts = bubble.menuEntryFacts(hasThread, conversationIsEndToEnd, nowMillis)
+    val shareTitle = stringResource(R.string.chat_action_share)
     // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]
     // SSOT: a strong swipe up expands the compact action sheet into the full language
     // explorer ("Plus…" / Menu 2), a strong swipe down dismisses, anything weaker
@@ -310,6 +328,59 @@ internal fun MessageActionsSheet(
                         label = stringResource(R.string.chat_action_export_card),
                         onClick = { onExportCard(); onDismiss() },
                     )
+                    MessageAction.OpenLink -> SheetAction(
+                        icon = MeeshyIcons.OpenExternal,
+                        label = stringResource(R.string.chat_action_open_link),
+                        onClick = {
+                            entryFacts.link?.let { openChatLink(context, it, accentColor.toArgb()) }
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.CopyLink -> SheetAction(
+                        icon = MeeshyIcons.Link,
+                        label = stringResource(R.string.chat_action_copy_link),
+                        onClick = {
+                            entryFacts.link?.let { clipboard.setText(AnnotatedString(it)) }
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.Thread -> SheetAction(
+                        icon = MeeshyIcons.Forum,
+                        label = stringResource(R.string.chat_action_thread),
+                        onClick = { onThread(); onDismiss() },
+                    )
+                    MessageAction.Translate -> SheetAction(
+                        icon = MeeshyIcons.Globe,
+                        label = stringResource(R.string.chat_action_translate),
+                        onClick = onExploreLanguages,
+                    )
+                    MessageAction.SaveMedia -> SheetAction(
+                        icon = MeeshyIcons.Download,
+                        label = stringResource(R.string.chat_action_save_media),
+                        onClick = { onSaveMedia(); onDismiss() },
+                    )
+                    MessageAction.Share -> SheetAction(
+                        icon = MeeshyIcons.Share,
+                        label = shareTitle,
+                        onClick = {
+                            when (MessageMenuEntries.shareTarget(entryFacts)) {
+                                MessageMenuEntries.ShareTarget.TEXT -> shareMessageText(context, bubble.text, shareTitle)
+                                MessageMenuEntries.ShareTarget.PIECE -> bubble.onlyPieceId?.let(onSharePiece)
+                                null -> Unit
+                            }
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.Transcription -> SheetAction(
+                        icon = MeeshyIcons.Waveform,
+                        label = stringResource(R.string.chat_action_transcription),
+                        onClick = { onTranscription(); onDismiss() },
+                    )
+                    MessageAction.Reactions -> SheetAction(
+                        icon = MeeshyIcons.Emoji,
+                        label = stringResource(R.string.chat_action_reactions),
+                        onClick = { onReactions(); onDismiss() },
+                    )
                     MessageAction.Report -> SheetAction(
                         icon = Icons.Outlined.Flag,
                         label = stringResource(R.string.chat_action_report),
@@ -317,6 +388,9 @@ internal fun MessageActionsSheet(
                         onClick = onReport,
                     )
                 }
+            }
+            if (MessageMenuEntries.saysServerFeaturesAbsent(entryFacts)) {
+                EndToEndMenuNotice()
             }
         }
     }
@@ -391,6 +465,26 @@ private fun OverlayDragHandle(
                 .height(4.dp)
                 .clip(CircleShape)
                 .background(if (armed) accentColor else MeeshyTheme.tokens.backgroundTertiary),
+        )
+    }
+}
+
+/** iOS `MessageMoreSheet.endToEndNotice` : la feuille DIT l'absence des services du serveur, elle ne les offre pas. */
+@Composable
+private fun EndToEndMenuNotice() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(imageVector = MeeshyIcons.LockFilled, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(16.dp))
+        Text(
+            text = stringResource(R.string.chat_menu_e2ee_notice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
         )
     }
 }
