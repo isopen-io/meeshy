@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectEditorRail
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.ComposerObjectKind
@@ -47,12 +48,18 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
 /**
  * Les sections que le média [id] sert. iOS donne au média de FOND le filtre de la slide (`objectId: isBackground ? nil`) ;
  * ici le fond est celui que le plateau peint (le premier média) ou celui que la publication désigne. Un autre média n'est
- * ni peint ni publié comme objet par le composeur Android (#11608) : un filtre sur lui serait perdu, il n'est pas proposé.
+ * ni peint ni publié comme objet tant qu'il n'est pas POSÉ sur la scène : un filtre sur lui serait perdu, il n'est pas proposé.
+ * Un média posé (#13630) est un objet de la scène : il offre SON filtre (#13603), à côté de celui de la scène.
  */
 internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
-    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id)
+    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id) ||
+        deck.selectedSlide.placedMedia.any { it.mediaId == id }
     return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
 }
+
+/** Le filtre PROPRE du média posé [id] ; `null` : pas posé, ou aucun filtre. Le fond n'en a pas : il porte celui de la scène. */
+internal fun StoryComposerUiState.placedFilterOf(id: String): StoryFilter? =
+    deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.filter
 
 internal val StoryComposerUiState.openMediaSection: ComposerObjectEditorSection
     get() {

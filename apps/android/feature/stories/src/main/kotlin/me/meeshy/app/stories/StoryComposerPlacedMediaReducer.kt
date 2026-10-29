@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryFilter
+
 /**
  * Réducteurs purs des médias posés sur la scène (miroir du sticker) : poser au centre, déplacer, pivoter / agrandir,
  * reprendre. La pose vit dans la slide, donc l'historique du composeur l'annule et la rétablit avec le reste.
@@ -31,6 +33,12 @@ internal object StoryComposerPlacedMediaReducer {
 
     fun transformed(state: StoryComposerUiState, mediaId: String, scaleBy: Float, rotateByDeg: Float): StoryComposerUiState =
         rewritten(state, mediaId) { it.transformed(scaleBy, rotateByDeg) }
+
+    /** Règle le filtre propre de CE média posé, et de lui seul : la scène garde le sien ; inerte si le média n'est pas posé ou le filtre inchangé. */
+    fun filtered(state: StoryComposerUiState, mediaId: String, filter: StoryFilter?): StoryComposerUiState {
+        if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId && it.filter != filter } }) return state
+        return rewritten(state, mediaId) { it.copy(filter = filter) }
+    }
 
     private fun rewritten(state: StoryComposerUiState, mediaId: String, change: (StoryPlacedMedia) -> StoryPlacedMedia): StoryComposerUiState {
         if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId } }) return state

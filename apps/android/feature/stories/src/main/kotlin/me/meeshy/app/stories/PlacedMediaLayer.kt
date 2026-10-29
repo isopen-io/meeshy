@@ -29,6 +29,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.ui.component.imageedit.sceneLook
 
 /**
  * Un média posé et de quoi le peindre : sa pose, le modèle d'image (vignette téléversée, ou aperçu local en attente)
@@ -37,6 +39,9 @@ import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 @Immutable
 internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: Any?, val aspectRatio: Double? = null) {
     val key: String get() = placed.mediaId
+
+    /** Le look que le plateau peint : SON filtre à pleine force, jamais celui de la scène — le même que lit `SceneLookRecipe.forMedia`. */
+    val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, null)
 }
 
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
@@ -133,7 +138,8 @@ internal fun PlacedMediaLayer(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
-                .clip(RoundedCornerShape(corner)),
+                .clip(RoundedCornerShape(corner))
+                .sceneLook(frame.look),
         )
     }
 }

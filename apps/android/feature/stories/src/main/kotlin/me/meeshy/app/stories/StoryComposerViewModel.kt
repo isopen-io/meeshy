@@ -348,6 +348,8 @@ class StoryComposerViewModel @Inject constructor(
     fun onMediaPlacementTransformed(id: String, scaleBy: Float, rotateByDeg: Float) =
         reduce(transformGesture(id)) { StoryComposerPlacedMediaReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
+    fun onSelectPlacedMediaFilter(mediaId: String, filter: StoryFilter?) = reduce { StoryComposerPlacedMediaReducer.filtered(it, mediaId, filter) }
+
     fun onMediaPlacementDragEnd() = reduce { it }
 
     /** Le doigt quitte le sticker : le geste se referme, le suivant sera son propre cran d'annulation. */

@@ -56,12 +56,21 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
                 onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
-            else -> FilterRow(
-                selected = state.selectedSlideFilter,
-                intensity = state.selectedSlideFilterIntensity,
-                onSelect = viewModel::onSelectFilter,
-                onIntensityChange = viewModel::onFilterIntensityChange,
-            )
+            else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
+                FilterRow(
+                    selected = state.placedFilterOf(mediaId),
+                    intensity = 1f,
+                    onSelect = { viewModel.onSelectPlacedMediaFilter(mediaId, it) },
+                    onIntensityChange = null,
+                )
+            } else {
+                FilterRow(
+                    selected = state.selectedSlideFilter,
+                    intensity = state.selectedSlideFilterIntensity,
+                    onSelect = viewModel::onSelectFilter,
+                    onIntensityChange = viewModel::onFilterIntensityChange,
+                )
+            }
         }
     }
 }

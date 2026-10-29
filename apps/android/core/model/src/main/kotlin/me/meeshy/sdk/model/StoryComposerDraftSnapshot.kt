@@ -126,6 +126,8 @@ data class StoryDraftPlacedMediaSnapshot(
     val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
     val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
     val rotationDeg: Float = 0f,
+    /** Le filtre propre du média (nom du fil, #13603) ; un blob d'avant ou un nom inconnu se lit « aucun filtre ». */
+    val filter: String? = null,
 )
 
 /**
