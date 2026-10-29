@@ -14,15 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallPreviewExposure
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.pressable
 import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.EglBase
@@ -90,7 +82,7 @@ internal fun CallPreviewSoundButton(isAudible: Boolean, onToggle: () -> Unit, mo
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(
-            imageVector = if (isAudible) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+            imageVector = if (isAudible) MeeshyIcons.VolumeUp else MeeshyIcons.VolumeOff,
             contentDescription = null,
             tint = ink,
             modifier = Modifier.size(20.dp),
@@ -138,8 +130,8 @@ internal fun CallPreviewOutgoingPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl)) {
             CallPreviewToggle(
                 isOn = preview.outgoingConsent.sendsAudio,
-                on = Icons.Filled.Mic,
-                off = Icons.Filled.MicOff,
+                on = MeeshyIcons.Mic,
+                off = MeeshyIcons.MicOff,
                 caption = stringResource(R.string.call_control_mute_caption),
                 label = stringResource(R.string.call_preview_mic_a11y),
                 hint = stringResource(R.string.call_preview_mic_hint, name),
@@ -148,8 +140,8 @@ internal fun CallPreviewOutgoingPanel(
             if (isVideoCall) {
                 CallPreviewToggle(
                     isOn = preview.outgoingConsent.sendsVideo,
-                    on = Icons.Filled.Videocam,
-                    off = Icons.Filled.VideocamOff,
+                    on = MeeshyIcons.Video,
+                    off = MeeshyIcons.VideoOff,
                     caption = stringResource(R.string.call_control_video_caption),
                     label = stringResource(R.string.call_preview_camera_a11y),
                     hint = stringResource(R.string.call_preview_camera_hint, name),
@@ -172,7 +164,7 @@ private fun CallPreviewSeenCapsule(text: String, exposure: CallPreviewExposure) 
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = if (exposure == CallPreviewExposure.Seen) Icons.Filled.Visibility else Icons.Filled.Hearing,
+            imageVector = if (exposure == CallPreviewExposure.Seen) MeeshyIcons.EyeFilled else MeeshyIcons.Hearing,
             contentDescription = null,
             tint = CallPalette.InkSecondary,
             modifier = Modifier.size(14.dp),
