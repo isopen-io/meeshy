@@ -76,9 +76,9 @@ private val STOP_SQUARE = 24.dp
 /**
  * Le mode « Capturer l'appel » (iOS `CallScreenMode.montage`) : la scène du montage CHOISI, sous son choix.
  * Choisir un cadre ne le pose pas sur l'appel (#13732) : il ne sert que la capture, et l'option « Cadre » le
- * garde pendant l'appel. La scène suit `CallMontageFrameStage` d'iOS : l'appel s'il montre déjà ce cadre, le
- * cadre posé sur le flux s'il est servi en direct, sinon l'aperçu peint. La prise se déclenche sur l'élément
- * centré du carrousel (#13733).
+ * garde pendant l'appel. La scène suit `CallMontageFrameStage` d'iOS : le cadre posé sur le flux s'il est servi
+ * en direct — le cadre gardé compris, dont la surface d'appel s'arrête sous le mode (#13738) —, sinon l'aperçu
+ * peint. La prise se déclenche sur l'élément centré du carrousel (#13733).
  */
 @Composable
 internal fun CallMontageMode(
@@ -105,17 +105,15 @@ internal fun CallMontageMode(
         )
     }
     val offered = CallLiveFrameRule.mayOffer(people.size, state.isVideoCall && state.showsConnectedLayout)
-    val shownByCall = CallLiveFrameRule.display(frame.frameId, people.size, constrained, reduceMotion).design?.id?.takeIf { offered }
     val chosenFrame = (scene.look as? CallCaptureLook.Frame)?.design?.id
     val live = chosenFrame?.takeIf { offered }?.let { CallLiveFrameRule.display(it, people.size, constrained, reduceMotion).design }
-    val stage = CallMontageStageRule.stage(scene.look, shownByCall, live)
+    val stage = CallMontageStageRule.stage(scene.look, live)
     val window = remember(pick, people.size) { CallMontagePickRule.frameWindow(pick, people.size) }
     val request by rememberUpdatedState(CallCapturePreviewRequest(scene, stage != CallMontageStage.Painted, window))
     val tracks = remember(people, localTrack, remoteTrack) { people.associate { it.id to if (it.isSelf) localTrack else remoteTrack } }
     LaunchedEffect(capture) { capture.startPreview { request } }
     LaunchedEffect(capture, scene.look, stage) { capture.refreshSoon() }
     when (stage) {
-        CallMontageStage.Call -> Unit
         is CallMontageStage.Live -> CallMontageLiveStage(stage.design, people, state, localTrack, remoteTrack, eglContext, frameViewModel, reduceMotion, constrained)
         CallMontageStage.Painted -> CallMontagePaintedStage(capture, scene.look, Modifier.fillMaxSize())
     }

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.call.frames
 
+import me.meeshy.sdk.model.call.CallScreenMode
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -43,6 +44,14 @@ object CallLiveFrameRule {
         if (!isOffered) return false
         return CallFrameCatalogue.frame(frameId, among)?.let(::isEligible) ?: false
     }
+
+    /**
+     * La surface du cadre gardé se compose-t-elle sur l'appel ? En vidéo établie, et hors mode seulement (iOS
+     * `CallView.liveFrameSurface`, `layer.activeMode == nil`) : sous le Montage ou les Effets, la scène du mode la
+     * recouvre, et c'est elle qui sert le cadre gardé s'il le faut (`CallMontageStage.Live`). Rien ne se décode pour
+     * personne ; l'état partagé du cadre ne bouge pas, la surface revient à la sortie du mode.
+     */
+    fun showsHeldFrame(isVideoConnected: Boolean, activeMode: CallScreenMode?): Boolean = isVideoConnected && activeMode == null
 
     /** Le cadre en direct n'existe qu'en vidéo, à deux. */
     fun mayOffer(participants: Int, showsVideo: Boolean): Boolean = showsVideo && participants == PEOPLE

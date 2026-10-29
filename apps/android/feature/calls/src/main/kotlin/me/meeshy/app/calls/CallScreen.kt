@@ -112,7 +112,6 @@ fun CallScreen(
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
     val extensions = viewModel.extensions
-    val overlayContext = CallOverlayContext(state = state, accent = accent)
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
@@ -136,6 +135,7 @@ fun CallScreen(
         }
     }
     val chromeState by chrome.state.collectAsStateWithLifecycle()
+    val overlayContext = CallOverlayContext(state = state, accent = accent, activeMode = chromeState.layer.activeMode)
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
 

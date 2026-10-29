@@ -56,6 +56,8 @@ private val STATUS_TOP = 68.dp
 /**
  * Le cadre en direct autour des deux vidéos ET ce qui se dit à son sujet : la proposition de l'autre
  * à trancher, sa réponse à la mienne, l'échec d'une proposition. Deux couches, un seul contrôleur.
+ * Sous un mode (Montage, Effets), la surface quitte la composition : ses rendus lâchent les pistes au lieu de
+ * composer des images que la scène du mode recouvre (#13738) ; le cadre reste gardé et revient à la sortie.
  */
 @Singleton
 class CallLiveFrameOverlay @Inject constructor(
@@ -70,6 +72,7 @@ class CallLiveFrameOverlay @Inject constructor(
 
     @Composable
     override fun Content(context: CallOverlayContext) {
+        if (!CallLiveFrameRule.showsHeldFrame(isVisible(context.state), context.activeMode)) return
         val shared by frame.state.collectAsState()
         val reduceMotion = rememberCallReduceMotion()
         val constrained = rememberCallDeviceConstrained()

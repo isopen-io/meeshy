@@ -102,4 +102,12 @@ class CallLiveFrameDisplayTest {
         assertThat(CallLiveFrameRule.paintSize(1080, 2220)).isEqualTo(623 to CallLiveFrameRule.PAINT_LONGEST_SIDE)
         assertThat(CallLiveFrameRule.paintSize(0, 960)).isEqualTo(0 to 0)
     }
+
+    @Test
+    fun `le cadre garde ne se compose que hors mode, en video etablie, et revient a la sortie`() {
+        assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = true, activeMode = null)).isTrue()
+        assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = true, activeMode = me.meeshy.sdk.model.call.CallScreenMode.Montage)).isFalse()
+        assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = true, activeMode = me.meeshy.sdk.model.call.CallScreenMode.Effects)).isFalse()
+        assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = false, activeMode = null)).isFalse()
+    }
 }

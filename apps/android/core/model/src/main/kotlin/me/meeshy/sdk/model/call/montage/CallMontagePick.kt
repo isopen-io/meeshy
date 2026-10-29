@@ -117,11 +117,11 @@ public object CallMontagePickRule {
     }
 }
 
-/** Ce que la scène du Montage montre (iOS `CallMontageFrameStage`). */
+/**
+ * Ce que la scène du Montage montre (iOS `CallMontageFrameStage`). La surface du cadre gardé se retire sous un mode
+ * (`CallLiveFrameRule.showsHeldFrame`) : le cadre gardé, choisi, se sert donc ici comme tout cadre en direct.
+ */
 public sealed interface CallMontageStage {
-    /** L'appel montre déjà ce cadre : rien à poser par-dessus. */
-    public data object Call : CallMontageStage
-
     /** Un cadre servi en direct se pose sur le flux vidéo, à pleine cadence. */
     public data class Live(val design: CallFrameDesign) : CallMontageStage
 
@@ -130,13 +130,9 @@ public sealed interface CallMontageStage {
 }
 
 public object CallMontageStageRule {
-    /** [shownByCall] : le cadre que l'écran d'appel montre déjà ; [live] : le cadre choisi tel que le direct le sert, s'il le sert. */
-    public fun stage(look: CallCaptureLook, shownByCall: String?, live: CallFrameDesign?): CallMontageStage = when (look) {
+    /** [live] : le cadre choisi tel que le direct le sert, s'il le sert. */
+    public fun stage(look: CallCaptureLook, live: CallFrameDesign?): CallMontageStage = when (look) {
         is CallCaptureLook.Classic -> CallMontageStage.Painted
-        is CallCaptureLook.Frame -> when {
-            shownByCall == look.design.id -> CallMontageStage.Call
-            live != null -> CallMontageStage.Live(live)
-            else -> CallMontageStage.Painted
-        }
+        is CallCaptureLook.Frame -> live?.let(CallMontageStage::Live) ?: CallMontageStage.Painted
     }
 }

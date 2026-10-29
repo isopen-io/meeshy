@@ -151,12 +151,11 @@ class CallMontagePickRuleTest {
     }
 
     @Test
-    fun `la scene, l'appel montre deja le cadre garde, un cadre servi en direct se pose sur le flux, le reste se peint`() {
+    fun `la scene, le cadre garde se sert lui-meme sous le mode, un cadre servi en direct se pose sur le flux, le reste se peint`() {
         val frame = CallCaptureLook.Frame(live)
 
-        assertThat(CallMontageStageRule.stage(CallCaptureLook.Classic(CallMontageStyle.GOLD), shownByCall = live.id, live = live)).isEqualTo(CallMontageStage.Painted)
-        assertThat(CallMontageStageRule.stage(frame, shownByCall = live.id, live = live)).isEqualTo(CallMontageStage.Call)
-        assertThat(CallMontageStageRule.stage(frame, shownByCall = null, live = live)).isEqualTo(CallMontageStage.Live(live))
-        assertThat(CallMontageStageRule.stage(frame, shownByCall = null, live = null)).isEqualTo(CallMontageStage.Painted)
+        assertThat(CallMontageStageRule.stage(CallCaptureLook.Classic(CallMontageStyle.GOLD), live = live)).isEqualTo(CallMontageStage.Painted)
+        assertThat(CallMontageStageRule.stage(frame, live = live)).isEqualTo(CallMontageStage.Live(live))
+        assertThat(CallMontageStageRule.stage(frame, live = null)).isEqualTo(CallMontageStage.Painted)
     }
 }
