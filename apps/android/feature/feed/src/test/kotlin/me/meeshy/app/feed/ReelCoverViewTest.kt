@@ -1,16 +1,27 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.ui.theme.MeeshyOpacity
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +44,7 @@ class ReelCoverViewTest {
                 ReelCoverView(ReelCover.Backdrop(isVideo = false), "Amina", { opened++ }, Modifier.fillMaxWidth().height(116.dp))
             }
         }
-        compose.onNodeWithContentDescription("Reel").performClick()
+        compose.onNodeWithContentDescription("Reel by Amina").performClick()
         assertThat(opened).isEqualTo(1)
     }
 
@@ -43,7 +54,7 @@ class ReelCoverViewTest {
         val scene = ReelCover.Scene(StoryItem(id = "r1"))
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalRepostSceneRenderer provides { item, _, _, _, _ -> rendered = item }) {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { item, _, _, _ -> rendered = item }) {
                     ReelCoverView(scene, "Amina", {}, Modifier.fillMaxWidth())
                 }
             }
@@ -61,7 +72,7 @@ class ReelCoverViewTest {
             MeeshyTheme {
                 CompositionLocalProvider(
                     LocalFeedSceneCoordinator provides coordinator,
-                    LocalRepostSceneRenderer provides { item, _, live, _, _ -> lives[item.id] = live },
+                    LocalReelSceneRenderer provides { item, _, live, _ -> lives[item.id] = live },
                 ) {
                     ReelCoverView(ReelCover.Scene(StoryItem(id = "r-elue")), "Amina", {}, sceneId = "elue")
                     ReelCoverView(ReelCover.Scene(StoryItem(id = "r-repos")), "Amina", {}, sceneId = "repos")
@@ -83,8 +94,49 @@ class ReelCoverViewTest {
             isQuote = false, isStory = false, isReel = true, reelCover = ReelCover.Backdrop(isVideo = false),
         )
         compose.setContent { MeeshyTheme { RepostEmbedCell(embed = embed, onOpen = { details += it }, onOpenReel = { opened += it }) } }
-        compose.onNodeWithContentDescription("Reel").performClick()
+        compose.onNodeWithContentDescription("Reel by Origen").performClick()
         assertThat(opened).containsExactly("orig")
         assertThat(details).isEmpty()
+    }
+
+    @Test
+    fun `la scene d un reel remplit le cadre de la couverture, elle ne garde pas son 9 16 de story`() {
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
+                    Box(Modifier.size(200.dp, 250.dp).testTag("cadre")) {
+                        ReelCoverView(ReelCover.Scene(StoryItem(id = "r1")), "Amina", {}, Modifier.fillMaxSize())
+                    }
+                }
+            }
+        }
+        val frame = compose.onNodeWithTag("cadre").getBoundsInRoot()
+        val scene = compose.onNodeWithTag("scene", useUnmergedTree = true).getBoundsInRoot()
+        assertThat(scene.width).isEqualTo(frame.width)
+        assertThat(scene.height).isEqualTo(frame.height)
+    }
+
+    @Test
+    fun `la scene d un reel recoit la couleur de son auteur et la couverture porte le libelle Reel de l auteur`() {
+        var accent: String? = null
+        var opened = 0
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, hex, _, _ -> accent = hex }) {
+                    ReelCoverView(ReelCover.Scene(StoryItem(id = "r1"), accentHex = "FF0000"), "Amina", { opened++ }, Modifier.size(200.dp, 250.dp))
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("Reel by Amina").performClick()
+        assertThat(accent).isEqualTo("FF0000")
+        assertThat(opened).isEqualTo(1)
+    }
+
+    @Test
+    fun `l aplat prend la couleur de l auteur, indigo seulement sans couleur`() {
+        assertThat(ReelCover.Backdrop(isVideo = false, accentHex = "FF0000").backdropTint())
+            .isEqualTo(hexColor("FF0000").copy(alpha = MeeshyOpacity.strong))
+        assertThat(ReelCover.Backdrop(isVideo = false).backdropTint())
+            .isEqualTo(MeeshyPalette.Indigo500.copy(alpha = MeeshyOpacity.strong))
     }
 }

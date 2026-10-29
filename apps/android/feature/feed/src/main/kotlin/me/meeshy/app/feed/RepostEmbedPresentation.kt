@@ -6,10 +6,10 @@ import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.StoryItem
-import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.story.toStoryItem
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 /**
  * A reposted/quoted post projected for the embedded quote cell rendered inside a
@@ -80,18 +80,11 @@ object RepostEmbedBuilder {
         mediaBaseUrl: String?,
     ): RepostEmbedPresentation? {
         val quoted = build(post.repostOf, preferences, mediaBaseUrl) ?: return unavailable(post)
-        return when {
-            quoted.isStory -> quoted.copy(storyItem = post.toStoryItem())
-            quoted.isReel -> quoted.copy(reelCover = quoted.reelCover.orScene { post.toStoryItem() })
-            else -> quoted
-        }
+        return if (quoted.isStory) quoted.copy(storyItem = post.toStoryItem()) else quoted
     }
 
-    /** Un réel cité sans visuel se rejoue par sa scène — celle que la republication sert, `playedEffects` — quand il en est une. */
-    private fun ReelCover?.orScene(scene: () -> StoryItem): ReelCover? {
-        if (this !is ReelCover.Backdrop || isVideo) return this
-        return scene().takeIf { it.storyEffects.composesScene() }?.let { ReelCover.Scene(it) } ?: this
-    }
+    private fun authorLabel(repost: ApiRepostOf): String? =
+        (repost.author?.displayName ?: repost.author?.username)?.takeIf { it.isNotBlank() }
 
     private fun unavailable(post: ApiPost): RepostEmbedPresentation? {
         val declaresRepost = !post.originalRepostOfId.isNullOrBlank() || post.isQuote == true
@@ -130,8 +123,7 @@ object RepostEmbedBuilder {
             id = repost.id,
             authorId = repost.author?.id?.takeIf { it.isNotBlank() },
             authorUsername = repost.author?.username?.takeIf { it.isNotBlank() },
-            authorName = (repost.author?.displayName ?: repost.author?.username)
-                ?.takeIf { it.isNotBlank() },
+            authorName = authorLabel(repost),
             authorAvatarUrl = repost.author?.avatar
                 ?.takeIf { it.isNotBlank() }
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
@@ -152,7 +144,8 @@ object RepostEmbedBuilder {
             location = FeedPostLocationBuilder.build(repost.location),
             reelCover = repost.takeIf { it.type.equals("reel", ignoreCase = true) }?.let {
                 ReelCoverResolver.resolve(
-                    FeedMediaMapper.map(it.media, preferredContentLanguages(preferences), mediaBaseUrl),
+                    media = FeedMediaMapper.map(it.media, preferredContentLanguages(preferences), mediaBaseUrl),
+                    accentHex = DynamicColorGenerator.colorForName(repost.author?.id?.takeIf { id -> id.isNotBlank() } ?: authorLabel(repost).orEmpty()),
                 ) { null }
             },
         )

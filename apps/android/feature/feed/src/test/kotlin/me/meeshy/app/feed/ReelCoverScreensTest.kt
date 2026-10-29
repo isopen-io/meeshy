@@ -56,11 +56,11 @@ class ReelCoverScreensTest {
         )
     }
 
-    private fun tapCover(post: FeedPostPresentation, card: (FeedPostPresentation, Taps) -> @Composable () -> Unit): Taps {
+    private fun tapCover(post: FeedPostPresentation, label: String, card: (FeedPostPresentation, Taps) -> @Composable () -> Unit): Taps {
         val taps = Taps()
         val content = card(post, taps)
         compose.setContent { MeeshyTheme { content() } }
-        compose.onNodeWithContentDescription("Reel").performClick()
+        compose.onNodeWithContentDescription(label).performClick()
         return taps
     }
 
@@ -75,13 +75,13 @@ class ReelCoverScreensTest {
     @Test fun `Detail du post - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::detail)
 
     private fun opensThisReel(card: (FeedPostPresentation, Taps) -> @Composable () -> Unit) {
-        val taps = tapCover(reel, card)
+        val taps = tapCover(reel, "Reel by Amina", card)
         assertThat(taps.reels).containsExactly("reel1")
         assertThat(taps.posts).isEmpty()
     }
 
     private fun opensQuotedReel(card: (FeedPostPresentation, Taps) -> @Composable () -> Unit) {
-        val taps = tapCover(republished, card)
+        val taps = tapCover(republished, "Reel by Origen", card)
         assertThat(taps.reels).containsExactly("orig")
         assertThat(taps.posts).isEmpty()
     }

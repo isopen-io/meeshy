@@ -28,17 +28,19 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
 /**
- * La couverture d'un réel dans le fil : sa scène muette, son image fixe (vignette, thumbHash) ou l'aplat d'accent —
- * jamais un lecteur par carte (la scène que le fil élit sous [sceneId] joue, muette). Un appui ouvre le lecteur de réels sur CE réel ([onOpen]).
+ * La couverture d'un réel dans le fil : sa scène muette, son image fixe (vignette, thumbHash) ou l'aplat de la couleur de son
+ * auteur — jamais un lecteur par carte (la scène que le fil élit sous [sceneId] joue, muette). Un appui ouvre le lecteur de réels
+ * sur CE réel ([onOpen]) ; la couverture se lit « Réel de [authorName] » (iOS `feed.reel.card.a11y`).
  *
- * [modifier] fixe la taille de la couverture (hors scène) ; la scène, elle, garde son 9:16 (le lecteur de scène du module des
- * stories vient de [LocalRepostSceneRenderer]) et retombe sur l'aplat quand l'application n'en fournit pas.
+ * [modifier] fixe le cadre de la couverture ; la scène le REMPLIT (cadrage « fill », comme iOS `ReelCardSceneBackdrop`) au lieu de
+ * garder le 9:16 d'une story. Le lecteur de scène du module des stories vient de [LocalReelSceneRenderer] ; sans lui, l'aplat.
  */
 @Composable
 internal fun ReelCoverView(
@@ -48,17 +50,26 @@ internal fun ReelCoverView(
     modifier: Modifier = Modifier,
     sceneId: String? = null,
 ) {
-    val renderer = LocalRepostSceneRenderer.current
-    if (cover is ReelCover.Scene && renderer != null) {
+    val label = stringResource(R.string.feed_reel_card_a11y, authorName ?: stringResource(R.string.feed_unknown_author))
+    val sceneRenderer = LocalReelSceneRenderer.current
+    if (cover is ReelCover.Scene && sceneRenderer != null) {
         val live by rememberSceneLive(sceneId)
-        renderer(cover.item, authorName, live, onOpen, Modifier.fillMaxWidth().sceneFrame(sceneId))
+        Box(
+            modifier = modifier
+                .sceneFrame(sceneId)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(Color.Black)
+                .clickable(role = Role.Button, onClick = onOpen)
+                .semantics { contentDescription = label },
+        ) {
+            sceneRenderer(cover.item, cover.accentHex, live, Modifier.fillMaxSize())
+        }
         return
     }
-    val label = stringResource(R.string.feed_reel)
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.md))
-            .background(MeeshyPalette.Indigo500.copy(alpha = BACKDROP_ALPHA))
+            .background(cover.backdropTint())
             .clickable(role = Role.Button, onClick = onOpen)
             .semantics { contentDescription = label },
     ) {
@@ -73,18 +84,13 @@ internal fun ReelCoverView(
             )
             is ReelCover.Backdrop, is ReelCover.Scene -> Unit
         }
+        val isSound = cover is ReelCover.Scene || (cover is ReelCover.Backdrop && !cover.isVideo)
         val glyph = when {
             cover is ReelCover.Poster && !cover.isVideo -> null
-            cover is ReelCover.Backdrop && !cover.isVideo -> MeeshyIcons.MusicNote
+            isSound -> MeeshyIcons.MusicNote
             else -> MeeshyIcons.Play
         }
-        glyph?.let {
-            CoverGlyph(
-                modifier = Modifier.align(Alignment.Center),
-                hasDisc = cover !is ReelCover.Backdrop || cover.isVideo,
-                icon = it,
-            )
-        }
+        glyph?.let { CoverGlyph(modifier = Modifier.align(Alignment.Center), hasDisc = !isSound, icon = it) }
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -115,10 +121,20 @@ private fun CoverGlyph(modifier: Modifier, hasDisc: Boolean, icon: ImageVector) 
 /** Hauteur de la bande d'un réel cité (iOS `ReelRepostEmbedCell.stripHeight`). */
 internal val REEL_STRIP_HEIGHT: Dp = 116.dp
 
-private const val BACKDROP_ALPHA = 0.35f
 private const val DISC_ALPHA = 0.45f
 private val PLAY_DISC = 56.dp
 private val PLAY_ICON = 32.dp
 private val GLYPH_SIZE = 40.dp
 private val BADGE_SIZE = 28.dp
 private val BADGE_ICON = 16.dp
+
+/** Le fond d'une couverture sans image : la couleur de l'auteur à l'opacité `strong` (iOS `Color(hex: authorColor).opacity(strong)`), indigo sans couleur. */
+internal fun ReelCover.backdropTint(): Color {
+    val hex = when (this) {
+        is ReelCover.Backdrop -> accentHex
+        is ReelCover.Scene -> accentHex
+        is ReelCover.Poster -> tintHex
+    }
+    val base = hex?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
+    return base.copy(alpha = MeeshyOpacity.strong)
+}

@@ -21,3 +21,14 @@ val LocalRepostSceneRenderer = staticCompositionLocalOf<RepostSceneRenderer?> { 
  * republiée l'ouvre, il n'ouvre pas la fiche du post). `null` hors de l'application : la carte retombe sur la fiche du post.
  */
 val LocalStoryOpener = staticCompositionLocalOf<((authorId: String, storyId: String) -> Unit)?> { null }
+
+/**
+ * Comment la scène d'un RÉEL se dessine sur sa carte (iOS `ReelCardSceneBackdrop`) : non plus une carte de story 9:16 centrée,
+ * mais la scène qui REMPLIT le cadre reçu (cadrage « fill », rognée au centre), sur du noir, muette, sans geste ni libellé propres
+ * — la carte porte l'ouverture et son libellé. Arguments : le réel composé, la couleur de son auteur, [live] (élu par le fil),
+ * le cadre à remplir.
+ */
+typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, live: Boolean, modifier: Modifier) -> Unit
+
+/** `null` hors de l'application (tests, aperçus) : la couverture retombe alors sur l'aplat d'accent. */
+val LocalReelSceneRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
