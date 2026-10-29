@@ -1,9 +1,11 @@
 package me.meeshy.app.calls
 
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallLiveFrameReply
 import me.meeshy.ui.theme.MeeshyTheme
@@ -67,45 +69,97 @@ class CallLiveFrameUiTest {
         stamp = { "STAMP" },
     )
 
+    private fun people(controller: CallLiveFrameController) = controller.people("Bob", null)
+
+    private fun scene(controller: CallLiveFrameController) = me.meeshy.sdk.model.call.montage.CallCaptureScene(
+        look = me.meeshy.sdk.model.call.montage.CallCaptureLook.Classic(me.meeshy.sdk.model.call.montage.CallMontageStyle.SCREEN),
+        subjects = me.meeshy.sdk.model.call.montage.CallCaptureSceneRule.duo(people(controller), true, true, false),
+    )
+
+    @androidx.compose.runtime.Composable
+    private fun Picker(controller: CallLiveFrameController, capture: CallCaptureController) {
+        MeeshyTheme {
+            CallMontagePicker(
+                live = controller,
+                capture = capture,
+                scene = scene(controller),
+                people = people(controller),
+                isLiveOffered = true,
+                reduceMotion = true,
+                onClose = {},
+            )
+        }
+    }
+
+    private fun carousel() = rule.onNode(androidx.compose.ui.test.hasContentDescription("Call montage"))
+
+    private fun action(label: String): () -> Boolean {
+        val node = carousel().fetchSemanticsNode()
+        val action = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].first { it.label == label }
+        return action.action
+    }
+
     @Test
-    fun `le montage ouvre sur les Classiques et leurs treize montages, et en toucher un le choisit pour la capture`() {
-        val (_, controller) = liveFrames()
+    fun `le montage ouvre sur l'Ecran des Classiques, et le carrousel choisit le suivant sans toucher l'appel`() {
+        val (social, controller) = liveFrames()
         val capture = capture()
-        rule.setContent { MeeshyTheme { CallMontagePicker(controller, capture, peerName = "Bob", onClose = {}) } }
+        rule.setContent { Picker(controller, capture) }
 
         rule.onNodeWithText("Classics").assertExists()
-        rule.onNodeWithText("Call montage").assertExists()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription("Screen")).assertExists()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription("Gold")).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        carousel().assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Screen"))
+        rule.runOnIdle { action("Next montage")() }
         rule.waitForIdle()
 
-        assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, controller.state.value.frameId))
-            .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Classic(me.meeshy.sdk.model.call.montage.CallMontageStyle.GOLD))
+        assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, 2))
+            .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Classic(me.meeshy.sdk.model.call.montage.CallMontageStyle.COVER))
         assertThat(controller.state.value.frameId).isNull()
+        io.mockk.coVerify(exactly = 0) { social.selectCallLiveFrame(any(), any(), any(), any()) }
         controller.onCleared()
     }
 
     @Test
-    fun `une ambiance propose Aucun cadre puis les cadres en direct, et en toucher un l'applique et le capture`() {
+    fun `choisir un cadre ne l'impose pas a l'appel, Cadre le garde et le propose a l'autre`() {
         val (social, controller) = liveFrames()
         val capture = capture()
-        capture.pickClassic(me.meeshy.sdk.model.call.montage.CallMontageStyle.HEART)
-        val mood = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.moods().first()
-        val first = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.frames(mood).first()
-        rule.setContent { MeeshyTheme { CallMontagePicker(controller, capture, peerName = "Bob", onClose = {}) } }
-        capture.show(me.meeshy.sdk.model.call.montage.CallMontageMoodChip.Mood(mood))
+        val mood = me.meeshy.sdk.model.call.montage.CallMontageMoodChip.Mood(me.meeshy.sdk.model.call.frames.CallFrameMood.SIGNATURE)
+        rule.setContent { Picker(controller, capture) }
+        rule.onNodeWithText("Live frame").assertDoesNotExist()
+
+        capture.show(mood, 2)
+        rule.waitForIdle()
+        val chosen = (me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, 2) as me.meeshy.sdk.model.call.montage.CallMontageChoice.Frame).id
+
+        assertThat(controller.state.value.frameId).isNull()
+        io.mockk.coVerify(exactly = 0) { social.selectCallLiveFrame(any(), any(), any(), any()) }
+
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Live frame")).performClick()
         rule.waitForIdle()
 
-        rule.onNodeWithText("No frame").assertExists()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription("Close")).assertExists()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription("Minimize call")).assertDoesNotExist()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription(first.name)).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        assertThat(controller.state.value.frameId).isEqualTo(chosen)
+        io.mockk.coVerify { social.selectCallLiveFrame("call-1", chosen, any(), null) }
+        controller.onCleared()
+    }
+
+    @Test
+    fun `Plus d'ambiances ouvre tout le catalogue, et l'element centre se photographie depuis TalkBack`() {
+        val (_, controller) = liveFrames()
+        val capture = capture()
+        rule.setContent { Picker(controller, capture) }
+
+        rule.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("More moods"))
+        rule.onNodeWithText("More moods").performClick()
         rule.waitForIdle()
 
-        assertThat(controller.state.value.frameId).isEqualTo(first.id)
-        assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, controller.state.value.frameId))
-            .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Frame(first.id))
-        io.mockk.coVerify { social.selectCallLiveFrame("call-1", first.id, any(), null) }
+        assertThat(capture.pick.value.requestedScope).isEqualTo(me.meeshy.sdk.model.call.frames.CallFrameScope.ALL)
+        rule.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("Fewer moods"))
+        rule.onNodeWithText("Fewer moods").assertExists()
+        rule.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("Unplugged"))
+        rule.onNodeWithText("Unplugged").assertExists()
+        assertThat(carousel().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].map { it.label })
+            .containsAtLeast("Take a photo", "Record")
         controller.onCleared()
     }
 }

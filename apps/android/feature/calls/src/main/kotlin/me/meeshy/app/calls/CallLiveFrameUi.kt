@@ -140,7 +140,10 @@ class CallLiveFrameStatusOverlay @Inject constructor(
 }
 
 @HiltViewModel
-class CallLiveFrameViewModel @Inject constructor(val controller: CallLiveFrameController) : ViewModel()
+class CallLiveFrameViewModel @Inject constructor(
+    val controller: CallLiveFrameController,
+    val texts: CallFrameTextsResolver,
+) : ViewModel()
 
 /** Le texte du haut de l'écran : la proposition à trancher, la réponse de l'autre, ou l'échec de la mienne. */
 @Composable

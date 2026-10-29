@@ -39,6 +39,8 @@
     <string name="call_detail_participants">Partecipanti</string>
     <string name="call_detail_transcript">Trascrizione</string>
     <string name="call_frames_classics">Classici</string>
+    <string name="call_frames_less">Meno atmosfere</string>
+    <string name="call_frames_less_hint">Torna alle atmosfere in evidenza</string>
     <string name="call_frames_mood_corporate">Aziendale</string>
     <string name="call_frames_mood_deconnecte">Staccato</string>
     <string name="call_frames_mood_distingue">Raffinato</string>
@@ -51,6 +53,8 @@
     <string name="call_frames_mood_jovial">Gioioso</string>
     <string name="call_frames_mood_morbide">Macabro</string>
     <string name="call_frames_mood_signature">Firma</string>
+    <string name="call_frames_more">Altre atmosfere</string>
+    <string name="call_frames_more_hint">Mostra tutte le atmosfere e tutte le cornici</string>
     <string name="call_journal_cancel">Annulla</string>
     <string name="call_journal_clear_action">Elimina</string>
     <string name="call_journal_clear_all">Elimina tutto</string>
@@ -74,6 +78,9 @@
     <string name="call_live_frame_not_proposed">La cornice è applicata da te, ma non è stato possibile proporla</string>
     <string name="call_live_frame_proposal">%1$s ti propone la cornice «%2$s»</string>
     <string name="call_mode_montage_title">Montaggio della chiamata</string>
+    <string name="call_mode_quit">Esci</string>
+    <string name="call_mode_quit_montage_hint">Torna alla chiamata</string>
+    <string name="call_mode_recording">Registrazione in corso</string>
     <string name="call_open_conversation">Conversazione</string>
     <string name="call_open_conversation_hint">Apre la conversazione mantenendo la chiamata attiva</string>
     <string name="call_recording_accept">Accetta</string>

@@ -342,6 +342,7 @@ fun CallScreen(
                     state = state,
                     localTrack = viewModel.localVideoTrack,
                     remoteTrack = remoteVideo,
+                    eglContext = viewModel.eglBaseContext,
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
                     pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),

@@ -35,6 +35,15 @@ object CallLiveFrameRule {
         return CallFrameMood.entries.filter { it in served }
     }
 
+    /** Toucher « Cadre » sur le cadre déjà gardé le retire ; sur un autre, le garde à sa place (#9287). */
+    fun toggledHold(current: String?, tapped: String): String? = if (current == tapped) null else tapped
+
+    /** L'interrupteur « Cadre » se montre sur un cadre du catalogue servi en direct, en duo vidéo. */
+    fun mayHold(frameId: String, isOffered: Boolean, among: List<CallFrameDesign> = CallFrameCatalogue.all): Boolean {
+        if (!isOffered) return false
+        return CallFrameCatalogue.frame(frameId, among)?.let(::isEligible) ?: false
+    }
+
     /** Le cadre en direct n'existe qu'en vidéo, à deux. */
     fun mayOffer(participants: Int, showsVideo: Boolean): Boolean = showsVideo && participants == PEOPLE
 

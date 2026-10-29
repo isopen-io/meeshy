@@ -39,6 +39,8 @@
     <string name="call_detail_participants">Participantes</string>
     <string name="call_detail_transcript">Transcrição</string>
     <string name="call_frames_classics">Clássicos</string>
+    <string name="call_frames_less">Menos climas</string>
+    <string name="call_frames_less_hint">Volta aos climas em destaque</string>
     <string name="call_frames_mood_corporate">Corporativo</string>
     <string name="call_frames_mood_deconnecte">Desconectado</string>
     <string name="call_frames_mood_distingue">Distinto</string>
@@ -51,6 +53,8 @@
     <string name="call_frames_mood_jovial">Alegre</string>
     <string name="call_frames_mood_morbide">Mórbido</string>
     <string name="call_frames_mood_signature">Assinatura</string>
+    <string name="call_frames_more">Mais climas</string>
+    <string name="call_frames_more_hint">Mostra todos os climas e todas as molduras</string>
     <string name="call_journal_cancel">Cancelar</string>
     <string name="call_journal_clear_action">Apagar</string>
     <string name="call_journal_clear_all">Apagar tudo</string>
@@ -74,6 +78,9 @@
     <string name="call_live_frame_not_proposed">A moldura está aplicada para você, mas não pôde ser proposta</string>
     <string name="call_live_frame_proposal">%1$s sugere a moldura “%2$s”</string>
     <string name="call_mode_montage_title">Montagem da chamada</string>
+    <string name="call_mode_quit">Sair</string>
+    <string name="call_mode_quit_montage_hint">Volta para a chamada</string>
+    <string name="call_mode_recording">Gravando</string>
     <string name="call_open_conversation">Conversa</string>
     <string name="call_open_conversation_hint">Abre a conversa mantendo a chamada ativa</string>
     <string name="call_recording_accept">Aceitar</string>

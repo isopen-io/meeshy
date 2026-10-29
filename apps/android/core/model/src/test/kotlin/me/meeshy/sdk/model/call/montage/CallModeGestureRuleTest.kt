@@ -70,4 +70,12 @@ class CallModeGestureRuleTest {
     fun `un chrono negatif se lit comme zero`() {
         assertThat(CallModeGestureRule.clock(-5_000)).isEqualTo("0:00")
     }
+
+    @Test
+    fun `sur la piste, seul l'element choisi ET centre se declenche, jamais pendant le film`() {
+        assertThat(CallModeGestureRule.listensOnTrack(isSelected = true, isCentred = true, isRecording = false)).isTrue()
+        assertThat(CallModeGestureRule.listensOnTrack(isSelected = true, isCentred = false, isRecording = false)).isFalse()
+        assertThat(CallModeGestureRule.listensOnTrack(isSelected = false, isCentred = true, isRecording = false)).isFalse()
+        assertThat(CallModeGestureRule.listensOnTrack(isSelected = true, isCentred = true, isRecording = true)).isFalse()
+    }
 }

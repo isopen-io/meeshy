@@ -66,4 +66,18 @@ class CallCapturePreviewRuleTest {
         assertThat(CallCapturePreviewRule.paintsPreview(live, liveFrameShown = true)).isFalse()
         assertThat(CallCapturePreviewRule.paintsPreview(live, liveFrameShown = false)).isTrue()
     }
+
+    @Test
+    fun `un cadre choisi refait les vignettes de son voisinage, jamais celles des classiques`() {
+        val window = CallLiveFrameRule.frames().take(3)
+
+        val first = CallCapturePreviewRule.plan(live, liveFrameShown = true, hasThumbnails = false, previewsSinceThumbnails = 0, frameWindow = window)
+        assertThat(first.frames).isEqualTo(window)
+        assertThat(first.thumbnails).isEmpty()
+        assertThat(first.preview).isFalse()
+        assertThat(first.isEmpty).isFalse()
+
+        assertThat(CallCapturePreviewRule.plan(live, true, hasThumbnails = true, previewsSinceThumbnails = 2, frameWindow = window).isEmpty).isTrue()
+        assertThat(CallCapturePreviewRule.plan(CallCaptureLook.Classic(CallMontageStyle.GRID), false, false, 0, frameWindow = window).frames).isEmpty()
+    }
 }

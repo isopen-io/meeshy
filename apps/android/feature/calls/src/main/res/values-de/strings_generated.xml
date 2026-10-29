@@ -39,6 +39,8 @@
     <string name="call_detail_participants">Teilnehmende</string>
     <string name="call_detail_transcript">Transkription</string>
     <string name="call_frames_classics">Klassiker</string>
+    <string name="call_frames_less">Weniger Stimmungen</string>
+    <string name="call_frames_less_hint">Zurück zu den hervorgehobenen Stimmungen</string>
     <string name="call_frames_mood_corporate">Business</string>
     <string name="call_frames_mood_deconnecte">Abgeschaltet</string>
     <string name="call_frames_mood_distingue">Vornehm</string>
@@ -51,6 +53,8 @@
     <string name="call_frames_mood_jovial">Fröhlich</string>
     <string name="call_frames_mood_morbide">Morbid</string>
     <string name="call_frames_mood_signature">Markenzeichen</string>
+    <string name="call_frames_more">Mehr Stimmungen</string>
+    <string name="call_frames_more_hint">Zeigt alle Stimmungen und alle Rahmen</string>
     <string name="call_journal_cancel">Abbrechen</string>
     <string name="call_journal_clear_action">Löschen</string>
     <string name="call_journal_clear_all">Alle löschen</string>
@@ -74,6 +78,9 @@
     <string name="call_live_frame_not_proposed">Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden</string>
     <string name="call_live_frame_proposal">%1$s schlägt dir den Rahmen „%2$s“ vor</string>
     <string name="call_mode_montage_title">Anrufcollage</string>
+    <string name="call_mode_quit">Beenden</string>
+    <string name="call_mode_quit_montage_hint">Kehrt zum Anruf zurück</string>
+    <string name="call_mode_recording">Aufnahme läuft</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>

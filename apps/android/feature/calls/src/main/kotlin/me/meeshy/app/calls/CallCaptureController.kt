@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.call.frames.CallFrameDesign
+import me.meeshy.sdk.model.call.frames.CallFrameScope
 import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureMachine
 import me.meeshy.sdk.model.call.montage.CallCapturePreviewRule
@@ -23,6 +25,7 @@ import me.meeshy.sdk.model.call.montage.CallCaptureSpec
 import me.meeshy.sdk.model.call.montage.CallCaptureState
 import me.meeshy.sdk.model.call.montage.CallCaptureStatus
 import me.meeshy.sdk.model.call.montage.CallCaptureSubject
+import me.meeshy.sdk.model.call.montage.CallMontageChoice
 import me.meeshy.sdk.model.call.montage.CallMontageMoodChip
 import me.meeshy.sdk.model.call.montage.CallMontagePick
 import me.meeshy.sdk.model.call.montage.CallMontagePickRule
@@ -58,18 +61,26 @@ interface CallCaptureRecording {
     suspend fun cancel()
 }
 
-/** Ce que l'aperçu doit peindre à un tour : la scène, et si un cadre la montre déjà en direct. */
-data class CallCapturePreviewRequest(val scene: CallCaptureScene, val liveFrameShown: Boolean)
+/**
+ * Ce que l'aperçu doit peindre à un tour : la scène, si un cadre la montre déjà en direct, et les cadres dont
+ * la vignette se peint sur les visages de l'appel (`CallMontagePickRule.frameWindow`, #13732).
+ */
+data class CallCapturePreviewRequest(
+    val scene: CallCaptureScene,
+    val liveFrameShown: Boolean,
+    val frameWindow: List<CallFrameDesign> = emptyList(),
+)
 
 /**
- * L'aperçu peint du mode Montage (iOS `previewFeed` et `thumbnails`) : la scène dans le rendu [look]
- * qu'elle porte, et les vignettes des classiques. Une image publiée n'est jamais recyclée : l'écran
- * peut encore la dessiner.
+ * L'aperçu peint du mode Montage (iOS `previewFeed`, `thumbnails` et `frameThumbnails`) : la scène dans le
+ * rendu [look] qu'elle porte, les vignettes des classiques et celles des cadres (par identifiant), toutes
+ * peintes sur les images de l'appel. Une image publiée n'est jamais recyclée : l'écran peut encore la dessiner.
  */
 data class CallCapturePreviews(
     val look: CallCaptureLook? = null,
     val preview: Bitmap? = null,
     val thumbnails: Map<CallMontageStyle, Bitmap> = emptyMap(),
+    val frameThumbnails: Map<String, Bitmap> = emptyMap(),
 )
 
 /**
@@ -123,13 +134,17 @@ class CallCaptureController(
         frames.detachAll()
     }
 
-    /** Toucher une puce : « Classiques » reprend le dernier classique, une ambiance montre ses cadres. */
-    fun show(chip: CallMontageMoodChip) = _pick.update { CallMontagePickRule.showing(it, chip) }
+    /** Un classique ou un cadre choisi dans le carrousel : il ne sert que la capture (#13732), jamais l'appel. */
+    fun select(choice: CallMontageChoice) = _pick.update { CallMontagePickRule.selecting(it, choice) }
 
-    fun pickClassic(style: CallMontageStyle) = _pick.update { CallMontagePickRule.pickingClassic(it, style) }
+    /** Toucher une puce : son dernier choix, sinon son premier élément, est pris (iOS `show`). */
+    fun show(chip: CallMontageMoodChip, people: Int) = _pick.update { CallMontagePickRule.showing(it, chip, people) }
 
-    /** Un cadre (ou « Aucun cadre ») vient d'être touché : la capture suit de nouveau le cadre en direct. */
-    fun pickFrame() = _pick.update(CallMontagePickRule::pickingFrame)
+    /** « Plus d'ambiances » / « Moins d'ambiances » (#12683). */
+    fun setScope(scope: CallFrameScope, people: Int) = _pick.update { CallMontagePickRule.settingScope(it, scope, people) }
+
+    /** Le mode s'ouvre : le cadre gardé pendant l'appel devient le choix (iOS `onAppear`). */
+    fun open(heldFrameId: String?) = _pick.update { CallMontagePickRule.opening(it, heldFrameId) }
 
     /** L'aperçu tourne toutes les [CallCapturePreviewRule.INTERVAL_MILLIS] tant que le mode est ouvert ; [request] se relit à chaque tour. */
     fun startPreview(request: () -> CallCapturePreviewRequest) {
@@ -159,10 +174,11 @@ class CallCaptureController(
         val plan = CallCapturePreviewRule.plan(
             look = scene.look,
             liveFrameShown = request.liveFrameShown,
-            hasThumbnails = _previews.value.thumbnails.isNotEmpty(),
+            hasThumbnails = hasThumbnails(scene.look, request.frameWindow),
             previewsSinceThumbnails = previewsSinceThumbnails,
+            frameWindow = request.frameWindow,
         )
-        previewsSinceThumbnails = if (plan.thumbnails.isEmpty()) previewsSinceThumbnails + 1 else 1
+        previewsSinceThumbnails = if (plan.thumbnails.isEmpty() && plan.frames.isEmpty()) previewsSinceThumbnails + 1 else 1
         if (plan.isEmpty || scene.subjects.isEmpty()) return
         val images = frames.snapshot(scene.subjects, CallCapturePreviewRule.MAX_DIMENSION)
         val painted = try {
@@ -180,21 +196,37 @@ class CallCaptureController(
                         CallCapturePreviewRule.THUMBNAIL_HEIGHT,
                     )?.let { style to it }
                 }.toMap()
-                preview to thumbnails
+                val frames = plan.frames.mapNotNull { design ->
+                    painter.paint(
+                        scene.copy(look = CallCaptureLook.Frame(design)),
+                        images,
+                        CallCapturePreviewRule.THUMBNAIL_WIDTH,
+                        CallCapturePreviewRule.THUMBNAIL_HEIGHT,
+                    )?.let { design.id to it }
+                }.toMap()
+                PaintedPreviews(preview, thumbnails, frames)
             }
         } finally {
             images.values.forEach(Bitmap::recycle)
         }
         if (_state.value.isRecording) return
         _previews.update { current ->
-            val (preview, thumbnails) = painted
             current.copy(
-                look = if (preview != null) scene.look else current.look,
-                preview = preview ?: current.preview,
-                thumbnails = current.thumbnails + thumbnails,
+                look = if (painted.preview != null) scene.look else current.look,
+                preview = painted.preview ?: current.preview,
+                thumbnails = current.thumbnails + painted.thumbnails,
+                frameThumbnails = current.frameThumbnails + painted.frames,
             )
         }
     }
+
+    /** Les vignettes du carrousel affiché sont-elles toutes là ? (iOS `hasThumbnails(for:)`) */
+    private fun hasThumbnails(look: CallCaptureLook, frameWindow: List<CallFrameDesign>): Boolean = when (look) {
+        is CallCaptureLook.Classic -> _previews.value.thumbnails.isNotEmpty()
+        is CallCaptureLook.Frame -> frameWindow.isNotEmpty() && frameWindow.all { it.id in _previews.value.frameThumbnails }
+    }
+
+    private class PaintedPreviews(val preview: Bitmap?, val thumbnails: Map<CallMontageStyle, Bitmap>, val frames: Map<String, Bitmap>)
 
     suspend fun capture(scene: CallCaptureScene, mayWrite: suspend () -> Boolean) {
         val shot = CallCaptureMachine.shoot(_state.value) ?: return

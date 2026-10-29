@@ -11,27 +11,31 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -42,18 +46,16 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.frames.CallFramePortrait
@@ -61,192 +63,270 @@ import me.meeshy.sdk.call.frames.CallFrameRenderer
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
+import me.meeshy.sdk.model.call.frames.CallFrameScope
 import me.meeshy.sdk.model.call.frames.CallFrameStyleRule
 import me.meeshy.sdk.model.call.frames.CallFrameTexts
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
+import me.meeshy.sdk.model.call.montage.CallCaptureScene
+import me.meeshy.sdk.model.call.montage.CallModeGestureRule
 import me.meeshy.sdk.model.call.montage.CallMontageChoice
+import me.meeshy.sdk.model.call.montage.CallMontageFrameRule
+import me.meeshy.sdk.model.call.montage.CallMontageHold
 import me.meeshy.sdk.model.call.montage.CallMontageMoodChip
 import me.meeshy.sdk.model.call.montage.CallMontagePickRule
+import me.meeshy.sdk.model.call.montage.CallMontageScopeToggle
 import me.meeshy.sdk.model.call.montage.CallMontageStyle
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
-private val THUMB_WIDTH = 72.dp
-private val THUMB_HEIGHT = 128.dp
+private val THUMB_WIDTH = 48.dp
+private val THUMB_HEIGHT = 85.dp
+private val THUMB_SPACING = 12.dp
+private val SIDE_DIAMETER = 48.dp
 
 /**
- * **LE CHOIX DU MODE MONTAGE** (#13690) — comme `CallMontageModeControls` d'iOS : la puce « Classiques »
- * en tête, et son carrousel des treize montages, chacun en vignette peinte sur les images de l'appel ;
- * puis les ambiances du cadre en direct : « Aucun cadre », puis leurs cadres. Toucher un classique le
- * choisit pour la capture ; toucher un cadre l'applique tout de suite chez moi et le propose à l'autre.
+ * **LE CHOIX DU MODE MONTAGE** (#13690, #13732, #13733) — comme `CallMontageModeControls` d'iOS : les puces
+ * (« Classiques », les ambiances mises en avant, puis « Plus d'ambiances »), le carrousel aimanté dont l'élément
+ * centré est choisi et SE déclenche (deux tapes : photo ; appui long : film), chaque vignette peinte sur les
+ * visages de l'appel ; puis la barre d'actions : Quitter, et « Cadre » qui garde le cadre affiché pendant l'appel
+ * et le propose à l'autre. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
  */
 @Composable
 internal fun CallMontagePicker(
-    controller: CallLiveFrameController,
+    live: CallLiveFrameController,
     capture: CallCaptureController,
-    peerName: String,
+    scene: CallCaptureScene,
+    people: List<CallFramePerson>,
+    isLiveOffered: Boolean,
+    reduceMotion: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by controller.state.collectAsState()
-    val pick by capture.pick.collectAsState()
-    val thumbnailsFlow = remember(capture) { capture.previews.map { it.thumbnails }.distinctUntilChanged() }
-    val thumbnails by thumbnailsFlow.collectAsState(initial = emptyMap())
-    val chips = remember { CallMontagePickRule.chips() }
-    val shown = CallMontagePickRule.shownChip(pick, state.frameId)
-    val people = remember(peerName, state.remoteSharedName) { controller.people(peerName, state.remoteSharedName) }
+    val held by live.state.collectAsState()
+    val pick by capture.pick.collectAsStateWithLifecycle()
+    val captureState by capture.state.collectAsStateWithLifecycle()
+    val previews by capture.previews.collectAsStateWithLifecycle()
+    val count = people.size
+    val chip = CallMontagePickRule.shownChip(pick, count)
+    val scope = CallMontagePickRule.scope(pick, count)
+    val selection = CallMontagePickRule.selection(pick, count)
+    val items = CallMontagePickRule.items(pick, count)
+    val hold = CallMontagePickRule.hold(pick, count, held.frameId, isLiveOffered)
+    val hints = rememberCaptureHint()
+    val shooter = rememberCallCaptureShooter(capture, scene, hints)
     val haptics = LocalHapticFeedback.current
+    val classicNames = CallMontageStyle.entries.associateWith { stringResource(styleName(it)) }
+    val nextDeclination = stringResource(R.string.call_live_frame_declination_next)
+    val previousDeclination = stringResource(R.string.call_live_frame_declination_previous)
+    fun stepDeclination(offset: Int): Boolean {
+        val current = CallMontagePickRule.choice(pick, count) as? CallMontageChoice.Frame ?: return false
+        val next = CallFrameStyleRule.neighbour(current.id, offset) ?: return false
+        capture.select(CallMontageChoice.Frame(next.id))
+        return true
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = MeeshyRadius.xl, topEnd = MeeshyRadius.xl))
-            .background(Color.Black.copy(alpha = 0.72f))
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
             .padding(top = MeeshySpacing.md, bottom = MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.padding(horizontal = MeeshySpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(if (shown == CallMontageMoodChip.Classics) R.string.call_mode_montage_title else R.string.call_live_frame_label),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = CallPalette.Ink,
-                modifier = Modifier.weight(1f),
-            )
-            CallPillButton(
-                icon = MeeshyIcons.Close,
-                kind = CallPillKind.Normal,
-                label = stringResource(R.string.call_panel_close),
-                onClick = onClose,
-                diameter = 40.dp,
-            )
+        MoodChips(
+            chips = CallMontagePickRule.chips(pick, count),
+            selected = chip,
+            isEnabled = !captureState.isRecording,
+            toggle = CallMontagePickRule.scopeToggle(pick, count),
+            onScope = { showsAll -> capture.setScope(if (showsAll) CallFrameScope.SPOTLIGHT else CallFrameScope.ALL, count) },
+        ) { tapped ->
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            capture.show(tapped, count)
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            items(chips) { chip -> MoodChip(chipLabel(chip), selected = chip == shown) { capture.show(chip) } }
-        }
-        when (shown) {
-            CallMontageMoodChip.Classics -> ClassicsCarousel(
-                isSelected = { CallMontagePickRule.isSelected(pick, state.frameId, CallMontageChoice.Classic(it)) },
-                thumbnails = thumbnails,
-            ) { style ->
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                capture.pickClassic(style)
+        key(chip, scope) {
+            CallModeCarousel(
+                items = items,
+                selection = selection,
+                title = stringResource(R.string.call_mode_montage_title),
+                name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames) },
+                reduceMotion = reduceMotion,
+                onSelect = { item -> if (item != selection) capture.select(item) },
+                nextLabel = stringResource(R.string.call_montage_next),
+                previousLabel = stringResource(R.string.call_montage_previous),
+                itemWidth = THUMB_WIDTH,
+                itemHeight = THUMB_HEIGHT,
+                spacing = THUMB_SPACING,
+                hint = stringResource(R.string.call_mode_gesture_hint)
+                    .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) },
+                shots = CallModeShots(captureState.isRecording, shooter.shoot, shooter.film),
+                extraActions = if (CallMontageFrameRule.declinations(selection).size > 1) {
+                    listOf(
+                        CustomAccessibilityAction(nextDeclination) { stepDeclination(1) },
+                        CustomAccessibilityAction(previousDeclination) { stepDeclination(-1) },
+                    )
+                } else {
+                    emptyList()
+                },
+            ) { item, isShown ->
+                MontageCell(
+                    item = item,
+                    posed = CallMontagePickRule.declined(pick, item, count),
+                    isSelected = isShown && item == selection,
+                    previews = previews,
+                    people = people,
+                    onDecline = { id -> capture.select(CallMontageChoice.Frame(id)) },
+                )
             }
-            is CallMontageMoodChip.Mood -> FramesCarousel(
-                mood = shown.mood,
-                chosen = state.frameId,
-                isSelected = { CallMontagePickRule.isSelected(pick, state.frameId, CallMontageChoice.Frame(it)) },
-                people = people,
-            ) { id ->
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                capture.pickFrame()
-                controller.apply(id)
-            }
         }
-        Text(
-            when (shown) {
-                CallMontageMoodChip.Classics -> stringResource(styleName(pick.lastClassic))
-                is CallMontageMoodChip.Mood -> stringResource(R.string.call_live_frame_hold_hint)
+        MontageActionBar(
+            hold = hold,
+            isRecording = captureState.isRecording,
+            onQuit = onClose,
+            onHold = { id ->
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                live.apply(CallLiveFrameRule.toggledHold(held.frameId, id))
             },
-            style = MaterialTheme.typography.bodySmall,
-            color = CallPalette.InkSecondary,
-            modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
         )
     }
 }
 
 @Composable
-private fun ClassicsCarousel(
-    isSelected: (CallMontageStyle) -> Boolean,
-    thumbnails: Map<CallMontageStyle, Bitmap>,
-    onPick: (CallMontageStyle) -> Unit,
+private fun MontageCell(
+    item: CallMontageChoice,
+    posed: CallMontageChoice,
+    isSelected: Boolean,
+    previews: CallCapturePreviews,
+    people: List<CallFramePerson>,
+    onDecline: (String) -> Unit,
 ) {
-    LazyRow(contentPadding = PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        items(CallMontagePickRule.classics(), key = { it.raw }) { style ->
-            ChoiceTile(label = stringResource(styleName(style)), selected = isSelected(style), onClick = { onPick(style) }) {
-                val thumbnail = thumbnails[style]
+    val shape = RoundedCornerShape(MeeshyRadius.sm)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(if (isSelected) 2.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.3f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        when (item) {
+            is CallMontageChoice.Classic -> {
+                val thumbnail = previews.thumbnails[item.style]
                 if (thumbnail != null) {
                     Image(thumbnail.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
-                    Icon(styleGlyph(style), contentDescription = null, tint = CallPalette.InkSecondary, modifier = Modifier.size(24.dp))
+                    Icon(styleGlyph(item.style), contentDescription = null, tint = CallPalette.InkSecondary, modifier = Modifier.size(20.dp))
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun FramesCarousel(
-    mood: CallFrameMood,
-    chosen: String?,
-    isSelected: (String) -> Boolean,
-    people: List<CallFramePerson>,
-    onApply: (String?) -> Unit,
-) {
-    val frames = remember(mood) { CallLiveFrameRule.frames(mood) }
-    LazyRow(contentPadding = PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        item {
-            ChoiceTile(label = stringResource(R.string.call_live_frame_none), selected = chosen == null, onClick = { onApply(null) }) {}
-        }
-        items(frames, key = { it.id }) { design ->
-            val selected = isSelected(design.id)
-            val declinations = remember(design.id) { CallFrameStyleRule.declinations(design.id) }
-            ChoiceTile(label = design.name, selected = selected, onClick = { onApply(design.id) }) {
-                if (selected && declinations.size > 1) {
-                    CallFrameDeclinationPager(
-                        declinations = declinations,
-                        selected = chosen ?: design.id,
-                        onSelect = onApply,
-                    ) { declined -> FrameThumbnail(declined, people) }
+            is CallMontageChoice.Frame -> {
+                val declinations = remember(item.id) { CallFrameStyleRule.declinations(item.id) }
+                val posedId = (posed as? CallMontageChoice.Frame)?.id ?: item.id
+                if (isSelected && declinations.size > 1) {
+                    CallFrameDeclinationPager(declinations = declinations, selected = posedId, onSelect = onDecline) { declined ->
+                        FrameTile(declined, previews.frameThumbnails[declined.id], people)
+                    }
                 } else {
-                    FrameThumbnail(design, people)
+                    val design = remember(item.id) { CallMontageFrameRule.design(item.id) }
+                    design?.let { FrameTile(it, previews.frameThumbnails[it.id], people) }
                 }
             }
         }
     }
 }
 
+/** La vignette d'un cadre peinte sur les visages de l'appel ; en attendant, le cadre avec les initiales — jamais un spinner. */
 @Composable
-private fun MoodChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun FrameTile(design: CallFrameDesign, painted: Bitmap?, people: List<CallFramePerson>) {
+    if (painted != null) {
+        Image(painted.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    } else {
+        FrameThumbnail(design, people)
+    }
+}
+
+@Composable
+private fun MoodChips(
+    chips: List<CallMontageMoodChip>,
+    selected: CallMontageMoodChip,
+    isEnabled: Boolean,
+    toggle: CallMontageScopeToggle?,
+    onScope: (Boolean) -> Unit,
+    onSelect: (CallMontageMoodChip) -> Unit,
+) {
+    val list = rememberLazyListState()
+    val index = chips.indexOf(selected)
+    LaunchedEffect(index) { if (index >= 0) list.animateScrollToItem(index) }
+    LazyRow(
+        state = list,
+        contentPadding = PaddingValues(horizontal = MeeshySpacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        userScrollEnabled = isEnabled,
+    ) {
+        items(chips) { chip ->
+            MoodChip(chipLabel(chip), selected = chip == selected, isEnabled = isEnabled) { if (chip != selected) onSelect(chip) }
+        }
+        toggle?.let { scope ->
+            item {
+                val label = stringResource(if (scope.showsAll) R.string.call_frames_less else R.string.call_frames_more)
+                val hint = stringResource(if (scope.showsAll) R.string.call_frames_less_hint else R.string.call_frames_more_hint)
+                MoodChip(label, selected = false, isEnabled = isEnabled, hint = hint) { onScope(scope.showsAll) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoodChip(label: String, selected: Boolean, isEnabled: Boolean, hint: String? = null, onClick: () -> Unit) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
-        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink,
+        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink.copy(alpha = if (isEnabled) 1f else 0.5f),
         modifier = Modifier
-            .height(40.dp)
+            .heightIn(min = 48.dp)
+            .padding(vertical = MeeshySpacing.xs)
             .clip(CircleShape)
             .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(role = Role.Tab, onClick = onClick)
+            .clickable(enabled = isEnabled, role = Role.Tab, onClickLabel = hint, onClick = onClick)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
             .semantics { this.selected = selected },
     )
 }
 
+/** Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel (iOS `CallModeActionBar`). */
 @Composable
-private fun ChoiceTile(label: String, selected: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(MeeshyRadius.md)
-    Column(
-        Modifier
-            .width(THUMB_WIDTH + 8.dp)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.selected = selected; contentDescription = label },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+private fun MontageActionBar(hold: CallMontageHold?, isRecording: Boolean, onQuit: () -> Unit, onHold: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        Box(
-            Modifier
-                .size(THUMB_WIDTH, THUMB_HEIGHT)
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = 0.3f), shape),
-            contentAlignment = Alignment.Center,
-        ) { content() }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = CallPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        CallPillButton(
+            icon = MeeshyIcons.Close,
+            kind = CallPillKind.Normal,
+            label = stringResource(R.string.call_mode_quit),
+            caption = stringResource(R.string.call_mode_quit),
+            hint = stringResource(R.string.call_mode_quit_montage_hint),
+            diameter = SIDE_DIAMETER,
+            onClick = onQuit,
+        )
+        Spacer(Modifier.weight(1f))
+        hold?.let { option ->
+            CallPillButton(
+                icon = MeeshyIcons.Wallpaper,
+                kind = if (option.isOn) CallPillKind.Active else CallPillKind.Normal,
+                label = stringResource(R.string.call_live_frame_label),
+                caption = stringResource(R.string.call_live_frame_caption),
+                hint = stringResource(R.string.call_live_frame_hold_hint),
+                toggleState = option.isOn,
+                diameter = SIDE_DIAMETER,
+                onClick = { if (!isRecording) onHold(option.frameId) },
+            )
+        }
     }
 }
 
+/** La vignette d'un cadre peinte avec les initiales : ce qui tient la place tant que les visages ne sont pas peints. */
 @Composable
 internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerson>) {
     val density = LocalDensity.current
@@ -261,6 +341,11 @@ internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerso
         }
     }
     bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
+}
+
+private fun choiceName(choice: CallMontageChoice, classicNames: Map<CallMontageStyle, String>): String = when (choice) {
+    is CallMontageChoice.Classic -> classicNames[choice.style].orEmpty()
+    is CallMontageChoice.Frame -> CallMontageFrameRule.frameName(choice.id).orEmpty()
 }
 
 @Composable

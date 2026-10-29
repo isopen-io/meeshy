@@ -39,6 +39,8 @@
     <string name="call_detail_participants">المشاركون</string>
     <string name="call_detail_transcript">النص</string>
     <string name="call_frames_classics">كلاسيكيات</string>
+    <string name="call_frames_less">أجواء أقل</string>
+    <string name="call_frames_less_hint">يعود إلى الأجواء المميزة</string>
     <string name="call_frames_mood_corporate">مؤسسي</string>
     <string name="call_frames_mood_deconnecte">بلا اتصال</string>
     <string name="call_frames_mood_distingue">راقٍ</string>
@@ -51,6 +53,8 @@
     <string name="call_frames_mood_jovial">مرح</string>
     <string name="call_frames_mood_morbide">كئيب</string>
     <string name="call_frames_mood_signature">بصمة</string>
+    <string name="call_frames_more">المزيد من الأجواء</string>
+    <string name="call_frames_more_hint">يعرض كل الأجواء وكل الإطارات</string>
     <string name="call_journal_cancel">إلغاء</string>
     <string name="call_journal_clear_action">مسح</string>
     <string name="call_journal_clear_all">مسح الكل</string>
@@ -74,6 +78,9 @@
     <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
     <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
     <string name="call_mode_montage_title">مونتاج المكالمة</string>
+    <string name="call_mode_quit">خروج</string>
+    <string name="call_mode_quit_montage_hint">يعود إلى المكالمة</string>
+    <string name="call_mode_recording">جارٍ التسجيل</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>

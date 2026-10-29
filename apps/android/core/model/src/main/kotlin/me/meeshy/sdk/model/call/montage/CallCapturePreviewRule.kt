@@ -1,11 +1,16 @@
 package me.meeshy.sdk.model.call.montage
 
+import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import kotlin.math.max
 import kotlin.math.min
 
-/** Un tour de l'aperçu : peindre la scène choisie ou non, et quelles vignettes classiques refaire. */
-public data class CallCapturePreviewPlan(val preview: Boolean, val thumbnails: List<CallMontageStyle>) {
-    val isEmpty: Boolean get() = !preview && thumbnails.isEmpty()
+/** Un tour de l'aperçu : peindre la scène choisie ou non, quelles vignettes classiques et quelles vignettes de cadres refaire. */
+public data class CallCapturePreviewPlan(
+    val preview: Boolean,
+    val thumbnails: List<CallMontageStyle>,
+    val frames: List<CallFrameDesign> = emptyList(),
+) {
+    val isEmpty: Boolean get() = !preview && thumbnails.isEmpty() && frames.isEmpty()
 }
 
 /**
@@ -39,12 +44,20 @@ public object CallCapturePreviewRule {
     public fun paintsPreview(look: CallCaptureLook, liveFrameShown: Boolean): Boolean =
         look is CallCaptureLook.Classic || !liveFrameShown
 
-    public fun plan(look: CallCaptureLook, liveFrameShown: Boolean, hasThumbnails: Boolean, previewsSinceThumbnails: Int): CallCapturePreviewPlan {
-        val thumbnails = when {
-            look !is CallCaptureLook.Classic -> emptyList()
-            !rendersThumbnails(hasThumbnails, previewsSinceThumbnails) -> emptyList()
-            else -> window(look.style, CallMontageStyle.entries.toList(), THUMBNAIL_RADIUS)
-        }
-        return CallCapturePreviewPlan(preview = paintsPreview(look, liveFrameShown), thumbnails = thumbnails)
+    /**
+     * [frameWindow] : les cadres dont la vignette se peint sur les visages de l'appel quand un cadre est choisi
+     * (`CallMontagePickRule.frameWindow`), refaits au même rythme que les classiques.
+     */
+    public fun plan(
+        look: CallCaptureLook,
+        liveFrameShown: Boolean,
+        hasThumbnails: Boolean,
+        previewsSinceThumbnails: Int,
+        frameWindow: List<CallFrameDesign> = emptyList(),
+    ): CallCapturePreviewPlan {
+        val due = rendersThumbnails(hasThumbnails, previewsSinceThumbnails)
+        val thumbnails = if (look is CallCaptureLook.Classic && due) window(look.style, CallMontageStyle.entries.toList(), THUMBNAIL_RADIUS) else emptyList()
+        val frames = if (look is CallCaptureLook.Frame && due) frameWindow else emptyList()
+        return CallCapturePreviewPlan(preview = paintsPreview(look, liveFrameShown), thumbnails = thumbnails, frames = frames)
     }
 }

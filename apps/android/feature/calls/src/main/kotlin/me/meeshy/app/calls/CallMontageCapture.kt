@@ -58,17 +58,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.call.frames.CallFrameDesign
+import me.meeshy.sdk.model.call.frames.CallFramePerson
+import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.montage.CallCaptureLook
-import me.meeshy.sdk.model.call.montage.CallCapturePreviewRule
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
 import me.meeshy.sdk.model.call.montage.CallModeGesture
 import me.meeshy.sdk.model.call.montage.CallModeGestureOutcome
 import me.meeshy.sdk.model.call.montage.CallModeGestureRule
 import me.meeshy.sdk.model.call.montage.CallMontagePickRule
+import me.meeshy.sdk.model.call.montage.CallMontageStage
+import me.meeshy.sdk.model.call.montage.CallMontageStageRule
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import org.webrtc.EglBase
 import org.webrtc.VideoTrack
 
 private const val HINT_PREFS = "meeshy_call_capture"
@@ -77,16 +82,18 @@ private val STOP_DIAMETER = 76.dp
 private val STOP_SQUARE = 24.dp
 
 /**
- * Le mode « Capturer l'appel » (iOS `CallScreenMode.montage`) : la scène qui SE déclenche, sous le choix du
- * montage. Ce que la capture peint suit ce que l'écran montre : un classique choisi (#13690), peint en
- * aperçu par-dessus l'appel comme `CallMontageFrameStage` d'iOS, sinon le cadre en direct qui tient déjà
- * la scène ; les deux personnes dans l'ordre du cadre, chacune branchée sur sa piste.
+ * Le mode « Capturer l'appel » (iOS `CallScreenMode.montage`) : la scène du montage CHOISI, sous son choix.
+ * Choisir un cadre ne le pose pas sur l'appel (#13732) : il ne sert que la capture, et l'option « Cadre » le
+ * garde pendant l'appel. La scène suit `CallMontageFrameStage` d'iOS : l'appel s'il montre déjà ce cadre, le
+ * cadre posé sur le flux s'il est servi en direct, sinon l'aperçu peint. La prise se déclenche sur l'élément
+ * centré du carrousel (#13733).
  */
 @Composable
 internal fun CallMontageMode(
     state: CallUiState,
     localTrack: VideoTrack?,
     remoteTrack: VideoTrack?,
+    eglContext: EglBase.Context?,
     reduceMotion: Boolean,
     onClose: () -> Unit,
     pickerModifier: Modifier,
@@ -98,28 +105,70 @@ internal fun CallMontageMode(
     val pick by capture.pick.collectAsStateWithLifecycle()
     val constrained = rememberCallDeviceConstrained()
     val people = remember(state.peerName, frame.remoteSharedName) { frameViewModel.controller.people(state.peerName, frame.remoteSharedName) }
-    val scene = remember(people, pick, frame.frameId, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
+    LaunchedEffect(capture) { capture.open(frame.frameId) }
+    val scene = remember(people, pick, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
         CallCaptureScene(
-            look = CallMontagePickRule.look(pick, frame.frameId, people.size),
+            look = CallMontagePickRule.look(pick, people.size),
             subjects = CallCaptureSceneRule.duo(people, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff),
         )
     }
-    val liveFrameShown = CallLiveFrameStage.framesTheDuo(frame.frameId, state.isVideoCall, state.showsConnectedLayout, constrained, reduceMotion)
-    val request by rememberUpdatedState(CallCapturePreviewRequest(scene, liveFrameShown))
+    val offered = CallLiveFrameRule.mayOffer(people.size, state.isVideoCall && state.showsConnectedLayout)
+    val shownByCall = CallLiveFrameRule.display(frame.frameId, people.size, constrained, reduceMotion).design?.id?.takeIf { offered }
+    val chosenFrame = (scene.look as? CallCaptureLook.Frame)?.design?.id
+    val live = chosenFrame?.takeIf { offered }?.let { CallLiveFrameRule.display(it, people.size, constrained, reduceMotion).design }
+    val stage = CallMontageStageRule.stage(scene.look, shownByCall, live)
+    val window = remember(pick, people.size) { CallMontagePickRule.frameWindow(pick, people.size) }
+    val request by rememberUpdatedState(CallCapturePreviewRequest(scene, stage != CallMontageStage.Painted, window))
     val tracks = remember(people, localTrack, remoteTrack) { people.associate { it.id to if (it.isSelf) localTrack else remoteTrack } }
     LaunchedEffect(capture) { capture.startPreview { request } }
-    LaunchedEffect(capture, scene.look, liveFrameShown) { capture.refreshSoon() }
-    if (CallCapturePreviewRule.paintsPreview(scene.look, liveFrameShown)) {
-        CallMontagePaintedStage(capture, scene.look, Modifier.fillMaxSize())
+    LaunchedEffect(capture, scene.look, stage) { capture.refreshSoon() }
+    when (stage) {
+        CallMontageStage.Call -> Unit
+        is CallMontageStage.Live -> CallMontageLiveStage(stage.design, people, state, localTrack, remoteTrack, eglContext, frameViewModel, reduceMotion, constrained)
+        CallMontageStage.Painted -> CallMontagePaintedStage(capture, scene.look, Modifier.fillMaxSize())
     }
-    CallMontageCaptureLayer(capture, scene, tracks, reduceMotion, Modifier.fillMaxSize())
+    CallMontageCaptureLayer(capture, scene, tracks, reduceMotion, Modifier.fillMaxSize(), shotsOnStage = false)
     CallMontagePicker(
-        controller = frameViewModel.controller,
+        live = frameViewModel.controller,
         capture = capture,
-        peerName = state.peerName,
+        scene = scene,
+        people = people,
+        isLiveOffered = offered,
+        reduceMotion = reduceMotion,
         onClose = onClose,
         modifier = pickerModifier,
     )
+}
+
+/** Le cadre choisi, servi en direct, posé sur le flux vidéo à pleine cadence (iOS `CallMontageFrameStage`). */
+@Composable
+private fun CallMontageLiveStage(
+    design: CallFrameDesign,
+    people: List<CallFramePerson>,
+    state: CallUiState,
+    localTrack: VideoTrack?,
+    remoteTrack: VideoTrack?,
+    eglContext: EglBase.Context?,
+    frameViewModel: CallLiveFrameViewModel,
+    reduceMotion: Boolean,
+    constrained: Boolean,
+) {
+    val call = frameViewModel.controller.callContext()
+    val texts by produceState(frameViewModel.texts.immediate(call), call) { value = frameViewModel.texts.texts(call) }
+    val sources = remember(people, localTrack, remoteTrack, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
+        CallLiveFrameSources.of(people, localTrack, remoteTrack, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff)
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black).clearAndSetSemantics { }) {
+        CallLiveFrameSurface(
+            design = design,
+            people = people,
+            texts = texts,
+            sources = sources,
+            eglContext = eglContext,
+            playsMotion = CallLiveFrameRule.playsMotion(design, reduceMotion, constrained),
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 /**
@@ -158,28 +207,21 @@ internal fun CallMontageCaptureLayer(
     tracks: Map<String, VideoTrack?>,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
+    shotsOnStage: Boolean = true,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
-    val latestScene by rememberUpdatedState(scene)
-    val permissions = rememberPermissionFlow()
     val scope = rememberCoroutineScope()
     val hints = rememberCaptureHint()
-    val mayWrite: suspend () -> Boolean = { permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false) }
+    val shooter = rememberCallCaptureShooter(controller, scene, hints)
 
     DisposableEffect(controller) { onDispose { controller.stop(); hints.seen() } }
     LaunchedEffect(controller, tracks) { controller.start(tracks) }
 
-    fun shoot() {
-        hints.seen()
-        scope.launch { controller.capture(latestScene, mayWrite) }
-    }
+    fun shoot() = shooter.shoot()
 
-    fun film() {
-        hints.seen()
-        scope.launch { controller.startRecording({ latestScene }, mayWrite) }
-    }
+    fun film() = shooter.film()
 
-    val listens = CallModeGestureRule.listensForShots(isSelected = true, isRecording = state.isRecording)
+    val listens = shotsOnStage && CallModeGestureRule.listensForShots(isSelected = true, isRecording = state.isRecording)
     val photoLabel = stringResource(R.string.call_mode_photo)
     val recordLabel = stringResource(R.string.call_mode_record)
     val previewLabel = stringResource(R.string.call_capture_preview)
@@ -212,7 +254,7 @@ internal fun CallMontageCaptureLayer(
             )
         }
 
-        if (CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = state.isRecording)) {
+        if (shotsOnStage && CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = state.isRecording)) {
             CaptureHint(Modifier.align(Alignment.Center))
         }
 
@@ -228,15 +270,38 @@ internal fun CallMontageCaptureLayer(
     }
 }
 
+/** La photo et le film du montage en cours, avec la permission de la galerie ; chacun marque l'astuce comme vue. */
+internal class CallCaptureShooter(val shoot: () -> Unit, val film: () -> Unit)
+
+@Composable
+internal fun rememberCallCaptureShooter(controller: CallCaptureController, scene: CallCaptureScene, hints: CaptureHintMemory): CallCaptureShooter {
+    val latestScene by rememberUpdatedState(scene)
+    val permissions = rememberPermissionFlow()
+    val scope = rememberCoroutineScope()
+    val mayWrite: suspend () -> Boolean = { permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false) }
+    return remember(controller, hints, scope) {
+        CallCaptureShooter(
+            shoot = {
+                hints.seen()
+                scope.launch { controller.capture(latestScene, mayWrite) }
+            },
+            film = {
+                hints.seen()
+                scope.launch { controller.startRecording({ latestScene }, mayWrite) }
+            },
+        )
+    }
+}
+
 private fun outcome(gesture: CallModeGesture, isRecording: Boolean): CallModeGestureOutcome =
     CallModeGestureRule.outcome(gesture, isSelected = true, isRecording = isRecording)
 
 /** L'appui long d'iOS (0,45 s) au lieu de celui du système. */
-private class CaptureViewConfiguration(base: ViewConfiguration) : ViewConfiguration by base {
+internal class CaptureViewConfiguration(base: ViewConfiguration) : ViewConfiguration by base {
     override val longPressTimeoutMillis: Long = CallModeGestureRule.LONG_PRESS_MILLIS
 }
 
-private class CaptureHintMemory(private val context: Context, initial: Boolean) {
+internal class CaptureHintMemory(private val context: Context, initial: Boolean) {
     var hasSeen by mutableStateOf(initial)
         private set
 
@@ -248,7 +313,7 @@ private class CaptureHintMemory(private val context: Context, initial: Boolean) 
 }
 
 @Composable
-private fun rememberCaptureHint(): CaptureHintMemory {
+internal fun rememberCaptureHint(): CaptureHintMemory {
     val context = LocalContext.current.applicationContext
     return remember(context) {
         val seen = context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_SEEN_KEY, false)

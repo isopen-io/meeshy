@@ -39,6 +39,8 @@
     <string name="call_detail_participants">Participantes</string>
     <string name="call_detail_transcript">Transcripción</string>
     <string name="call_frames_classics">Clásicos</string>
+    <string name="call_frames_less">Menos ambientes</string>
+    <string name="call_frames_less_hint">Vuelve a los ambientes destacados</string>
     <string name="call_frames_mood_corporate">Corporativo</string>
     <string name="call_frames_mood_deconnecte">Desconectado</string>
     <string name="call_frames_mood_distingue">Distinguido</string>
@@ -51,6 +53,8 @@
     <string name="call_frames_mood_jovial">Alegre</string>
     <string name="call_frames_mood_morbide">Macabro</string>
     <string name="call_frames_mood_signature">Sello propio</string>
+    <string name="call_frames_more">Más ambientes</string>
+    <string name="call_frames_more_hint">Muestra todos los ambientes y todos los marcos</string>
     <string name="call_journal_cancel">Cancelar</string>
     <string name="call_journal_clear_action">Borrar</string>
     <string name="call_journal_clear_all">Borrar todo</string>
@@ -74,6 +78,9 @@
     <string name="call_live_frame_not_proposed">El marco se aplica en tu pantalla, pero no se pudo proponer</string>
     <string name="call_live_frame_proposal">%1$s te propone el marco «%2$s»</string>
     <string name="call_mode_montage_title">Montaje de la llamada</string>
+    <string name="call_mode_quit">Salir</string>
+    <string name="call_mode_quit_montage_hint">Vuelve a la llamada</string>
+    <string name="call_mode_recording">Grabando</string>
     <string name="call_open_conversation">Conversación</string>
     <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>

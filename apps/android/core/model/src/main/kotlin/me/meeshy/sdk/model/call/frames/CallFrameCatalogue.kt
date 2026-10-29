@@ -16,6 +16,9 @@ public object CallFrameCatalogue {
     /** Tous les cadres, ordonnés par ambiance puis dans l'ordre des fichiers. */
     public val all: List<CallFrameDesign> by lazy { parse(CallFrameCatalogueGenerated.moodFiles.map { it.second }) }
 
+    /** La mise en avant du carrousel d'appel (#12683), lue du même dossier partagé. */
+    public val spotlight: List<CallFrameSpotlight> by lazy { CallFrameSpotlightRule.parse(CallFrameCatalogueGenerated.spotlightFile) }
+
     public fun bucket(people: Int): CallFrameBucket? = CallFrameBucket.entries.firstOrNull { people in it.people }
 
     public fun frames(

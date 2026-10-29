@@ -149,21 +149,49 @@ class CallCapturePreviewTest {
     }
 
     @Test
-    fun `le choix du montage passe par les Classiques et revient au cadre en direct`() = rig {
-        controller.pickClassic(CallMontageStyle.MAGAZINE)
-        assertThat(CallMontagePickRule.choice(controller.pick.value, "x")).isEqualTo(CallMontageChoice.Classic(CallMontageStyle.MAGAZINE))
+    fun `le choix du montage ne sert que la capture et se souvient du dernier choix de chaque puce`() = rig {
+        controller.select(CallMontageChoice.Classic(CallMontageStyle.MAGAZINE))
+        assertThat(CallMontagePickRule.choice(controller.pick.value, 2)).isEqualTo(CallMontageChoice.Classic(CallMontageStyle.MAGAZINE))
 
-        controller.pickFrame()
-        assertThat(CallMontagePickRule.choice(controller.pick.value, "x")).isEqualTo(CallMontageChoice.Frame("x"))
+        val frame = CallLiveFrameRule.frames().first()
+        controller.select(CallMontageChoice.Frame(frame.id))
+        assertThat(CallMontagePickRule.choice(controller.pick.value, 2)).isEqualTo(CallMontageChoice.Frame(frame.id))
 
-        controller.show(CallMontageMoodChip.Classics)
-        assertThat(CallMontagePickRule.choice(controller.pick.value, "x")).isEqualTo(CallMontageChoice.Classic(CallMontageStyle.MAGAZINE))
+        controller.show(CallMontageMoodChip.Classics, 2)
+        assertThat(CallMontagePickRule.choice(controller.pick.value, 2)).isEqualTo(CallMontageChoice.Classic(CallMontageStyle.MAGAZINE))
+    }
+
+    @Test
+    fun `a l'ouverture, le cadre garde pendant l'appel devient le choix`() = rig {
+        val frame = CallLiveFrameRule.frames().first()
+
+        controller.open(frame.id)
+
+        assertThat(CallMontagePickRule.choice(controller.pick.value, 2)).isEqualTo(CallMontageChoice.Frame(frame.id))
+    }
+
+    @Test
+    fun `un cadre choisi peint ses vignettes voisines sur les images de l'appel, sans peindre la scene servie en direct`() = rig {
+        val window = CallLiveFrameRule.frames().take(3)
+        val look = CallCaptureLook.Frame(window.first())
+
+        controller.refreshPreview(CallCapturePreviewRequest(scene(look), liveFrameShown = true, frameWindow = window))
+
+        assertThat(frames.requests).containsExactly(CallCapturePreviewRule.MAX_DIMENSION)
+        assertThat(painter.calls.map { it.first }).isEqualTo(window.map { CallCaptureLook.Frame(it) })
+        assertThat(painter.calls.map { it.second }.toSet()).containsExactly(108 to 192)
+        assertThat(controller.previews.value.frameThumbnails.keys).isEqualTo(window.map { it.id }.toSet())
+        assertThat(controller.previews.value.preview).isNull()
+
+        painter.calls.clear()
+        controller.refreshPreview(CallCapturePreviewRequest(scene(look), liveFrameShown = true, frameWindow = window))
+        assertThat(painter.calls).isEmpty()
     }
 
     @Test
     fun `la photo prend le classique choisi`() = rig {
-        controller.pickClassic(CallMontageStyle.NOIR)
-        val look = CallMontagePickRule.look(controller.pick.value, liveFrameId = CallLiveFrameRule.frames().first().id)
+        controller.select(CallMontageChoice.Classic(CallMontageStyle.NOIR))
+        val look = CallMontagePickRule.look(controller.pick.value, 2)
 
         controller.capture(scene(look)) { true }
 
