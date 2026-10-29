@@ -295,6 +295,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         set { engineState.mutate { $0.realtimeMessagePersistor = newValue } }
     }
 
+    /// Lit, sans réseau, les traductions que l'appareil garde d'un message (base du compte). Le modèle de message du
+    /// cache n'en porte pas : le message précédent qui reprend la ligne de liste après une suppression les demande
+    /// ici pour que la ligne serve la langue du lecteur. Installé par l'app, qui possède la base ; `nil` en test.
+    public var messageTranslationsReader: (@Sendable @concurrent (String) async -> [TranslationRecord])? {
+        get { engineState.read { $0.messageTranslationsReader } }
+        set { engineState.mutate { $0.messageTranslationsReader = newValue } }
+    }
+
     /// Accusés de RÉCEPTION en attente, par conversation.
     ///
     /// `POST /conversations/{id}/mark-as-received` ne porte AUCUN `messageId` :

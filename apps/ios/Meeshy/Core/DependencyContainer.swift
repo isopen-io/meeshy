@@ -108,6 +108,16 @@ final class DependencyContainer {
             guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return }
             await Self.persist(mutation, into: session.messagePersistence)
         }
+
+        // Le message précédent qui reprend la ligne de liste après une suppression relit ici ses traductions, sans
+        // réseau : le modèle de message du cache n'en porte pas.
+        ConversationSyncEngine.shared.messageTranslationsReader = { [router] messageId in
+            guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return [] }
+            let persistence = session.messagePersistence
+            let direct = (try? persistence.translations(for: messageId)) ?? []
+            guard direct.isEmpty, let localId = try? persistence.resolveLocalId(forServerId: messageId) else { return direct }
+            return (try? persistence.translations(for: localId)) ?? []
+        }
     }
 
     /// Le dossier des bases de compte (App Group, ou Application Support
