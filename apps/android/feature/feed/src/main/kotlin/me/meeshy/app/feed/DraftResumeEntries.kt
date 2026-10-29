@@ -1,10 +1,12 @@
 package me.meeshy.app.feed
 
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
+import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import java.time.Instant
 
-enum class DraftResumeKind { POST, STORY }
+enum class DraftResumeKind { POST, REEL, STORY }
 
 /** One draft the author can pick up again, as the head of the feed shows it. */
 data class DraftResumeEntry(
@@ -18,6 +20,9 @@ data class DraftResumeEntry(
  * « Reprendre votre brouillon » (#13430, iso iOS #8848): the drafts worth offering at the head of
  * the feed, the most recently touched first. A story draft whose publication is on its way is not
  * one — it is already sent, and is told by « Publications non envoyées ».
+ *
+ * A reel is composed in the post composer and kept in its slot (#13503): the draft is a REEL when its
+ * composition is one ([ReelComposition.defaultType], the very rule the publish applies), a POST otherwise.
  */
 object DraftResumeEntries {
 
@@ -27,12 +32,15 @@ object DraftResumeEntries {
     private fun PostComposerDraftSnapshot.toEntry(): DraftResumeEntry? =
         takeIf { it.isWorthRestoring }?.let {
             DraftResumeEntry(
-                kind = DraftResumeKind.POST,
+                kind = if (isReel) DraftResumeKind.REEL else DraftResumeKind.POST,
                 text = text.trim().ifBlank { null },
                 mediaCount = media.size,
                 updatedAtMillis = updatedAtMillis,
             )
         }
+
+    private val PostComposerDraftSnapshot.isReel: Boolean
+        get() = ReelComposition.defaultType(media.map { ReelComposition.MediaKind(it.mimeType, it.durationMs) }, forcePlainPost) == PostType.REEL
 
     private fun StoryComposerDraftSnapshot.toEntry(): DraftResumeEntry? =
         takeIf { it.isWorthRestoring && !it.isAwaitingPublication }?.let {

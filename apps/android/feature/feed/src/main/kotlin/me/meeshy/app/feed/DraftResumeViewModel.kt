@@ -31,7 +31,7 @@ class DraftResumeViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 when (kind) {
-                    DraftResumeKind.POST -> posts.clearEditing()
+                    DraftResumeKind.POST, DraftResumeKind.REEL -> posts.clearEditing()
                     DraftResumeKind.STORY -> if (stories.load()?.isAwaitingPublication != true) stories.clear()
                 }
             }
