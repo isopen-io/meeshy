@@ -15,6 +15,8 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.KeyedJsonCacheSource
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.game.GameWriteParser
+import me.meeshy.sdk.model.game.GameBlockParser
+import me.meeshy.sdk.model.game.GameRarityEntry
 import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgressParser
 import me.meeshy.sdk.model.game.engagement.MeeshMintResult
@@ -53,6 +55,13 @@ class EngagementProgressRepository(
         source().results(CachePolicy.UserStats, clock, onSyncError)
             .map { result -> result.parsed() }
             .flowOn(Dispatchers.Default)
+
+    /**
+     * Les raretés mesurées du DERNIER bloc connu, lues au disque seul — jamais au réseau : la célébration d'un succès
+     * porte son liseré si le cache le connaît, et reste celle d'avant sinon. Vide à froid, ou compte vidé.
+     */
+    suspend fun cachedRarities(): Map<String, GameRarityEntry>? =
+        GameBlockParser.raritiesFromEngagement(cache.get(NAMESPACE, KEY, JsonElement.serializer())?.value)
 
     /** Force le réseau (tirer pour rafraîchir) et pose la charge au cache ; lève sur un échec, le cache reste. */
     suspend fun refresh() = source().revalidate()
