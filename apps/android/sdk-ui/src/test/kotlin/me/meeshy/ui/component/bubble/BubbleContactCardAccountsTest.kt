@@ -177,4 +177,28 @@ class BubbleContactCardAccountsTest {
         )
         assertThat(content.files.single().localUri).isEqualTo("content://x/1")
     }
+
+    @Test
+    fun `une portee qui se ferme retire la rangee deja montree`() {
+        val open = Spy(ada)
+        val closed = Spy(null)
+        val accounts = mutableStateOf<BubbleContactCardAccounts>(open)
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(
+                    LocalBubbleContactCardAccounts provides accounts.value,
+                    LocalBubbleFileTransfers provides BubbleFileTransfers(readyAttachmentIds = setOf("a1")),
+                ) {
+                    BubbleFileRow(file = card(), onColor = Color.Black, onClick = {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Ada Lovelace", useUnmergedTree = true).assertIsDisplayed()
+
+        accounts.value = closed
+        compose.waitForIdle()
+
+        compose.onNodeWithText("On Meeshy", useUnmergedTree = true).assertDoesNotExist()
+    }
 }

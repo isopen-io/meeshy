@@ -109,4 +109,13 @@ class VCardCacheTest {
         assertThat(pending.await()).isNull()
         assertThat(subject.cached("1")).isNull()
     }
+
+    @Test
+    fun `un fournisseur de contenu qui refuse l'adresse ne fait pas tomber le fil`() = runTest {
+        val subject = VCardCache({ throw IllegalArgumentException("Invalid lookup id") }, Dispatchers.Unconfined, 10, null)
+        val refusing = VCardCache({ throw UnsupportedOperationException("no") }, Dispatchers.Unconfined, 10, null)
+
+        assertThat(subject.load("a1", "content://com.android.contacts/contacts/as_vcard/x")).isNull()
+        assertThat(refusing.load("a2", "content://x/2")).isNull()
+    }
 }

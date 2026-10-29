@@ -133,8 +133,11 @@ fun ChatScreen(
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
     val isEndToEnd = state.isEndToEnd
-    val contactCards = remember(cardsViewModel, viewModel, isEndToEnd) {
-        ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, viewModel::downloadedFileUri)
+    val clearance = remember(cardsViewModel, state.conversationId, state.encryptionMode, isEndToEnd) {
+        cardsViewModel.clearance(state.conversationId, state.encryptionMode)
+    }
+    val contactCards = remember(cardsViewModel, viewModel, isEndToEnd, clearance) {
+        ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, clearance, viewModel::downloadedFileUri)
     }
     CompositionLocalProvider(LocalBubbleContactCardAccounts provides contactCards) {
     ChatBackgroundHost(appearance) {

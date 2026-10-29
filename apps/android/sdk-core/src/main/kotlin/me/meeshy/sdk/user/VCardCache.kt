@@ -16,7 +16,7 @@ import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.commitOrWrite
 
-/** Couture d'ouverture d'un fichier LOCAL (remplacée par les témoins) : `null` = illisible. */
+/** Couture d'ouverture d'un fichier LOCAL (remplacée par les témoins) : `null` = illisible ; un refus du fournisseur (permission, adresse inconnue) aussi. */
 internal fun interface LocalFileOpener {
     fun open(uri: String): java.io.InputStream?
 }
@@ -73,7 +73,7 @@ class VCardCache internal constructor(
         if (read.isBinary || read.truncated) null else VCardParser.parse(read.text)
     } catch (_: IOException) {
         null
-    } catch (_: SecurityException) {
+    } catch (_: RuntimeException) {
         null
     }
 

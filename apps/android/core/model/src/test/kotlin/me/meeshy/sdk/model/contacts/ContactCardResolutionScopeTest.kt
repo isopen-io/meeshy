@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.contacts
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ConversationClearance
 import org.junit.Test
 
 class ContactCardResolutionScopeTest {
@@ -47,5 +48,25 @@ class ContactCardResolutionScopeTest {
     fun `un mode inconnu ferme et le reste ferme`() {
         assertThat(ContactCardResolutionScope.Unknown.mayResolveOnServer).isFalse()
         assertThat(ContactCardResolutionScope.Unknown.inConversation(isEndToEnd = false)).isEqualTo(ContactCardResolutionScope.Unknown)
+    }
+
+    @Test
+    fun `un mode de message que cette version ne connait pas ferme comme le bout en bout`() {
+        assertThat(ContactCardResolutionScope.of(message(mode = "mls")).mayResolveOnServer).isFalse()
+        assertThat(ContactCardResolutionScope.of(message(mode = "hybrid")).mayResolveOnServer).isTrue()
+    }
+
+    @Test
+    fun `une piece au mode inconnu ferme un message en clair`() {
+        assertThat(ContactCardResolutionScope.Clear.sealedBy(card(mode = "mls")).mayResolveOnServer).isFalse()
+        assertThat(ContactCardResolutionScope.Clear.sealedBy(card(mode = "server")).mayResolveOnServer).isTrue()
+    }
+
+    @Test
+    fun `seule une conversation connue claire laisse resoudre`() {
+        assertThat(ContactCardResolutionScope.Clear.under(ConversationClearance.CLEAR)).isEqualTo(ContactCardResolutionScope.Clear)
+        assertThat(ContactCardResolutionScope.Clear.under(ConversationClearance.END_TO_END)).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(ContactCardResolutionScope.Clear.under(ConversationClearance.UNKNOWN)).isEqualTo(ContactCardResolutionScope.Unknown)
+        assertThat(ContactCardResolutionScope.EndToEnd.under(ConversationClearance.CLEAR)).isEqualTo(ContactCardResolutionScope.EndToEnd)
     }
 }

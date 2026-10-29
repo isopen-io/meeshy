@@ -7,6 +7,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.user.ContactCardMeeshyAccount
 import me.meeshy.sdk.user.ContactCardMeeshyLookup
@@ -22,8 +23,11 @@ class ChatContactCardAccountsTest {
         every { it.cached(any(), any()) } returns ada
     }
 
-    private fun provider(e2ee: Boolean = false, downloaded: Map<String, String> = emptyMap()) =
-        ChatContactCardAccounts(lookup, e2ee, downloaded::get)
+    private fun provider(
+        e2ee: Boolean = false,
+        downloaded: Map<String, String> = emptyMap(),
+        clearance: ConversationClearance = ConversationClearance.CLEAR,
+    ) = ChatContactCardAccounts(lookup, e2ee, clearance, downloaded::get)
 
     private fun file(scope: ContactCardResolutionScope = ContactCardResolutionScope.Clear, localUri: String? = null) =
         BubbleFile(attachmentId = "a1", name = "Ada.vcf", isContactCard = true, localUri = localUri, contactScope = scope)
@@ -66,5 +70,27 @@ class ChatContactCardAccountsTest {
         subject.lookup(file(ContactCardResolutionScope.Unknown))
 
         coVerify { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.Unknown) }
+    }
+
+    @Test
+    fun `une conversation dont le mode n'a jamais ete servi ne resout rien`() = runTest {
+        val subject = provider(downloaded = mapOf("a1" to "content://dl/1"), clearance = ConversationClearance.UNKNOWN)
+
+        subject.lookup(file())
+        subject.cached(file())
+
+        coVerify { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.Unknown) }
+        verify { lookup.cached("a1", ContactCardResolutionScope.Unknown) }
+        coVerify(exactly = 0) { lookup.lookup(any(), any(), ContactCardResolutionScope.Clear) }
+    }
+
+    @Test
+    fun `une conversation scellee au registre ou au mode inconnu ferme la portee`() = runTest {
+        val subject = provider(downloaded = mapOf("a1" to "content://dl/1"), clearance = ConversationClearance.END_TO_END)
+
+        subject.lookup(file())
+
+        coVerify { lookup.lookup("a1", "content://dl/1", ContactCardResolutionScope.EndToEnd) }
+        coVerify(exactly = 0) { lookup.lookup(any(), any(), ContactCardResolutionScope.Clear) }
     }
 }

@@ -67,7 +67,7 @@ internal fun BubbleFile.asksForMeeshyAccount(isDownloaded: Boolean): Boolean =
 /**
  * Le compte Meeshy de la carte, tant que la bulle est composée. Clés STABLES (l'identifiant de la pièce et le fait
  * qu'elle soit prête) : un défilement ou une recomposition ne relance rien, et une bulle qui revient s'affiche avec
- * le compte déjà connu.
+ * le compte déjà connu. Un hôte qui change (portée fermée) repose la question : la rangée d'avant ne survit pas.
  */
 @Composable
 internal fun rememberMeeshyAccount(file: BubbleFile, isDownloaded: Boolean): ContactCardMeeshyAccount? {
@@ -75,7 +75,7 @@ internal fun rememberMeeshyAccount(file: BubbleFile, isDownloaded: Boolean): Con
     val asks = file.asksForMeeshyAccount(isDownloaded)
     val initial = remember(accounts, file.attachmentId, asks) { if (asks) accounts.cached(file) else null }
     val account by produceState(initial, accounts, file.attachmentId, asks) {
-        value = if (asks) value ?: accounts.lookup(file) else null
+        value = if (asks) accounts.cached(file) ?: accounts.lookup(file) else null
     }
     return account
 }
