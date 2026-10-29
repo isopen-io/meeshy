@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_edit_unavailable">تعذّر إعادة فتح هذه القصة</string>
+    <string name="story_edit_one_slide">القصة المنشورة تحتوي على شريحة واحدة فقط: احذف الشرائح الأخرى لحفظها</string>
+</resources>

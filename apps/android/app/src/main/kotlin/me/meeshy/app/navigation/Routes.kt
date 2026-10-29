@@ -175,7 +175,9 @@ object Routes {
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}"
+    /** La story PUBLIÉE que le composeur rouvre pour la modifier (#13632) — absente, c'est une story neuve. */
+    const val STORY_COMPOSER_EDIT_ARG = "editStoryId"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}&$STORY_COMPOSER_EDIT_ARG={$STORY_COMPOSER_EDIT_ARG}"
     /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
@@ -189,6 +191,10 @@ object Routes {
     /** Opens the story composer as a repost of [storyId] — the source id rides as an optional arg. */
     fun storyComposerRepost(storyId: String): String =
         "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
+
+    /** Rouvre la story publiée [storyId] dans le composeur : l'enregistrement la met à jour. */
+    fun storyComposerEdit(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_EDIT_ARG=${Uri.encode(storyId)}"
 
     /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
     fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =

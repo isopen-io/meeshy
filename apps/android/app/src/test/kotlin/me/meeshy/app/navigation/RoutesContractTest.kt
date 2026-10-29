@@ -78,7 +78,7 @@ class RoutesContractTest {
             "USER_POSTS", "profile/{userId}/posts",
             "REPORT_USER", "report/{userId}?username={username}",
             "STORY_VIEWER", "story/{userId}",
-            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}",
+            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}&editStoryId={editStoryId}",
             "REELS", "reels?seed={seed}",
             "CALL", CallRoute.PATTERN,
         )
@@ -90,6 +90,13 @@ class RoutesContractTest {
             .isEqualTo("story_composer?audience=FRIENDS")
         assertThat(Routes.storyComposerFromOnboarding(me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.PUBLIC))
             .isEqualTo(Routes.STORY_COMPOSER)
+    }
+
+    @Test
+    fun `modifier une story publiee rouvre le composeur par un argument optionnel de la route du composeur`() {
+        assertThat(Routes.STORY_COMPOSER_EDIT_ARG).isEqualTo("editStoryId")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).contains("&editStoryId={editStoryId}")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).startsWith(Routes.STORY_COMPOSER)
     }
 
     @Test

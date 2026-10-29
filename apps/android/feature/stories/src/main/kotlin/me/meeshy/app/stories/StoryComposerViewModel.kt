@@ -107,6 +107,18 @@ class StoryComposerViewModel @Inject constructor(
     private var ownsStoredDraft = false
     private var restoring: Job? = null
 
+    /** Une story PUBLIÉE rouverte (#13632) : son enregistrement la met à jour, il ne publie jamais une story neuve. */
+    private var editMode: StoryEditMode? = null
+
+    /** `false` : l'édition est déjà ouverte (l'écran se recompose ou tourne) — rien ne se rouvre par-dessus ce que l'auteur a changé. */
+    fun onEditRequested(): Boolean = (editMode !is StoryEditMode.Active).also { if (it) { editMode = StoryEditMode.Loading; seededByDoor = true } }
+
+    internal fun onEditing(opening: StoryEditOpening, editor: StoryEditor) {
+        editMode = StoryEditMode.Active(opening, editor)
+        _state.update(opening::applied)
+        resetHistory()
+    }
+
     /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
     fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
         restoring?.join()
@@ -177,6 +189,7 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
     fun persistDraft() {
+        if (editMode != null) return
         viewModelScope.launch {
             val orphans = underOpeningAccount {
                 val current = _state.value
@@ -684,6 +697,8 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     fun publish() {
+        (editMode as? StoryEditMode.Active)?.let { return it.save(viewModelScope, _state, _published, resolvePublishLanguage()) }
+        if (editMode != null) return
         val current = _state.updateAndGet { it.withAudiencePurged() }
         if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }

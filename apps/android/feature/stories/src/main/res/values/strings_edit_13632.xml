@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_edit_unavailable">This story can\'t be reopened</string>
+    <string name="story_edit_one_slide">A published story holds a single slide: remove the other slides to save it</string>
+</resources>

@@ -76,6 +76,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = dismiss,
             onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
+            onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -181,12 +182,18 @@ internal fun NavGraphBuilder.feedNavGraph(
                 nullable = true
                 defaultValue = null
             },
+            navArgument(Routes.STORY_COMPOSER_EDIT_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
         ),
     ) { entry ->
         StoryComposerScreen(
             onClose = { navController.popBackStack() },
             repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
             initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
+            editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG),
         )
     }
 }

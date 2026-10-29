@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_edit_unavailable">Cette story ne peut pas être rouverte</string>
+    <string name="story_edit_one_slide">Une story publiée tient sur une seule slide : retirez les autres pour l\'enregistrer</string>
+</resources>

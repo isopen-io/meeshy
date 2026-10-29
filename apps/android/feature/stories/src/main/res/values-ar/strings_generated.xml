@@ -97,6 +97,7 @@
     <string name="my_stories_delete_selected_title">حذف القصص المحدَّدة؟</string>
     <string name="my_stories_delete_success">تم حذف القصة</string>
     <string name="my_stories_delete_title">حذف القصة؟</string>
+    <string name="my_stories_edit">تعديل</string>
     <string name="my_stories_empty_subtitle">ستظهر قصصك المنشورة هنا ما دامت نشطة.</string>
     <string name="my_stories_empty_title">لم تُرسَل أي قصة</string>
     <string name="my_stories_glyph_comments">عرض التعليقات</string>
@@ -269,6 +270,8 @@
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
+    <string name="story_edit_error">فشل تحديث القصة</string>
+    <string name="story_edit_offline">الاتصال بالإنترنت مطلوب لتعديل القصة</string>
     <string name="story_language_close">إغلاق</string>
     <string name="story_language_original">الأصل</string>
     <string name="story_language_original_hint">كل نص بلغته</string>

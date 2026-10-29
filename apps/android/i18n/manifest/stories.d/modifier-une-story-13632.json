@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.edit",
+          "androidName": "my_stories_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.edit.error",
+          "androidName": "story_edit_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.edit.offline",
+          "androidName": "story_edit_offline",
+          "status": "adopted"
+        },
+        {
+          "androidName": "story_edit_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_edit_one_slide",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

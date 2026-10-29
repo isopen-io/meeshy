@@ -536,6 +536,10 @@ class PostRepository @Inject constructor(
     ): NetworkResult<ApiPost> =
         apiCall { postApi.update(postId, UpdatePostRequest(content, visibility, moodEmoji)) }
 
+    /** L'édition d'une story publiée (#13632) : la requête est déjà composée, les champs absents restent ceux du serveur. */
+    suspend fun update(postId: String, request: UpdatePostRequest): NetworkResult<ApiPost> =
+        apiCall { postApi.update(postId, request) }
+
     /** Édition à champs déclarés : seul ce que [PostEditPayload.build] a laissé part sur le fil. */
     suspend fun update(postId: String, draft: PostEditDraft): NetworkResult<ApiPost> =
         apiCall { postApi.update(postId, draft.toUpdateRequest()) }

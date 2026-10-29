@@ -197,6 +197,9 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                             text = when (val error = state.errorMessage) {
                                 null -> stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining)
                                 StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+                                StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
+                                StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
+                                StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
                                 else -> error
                             },
                             modifier = Modifier.fillMaxWidth(),

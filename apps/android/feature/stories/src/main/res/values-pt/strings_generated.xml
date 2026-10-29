@@ -97,6 +97,7 @@
     <string name="my_stories_delete_selected_title">Excluir as stories selecionadas?</string>
     <string name="my_stories_delete_success">Story excluída</string>
     <string name="my_stories_delete_title">Excluir esta story?</string>
+    <string name="my_stories_edit">Editar</string>
     <string name="my_stories_empty_subtitle">Suas stories publicadas aparecerão aqui enquanto estiverem ativas.</string>
     <string name="my_stories_empty_title">Nenhuma story enviada ainda</string>
     <string name="my_stories_glyph_comments">Ver comentários</string>
@@ -263,6 +264,8 @@
     <string name="story_composer_redo">Refazer</string>
     <string name="story_composer_soundLibrary">Biblioteca</string>
     <string name="story_composer_undo">Desfazer</string>
+    <string name="story_edit_error">Falha ao atualizar o story</string>
+    <string name="story_edit_offline">Conexão necessária para editar o story</string>
     <string name="story_language_close">Fechar</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Cada texto no seu idioma</string>

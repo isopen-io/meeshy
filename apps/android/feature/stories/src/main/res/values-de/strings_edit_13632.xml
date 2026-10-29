@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_edit_unavailable">Diese Story lässt sich nicht erneut öffnen</string>
+    <string name="story_edit_one_slide">Eine veröffentlichte Story hat nur eine Folie: Entferne die anderen, um zu speichern</string>
+</resources>

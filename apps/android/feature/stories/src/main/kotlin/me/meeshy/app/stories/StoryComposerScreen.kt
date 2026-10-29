@@ -102,6 +102,8 @@ fun StoryComposerScreen(
     seededByDoor: Boolean = false,
     /** L'audience dont la porte amorce le composeur (onboarding d'un mineur) ; un brouillon restauré garde la sienne. */
     initialVisibility: StoryVisibility? = null,
+    /** La story PUBLIÉE à modifier (#13632) : le composeur la rouvre et l'enregistrement la met à jour. */
+    editStoryId: String? = null,
     titleContent: (@Composable () -> Unit)? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
@@ -128,9 +130,11 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor, initialVisibility = initialVisibility)
+        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor || editStoryId != null, initialVisibility = initialVisibility)
         onDispose { viewModel.persistDraft() }
     }
+
+    StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
 
     fun dispatchPicked(uris: List<Uri>) {
         if (uris.isEmpty()) return
