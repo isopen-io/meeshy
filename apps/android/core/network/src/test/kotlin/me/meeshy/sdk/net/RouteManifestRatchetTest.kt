@@ -70,8 +70,10 @@ class RouteManifestRatchetTest {
          * `ConversationEngagementApi.kt`.
          * 236 : moins `DELETE /attachments/:attachmentId` (#13596 : supprimer UNE pièce d'un message), que porte
          * `MediaApi.delete`.
+         * 235 : moins `GET /users/:userId/game` (#13498 : le niveau et le rang d'un autre membre sur sa bannière, selon
+         * SES réglages), que porte `GameApi.userGame`.
          */
-        const val TO_PORT_CEILING = 236
+        const val TO_PORT_CEILING = 235
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

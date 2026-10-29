@@ -36,6 +36,13 @@ interface GameApi {
     @GET("me/game/league/friends")
     suspend fun leagueFriends(): ApiResponse<JsonElement>
 
+    /**
+     * Le jeu d'un AUTRE membre : son niveau et son rang selon SES réglages (`rank`), le palier de son trésor (`treasury`).
+     * Un refus, un blocage ou un compte inconnu répondent `visible: false` — jamais une erreur qui trahirait le réglage.
+     */
+    @GET("users/{userId}/game")
+    suspend fun userGame(@Path("userId") userId: String): ApiResponse<JsonElement>
+
     @GET("me/game/privacy")
     suspend fun settings(): ApiResponse<JsonElement>
 
