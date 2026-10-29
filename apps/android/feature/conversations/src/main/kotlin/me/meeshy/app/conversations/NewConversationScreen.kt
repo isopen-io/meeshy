@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,10 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -289,32 +288,60 @@ private fun NoUserFound(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SelectedChips(
+internal fun SelectedChips(
     selected: List<SelectableUser>,
     onRemove: (String) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         items(selected, key = { it.id }) { user ->
-            AssistChip(
-                onClick = { onRemove(user.id) },
-                label = { Text(user.displayName) },
-                trailingIcon = {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.new_conversation_remove),
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MeeshyPalette.Indigo500.copy(alpha = 0.12f),
-                ),
-            )
+            SelectedChip(user = user, onRemove = { onRemove(user.id) })
         }
+    }
+}
+
+@Composable
+internal fun SelectedChip(
+    user: SelectableUser,
+    onRemove: () -> Unit,
+) {
+    val chipShape = CircleShape
+    Row(
+        modifier = Modifier
+            .clip(chipShape)
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f))
+            .border(1.dp, MeeshyPalette.Indigo500.copy(alpha = 0.3f), chipShape)
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        MeeshyAvatar(
+            name = user.displayName,
+            size = 24.dp,
+            imageUrl = user.avatarUrl,
+            presence = rememberPresence(user.id, user.servedPresence),
+        )
+        Text(
+            text = user.displayName,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+        )
+        Icon(
+            MeeshyIcons.CloseCircleFilled,
+            contentDescription = stringResource(R.string.new_conversation_remove),
+            tint = MeeshyTheme.tokens.textMuted,
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onRemove)
+                .padding(2.dp),
+        )
     }
 }
 
