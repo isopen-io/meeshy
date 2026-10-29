@@ -159,5 +159,5 @@ internal fun rememberOnboardingReduceMotion(): Boolean {
  * À poser sur le contenu de la racine pendant que le calque est présenté : TalkBack ne peut plus
  * y aller. Le trait modal à lui seul n'isole rien.
  */
-internal fun Modifier.hiddenBehindOnboarding(isPresented: Boolean): Modifier =
+fun Modifier.hiddenBehindOnboarding(isPresented: Boolean): Modifier =
     if (isPresented) clearAndSetSemantics {} else this
