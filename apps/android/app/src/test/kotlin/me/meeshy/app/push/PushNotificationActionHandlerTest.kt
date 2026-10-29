@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.ConversationRepository
@@ -16,7 +17,12 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.outbox.EndToEndOutboxAdmission
 import me.meeshy.sdk.outbox.OutboxAdmissionVerdict
+import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.AccountTicketContext
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,6 +37,7 @@ class PushNotificationActionHandlerTest {
         user: MeeshyUser?,
         verdict: OutboxAdmissionVerdict = OutboxAdmissionVerdict.ADMIT,
         locked: Set<String> = emptySet(),
+        fence: AccountFence? = null,
     ) {
         constructor(user: MeeshyUser?, sealed: Boolean) :
             this(user, if (sealed) OutboxAdmissionVerdict.WITHHOLD else OutboxAdmissionVerdict.ADMIT)
@@ -49,7 +56,7 @@ class PushNotificationActionHandlerTest {
         val notifications = mockk<NotificationRepository>(relaxed = true)
         val locks = InMemoryConversationLockStore().also { store -> locked.forEach { store.setLock(it, "1234") } }
         val handler = PushNotificationActionHandler(
-            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission, posts, notifications, locks,
+            ApplicationProvider.getApplicationContext<Context>(), session, messages, conversations, admission, posts, notifications, locks, fence,
         )
     }
 
@@ -235,5 +242,65 @@ class PushNotificationActionHandlerTest {
 
         assertThat(f.handler.comment("p1", "Bravo", serverNotificationId = "n7"))
             .isEqualTo(PushNotificationActionHandler.Outcome.COMMENT_QUEUED)
+    }
+    @Test
+    fun `une reponse part sous le compte de la banniere meme si un autre compte s ouvre pendant la relecture du mode`() = runTest {
+        var owner: String? = "me"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val f = Fixture(me, fence = fence)
+        coEvery { f.admission.verdictFor("c1") } coAnswers {
+            owner = "other"
+            OutboxAdmissionVerdict.ADMIT
+        }
+        var queuedUnder: AccountTicket? = null
+        coEvery { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } coAnswers {
+            queuedUnder = currentCoroutineContext()[AccountTicketContext]?.ticket
+            "cid"
+        }
+
+        f.handler.reply("c1", "les mots de me", accountId = "me")
+
+        assertThat(queuedUnder?.ownerId).isEqualTo("me")
+        assertThat(fence.isCurrent(queuedUnder!!)).isFalse()
+    }
+
+    @Test
+    fun `un commentaire entre dans la file sous le compte de la banniere`() = runTest {
+        var owner: String? = "me"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val f = Fixture(me, fence = fence)
+        var queuedUnder: AccountTicket? = null
+        coEvery { f.posts.queueComment(any(), any(), any(), any()) } coAnswers {
+            queuedUnder = currentCoroutineContext()[AccountTicketContext]?.ticket
+            "cmid_c1"
+        }
+
+        f.handler.comment("p1", "Bravo", accountId = "me")
+
+        assertThat(queuedUnder?.ownerId).isEqualTo("me")
+    }
+
+    @Test
+    fun `une session dont le compte de la file n est pas celui de l utilisateur ne repond ni ne commente`() = runTest {
+        val fence = AccountFence(OutboxOwnerSource { "other" })
+        val f = Fixture(me, fence = fence)
+
+        assertThat(f.handler.reply("c1", "salut", accountId = "me")).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(f.handler.comment("p1", "Bravo", accountId = "me")).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(f.handler.markRead("c1", accountId = "me")).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { f.posts.queueComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { f.conversations.markReadOptimistic(any()) }
+    }
+
+    @Test
+    fun `un compte clos pendant l action rend une issue qui retire la banniere au lieu de la laisser en attente`() = runTest {
+        val f = Fixture(me)
+        coEvery { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } throws AccountClosedException()
+        coEvery { f.posts.queueComment(any(), any(), any(), any()) } throws AccountClosedException()
+
+        assertThat(f.handler.reply("c1", "salut")).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(f.handler.comment("p1", "Bravo", serverNotificationId = "n7")).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        coVerify(exactly = 0) { f.notifications.markAsRead(any()) }
     }
 }

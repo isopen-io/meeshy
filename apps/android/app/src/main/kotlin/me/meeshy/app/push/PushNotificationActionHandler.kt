@@ -18,6 +18,10 @@ import me.meeshy.sdk.outbox.EndToEndOutboxAdmission
 import me.meeshy.sdk.outbox.OutboxAdmissionVerdict
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.withAccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import timber.log.Timber
 import javax.inject.Inject
@@ -37,6 +41,10 @@ import javax.inject.Singleton
  * ([EndToEndOutboxAdmission.verdictFor]), lue AVANT de créer une bulle condamnée. Un mode encore INCONNU est relu au
  * serveur ; toujours inconnu, on refuse proprement ([Outcome.MODE_UNKNOWN]) plutôt que de faire naître une bulle que le
  * drainer retiendrait. Une conversation verrouillée par code n'agit pas non plus ([Outcome.LOCKED]).
+ *
+ * Le compte de l'action est celui du GESTE : son ticket ([AccountFence.ticket]) est pris dès la session connue, doit
+ * désigner le compte de la bannière, et porte toute écriture qui suit — la relecture du mode peut durer, et un autre
+ * compte ouvert entre-temps ne reçoit jamais la réponse ni le commentaire tapés pour le premier (#13558).
  */
 @Singleton
 class PushNotificationActionHandler @Inject constructor(
@@ -48,6 +56,7 @@ class PushNotificationActionHandler @Inject constructor(
     private val postRepository: PostRepository,
     private val notificationRepository: NotificationRepository,
     private val lockStore: ConversationLockStore,
+    private val fence: AccountFence? = null,
 ) {
     /** [dismissesBanner] : l'action est prise en compte, la bannière s'en va ; sinon elle reste, intacte. */
     enum class Outcome(val dismissesBanner: Boolean) {
@@ -75,9 +84,10 @@ class PushNotificationActionHandler @Inject constructor(
         val content = text.trim()
         if (content.isEmpty()) return Outcome.EMPTY
         val user = signedInUser() ?: return Outcome.NOT_SIGNED_IN
-        if (accountId != null && accountId != user.id) return Outcome.ACCOUNT_CHANGED
+        val gesture = fence?.ticket()
+        if (!isAddressedTo(user, accountId, gesture)) return Outcome.ACCOUNT_CHANGED
         if (lockStore.isLocked(conversationId)) return Outcome.LOCKED
-        return guarded {
+        return guarded(gesture) {
             when (admission.verdictFor(conversationId)) {
                 OutboxAdmissionVerdict.ADMIT -> Unit
                 OutboxAdmissionVerdict.WITHHOLD -> return@guarded Outcome.END_TO_END
@@ -115,8 +125,9 @@ class PushNotificationActionHandler @Inject constructor(
         if (content.isEmpty()) return Outcome.EMPTY
         val user = signedInUser() ?: return Outcome.NOT_SIGNED_IN
         if (user.isAnonymous == true) return Outcome.NOT_SIGNED_IN
-        if (accountId != null && accountId != user.id) return Outcome.ACCOUNT_CHANGED
-        return guarded {
+        val gesture = fence?.ticket()
+        if (!isAddressedTo(user, accountId, gesture)) return Outcome.ACCOUNT_CHANGED
+        return guarded(gesture) {
             val parentId = PushNotificationActions.threadedParentCommentId(type, notifiedCommentId)
             postRepository.queueComment(postId, content, parentId) ?: return@guarded Outcome.FAILED
             WorkManager.getInstance(context).enqueue(OutboxFlushWorker.buildRequest())
@@ -130,9 +141,10 @@ class PushNotificationActionHandler @Inject constructor(
 
     suspend fun markRead(conversationId: String, accountId: String? = null): Outcome {
         val user = signedInUser() ?: return Outcome.NOT_SIGNED_IN
-        if (accountId != null && accountId != user.id) return Outcome.ACCOUNT_CHANGED
+        val gesture = fence?.ticket()
+        if (!isAddressedTo(user, accountId, gesture)) return Outcome.ACCOUNT_CHANGED
         if (lockStore.isLocked(conversationId)) return Outcome.LOCKED
-        return guarded {
+        return guarded(gesture) {
             conversationRepository.markReadOptimistic(conversationId)
             WorkManager.getInstance(context).enqueue(OutboxFlushWorker.buildRequest())
             Outcome.MARKED_READ
@@ -148,8 +160,15 @@ class PushNotificationActionHandler @Inject constructor(
         }
     }
 
-    private suspend fun guarded(action: suspend () -> Outcome): Outcome = try {
-        action()
+    /** La bannière s'adresse au compte connecté, et c'est aussi le compte sous lequel la file écrira. */
+    private fun isAddressedTo(user: MeeshyUser, accountId: String?, gesture: AccountTicket?): Boolean =
+        (accountId == null || accountId == user.id) && (gesture == null || gesture.ownerId == user.id)
+
+    private suspend fun guarded(gesture: AccountTicket?, action: suspend () -> Outcome): Outcome = try {
+        withAccountTicket(gesture) { action() }
+    } catch (closed: AccountClosedException) {
+        Timber.w("Notification action dropped: its account closed")
+        Outcome.ACCOUNT_CHANGED
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: Exception) {
