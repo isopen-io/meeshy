@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.game.GameMomentPresence
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
@@ -59,6 +60,7 @@ class StoryViewerViewModel @Inject constructor(
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
+    private val gameMoment: GameMomentPresence = GameMomentPresence(),
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -67,6 +69,9 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Pause de l'appui long — portée par [emit] tant que la story n'a pas repris. */
     private var isHoldPaused = false
+
+    /** Une célébration du jeu recouvre l'écran : la story se fige dessous (iOS `isGameMomentShown`). */
+    private var isGameMomentShown = false
 
     /** Son coupé pour toute la session de lecture — porté par [emit]. */
     private var isMuted = false
@@ -127,6 +132,16 @@ class StoryViewerViewModel @Inject constructor(
         observeTranslationUpdates()
         observeStoryDeletions()
         observeStoryUpdates()
+        observeGameMoment()
+    }
+
+    private fun observeGameMoment() {
+        viewModelScope.launch {
+            gameMoment.isPresented.collect {
+                isGameMomentShown = it
+                _state.update { state -> state.copy(isPaused = isHoldPaused || it) }
+            }
+        }
     }
 
     /**
@@ -577,7 +592,7 @@ class StoryViewerViewModel @Inject constructor(
             } else {
                 null
             },
-            isPaused = isHoldPaused,
+            isPaused = isHoldPaused || isGameMomentShown,
             isMuted = isMuted,
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
             groupCount = playback.groups.size,
