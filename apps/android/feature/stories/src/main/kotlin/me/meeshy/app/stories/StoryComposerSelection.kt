@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffects
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
 import me.meeshy.sdk.model.media.MediaTrimBounds
+import me.meeshy.sdk.model.media.MediaTrimRule
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
@@ -23,11 +24,12 @@ internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerOb
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
 
 /**
- * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans rognage ni actions — filtre propre,
- * Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
+ * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans actions — rognage (d'une vidéo dont
+ * la durée est connue seulement), filtre propre, Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
  */
 internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.TRIM),
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
         ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
@@ -67,7 +69,12 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
  */
 internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
     if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) {
-        return if (placedMediaIsVideo(id)) ServedPlacedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) else ServedPlacedMediaSections
+        val trim = ComposerObjectEditorSection.Media(MediaEditTool.TRIM)
+        return when {
+            !placedMediaIsVideo(id) -> ServedPlacedMediaSections - trim
+            placedTrimSourceOf(id) == null -> ServedPlacedMediaSections - trim - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS)
+            else -> ServedPlacedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS)
+        }
     }
     val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id)
     return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
@@ -77,6 +84,23 @@ internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObj
 internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
     val mime = attachments.firstOrNull { it.id == id }?.mimeType ?: pendingUploads.firstOrNull { it.cmid == id }?.item?.mimeType
     return mime?.startsWith("video", ignoreCase = true) == true
+}
+
+/**
+ * La durée de SOURCE de la vidéo posée [id], seule matière d'un rognage : `null` pour une image, un média non posé ou une vidéo
+ * dont la durée n'est pas mesurée (en attente d'envoi) — aucun bouton sans effet.
+ */
+internal fun StoryComposerUiState.placedTrimSourceOf(id: String): Double? {
+    if (deck.selectedSlide.placedMedia.none { it.mediaId == id } || !placedMediaIsVideo(id)) return null
+    val seconds = attachments.firstOrNull { it.id == id }?.durationMs?.let { it / 1000.0 } ?: return null
+    return seconds.takeIf { it.isFinite() && it >= MediaTrimRule.MINIMUM_DURATION }?.coerceAtMost(SoundTrimLaw.MAX_SOURCE_SECONDS)
+}
+
+/** La fenêtre EFFECTIVE de la vidéo posée [id] dans sa source : entière tant qu'elle n'est pas rognée. */
+internal fun StoryComposerUiState.placedTrimOf(id: String): MediaTrimBounds? {
+    val source = placedTrimSourceOf(id) ?: return null
+    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }
+    return MediaTrimRule.resolved(placed?.sourceStart, placed?.sourceEnd, source)
 }
 
 /** Les réglages et effets PROPRES du média posé [id] ; `null` : pas posé, ou rien de réglé. */

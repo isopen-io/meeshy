@@ -149,4 +149,21 @@ class StoryViewerPlacedMediaTest {
 
         assertThat(slide.imageUrl).isEqualTo("http://cdn/backdrop.jpg")
     }
+
+    @Test
+    fun `a placed video trimmed by its author plays its window, a whole one plays whole`() = runTest {
+        val video = ApiPostMedia(id = "v", fileUrl = "http://cdn/v.mp4", mimeType = "video/mp4", duration = 20_000)
+        val slide = slideOf(
+            story(
+                media = listOf(video),
+                objects = listOf(
+                    StoryMediaObject(id = "o1", postMediaId = "v", mediaType = "video", sourceStart = 2.0, sourceEnd = 6.5, duration = 4.5),
+                    StoryMediaObject(id = "o2", postMediaId = "v", mediaType = "video"),
+                ),
+            ),
+        )
+
+        assertThat(slide.foregroundMedia.map { it.sourceWindow?.startMs }).containsExactly(2_000L, null).inOrder()
+        assertThat(slide.foregroundMedia.first().sourceWindow?.endMs).isEqualTo(6_500L)
+    }
 }

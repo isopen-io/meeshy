@@ -4,6 +4,8 @@ import me.meeshy.sdk.model.AdjustmentFamily
 import me.meeshy.sdk.model.AdjustmentKind
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.media.MediaTrimBounds
+import me.meeshy.sdk.model.media.MediaTrimRule
 
 /**
  * Réducteurs purs des médias posés sur la scène (miroir du sticker) : poser au centre, déplacer, pivoter / agrandir,
@@ -53,6 +55,19 @@ internal object StoryComposerPlacedMediaReducer {
     /** Remet au neutre un sous-outil (Réglages ou Effets) de CE média posé ; l'autre garde ses valeurs. */
     fun adjustmentsReset(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily): StoryComposerUiState =
         adjustments(state, mediaId) { it.resetting(family) }
+
+    /**
+     * Rogne la VIDÉO posée [mediaId] à [bounds] (iOS `setSourceTrim`) : bornes ramenées dans la source et au plancher de
+     * durée, la source entière n'écrit aucune borne. Inerte si le média n'est pas posé, n'est pas une vidéo de durée connue,
+     * ou si la fenêtre ne change rien. Les autres médias, la scène et les sons ne bougent pas.
+     */
+    fun trimmed(state: StoryComposerUiState, mediaId: String, bounds: MediaTrimBounds): StoryComposerUiState {
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val source = state.placedTrimSourceOf(mediaId) ?: return state
+        val fields = MediaTrimRule.fields(MediaTrimRule.resolved(bounds.start, bounds.end, source), source)
+        if (fields.start == current.sourceStart && fields.end == current.sourceEnd) return state
+        return rewritten(state, mediaId) { it.copy(sourceStart = fields.start, sourceEnd = fields.end) }
+    }
 
     private fun adjustments(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {
         val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state

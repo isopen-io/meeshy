@@ -58,6 +58,7 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
                 onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel)
             else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
@@ -92,6 +93,26 @@ private fun PlacedAdjustSection(state: StoryComposerUiState, mediaId: String, fa
             onReset = { viewModel.onSceneReduce { StoryComposerPlacedMediaReducer.adjustmentsReset(it, mediaId, family) } },
         )
     }
+}
+
+/**
+ * La fenêtre de source de la vidéo posée (iOS `MediaTrimStrip` + `setSourceTrim`) : la source ENTIÈRE en vignettes, deux
+ * poignées pour ce qu'on garde, l'écarté assombri. Chaque image du geste écrit les bornes (un seul cran d'historique par geste).
+ */
+@Composable
+private fun PlacedTrimSection(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
+    val source = state.placedTrimSourceOf(mediaId) ?: return
+    val bounds = state.placedTrimOf(mediaId) ?: return
+    val url = state.attachments.firstOrNull { it.id == mediaId }?.url.orEmpty()
+    MediaTrimStrip(
+        content = MediaTrimContent.VIDEO,
+        sourceDuration = source,
+        bounds = bounds,
+        accent = MaterialTheme.colorScheme.primary,
+        frames = rememberVideoFrames(url, source),
+        onChange = { next -> viewModel.onSceneGesture("trim-$mediaId") { StoryComposerPlacedMediaReducer.trimmed(it, mediaId, next) } },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
