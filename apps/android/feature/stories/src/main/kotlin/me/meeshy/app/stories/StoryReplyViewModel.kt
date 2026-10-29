@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
+import me.meeshy.sdk.conversation.conversationOrNull
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.lang.ComposeLanguageDetector
@@ -71,19 +73,26 @@ class StoryReplyViewModel @Inject constructor(
         val gesture = accountFence?.ticket()
         viewModelScope.launch(gesture.asCoroutineContext()) {
             try {
-                val conversation = when (val direct = conversationRepository.directConversationWith(authorId)) {
-                    is DirectConversationResolution.Found -> direct.conversation
-                    is DirectConversationResolution.Created -> direct.conversation
-                    else -> null
-                }
+                val resolution = conversationRepository.directConversationWith(authorId)
+                val conversation = resolution.conversationOrNull
                 if (conversation == null) {
                     fail(text)
                     return@launch
                 }
                 val conversationId = conversation.id
                 // Fail closed (#13621): the outbox would withhold this plaintext anyway, but the sheet must not say « sent ».
-                if (EndToEndRegime.isEndToEnd(conversation.encryptionMode) || endToEndRegime.isSealed(conversationId)) {
-                    _state.update { it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.ENCRYPTED) }
+                if (endToEndRegime.isSealed(conversationId)) {
+                    refuseEncrypted(text)
+                    return@launch
+                }
+                // A cached direct may lag: with no mode known, ask the server (a read that carries no words) before any queueing.
+                val mode = knownMode(resolution, conversationId)
+                if (mode == null) {
+                    fail(text)
+                    return@launch
+                }
+                if (EndToEndRegime.isEndToEnd(mode.value)) {
+                    refuseEncrypted(text)
                     return@launch
                 }
                 val language = ComposeLanguageDetector.originalLanguageAtSend(
@@ -108,6 +117,22 @@ class StoryReplyViewModel @Inject constructor(
             }
         }
     }
+
+    private fun refuseEncrypted(text: String) = _state.update {
+        it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.ENCRYPTED)
+    }
+
+    /** The conversation's mode when it is known (null inside [KnownMode] = clear), or null when it cannot be learned now. */
+    private suspend fun knownMode(resolution: DirectConversationResolution, conversationId: String): KnownMode? {
+        val served = resolution.conversationOrNull ?: return null
+        val cachedOnly = resolution is DirectConversationResolution.Found && resolution.fromCache
+        if (!cachedOnly || !served.encryptionMode.isNullOrBlank()) return KnownMode(served.encryptionMode)
+        val fresh = (conversationRepository.getById(conversationId) as? NetworkResult.Success)?.data ?: return null
+        conversationRepository.remember(fresh)
+        return KnownMode(fresh.encryptionMode)
+    }
+
+    private data class KnownMode(val value: String?)
 
     private fun fail(text: String) = _state.update {
         it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.FAILED)
