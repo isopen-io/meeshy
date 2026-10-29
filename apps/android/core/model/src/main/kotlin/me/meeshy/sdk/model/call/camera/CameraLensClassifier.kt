@@ -3,8 +3,17 @@ package me.meeshy.sdk.model.call.camera
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Ce que le système dit d'une caméra : son identifiant, sa face, et sa focale ramenée au plein format (35 mm). */
-data class CameraLensProbe(val id: String, val isFront: Boolean, val equivalentFocalMm: Float, val maxDigitalZoom: Float = 1f)
+/**
+ * Ce que le système dit d'une caméra : son identifiant, sa face, sa focale ramenée au plein format (35 mm) et,
+ * pour une caméra branchée (USB), [isExternal] — elle n'est alors ni l'avant ni un objectif de l'arrière.
+ */
+data class CameraLensProbe(
+    val id: String,
+    val isFront: Boolean,
+    val equivalentFocalMm: Float,
+    val maxDigitalZoom: Float = 1f,
+    val isExternal: Boolean = false,
+)
 
 /**
  * Range les caméras ouvrables d'un appareil en objectifs affichés. Le grand-angle (1×) est celui dont
@@ -18,7 +27,7 @@ object CameraLensClassifier {
     private const val TELE_LIMIT = 1.5f
 
     fun profile(probes: List<CameraLensProbe>, isFront: Boolean): CameraZoomProfile? {
-        val side = probes.filter { it.isFront == isFront && it.equivalentFocalMm > 0f }
+        val side = probes.filter { !it.isExternal && it.isFront == isFront && it.equivalentFocalMm > 0f }
         val main = side.minByOrNull { abs(it.equivalentFocalMm - MAIN_EQUIVALENT_MM) } ?: return null
         val others = if (isFront) emptyList() else side.filter { it !== main }.mapNotNull { probe ->
             val ratio = displayRatio(probe.equivalentFocalMm / main.equivalentFocalMm)
