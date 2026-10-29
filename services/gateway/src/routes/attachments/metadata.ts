@@ -17,7 +17,8 @@ import type {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { createHash } from 'crypto';
 import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
@@ -506,6 +507,10 @@ export async function registerMetadataRoutes(
             description: 'Attachment not found',
             ...errorResponseSchema
           },
+          409: {
+            description: 'End-to-end encrypted message: erase it through the encrypted signal channel',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -550,6 +555,18 @@ export async function registerMetadataRoutes(
         }
 
         const messageId = attachment.messageId ?? null;
+        // #13802 — la pièce d'un message scellé au serveur s'efface comme lui
+        // (#13142), par signal chiffré ; jugée sur la LIGNE de son message,
+        // après le contrôle du droit.
+        const carrier = messageId
+          ? await prisma.message.findUnique({
+              where: { id: messageId },
+              select: { conversationId: true, isEncrypted: true, encryptionMode: true },
+            })
+          : null;
+        if (carrier && await messageRefusesPlainErasure(prisma, carrier)) {
+          return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+        }
         await attachmentService.deleteAttachment(attachmentId);
         await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
 

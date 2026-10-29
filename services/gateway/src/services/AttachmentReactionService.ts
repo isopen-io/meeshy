@@ -3,6 +3,7 @@ import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { CLOSED_CONVERSATION_REACTION_ERROR } from './ReactionService.js';
+import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -67,10 +68,17 @@ export class AttachmentReactionService {
     // et le § 3 du témoin.
     const host = await this.prisma.message.findUnique({
       where: { id: o.messageId },
-      select: { conversation: { select: { isActive: true, closedAt: true } } },
+      select: { conversation: { select: { isActive: true, closedAt: true, encryptionMode: true } } },
     });
     if (isConversationClosed(host?.conversation)) {
       throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
+    }
+    // #13802 — la jumelle refuse l'emoji en clair d'une conversation e2ee
+    // (#13142) ; cette porte-ci ne converge pas vers elle, donc elle refuse
+    // aussi, sur la MÊME lecture que l'état terminal. Le gestionnaire a déjà
+    // résolu le membre : un étranger n'apprend pas le régime.
+    if (conversationRefusesPlainSignal(host?.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
     }
 
     // Idempotency: the participant already holding exactly this emoji on this
@@ -141,6 +149,18 @@ export class AttachmentReactionService {
     // risquait d'emporter les autres réactions du participant.
     const emoji = sanitizeEmoji(o.emoji);
     if (!emoji) throw new Error('Invalid emoji format');
+
+    // #13802 — retirer un emoji le dit aussi : refusé en clair dans une
+    // conversation e2ee, jugé sur la conversation de la PIÈCE elle-même (le
+    // retrait ne reçoit pas de `messageId`). Une lecture en échec lève : rien
+    // ne s'efface sur un doute. La clôture, elle, laisse toujours retirer.
+    const carrier = await this.prisma.messageAttachment.findUnique({
+      where: { id: o.attachmentId },
+      select: { message: { select: { conversation: { select: { encryptionMode: true } } } } },
+    });
+    if (conversationRefusesPlainSignal(carrier?.message?.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
+    }
 
     const result = await this.prisma.attachmentReaction.deleteMany({
       where: {

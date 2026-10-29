@@ -52,6 +52,7 @@ const makePrismaMock = () => {
       }),
     },
     message: { findUnique: jest.fn(async () => ({ conversationId: 'conv1' })) },
+    messageAttachment: { findUnique: jest.fn(async () => ({ message: { conversation: { encryptionMode: null } } })) },
   } as any;
 };
 
