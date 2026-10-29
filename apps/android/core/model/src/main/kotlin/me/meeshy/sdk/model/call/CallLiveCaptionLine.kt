@@ -158,7 +158,8 @@ data class CallCaptionListeners(val peers: Set<String> = emptySet()) {
 
 /**
  * The captions state of the call screen: the panel the reader opened (the pilot of [mode], never
- * the capture), the « Original » preference, the lines touched to flip, and the journal.
+ * the capture), the « Original » preference, the lines touched to flip, the journal, and whether
+ * this device can caption MY words ([ownSpeech], #13718).
  */
 data class CallCaptionsState(
     val isPanelOpen: Boolean = false,
@@ -167,6 +168,7 @@ data class CallCaptionsState(
     val journal: CallLiveJournal = CallLiveJournal(),
     val gate: CallCaptionsGate = CallCaptionsGate.Unresolved,
     val listeners: CallCaptionListeners = CallCaptionListeners(),
+    val ownSpeech: OwnSpeechSupport = OwnSpeechSupport.Unknown,
 ) {
     val mode: CaptionsMode get() = CaptionsMode.from(isTranscribing = isPanelOpen, showOriginalText = showsOriginal)
 
@@ -193,6 +195,14 @@ data class CallCaptionsState(
      */
     fun receiving(segment: CallJournalSegment): CallCaptionsState =
         if (isPanelOpen && gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
+
+    /**
+     * One of MY lines (#13718), iOS `appendSegment`: my capture may run for a peer while my panel is
+     * closed, and my finals still enter my journal; my partials only while I read. A closed gate
+     * keeps nothing.
+     */
+    fun receivingOwn(segment: CallJournalSegment): CallCaptionsState =
+        if (gate.allowsCaptions && (segment.isFinal || isPanelOpen)) copy(journal = journal.receive(segment)) else this
 
     /** A gate that closes takes the panel down with it. */
     fun gated(gate: CallCaptionsGate): CallCaptionsState =

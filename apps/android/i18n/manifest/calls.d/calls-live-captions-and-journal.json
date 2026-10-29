@@ -65,7 +65,11 @@
           "status": "android-only"
         },
         {
-          "androidName": "call_captions_local_pending",
+          "androidName": "call_captions_local_unsupported",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_local_language_missing",
           "status": "android-only"
         }
       ]

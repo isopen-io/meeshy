@@ -268,12 +268,14 @@ internal fun CallCaptionsJournalSheet(onDismiss: () -> Unit, viewModel: CallCapt
         Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).navigationBarsPadding()) {
             CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal, onClose = onDismiss)
             CallJournalList(lines = lines, onToggleOriginal = viewModel::toggleReveal, modifier = Modifier.weight(1f))
-            Text(
-                text = stringResource(R.string.call_captions_local_pending),
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-            )
+            state.ownSpeech.notCaptionedRes()?.let { notCaptioned ->
+                Text(
+                    text = stringResource(notCaptioned),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                )
+            }
         }
     }
 }

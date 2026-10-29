@@ -15,5 +15,6 @@
     <string name="call_captions_new_lines">Novas frases</string>
     <string name="call_captions_end_to_end">As legendas não estão disponíveis numa conversa encriptada de ponta a ponta.</string>
     <string name="call_captions_unavailable">As legendas ainda não estão disponíveis para esta chamada.</string>
-    <string name="call_captions_local_pending">As suas próprias palavras ainda não são transcritas a partir deste dispositivo.</string>
+    <string name="call_captions_local_unsupported">As suas palavras não são legendadas neste dispositivo: é preciso Android 13 e reconhecimento de voz no dispositivo. Continua a ler as legendas da outra pessoa.</string>
+    <string name="call_captions_local_language_missing">As suas palavras não são legendadas: este dispositivo não tem o modelo de voz do seu idioma. Continua a ler as legendas da outra pessoa.</string>
 </resources>

@@ -15,5 +15,6 @@
     <string name="call_captions_new_lines">Neue Sätze</string>
     <string name="call_captions_end_to_end">Untertitel sind in einer Ende-zu-Ende-verschlüsselten Unterhaltung nicht verfügbar.</string>
     <string name="call_captions_unavailable">Untertitel sind für diesen Anruf noch nicht verfügbar.</string>
-    <string name="call_captions_local_pending">Deine eigenen Worte werden auf diesem Gerät noch nicht transkribiert.</string>
+    <string name="call_captions_local_unsupported">Deine Worte werden auf diesem Gerät nicht untertitelt: Es braucht Android 13 und Spracherkennung auf dem Gerät. Die Untertitel der anderen Seite liest du weiterhin.</string>
+    <string name="call_captions_local_language_missing">Deine Worte werden nicht untertitelt: Auf diesem Gerät fehlt das Sprachmodell deiner Sprache. Die Untertitel der anderen Seite liest du weiterhin.</string>
 </resources>

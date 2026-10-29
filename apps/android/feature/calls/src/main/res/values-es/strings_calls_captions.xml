@@ -15,5 +15,6 @@
     <string name="call_captions_new_lines">Frases nuevas</string>
     <string name="call_captions_end_to_end">Los subtítulos no están disponibles en una conversación cifrada de extremo a extremo.</string>
     <string name="call_captions_unavailable">Los subtítulos aún no están disponibles para esta llamada.</string>
-    <string name="call_captions_local_pending">Tus propias palabras aún no se transcriben desde este dispositivo.</string>
+    <string name="call_captions_local_unsupported">Tus palabras no se subtitulan en este dispositivo: necesita Android 13 y reconocimiento de voz en el dispositivo. Sigues leyendo los subtítulos de la otra persona.</string>
+    <string name="call_captions_local_language_missing">Tus palabras no se subtitulan: este dispositivo no tiene el modelo de voz de tu idioma. Sigues leyendo los subtítulos de la otra persona.</string>
 </resources>

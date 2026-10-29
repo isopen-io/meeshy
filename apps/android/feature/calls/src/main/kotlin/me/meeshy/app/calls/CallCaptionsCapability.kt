@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import android.content.Context
+import androidx.annotation.StringRes
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -44,6 +45,7 @@ import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.DataChannelCodec
 import me.meeshy.sdk.model.call.DataChannelInbound
+import me.meeshy.sdk.model.call.OwnSpeechSupport
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CallSignalManager
@@ -110,7 +112,8 @@ class CallCaptionsWires(
  * panel would make the peer send its words in clear to the gateway — and a regime not read yet
  * neither. The state lives for one call and dies with it.
  *
- * Not ported yet: transcribing MY microphone on Android (#13718) — the call holds the mic.
+ * My own words are captured by [CallOwnSpeechController] (#13718), which reads this state and
+ * hands my lines back through [receiveOwn].
  */
 @Singleton
 class CallCaptionsController internal constructor(
@@ -217,6 +220,21 @@ class CallCaptionsController internal constructor(
         _journalRequests.tryEmit(Unit)
     }
 
+    /** One of MY lines, captioned on this device: my finals enter my journal even while my panel is closed. */
+    fun receiveOwn(segment: CallJournalSegment) = _state.update { it.receivingOwn(segment) }
+
+    /** Whether this device can caption my words: the button and the journal say it when it cannot. */
+    fun setOwnSpeech(support: OwnSpeechSupport) = _state.update { it.copy(ownSpeech = support) }
+
+    /**
+     * The device learned during the call that the conversation is sealed end to end: the panel
+     * closes, the peers are told I stopped reading, and nothing more leaves (fail-closed, #13720).
+     */
+    fun closeForEndToEnd() {
+        _state.update { it.gated(CallCaptionsGate.EndToEnd) }
+        publishListening()
+    }
+
     private fun listen(): List<Job> =
         listOf(
             wires.relayed.onEach { payload ->
@@ -291,10 +309,19 @@ data class CallCaptionsChip(
     val mode: CaptionsMode = CaptionsMode.Off,
     val invitesToOpen: Boolean = false,
     val gate: CallCaptionsGate = CallCaptionsGate.Unresolved,
+    val ownSpeech: OwnSpeechSupport = OwnSpeechSupport.Unknown,
 ) {
     companion object {
-        fun of(state: CallCaptionsState): CallCaptionsChip = CallCaptionsChip(state.mode, state.invitesToOpen, state.gate)
+        fun of(state: CallCaptionsState): CallCaptionsChip = CallCaptionsChip(state.mode, state.invitesToOpen, state.gate, state.ownSpeech)
     }
+}
+
+/** What the captions say when this device cannot caption my words, `null` when it can (or does not know yet). */
+@StringRes
+fun OwnSpeechSupport.notCaptionedRes(): Int? = when (this) {
+    OwnSpeechSupport.DeviceUnsupported -> R.string.call_captions_local_unsupported
+    OwnSpeechSupport.LanguageMissing -> R.string.call_captions_local_language_missing
+    OwnSpeechSupport.Unknown, OwnSpeechSupport.Available -> null
 }
 
 /**
@@ -330,6 +357,7 @@ object CallCaptionsPresenter {
         hintRes = when {
             chip.gate == CallCaptionsGate.EndToEnd -> R.string.call_captions_end_to_end
             chip.invitesToOpen -> R.string.call_captions_peer_active
+            chip.ownSpeech.saysNotCaptioned -> chip.ownSpeech.notCaptionedRes()
             chip.mode == CaptionsMode.Translated -> R.string.call_captions_state_translated
             chip.mode == CaptionsMode.Original -> R.string.call_captions_state_original
             else -> R.string.call_captions_state_off
