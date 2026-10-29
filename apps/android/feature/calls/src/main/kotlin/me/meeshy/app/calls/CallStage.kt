@@ -22,10 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -37,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -51,8 +49,11 @@ private val CAMERA_RAIL_TOP = 56.dp
 /**
  * La scène vidéo du duo (miroir de iOS `videoCallLayout` + `duoOverlays`). Connecté : la vidéo du
  * correspondant occupe tout l'écran — son avatar « Caméra désactivée » s'il n'envoie rien — et ma
- * vignette flotte par-dessus ; toucher la vignette permute les deux. Avant la connexion, mon aperçu
+ * vignette flotte par-dessus ; toucher la vignette permute les deux ([onSwap]). Avant la connexion, mon aperçu
  * tient tout le fond. Le flux d'un pair qui escalade l'audio en vidéo s'affiche même caméra locale coupée.
+ *
+ * [layout] — mon image en plein écran ou dans la vignette — est décidé par l'écran (`CallDuoStageLaw`) : la pilule
+ * lit le même pour ne pas répéter les commandes que la vignette ou le rail du haut portent.
  */
 @Composable
 internal fun CallDuoVideoStage(
@@ -64,7 +65,10 @@ internal fun CallDuoVideoStage(
     peerAvatarUrl: String?,
     connected: Boolean,
     reduceMotion: Boolean,
+    layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
+    onSwap: () -> Unit = {},
+    selfEffects: CallSelfEffects? = null,
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
@@ -77,8 +81,7 @@ internal fun CallDuoVideoStage(
                 VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera)
             }
         } else {
-            var swapped by remember(callKey) { mutableStateOf(false) }
-            val featuresLocal = !framed && swapped && localTrack != null && state.isCameraOn
+            val featuresLocal = layout.isMyImageFullScreen
             val fit = rememberCallVideoFit()
             if (!framed) {
                 if (featuresLocal && localTrack != null) {
@@ -131,7 +134,7 @@ internal fun CallDuoVideoStage(
                     exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = CAMERA_RAIL_TOP),
                 ) {
-                    CallMyImageTopRail(selfCamera, state.isCameraOn, onPickCamera = pickCamera)
+                    CallMyImageTopRail(selfCamera, state.isCameraOn, onPickCamera = pickCamera, effects = selfEffects)
                 }
             }
             if (state.isPeerMuted && !featuresLocal) {
@@ -140,19 +143,25 @@ internal fun CallDuoVideoStage(
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MUTED_BADGE_TOP),
                 )
             }
-            val showsSelfTile = !framed && (!state.isCameraOn || localTrack != null || state.isVideoAutoPaused)
-            if (showsSelfTile) {
-                val controlCount = if (featuresLocal) 0 else rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
+            if (layout.showsSelfTile) {
+                val cameraCount = if (featuresLocal) 0 else rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
+                val effectsCount = if (featuresLocal) 0 else selfEffects?.items?.size ?: 0
                 val showsMyImage = !featuresLocal && state.isCameraOn && localTrack != null && !state.isVideoAutoPaused
                 CallSelfTile(
                     callKey = callKey,
                     memory = selfTileMemory,
                     paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
-                    onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
-                    controlCount = controlCount,
+                    onSwap = onSwap,
+                    effectsCount = effectsCount,
+                    cameraCount = cameraCount,
                     controlsVisible = controlsVisible,
-                    controls = { selfCamera?.let { CallSelfTileControlsRow(it, state.isCameraOn, onPickCamera = pickCamera) } },
+                    effectsControls = { selfEffects?.let { CallSelfEffectsRow(it) } },
+                    cameraControls = {
+                        selfCamera?.let {
+                            CallSelfTileControlsRow(it, state.isCameraOn, onPickCamera = pickCamera, isPaused = state.isVideoAutoPaused)
+                        }
+                    },
                     modifier = Modifier.fillMaxSize(),
                     overlay = {
                         if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)

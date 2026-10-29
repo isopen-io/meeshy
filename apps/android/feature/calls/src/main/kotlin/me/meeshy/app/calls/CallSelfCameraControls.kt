@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallCameraRail
 import me.meeshy.sdk.model.call.CallChromeVisibility
@@ -80,6 +81,13 @@ internal class CallSelfCameraActions(
     val onFlip: () -> Unit,
     val onToggleCamera: () -> Unit,
 )
+
+/**
+ * « Effets · Écran », la rangée au-dessus de ma vignette (iOS `CallCameraRail.effectsRow`) : ce qui part AVEC mon
+ * image. Seules les actions que l'appel offre maintenant ([CallPillModel.selfEffects]) — Android n'a pas de partage
+ * d'écran : la rangée ne porte qu'« Effets ».
+ */
+internal class CallSelfEffects(val items: List<CallPillItem>, val onAction: (CallAction) -> Unit)
 
 private const val CHIP_SCRIM_ALPHA = 0.4f
 private const val INDICATOR_LINGER_MILLIS = 1_000L
@@ -117,6 +125,8 @@ internal fun CallSelfTileControlsRow(
     isCameraOn: Boolean,
     modifier: Modifier = Modifier,
     onPickCamera: (() -> Unit)? = null,
+    isPaused: Boolean = false,
+    effects: CallSelfEffects? = null,
 ) {
     Row(
         modifier = modifier.callCameraRailSemantics(),
@@ -138,7 +148,33 @@ internal fun CallSelfTileControlsRow(
                 )
             }
         }
-        CameraToggleButton(actions, isCameraOn)
+        CameraToggleButton(actions, isCameraOn, isPaused)
+        effects?.let { CallSelfEffectButtons(it) }
+    }
+}
+
+/** La rangée « Effets · Écran » posée au-dessus de ma vignette. */
+@Composable
+internal fun CallSelfEffectsRow(effects: CallSelfEffects, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.callCameraRailSemantics(),
+        horizontalArrangement = Arrangement.spacedBy(CallSelfTileControlsLaw.SPACING_DP.dp),
+    ) { CallSelfEffectButtons(effects) }
+}
+
+/** Chaque action de la famille « Mon image » dessinée comme dans la pilule : même icône, même libellé, allumée si active. */
+@Composable
+private fun CallSelfEffectButtons(effects: CallSelfEffects) {
+    effects.items.forEach { item ->
+        val active = item.kind == CallPillKind.Active
+        CallSelfCameraButton(
+            icon = item.icon,
+            label = stringResource(item.labelRes),
+            hint = item.hintRes?.let { stringResource(it) },
+            background = if (active) CallPalette.Brand else Color.Black.copy(alpha = CHIP_SCRIM_ALPHA),
+            selected = active,
+            onClick = { effects.onAction(item.action) },
+        )
     }
 }
 
@@ -159,6 +195,8 @@ private fun CallSelfCameraButton(
     hint: String? = null,
     background: Color = Color.Black.copy(alpha = CHIP_SCRIM_ALPHA),
     toggleState: String? = null,
+    selected: Boolean? = null,
+    tint: Color = CallPalette.Ink,
 ) {
     val haptics = LocalHapticFeedback.current
     Box(
@@ -171,6 +209,7 @@ private fun CallSelfCameraButton(
             }
             .semantics {
                 contentDescription = label
+                selected?.let { this.selected = it }
                 toggleState?.let {
                     stateDescription = it
                     liveRegion = LiveRegionMode.Polite
@@ -179,20 +218,31 @@ private fun CallSelfCameraButton(
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(CHIP_VISUAL).clip(CircleShape).background(background), contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(18.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
         }
     }
 }
 
-/** Allumer / couper : l'état bascule tout de suite (`toggleCamera` est optimiste) ; coupée, le disque passe au rouge. */
+/**
+ * Allumer / couper : l'état bascule tout de suite (`toggleCamera` est optimiste) ; coupée, le disque passe au rouge ;
+ * gelée par l'appli ([isPaused]), le glyphe passe à l'ambre et le dit, comme le bouton de la pilule qu'elle remplace.
+ */
 @Composable
-private fun CameraToggleButton(actions: CallSelfCameraActions, isCameraOn: Boolean) {
+private fun CameraToggleButton(actions: CallSelfCameraActions, isCameraOn: Boolean, isPaused: Boolean) {
+    val paused = isPaused && isCameraOn
     CallSelfCameraButton(
-        icon = if (isCameraOn) MeeshyIcons.Video else MeeshyIcons.VideoOff,
-        label = stringResource(if (isCameraOn) R.string.call_camera_toggle_off else R.string.call_camera_toggle_on),
+        icon = if (isCameraOn && !paused) MeeshyIcons.Video else MeeshyIcons.VideoOff,
+        label = stringResource(
+            when {
+                paused -> R.string.call_control_video_paused
+                isCameraOn -> R.string.call_camera_toggle_off
+                else -> R.string.call_camera_toggle_on
+            },
+        ),
         onClick = actions.onToggleCamera,
         background = if (isCameraOn) Color.Black.copy(alpha = CHIP_SCRIM_ALPHA) else MeeshyPalette.Error.copy(alpha = 0.85f),
         toggleState = stringResource(if (isCameraOn) R.string.call_camera_state_on else R.string.call_camera_state_off),
+        tint = if (paused) MeeshyTheme.tokens.warning else CallPalette.Ink,
     )
 }
 
@@ -299,8 +349,8 @@ internal fun BoxScope.CallSelfTileZoomSlot(zoom: CallCameraZoom, visible: Boolea
 
 /**
  * Mon image en plein écran (iOS `cameraRail`, placement `topCenter`) : les commandes de ma caméra se posent en
- * haut au centre, sous l'en-tête, dans une capsule de verre — la rangée de la caméra puis, dessous, les pastilles
- * de zoom.
+ * haut au centre, sous l'en-tête, dans une capsule de verre — Retourner · Caméra · Effets dans l'ordre d'iOS
+ * (`CallCameraRail.order`) puis, dessous, les pastilles de zoom.
  */
 @Composable
 internal fun CallMyImageTopRail(
@@ -308,6 +358,7 @@ internal fun CallMyImageTopRail(
     isCameraOn: Boolean,
     modifier: Modifier = Modifier,
     onPickCamera: (() -> Unit)? = null,
+    effects: CallSelfEffects? = null,
 ) {
     val profile by remember(actions.zoom) {
         actions.zoom.state.map { it.profile }.distinctUntilChanged()
@@ -319,7 +370,7 @@ internal fun CallMyImageTopRail(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
         ) {
-            CallSelfTileControlsRow(actions, isCameraOn, onPickCamera = onPickCamera)
+            CallSelfTileControlsRow(actions, isCameraOn, onPickCamera = onPickCamera, effects = effects)
             if (isCameraOn && chips != null) CallZoomLensChips(actions.zoom, chips.stops)
         }
     }

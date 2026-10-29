@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
@@ -52,7 +53,7 @@ class CallControlsPillSemanticsTest {
                 CallControlsPill(
                     state = state,
                     layer = layer,
-                    rows = CallPillModel.rows(set, isCompactHeight = false),
+                    rows = CallPillModel.rows(set, isCompactHeight = false, CallCameraControlsPlacement.Menu),
                     items = items,
                     outputIcon = Icons.Filled.VolumeUp,
                     onToggleMenu = { taps += "more" },

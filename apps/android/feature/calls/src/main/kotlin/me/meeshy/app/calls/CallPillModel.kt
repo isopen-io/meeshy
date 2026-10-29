@@ -9,6 +9,8 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionContext
 import me.meeshy.sdk.model.call.CallActionSet
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
+import me.meeshy.sdk.model.call.CallCameraRail
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallPillRowContent
 import me.meeshy.ui.icons.MeeshyIcons
@@ -110,7 +112,18 @@ internal object CallPillModel {
         )
     }
 
-    /** The rows to draw: one per family (titled), or ONE untitled line in compact height. */
-    fun rows(available: CallActionSet, isCompactHeight: Boolean): List<CallPillRowContent> =
-        CallGroupStageSizing.rows(available.familyRows, isCompactHeight)
+    /**
+     * The rows to draw: one per family (titled), or ONE untitled line in compact height. When my tile or the top
+     * rail carries the controls of my image ([placement]), the « (…) » drops them (iOS `CallCameraRail.menuRows`).
+     */
+    fun rows(
+        available: CallActionSet,
+        isCompactHeight: Boolean,
+        placement: CallCameraControlsPlacement,
+    ): List<CallPillRowContent> =
+        CallGroupStageSizing.rows(CallCameraRail.menuRows(available, placement), isCompactHeight)
+
+    /** « Effets · Écran », the row above my tile (iOS `CallCameraRail.selfTileRows`): only what the call offers now. */
+    fun selfEffects(available: CallActionSet, items: Map<CallAction, CallPillItem>): List<CallPillItem> =
+        CallCameraRail.selfTileRows(CallCameraRail.actions(available)).effects.mapNotNull(items::get)
 }

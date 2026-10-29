@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +31,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallDuoStageInputs
+import me.meeshy.sdk.model.call.CallDuoStageLaw
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
@@ -175,18 +179,40 @@ fun CallScreen(
             )
             // Le mode « Effets » pose lui-même les deux vidéos (la mienne en plein écran, l'autre en vignette) : la
             // scène du duo s'efface, sa vignette de soi en `SurfaceView` superposée percerait le mode.
-            if (videoStage && chromeState.layer.activeMode != CallScreenMode.Effects) {
+            val stageShown = videoStage && chromeState.layer.activeMode != CallScreenMode.Effects
+            // La permutation vit ICI, pas dans la scène : la pilule lit la même disposition pour ne pas répéter les
+            // commandes de mon image que la vignette ou le rail du haut portent (iOS `CallCameraRail.placement`).
+            val callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId }
+            var swapped by remember(callKey) { mutableStateOf(false) }
+            val localTrack = viewModel.localVideoTrack
+            val stageLayout = CallDuoStageLaw.layout(
+                CallDuoStageInputs(
+                    isStageShown = stageShown,
+                    isConnected = state.showsConnectedLayout,
+                    isFramed = framed,
+                    isSwapped = swapped,
+                    hasLocalTrack = localTrack != null,
+                    isCameraOn = state.isCameraOn,
+                    isVideoAutoPaused = state.isVideoAutoPaused,
+                ),
+            )
+            val pill = rememberCallPillActions(state, viewModel, chrome)
+            val selfEffects = remember(pill) { CallSelfEffects(CallPillModel.selfEffects(pill.available, pill.items), pill.onAction) }
+            if (stageShown) {
                 CallDuoVideoStage(
                     state = state,
-                    callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId },
+                    callKey = callKey,
                     remoteTrack = remoteVideo,
-                    localTrack = viewModel.localVideoTrack,
+                    localTrack = localTrack,
                     eglContext = viewModel.eglBaseContext,
                     peerAvatarUrl = avatarUrl,
                     connected = state.showsConnectedLayout,
                     reduceMotion = reduceMotion,
+                    layout = stageLayout,
+                    onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
                     onSceneTap = sceneTap,
                     selfCamera = selfCamera,
+                    selfEffects = selfEffects,
                     controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                     framed = framed,
                 )
@@ -211,6 +237,8 @@ fun CallScreen(
                     chrome = chrome,
                     videoStage = videoStage,
                     peer = peer,
+                    pill = pill,
+                    cameraPlacement = stageLayout.controlsPlacement,
                     modifier = content,
                     inPip = inPip,
                 )
