@@ -31,9 +31,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,7 +117,7 @@ fun ReelCommentsSheet(
                 )
             }
 
-            ReelCommentInput(onSend = viewModel::post)
+            ReelCommentInput(draft = state.draft, onDraftChange = viewModel::setDraft, onSend = viewModel::post)
         }
     }
 }
@@ -201,13 +198,11 @@ private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -
 }
 
 @Composable
-private fun ReelCommentInput(onSend: (String) -> Unit) {
-    var draft by rememberSaveable { mutableStateOf("") }
+private fun ReelCommentInput(draft: String, onDraftChange: (String) -> Unit, onSend: (String) -> Unit) {
     val canSend = draft.isNotBlank()
     fun submit() {
         if (!canSend) return
         onSend(draft)
-        draft = ""
     }
     Row(
         modifier = Modifier
@@ -218,7 +213,7 @@ private fun ReelCommentInput(onSend: (String) -> Unit) {
     ) {
         OutlinedTextField(
             value = draft,
-            onValueChange = { draft = it },
+            onValueChange = onDraftChange,
             modifier = Modifier.weight(1f),
             placeholder = { Text(stringResource(R.string.reels_comments_input_hint)) },
             singleLine = true,

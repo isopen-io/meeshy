@@ -19,13 +19,14 @@ import javax.inject.Singleton
 
 /**
  * « Commentaire non envoyé » (#13693, iOS `notifyUnsentComment`) : la bannière de « Commenter » est partie dès que la file a
- * gardé le commentaire ; si le serveur le refuse pour de bon ensuite, cette notification locale le dit à l'auteur et porte
- * son texte. Toucher ouvre le post (la destination d'un `post_comment`) ; le texte, gardé par
- * [me.meeshy.sdk.post.UnsentCommentStore], revient dans le champ de commentaire du post.
+ * gardé le commentaire ; si le serveur le refuse pour de bon ensuite, cette notification locale le dit à l'auteur. Toucher
+ * ouvre le post (la destination d'un `post_comment`) ; le texte, gardé par [me.meeshy.sdk.post.UnsentCommentStore], revient
+ * dans le champ de commentaire du post ou du réel.
  *
- * Sur un écran verrouillé qui masque le contenu sensible, seule la version publique (sans corps) s'affiche ; la
- * notification n'est posée que sous le compte AUTEUR de la ligne, lu comme la file le lit ([OutboxOwnerSource] : la session,
- * sinon l'identité gardée d'un processus réveillé par la file) — une ligne sans auteur ne s'affiche sous aucun compte.
+ * L'avis n'affiche qu'un libellé du catalogue, JAMAIS le texte saisi, quel que soit le réglage de l'écran verrouillé
+ * (iOS `NotificationReplyFailure.post`, #13710) : `text` n'est lu par aucun champ. La notification n'est posée que sous le
+ * compte AUTEUR de la ligne, lu comme la file le lit ([OutboxOwnerSource] : la session, sinon l'identité gardée d'un
+ * processus réveillé par la file) — une ligne sans auteur ne s'affiche sous aucun compte.
  */
 @Singleton
 class UnsentCommentNotifier @Inject constructor(
@@ -38,18 +39,10 @@ class UnsentCommentNotifier @Inject constructor(
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
-        val title = context.getString(R.string.push_comment_unsent_title)
-        val publicVersion = NotificationCompat.Builder(context, NotificationChannelIds.CHANNEL_SOCIAL_V2)
-            .setSmallIcon(R.drawable.ic_stat_meeshy)
-            .setContentTitle(title)
-            .build()
         val notification = NotificationCompat.Builder(context, NotificationChannelIds.CHANNEL_SOCIAL_V2)
             .setSmallIcon(R.drawable.ic_stat_meeshy)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text).setSummaryText(context.getString(R.string.push_comment_unsent_hint)))
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(publicVersion)
+            .setContentTitle(context.getString(R.string.push_comment_unsent_title))
+            .setContentText(context.getString(R.string.push_comment_unsent_hint))
             .setCategory(NotificationCompat.CATEGORY_ERROR)
             .setAutoCancel(true)
             .setContentIntent(openPost(postId))

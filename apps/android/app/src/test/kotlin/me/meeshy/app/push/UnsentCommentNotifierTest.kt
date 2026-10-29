@@ -31,18 +31,34 @@ class UnsentCommentNotifierTest {
     }
 
     @Test
-    fun `un commentaire refuse previent son auteur avec son texte et ouvre le post`() = runTest {
+    fun `un commentaire refuse previent son auteur par un libelle et ouvre le post`() = runTest {
         manager.cancelAll()
 
         notifier.commentNotSent("me", "p1", "Bravo pour ce post")
 
         val posted = shadowOf(manager).allNotifications.single()
         assertThat(posted.extras.getCharSequence("android.title").toString()).isEqualTo(context.getString(me.meeshy.app.R.string.push_comment_unsent_title))
-        assertThat(posted.extras.getCharSequence("android.bigText").toString()).isEqualTo("Bravo pour ce post")
-        assertThat(posted.publicVersion.extras.getCharSequence("android.text")?.toString()).isNull()
         val tap = shadowOf(posted.contentIntent).savedIntent
         val (payload, _) = PushTapExtras.read(tap)
         assertThat(PushTapDestination.resolve(payload)).isEqualTo(PushTapDestination.Post("p1"))
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
+    fun `le texte saisi n apparait dans aucun champ de l avis, ni de sa version publique`() = runTest {
+        manager.cancelAll()
+        val typed = "Mot de passe du wifi: SECRET-1234"
+
+        notifier.commentNotSent("me", "p1", typed)
+
+        val posted = shadowOf(manager).allNotifications.single()
+        val surfaces = listOfNotNull(posted, posted.publicVersion).flatMap { n ->
+            n.extras.keySet().mapNotNull { key -> n.extras.get(key)?.toString() } + listOfNotNull(n.tickerText?.toString())
+        }
+        assertThat(surfaces).isNotEmpty()
+        surfaces.forEach { assertThat(it).doesNotContain("SECRET-1234") }
+        assertThat(posted.extras.getCharSequence("android.bigText")?.toString()).isNotEqualTo(typed)
+        assertThat(posted.extras.getCharSequence("android.text")?.toString()).isNotEqualTo(typed)
     }
 
     @Test

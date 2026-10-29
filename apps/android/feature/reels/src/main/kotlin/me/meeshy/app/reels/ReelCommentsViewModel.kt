@@ -16,6 +16,7 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import java.util.UUID
@@ -35,6 +36,7 @@ data class ReelCommentsUiState(
     val comments: List<ReelCommentPresentation> = emptyList(),
     val hasMore: Boolean = false,
     val errorMessage: String? = null,
+    val draft: String = "",
 ) {
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && comments.isEmpty()
 }
@@ -58,6 +60,7 @@ class ReelCommentsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val unsentComments: UnsentCommentStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelCommentsUiState())
@@ -88,6 +91,7 @@ class ReelCommentsViewModel @Inject constructor(
             return
         }
         loadingReelId = reelId
+        restoreUnsentComment(reelId)
         observeIncoming()
         val hadData = _state.value.comments.isNotEmpty()
         _state.update { it.copy(isLoading = !hadData, errorMessage = null) }
@@ -118,6 +122,22 @@ class ReelCommentsViewModel @Inject constructor(
                 loadingReelId = null
             }
         }
+    }
+
+    /** The comment field's text lives here so a refused banner comment can come back into it. */
+    fun setDraft(text: String) {
+        _state.update { it.copy(draft = text) }
+    }
+
+    /**
+     * #13712 — a comment typed in a banner and refused for good comes back in this reel's field, like the post
+     * detail ([me.meeshy.app.feed.PostCommentsViewModel]); only into an EMPTY field — a typed one stays intact and the
+     * kept text stays in the store.
+     */
+    private fun restoreUnsentComment(reelId: String) {
+        if (_state.value.draft.isNotBlank()) return
+        val kept = unsentComments?.take(reelId) ?: return
+        _state.update { it.copy(draft = kept) }
     }
 
     /**
@@ -172,7 +192,7 @@ class ReelCommentsViewModel @Inject constructor(
             createdAt = null,
             status = ReelCommentStatus.Pending,
         )
-        _state.update { it.copy(comments = ReelCommentsReducer.posting(it.comments, optimistic)) }
+        _state.update { it.copy(comments = ReelCommentsReducer.posting(it.comments, optimistic), draft = "") }
         send(reel, clientId, trimmed)
     }
 
