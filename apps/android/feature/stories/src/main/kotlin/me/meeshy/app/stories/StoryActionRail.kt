@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -72,6 +73,7 @@ fun StoryActionRail(
     heartBouncePulse: Int,
     onTapHeart: () -> Unit,
     onTapLanguage: () -> Unit,
+    onTapReply: () -> Unit,
     onScrubEvent: (StoryScrubEvent) -> Unit,
     onHeartBounds: (Rect) -> Unit,
     onLanguageBounds: (Rect) -> Unit,
@@ -105,6 +107,18 @@ fun StoryActionRail(
                 scrubKind = StoryScrubKind.Reactions,
                 onScrubEvent = onScrubEvent,
                 onBounds = onHeartBounds,
+            )
+        }
+        if (plan.showsReply) {
+            RailButton(
+                icon = MeeshyIcons.Reply,
+                label = stringResource(R.string.stories_action_reply),
+                tint = MeeshyPalette.White,
+                scale = 1f,
+                onTap = onTapReply,
+                scrubKind = null,
+                onScrubEvent = onScrubEvent,
+                onBounds = {},
             )
         }
         if (plan.showsLanguage) {
@@ -144,7 +158,7 @@ private fun RailButton(
     tint: Color,
     scale: Float,
     onTap: () -> Unit,
-    scrubKind: StoryScrubKind,
+    scrubKind: StoryScrubKind?,
     onScrubEvent: (StoryScrubEvent) -> Unit,
     onBounds: (Rect) -> Unit,
 ) {
@@ -168,6 +182,7 @@ private fun RailButton(
                     )
                 }
                 .pointerInput(scrubKind) {
+                    if (scrubKind == null) return@pointerInput
                     detectDragGesturesAfterLongPress(
                         onDragStart = { offset ->
                             scrubStartedThisGesture = true

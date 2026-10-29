@@ -31,4 +31,11 @@ class StoryRailPlanTest {
     fun `no translatable content hides the language button`() {
         assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false).showsLanguage).isFalse()
     }
+
+    @Test
+    fun `reply is offered on somebody else's story that can be answered, never on one's own`() {
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, canReply = true).showsReply).isTrue()
+        assertThat(StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false, canReply = true).showsReply).isFalse()
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, canReply = false).showsReply).isFalse()
+    }
 }

@@ -107,6 +107,7 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.scene.StoryTextBackground
@@ -155,6 +156,7 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showReply by remember { mutableStateOf(false) }
     var showSendTo by remember { mutableStateOf(false) }
     val shareLauncher = LocalShareLauncher.current
     val shareContext = androidx.compose.ui.platform.LocalContext.current
@@ -184,7 +186,7 @@ fun StoryViewerScreen(
     val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
     val cover = StoryViewerCover(
-        sheet = showViewers || showComments || showSendTo || state.languageExplorer != null,
+        sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
         menu = showOptions,
         dialog = showReportDialog || showDeleteDialog,
@@ -677,6 +679,7 @@ fun StoryViewerScreen(
                 plan = StoryRailPlan.resolve(
                     isOwnStory = state.isOwnStory,
                     hasTranslatableContent = state.availableLanguages.isNotEmpty(),
+                    canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
                 ),
                 reactionCount = state.reactionCount,
                 hasReacted = state.myReactions.isNotEmpty(),
@@ -687,6 +690,11 @@ fun StoryViewerScreen(
                     reactionBarVisible = false
                     hoveredIndex = null
                     languageBarVisible = !languageBarVisible
+                },
+                onTapReply = {
+                    closeRailBars()
+                    meeshyHaptics.light()
+                    showReply = true
                 },
                 onScrubEvent = ::handleScrub,
                 onHeartBounds = { heartBounds = it },
@@ -809,6 +817,22 @@ fun StoryViewerScreen(
             storyId = viewersStoryId,
             accentHex = accent,
             onDismiss = { showViewers = false },
+        )
+    }
+
+    val replyStoryId = state.currentStoryId
+    val replyAuthorId = state.authorUserId
+    if (showReply && replyStoryId != null && replyAuthorId != null) {
+        StoryReplySheet(
+            quote = StoryReplyQuote(
+                storyId = replyStoryId,
+                authorId = replyAuthorId,
+                authorName = state.authorName,
+                preview = StoryReplyRules.quotePreview(slide?.text),
+                thumbnailUrl = slide?.imageUrl,
+                accentHex = accent,
+            ),
+            onDismiss = { showReply = false },
         )
     }
 
