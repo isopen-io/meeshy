@@ -35,4 +35,11 @@ class ConversationClearanceTest {
         assertThat(ConversationClearance.ofServed(null)).isEqualTo(ConversationClearance.CLEAR)
         assertThat(ConversationClearance.ofServed("e2ee")).isEqualTo(ConversationClearance.END_TO_END)
     }
+
+    @Test
+    fun `un mode inconnu de cette version (futur protocole) n'est jamais tenu pour clair`() {
+        assertThat(ConversationClearance.ofServed("mls")).isEqualTo(ConversationClearance.END_TO_END)
+        assertThat(ConversationClearance.of(false, "e2ee-v2", servedClearConfirmed = true)).isEqualTo(ConversationClearance.END_TO_END)
+        assertThat(ConversationClearance.ofServed(" Server ")).isEqualTo(ConversationClearance.CLEAR)
+    }
 }

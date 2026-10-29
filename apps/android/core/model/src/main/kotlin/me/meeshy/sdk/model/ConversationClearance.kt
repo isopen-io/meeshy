@@ -22,13 +22,25 @@ enum class ConversationClearance {
          * que la passerelle a SERVI cette conversation sans bout en bout (registre des conversations confirmées claires).
          */
         fun of(sealedInLedger: Boolean, cachedMode: String?, servedClearConfirmed: Boolean): ConversationClearance = when {
-            sealedInLedger || EndToEndRegime.isEndToEnd(cachedMode) -> END_TO_END
-            !cachedMode.isNullOrBlank() || servedClearConfirmed -> CLEAR
+            sealedInLedger -> END_TO_END
+            !cachedMode.isNullOrBlank() -> ofServed(cachedMode)
+            servedClearConfirmed -> CLEAR
             else -> UNKNOWN
         }
 
-        /** Le mode que la passerelle vient de servir : nul servi = claire, jamais inconnu. */
-        fun ofServed(servedMode: String?): ConversationClearance =
-            if (EndToEndRegime.isEndToEnd(servedMode)) END_TO_END else CLEAR
+        /**
+         * Le mode que la passerelle vient de servir : nul servi = claire, jamais inconnu. Seuls les modes que le serveur LIT
+         * (`server`, `hybrid`) sont clairs ; un mode que cette version ne connaît pas (un futur protocole) est tenu pour chiffré :
+         * un ancien client n'envoie jamais de clair vers lui.
+         */
+        fun ofServed(servedMode: String?): ConversationClearance {
+            val mode = servedMode?.trim()?.lowercase()
+            return when {
+                mode.isNullOrEmpty() || mode in SERVER_READABLE_MODES -> CLEAR
+                else -> END_TO_END
+            }
+        }
+
+        private val SERVER_READABLE_MODES: Set<String> = setOf("server", "hybrid")
     }
 }
