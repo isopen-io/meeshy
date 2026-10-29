@@ -204,7 +204,7 @@ fun MyStoriesScreen(
                         },
                         onViewers = { viewersStoryId = it.id },
                         onDelete = { viewModel.onEvent(MyStoriesUiEvent.RequestDelete(it.id)) },
-                        onRepublish = { viewModel.onEvent(MyStoriesUiEvent.Republish(it.id)) },
+                        onRepublish = { viewModel.onEvent(MyStoriesUiEvent.RequestRepublish(it.id)) },
                         onSelectStart = {
                             if (!state.isSelecting) viewModel.onEvent(MyStoriesUiEvent.ToggleSelecting)
                             viewModel.onEvent(MyStoriesUiEvent.ToggleSelected(it.id))
@@ -214,6 +214,27 @@ fun MyStoriesScreen(
                 }
             }
         }
+    }
+
+    state.pendingRepublish?.let { pending ->
+        StoryAudienceSheet(
+            visibility = pending.choice.visibility,
+            userIds = pending.choice.userIds,
+            mentions = emptyList(),
+            hashtags = emptyList(),
+            onChooseVisibility = { viewModel.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(it)) },
+            onUserIdsChange = { viewModel.onEvent(MyStoriesUiEvent.SetRepublishUserIds(it)) },
+            onAddMention = {},
+            onRemoveMention = {},
+            onRemoveHashtag = {},
+            onDismiss = { viewModel.onEvent(MyStoriesUiEvent.DismissRepublish) },
+            republish = true,
+            canApply = pending.canConfirm,
+            onApply = {
+                haptics.medium()
+                viewModel.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+            },
+        )
     }
 
     state.pendingDelete?.let { pending ->

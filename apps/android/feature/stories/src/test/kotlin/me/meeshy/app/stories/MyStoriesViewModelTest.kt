@@ -3,11 +3,13 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,8 +21,12 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MyStoriesTab
 import me.meeshy.sdk.model.MyStoryDeleteConfirmation
+import me.meeshy.sdk.model.PostEditDraft
+import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.SocketStoryDeletedData
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
@@ -76,10 +82,13 @@ class MyStoriesViewModelTest {
         coEvery { it.delete(any()) } returns NetworkResult.Success(Unit)
     }
 
+    private val postRepo: PostRepository = mockk(relaxed = true)
+    private val blocks = BlockCache()
+
     private fun viewModel(repo: StoryRepository): MyStoriesViewModel {
         val session = mockk<SessionRepository>(relaxed = true).also { every { it.currentUserId } returns "me" }
         val socket = mockk<SocialSocketManager>(relaxed = true).also { every { it.storyDeleted } returns deletedFlow }
-        return MyStoriesViewModel(repo, session, socket) { nowMillis }
+        return MyStoriesViewModel(repo, postRepo, session, socket, blocks) { nowMillis }
     }
 
     @Test
@@ -229,6 +238,11 @@ class MyStoriesViewModelTest {
         assertThat(vm.state.value.active.map { it.id }).containsExactly("b")
     }
 
+    private fun republish(vm: MyStoriesViewModel, id: String) {
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish(id))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+    }
+
     @Test
     fun `republier remplace la story par la version republiee`() = runTest(dispatcher) {
         val repo = repository()
@@ -237,7 +251,7 @@ class MyStoriesViewModelTest {
         val vm = viewModel(repo)
         advanceUntilIdle()
 
-        vm.onEvent(MyStoriesUiEvent.Republish("a"))
+        republish(vm, "a")
         advanceUntilIdle()
 
         assertThat(vm.state.value.active.first().id).isEqualTo("a")
@@ -286,10 +300,144 @@ class MyStoriesViewModelTest {
         val vm = viewModel(repo)
         advanceUntilIdle()
 
-        vm.onEvent(MyStoriesUiEvent.Republish("a"))
+        republish(vm, "a")
         advanceUntilIdle()
 
         coVerify { repo.persistMyStories(any(), ticketOfA) }
         coVerify(exactly = 0) { repo.persistMyStories(any(), ticketOfB) }
+    }
+
+    @Test
+    fun `republier redemande l'audience precedente sans rien envoyer avant la confirmation`() = runTest(dispatcher) {
+        val friends = activeA.copy(visibility = "FRIENDS")
+        val repo = repository(stream = listOf(friends))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+
+        val pending = vm.state.value.pendingRepublish!!
+        assertThat(pending.choice.visibility).isEqualTo(StoryVisibility.FRIENDS)
+        assertThat(pending.choice).isEqualTo(pending.previous)
+        coVerify(exactly = 0) { repo.republish(any()) }
+    }
+
+    @Test
+    fun `une audience inconnue est proposee en PRIVATE jamais elargie`() = runTest(dispatcher) {
+        val vm = viewModel(repository())
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+
+        assertThat(vm.state.value.pendingRepublish!!.choice.visibility).isEqualTo(StoryVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `annuler la feuille ne republie rien et n'ecrit aucune audience`() = runTest(dispatcher) {
+        val repo = repository()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.DismissRepublish)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.pendingRepublish).isNull()
+        coVerify(exactly = 0) { repo.republish(any()) }
+        coVerify(exactly = 0) { postRepo.update(any(), any<PostEditDraft>()) }
+    }
+
+    @Test
+    fun `confirmer sans changer l'audience republie sans ecrire l'audience`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA.copy(visibility = "FRIENDS"))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        republish(vm, "a")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.republish("a") }
+        coVerify(exactly = 0) { postRepo.update(any(), any<PostEditDraft>()) }
+    }
+
+    @Test
+    fun `un autre choix ecrit l'audience, liste vide comprise, puis republie`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "ONLY", visibilityUserIds = listOf("x"))))
+        coEvery { repo.republish("a") } returns NetworkResult.Success(activeA.copy(visibility = "FRIENDS"))
+        coEvery { postRepo.update("a", any<PostEditDraft>()) } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.FRIENDS))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            postRepo.update("a", PostEditDraft(visibility = "FRIENDS", visibilityUserIds = emptyList()))
+            repo.republish("a")
+        }
+    }
+
+    @Test
+    fun `ONLY sans personne ne part pas`() = runTest(dispatcher) {
+        val repo = repository()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.ONLY))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.pendingRepublish!!.canConfirm).isFalse()
+        coVerify(exactly = 0) { repo.republish(any()) }
+    }
+
+    @Test
+    fun `sous ONLY les bloques et soi sont purges de la liste choisie`() = runTest(dispatcher) {
+        blocks.setBlocked("bad", true)
+        val vm = viewModel(repository())
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.ONLY))
+        vm.onEvent(MyStoriesUiEvent.SetRepublishUserIds(listOf("ok", "bad", "me")))
+
+        assertThat(vm.state.value.pendingRepublish!!.choice.userIds).containsExactly("ok")
+    }
+
+    @Test
+    fun `une republication refusee rend l'audience precedente et le dit`() = runTest(dispatcher) {
+        val repo = repository(stream = listOf(activeA.copy(visibility = "FRIENDS")))
+        coEvery { repo.republish("a") } returns failure()
+        coEvery { postRepo.update(any(), any<PostEditDraft>()) } returns NetworkResult.Success(activeA)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.PUBLIC))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerify { postRepo.update("a", PostEditDraft(visibility = "FRIENDS", visibilityUserIds = emptyList())) }
+        assertThat(vm.effects.first()).isEqualTo(MyStoriesUiEffect.RepublishFailed)
+        assertThat(vm.state.value.isRepublishing).isFalse()
+    }
+
+    @Test
+    fun `une audience refusee n'envoie pas la republication`() = runTest(dispatcher) {
+        val repo = repository()
+        coEvery { postRepo.update(any(), any<PostEditDraft>()) } returns failure()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestRepublish("a"))
+        vm.onEvent(MyStoriesUiEvent.ChooseRepublishVisibility(StoryVisibility.PUBLIC))
+        vm.onEvent(MyStoriesUiEvent.ConfirmRepublish)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.republish(any()) }
     }
 }
