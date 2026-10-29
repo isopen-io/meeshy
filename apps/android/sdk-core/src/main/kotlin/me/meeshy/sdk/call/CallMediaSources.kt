@@ -10,7 +10,9 @@ import me.meeshy.sdk.call.effects.CallVideoEffectsProcessor
 import me.meeshy.sdk.call.effects.MlKitPersonSegmenter
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.camera.CameraLensClassifier
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.model.call.camera.CameraLensProbe
+import me.meeshy.sdk.model.call.camera.CameraPickerLaw
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Enumerator
@@ -53,6 +55,15 @@ internal class CallMediaSources(
 
         override fun openLens(lensId: String) {
             reopen(lensId)
+        }
+
+        override fun openCamera(cameraId: String): Boolean {
+            var opened = false
+            reopen(cameraId) { done ->
+                if (done) attachZoom(cameraId)
+                opened = done
+            }
+            return opened
         }
     })
 
@@ -105,9 +116,26 @@ internal class CallMediaSources(
         attachZoom(name)
     }
 
+    /**
+     * Rattache le zoom à la caméra [name] qui vient de s'ouvrir : ses objectifs (aucun pour une caméra branchée,
+     * que seul le recadrage ne sert pas), le choix de caméra et sa face, d'où le miroir de l'aperçu.
+     */
     private fun attachZoom(name: String) {
-        val isFront = enumerator.isFrontFacing(name)
-        zoom.attach(CameraLensClassifier.profile(lensProbes, isFront), activeLensId = name)
+        val isExternal = lensProbes.firstOrNull { it.id == name }?.isExternal == true
+        val isFront = !isExternal && enumerator.isFrontFacing(name)
+        val facing = when {
+            isExternal -> CameraFacing.External
+            isFront -> CameraFacing.Front
+            else -> CameraFacing.Back
+        }
+        val cameras = CameraPickerLaw.options(lensProbes)
+        zoom.attach(
+            profile = if (isExternal) null else CameraLensClassifier.profile(lensProbes, isFront),
+            activeLensId = name,
+            cameras = cameras,
+            selectedCameraId = CameraPickerLaw.selectedId(cameras, lensProbes, name),
+            facing = facing,
+        )
     }
 
     /** Rouvre la capture sur la caméra [name], sur la même source : la piste, l'encodeur et le recadrage restent. */

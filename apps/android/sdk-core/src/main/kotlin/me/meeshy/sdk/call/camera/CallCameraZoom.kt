@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import me.meeshy.sdk.model.call.camera.CameraDeviceOption
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.model.call.camera.CameraZoomPlan
 import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import me.meeshy.sdk.model.call.camera.CameraZoomProfile
@@ -16,19 +18,32 @@ interface CameraZoomActuator {
 
     /** Rouvre la capture sur l'objectif physique [lensId] (le recadrage courant est conservé). */
     fun openLens(lensId: String)
+
+    /**
+     * Rouvre la capture sur la caméra [cameraId] (« Choisir la caméra ») et rattache le zoom à sa face ;
+     * `false` si elle ne s'ouvre pas. Même source, même piste : aucune renégociation, les effets restent.
+     */
+    fun openCamera(cameraId: String): Boolean = false
 }
 
+/**
+ * [cameras] : ce que « Choisir la caméra » propose ; [selectedCameraId] : celle qui est cochée ; [facing] : la face
+ * de la caméra ouverte, d'où se déduit le miroir de mon aperçu.
+ */
 data class CallCameraZoomState(
     val profile: CameraZoomProfile? = null,
     val displayFactor: Float = 1f,
     val isPinching: Boolean = false,
+    val cameras: List<CameraDeviceOption> = emptyList(),
+    val selectedCameraId: String? = null,
+    val facing: CameraFacing? = null,
 ) {
     val isZoomable: Boolean get() = profile != null
 }
 
 /**
  * Le zoom de MA caméra pendant un appel (miroir de iOS `CameraZoomController`) : pincer sa propre
- * image, choisir une pastille d'objectif, revenir à 1×. Les décisions sont les nombres de
+ * image, choisir une pastille d'objectif, revenir à 1×, choisir la caméra quand une est branchée. Les décisions sont les nombres de
  * [CameraZoomProfile] ; l'écriture dans la caméra part par [CameraZoomActuator], jamais d'ici.
  */
 class CallCameraZoom(private val actuator: CameraZoomActuator) {
@@ -40,11 +55,25 @@ class CallCameraZoom(private val actuator: CameraZoomActuator) {
 
     /** Après chaque capture démarrée sur une face : une nouvelle caméra repart à 1×. */
     @Synchronized
-    fun attach(profile: CameraZoomProfile?, activeLensId: String?) {
+    fun attach(
+        profile: CameraZoomProfile?,
+        activeLensId: String?,
+        cameras: List<CameraDeviceOption> = emptyList(),
+        selectedCameraId: String? = null,
+        facing: CameraFacing? = null,
+    ) {
         this.activeLensId = activeLensId
         pinchStart = null
-        _state.value = CallCameraZoomState(profile = profile)
+        _state.value = CallCameraZoomState(profile = profile, cameras = cameras, selectedCameraId = selectedCameraId, facing = facing)
         if (profile != null) move(profile.baselineDisplay, rampRate = null, stayOnLens = true)
+    }
+
+    /** « Choisir la caméra » (iOS `selectCamera(id:)`) : `true` quand une autre caméra proposée s'est ouverte. */
+    @Synchronized
+    fun selectCamera(cameraId: String): Boolean {
+        val current = _state.value
+        if (cameraId == current.selectedCameraId || current.cameras.none { it.id == cameraId }) return false
+        return actuator.openCamera(cameraId)
     }
 
     @Synchronized
