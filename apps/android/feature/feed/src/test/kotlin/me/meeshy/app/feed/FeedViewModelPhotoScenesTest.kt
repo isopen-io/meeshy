@@ -109,9 +109,20 @@ class FeedViewModelPhotoScenesTest {
     }
 
     @Test
-    fun `a layout armed before the photos were removed never travels with a lone photo`() = runTest {
+    fun `a layout armed before the photos were removed never travels with a lone photo, which leaves as a one scene document`() = runTest {
         val request = queued {
             publishPost(content = "", visibility = "PUBLIC", mediaIds = listOf("a"), media = listOf(photo("a")), layout = MosaicLayoutMode.WAVE)
+        }
+
+        val canvas = request.storyEffects!!.canvas!!
+        assertThat(canvas.scenes).hasSize(1)
+        assertThat(canvas.layout).isNull()
+    }
+
+    @Test
+    fun `a lone video keeps the old path, no document`() = runTest {
+        val request = queued {
+            publishPost(content = "", visibility = "PUBLIC", mediaIds = listOf("a"), media = listOf(photo("a").copy(mimeType = "video/mp4")))
         }
 
         assertThat(request.storyEffects).isNull()

@@ -39,13 +39,15 @@ object PostPhotoScenes {
         }
 
     /**
-     * Le document de [media] — `null` quand [sceneCount] est nul, sauf pour une photo seule posée sur un fond de couleur.
+     * Le document de [media] — `null` quand [sceneCount] est nul, sauf pour une photo SEULE, avec ou sans fond de couleur.
      * [language] est la langue de composition (`locale` de l'objet, `declaredContentLanguage` d'iOS) ; [armedLayout] n'est
      * écrit que là où le contrôle était offert ; [background] se pose sous la PREMIÈRE photo, comme iOS garde la couleur
      * sur la slide où elle a été choisie (`applyBackground` n'écrit que la slide courante, et `addSlide` en ouvre une vierge).
      *
-     * Une photo seule sur une couleur part en document d'UNE scène, comme iOS (`publishedSlide` rend alors les effets de
-     * la slide) : la couleur seule masquerait la photo, la photo seule perdrait la couleur.
+     * Une photo seule part en document d'UNE scène, comme iOS : `publishedSlide` rend les effets de la slide, et
+     * `StoryEffects.encode` les écrit TOUJOURS en document v3 (fixture `post-photo-scenes-1`, produite par le composeur).
+     * Le fond de couleur éventuel y reste sous la photo : la couleur seule la masquerait, la photo seule la perdrait.
+     * Le `layout` n'y est jamais écrit (une scène n'a rien à disposer).
      *
      * Un média encore en file (son id est un `cmid`) désigne cet id provisoire et ne porte pas d'adresse : l'outbox
      * (`PostPublishMediaWriteBack`) le remplace par le vrai à l'arrivée du téléversement, scène comprise.
@@ -57,8 +59,8 @@ object PostPhotoScenes {
         background: String? = null,
     ): StoryEffects? {
         val count = sceneCount(media.map { it.mimeType }, ComposerFormat.POST)
-        val colouredPhoto = background != null && media.size == 1 && isPhoto(media.single().mimeType)
-        if (count == 0 && !colouredPhoto) return null
+        val singlePhoto = media.size == 1 && isPhoto(media.single().mimeType)
+        if (count == 0 && !singlePhoto) return null
         val slides = media.mapIndexed { index, item -> slide(index, item, language, background.takeIf { index == 0 }) }
         val layout = ComposerMosaicChoice.published(armedLayout, count, ComposerFormat.POST)
         return StoryEffects(canvas = CanvasV3Migration.migrate(slides, layout))

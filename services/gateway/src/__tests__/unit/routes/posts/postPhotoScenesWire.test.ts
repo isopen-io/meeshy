@@ -186,6 +186,7 @@ describe('un post de photos en document de scènes — écrit, puis lu par un an
   });
 
   it.each([
+    ['post-photo-scenes-1', 1],
     ['post-photo-scenes-2', 2],
     ['post-photo-scenes-3-hero', 3],
   ])('%s : créé sous écriture stricte, le document atteint le service tel quel', async (name, count) => {
@@ -214,6 +215,23 @@ describe('un post de photos en document de scènes — écrit, puis lu par un an
     const data = res.json().data;
     expect(data).not.toHaveProperty('storyEffects');
     expect(data.media.map((m: { id: string }) => m.id)).toEqual(MEDIA_IDS);
+    await app.close();
+  });
+
+  it('une photo seule, relue SANS X-Canvas-Caps : storyEffects omis, la photo du post intacte ; avec caps 3 : la scène la désigne', async () => {
+    const document = loadFixture('post-photo-scenes-1');
+    const single = { ...servedPost(document), media: postMedia.slice(0, 1) };
+    mockGetPostById.mockResolvedValue(single);
+    const app = await buildApp();
+
+    const old = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
+    expect(old.statusCode).toBe(200);
+    expect(old.json().data).not.toHaveProperty('storyEffects');
+    expect(old.json().data.media.map((m: { id: string }) => m.id)).toEqual([MEDIA_IDS[0]]);
+
+    const current = await app.inject({ method: 'GET', url: `/posts/${POST_ID}`, headers: CAPS_HEADER });
+    expect(current.json().data.storyEffects).toEqual(document);
+    expect(designated(current.json().data.storyEffects)).toEqual([MEDIA_IDS[0]]);
     await app.close();
   });
 
