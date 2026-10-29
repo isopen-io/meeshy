@@ -60,7 +60,8 @@ class WebRtcEngine internal constructor(
     constructor(
         @ApplicationContext appContext: Context,
         activityGate: CallActivityGate,
-    ) : this(appContext, { buildStack(appContext) }, activityGate)
+        microphoneSamples: CallMicrophoneSamples,
+    ) : this(appContext, { buildStack(appContext, microphoneSamples) }, activityGate)
 
     private val stack = lazy(stackProvider)
     private val media = CallMediaSources(appContext, stack)
@@ -322,12 +323,13 @@ class WebRtcEngine internal constructor(
         @Volatile
         private var globalInitDone = false
 
-        fun buildStack(context: Context): WebRtcStack {
+        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples): WebRtcStack {
             ensureGlobalInit(context)
             val egl = EglBase.create()
             val audioDevice = JavaAudioDeviceModule.builder(context)
                 .setUseHardwareAcousticEchoCanceler(true)
                 .setUseHardwareNoiseSuppressor(true)
+                .setSamplesReadyCallback(microphoneSamples.callback)
                 .createAudioDeviceModule()
             val factory = PeerConnectionFactory.builder()
                 .setAudioDeviceModule(audioDevice)
