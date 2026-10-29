@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,25 +56,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.call.frames.CallFramePortrait
 import me.meeshy.sdk.call.frames.CallFrameRenderer
-import me.meeshy.sdk.call.frames.CallFrameStage
 import me.meeshy.sdk.model.call.CallLiveFrameReply
-import me.meeshy.sdk.model.call.frames.CallFrameChromeReserve
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
+import me.meeshy.sdk.model.call.frames.CallFrameStyleRule
 import me.meeshy.sdk.model.call.frames.CallFrameTexts
+import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
+import me.meeshy.sdk.model.call.frames.CallLiveFrameSuspension
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import org.webrtc.VideoTrack
 
-private const val PAINT_LONGEST_SIDE = 1280
 private const val ANSWER_LINGER_MILLIS = 4_000L
-private val HEADER_RESERVE = 72.dp
-private val PILL_RESERVE = 200.dp
 private val STATUS_TOP = 68.dp
 private val THUMB_WIDTH = 72.dp
 private val THUMB_HEIGHT = 128.dp
@@ -87,6 +86,8 @@ private val THUMB_HEIGHT = 128.dp
 @Singleton
 class CallLiveFrameOverlay @Inject constructor(
     private val frame: CallLiveFrameController,
+    private val engine: WebRtcEngine,
+    private val textsResolver: CallFrameTextsResolver,
 ) : CallOverlay {
     override val id: String = "call-live-frame"
     override val slot: CallOverlaySlot = CallOverlaySlot.Background
@@ -96,13 +97,44 @@ class CallLiveFrameOverlay @Inject constructor(
     @Composable
     override fun Content(context: CallOverlayContext) {
         val shared by frame.state.collectAsState()
-        val design = CallLiveFrameRule.displayed(shared.frameId, CallLiveFrameRule.PEOPLE) ?: return
+        val reduceMotion = rememberCallReduceMotion()
+        val constrained = rememberCallDeviceConstrained()
+        val design = CallLiveFrameRule.display(shared.frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design ?: return
+        val state = context.state
+        val people = remember(state.peerName, shared.remoteSharedName) { frame.people(state.peerName, shared.remoteSharedName) }
+        val call = frame.callContext()
+        val texts by produceState(textsResolver.immediate(call), call) { value = textsResolver.texts(call) }
+        val remote by engine.remoteVideoTracks.collectAsState(initial = null)
+        val local = engine.localVideoTrack
+        val sources = remember(local, remote, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
+            CallLiveFrameSources.of(people, local, remote, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff)
+        }
+        val egl = remember(engine) { runCatching { engine.eglBase.eglBaseContext }.getOrNull() }
         CallLiveFrameSurface(
             design = design,
-            people = frame.people(context.state.peerName, shared.remoteSharedName),
+            people = people,
+            texts = texts,
+            sources = sources,
+            eglContext = egl,
+            playsMotion = CallLiveFrameRule.playsMotion(design, reduceMotion, constrained),
             modifier = Modifier.fillMaxSize(),
         )
     }
+}
+
+/** Les pistes à poser dans les cases : celles qui montrent une image. Une caméra coupée garde sa case, avec son initiale. */
+internal object CallLiveFrameSources {
+    fun of(
+        people: List<CallFramePerson>,
+        local: VideoTrack?,
+        remote: VideoTrack?,
+        isCameraOn: Boolean,
+        isFrontCamera: Boolean,
+        isPeerCameraOff: Boolean,
+    ): Map<String, CallLiveFrameVideoSource> = people.mapNotNull { person ->
+        val track = if (person.isSelf) local?.takeIf { isCameraOn } else remote?.takeIf { !isPeerCameraOff }
+        track?.let { person.id to CallLiveFrameVideoSource(it, isMirrored = person.isSelf && isFrontCamera) }
+    }.toMap()
 }
 
 /** Ce qui se dit du cadre en haut de l'écran, sous l'en-tête : une proposition à trancher, une réponse, un échec. */
@@ -127,6 +159,9 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
     val notice by controller.notices.collectAsState()
     val proposed = state.proposal?.let { p -> CallLiveFrameRule.frames().firstOrNull { it.id == p.frameId }?.let { p to it } }
     val answer = state.answer
+    val suspended = CallLiveFrameRule.display(
+        state.frameId, CallLiveFrameRule.PEOPLE, rememberCallDeviceConstrained(), rememberCallReduceMotion(),
+    ) as? CallLiveFrameDisplay.Suspended
     Column(modifier.padding(top = STATUS_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
         when {
             proposed != null -> CallLiveFrameProposalCard(
@@ -149,8 +184,14 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
                     controller.noticeShown()
                 }
             }
+            suspended != null -> CallLiveFrameNotice(stringResource(suspendedText(suspended.reason)))
         }
     }
+}
+
+private fun suspendedText(reason: CallLiveFrameSuspension): Int = when (reason) {
+    CallLiveFrameSuspension.DEVICE_CONSTRAINED -> R.string.call_live_frame_suspended_device
+    CallLiveFrameSuspension.REDUCE_MOTION -> R.string.call_live_frame_suspended_motion
 }
 
 @Composable
@@ -218,43 +259,6 @@ internal fun CallLiveFrameNotice(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Le cadre à l'écran : le DESSUS du cadre (traits de case, bordure, ornements de premier plan, noms,
- * titre, signature), peint hors du fil principal à la taille de l'écran puis posé tel quel par-dessus
- * les vidéos. Il ne prend aucun toucher. Les couches se repeignent seulement quand le cadre, les
- * personnes, les textes ou la taille changent — jamais à une image vidéo.
- */
-@Composable
-internal fun CallLiveFrameSurface(design: CallFrameDesign, people: List<CallFramePerson>, modifier: Modifier = Modifier) {
-    val density = LocalDensity.current
-    val locale = LocalConfiguration.current.locales[0]
-    val date = remember(locale) { DateFormat.getDateInstance(DateFormat.LONG, locale).format(Date()) }
-    BoxWithConstraints(modifier) {
-        val widthPx = with(density) { maxWidth.roundToPx() }
-        val heightPx = with(density) { maxHeight.roundToPx() }
-        val shrink = (PAINT_LONGEST_SIDE.toFloat() / maxOf(widthPx, heightPx)).coerceAtMost(1f)
-        val paintW = (widthPx * shrink).toInt()
-        val paintH = (heightPx * shrink).toInt()
-        val reserve = with(density) { CallFrameChromeReserve.covering(HEADER_RESERVE.toPx().toDouble(), PILL_RESERVE.toPx().toDouble(), heightPx.toDouble()) }
-        val overlay by produceState<ImageBitmap?>(null, design.id, people, paintW, paintH, date, reserve) {
-            if (paintW < 1 || paintH < 1) return@produceState
-            val texts = CallFrameTexts(groupName = null, isGroup = false, date = date, accentHex = null)
-            value = withContext(Dispatchers.Default) {
-                CallFrameRenderer.layers(CallFrameStage(design, people, texts, paintW, paintH, reserve))?.overlay?.asImageBitmap()
-            }
-        }
-        val description = stringResource(R.string.call_live_frame_surface, design.name)
-        overlay?.let {
-            Image(
-                bitmap = it,
-                contentDescription = description,
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-/**
  * Le choix du cadre en direct (le mode « Capturer l'appel », comme sur iOS) : « Aucun cadre », puis les cadres
  * d'une ambiance, chacun en vignette. Toucher un cadre l'applique tout de suite chez moi et le propose à l'autre.
  */
@@ -306,7 +310,11 @@ internal fun CallLiveFramePicker(
                 }
             }
             items(frames, key = { it.id }) { design ->
-                FrameTile(label = design.name, selected = design.id == state.frameId, thumb = design, people = people) {
+                val selected = state.frameId?.let(CallFrameStyleRule::baseId) == design.id
+                FrameTile(label = design.name, selected = selected, thumb = design, people = people, chosen = state.frameId, onDecline = { id ->
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    controller.apply(id)
+                }) {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     controller.apply(design.id)
                 }
@@ -341,7 +349,16 @@ private fun MoodChip(mood: CallFrameMood, selected: Boolean, onClick: () -> Unit
 private fun Modifier.defaultMinSizeForTarget(): Modifier = this.height(40.dp)
 
 @Composable
-private fun FrameTile(label: String, selected: Boolean, thumb: CallFrameDesign?, people: List<CallFramePerson>, onClick: () -> Unit) {
+private fun FrameTile(
+    label: String,
+    selected: Boolean,
+    thumb: CallFrameDesign?,
+    people: List<CallFramePerson>,
+    chosen: String? = null,
+    onDecline: (String) -> Unit = {},
+    onClick: () -> Unit,
+) {
+    val declinations = remember(thumb?.id) { thumb?.let { CallFrameStyleRule.declinations(it.id) }.orEmpty() }
     val shape = RoundedCornerShape(MeeshyRadius.md)
     Column(
         Modifier
@@ -359,14 +376,22 @@ private fun FrameTile(label: String, selected: Boolean, thumb: CallFrameDesign?,
                 .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = 0.3f), shape),
             contentAlignment = Alignment.Center,
         ) {
-            if (thumb != null) FrameThumbnail(thumb, people)
+            when {
+                thumb == null -> Unit
+                selected && declinations.size > 1 -> CallFrameDeclinationPager(
+                    declinations = declinations,
+                    selected = chosen ?: thumb.id,
+                    onSelect = onDecline,
+                ) { design -> FrameThumbnail(design, people) }
+                else -> FrameThumbnail(thumb, people)
+            }
         }
         Text(label, style = MaterialTheme.typography.labelSmall, color = CallPalette.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerson>) {
+internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerson>) {
     val density = LocalDensity.current
     val w = with(density) { THUMB_WIDTH.roundToPx() }
     val h = with(density) { THUMB_HEIGHT.roundToPx() }

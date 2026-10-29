@@ -69,3 +69,26 @@ class CallLiveFrameUiTest {
         controller.onCleared()
     }
 }
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class CallFrameDeclinationPagerTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Test
+    fun `la vignette du cadre choisi dit sa declinaison et passe a la suivante sans souris ni glisse`() {
+        val base = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.frames().first { it.styles.isNotEmpty() }
+        val declinations = me.meeshy.sdk.model.call.frames.CallFrameStyleRule.declinations(base.id)
+        var chosen: String? = null
+        rule.setContent {
+            MeeshyTheme {
+                CallFrameDeclinationPager(declinations, selected = base.id, onSelect = { chosen = it }) { androidx.compose.material3.Text(it.id) }
+            }
+        }
+        rule.onNode(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Version 1 of ${declinations.size}")).assertExists()
+        val node = rule.onNode(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Version 1 of ${declinations.size}")).fetchSemanticsNode()
+        val next = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].first { it.label == "Next version" }
+        rule.runOnIdle { next.action() }
+        assertThat(chosen).isEqualTo(declinations[1].id)
+    }
+}

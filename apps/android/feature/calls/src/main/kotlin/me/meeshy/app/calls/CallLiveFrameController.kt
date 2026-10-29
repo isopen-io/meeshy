@@ -22,6 +22,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallLiveFrameSelected
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.frames.CallFrameCallContext
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameMachine
 import me.meeshy.sdk.model.call.frames.CallLiveFrameOutgoing
@@ -61,6 +62,8 @@ class CallLiveFrameController internal constructor(
     val notices: StateFlow<CallLiveFrameNotice?> = _notices.asStateFlow()
 
     @Volatile private var callId: String? = null
+
+    @Volatile private var conversationId: String? = null
     private var listening: Job? = null
 
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
@@ -72,6 +75,7 @@ class CallLiveFrameController internal constructor(
                     _state.value = CallLiveFrameState()
                     callId = id
                 }
+                conversationId = session.config.conversationId.ifBlank { null }
                 if (listening == null) listening = social.frameSelected.onEach(::receive).launchIn(scope)
             }
         }
@@ -127,12 +131,16 @@ class CallLiveFrameController internal constructor(
         remoteSharedName,
     )
 
+    /** Ce que l'appel sait de sa conversation, sans rien attendre : de quoi résoudre les textes du cadre (#13687). */
+    fun callContext(): CallFrameCallContext = CallFrameCallContext(conversationId, knownGroupTitle = null, isGroupCall = false)
+
     private fun myName(): String? = session.currentUser.value?.effectiveDisplayName?.takeIf { it.isNotBlank() }
 
     private fun reset() {
         listening?.cancel()
         listening = null
         callId = null
+        conversationId = null
         _state.value = CallLiveFrameState()
         _notices.value = null
     }
