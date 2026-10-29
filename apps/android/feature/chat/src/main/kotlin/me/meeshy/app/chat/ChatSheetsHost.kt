@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
@@ -179,11 +180,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
-    val contactScopeFor = LocalChatContactCardScope.current
+    var hubContactSeeds by remember { mutableStateOf(emptyMap<String, ContactCardResolutionScope>()) }
+    val contactGate = LocalChatContactCardScope.current
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactScopeFor)) },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
         onDismiss = actions.dismissFileDownload,
         onRetry = { actions.retryFileDownload() },
     )
@@ -309,7 +311,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 sheets.media = false
                 actions.scrollToMessage(messageId)
             },
-            onOpenFile = { messageId, attachment -> actions.onHubFileOpen(messageId, attachment) },
+            onOpenFile = { carrier, attachment ->
+                hubContactSeeds = hubContactSeeds + (attachment.id to hubContactSeed(carrier, attachment))
+                actions.onHubFileOpen(carrier.id, attachment)
+            },
             onDismiss = { sheets.media = false },
         )
     }

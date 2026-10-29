@@ -57,8 +57,9 @@ internal sealed interface ContactCardAccountEvent {
  * - **Optimiste** : la demande d'amitié passe par [FriendConnectionCoordinator], qui bascule le cache d'amitié
  *   AVANT le réseau et le restaure sur refus ; la relation servie suit ce cache.
  * - **Échec fermé** (#13633, miroir de #13622) : seule une conversation CONNUE claire ouvre la résolution ([ContactCardResolutionScope.mayResolveOnServer]) ;
- *   chiffrée de bout en bout, mode inconnu ou protocole futur ⇒ ni lecture du cache ni requête, coordonnées locales seules, et la fiche dit
- *   que la vérification « Sur Meeshy » est indisponible ([lookupUnavailable]).
+ *   chiffrée de bout en bout, mode inconnu ou protocole futur ⇒ ni lecture du cache ni requête, coordonnées locales seules ; seule une
+ *   portée chiffrée de bout en bout fait dire à la fiche que la vérification « Sur Meeshy » est indisponible dans une conversation
+ *   chiffrée ([lookupUnavailable]) — un mode inconnu ferme en silence, comme iOS, car la conversation peut être claire.
  * - **Vie privée** (#9225) : la résolution est faite par la passerelle, qui ne rend que des comptes inscrits
  *   (profil public, jamais la présence) ; rien du carnet n'est conservé ici.
  */
@@ -86,7 +87,7 @@ internal class ContactCardAccountsViewModel internal constructor(
     private var bound: Pair<ContactResolveRequest, ContactCardResolutionScope>? = null
     private val _lookupUnavailable = MutableStateFlow(false)
 
-    /** La portée interdit de rapprocher la carte : la fiche le dit, sans dire pourquoi. */
+    /** La carte vient d'une conversation chiffrée de bout en bout : la fiche le dit (jamais pour un mode seulement inconnu). */
     val lookupUnavailable: StateFlow<Boolean> = _lookupUnavailable.asStateFlow()
 
     private val _events = MutableSharedFlow<ContactCardAccountEvent>(extraBufferCapacity = 8)
@@ -134,7 +135,7 @@ internal class ContactCardAccountsViewModel internal constructor(
         val request = ContactResolveRequest.bounded(card.phones.map { it.value }, card.emails.map { it.value }, defaultCountry())
         if (bound == request to scope) return
         bound = request to scope
-        _lookupUnavailable.value = !scope.mayResolveOnServer
+        _lookupUnavailable.value = scope == ContactCardResolutionScope.EndToEnd
         if (!scope.mayResolveOnServer) {
             accounts.value = emptyList()
             return

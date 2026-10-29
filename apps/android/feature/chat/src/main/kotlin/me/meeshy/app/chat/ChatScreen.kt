@@ -141,7 +141,7 @@ fun ChatScreen(
     }
     CompositionLocalProvider(
         LocalBubbleContactCardAccounts provides contactCards,
-        LocalChatContactCardScope provides contactCards::scopeFor,
+        LocalChatContactCardScope provides contactCards::underConversation,
     ) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :

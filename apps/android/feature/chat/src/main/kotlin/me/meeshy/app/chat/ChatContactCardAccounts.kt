@@ -5,6 +5,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.user.ContactCardMeeshyAccount
@@ -60,16 +62,39 @@ internal class ChatContactCardAccounts(
     /** La portée d'une carte : celle de la rangée sous la bulle ET de la fiche (#13633) — seul le clair CONFIRMÉ ouvre. */
     fun scopeFor(file: BubbleFile): ContactCardResolutionScope = scopeOf(file)
 
-    private fun scopeOf(file: BubbleFile) = file.contactScope.inConversation(conversationIsEndToEnd).under(clearance)
+    /** La portée d'un message (et de sa pièce) passée par la conversation : chiffrée ou de mode inconnu, elle ferme. */
+    fun underConversation(seed: ContactCardResolutionScope): ContactCardResolutionScope =
+        seed.inConversation(conversationIsEndToEnd).under(clearance)
+
+    private fun scopeOf(file: BubbleFile) = underConversation(file.contactScope)
 }
 
-/** La portée que l'hôte du fil donne à la fiche d'une carte ; FERMÉE tant qu'aucun hôte n'en fournit. */
-internal val LocalChatContactCardScope = staticCompositionLocalOf<(BubbleFile) -> ContactCardResolutionScope> { { ContactCardResolutionScope.Unknown } }
+/** La porte de la conversation que l'hôte du fil donne à la fiche d'une carte ; FERMÉE tant qu'aucun hôte n'en fournit. */
+internal val LocalChatContactCardScope =
+    staticCompositionLocalOf<(ContactCardResolutionScope) -> ContactCardResolutionScope> { { ContactCardResolutionScope.Unknown } }
 
-/** La portée de la pièce [attachmentId] parmi les bulles du fil ; une pièce introuvable ferme ([ContactCardResolutionScope.Unknown]). */
+/** La portée d'une carte ouverte depuis le hub média : la règle de la rangée, lue sur son message porteur. */
+internal fun hubContactSeed(carrier: ApiMessage, attachment: ApiMessageAttachment): ContactCardResolutionScope =
+    ContactCardResolutionScope.of(carrier).sealedBy(attachment)
+
+/**
+ * La portée de la pièce [attachmentId] : celle de ses bulles dans le fil et, pour une pièce que le fil n'a pas chargée,
+ * celle que le hub a lue sur son porteur ([provided]) — toutes passées par la conversation ([gate]). La plus FERMÉE
+ * l'emporte (une même pièce portée deux fois n'ouvre que si chaque porteur est clair), et une pièce introuvable ferme
+ * ([ContactCardResolutionScope.Unknown]).
+ */
 internal fun List<BubbleContent>.contactScopeOf(
     attachmentId: String,
-    scopeFor: (BubbleFile) -> ContactCardResolutionScope,
-): ContactCardResolutionScope =
-    asSequence().flatMap { it.files.asSequence() }.firstOrNull { it.attachmentId == attachmentId }?.let(scopeFor)
-        ?: ContactCardResolutionScope.Unknown
+    gate: (ContactCardResolutionScope) -> ContactCardResolutionScope,
+    provided: Map<String, ContactCardResolutionScope> = emptyMap(),
+): ContactCardResolutionScope {
+    val seeds = flatMap { it.files }.filter { it.attachmentId == attachmentId }.map { it.contactScope } +
+        listOfNotNull(provided[attachmentId])
+    val scopes = seeds.map(gate)
+    return when {
+        scopes.isEmpty() -> ContactCardResolutionScope.Unknown
+        scopes.all { it == ContactCardResolutionScope.Clear } -> ContactCardResolutionScope.Clear
+        ContactCardResolutionScope.EndToEnd in scopes -> ContactCardResolutionScope.EndToEnd
+        else -> ContactCardResolutionScope.Unknown
+    }
+}

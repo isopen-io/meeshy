@@ -196,13 +196,25 @@ class ContactCardAccountsViewModelTest {
     }
 
     @Test
-    fun `une fiche au mode inconnu ferme comme le bout en bout`() = runTest(dispatcher) {
-        val f = fixture(resolved = listOf(account("a")))
+    fun `une fiche au mode inconnu ferme sans pretendre la conversation chiffree`() = runTest(dispatcher) {
+        val f = fixture(cached = listOf(account("a")), resolved = listOf(account("a")))
         f.vm.bind(card, ContactCardResolutionScope.Unknown)
         advanceUntilIdle()
         coVerify(exactly = 0) { f.resolver.resolve(any()) }
+        verify(exactly = 0) { f.resolver.cached(any()) }
         assertThat(f.vm.rows.value).isEmpty()
-        assertThat(f.vm.lookupUnavailable.value).isTrue()
+        assertThat(f.vm.lookupUnavailable.value).isFalse()
+    }
+
+    @Test
+    fun `une fiche rouverte du bout en bout vers l inconnu retire la mention chiffree`() = runTest(dispatcher) {
+        val f = fixture(resolved = listOf(account("a")))
+        f.vm.bind(card, ContactCardResolutionScope.EndToEnd)
+        advanceUntilIdle()
+        f.vm.bind(card, ContactCardResolutionScope.Unknown)
+        advanceUntilIdle()
+        assertThat(f.vm.lookupUnavailable.value).isFalse()
+        coVerify(exactly = 0) { f.resolver.resolve(any()) }
     }
 
     @Test

@@ -129,24 +129,65 @@ class ChatContactCardAccountsTest {
         assertThat(provider().scopeFor(file(ContactCardResolutionScope.EndToEnd))).isEqualTo(ContactCardResolutionScope.EndToEnd)
     }
 
+    private fun bubble(id: String, vararg files: BubbleFile) = me.meeshy.ui.component.bubble.BubbleContent(
+        messageId = id,
+        text = "",
+        isOutgoing = false,
+        isTranslated = false,
+        originalText = null,
+        senderName = "Ada",
+        showSenderName = false,
+        isEdited = false,
+        isDeleted = false,
+        createdAtIso = "2026-10-29T10:00:00Z",
+        files = files.toList(),
+    )
+
     @Test
     fun `la portee d'une piece du fil se lit dans ses bulles et une piece introuvable ferme`() {
-        val bubble = me.meeshy.ui.component.bubble.BubbleContent(
-            messageId = "m1",
-            text = "",
-            isOutgoing = false,
-            isTranslated = false,
-            originalText = null,
-            senderName = "Ada",
-            showSenderName = false,
-            isEdited = false,
-            isDeleted = false,
-            createdAtIso = "2026-10-29T10:00:00Z",
-            files = listOf(file()),
-        )
-        val scopeFor = provider(e2ee = true)::scopeFor
+        val gate = provider(e2ee = true)::underConversation
 
-        assertThat(listOf(bubble).contactScopeOf("a1", scopeFor)).isEqualTo(ContactCardResolutionScope.EndToEnd)
-        assertThat(listOf(bubble).contactScopeOf("zz", scopeFor)).isEqualTo(ContactCardResolutionScope.Unknown)
+        assertThat(listOf(bubble("m1", file())).contactScopeOf("a1", gate)).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(listOf(bubble("m1", file())).contactScopeOf("zz", gate)).isEqualTo(ContactCardResolutionScope.Unknown)
+    }
+
+    @Test
+    fun `une carte ouverte depuis le hub prend la portee de son porteur meme hors du fil charge`() {
+        val clear = provider()::underConversation
+        val provided = mapOf("hub1" to ContactCardResolutionScope.Clear, "hub2" to ContactCardResolutionScope.EndToEnd)
+
+        assertThat(emptyList<me.meeshy.ui.component.bubble.BubbleContent>().contactScopeOf("hub1", clear, provided))
+            .isEqualTo(ContactCardResolutionScope.Clear)
+        assertThat(emptyList<me.meeshy.ui.component.bubble.BubbleContent>().contactScopeOf("hub2", clear, provided))
+            .isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(emptyList<me.meeshy.ui.component.bubble.BubbleContent>().contactScopeOf("hub1", provider(clearance = ConversationClearance.UNKNOWN)::underConversation, provided))
+            .isEqualTo(ContactCardResolutionScope.Unknown)
+        assertThat(emptyList<me.meeshy.ui.component.bubble.BubbleContent>().contactScopeOf("hub1", provider(e2ee = true)::underConversation, provided))
+            .isEqualTo(ContactCardResolutionScope.EndToEnd)
+    }
+
+    @Test
+    fun `une meme piece portee deux fois prend la portee la plus fermee`() {
+        val clear = provider()::underConversation
+        val sealed = file(ContactCardResolutionScope.EndToEnd)
+        val thread = listOf(bubble("m1", file()), bubble("m2", sealed))
+
+        assertThat(thread.contactScopeOf("a1", clear)).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(listOf(bubble("m1", sealed), bubble("m2", file())).contactScopeOf("a1", clear))
+            .isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(listOf(bubble("m1", file())).contactScopeOf("a1", clear, mapOf("a1" to ContactCardResolutionScope.EndToEnd)))
+            .isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(listOf(bubble("m1", file())).contactScopeOf("a1", clear, mapOf("a1" to ContactCardResolutionScope.Clear)))
+            .isEqualTo(ContactCardResolutionScope.Clear)
+    }
+
+    @Test
+    fun `la graine du hub suit la regle de la rangee`() {
+        val clearCarrier = ApiMessage(id = "m", conversationId = "c", senderId = "u", content = "", attachments = emptyList())
+        val vcf = ApiMessageAttachment(id = "a", mimeType = "text/vcard", fileUrl = "https://cdn/a.vcf")
+
+        assertThat(hubContactSeed(clearCarrier, vcf)).isEqualTo(ContactCardResolutionScope.Clear)
+        assertThat(hubContactSeed(clearCarrier.copy(encryptionMode = "e2ee"), vcf)).isEqualTo(ContactCardResolutionScope.EndToEnd)
+        assertThat(hubContactSeed(clearCarrier, vcf.copy(isEncrypted = true))).isEqualTo(ContactCardResolutionScope.EndToEnd)
     }
 }
