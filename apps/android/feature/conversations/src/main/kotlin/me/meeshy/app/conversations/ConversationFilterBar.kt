@@ -14,14 +14,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ConversationFilter
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
 /**
  * Horizontally scrollable filter tabs mirroring the iOS conversation filter bar.
  * Each chip carries its iOS accent colour ([ConversationFilter.colorHex]) so the
- * selected state stays visually coherent across platforms.
+ * selected state stays visually coherent across platforms. Pleine largeur comme la `ScrollView` d'iOS : aucune réserve
+ * latérale pour les disques flottants (#13664).
  */
 @Composable
 fun ConversationFilterBar(
@@ -30,7 +30,7 @@ fun ConversationFilterBar(
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
-        modifier = modifier.floatingChromeLateralReserve(yieldsBothSides = true),
+        modifier = modifier,
         contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {

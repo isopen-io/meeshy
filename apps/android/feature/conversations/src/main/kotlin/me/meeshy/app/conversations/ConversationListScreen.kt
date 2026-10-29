@@ -162,22 +162,23 @@ fun ConversationListScreen(
         ) {
             ConnectionBannerStrip(state.banner)
             val content = ConversationListContent.of(state)
-            // iOS : le rail puis les filtres défilent avec la liste ; hors liste peuplée (squelette, vide, erreur) ils gardent leur place.
-            ConversationListChrome(
-                railInList = content == ConversationListContent.Populated,
-                filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
-                rail = header,
-                modifier = Modifier.weight(1f),
-            ) { head ->
-                Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
-                    ConversationListStateHost(
-                        content = content,
-                        onRetry = viewModel::refresh,
-                        onNewConversation = onNewConversation,
-                    ) {
-                        ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh, rowNavigation = rowNavigation, header = head)
-                    }
-                }
+            // iOS : le rail puis les filtres sont les premières lignes de la liste, dans tous les états (#13664).
+            Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
+                ConversationListBody(
+                    state = state,
+                    listState = listState,
+                    viewModel = viewModel,
+                    content = ConversationListContent.of(state),
+                    onNewConversation = onNewConversation,
+                    onRefresh = onRefresh,
+                    rowNavigation = rowNavigation,
+                    header = {
+                        ConversationListHead(
+                            rail = header,
+                            filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
+                        )
+                    },
+                )
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,7 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
@@ -31,13 +34,17 @@ import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 
-/** The populated list: pull-to-refresh over the pinned / category / all sections. */
+internal const val CONVERSATION_LIST_TAG = "conversation-list"
+
+/** La liste : tirer pour rafraîchir sur la tête (rail + filtres) puis, selon [content], le squelette, la carte d'état ou les sections épinglés / catégories / toutes. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ConversationListBody(
     state: ConversationListUiState,
     listState: LazyListState,
     viewModel: ConversationListViewModel,
+    content: ConversationListContent,
+    onNewConversation: () -> Unit = {},
     onRefresh: () -> Unit = {},
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
     header: @Composable () -> Unit = {},
@@ -60,43 +67,61 @@ internal fun ConversationListBody(
         val sections = ConversationSections.of(state.conversations, state.categories)
         val nowMillis by rememberMinuteClock()
         val tailHeight = maxOf(LIST_TAIL_HEIGHT, floatingChromeBottomReserve())
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
             item(key = "list-story-rail", contentType = "story-rail") { header() }
-            if (!ConversationSections.showsHeaders(sections)) {
-                sections.forEach { section ->
-                    items(section.items, key = { "row-${it.id}" }) { conversation ->
-                        ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
-                    }
-                }
-                item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
-                return@LazyColumn
+            conversationListStateItems(
+                content = content,
+                onRetry = viewModel::refresh,
+                onNewConversation = onNewConversation,
+            ) {
+                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight)
             }
-            sections.forEach { section ->
-                val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
-                item(key = key) {
-                    CollapsibleSection(
-                        title = section.title ?: stringResource(section.kind.titleRes()),
-                        count = section.items.size,
-                        foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
-                        iconContainerColor = section.kind.containerColor(),
-                        icon = {
-                            Icon(
-                                section.kind.icon(),
-                                contentDescription = null,
-                                tint = MeeshyPalette.White,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        },
-                    ) {
-                        section.items.forEach { conversation ->
-                            ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
-                        }
-                    }
-                }
-            }
-            item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
         }
     }
+}
+
+private fun LazyListScope.populatedItems(
+    state: ConversationListUiState,
+    sections: List<ConversationSection>,
+    viewModel: ConversationListViewModel,
+    nowMillis: Long,
+    signals: ConversationRowSignals,
+    rowNavigation: ConversationRowNavigation,
+    tailHeight: Dp,
+) {
+    if (!ConversationSections.showsHeaders(sections)) {
+        sections.forEach { section ->
+            items(section.items, key = { "row-${it.id}" }) { conversation ->
+                ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+            }
+        }
+        item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
+        return
+    }
+    sections.forEach { section ->
+        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
+        item(key = key) {
+            CollapsibleSection(
+                title = section.title ?: stringResource(section.kind.titleRes()),
+                count = section.items.size,
+                foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
+                iconContainerColor = section.kind.containerColor(),
+                icon = {
+                    Icon(
+                        section.kind.icon(),
+                        contentDescription = null,
+                        tint = MeeshyPalette.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            ) {
+                section.items.forEach { conversation ->
+                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                }
+            }
+        }
+    }
+    item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
 }
 
 /** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`), au moins : la derniere rangee passe au-dessus des disques flottants, quelle que soit leur place (#12497). */
