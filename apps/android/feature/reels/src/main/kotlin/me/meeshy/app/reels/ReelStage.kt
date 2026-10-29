@@ -27,6 +27,8 @@ data class ReelStage(
 
 val ReelPresentation.stage: ReelStage
     get() {
+        // Une scène est son propre lecteur : ni vidéo brute, ni fond, ni lecteur audio en double.
+        if (scene != null) return ReelStage(backdrop = ReelBackdrop.None, playableUrl = null, showsVideoSurface = false)
         val isVideo = layout is ReelMediaLayout.Video
         val still = imageUrls.firstOrNull() ?: posterUrl
         val backdrop = when {

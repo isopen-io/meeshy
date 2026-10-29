@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.ReelMediaLayout
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.app.stories.StorySlideView
 
 /** A single reel ready to render: a playable video + its author/caption/counters. */
 data class ReelPresentation(
@@ -43,6 +44,11 @@ data class ReelPresentation(
     val repostCount: Int,
     val isBookmarked: Boolean,
     val bookmarkCount: Int,
+    /**
+     * La scène que ce réel REJOUE (iOS `reelSceneDocument`) : la même projection que le lecteur de stories.
+     * Quand elle existe, le fichier média du post n'en est que le fond ou le son — jamais un second lecteur.
+     */
+    val scene: StorySlideView? = null,
 )
 
 object ReelBuilder {
@@ -66,14 +72,15 @@ object ReelBuilder {
                     .sortedBy { it.order ?: Int.MAX_VALUE }
                     .mapNotNull { it.toReelMedia() }
                 val layout = ReelMediaLayout.resolve(feedMedia)
-                if (layout is ReelMediaLayout.Empty) return@mapNotNull null
+                val scene = ReelScene.project(post, mediaBaseUrl, preferences)
+                if (layout is ReelMediaLayout.Empty && scene == null) return@mapNotNull null
                 val resolve = { url: String -> resolveMediaUrl(url, mediaBaseUrl) }
                 val images = feedMedia.filter { it.type == FeedMediaType.IMAGE }.mapNotNull { it.url?.let(resolve) }
                 val audio = feedMedia.firstOrNull { it.type == FeedMediaType.AUDIO }?.url?.let(resolve)
                 val video = (layout as? ReelMediaLayout.Video)?.media
                 ReelPresentation(
                     id = post.id,
-                    videoUrl = video?.url?.let(resolve) ?: audio,
+                    videoUrl = if (scene != null) null else video?.url?.let(resolve) ?: audio,
                     posterUrl = (video?.thumbnailUrl ?: feedMedia.firstOrNull()?.thumbnailUrl)?.let(resolve),
                     layout = layout,
                     imageUrls = images,
@@ -99,6 +106,7 @@ object ReelBuilder {
                     repostCount = post.repostCount ?: 0,
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
+                    scene = scene,
                 )
             }
             .toList()

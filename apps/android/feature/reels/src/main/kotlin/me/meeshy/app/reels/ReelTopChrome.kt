@@ -28,8 +28,8 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
- * La barre haute du lecteur de réels : sortie à l'extrémité de début, puis le son (les réels
- * démarrent muets, ce bouton est le seul chemin pour les entendre) et le menu « … » du réel
+ * La barre haute du lecteur de réels : sortie à l'extrémité de début, puis le son (seulement
+ * pour un réel qui en porte : un bouton sur un réel sans piste serait du chrome mort) et le menu « … » du réel
  * affiché. Elle s'efface avec le reste du chrome en mode immersif et rend le chrome au toucher
  * (relais TalkBack compris).
  */
@@ -38,6 +38,7 @@ internal fun ReelTopChrome(
     reel: ReelPresentation?,
     chromeHidden: Boolean,
     muted: Boolean,
+    showsMute: Boolean,
     viewModel: ReelsViewModel,
     onClose: () -> Unit,
     onToggleMute: () -> Unit,
@@ -49,7 +50,7 @@ internal fun ReelTopChrome(
         FullscreenTopBar(
             onClose = onClose,
             trailing = {
-                FullscreenChromeButton(
+                if (showsMute) FullscreenChromeButton(
                     icon = if (muted) MeeshyIcons.VolumeOff else MeeshyIcons.VolumeUp,
                     label = stringResource(if (muted) R.string.reels_unmute else R.string.reels_mute),
                     onClick = onToggleMute,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -29,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import me.meeshy.app.stories.StoryScenePlayer
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.ReelContentTap
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -60,6 +62,7 @@ internal fun ReelPage(
     isEngaged: Boolean,
     loadsMedia: Boolean,
     muted: Boolean,
+    onSoundProbed: (Boolean) -> Unit,
     chromeHidden: Boolean,
     isOwn: Boolean,
     quickEmojis: List<String>,
@@ -70,7 +73,8 @@ internal fun ReelPage(
 ) {
     val haptics = rememberMeeshyHaptics()
     val stage = reel.stage
-    val hasPlayable = stage.playableUrl != null
+    val scene = reel.scene
+    val hasPlayable = stage.playableUrl != null || scene != null
     var paused by rememberSaveable(reel.id) { mutableStateOf(false) }
     var player by remember { mutableStateOf<ReelPlayerHandle?>(null) }
     // Position gardée quand le lecteur est libéré sans que la page cesse d'être élue (app en
@@ -81,6 +85,13 @@ internal fun ReelPage(
     val accent = hexColor(DynamicColorGenerator.colorForName(reel.authorName ?: reel.id), MeeshyPalette.Indigo500)
     val currentChromeHidden by rememberUpdatedState(chromeHidden)
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
+
+    val currentOnSoundProbed by rememberUpdatedState(onSoundProbed)
+    // Le bouton muet attend la sonde : la piste audio de la vidéo, lue par le lecteur lui-même.
+    DisposableEffect(player) {
+        val stop = player?.observeAudioTrack { currentOnSoundProbed(it) }
+        onDispose { stop?.invoke() }
+    }
 
     LaunchedEffect(isElected) {
         if (!isElected) {
@@ -118,7 +129,18 @@ internal fun ReelPage(
                     )
                 },
         ) {
-            ReelMedia(
+            if (scene != null) {
+                // La scène du réel : le rendu du lecteur de stories, rejoué en boucle, son compris.
+                StoryScenePlayer(
+                    slide = scene,
+                    playing = isPlaying && loadsMedia,
+                    muted = muted,
+                    loads = loadsMedia,
+                    rewindWhenIdle = !isElected,
+                    onAudioFocusLost = { paused = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else ReelMedia(
                 reel = reel,
                 stage = stage,
                 accent = accent,
@@ -190,7 +212,7 @@ internal fun ReelPage(
                     )
                     ReelRail(reel = reel, quickEmojis = quickEmojis, actions = railActions)
                 }
-                if (isEngaged && hasPlayable) {
+                if (isEngaged && stage.playableUrl != null) {
                     ReelScrubBar(player = player, accent = accent)
                 }
             }

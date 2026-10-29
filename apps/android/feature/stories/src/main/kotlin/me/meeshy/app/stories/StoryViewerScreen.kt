@@ -424,74 +424,15 @@ fun StoryViewerScreen(
             .background(hexColor(accent))
             .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() },
     ) {
-        when {
-            slide?.backgroundVideoUrl != null -> {
-                val bg = slide.backgroundTransform
-                ReelVideoSurface(
-                    mediaUrl = slide.backgroundVideoUrl,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    muted = state.isMuted,
-                    // Un vocal ou un appel prend le son : la story se fige avec la vidéo (minuterie comprise), comme un appui long.
-                    onAudioFocusLost = viewModel::pauseByHold,
-                    // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
-                    // quand la source joue en entier.
-                    sourceStartMs = slide.backgroundVideoWindow?.startMs,
-                    sourceEndMs = slide.backgroundVideoWindow?.endMs,
-                    // Aspect-fill base, then the author's pan/zoom framing on top — the
-                    // offset fractions scale to the measured canvas so it is resolution-
-                    // independent (mirrors the image branch and iOS's "zoom inside the
-                    // background", clipped by the 9:16 frame).
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // Deux axes depuis #5085 : un recadrage non carré
-                            // agrandit différemment en largeur et en hauteur.
-                            scaleX = bg.scaleX
-                            scaleY = bg.scaleY
-                            rotationZ = bg.rotationDegrees
-                            translationX = bg.offsetXFraction * size.width
-                            translationY = bg.offsetYFraction * size.height
-                        },
-                )
-            }
-            slide?.imageUrl != null -> {
-                val imageUrl = slide.imageUrl
-                val bg = slide.backgroundTransform
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
-                    // Instant blur behind the loading image — no black flash on cold
-                    // load (decoded from the slide's ThumbHash; null → plain background).
-                    placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),
-                    // Resolved (loaded or failed) → the countdown gate may open.
-                    onSuccess = { viewModel.onImageResolved(imageUrl) },
-                    onError = { viewModel.onImageResolved(imageUrl) },
-                    // Aspect-fill base, then the author's pan/zoom framing on top — the
-                    // offset fractions scale to the measured canvas so it is resolution-
-                    // independent (mirrors iOS's "zoom inside the background", clipped).
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // Deux axes depuis #5085 : un recadrage non carré
-                            // agrandit différemment en largeur et en hauteur.
-                            scaleX = bg.scaleX
-                            scaleY = bg.scaleY
-                            rotationZ = bg.rotationDegrees
-                            translationX = bg.offsetXFraction * size.width
-                            translationY = bg.offsetYFraction * size.height
-                        },
-                )
-            }
-            slide != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
-                )
-            }
+        if (slide != null) {
+            StorySceneBackground(
+                slide = slide,
+                playing = playing,
+                muted = state.isMuted,
+                // Un vocal ou un appel prend le son : la story se fige avec la vidéo (minuterie comprise), comme un appui long.
+                onAudioFocusLost = viewModel::pauseByHold,
+                onImageResolved = viewModel::onImageResolved,
+            )
         }
 
         if (slide != null) {
@@ -505,34 +446,7 @@ fun StoryViewerScreen(
             )
         }
 
-        slide?.backgroundAudioUrl?.let { url ->
-            key(url) {
-                AudioTrackSurface(
-                    mediaUrl = url,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    volume = if (state.isMuted) 0f else 1f,
-                    loop = slide.backgroundLoop,
-                    sourceStartMs = slide.backgroundAudioWindow?.startMs,
-                    sourceEndMs = slide.backgroundAudioWindow?.endMs,
-                )
-            }
-        }
-        slide?.foregroundAudioUrl?.let { url ->
-            key(url) {
-                AudioTrackSurface(
-                    mediaUrl = url,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    volume = if (state.isMuted) 0f else 1f,
-                    loop = false,
-                    // Un vocal rogné compte autant qu'une vidéo rognée : iOS
-                    // écrit les deux bornes sur les deux familles (#5129).
-                    sourceStartMs = slide.foregroundAudioWindow?.startMs,
-                    sourceEndMs = slide.foregroundAudioWindow?.endMs,
-                )
-            }
-        }
+        if (slide != null) StorySceneAudio(slide = slide, playing = playing, muted = state.isMuted)
 
         if (slide != null && slide.text.isNotBlank()) {
             StoryCaptionOverlay(
