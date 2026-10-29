@@ -19,6 +19,8 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
@@ -44,6 +46,7 @@ class StoryReplyViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
+    private val accountFence: AccountFence? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryReplyUiState())
@@ -59,7 +62,10 @@ class StoryReplyViewModel @Inject constructor(
         if (!StoryReplyRules.canSend(canReply = true, isSending = current.phase == StoryReplyPhase.SENDING, text = current.text)) return
         val text = current.text.trim()
         _state.update { it.copy(text = "", phase = StoryReplyPhase.SENDING) }
-        viewModelScope.launch {
+        // The reply belongs to the account of the gesture: opening the conversation may outlast a sign-out, and the
+        // words of A must never be queued, nor shown, under B (#13558).
+        val gesture = accountFence?.ticket()
+        viewModelScope.launch(gesture.asCoroutineContext()) {
             try {
                 val conversationId = when (val direct = conversationRepository.directConversationWith(authorId)) {
                     is DirectConversationResolution.Found -> direct.conversation.id
