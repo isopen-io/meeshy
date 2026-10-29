@@ -158,6 +158,7 @@
     <string name="status_composer_visibility_friends">Contatti</string>
     <string name="status_composer_visibility_private">Privato</string>
     <string name="status_composer_visibility_public">Pubblico</string>
+    <string name="status_react_error">Errore nella reazione allo stato</string>
     <string name="user_posts_back">Indietro</string>
     <string name="user_posts_empty">Nessun post</string>
     <string name="user_posts_title">Post</string>

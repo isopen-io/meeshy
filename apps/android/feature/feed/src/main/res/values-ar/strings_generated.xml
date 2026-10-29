@@ -170,6 +170,7 @@
     <string name="status_composer_visibility_friends">جهات الاتصال</string>
     <string name="status_composer_visibility_private">خاص</string>
     <string name="status_composer_visibility_public">عام</string>
+    <string name="status_react_error">تعذّر التفاعل مع الحالة</string>
     <string name="user_posts_back">رجوع</string>
     <string name="user_posts_empty">لا توجد منشورات</string>
     <string name="user_posts_title">المنشورات</string>

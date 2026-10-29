@@ -1,5 +1,8 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
@@ -108,11 +111,59 @@ class StoryTrayRailMoodTest {
                 myMoodEmoji = "😀",
                 onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {},
                 onAddStatus = {},
+                moodIdOf = { userId -> "mood-$userId".takeIf { userId == "u2" || userId == "me" } },
                 onMoodShown = { shown += it },
             )
         }
         compose.waitForIdle()
-        assertThat(shown).containsExactly("u2")
+        assertThat(shown).containsExactly("mood-u2")
+    }
+
+    @Test
+    fun `une nouvelle humeur au meme emoji compte encore, une recomposition jamais`() {
+        val shown = mutableListOf<String>()
+        var moodId by mutableStateOf("s1")
+        var tick by mutableStateOf(0)
+        compose.setContent {
+            tick.let { _ ->
+                StoryTrayRail(
+                    tray = tray("me", "u2"),
+                    moodEmojiOf = { userId -> "🔥".takeIf { userId == "u2" } },
+                    onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {},
+                    moodIdOf = { userId -> moodId.takeIf { userId == "u2" } },
+                    onMoodShown = { shown += it },
+                )
+            }
+        }
+        compose.waitForIdle()
+        tick++
+        compose.waitForIdle()
+        moodId = "s2"
+        compose.waitForIdle()
+        assertThat(shown).containsExactly("s1", "s2").inOrder()
+    }
+
+    @Test
+    fun `une humeur qui revient a l ecran compte une nouvelle apparition`() {
+        val shown = mutableListOf<String>()
+        var visible by mutableStateOf(true)
+        compose.setContent {
+            if (visible) {
+                StoryTrayRail(
+                    tray = tray("me", "u2"),
+                    moodEmojiOf = { userId -> "🔥".takeIf { userId == "u2" } },
+                    onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {},
+                    moodIdOf = { userId -> "s1".takeIf { userId == "u2" } },
+                    onMoodShown = { shown += it },
+                )
+            }
+        }
+        compose.waitForIdle()
+        visible = false
+        compose.waitForIdle()
+        visible = true
+        compose.waitForIdle()
+        assertThat(shown).containsExactly("s1", "s1")
     }
 
     @Test

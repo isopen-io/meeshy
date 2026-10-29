@@ -12,7 +12,7 @@ import androidx.navigation.NavHostController
 import me.meeshy.app.feed.MoodBubble
 import me.meeshy.app.feed.MoodBubbleModel
 import me.meeshy.app.feed.MoodLookup
-import me.meeshy.app.feed.MoodRailImpressions
+import me.meeshy.app.feed.MoodReactFailureToast
 import me.meeshy.app.feed.StatusComposerDraft
 import me.meeshy.app.feed.StatusComposerSheet
 import me.meeshy.app.feed.StatusesViewModel
@@ -25,7 +25,8 @@ import me.meeshy.sdk.model.composer.ComposerOrigin
  * liste des conversations (#13653). Les deux écrans l'appellent ; aucun ne câble son propre rail, et
  * l'humeur (statut) y vit sur l'avatar, comme `MyStoryButton` / `StoryRingCell` d'iOS : appui sur
  * l'humeur d'un autre = sa bulle (réagir, republier, répondre — iOS `StatusBubbleOverlay`, #13662),
- * appui sur la sienne = le composeur d'humeur. Chaque humeur vue sur le rail compte une impression.
+ * appui sur la sienne = le composeur d'humeur. Chaque apparition d'une humeur sur le rail compte une impression
+ * (status / story_rail), une réaction refusée se dit par un toast.
  */
 @Composable
 internal fun MeeshyStoryRail(
@@ -36,7 +37,6 @@ internal fun MeeshyStoryRail(
 ) {
     val statuses by statusesViewModel.state.collectAsStateWithLifecycle()
     val moods = remember(statuses.statuses, statuses.myStatus) { MoodLookup.from(statuses) }
-    val impressions = remember { MoodRailImpressions() }
     var bubbleUserId by remember { mutableStateOf<String?>(null) }
     var republishSeed by remember { mutableStateOf<StatusComposerDraft?>(null) }
 
@@ -55,11 +55,11 @@ internal fun MeeshyStoryRail(
                 statusesViewModel.markStatusViewed(entry.id)
             }
         },
-        onMoodShown = { userId ->
-            moods.statusIdOf(userId)?.takeIf(impressions::firstSight)?.let(statusesViewModel::trackImpression)
-        },
+        moodIdOf = moods::statusIdOf,
+        onMoodShown = statusesViewModel::trackImpression,
         viewModel = storiesViewModel,
     )
+    MoodReactFailureToast(statusesViewModel.reactFailed)
 
     val shown = bubbleUserId?.let(moods::entryOf)
     if (shown != null) {

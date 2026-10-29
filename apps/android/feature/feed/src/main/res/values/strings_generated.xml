@@ -154,6 +154,7 @@
     <string name="status_composer_visibility_friends">Contacts</string>
     <string name="status_composer_visibility_private">Private</string>
     <string name="status_composer_visibility_public">Public</string>
+    <string name="status_react_error">Error reacting to status</string>
     <string name="user_posts_back">Back</string>
     <string name="user_posts_empty">No posts yet</string>
     <string name="user_posts_title">Posts</string>

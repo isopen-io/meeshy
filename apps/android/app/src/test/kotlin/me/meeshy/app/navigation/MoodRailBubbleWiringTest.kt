@@ -27,10 +27,16 @@ class MoodRailBubbleWiringTest {
     }
 
     @Test
-    fun `chaque humeur vue sur le rail compte une impression, une fois`() {
-        assertThat(host).contains("MoodRailImpressions()")
-        assertThat(host).contains("statusesViewModel::trackImpression")
+    fun `chaque apparition d une humeur sur le rail compte une impression, sans dedoublonnage`() {
+        assertThat(host).contains("moodIdOf = moods::statusIdOf")
+        assertThat(host).contains("onMoodShown = statusesViewModel::trackImpression")
+        assertThat(host).doesNotContain("MoodRailImpressions")
         assertThat(host).contains("onDwellEnd = statusesViewModel::endStatusDwell")
+    }
+
+    @Test
+    fun `une reaction refusee se dit par un toast`() {
+        assertThat(host).contains("MoodReactFailureToast(statusesViewModel.reactFailed)")
     }
 
     @Test

@@ -25,6 +25,8 @@ import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
 import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.analytics.ContentSurface
+import me.meeshy.sdk.model.analytics.SocialEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.cache.CacheClock
@@ -373,7 +375,7 @@ class StatusesViewModelTest {
 
         vm.state.test {
             val s = awaitItem()
-            assertThat(s.statuses.first().reactionSummary).isNull()
+            assertThat(s.statuses.first().reactionSummary.orEmpty()).isEmpty()
             assertThat(s.errorMessage).isEqualTo("rip")
         }
     }
@@ -989,5 +991,99 @@ class StatusesViewModelTest {
         vm.markStatusViewed("a")
 
         coVerify(exactly = 1) { postRepository.viewPost("a") }
+    }
+
+    @Test
+    fun `reacting twice with the same emoji bumps once and sends once, the gateway keeping one per emoji`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.first().reactionSummary).containsExactly("❤️", 1)
+        }
+        coVerify(exactly = 1) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a refused reaction withdraws only its own bump, what arrived meanwhile stays`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "friend", emoji = "😂"))
+            statusCreatedFlow.emit(SocketStatusCreatedData(status = apiStatus(id = "new", userId = "friend", emoji = "🔥")))
+            NetworkResult.Failure(ApiError("rip"))
+        }
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.statuses.map { it.id }).containsExactly("new", "a")
+            assertThat(s.statuses.first { it.id == "a" }.reactionSummary).containsExactly("😂", 1)
+        }
+    }
+
+    @Test
+    fun `a refused reaction is announced once and can be tried again`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returnsMany
+            listOf(NetworkResult.Failure(ApiError("rip")), NetworkResult.Success(Unit))
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.reactFailed.test {
+            vm.react("a", "❤️")
+            awaitItem()
+            vm.react("a", "❤️")
+            expectNoEvents()
+        }
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+        vm.state.test {
+            assertThat(awaitItem().statuses.first().reactionSummary).containsExactly("❤️", 1)
+        }
+    }
+
+    @Test
+    fun `a reaction refused after the account changed announces nothing`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            throw java.io.IOException("offline")
+        }
+
+        val vm = viewModel()
+        vm.reactFailed.test {
+            vm.react("a", "❤️")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `every appearance of a mood on the rail counts one impression on the story rail surface`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        val vm = viewModel()
+
+        vm.trackImpression("a")
+        vm.trackImpression("a")
+
+        coVerify(timeout = 8_000) {
+            engagement.deliver(
+                match { batch ->
+                    batch.size == 2 && batch.all {
+                        val event = it.event
+                        event is SocialEvent.Impression && event.postId == "a" && event.source == "status" &&
+                            event.surface == ContentSurface.STORY_RAIL
+                    }
+                },
+            )
+        }
     }
 }

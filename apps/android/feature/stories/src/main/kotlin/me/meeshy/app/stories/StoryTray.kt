@@ -60,7 +60,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * Android port of `StoryTrayView`. UN SEUL rail, monté en tête du fil ET de la liste des
  * conversations (#13653) : « Votre story » (ajout) reste toujours là, comme le `MyStoryButton`
  * d'iOS, même sans aucune story ; l'humeur (statut) vit sur l'avatar — badge, appui, menu —
- * et non dans une barre de pastilles à part.
+ * et non dans une barre de pastilles à part. L'humeur d'un anneau ([moodIdOf]) est annoncée à [onMoodShown] à CHAQUE
+ * apparition à l'écran et à chaque nouvelle humeur, jamais à une recomposition — iOS `countsImpression` (#13662).
  */
 @Composable
 fun StoryTray(
@@ -73,6 +74,7 @@ fun StoryTray(
     myMoodEmoji: String? = null,
     onAddStatus: (() -> Unit)? = null,
     onMoodTap: ((String) -> Unit)? = null,
+    moodIdOf: (String) -> String? = { null },
     onMoodShown: ((String) -> Unit)? = null,
     viewModel: StoriesViewModel = hiltViewModel(),
     impressions: StoryTrayImpressionsViewModel = hiltViewModel(),
@@ -104,6 +106,7 @@ fun StoryTray(
             onAppeared = impressions::onRingAppeared,
             onAddStatus = onAddStatus,
             onMoodTap = onMoodTap,
+            moodIdOf = moodIdOf,
             onMoodShown = onMoodShown,
         )
     }
@@ -126,6 +129,7 @@ internal fun StoryTrayRail(
     myMoodEmoji: String? = null,
     onAddStatus: (() -> Unit)? = null,
     onMoodTap: ((String) -> Unit)? = null,
+    moodIdOf: (String) -> String? = { null },
     onMoodShown: ((String) -> Unit)? = null,
 ) {
     LazyRow(
@@ -166,8 +170,9 @@ internal fun StoryTrayRail(
         }
         itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
             val moodEmoji = moodEmojiOf(ring.userId)
-            if (onMoodShown != null && !moodEmoji.isNullOrEmpty()) {
-                LaunchedEffect(ring.userId, moodEmoji) { onMoodShown(ring.userId) }
+            val moodId = moodIdOf(ring.userId)
+            if (onMoodShown != null && moodId != null && !moodEmoji.isNullOrEmpty()) {
+                LaunchedEffect(moodId) { onMoodShown(moodId) }
             }
             StoryRingCell(
                 ring = ring,

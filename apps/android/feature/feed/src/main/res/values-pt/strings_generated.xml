@@ -158,6 +158,7 @@
     <string name="status_composer_visibility_friends">Contatos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
+    <string name="status_react_error">Erro ao reagir ao status</string>
     <string name="user_posts_back">Voltar</string>
     <string name="user_posts_empty">Nenhuma publicação</string>
     <string name="user_posts_title">Publicações</string>
