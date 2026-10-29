@@ -10,6 +10,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import java.io.File
 import me.meeshy.ui.theme.MeeshyTheme
+import kotlinx.coroutines.Dispatchers
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -23,6 +26,18 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TextDocumentSheetTest {
+
+    @Before
+    fun `lecture sur un dispatcher de test`() {
+        FileViewerDispatchers.io = Dispatchers.Unconfined
+        FileViewerDispatchers.default = Dispatchers.Unconfined
+    }
+
+    @After
+    fun `dispatchers du systeme`() {
+        FileViewerDispatchers.io = Dispatchers.IO
+        FileViewerDispatchers.default = Dispatchers.Default
+    }
 
     @get:Rule val compose = createComposeRule()
     @get:Rule val folder = TemporaryFolder()
