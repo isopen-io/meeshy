@@ -562,12 +562,113 @@ class PresenceStorePersistenceTest {
         testScheduler.runCurrent()
         val received = f.store.receipt()
         f.userStatus.emit(UserStatusEvent("after", "b", true, iso(epoch - 60_000)))
-        f.typing.emit(me.meeshy.sdk.model.TypingEvent(conversationId = "c", userId = "typist"))
         testScheduler.runCurrent()
 
-        f.store.seed(ServedPresencePage(masked = setOf("before", "after", "typist"), receipt = received))
+        f.store.seed(ServedPresencePage(masked = setOf("before", "after"), receipt = received))
 
-        assertThat(f.store.entriesNow().keys).containsExactly("after", "typist")
+        assertThat(f.store.entriesNow().keys).containsExactly("after")
+    }
+
+    @Test
+    fun `an ex friend who types or views after the masking page arrived is still withdrawn by it, activity authorizes nothing`() = runTest {
+        val f = fixture()
+        f.userStatus.emit(UserStatusEvent("typist", "a", true, iso(epoch)))
+        f.userStatus.emit(UserStatusEvent("viewer", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
+        val received = f.store.receipt()
+        f.typing.emit(me.meeshy.sdk.model.TypingEvent(conversationId = "group", userId = "typist"))
+        f.store.noteActivity("viewer")
+        testScheduler.runCurrent()
+
+        f.store.seed(ServedPresencePage(masked = setOf("typist", "viewer"), receipt = received))
+
+        assertThat(f.store.entriesNow()).isEmpty()
+    }
+
+    @Test
+    fun `a withdrawn ex friend who types again is green for the activity only, never online for the server, and fades`() = runTest {
+        val f = fixture()
+        f.userStatus.emit(UserStatusEvent("typist", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
+        f.store.seed(ServedPresencePage(masked = setOf("typist")))
+
+        f.typing.emit(me.meeshy.sdk.model.TypingEvent(conversationId = "group", userId = "typist"))
+        testScheduler.runCurrent()
+        assertThat(f.store.entriesNow()["typist"]?.isOnline).isFalse()
+        assertThat(f.store.currentStateOf("typist")).isEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
+
+        testScheduler.advanceTimeBy(6 * 60_000L)
+        testScheduler.runCurrent()
+        assertThat(f.store.currentStateOf("typist")).isNotEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
+    }
+
+    @Test
+    fun `the sink the app injects hands out the store's own receipts, so a status heard after the page spares the peer`() = runTest {
+        val f = fixture()
+        val sink = PresenceMapPersistenceModule.provideServedPresenceSink { f.store }
+        f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch)))
+        testScheduler.runCurrent()
+
+        val received = sink.receipt()
+        f.userStatus.emit(UserStatusEvent("u1", "a", true, iso(epoch + 1_000)))
+        testScheduler.runCurrent()
+        sink.seedSweep(listOf(ServedPresencePage(masked = setOf("u1"), receipt = received)))
+
+        assertThat(received).isNotNull()
+        assertThat(f.store.receipt()).isGreaterThan(received!!)
+        assertThat(f.store.entriesNow()["u1"]).isEqualTo(UserPresence(true, iso(epoch + 1_000)))
+    }
+
+    @Test
+    fun `a sweep asked for before a newer one that masked a peer never seeds the peer back, even when it lands last`() = runTest {
+        val f = fixture()
+        f.store.seed(ServedPresencePage(served = mapOf("ex" to UserPresence(true, iso(epoch)))))
+        val olderAsked = f.store.receipt()
+        val newerAsked = f.store.receipt()
+
+        f.store.seedSweep(listOf(ServedPresencePage(masked = setOf("ex"), requested = newerAsked, receipt = f.store.receipt())))
+        f.store.seedSweep(
+            listOf(ServedPresencePage(served = mapOf("ex" to UserPresence(true, iso(epoch))), requested = olderAsked, receipt = f.store.receipt())),
+        )
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entriesNow()).doesNotContainKey("ex")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("ex")
+    }
+
+    @Test
+    fun `a sweep asked for after the mask puts the peer back`() = runTest {
+        val f = fixture()
+        f.store.seed(ServedPresencePage(served = mapOf("friend" to UserPresence(true, iso(epoch)))))
+        f.store.seedSweep(listOf(ServedPresencePage(masked = setOf("friend"), receipt = f.store.receipt())))
+        assertThat(f.store.entriesNow()).doesNotContainKey("friend")
+
+        val asked = f.store.receipt()
+        f.store.seedSweep(listOf(ServedPresencePage(served = mapOf("friend" to UserPresence(true, iso(epoch))), requested = asked, receipt = f.store.receipt())))
+
+        assertThat(f.store.entriesNow()).containsKey("friend")
+    }
+
+    @Test
+    fun `a late read back never reinjects a peer a newer page masked, even after an older page served it`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf("ex" to UserPresence(false, iso(epoch - 60_000)))
+            gate = CompletableDeferred()
+        }
+        val f = fixture(disk)
+        val olderAsked = f.store.receipt()
+
+        f.store.seedSweep(listOf(ServedPresencePage(masked = setOf("ex"), requested = f.store.receipt(), receipt = f.store.receipt())))
+        f.store.seedSweep(
+            listOf(ServedPresencePage(served = mapOf("ex" to UserPresence(true, iso(epoch))), requested = olderAsked, receipt = f.store.receipt())),
+        )
+        disk.gate!!.complete(Unit)
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entriesNow()).doesNotContainKey("ex")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("ex")
     }
 
     @Test

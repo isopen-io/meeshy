@@ -114,11 +114,14 @@ internal object PresenceMapPersistenceModule {
     fun providePresenceMapPersistence(@ApplicationContext context: Context): PresenceMapPersistence =
         FilePresenceMapPersistence(File(context.noBackupFilesDir, "presence/presence_map.json"))
 
+    /** La porte des pages vers LA carte : tout lui est délégué, ses marques comprises — sans elles, rien ne s'ordonne. */
     @Provides
     @Singleton
     fun provideServedPresenceSink(store: dagger.Lazy<PresenceStore>): ServedPresenceSink = object : ServedPresenceSink {
         override fun seed(served: Map<String, UserPresence>) = store.get().seed(served)
         override fun seed(page: ServedPresencePage) = store.get().seed(page)
+        override fun seedSweep(pages: List<ServedPresencePage>) = store.get().seedSweep(pages)
+        override fun receipt(): Long = store.get().receipt()
     }
 
     /** La carte et son fichier se vident dans [me.meeshy.sdk.session.SessionTeardown.wipe], attendu par la déconnexion. */

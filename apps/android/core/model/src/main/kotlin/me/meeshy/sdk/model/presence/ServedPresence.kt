@@ -9,14 +9,32 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
  * (`isOnline` + `lastActiveAt`) ; [masked], ceux qu'elle a MASQUÉS (`false` et pas de date — la loi de
  * visibilité ne permet plus de les voir : ami retiré, `showOnlineStatus` coupé). Un masqué ne sème
  * rien, mais il retire ce que la carte savait de lui, sauf ce que le socket a dit après la réception de
- * la page. [receipt] : la marque de réception que la carte a donnée quand la réponse est arrivée
- * ([me.meeshy.sdk.socket.ServedPresenceSink.receipt]) ; `null` = reçue à l'instant où elle est semée.
+ * la page. Deux marques de la carte ([me.meeshy.sdk.socket.ServedPresenceSink.receipt]), `null` = l'instant
+ * où la page est semée : [receipt], prise à l'ARRIVÉE de la réponse — ce qu'elle masque parle de là ;
+ * [requested], prise à la DEMANDE — ce qu'elle sert parle de là, jamais plus tard (#13798) : une réponse
+ * demandée avant un masque ne le défait pas, même si elle arrive après lui.
  */
 data class ServedPresencePage(
     val served: Map<String, UserPresence> = emptyMap(),
     val masked: Set<String> = emptySet(),
     val receipt: Long? = null,
+    val requested: Long? = null,
 )
+
+/**
+ * Ce que les pages d'un parcours disent ENSEMBLE, sans leurs marques : un compte servi par l'une n'est
+ * masqué par aucune, et la présence la plus récente d'un compte servi deux fois l'emporte.
+ */
+fun List<ServedPresencePage>.combined(): ServedPresencePage {
+    val served = HashMap<String, UserPresence>()
+    for (page in this) {
+        for ((userId, presence) in page.served) {
+            val known = served[userId]
+            if (known == null || presence.isNewerThan(known)) served[userId] = presence
+        }
+    }
+    return ServedPresencePage(served, flatMapTo(HashSet()) { it.masked } - served.keys)
+}
 
 /**
  * La présence que la page de conversations a SERVIE, par compte (miroir de la boucle de

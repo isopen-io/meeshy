@@ -31,8 +31,11 @@ import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.presence.PresenceDecayClock
 import me.meeshy.sdk.model.presence.PresenceMap
 import me.meeshy.sdk.model.presence.PresenceMapReducer
+import me.meeshy.sdk.model.presence.PresenceMarks
 import me.meeshy.sdk.model.presence.PresenceRetention
+import me.meeshy.sdk.model.presence.PresenceSweep
 import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.model.presence.combined
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
@@ -100,15 +103,15 @@ class PresenceStore internal constructor(
 
     /**
      * La carte tenue et, avec elle, les comptes dont l'entrée ne vient encore que de la relecture du disque
-     * ([restored]) : une page servie les remplace, une source vivante les confirme. [heard] : la marque de
-     * réception du dernier événement du socket pour chaque compte de la carte — une page qui le masque ne
-     * l'épargne que si cette marque est postérieure à la sienne. Rien de ce qui est tenu ne se lit tel quel —
-     * toute lecture passe par [visibleAt].
+     * ([restored]) : une page servie les remplace, une source vivante les confirme. [marks] : ce que le serveur a
+     * dit de chacun et quand — par le socket, par une page qui le sert, par une page qui le masque ([PresenceMarks]) ;
+     * c'est l'ordre de ces marques qui décide ce qu'une page retire ou ressème. Rien de ce qui est tenu ne se lit
+     * tel quel — toute lecture passe par [visibleAt].
      */
     private data class Held(
         val entries: PresenceMap = emptyMap(),
         val restored: Set<String> = emptySet(),
-        val heard: Map<String, Long> = emptyMap(),
+        val marks: PresenceMarks = PresenceMarks(),
     ) {
         /**
          * Ce que la carte montre à [nowMillis] (#13774) : une entrée relue dont le point s'est éteint, ou datée dans
@@ -160,11 +163,12 @@ class PresenceStore internal constructor(
     fun entriesNow(): PresenceMap = held.value.visibleAt(clock.nowMillis())
 
     /**
-     * La marque de réception, posée par l'appelant sur la page dont la réponse vient d'arriver : chaque
-     * événement du socket reçu ensuite porte une marque strictement plus grande. Un ordinal du process, pas
-     * une heure : ni la veille profonde, ni un recul de l'horloge murale, ni l'horloge du serveur ne le faussent.
+     * Une marque NEUVE, que l'appelant pose sur une page à sa demande ([ServedPresencePage.requested]) et à
+     * l'arrivée de sa réponse ([ServedPresencePage.receipt]) : tout ce qui est reçu ou demandé ensuite porte une
+     * marque strictement plus grande, deux pages n'ont jamais la même. Un ordinal du process, pas une heure : ni
+     * la veille profonde, ni un recul de l'horloge murale, ni l'horloge du serveur ne le faussent.
      */
-    override fun receipt(): Long = synchronized(lock) { receipts }
+    override fun receipt(): Long = synchronized(lock) { nextMarkLocked() }
 
     /** Abonne la carte aux flux socket. Idempotent ; à appeler au démarrage du process. */
     @Synchronized
@@ -173,12 +177,12 @@ class PresenceStore internal constructor(
         started = true
         scope.launch {
             sources.userStatus.collect { event ->
-                applyLive(listOf(event.userId)) { map, _ -> PresenceMapReducer.applyStatus(map, event) }
+                applyServer(listOf(event.userId)) { map -> PresenceMapReducer.applyStatus(map, event) }
             }
         }
         scope.launch {
             sources.presenceSnapshot.collect { snapshot ->
-                applyLive(snapshot.users.map { it.userId }) { map, _ -> PresenceMapReducer.applySnapshot(map, snapshot.users) }
+                applyServer(snapshot.users.map { it.userId }) { map -> PresenceMapReducer.applySnapshot(map, snapshot.users) }
             }
         }
         scope.launch { sources.typingStarted.collect { event -> noteActivity(event.userId) } }
@@ -196,19 +200,22 @@ class PresenceStore internal constructor(
      */
     override fun seed(served: Map<String, UserPresence>) = seed(ServedPresencePage(served))
 
+    /** Semis d'une page seule : un parcours d'une page. */
+    override fun seed(page: ServedPresencePage) = seedSweep(listOf(page))
+
     /**
-     * Semis d'une page entière : comme ci-dessus, et une entrée qui ne venait que du DISQUE cède à la
+     * Semis d'un parcours de pages : comme ci-dessus, et une entrée qui ne venait que du DISQUE cède à la
      * page, remplacée par ce qu'elle sert. Une ligne masquée retire l'entrée quelle que soit son origine
-     * (#13783), sauf si le socket en a parlé après la réception de la page ([ServedPresencePage.receipt]).
+     * (#13783), sauf si le SERVEUR en a parlé après la dernière page qui la masque — la frappe et `viewing:*`
+     * ne comptent pas — ; une page demandée avant un masque ne ressème rien de ce qu'il a retiré (#13798,
+     * [PresenceSweep]). Une page sans marque parle de l'instant du semis.
      */
-    override fun seed(page: ServedPresencePage) {
-        if (page.served.isEmpty() && page.masked.isEmpty()) return
+    override fun seedSweep(pages: List<ServedPresencePage>) {
+        if (pages.all { it.served.isEmpty() && it.masked.isEmpty() }) return
         mutate { map, current ->
-            val received = page.receipt ?: receipts
-            val newer = map.heard.filterValues { it > received }.keys
-            val seeded = PresenceMapReducer.seed(map.entries, map.restored, page, current.owner, newer)
-            val withheld = if (current.readBack) current.withheld else current.withheld - page.served.keys + page.masked
-            Held(seeded.entries, seeded.restored, map.heard.filterKeys { it in seeded.entries }) to current.copy(withheld = withheld)
+            val swept = PresenceSweep.seed(map.entries, map.restored, pages, current.owner, map.marks, nextMarkLocked())
+            val withheld = if (current.readBack) current.withheld else current.withheld - swept.admitted + pages.combined().masked
+            Held(swept.entries, swept.restored, swept.marks) to current.copy(withheld = withheld)
         }
     }
 
@@ -231,8 +238,13 @@ class PresenceStore internal constructor(
     private val lock = Any()
     private var generation = Generation()
 
-    /** La dernière marque de réception donnée, sous [lock] ; elle ne revient jamais en arrière, même au changement de compte. */
+    /** La dernière marque donnée, sous [lock] ; elle ne revient jamais en arrière, même au changement de compte. */
     private var receipts = 0L
+
+    private fun nextMarkLocked(): Long {
+        receipts += 1
+        return receipts
+    }
 
     /** Un seul à la fois écrit, relit ou efface le disque : un effacement n'est jamais rattrapé par une écriture tardive. */
     private val disk = Mutex()
@@ -274,15 +286,14 @@ class PresenceStore internal constructor(
     }
 
     /**
-     * Une source vivante (socket, frappe, `viewing:*`) : les comptes [touched] ne sont plus « relus du disque »,
-     * et ils sont entendus sous une marque de réception neuve.
+     * Ce que le SERVEUR dit par le socket (`user:status`, `presence:snapshot`) : les comptes [touched] ne sont plus
+     * « relus du disque », et ils sont entendus sous une marque neuve — le serveur les autorise depuis.
      */
-    private inline fun applyLive(touched: Collection<String>, crossinline transform: (PresenceMap, String) -> PresenceMap) =
+    private inline fun applyServer(touched: Collection<String>, crossinline transform: (PresenceMap) -> PresenceMap) =
         mutate { map, current ->
-            receipts += 1
-            val entries = transform(map.entries, current.owner.orEmpty())
-            val heard = (map.heard + touched.associateWith { receipts }).filterKeys { it in entries }
-            Held(entries, map.restored - touched.toSet(), heard) to current
+            val entries = transform(map.entries)
+            val marks = map.marks.heard(touched, nextMarkLocked()).keptFor(entries)
+            Held(entries, map.restored - touched.toSet(), marks) to current
         }
 
     /**
@@ -404,11 +415,15 @@ class PresenceStore internal constructor(
 
     /**
      * Date l'activité de [userId] à maintenant (miroir de `PresenceManager.noteActivity` iOS) : un
-     * pair annoncé dans la conversation (`viewing:*`) est actif LÀ, MAINTENANT, donc vert 60 s puis
-     * il décroît. `isOnline` reste ce que le serveur a dit ; le compte courant n'écrit jamais la carte.
+     * pair qui écrit (`typing:start`) ou annoncé dans la conversation (`viewing:*`) est actif LÀ, MAINTENANT,
+     * donc vert 60 s puis il décroît. `isOnline` reste ce que le serveur a dit ; le compte courant n'écrit
+     * jamais la carte. L'activité n'est PAS une parole du serveur (#13798) : elle ne pose aucune marque, et
+     * n'épargne donc rien d'une page qui masque le pair — un ex-ami qui écrit dans un groupe commun n'y gagne
+     * qu'un point qui s'éteint, jamais une présence que la page lui a retirée.
      */
-    fun noteActivity(userId: String) {
-        applyLive(listOf(userId)) { map, owner -> PresenceMapReducer.noteActivity(map, userId, owner, clock.nowMillis()) }
+    fun noteActivity(userId: String) = mutate { map, current ->
+        val entries = PresenceMapReducer.noteActivity(map.entries, userId, current.owner, clock.nowMillis())
+        map.copy(entries = entries, restored = map.restored - userId) to current
     }
 
     private fun isMe(userId: String): Boolean = userId == currentUserId()
