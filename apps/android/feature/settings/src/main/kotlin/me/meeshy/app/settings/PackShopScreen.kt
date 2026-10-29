@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -100,6 +101,7 @@ fun PackShopScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
@@ -252,7 +254,7 @@ private fun Skeleton() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: Boolean, onBuy: () -> Unit) {
+internal fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: Boolean, onBuy: () -> Unit) {
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) requester.bringIntoView() }
     val name = pack.localizedName(language)
@@ -293,6 +295,12 @@ private fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: Bo
                     Text(stringResource(R.string.pack_shop_owned), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
                 }
             }
+            if (pack.showsFree) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(MeeshyIcons.Gift, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+                    Text(stringResource(R.string.pack_shop_free), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
+                }
+            }
             if (description.isNotBlank()) {
                 Text(
                     text = description,
@@ -309,6 +317,12 @@ private fun PackRow(pack: ShopPack, language: String, busy: Boolean, focused: Bo
         }
     }
 }
+
+/**
+ * Un pack sans prix et pas verrouillé le dit (« Gratuit ») : sans cela sa rangée n'avait ni mot ni geste. iOS y offre
+ * « Installer / Retirer » ; ce geste n'existe pas encore ici (#13641), l'état lisible, lui, est dû dès maintenant.
+ */
+internal val ShopPack.showsFree: Boolean get() = meeshes == null && !isLocked
 
 @Composable
 private fun LockedBadge() {
