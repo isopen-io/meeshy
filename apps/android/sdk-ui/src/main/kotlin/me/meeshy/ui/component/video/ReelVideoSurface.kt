@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.MeeshyMediaCache
+import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
@@ -96,6 +97,7 @@ fun ReelVideoSurface(
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached) {
         if (!loads) return@remember null
+        PlayerCensus.record()
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(

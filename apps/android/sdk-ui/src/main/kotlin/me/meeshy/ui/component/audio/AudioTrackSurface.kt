@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.media.PlaybackReportSink
 import me.meeshy.sdk.model.media.PlaybackStatusReport
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.MeeshyMediaCache
+import me.meeshy.ui.component.media.PlayerCensus
 
 /**
  * SDK-pure headless audio track: an [ExoPlayer] instance with no visual surface,
@@ -71,6 +72,7 @@ fun AudioTrackSurface(
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
+        PlayerCensus.record()
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.AUDIO, mediaUrl))

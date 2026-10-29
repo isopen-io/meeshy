@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
 import me.meeshy.app.feed.LocalRepostSceneRenderer
+import me.meeshy.app.feed.LocalStoryOpener
 import me.meeshy.app.feed.RepostSceneRenderer
 import me.meeshy.app.stories.RepostSceneCard
 import me.meeshy.sdk.model.share.ShareSubject
@@ -28,8 +29,14 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     var pending by remember { mutableStateOf<PendingShare?>(null) }
     val launcher = remember { ShareLauncher { subject, onDismissed -> pending = PendingShare(subject, onDismissed) } }
     // La scène d'une story reposté se dessine dans le fil par le lecteur du module des stories (#13654).
-    val repostScene: RepostSceneRenderer = remember { { item, author, open, modifier -> RepostSceneCard(item, author, open, modifier) } }
-    CompositionLocalProvider(LocalShareLauncher provides launcher, LocalRepostSceneRenderer provides repostScene) { content() }
+    val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
+    // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
+    val openStory: (String) -> Unit = remember(navController) { { authorId -> navController.navigate(Routes.story(authorId)) } }
+    CompositionLocalProvider(
+        LocalShareLauncher provides launcher,
+        LocalRepostSceneRenderer provides repostScene,
+        LocalStoryOpener provides openStory,
+    ) { content() }
     pending?.let { share ->
         AppShareSheetHost(
             subject = share.subject,

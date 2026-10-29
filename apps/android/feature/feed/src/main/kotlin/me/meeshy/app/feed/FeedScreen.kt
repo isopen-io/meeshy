@@ -17,6 +17,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,10 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
+    // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
+    val sceneCoordinator = remember { FeedSceneCoordinator() }
+    val sceneIds = remember(state.posts) { state.posts.filter { it.carriesScene }.map { it.id }.toSet() }
+    FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
     var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
 
     val context = LocalContext.current
@@ -88,6 +93,7 @@ fun FeedScreen(
     }
 
     MeeshyBackground {
+    CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator) {
     Scaffold(
         topBar = {
             FeedHeader(
@@ -237,6 +243,7 @@ fun FeedScreen(
             )
             }
         }
+    }
     }
     }
     state.imageViewer?.let { gallery ->

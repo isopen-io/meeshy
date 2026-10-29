@@ -84,6 +84,7 @@ internal fun ReelPostCard(
                 authorName = authorName,
                 onOpen = { onOpenReel(post.reelOpenId) },
                 modifier = Modifier.fillMaxSize(),
+                sceneId = post.id,
             )
         }
         Column(

@@ -50,9 +50,10 @@ internal fun StorySceneBackground(
     onAudioFocusLost: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
+    stillFrame: Boolean = false,
 ) {
     when {
-        slide.backgroundVideoUrl != null -> {
+        slide.backgroundVideoUrl != null && !stillFrame -> {
             val bg = slide.backgroundTransform
             ReelVideoSurface(
                 mediaUrl = slide.backgroundVideoUrl,
@@ -142,6 +143,9 @@ internal fun StorySceneAudio(
  * médias jouent. Une scène qui n'est plus [playing] sans être [rewindWhenIdle] garde sa position ; avec, l'horloge
  * ET les médias repartent de zéro, ensemble. [onBackgroundPlayer] tend le lecteur de la vidéo de fond (sonde de sa
  * piste audio).
+ *
+ * [resting] : la scène est une image fixe (#13663) — fond, images, textes et stickers à l'instant zéro, et AUCUN lecteur
+ * (ni la vidéo de fond, ni les vidéos posées, ni les pistes). Seule la scène que le fil élit joue ; les autres restent ainsi.
  */
 @Composable
 fun StoryScenePlayer(
@@ -153,6 +157,7 @@ fun StoryScenePlayer(
     modifier: Modifier = Modifier,
     onAudioFocusLost: () -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
+    resting: Boolean = false,
 ) {
     val progress = remember(slide.id) { Animatable(0f) }
     var lap by remember(slide.id) { mutableIntStateOf(0) }
@@ -178,6 +183,7 @@ fun StoryScenePlayer(
             rewindWhenInactive = rewindWhenIdle,
             onAudioFocusLost = onAudioFocusLost,
             onBackgroundPlayer = onBackgroundPlayer,
+            stillFrame = resting,
         )
         if (loads) {
             StorySceneOverlays(
@@ -188,8 +194,9 @@ fun StoryScenePlayer(
                 muted = muted,
                 rewindWhenInactive = rewindWhenIdle,
                 onAudioFocusLost = onAudioFocusLost,
+                players = !resting,
             )
-            StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
         }
     }
 }

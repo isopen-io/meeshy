@@ -43,13 +43,34 @@ class ReelCoverViewTest {
         val scene = ReelCover.Scene(StoryItem(id = "r1"))
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalRepostSceneRenderer provides { item, _, _, _ -> rendered = item }) {
+                CompositionLocalProvider(LocalRepostSceneRenderer provides { item, _, _, _, _ -> rendered = item }) {
                     ReelCoverView(scene, "Amina", {}, Modifier.fillMaxWidth())
                 }
             }
         }
         compose.waitForIdle()
         assertThat(rendered).isEqualTo(scene.item)
+    }
+
+    @Test
+    fun `une scene de reel ne joue que si le coordinateur l elit, sinon elle reste une image fixe`() {
+        val lives = mutableMapOf<String, Boolean>()
+        val coordinator = FeedSceneCoordinator()
+        coordinator.update(listOf(FeedSceneFrame("elue", 100f, 600f)), 0f, 1000f)
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(
+                    LocalFeedSceneCoordinator provides coordinator,
+                    LocalRepostSceneRenderer provides { item, _, live, _, _ -> lives[item.id] = live },
+                ) {
+                    ReelCoverView(ReelCover.Scene(StoryItem(id = "r-elue")), "Amina", {}, sceneId = "elue")
+                    ReelCoverView(ReelCover.Scene(StoryItem(id = "r-repos")), "Amina", {}, sceneId = "repos")
+                    ReelCoverView(ReelCover.Scene(StoryItem(id = "r-hors-fil")), "Amina", {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertThat(lives).containsExactly("r-elue", true, "r-repos", false, "r-hors-fil", false)
     }
 
     @Test

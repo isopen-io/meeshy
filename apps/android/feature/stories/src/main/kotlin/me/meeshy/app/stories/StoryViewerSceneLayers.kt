@@ -145,7 +145,9 @@ internal fun StoryForegroundLayer(
     modifier: Modifier = Modifier,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    players: Boolean = true,
 ) {
+    if (media.isVideo && !players) return
     val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val frame = ForegroundMediaFrame.renderedSize(

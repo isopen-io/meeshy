@@ -27,6 +27,7 @@ class RepostEmbedCellTest {
         isUnavailable: Boolean = false,
         storyItem: StoryItem? = null,
         isStory: Boolean = false,
+        authorId: String? = null,
     ) = RepostEmbedPresentation(
         id = "orig-1",
         authorName = "Origen",
@@ -43,6 +44,7 @@ class RepostEmbedCellTest {
         isReel = false,
         storyItem = storyItem,
         isUnavailable = isUnavailable,
+        authorId = authorId,
     )
 
     @Test
@@ -78,7 +80,7 @@ class RepostEmbedCellTest {
         compose.setContent {
             MeeshyTheme {
                 CompositionLocalProvider(
-                    LocalRepostSceneRenderer provides { item, _, _, _ -> rendered = item },
+                    LocalRepostSceneRenderer provides { item, _, _, _, _ -> rendered = item },
                 ) { RepostEmbedCell(embed = embed(isStory = true, storyItem = story), onOpen = {}) }
             }
         }
@@ -91,5 +93,67 @@ class RepostEmbedCellTest {
     fun `sans lecteur de scene une story reposte retombe sur la citation`() {
         compose.setContent { MeeshyTheme { RepostEmbedCell(embed = embed(isStory = true, storyItem = StoryItem(id = "s1")), onOpen = {}) } }
         compose.onNodeWithText("Le texte d'origine").assertIsDisplayed()
+    }
+
+    @Test
+    fun `une story reposte ne joue que si le coordinateur l elit`() {
+        val lives = mutableListOf<Boolean>()
+        val coordinator = FeedSceneCoordinator()
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(
+                    LocalFeedSceneCoordinator provides coordinator,
+                    LocalRepostSceneRenderer provides { _, _, live, _, _ -> lives += live },
+                ) { RepostEmbedCell(embed = embed(isStory = true, storyItem = StoryItem(id = "s1")), onOpen = {}, sceneId = "post-1") }
+            }
+        }
+        compose.waitForIdle()
+        assertThat(lives.last()).isFalse()
+        coordinator.update(listOf(FeedSceneFrame("post-1", 100f, 600f)), 0f, 1000f)
+        compose.waitForIdle()
+        assertThat(lives.last()).isTrue()
+    }
+
+    @Test
+    fun `toucher une story reposte l ouvre en plein ecran sur son auteur, pas la fiche du post`() {
+        val stories = mutableListOf<String>()
+        val posts = mutableListOf<String>()
+        var open: () -> Unit = {}
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(
+                    LocalStoryOpener provides { stories += it },
+                    LocalRepostSceneRenderer provides { _, _, _, onOpen, _ -> open = onOpen },
+                ) {
+                    RepostEmbedCell(
+                        embed = embed(isStory = true, storyItem = StoryItem(id = "s1"), authorId = "author-1"),
+                        onOpen = { posts += it },
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        open()
+        assertThat(stories).containsExactly("author-1")
+        assertThat(posts).isEmpty()
+    }
+
+    @Test
+    fun `sans lecteur de stories ou sans auteur, la story reposte retombe sur la fiche du post`() {
+        val posts = mutableListOf<String>()
+        var open: () -> Unit = {}
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalRepostSceneRenderer provides { _, _, _, onOpen, _ -> open = onOpen }) {
+                    RepostEmbedCell(
+                        embed = embed(isStory = true, storyItem = StoryItem(id = "s1"), authorId = "author-1"),
+                        onOpen = { posts += it },
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        open()
+        assertThat(posts).containsExactly("orig-1")
     }
 }

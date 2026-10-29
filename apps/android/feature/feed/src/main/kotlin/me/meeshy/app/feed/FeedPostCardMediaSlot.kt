@@ -55,7 +55,7 @@ internal fun FeedPostQuoteAndReel(
 ) {
     post.repostEmbed?.takeIf { post.republishedReel == null }?.let { embed ->
         Spacer(Modifier.height(MeeshySpacing.md))
-        RepostEmbedCell(embed = embed, onOpen = onOpenPost, onOpenReel = onOpenReel)
+        RepostEmbedCell(embed = embed, onOpen = onOpenPost, onOpenReel = onOpenReel, sceneId = post.id)
     }
 
     post.reelCover?.takeIf { post.isReel }?.let { cover ->
@@ -65,6 +65,7 @@ internal fun FeedPostQuoteAndReel(
             authorName = post.republishedReel?.authorName ?: post.authorName,
             onOpen = { onOpenReel(post.reelOpenId) },
             modifier = Modifier.fillMaxWidth().aspectRatio(post.reelAspect),
+            sceneId = post.id,
         )
     }
 }

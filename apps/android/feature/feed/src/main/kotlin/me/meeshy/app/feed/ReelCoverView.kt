@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +35,7 @@ import me.meeshy.ui.theme.hexColor
 
 /**
  * La couverture d'un réel dans le fil : sa scène muette, son image fixe (vignette, thumbHash) ou l'aplat d'accent —
- * jamais un lecteur par carte. Un appui ouvre le lecteur de réels sur CE réel ([onOpen]).
+ * jamais un lecteur par carte (la scène que le fil élit sous [sceneId] joue, muette). Un appui ouvre le lecteur de réels sur CE réel ([onOpen]).
  *
  * [modifier] fixe la taille de la couverture (hors scène) ; la scène, elle, garde son 9:16 (le lecteur de scène du module des
  * stories vient de [LocalRepostSceneRenderer]) et retombe sur l'aplat quand l'application n'en fournit pas.
@@ -45,10 +46,12 @@ internal fun ReelCoverView(
     authorName: String?,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    sceneId: String? = null,
 ) {
     val renderer = LocalRepostSceneRenderer.current
     if (cover is ReelCover.Scene && renderer != null) {
-        renderer(cover.item, authorName, onOpen, Modifier.fillMaxWidth())
+        val live by rememberSceneLive(sceneId)
+        renderer(cover.item, authorName, live, onOpen, Modifier.fillMaxWidth())
         return
     }
     val label = stringResource(R.string.feed_reel)
