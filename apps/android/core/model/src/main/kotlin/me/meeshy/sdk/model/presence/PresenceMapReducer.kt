@@ -64,4 +64,21 @@ object PresenceMapReducer {
         if (map.values.none { it.isOnline }) return map
         return map.mapValues { (_, presence) -> UserPresence(isOnline = false, lastActiveAt = presence.lastActiveAt) }
     }
+
+    /**
+     * Semis depuis la charge servie par la page de conversations (miroir de `PresenceManager.seed`
+     * iOS) : elle n'a d'autorité que sur les INCONNUS. Un utilisateur déjà suivi — par le socket, la
+     * frappe ou la relecture du disque — GARDE son entrée ; seules les sources vivantes en
+     * remplacent une. Le compte courant et un identifiant vide n'y entrent jamais.
+     */
+    fun seed(map: PresenceMap, served: Map<String, UserPresence>, currentUserId: String?): PresenceMap {
+        val unknown = served.filter { (userId, _) -> userId.isNotBlank() && userId != currentUserId && userId !in map }
+        return if (unknown.isEmpty()) map else map + unknown
+    }
+
+    /** Relecture du disque : elle comble les inconnus et cède à toute entrée vivante déjà posée. */
+    fun restore(map: PresenceMap, restored: PresenceMap): PresenceMap {
+        val unknown = restored.filterKeys { it !in map }
+        return if (unknown.isEmpty()) map else map + unknown
+    }
 }

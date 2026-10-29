@@ -49,6 +49,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
@@ -65,6 +66,7 @@ class ConversationRepository @Inject constructor(
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
     endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
     private val fence: AccountFence? = null,
+    presenceSink: ServedPresenceSink = ServedPresenceSink.None,
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -80,6 +82,7 @@ class ConversationRepository @Inject constructor(
         protectedIds = ::recentlyCreatedIds,
         endToEnd = endToEndRegimeLedger,
         fence = fence,
+        presenceSink = presenceSink,
     )
 
     /**

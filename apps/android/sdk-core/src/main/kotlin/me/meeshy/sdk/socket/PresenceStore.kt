@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.PresenceSnapshotEvent
@@ -27,6 +29,7 @@ import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.presence.PresenceDecayClock
 import me.meeshy.sdk.model.presence.PresenceMap
 import me.meeshy.sdk.model.presence.PresenceMapReducer
+import me.meeshy.sdk.model.presence.PresenceRetention
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
@@ -63,7 +66,9 @@ class PresenceStore internal constructor(
     private val currentUserId: () -> String?,
     dispatcher: CoroutineDispatcher,
     private val tickMillis: Long = PresenceDecayClock.TICK_MS,
-) {
+    private val persistence: PresenceMapPersistence = PresenceMapPersistence.None,
+    private val persistIntervalMillis: Long = PERSIST_INTERVAL_MS,
+) : ServedPresenceSink {
     @Inject
     constructor(
         messageSocketManager: MessageSocketManager,
@@ -72,6 +77,7 @@ class PresenceStore internal constructor(
         tokenStore: TokenStore,
         clock: CacheClock,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
+        persistence: PresenceMapPersistence,
     ) : this(
         PresenceSources(
             userStatus = messageSocketManager.userStatus,
@@ -83,6 +89,7 @@ class PresenceStore internal constructor(
         clock,
         { (sessionRepository.currentUserId ?: tokenStore.userId)?.takeIf { it.isNotBlank() } },
         dispatcher,
+        persistence = persistence,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -125,10 +132,65 @@ class PresenceStore internal constructor(
             }
         }
         scope.launch { sources.connectionState.collect(::onConnectionState) }
-        scope.launch { sources.sessionUserId.collect(::onSessionUser) }
+        scope.launch { sources.sessionUserId.collect { onSessionUser(it) } }
+        scope.launch { currentUserId()?.let { restoreFor(it) } }
+        scope.launch { _entries.collect { persistNow(); delay(persistIntervalMillis) } }
+    }
+
+    /**
+     * Semis depuis la charge que la page de conversations a servie (miroir de `PresenceManager.seed`
+     * iOS) : seuls les INCONNUS sont semés, une entrée déjà posée — socket, frappe, relecture — est
+     * gardée, et le compte courant n'y entre jamais.
+     */
+    override fun seed(served: Map<String, UserPresence>) {
+        if (served.isEmpty()) return
+        _entries.update { PresenceMapReducer.seed(it, served, currentUserId()) }
     }
 
     private var previousSessionUser: String? = null
+
+    /** Un seul à la fois écrit, relit ou efface le disque : un effacement n'est jamais rattrapé par une écriture tardive. */
+    private val disk = Mutex()
+
+    /** Le compte à qui appartient la carte en mémoire ; `null` tant qu'elle n'a pas été relue ou après une déconnexion. */
+    private var mapOwner: String? = null
+
+    /** Ce qui est sur le disque : une écriture identique est sautée. */
+    private var onDisk: PresenceMap = emptyMap()
+
+    /**
+     * Relit le disque pour [account] et comble les inconnus de la carte (une entrée vivante gagne
+     * toujours). Une réponse arrivée après un changement de compte est jetée.
+     */
+    private suspend fun restoreFor(account: String) = disk.withLock {
+        if (mapOwner == account) return@withLock
+        val now = clock.nowMillis()
+        val persisted = persistence.load(account)
+        if (currentUserId() != account) return@withLock
+        val restored = PresenceRetention.restoredAtLaunch(persisted, account, now)
+        _entries.update { PresenceMapReducer.restore(it, restored) }
+        onDisk = PresenceRetention.retained(persisted, account, now)
+        mapOwner = account
+    }
+
+    /** Écrit la carte, bornée à 24 h et sans le compte courant, sous la clé du compte qui la possède. */
+    private suspend fun persistNow() = disk.withLock {
+        val owner = mapOwner ?: return@withLock
+        if (owner != currentUserId()) return@withLock
+        val retained = PresenceRetention.retained(_entries.value, owner, clock.nowMillis())
+        if (retained == onDisk) return@withLock
+        persistence.save(owner, retained)
+        onDisk = retained
+    }
+
+    private suspend fun forgetAccount() {
+        _entries.value = emptyMap()
+        disk.withLock {
+            mapOwner = null
+            onDisk = emptyMap()
+            persistence.clear()
+        }
+    }
 
     /**
      * La carte appartient au compte qui l'a reçue (miroir de `resetForLogout` iOS) : dès que le
@@ -136,10 +198,11 @@ class PresenceStore internal constructor(
      * coupure du socket ne suffit pas : `reconnectWithToken` enchaîne DISCONNECTED puis CONNECTING
      * sous le même verrou, et un collecteur d'état conflaté ne voit que le second.
      */
-    private fun onSessionUser(userId: String?) {
+    private suspend fun onSessionUser(userId: String?) {
         val previous = previousSessionUser
         previousSessionUser = userId
-        if (previous != null && previous != userId) _entries.value = emptyMap()
+        if (previous != null && previous != userId) forgetAccount()
+        if (userId != null) restoreFor(userId)
     }
 
     private var previousConnection: SocketConnectionState = SocketConnectionState.DISCONNECTED
@@ -216,4 +279,9 @@ class PresenceStore internal constructor(
 
     /** L'instant de référence de la décroissance (l'horloge injectée, jamais celle du système en dur). */
     fun nowMillis(): Long = clock.nowMillis()
+
+    private companion object {
+        /** Au plus une écriture disque toutes les 1,5 s (comme iOS), la dernière carte gagnant. */
+        const val PERSIST_INTERVAL_MS = 1_500L
+    }
 }

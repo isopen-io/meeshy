@@ -25,6 +25,9 @@ import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.keepingParticipantsOf
 import me.meeshy.sdk.model.namesTwoPeople
+import me.meeshy.sdk.model.presence.servedPresence
+import me.meeshy.sdk.model.presence.withoutServedPresence
+import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -71,6 +74,8 @@ internal class ConversationCacheSource(
     private val fence: AccountFence? = null,
     /** #13647 — the cached payloads are decoded here, never on the thread of the screen that collects them. */
     private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
+    /** #13746 — the presence the gateway serves on the page seeds the session's presence map at cold start. */
+    private val presenceSink: ServedPresenceSink = ServedPresenceSink.None,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -335,6 +340,7 @@ internal class ConversationCacheSource(
         if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
         fence.commitOrWrite(ticket) {
+            presenceSink.seed(outcome.conversations.servedPresence())
             persist(
                 conversations = outcome.conversations,
                 prune = !useDelta && outcome.isComplete,
@@ -487,7 +493,7 @@ internal class ConversationCacheSource(
 
     private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
         id = conversation.id,
-        payload = MeeshyApi.json.encodeToString(conversation),
+        payload = MeeshyApi.json.encodeToString(conversation.withoutServedPresence()),
         updatedAt = isoToEpochMillis(
             conversation.updatedAt
                 ?: conversation.lastMessage?.createdAt

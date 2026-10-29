@@ -101,4 +101,36 @@ class PresenceMapReducerTest {
         assertThat(PresenceDecayClock.derive(null, now)).isNull()
         assertThat(PresenceDecayClock.derive(UserPresence(true, iso(0)), now)).isEqualTo(PresenceState.ONLINE)
     }
+
+    @Test
+    fun `a served page seeds the users nobody knows yet`() {
+        val after = PresenceMapReducer.seed(emptyMap(), mapOf("u1" to UserPresence(true, iso(-1000))), "me")
+
+        assertThat(after["u1"]).isEqualTo(UserPresence(true, iso(-1000)))
+    }
+
+    @Test
+    fun `a served page never replaces an entry the socket already gave`() {
+        val live: PresenceMap = mapOf("u1" to UserPresence(false, iso(-10)))
+        val after = PresenceMapReducer.seed(live, mapOf("u1" to UserPresence(true, iso(-5000))), "me")
+
+        assertThat(after).isSameInstanceAs(live)
+    }
+
+    @Test
+    fun `a served page never writes the current account nor a blank id`() {
+        val empty: PresenceMap = emptyMap()
+        val after = PresenceMapReducer.seed(empty, mapOf("me" to UserPresence(true, iso(0)), " " to UserPresence(true, iso(0))), "me")
+
+        assertThat(after).isSameInstanceAs(empty)
+    }
+
+    @Test
+    fun `what was read back fills the unknown and yields to the live entries`() {
+        val live: PresenceMap = mapOf("a" to UserPresence(true, iso(0)))
+        val after = PresenceMapReducer.restore(live, mapOf("a" to UserPresence(false, iso(-9000)), "b" to UserPresence(false, iso(-9000))))
+
+        assertThat(after["a"]).isEqualTo(UserPresence(true, iso(0)))
+        assertThat(after["b"]).isEqualTo(UserPresence(false, iso(-9000)))
+    }
 }

@@ -1,0 +1,105 @@
+package me.meeshy.sdk.socket
+
+import android.content.Context
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.presence.PresenceMap
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import javax.inject.Singleton
+
+/**
+ * La mémoire disque de la carte de présence (miroir de `presence_map.json` d'iOS). Une écriture porte
+ * le compte qui l'a reçue : une lecture pour un AUTRE compte ne rend rien. Ni l'âge (24 h) ni le
+ * compte courant ne se décident ici — c'est la loi pure `PresenceRetention`.
+ */
+interface PresenceMapPersistence {
+    suspend fun load(accountId: String): PresenceMap
+    suspend fun save(accountId: String, entries: PresenceMap)
+    suspend fun clear()
+
+    companion object {
+        /** Sans disque : la carte repart vide à chaque démarrage. */
+        val None: PresenceMapPersistence = object : PresenceMapPersistence {
+            override suspend fun load(accountId: String): PresenceMap = emptyMap()
+            override suspend fun save(accountId: String, entries: PresenceMap) = Unit
+            override suspend fun clear() = Unit
+        }
+    }
+}
+
+@Serializable
+private class PersistedPresenceMap(val accountId: String, val entries: Map<String, UserPresence>)
+
+/**
+ * Un fichier privé de l'application (jamais sauvegardé : `allowBackup=false`), écrit hors du fil
+ * principal par remplacement atomique. Une lecture illisible rend une carte vide : la présence est un
+ * confort de démarrage, jamais une raison de planter.
+ */
+class FilePresenceMapPersistence(
+    private val file: File,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) : PresenceMapPersistence {
+
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    override suspend fun load(accountId: String): PresenceMap = withContext(io) {
+        attempt {
+            if (!file.exists()) return@attempt emptyMap()
+            val persisted = json.decodeFromString<PersistedPresenceMap>(file.readText())
+            if (persisted.accountId == accountId) persisted.entries else emptyMap()
+        } ?: emptyMap()
+    }
+
+    override suspend fun save(accountId: String, entries: PresenceMap) = withContext(io) {
+        attempt {
+            file.parentFile?.mkdirs()
+            val pending = File(file.parentFile, file.name + ".tmp")
+            pending.writeText(json.encodeToString(PersistedPresenceMap.serializer(), PersistedPresenceMap(accountId, entries)))
+            Files.move(pending.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        }
+        Unit
+    }
+
+    override suspend fun clear() = withContext(io) {
+        attempt { file.delete() }
+        Unit
+    }
+
+    private inline fun <T> attempt(block: () -> T): T? =
+        try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+internal object PresenceMapPersistenceModule {
+    @Provides
+    @Singleton
+    fun providePresenceMapPersistence(@ApplicationContext context: Context): PresenceMapPersistence =
+        FilePresenceMapPersistence(File(context.noBackupFilesDir, "presence/presence_map.json"))
+
+    @Provides
+    @Singleton
+    fun provideServedPresenceSink(store: dagger.Lazy<PresenceStore>): ServedPresenceSink =
+        ServedPresenceSink { served -> store.get().seed(served) }
+}
