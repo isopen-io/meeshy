@@ -78,7 +78,7 @@ public class CreatePostHandler @Inject constructor(
  * `CREATE_COMMENT` (#13679): posts the comment the device queued — typed in a notification banner, with no screen open —
  * under the row's own `cmid` as `X-Client-Mutation-Id`: the gateway's MutationLog answers a replay with the comment it
  * already wrote (`replayCost: 'diverges'`), so a response lost on the way back never comments twice. A 410
- * (`MUTATION_RESULT_GONE`: the first comment was deleted since) means the gesture WAS applied: success, never a second
+ * carrying `MUTATION_RESULT_GONE` (the first comment was deleted since) means the gesture WAS applied: success, never a second
  * insert. A refusal the same payload would meet again (a deleted or private post, a closed thread, a validation error
  * carried by the gateway envelope) exhausts the row at once and takes the optimistic count back; anything else (401 during
  * a session renewal, 408, 429, 5xx, network) is replayed.
@@ -108,13 +108,14 @@ public class CreateCommentHandler @Inject constructor(
     }
 
     private fun ApiError.toCommentFailure(): SendResult = when {
-        httpStatus == HTTP_GONE -> SendResult.Success
+        httpStatus == HTTP_GONE && code == MUTATION_RESULT_GONE -> SendResult.Success
         httpStatus in DEFINITIVE_REFUSALS && code != "HTTP_$httpStatus" -> SendResult.PermanentFailure("Comment refused: HTTP $httpStatus $code")
         else -> SendResult.TransientFailure
     }
 
     private companion object {
         const val HTTP_GONE = 410
+        const val MUTATION_RESULT_GONE = "MUTATION_RESULT_GONE"
         val DEFINITIVE_REFUSALS = setOf(400, 403, 404, 422)
     }
 }

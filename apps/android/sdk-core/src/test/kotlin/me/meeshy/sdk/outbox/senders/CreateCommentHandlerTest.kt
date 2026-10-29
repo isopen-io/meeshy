@@ -79,6 +79,13 @@ class CreateCommentHandlerTest {
     }
 
     @Test
+    fun `un 410 qui ne dit pas que le geste a eu lieu n efface pas le commentaire de la file`() = runTest {
+        coEvery { postApi.addComment(any(), any(), any()) } throws refusal(410, "<html>gone</html>")
+
+        assertThat(handler.send(row())).isNotEqualTo(SendResult.Success)
+    }
+
+    @Test
     fun `une charge illisible echoue sans appeler la passerelle`() = runTest {
         val result = handler.send(outboxRow(OutboxKind.CREATE_COMMENT, targetId = "p1", payload = "oops"))
 
