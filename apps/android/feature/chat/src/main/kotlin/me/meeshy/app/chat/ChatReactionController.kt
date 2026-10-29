@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawal
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -38,6 +40,7 @@ internal class ChatReactionController(
     private val emojiUsageStore: EmojiUsageStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    private val ownReactionWithdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
 ) {
 
     private val mutableOwnReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -70,6 +73,21 @@ internal class ChatReactionController(
                 applyPeerReactionEvent(event, delta = -1)
             }
         }
+        scope.launch {
+            ownReactionWithdrawals.withdrawals.collect(::applyWithdrawal)
+        }
+    }
+
+    /**
+     * #13803 — the outbox gave a reaction up (refused in clear for an end-to-end conversation, retries spent) and already
+     * took its chip back in the cached summary: the viewer's own mark follows, here and in the open who-reacted sheet. A
+     * message this screen never reacted to has no mark to take back.
+     */
+    private fun applyWithdrawal(withdrawal: OwnReactionWithdrawal) {
+        val mine = mutableOwnReactions.value[withdrawal.messageId] ?: return
+        val restored = if (withdrawal.stillMine) mine + withdrawal.emoji else mine - withdrawal.emoji
+        mutableOwnReactions.update { it + (withdrawal.messageId to restored) }
+        applySelfToOpenDetails(withdrawal.messageId, withdrawal.emoji, present = withdrawal.stillMine)
     }
 
     /**

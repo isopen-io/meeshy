@@ -12,7 +12,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
@@ -23,6 +25,8 @@ import me.meeshy.sdk.conversation.PieceRemoval
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.outbox.ConversationPlaintextVerdict
+import me.meeshy.sdk.outbox.OutboxAdmissionVerdict
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 
@@ -62,6 +66,7 @@ class ChatPieceControllerTest {
     private fun TestScope.rig(
         loaded: List<LocalMessage>,
         state: ChatUiState = ChatUiState(conversationId = "c1"),
+        verdict: ConversationPlaintextVerdict = ConversationPlaintextVerdict { OutboxAdmissionVerdict.ADMIT },
     ): Rig {
         val remover = mockk<MessageAttachmentRemover>()
         val realtime = mockk<ChatRealtimeController>()
@@ -70,7 +75,7 @@ class ChatPieceControllerTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns MutableStateFlow(me)
-        val controller = ChatPieceController(remover, realtime, repo, workManager, session)
+        val controller = ChatPieceController(remover, realtime, repo, workManager, session, verdict)
         controller.attach(FakeHost(backgroundScope, MutableStateFlow(loaded), state))
         return Rig(controller, remover, realtime, repo, workManager)
     }
@@ -156,5 +161,96 @@ class ChatPieceControllerTest {
 
         coVerify(exactly = 0) { r.remover.remove(any(), any()) }
         coVerify(exactly = 0) { r.repo.deleteOptimistic(any()) }
+    }
+
+    // ── #13803 — réagir à une pièce ou la supprimer suit la garde du clair des messages ──
+
+    /** Room garde `server` (hors ligne pendant la bascule), le registre sait la conversation chiffrée : verdict retenu. */
+    private val servedServer = ChatUiState(conversationId = "c1", encryptionMode = "server")
+
+    private fun told(r: Rig, scope: TestScope): List<PieceFailure> {
+        val told = mutableListOf<PieceFailure>()
+        scope.backgroundScope.launch { r.controller.failures.collect { told += it } }
+        scope.runCurrent()
+        return told
+    }
+
+    @Test
+    fun `a conversation the ledger knows end to end never receives a piece reaction, even while Room still says server`() = runTest {
+        val asked = mutableListOf<String>()
+        val r = rig(
+            listOf(carrier(photo("a"))),
+            state = servedServer,
+            verdict = { id -> asked += id; OutboxAdmissionVerdict.WITHHOLD },
+        )
+
+        r.controller.react(messageId, "a", "👍")
+        runCurrent()
+
+        assertThat(asked).containsExactly("c1")
+        coVerify(exactly = 0) { r.realtime.toggleAttachmentReaction(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a conversation whose mode is unknown never receives a piece reaction`() = runTest {
+        listOf(OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE).forEach { unknown ->
+            val r = rig(listOf(carrier(photo("a"))), state = servedServer, verdict = { unknown })
+
+            r.controller.react(messageId, "a", "👍")
+            runCurrent()
+
+            coVerify(exactly = 0) { r.realtime.toggleAttachmentReaction(any(), any(), any(), any()) }
+        }
+    }
+
+    @Test
+    fun `a mode read that does not answer in time sends nothing`() = runTest {
+        val r = rig(listOf(carrier(photo("a"), photo("b"))), state = servedServer, verdict = { awaitCancellation() })
+        val told = told(r, this)
+
+        r.controller.react(messageId, "a", "👍")
+        r.controller.delete(messageId, "b")
+        advanceTimeBy(60_000)
+        runCurrent()
+
+        coVerify(exactly = 0) { r.realtime.toggleAttachmentReaction(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { r.remover.remove(any(), any()) }
+        assertThat(told).containsExactly(PieceFailure.REMOVE)
+    }
+
+    @Test
+    fun `a conversation known clear sends the piece reaction once its verdict admits it`() = runTest {
+        val asked = mutableListOf<String>()
+        val r = rig(
+            listOf(carrier(photo("a"))),
+            state = servedServer,
+            verdict = { id -> asked += id; OutboxAdmissionVerdict.ADMIT },
+        )
+
+        r.controller.react(messageId, "a", "👍")
+        runCurrent()
+
+        assertThat(asked).containsExactly("c1")
+        coVerify(exactly = 1) { r.realtime.toggleAttachmentReaction(messageId, "a", "👍", true) }
+    }
+
+    @Test
+    fun `deleting a piece in an end-to-end or unknown conversation calls no gateway and says so`() = runTest {
+        listOf(OutboxAdmissionVerdict.WITHHOLD, OutboxAdmissionVerdict.WAIT, OutboxAdmissionVerdict.UNREACHABLE).forEach { refused ->
+            val several = rig(listOf(carrier(photo("a"), photo("b"))), state = servedServer, verdict = { refused })
+            val last = rig(listOf(carrier(photo("a"))), state = servedServer, verdict = { refused })
+            val toldSeveral = told(several, this)
+            val toldLast = told(last, this)
+
+            several.controller.delete(messageId, "b")
+            last.controller.delete(messageId, "a")
+            runCurrent()
+
+            coVerify(exactly = 0) { several.remover.remove(any(), any()) }
+            coVerify(exactly = 0) { last.repo.deleteOptimistic(any()) }
+            verify(exactly = 0) { last.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+            assertThat(toldSeveral).containsExactly(PieceFailure.REMOVE)
+            assertThat(toldLast).containsExactly(PieceFailure.REMOVE)
+        }
     }
 }

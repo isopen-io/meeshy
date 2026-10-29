@@ -56,6 +56,7 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
@@ -108,6 +109,7 @@ class ChatViewModel @Inject constructor(
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val blockCache: BlockCache = BlockCache(),
+    ownReactionWithdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -206,6 +208,7 @@ class ChatViewModel @Inject constructor(
         emojiUsageStore = emojiUsageStore,
         messageSocketManager = messageSocketManager,
         workManager = workManager,
+        ownReactionWithdrawals = ownReactionWithdrawals,
     )
 
     private val translation = ChatTranslationController(

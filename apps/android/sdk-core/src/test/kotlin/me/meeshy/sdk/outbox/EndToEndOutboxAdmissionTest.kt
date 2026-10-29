@@ -321,6 +321,16 @@ class EndToEndOutboxAdmissionTest {
     }
 
     @Test
+    fun `un geste hors outbox vers une conversation apprise e2ee que Room croit encore server est retenu, sans relecture`() = runTest {
+        ledger.learn("c1")
+        cache("c1", "server")
+
+        val verdict: ConversationPlaintextVerdict = admission
+        assertThat(verdict.verdictFor("c1")).isEqualTo(OutboxAdmissionVerdict.WITHHOLD)
+        assertThat(reads).isEmpty()
+    }
+
+    @Test
     fun `la reponse d une banniere, un mode inconnu est relu au serveur, jamais admis a l aveugle`() = runTest {
         served = ApiConversation(id = "c2", encryptionMode = null)
 

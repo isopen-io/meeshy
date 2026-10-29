@@ -42,6 +42,16 @@ public interface OutboxPlaintextAdmission {
     }
 }
 
+/**
+ * **Le verdict du clair pour UNE conversation, lu par un geste qui part HORS de l'outbox** (#13803) : réagir à une pièce (socket
+ * `attachment:reaction-add|remove`), supprimer une pièce (`DELETE /attachments/:id`). La même loi que la file
+ * ([EndToEndOutboxAdmission.verdictFor]) : registre, mode en cache, puis relecture au serveur d'un mode inconnu. Seul
+ * [OutboxAdmissionVerdict.ADMIT] laisse partir le geste.
+ */
+public fun interface ConversationPlaintextVerdict {
+    public suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict
+}
+
 /** Le verdict de la garde du clair (#13628) : le mode inconnu n'est ni un feu vert ni un refus définitif, c'est une attente. */
 public enum class OutboxAdmissionVerdict {
     ADMIT,
@@ -118,7 +128,7 @@ public class EndToEndOutboxAdmission @Inject constructor(
     private val messageDao: MessageDao,
     private val outbox: OutboxRepository,
     private val modeReader: ConversationModeReader = ConversationModeReader.Unavailable,
-) : OutboxPlaintextAdmission {
+) : OutboxPlaintextAdmission, ConversationPlaintextVerdict {
 
     override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
         val conversations = conversationsOf(row)
@@ -132,7 +142,7 @@ public class EndToEndOutboxAdmission @Inject constructor(
      * loi que [judge] — registre, mode en cache, puis relecture au serveur d'un mode inconnu —, de sorte que ni une
      * conversation chiffrée ni une conversation dont le mode est encore inconnu ne reçoit une bulle condamnée à ne jamais partir.
      */
-    public suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict = judgeConversations(listOf(conversationId))
+    override suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict = judgeConversations(listOf(conversationId))
 
     private suspend fun judgeConversations(conversations: List<String>): OutboxAdmissionVerdict {
         val clearances = conversations.distinct().associateWith { clearanceOf(it) }
@@ -229,4 +239,7 @@ public interface OutboxPlaintextAdmissionModule {
 
     @Binds
     public fun modeReader(impl: RepositoryConversationModeReader): ConversationModeReader
+
+    @Binds
+    public fun conversationVerdict(impl: EndToEndOutboxAdmission): ConversationPlaintextVerdict
 }

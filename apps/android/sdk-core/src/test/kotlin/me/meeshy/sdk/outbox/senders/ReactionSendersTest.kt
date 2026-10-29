@@ -4,6 +4,9 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
@@ -14,9 +17,12 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.ReactionPayload
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.reaction.OwnReactionWithdrawal
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import org.junit.Test
 import java.io.IOException
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReactionSendersTest {
 
     private val reactionApi = mockk<ReactionApi>()
@@ -99,6 +105,22 @@ class ReactionSendersTest {
 
         coVerify(exactly = 1) { messageRepository.applyReactionDelta("m1", "🔥", -1) }
         coVerify(exactly = 1) { messageRepository.applyReactionDelta("m1", "🔥", 1) }
+    }
+
+    @Test
+    fun `an exhausted reaction tells the open screen the viewer's mark is undone too`() = runTest {
+        val withdrawals = OwnReactionWithdrawals()
+        val heard = mutableListOf<OwnReactionWithdrawal>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { withdrawals.withdrawals.collect { heard += it } }
+
+        AddReactionHandler(reactionApi, messageRepository, senderJson, ledger, withdrawals).onExhausted(row(OutboxKind.ADD_REACTION))
+        RemoveReactionHandler(reactionApi, messageRepository, senderJson, ledger, withdrawals).onExhausted(row(OutboxKind.REMOVE_REACTION))
+        AddReactionHandler(reactionApi, messageRepository, senderJson, ledger, withdrawals).onExhausted(row(OutboxKind.ADD_REACTION, payload = "nope"))
+
+        assertThat(heard).containsExactly(
+            OwnReactionWithdrawal("m1", "🔥", stillMine = false),
+            OwnReactionWithdrawal("m1", "🔥", stillMine = true),
+        ).inOrder()
     }
 
     @Test

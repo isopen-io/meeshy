@@ -20,17 +20,20 @@ import me.meeshy.sdk.outbox.ReactionPayload
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
+import me.meeshy.sdk.reaction.OwnReactionWithdrawal
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import javax.inject.Inject
 
 /**
  * `ADD_REACTION`: reacts to the row's message with the payload's emoji. An exhausted reaction (refused in clear for an
- * end-to-end conversation, #13790, or retries spent) takes its optimistic chip back.
+ * end-to-end conversation, #13790, or retries spent) takes its optimistic chip back, and the viewer's own mark (#13803).
  */
 public class AddReactionHandler @Inject constructor(
     private val reactionApi: ReactionApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val withdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
@@ -41,16 +44,17 @@ public class AddReactionHandler @Inject constructor(
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        undoReaction(json, messageRepository, row, delta = -1)
+        undoReaction(json, messageRepository, withdrawals, row, wasAdding = true)
     }
 }
 
-/** `REMOVE_REACTION`: removes the payload's emoji from the row's message; an exhausted removal puts the chip back. */
+/** `REMOVE_REACTION`: removes the payload's emoji from the row's message; an exhausted removal puts the chip back, the viewer's mark too. */
 public class RemoveReactionHandler @Inject constructor(
     private val reactionApi: ReactionApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val withdrawals: OwnReactionWithdrawals = OwnReactionWithdrawals(),
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
@@ -59,14 +63,24 @@ public class RemoveReactionHandler @Inject constructor(
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        undoReaction(json, messageRepository, row, delta = 1)
+        undoReaction(json, messageRepository, withdrawals, row, wasAdding = false)
     }
 }
 
-/** The opposite of the optimistic shift the toggle applied to the cached summary; an unreadable payload undoes nothing. */
-private suspend fun undoReaction(json: Json, messageRepository: MessageRepository, row: OutboxEntity, delta: Int) {
+/**
+ * The opposite of the optimistic shift the toggle applied to the cached summary, and of the viewer's own mark on the open
+ * screen (#13803); an unreadable payload undoes nothing.
+ */
+private suspend fun undoReaction(
+    json: Json,
+    messageRepository: MessageRepository,
+    withdrawals: OwnReactionWithdrawals,
+    row: OutboxEntity,
+    wasAdding: Boolean,
+) {
     val emoji = runCatching { json.decodeFromString<ReactionPayload>(row.payload) }.getOrNull()?.emoji ?: return
-    messageRepository.applyReactionDelta(row.targetId, emoji, delta)
+    messageRepository.applyReactionDelta(row.targetId, emoji, if (wasAdding) -1 else 1)
+    withdrawals.announce(OwnReactionWithdrawal(row.targetId, emoji, stillMine = !wasAdding))
 }
 
 @Module
