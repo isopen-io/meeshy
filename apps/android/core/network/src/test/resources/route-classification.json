@@ -371,7 +371,6 @@
     "GET /api/v1/user/deleted-conversations",
     "GET /api/v1/users/:id",
     "GET /api/v1/users/:userId/affiliate-token",
-    "GET /api/v1/users/:userId/game",
     "GET /api/v1/users/:userId/game/showcase",
     "GET /api/v1/users/friend-requests",
     "GET /api/v1/users/id/:id",

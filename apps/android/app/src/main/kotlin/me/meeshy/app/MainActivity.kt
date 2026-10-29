@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
 import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.composer.inbound.ComposerSeedStore
+import me.meeshy.app.game.banner.gameProfileSlot
 import me.meeshy.app.navigation.InboundIntentGate
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
@@ -54,6 +55,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.LocalPresenceStore
+import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
 import javax.inject.Inject
@@ -107,6 +109,8 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var composerSeedStore: ComposerSeedStore
 
+    private val gameSlot = gameProfileSlot()
+
     private var launchRoute by mutableStateOf<String?>(null)
 
     /** Un lien reçu app ouverte : [MeeshyApp] le rejoue dans la navigation (les navDeepLink ne lisent que le démarrage). */
@@ -147,6 +151,8 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
+                        // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
+                        LocalProfileGameSlot provides gameSlot,
                     ) {
                         ProvideRootSplash {
                             MeeshyApp(
