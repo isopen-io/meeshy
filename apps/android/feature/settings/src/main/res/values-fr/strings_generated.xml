@@ -33,7 +33,7 @@
     <string name="account_contact_phone_current_label">Téléphone actuel</string>
     <string name="account_contact_phone_implausible">Ce numéro ne semble pas réel : vérifiez-le.</string>
     <string name="account_contact_phone_section">Téléphone</string>
-    <string name="account_contact_phone_too_short">Ce numéro est trop court : %d chiffres au moins.</string>
+    <string name="account_contact_phone_too_short">Ce numéro est trop court : %1$d chiffres au moins.</string>
     <string name="account_contact_phone_verify">Vérifier</string>
     <string name="account_contact_send">Envoyer</string>
     <string name="account_contact_verified">Vérifié</string>
@@ -147,7 +147,7 @@
     <string name="sessions_revoke_all_action">Déconnecter les autres appareils</string>
     <string name="sessions_revoke_all_confirm_message">Seul cet appareil restera connecté. Les autres devront se reconnecter.</string>
     <string name="sessions_revoke_confirm_action">Déconnecter</string>
-    <string name="sessions_revoke_confirm_message">%s devra se reconnecter pour accéder à votre compte.</string>
+    <string name="sessions_revoke_confirm_message">%1$s devra se reconnecter pour accéder à votre compte.</string>
     <string name="sessions_revoke_confirm_title">Déconnecter cet appareil ?</string>
     <string name="settings_about_meeshy">À propos de Meeshy</string>
     <string name="settings_active_sessions">Sessions actives</string>

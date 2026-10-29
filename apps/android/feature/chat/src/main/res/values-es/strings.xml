@@ -74,7 +74,7 @@
     <string name="chat_forward_title">Reenviar a…</string>
     <string name="chat_forward_search_hint">Buscar una conversación</string>
     <string name="chat_forward_empty">Ninguna conversación</string>
-    <string name="chat_forward_members">%d miembros</string>
+    <string name="chat_forward_members">%1$d miembros</string>
     <string name="chat_forward_sent">Reenviado</string>
     <string name="chat_forward_send_a11y">Reenviar a %1$s</string>
     <string name="chat_replying_to">Respondiendo a %1$s</string>

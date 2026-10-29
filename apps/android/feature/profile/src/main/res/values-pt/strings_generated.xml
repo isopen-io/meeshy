@@ -22,8 +22,8 @@
     <string name="profile_blocked_unblock">Desbloquear</string>
     <string name="profile_call_not_placed">Sem conexão: a chamada não foi feita</string>
     <string name="profile_close_hint">Fecha o perfil</string>
-    <string name="profile_connection_context_received">%s quer se conectar com você. Aceite para trocar mensagens.</string>
-    <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %s. Aguardando a resposta.</string>
+    <string name="profile_connection_context_received">%1$s quer se conectar com você. Aceite para trocar mensagens.</string>
+    <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %1$s. Aguardando a resposta.</string>
     <string name="profile_conversations_interactionsDisabled">Interações desativadas</string>
     <string name="profile_conversations_noShared">Sem conversas em comum</string>
     <string name="profile_decor_banner_section">Banner</string>

@@ -49,9 +49,9 @@
     <string name="feed_location_shared">Posizione condivisa</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
-        <item quantity="one">%d nuovo post</item>
-        <item quantity="many">%d nuovi post</item>
-        <item quantity="other">%d nuovi post</item>
+        <item quantity="one">%1$d nuovo post</item>
+        <item quantity="many">%1$d nuovi post</item>
+        <item quantity="other">%1$d nuovi post</item>
     </plurals>
     <string name="feed_notice_bookmark_failed">Errore nel salvataggio del segnalibro</string>
     <string name="feed_notice_delete_failed">Errore durante l\'eliminazione del post</string>
@@ -78,9 +78,9 @@
     <string name="feed_report_reason_spam">Spam</string>
     <string name="feed_report_reason_violence">Violenza</string>
     <plurals name="feed_repost_likes_count">
-        <item quantity="one">%d mi piace</item>
-        <item quantity="many">%d mi piace</item>
-        <item quantity="other">%d mi piace</item>
+        <item quantity="one">%1$d mi piace</item>
+        <item quantity="many">%1$d mi piace</item>
+        <item quantity="other">%1$d mi piace</item>
     </plurals>
     <string name="feed_repost_reposted">Ripubblicato</string>
     <string name="feed_repost_story">Storia</string>
@@ -98,11 +98,11 @@
     <string name="feed_translations_badge_hint">Mostra le lingue disponibili</string>
     <string name="feed_unknown_author">Sconosciuto</string>
     <string name="feed_unlike">Non mi piace più</string>
-    <string name="hashtag_results_empty">Nessun post con #%s</string>
+    <string name="hashtag_results_empty">Nessun post con #%1$s</string>
     <string name="mood_spotlight_close">Chiudi</string>
     <string name="mood_spotlight_loading">Caricamento dell\'umore</string>
     <string name="mood_spotlight_reply_failed">La risposta non è stata inviata</string>
-    <string name="mood_spotlight_reply_placeholder">Rispondi a %s…</string>
+    <string name="mood_spotlight_reply_placeholder">Rispondi a %1$s…</string>
     <string name="mood_spotlight_reply_send">Invia risposta</string>
     <string name="mood_spotlight_reply_sent">Risposta inviata</string>
     <string name="mood_spotlight_unavailable">Questo umore non è più disponibile</string>
@@ -116,9 +116,9 @@
     <string name="post_comments_edit_media">Modifica</string>
     <string name="post_comments_load_error">Errore nel caricamento dei commenti</string>
     <plurals name="post_comments_load_more_replies">
-        <item quantity="one">Mostra %d altra risposta</item>
-        <item quantity="many">Mostra altre %d risposte</item>
-        <item quantity="other">Mostra altre %d risposte</item>
+        <item quantity="one">Mostra %1$d altra risposta</item>
+        <item quantity="many">Mostra altre %1$d risposte</item>
+        <item quantity="other">Mostra altre %1$d risposte</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Mostra le risposte restanti in questo thread</string>
     <string name="post_comments_more_options">Altre opzioni</string>
@@ -126,15 +126,15 @@
     <string name="post_comments_reply_action">Rispondi</string>
     <string name="post_comments_reply_badge">Rispondi</string>
     <string name="post_comments_reply_error">Errore nell\'invio della risposta</string>
-    <string name="post_comments_replying_to">In risposta a %s</string>
+    <string name="post_comments_replying_to">In risposta a %1$s</string>
     <string name="post_comments_send">Invia</string>
     <string name="post_comments_send_error">Errore nell\'invio del commento</string>
     <string name="post_comments_sending">Invio…</string>
     <string name="post_comments_title">Commenti</string>
     <plurals name="post_comments_view_replies">
-        <item quantity="one">Vedi %d risposta</item>
-        <item quantity="many">Vedi %d risposte</item>
-        <item quantity="other">Vedi %d risposte</item>
+        <item quantity="one">Vedi %1$d risposta</item>
+        <item quantity="many">Vedi %1$d risposte</item>
+        <item quantity="other">Vedi %1$d risposte</item>
     </plurals>
     <string name="post_detail_back">Indietro</string>
     <string name="post_detail_title">Post</string>
@@ -144,7 +144,7 @@
     <string name="status_bar_me">Io</string>
     <string name="status_bar_republish">Ricondividi</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">via @%s</string>
+    <string name="status_bar_via">via @%1$s</string>
     <string name="status_composer_bare_add">Aggiungi una parola</string>
     <string name="status_composer_bare_publish">Pubblica comunque</string>
     <string name="status_composer_bare_title">Pubblicare il tuo umore senza due parole?</string>

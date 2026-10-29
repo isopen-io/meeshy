@@ -49,12 +49,12 @@
     <string name="feed_location_shared">موقع تمت مشاركته</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
-        <item quantity="zero">%d منشورات جديدة</item>
-        <item quantity="one">%d منشور جديد</item>
-        <item quantity="two">%d منشوران جديدان</item>
-        <item quantity="few">%d منشورات جديدة</item>
-        <item quantity="many">%d منشورات جديدة</item>
-        <item quantity="other">%d منشورات جديدة</item>
+        <item quantity="zero">%1$d منشورات جديدة</item>
+        <item quantity="one">%1$d منشور جديد</item>
+        <item quantity="two">%1$d منشوران جديدان</item>
+        <item quantity="few">%1$d منشورات جديدة</item>
+        <item quantity="many">%1$d منشورات جديدة</item>
+        <item quantity="other">%1$d منشورات جديدة</item>
     </plurals>
     <string name="feed_notice_bookmark_failed">تعذّر حفظ الإشارة المرجعية</string>
     <string name="feed_notice_delete_failed">خطأ في حذف المنشور</string>
@@ -81,12 +81,12 @@
     <string name="feed_report_reason_spam">رسائل مزعجة</string>
     <string name="feed_report_reason_violence">عنف</string>
     <plurals name="feed_repost_likes_count">
-        <item quantity="zero">%d إعجابات</item>
-        <item quantity="one">%d إعجاب</item>
-        <item quantity="two">%d إعجابان</item>
-        <item quantity="few">%d إعجابات</item>
-        <item quantity="many">%d إعجابات</item>
-        <item quantity="other">%d إعجابات</item>
+        <item quantity="zero">%1$d إعجابات</item>
+        <item quantity="one">%1$d إعجاب</item>
+        <item quantity="two">%1$d إعجابان</item>
+        <item quantity="few">%1$d إعجابات</item>
+        <item quantity="many">%1$d إعجابات</item>
+        <item quantity="other">%1$d إعجابات</item>
     </plurals>
     <string name="feed_repost_reposted">تمت إعادة النشر</string>
     <string name="feed_repost_story">قصة</string>
@@ -104,11 +104,11 @@
     <string name="feed_translations_badge_hint">يعرض اللغات المتاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
-    <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%s</string>
+    <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
     <string name="mood_spotlight_close">إغلاق</string>
     <string name="mood_spotlight_loading">جارٍ تحميل المزاج</string>
     <string name="mood_spotlight_reply_failed">لم يتم إرسال الرد</string>
-    <string name="mood_spotlight_reply_placeholder">الرد على %s…</string>
+    <string name="mood_spotlight_reply_placeholder">الرد على %1$s…</string>
     <string name="mood_spotlight_reply_send">إرسال الرد</string>
     <string name="mood_spotlight_reply_sent">تم إرسال الرد</string>
     <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
@@ -122,12 +122,12 @@
     <string name="post_comments_edit_media">تحرير</string>
     <string name="post_comments_load_error">تعذّر تحميل التعليقات</string>
     <plurals name="post_comments_load_more_replies">
-        <item quantity="zero">عرض %d ردّ إضافي</item>
-        <item quantity="one">عرض %d ردّ إضافي</item>
-        <item quantity="two">عرض %d ردّين إضافيين</item>
-        <item quantity="few">عرض %d ردود إضافية</item>
-        <item quantity="many">عرض %d ردًّا إضافيًا</item>
-        <item quantity="other">عرض %d ردّ إضافي</item>
+        <item quantity="zero">عرض %1$d ردّ إضافي</item>
+        <item quantity="one">عرض %1$d ردّ إضافي</item>
+        <item quantity="two">عرض %1$d ردّين إضافيين</item>
+        <item quantity="few">عرض %1$d ردود إضافية</item>
+        <item quantity="many">عرض %1$d ردًّا إضافيًا</item>
+        <item quantity="other">عرض %1$d ردّ إضافي</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">يعرض بقية الردود في هذا النقاش</string>
     <string name="post_comments_more_options">المزيد من الخيارات</string>
@@ -135,7 +135,7 @@
     <string name="post_comments_reply_action">رد</string>
     <string name="post_comments_reply_badge">رد</string>
     <string name="post_comments_reply_error">تعذّر إرسال الرد</string>
-    <string name="post_comments_replying_to">ردًا على %s</string>
+    <string name="post_comments_replying_to">ردًا على %1$s</string>
     <string name="post_comments_send">إرسال</string>
     <string name="post_comments_send_error">تعذّر إرسال التعليق</string>
     <string name="post_comments_sending">جارٍ الإرسال…</string>
@@ -144,9 +144,9 @@
         <item quantity="zero">عرض لا ردود</item>
         <item quantity="one">عرض رد واحد</item>
         <item quantity="two">عرض ردين</item>
-        <item quantity="few">عرض %d ردود</item>
-        <item quantity="many">عرض %d ردًا</item>
-        <item quantity="other">عرض %d رد</item>
+        <item quantity="few">عرض %1$d ردود</item>
+        <item quantity="many">عرض %1$d ردًا</item>
+        <item quantity="other">عرض %1$d رد</item>
     </plurals>
     <string name="post_detail_back">رجوع</string>
     <string name="post_detail_title">منشور</string>
@@ -156,7 +156,7 @@
     <string name="status_bar_me">أنا</string>
     <string name="status_bar_republish">إعادة نشر</string>
     <string name="status_bar_status_label">%1$s %2$s</string>
-    <string name="status_bar_via">عبر @%s</string>
+    <string name="status_bar_via">عبر @%1$s</string>
     <string name="status_composer_bare_add">إضافة كلمة</string>
     <string name="status_composer_bare_publish">النشر على أي حال</string>
     <string name="status_composer_bare_title">هل تريد نشر مزاجك دون كلمة قصيرة؟</string>

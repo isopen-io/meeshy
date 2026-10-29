@@ -5,9 +5,9 @@
     <string name="reels_close">Fermer</string>
     <string name="reels_comments">Commentaires</string>
     <plurals name="reels_comments_count">
-        <item quantity="one">%d commentaire</item>
-        <item quantity="many">%d commentaires</item>
-        <item quantity="other">%d commentaires</item>
+        <item quantity="one">%1$d commentaire</item>
+        <item quantity="many">%1$d commentaires</item>
+        <item quantity="other">%1$d commentaires</item>
     </plurals>
     <string name="reels_comments_empty_subtitle">Soyez le premier à commenter !</string>
     <string name="reels_comments_empty_title">Pas encore de commentaires</string>

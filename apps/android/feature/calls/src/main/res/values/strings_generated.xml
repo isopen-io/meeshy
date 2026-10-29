@@ -42,7 +42,7 @@
     <string name="call_journal_erase_failed">Couldn\'t delete. Try again.</string>
     <string name="call_journal_filter_video">Video</string>
     <string name="call_journal_hide">Delete</string>
-    <string name="call_journal_search_empty">No call matches “%s”</string>
+    <string name="call_journal_search_empty">No call matches “%1$s”</string>
     <string name="call_journal_search_empty_hint">The log covers the last three months.</string>
     <string name="call_journal_search_placeholder">Search calls</string>
     <string name="call_live_frame_accept">Apply</string>
@@ -59,10 +59,10 @@
     <string name="call_open_conversation_hint">Opens the conversation while keeping the call active</string>
     <string name="call_recording_accept">Accept</string>
     <string name="call_recording_active">Recording in progress</string>
-    <string name="call_recording_ask">%s wants to record the call</string>
+    <string name="call_recording_ask">%1$s wants to record the call</string>
     <string name="call_recording_askDetail">Recording only starts if everyone agrees, and it is then added to the conversation.</string>
     <string name="call_recording_askDetail_video">The call screen and all its sound are recorded only if everyone agrees, then added to the conversation.</string>
-    <string name="call_recording_ask_video">%s wants to record the call on video</string>
+    <string name="call_recording_ask_video">%1$s wants to record the call on video</string>
     <string name="call_recording_cancel">Cancel</string>
     <string name="call_recording_caption">Record</string>
     <string name="call_recording_close">Close</string>

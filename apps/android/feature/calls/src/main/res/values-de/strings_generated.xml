@@ -42,7 +42,7 @@
     <string name="call_journal_erase_failed">Löschen fehlgeschlagen. Versuche es erneut.</string>
     <string name="call_journal_filter_video">Video</string>
     <string name="call_journal_hide">Löschen</string>
-    <string name="call_journal_search_empty">Kein Anruf entspricht „%s“</string>
+    <string name="call_journal_search_empty">Kein Anruf entspricht „%1$s“</string>
     <string name="call_journal_search_empty_hint">Das Protokoll umfasst die letzten drei Monate.</string>
     <string name="call_journal_search_placeholder">Anruf suchen</string>
     <string name="call_live_frame_accept">Übernehmen</string>
@@ -59,10 +59,10 @@
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>
     <string name="call_recording_active">Aufnahme läuft</string>
-    <string name="call_recording_ask">%s möchte den Anruf aufnehmen</string>
+    <string name="call_recording_ask">%1$s möchte den Anruf aufnehmen</string>
     <string name="call_recording_askDetail">Die Aufnahme beginnt nur, wenn alle zustimmen, und wird dann zur Unterhaltung hinzugefügt.</string>
     <string name="call_recording_askDetail_video">Der Anrufbildschirm und sein gesamter Ton werden nur aufgenommen, wenn alle zustimmen, und dann zur Unterhaltung hinzugefügt.</string>
-    <string name="call_recording_ask_video">%s möchte den Anruf als Video aufnehmen</string>
+    <string name="call_recording_ask_video">%1$s möchte den Anruf als Video aufnehmen</string>
     <string name="call_recording_cancel">Abbrechen</string>
     <string name="call_recording_caption">Aufnehmen</string>
     <string name="call_recording_close">Schließen</string>

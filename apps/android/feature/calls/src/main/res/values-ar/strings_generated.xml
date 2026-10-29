@@ -42,7 +42,7 @@
     <string name="call_journal_erase_failed">تعذّر المسح. حاول مرة أخرى.</string>
     <string name="call_journal_filter_video">فيديو</string>
     <string name="call_journal_hide">مسح</string>
-    <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%s»</string>
+    <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%1$s»</string>
     <string name="call_journal_search_empty_hint">يغطي السجل الأشهر الثلاثة الأخيرة.</string>
     <string name="call_journal_search_placeholder">البحث عن مكالمة</string>
     <string name="call_live_frame_accept">تطبيق</string>
@@ -59,10 +59,10 @@
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>
     <string name="call_recording_active">التسجيل جارٍ</string>
-    <string name="call_recording_ask">%s يريد تسجيل المكالمة</string>
+    <string name="call_recording_ask">%1$s يريد تسجيل المكالمة</string>
     <string name="call_recording_askDetail">لا يبدأ التسجيل إلا إذا وافق الجميع، ثم يُضاف إلى المحادثة.</string>
     <string name="call_recording_askDetail_video">لا تُسجَّل شاشة المكالمة وكل صوتها إلا إذا وافق الجميع، ثم تُضاف إلى المحادثة.</string>
-    <string name="call_recording_ask_video">%s يريد تسجيل المكالمة بالفيديو</string>
+    <string name="call_recording_ask_video">%1$s يريد تسجيل المكالمة بالفيديو</string>
     <string name="call_recording_cancel">إلغاء</string>
     <string name="call_recording_caption">تسجيل</string>
     <string name="call_recording_close">إغلاق</string>

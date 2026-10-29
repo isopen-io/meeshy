@@ -1,7 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="accessibility_conversation_with">Conversation with %s</string>
-    <string name="accessibility_last_message_preview">last message: %s</string>
+    <string name="accessibility_conversation_with">Conversation with %1$s</string>
+    <string name="accessibility_last_message_preview">last message: %1$s</string>
     <string name="accessibility_muted">muted</string>
     <string name="accessibility_pinned">pinned</string>
     <string name="accessibility_search_list_hint">Opens conversation search and your communities</string>
@@ -12,7 +12,7 @@
     <string name="common_share">Share</string>
     <string name="conversationCard_expired">Link expired</string>
     <string name="conversations_action_archive">Archive</string>
-    <string name="conversations_action_create_category">Create \"%s\"</string>
+    <string name="conversations_action_create_category">Create \"%1$s\"</string>
     <string name="conversations_action_delete_for_all">Delete for everyone</string>
     <string name="conversations_action_delete_for_me">Delete for me</string>
     <string name="conversations_action_favorite">Favorite</string>
@@ -62,14 +62,14 @@
     <string name="conversations_lock_error_master_incorrect">Incorrect master PIN</string>
     <string name="conversations_lock_error_pin_mismatch">The PINs don\'t match</string>
     <string name="conversations_lock_subtitle_change_verify">Enter your current master PIN</string>
-    <string name="conversations_lock_subtitle_confirm_code">Confirm the code for %s</string>
+    <string name="conversations_lock_subtitle_confirm_code">Confirm the code for %1$s</string>
     <string name="conversations_lock_subtitle_confirm_master">Re-enter your master PIN to confirm</string>
     <string name="conversations_lock_subtitle_confirm_new">Confirm your new master PIN</string>
     <string name="conversations_lock_subtitle_create_master">Choose a 6-digit master PIN to secure your locks</string>
-    <string name="conversations_lock_subtitle_enter_code">Choose a 4-digit code for %s</string>
+    <string name="conversations_lock_subtitle_enter_code">Choose a 4-digit code for %1$s</string>
     <string name="conversations_lock_subtitle_new_master">Choose a new 6-digit master PIN</string>
     <string name="conversations_lock_subtitle_remove_master">Enter your master PIN to confirm removal</string>
-    <string name="conversations_lock_subtitle_unlock">Enter the code for %s to unlock it</string>
+    <string name="conversations_lock_subtitle_unlock">Enter the code for %1$s to unlock it</string>
     <string name="conversations_lock_title_confirm_code">Confirm code</string>
     <string name="conversations_lock_title_confirm_master">Confirm master PIN</string>
     <string name="conversations_lock_title_confirm_new">Confirm new PIN</string>
@@ -89,7 +89,7 @@
     <string name="conversations_preview_hidden">Hidden message</string>
     <string name="conversations_preview_loading">Loading…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
-    <string name="conversations_preview_typing">%s is typing</string>
+    <string name="conversations_preview_typing">%1$s is typing</string>
     <string name="conversations_preview_view_once">View-once message</string>
     <string name="conversations_preview_you">You</string>
     <string name="conversations_remove_master_pin">Remove master PIN</string>
@@ -101,7 +101,7 @@
     <string name="conversations_search_hint">Search conversations</string>
     <string name="conversations_tags_dialog_title">Tags</string>
     <string name="conversations_tags_field_hint">Add a tag…</string>
-    <string name="conversations_tags_remove_content_description">Remove tag %s</string>
+    <string name="conversations_tags_remove_content_description">Remove tag %1$s</string>
     <string name="dashboard_action_contacts">Contacts</string>
     <string name="dashboard_action_new_conversation">New conversation</string>
     <string name="dashboard_action_share_links">Share links</string>
@@ -124,7 +124,7 @@
     <string name="dialogs_master_pin_title">Master PIN required</string>
     <string name="dialogs_removal_delete">Delete</string>
     <string name="dialogs_removal_hide">Hide chat</string>
-    <string name="dialogs_removal_message">“%s” will be hidden for you. Other participants keep it.</string>
+    <string name="dialogs_removal_message">“%1$s” will be hidden for you. Other participants keep it.</string>
     <string name="dialogs_rename_placeholder">Name</string>
     <string name="dialogs_rename_title">Rename the conversation</string>
     <string name="dialogs_report_details_label">Details (optional)</string>
@@ -145,8 +145,8 @@
     <string name="dialogs_unblock_error">Unable to unblock this user</string>
     <string name="global_search_back">Back</string>
     <plurals name="global_search_members">
-        <item quantity="one">%d member</item>
-        <item quantity="other">%d members</item>
+        <item quantity="one">%1$d member</item>
+        <item quantity="other">%1$d members</item>
     </plurals>
     <string name="global_search_no_results">No results</string>
     <string name="global_search_online">Online</string>
@@ -176,12 +176,12 @@
     <string name="links_affiliate_stat_signups">Sign-ups</string>
     <string name="links_affiliate_title">Referral</string>
     <plurals name="links_affiliate_token_clicks">
-        <item quantity="one">%d click</item>
-        <item quantity="other">%d clicks</item>
+        <item quantity="one">%1$d click</item>
+        <item quantity="other">%1$d clicks</item>
     </plurals>
     <plurals name="links_affiliate_token_signups">
-        <item quantity="one">%d signup</item>
-        <item quantity="other">%d signups</item>
+        <item quantity="one">%1$d signup</item>
+        <item quantity="other">%1$d signups</item>
     </plurals>
     <string name="links_common_active">Active</string>
     <string name="links_common_cancel">Cancel</string>
@@ -249,7 +249,7 @@
     <string name="links_tracking_detail_delete">Delete</string>
     <string name="links_tracking_detail_destination_url">Destination URL</string>
     <string name="links_tracking_detail_devices">DEVICES</string>
-    <string name="links_tracking_detail_last_click">Last click: %s</string>
+    <string name="links_tracking_detail_last_click">Last click: %1$s</string>
     <string name="links_tracking_detail_no_data">No data</string>
     <string name="links_tracking_detail_qr">QR code</string>
     <string name="links_tracking_detail_recent_clicks">LATEST CLICKS</string>
@@ -262,12 +262,12 @@
     <string name="links_tracking_empty_subtitle">Create a link to track your clicks and campaigns</string>
     <string name="links_tracking_empty_title">No tracking links</string>
     <plurals name="links_tracking_row_clicks">
-        <item quantity="one">%d click</item>
-        <item quantity="other">%d clicks</item>
+        <item quantity="one">%1$d click</item>
+        <item quantity="other">%1$d clicks</item>
     </plurals>
     <plurals name="links_tracking_row_uniques">
-        <item quantity="one">· %d unique</item>
-        <item quantity="other">· %d unique</item>
+        <item quantity="one">· %1$d unique</item>
+        <item quantity="other">· %1$d unique</item>
     </plurals>
     <string name="links_tracking_section_my_links">MY LINKS</string>
     <string name="links_tracking_stats_active">Active</string>
@@ -286,8 +286,8 @@
     <string name="my_share_links_expiry_3m">3 months</string>
     <string name="my_share_links_expiry_7d">7 days</string>
     <plurals name="my_share_links_joined_count">
-        <item quantity="one">%d joined</item>
-        <item quantity="other">%d joined</item>
+        <item quantity="one">%1$d joined</item>
+        <item quantity="other">%1$d joined</item>
     </plurals>
     <string name="my_share_links_retry">Retry</string>
     <string name="my_share_links_section">My links</string>
@@ -312,14 +312,14 @@
     <string name="new_conversation_selected">Selected</string>
     <string name="new_conversation_title">New conversation</string>
     <string name="participantProfile_linkExpires">Expires on</string>
-    <string name="row_a11y_conversation_with">Conversation with %s</string>
-    <string name="row_a11y_last_message">last message: %s</string>
+    <string name="row_a11y_conversation_with">Conversation with %1$s</string>
+    <string name="row_a11y_last_message">last message: %1$s</string>
     <string name="row_a11y_muted">muted</string>
     <string name="row_a11y_pending_sync">sync pending</string>
     <string name="row_a11y_pinned">pinned</string>
     <plurals name="row_a11y_unread_count">
         <item quantity="one">1 unread message</item>
-        <item quantity="other">%d unread messages</item>
+        <item quantity="other">%1$d unread messages</item>
     </plurals>
     <string name="row_join_call">Rejoin</string>
     <string name="row_join_call_a11y">Call in progress, tap to rejoin</string>
@@ -331,12 +331,12 @@
     <string name="shareLink_arrivals_loading">Loading arrivals</string>
     <string name="shareLink_arrivals_moreFailed">The rest couldn\'t be loaded.</string>
     <plurals name="shareLink_arrivals_seeAll">
-        <item quantity="one">See %d arrival</item>
-        <item quantity="other">See all %d arrivals</item>
+        <item quantity="one">See %1$d arrival</item>
+        <item quantity="other">See all %1$d arrivals</item>
     </plurals>
     <plurals name="shareLink_arrivals_total">
-        <item quantity="one">%d arrival in total</item>
-        <item quantity="other">%d arrivals in total</item>
+        <item quantity="one">%1$d arrival in total</item>
+        <item quantity="other">%1$d arrivals in total</item>
     </plurals>
     <string name="shareLink_detail_allLanguages">All languages</string>
     <string name="shareLink_detail_allowedLanguages">Allowed languages</string>
@@ -344,9 +344,9 @@
     <string name="shareLink_detail_arrivals">Arrivals</string>
     <string name="shareLink_detail_askedOnArrival">Asked on arrival</string>
     <string name="shareLink_detail_concurrent">At the same time</string>
-    <string name="shareLink_detail_concurrentMax">%d max</string>
+    <string name="shareLink_detail_concurrentMax">%1$d max</string>
     <string name="shareLink_detail_configuration">Settings</string>
-    <string name="shareLink_detail_createdOn">Link created %s</string>
+    <string name="shareLink_detail_createdOn">Link created %1$s</string>
     <string name="shareLink_detail_edit">Edit</string>
     <string name="shareLink_detail_editTitle">Edit the link</string>
     <string name="shareLink_detail_entryConditions">Entry conditions</string>
@@ -382,7 +382,7 @@
     <string name="shareLink_detail_statsUnavailable">Statistics for this link are not available yet.</string>
     <string name="shareLink_detail_unlimited">Unlimited</string>
     <string name="shareLink_detail_uses">Uses</string>
-    <string name="shareLink_detail_usesUnlimited">%d / unlimited</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / unlimited</string>
     <string name="shareLink_detail_visits">Visits</string>
     <string name="shareLink_detail_withoutAccount">Without account</string>
     <string name="share_link_access_account">Account required</string>
@@ -428,8 +428,8 @@
     <string name="share_link_field_slug_placeholder">e.g. my-group-2025</string>
     <string name="share_link_limit_uses">Limit uses</string>
     <plurals name="share_link_max_uses">
-        <item quantity="one">%d use maximum</item>
-        <item quantity="other">%d uses maximum</item>
+        <item quantity="one">%1$d use maximum</item>
+        <item quantity="other">%1$d uses maximum</item>
     </plurals>
     <string name="share_link_permission_files">Send files</string>
     <string name="share_link_permission_files_subtitle">Guests can send documents</string>

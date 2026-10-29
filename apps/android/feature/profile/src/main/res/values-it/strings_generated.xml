@@ -22,8 +22,8 @@
     <string name="profile_blocked_unblock">Sblocca</string>
     <string name="profile_call_not_placed">Nessuna connessione: la chiamata non è partita</string>
     <string name="profile_close_hint">Chiude il profilo</string>
-    <string name="profile_connection_context_received">%s desidera mettersi in contatto con te. Accetta per scambiare messaggi.</string>
-    <string name="profile_connection_context_sent">Hai inviato una richiesta di connessione a %s. In attesa della sua risposta.</string>
+    <string name="profile_connection_context_received">%1$s desidera mettersi in contatto con te. Accetta per scambiare messaggi.</string>
+    <string name="profile_connection_context_sent">Hai inviato una richiesta di connessione a %1$s. In attesa della sua risposta.</string>
     <string name="profile_conversations_interactionsDisabled">Interazioni disattivate</string>
     <string name="profile_conversations_noShared">Nessuna conversazione in comune</string>
     <string name="profile_decor_banner_section">Banner</string>

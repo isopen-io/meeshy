@@ -42,7 +42,7 @@
     <string name="call_journal_erase_failed">No se pudo borrar. Inténtalo de nuevo.</string>
     <string name="call_journal_filter_video">Vídeo</string>
     <string name="call_journal_hide">Borrar</string>
-    <string name="call_journal_search_empty">Ninguna llamada coincide con «%s»</string>
+    <string name="call_journal_search_empty">Ninguna llamada coincide con «%1$s»</string>
     <string name="call_journal_search_empty_hint">El registro abarca los últimos tres meses.</string>
     <string name="call_journal_search_placeholder">Buscar una llamada</string>
     <string name="call_live_frame_accept">Aplicar</string>
@@ -59,10 +59,10 @@
     <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>
     <string name="call_recording_active">Grabación en curso</string>
-    <string name="call_recording_ask">%s quiere grabar la llamada</string>
+    <string name="call_recording_ask">%1$s quiere grabar la llamada</string>
     <string name="call_recording_askDetail">La grabación solo empieza si todos aceptan, y luego se añade a la conversación.</string>
     <string name="call_recording_askDetail_video">La pantalla de la llamada y todo su sonido solo se graban si todos aceptan, y luego se añaden a la conversación.</string>
-    <string name="call_recording_ask_video">%s quiere grabar la llamada en vídeo</string>
+    <string name="call_recording_ask_video">%1$s quiere grabar la llamada en vídeo</string>
     <string name="call_recording_cancel">Cancelar</string>
     <string name="call_recording_caption">Grabar</string>
     <string name="call_recording_close">Cerrar</string>

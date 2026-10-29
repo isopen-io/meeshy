@@ -42,7 +42,7 @@
     <string name="call_journal_erase_failed">L\'effacement a échoué. Réessayez.</string>
     <string name="call_journal_filter_video">Vidéo</string>
     <string name="call_journal_hide">Effacer</string>
-    <string name="call_journal_search_empty">Aucun appel ne correspond à « %s »</string>
+    <string name="call_journal_search_empty">Aucun appel ne correspond à « %1$s »</string>
     <string name="call_journal_search_empty_hint">Le journal couvre les trois derniers mois.</string>
     <string name="call_journal_search_placeholder">Rechercher un appel</string>
     <string name="call_live_frame_accept">Appliquer</string>
@@ -59,10 +59,10 @@
     <string name="call_open_conversation_hint">Ouvre la conversation en gardant l\'appel actif</string>
     <string name="call_recording_accept">Accepter</string>
     <string name="call_recording_active">Enregistrement en cours</string>
-    <string name="call_recording_ask">%s veut enregistrer l’appel</string>
+    <string name="call_recording_ask">%1$s veut enregistrer l’appel</string>
     <string name="call_recording_askDetail">L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation.</string>
     <string name="call_recording_askDetail_video">L’écran de l’appel et tout son son ne sont enregistrés que si tout le monde accepte, puis ils sont ajoutés à la conversation.</string>
-    <string name="call_recording_ask_video">%s veut enregistrer l’appel en vidéo</string>
+    <string name="call_recording_ask_video">%1$s veut enregistrer l’appel en vidéo</string>
     <string name="call_recording_cancel">Annuler</string>
     <string name="call_recording_caption">Enregistrer</string>
     <string name="call_recording_close">Fermer</string>
