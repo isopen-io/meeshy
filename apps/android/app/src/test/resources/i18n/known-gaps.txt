@@ -1688,6 +1688,8 @@ bare-specifier :feature:stories en composer_chip_align
 bare-specifier :feature:stories en composer_chip_rotation
 bare-specifier :feature:stories en composer_chip_size
 bare-specifier :feature:stories en composer_chip_style
+bare-specifier :feature:stories en stories_reply_placeholder
+bare-specifier :feature:stories en stories_reply_to
 
 # --- Contenu visiteur et feuille de pieces jointes d'un invite (#13464) ---------------------
 # « %@ vous a partage ce reel » / « Partager dans %@ » : un seul argument, rendu nu par la generation.
