@@ -138,15 +138,16 @@ public class CallPreviewPeer internal constructor(
 
     /** L'appelant : la première offre pose ses transceivers et son canal de contrôle. */
     public suspend fun createOffer(): SessionDescription {
-        addOffererTransceiversIfNeeded()
-        openControlChannelIfNeeded()
-        return peer.awaitCreate(isOffer = true)
+        val pc = live()
+        addOffererTransceiversIfNeeded(pc)
+        openControlChannelIfNeeded(pc)
+        return pc.awaitCreate(isOffer = true)
     }
 
-    public suspend fun createAnswer(): SessionDescription = peer.awaitCreate(isOffer = false)
+    public suspend fun createAnswer(): SessionDescription = live().awaitCreate(isOffer = false)
 
     public suspend fun setLocalDescription(desc: SessionDescription) {
-        peer.awaitApply(desc, local = true)
+        live().awaitApply(desc, local = true)
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
     }
 
@@ -163,14 +164,16 @@ public class CallPreviewPeer internal constructor(
         }
         WebRtcSdpRules.requireValidRemoteSdp(desc.description)
         if (remoteDescriptions.judge(type, desc.description) != Verdict.Apply) return
-        peer.awaitApply(desc, local = false)
-        if (type == DescriptionType.Offer && config.receiveOnly) peer.transceivers.forEach(::forceReceiveOnly)
-        remoteDescriptions.onApplied(type, desc.description).forEach { peer.addIceCandidate(it.toIceCandidate()) }
+        live().awaitApply(desc, local = false)
+        val pc = live()
+        if (type == DescriptionType.Offer && config.receiveOnly) pc.transceivers.forEach(::forceReceiveOnly)
+        remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
 
     /** Candidat du pair : refusé hors bornes, gardé tant que la description distante manque. */
     public fun addIceCandidate(candidate: IceCandidate) {
         val line = IceCandidateLine(candidate.sdpMid, candidate.sdpMLineIndex, candidate.sdp)
+        if (closed.get()) return
         if (remoteDescriptions.route(line) == CandidateRoute.ApplyNow) peer.addIceCandidate(candidate)
     }
 
@@ -226,7 +229,7 @@ public class CallPreviewPeer internal constructor(
         localVideo?.dispose()
     }
 
-    private fun addOffererTransceiversIfNeeded() {
+    private fun addOffererTransceiversIfNeeded(peer: PeerConnection) {
         if (peer.transceivers.isNotEmpty()) return
         val audio = peer.addTransceiver(
             MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
@@ -241,7 +244,7 @@ public class CallPreviewPeer internal constructor(
         localVideo?.let { video?.sender?.setTrack(it.takeIf { sendsVideo }, false) }
     }
 
-    private fun openControlChannelIfNeeded() {
+    private fun openControlChannelIfNeeded(peer: PeerConnection) {
         if (config.receiveOnly || controlChannel != null) return
         val channel = peer.createDataChannel(CallPreviewControl.CHANNEL_LABEL, DataChannel.Init().apply { ordered = true })
             ?: return
@@ -274,7 +277,13 @@ public class CallPreviewPeer internal constructor(
     }
 
     private fun transceiverOf(type: MediaStreamTrack.MediaType): RtpTransceiver? =
-        peer.transceivers.firstOrNull { it.mediaType == type }
+        if (closed.get()) null else peer.transceivers.firstOrNull { it.mediaType == type }
+
+    /** Le pair tant qu'il vit : après [close] il est disposé, et le toucher planterait dans libwebrtc. */
+    private fun live(): PeerConnection {
+        if (closed.get()) throw WebRtcError.NoPeerConnection()
+        return peer
+    }
 
     private fun IceCandidateLine.toIceCandidate() = IceCandidate(sdpMid, sdpMLineIndex, line)
 

@@ -152,6 +152,7 @@ class CallExtensionPointsWiringTest {
         ),
         io.mockk.mockk(relaxed = true),
         peerVisuals,
+        recordingCallPreview(),
     )
 
     @Test

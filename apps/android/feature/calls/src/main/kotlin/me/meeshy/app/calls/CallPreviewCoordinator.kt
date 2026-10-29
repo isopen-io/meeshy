@@ -4,6 +4,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallPreviewConsent
 import me.meeshy.sdk.model.call.CallPreviewControl
@@ -60,9 +62,12 @@ class CallPreviewCoordinator @Inject constructor(
     private var isHeardByCallee = false
     private var outgoingConsent = CallPreviewConsent.INITIAL
 
+    /** Branche l'aperçu sur l'appel : [scope] est celui du [CallViewModel], la passerelle s'y écoute. */
     fun attach(scope: CoroutineScope, host: CallPreviewHostActions) {
         this.scope = scope
         this.host = host
+        signaling.requested.onEach(::onRequested).launchIn(scope)
+        signaling.signals.onEach(::onSignal).launchIn(scope)
     }
 
     // --- L'appel ---

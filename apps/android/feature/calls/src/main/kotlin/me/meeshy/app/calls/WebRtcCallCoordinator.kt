@@ -162,6 +162,18 @@ class WebRtcCallCoordinator @Inject constructor(
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
     fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
 
+    /**
+     * L'aperçu avant décroché devient audible (ou se tait) : la route s'ouvre sur le haut-parleur,
+     * et ne se rend que si l'appel lui-même n'a pas encore pris l'audio (au décroché, [begin] la reprend).
+     */
+    fun routePreviewAudio(audible: Boolean, isVideo: Boolean) {
+        if (audible) {
+            audio.route(speakerOn = true, isVideo = isVideo)
+            return
+        }
+        if (callScope == null) audio.restore()
+    }
+
     fun end() {
         callScope?.cancel()
         callScope = null

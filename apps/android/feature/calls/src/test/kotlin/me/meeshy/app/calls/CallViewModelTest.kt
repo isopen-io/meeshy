@@ -190,6 +190,7 @@ class CallViewModelTest {
         extensions,
         mockk(relaxed = true),
         CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
+        recordingCallPreview(),
     )
 
     @Test

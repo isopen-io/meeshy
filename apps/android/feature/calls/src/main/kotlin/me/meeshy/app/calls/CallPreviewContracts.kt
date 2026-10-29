@@ -1,8 +1,11 @@
 package me.meeshy.app.calls
 
+import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.model.call.CallPreviewConsent
 import me.meeshy.sdk.model.call.CallPreviewExposure
 import me.meeshy.sdk.model.call.CallPreviewPhase
+import me.meeshy.sdk.model.call.CallPreviewRequested
+import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import org.webrtc.VideoTrack
@@ -98,8 +101,14 @@ fun interface CallPreviewLinkFactory {
     fun open(config: CallPreviewLinkConfig, onEvent: (CallPreviewLinkEvent) -> Unit): CallPreviewLink
 }
 
-/** Les deux émissions de l'aperçu — `CallSocialSignalManager` les porte. */
+/** Les deux réceptions et les deux émissions de l'aperçu — `CallSocialSignalManager` les porte. */
 interface CallPreviewSignaling {
+    /** `call:preview-requested` — à l'appelant. */
+    val requested: Flow<CallPreviewRequested>
+
+    /** `call:preview-signal` — offre, réponse ou candidat du lien d'aperçu. */
+    val signals: Flow<CallSignalEnvelope>
+
     fun request(callId: String)
 
     fun emit(callId: String, type: String, from: String, to: String, negotiationId: Int, fields: Map<String, Any?>)

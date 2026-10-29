@@ -26,56 +26,16 @@ import org.webrtc.VideoTrack
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallPreviewCoordinatorTest {
 
-    private class FakeLink(val config: CallPreviewLinkConfig, val onEvent: (CallPreviewLinkEvent) -> Unit) : CallPreviewLink {
-        override val remoteUserId: String get() = config.remoteUserId
-        var offers = 0
-        val received = mutableListOf<CallSignalPayload>()
-        val sentControl = mutableListOf<String>()
-        val sendsAudio = mutableListOf<Boolean>()
-        val sendsVideo = mutableListOf<Boolean>()
-        val audible = mutableListOf<Boolean>()
-        val iceUpdates = mutableListOf<List<SocketIceServer>>()
-        var closed = false
-
-        override suspend fun offer() { offers += 1 }
-        override suspend fun receive(signal: CallSignalPayload) { received += signal }
-        override fun setSendsAudio(enabled: Boolean) { sendsAudio += enabled }
-        override fun setSendsVideo(enabled: Boolean) { sendsVideo += enabled }
-        override fun setRemoteAudible(audible: Boolean) { this.audible += audible }
-        override fun updateIceServers(servers: List<SocketIceServer>) { iceUpdates += servers }
-        override fun sendControl(bytes: ByteArray) { sentControl += String(bytes, Charsets.UTF_8) }
-        override fun close() { closed = true }
-    }
-
-    private class Signaling : CallPreviewSignaling {
-        val requests = mutableListOf<String>()
-        val emitted = mutableListOf<List<Any?>>()
-        override fun request(callId: String) { requests += callId }
-        override fun emit(callId: String, type: String, from: String, to: String, negotiationId: Int, fields: Map<String, Any?>) {
-            emitted += listOf(callId, type, from, to, negotiationId, fields)
-        }
-    }
-
-    private class Consents(var stored: CallPreviewConsent = CallPreviewConsent.INITIAL) : CallPreviewConsentStoring {
-        val remembered = mutableListOf<Triple<CallPreviewConsent, String, String>>()
-        override fun consent(localUserId: String, peerUserId: String) = stored
-        override fun remember(consent: CallPreviewConsent, localUserId: String, peerUserId: String) {
-            remembered += Triple(consent, localUserId, peerUserId)
-        }
-    }
-
     private class Rig(consent: CallPreviewConsent = CallPreviewConsent.INITIAL) {
-        val links = mutableListOf<FakeLink>()
-        val signaling = Signaling()
-        val consents = Consents(consent)
+        val factory = RecordingPreviewLinks()
+        val links: List<RecordingPreviewLink> get() = factory.links
+        val signaling = RecordingPreviewSignaling()
+        val consents = InMemoryPreviewConsents(consent)
         val hostAudible = mutableListOf<Boolean>()
-        val coordinator = CallPreviewCoordinator(
-            links = { config, onEvent -> FakeLink(config, onEvent).also { links += it } },
-            signaling = signaling,
-            consents = consents,
-        ).apply { attach(CoroutineScope(UnconfinedTestDispatcher()), { hostAudible += it }) }
+        val coordinator = recordingCallPreview(factory, signaling, consents)
+            .apply { attach(CoroutineScope(UnconfinedTestDispatcher()), { hostAudible += it }) }
 
-        val link: FakeLink get() = links.last()
+        val link: RecordingPreviewLink get() = factory.last
         val ui: CallPreviewUi get() = coordinator.ui.value
     }
 
@@ -92,13 +52,28 @@ class CallPreviewCoordinatorTest {
     private fun signal(type: String, from: String = "caller", to: String = "me", callId: String = "c1", negotiationId: Int = 1) =
         CallSignalEnvelope(callId, CallSignalPayload(type = type, sdp = "v=0", from = from, to = to, negotiationId = negotiationId))
 
-    private fun Rig.ringWithOpenLink(): FakeLink {
+    private fun Rig.ringWithOpenLink(): RecordingPreviewLink {
         coordinator.sync(incoming())
         coordinator.onSignal(signal("offer"))
         return link
     }
 
     // --- Appelé ---
+
+    @Test
+    fun `la passerelle est ecoutee des le branchement - demandes et signaux arrivent par ses flux`() {
+        val rig = Rig()
+        rig.coordinator.sync(incoming())
+
+        rig.signaling.signals.tryEmit(signal("offer"))
+
+        assertThat(rig.links).hasSize(1)
+
+        val caller = Rig()
+        caller.coordinator.sync(outgoing())
+        caller.signaling.requested.tryEmit(CallPreviewRequested("c1", "callee"))
+        assertThat(caller.link.offers).isEqualTo(1)
+    }
 
     @Test
     fun `l'appele demande l'apercu une fois par appel des que l'appel 1-1 sonne`() {
