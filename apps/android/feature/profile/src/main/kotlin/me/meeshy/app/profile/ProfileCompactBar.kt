@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ripple
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -117,7 +116,11 @@ internal fun ProfileCompactBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val moodTap = if (gating.isInteractive && moodEmoji != null) {
-                Modifier.clip(CircleShape).clickable(onClick = onMoodTap)
+                Modifier.clickable(
+                    interactionSource = null,
+                    indication = ripple(bounded = false, radius = 16.dp),
+                    onClick = onMoodTap,
+                )
             } else {
                 Modifier
             }

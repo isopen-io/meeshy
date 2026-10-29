@@ -29,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -344,8 +345,9 @@ internal fun ChatHeaderAvatar(
     Box {
         Box(
             modifier = Modifier
-                .clip(CircleShape)
                 .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(bounded = false, radius = (context.size / 2f).dp),
                     onClick = open,
                     onLongClick = if (door.hasLongPressMenu) {
                         {
