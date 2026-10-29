@@ -37,3 +37,8 @@ internal fun StoryEditGate(editStoryId: String?, viewModel: StoryComposerViewMod
         }
     }
 }
+
+/** Pourquoi l'ajout d'une slide est refusé : une story publiée n'en tient qu'une, sinon le plafond de la scène. */
+@androidx.annotation.StringRes
+internal fun StoryComposerUiState.addSlideRefusalRes(): Int =
+    if (editing) R.string.story_edit_no_add_slide else R.string.composer_slide_rail_capReached

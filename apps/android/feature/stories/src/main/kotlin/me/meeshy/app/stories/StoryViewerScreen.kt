@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -136,6 +137,7 @@ fun StoryViewerScreen(
     onClose: () -> Unit,
     onRepost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onEditStory: ((String) -> Unit)? = null,
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -549,6 +551,16 @@ fun StoryViewerScreen(
                                 },
                             )
                             if (state.isOwnStory) {
+                                if (onEditStory != null && StoryEditEntry.offered(state.isOwnStory, state.currentStoryId)) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.my_stories_edit)) },
+                                        leadingIcon = { Icon(MeeshyIcons.Edit, contentDescription = null) },
+                                        onClick = {
+                                            showOptions = false
+                                            state.currentStoryId?.let(onEditStory)
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
                                     onClick = {

@@ -272,6 +272,7 @@
     <string name="story_composer_undo">تراجع</string>
     <string name="story_edit_error">فشل تحديث القصة</string>
     <string name="story_edit_offline">الاتصال بالإنترنت مطلوب لتعديل القصة</string>
+    <string name="story_edit_save">حفظ</string>
     <string name="story_language_close">إغلاق</string>
     <string name="story_language_original">الأصل</string>
     <string name="story_language_original_hint">كل نص بلغته</string>

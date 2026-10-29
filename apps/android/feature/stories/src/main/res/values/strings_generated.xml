@@ -264,6 +264,7 @@
     <string name="story_composer_undo">Undo</string>
     <string name="story_edit_error">Failed to update the story</string>
     <string name="story_edit_offline">You need to be online to edit the story</string>
+    <string name="story_edit_save">Save</string>
     <string name="story_language_close">Close</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Each text in its own language</string>

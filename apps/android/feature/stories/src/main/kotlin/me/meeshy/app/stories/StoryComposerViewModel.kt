@@ -470,10 +470,10 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
-    fun onAddSlide() = applyDeck { it.addSlide(newSlideId()) }
+    fun onAddSlide() = applyDeck { if (_state.value.editing) it else it.addSlide(newSlideId()) }
 
     /** Inserts a clone of the selected slide right after it and selects the clone. */
-    fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
+    fun onDuplicateSelectedSlide() = applyDeck { if (_state.value.editing) it else it.duplicate(it.selectedId, newSlideId()) }
 
     /** Removes the slide [id] (inert on the last one); its media leave the pools, its pending uploads wait in [buried] (a duplicate's shared media stay). */
     fun onRemoveSlide(id: String) {

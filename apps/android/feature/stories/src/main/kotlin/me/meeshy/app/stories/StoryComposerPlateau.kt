@@ -67,7 +67,7 @@ internal fun StoryComposerPlateau(
                 ComposerRailButton(
                     MeeshyIcons.Add,
                     stringResource(R.string.stories_composer_add_slide),
-                    rememberGuardedAddition(state.deck.canAddSlide, action = viewModel::onAddSlide),
+                    rememberGuardedAddition(state.canAddSlide, state.addSlideRefusalRes(), action = viewModel::onAddSlide),
                 )
                 ComposerOverflowMenu(
                     entries = sceneExport.entries,

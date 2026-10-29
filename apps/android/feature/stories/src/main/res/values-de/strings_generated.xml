@@ -264,6 +264,7 @@
     <string name="story_composer_undo">Rückgängig</string>
     <string name="story_edit_error">Story konnte nicht aktualisiert werden</string>
     <string name="story_edit_offline">Zum Bearbeiten der Story ist eine Verbindung erforderlich</string>
+    <string name="story_edit_save">Sichern</string>
     <string name="story_language_close">Schließen</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Jeder Text in seiner Sprache</string>

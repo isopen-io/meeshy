@@ -92,6 +92,8 @@ data class StoryComposerUiState(
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     val isPublishing: Boolean = false,
+    /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
+    val editing: Boolean = false,
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
     val canvasHeightPx: Float = 0f,
@@ -136,7 +138,10 @@ data class StoryComposerUiState(
 
     /** Ce que le bouton de publication nomme : la story, ou le nombre de stories (une par slide). */
     val publishTitle: StoryPublishTitle
-        get() = StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+        get() = if (editing) StoryPublishTitle.Save else StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+
+    /** Une story publiée tient UNE slide : en édition l'ajout est fermé d'avance, plutôt que refusé à l'enregistrement. */
+    val canAddSlide: Boolean get() = !editing && deck.canAddSlide
 
     /** Les médias de la slide sélectionnée sans texte alternatif — rappelés à l'auteur, jamais bloquants. */
     val undescribedMediaIds: List<String>

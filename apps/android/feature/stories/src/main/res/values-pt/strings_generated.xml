@@ -266,6 +266,7 @@
     <string name="story_composer_undo">Desfazer</string>
     <string name="story_edit_error">Falha ao atualizar o story</string>
     <string name="story_edit_offline">Conexão necessária para editar o story</string>
+    <string name="story_edit_save">Salvar</string>
     <string name="story_language_close">Fechar</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Cada texto no seu idioma</string>

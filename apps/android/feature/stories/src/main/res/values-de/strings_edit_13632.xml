@@ -2,4 +2,5 @@
 <resources>
     <string name="story_edit_unavailable">Diese Story lässt sich nicht erneut öffnen</string>
     <string name="story_edit_one_slide">Eine veröffentlichte Story hat nur eine Folie: Entferne die anderen, um zu speichern</string>
+    <string name="story_edit_no_add_slide">Eine veröffentlichte Story besteht aus nur einer Folie: Es kann keine weitere hinzugefügt werden</string>
 </resources>

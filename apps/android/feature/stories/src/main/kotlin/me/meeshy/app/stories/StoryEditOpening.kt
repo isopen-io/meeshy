@@ -56,13 +56,14 @@ internal data class StoryEditOpening(
     fun applied(state: StoryComposerUiState): StoryComposerUiState {
         val visibility = StoryVisibility.fromWire(post.visibility.orEmpty())
         return state.copy(
+            editing = true,
             deck = StorySlideDeck(listOf(slide), slide.id),
             attachments = attachments,
             pendingUploads = emptyList(),
             draft = state.draft
                 .withVisibility(visibility)
                 .withVisibilityUserIds(post.visibilityUserIds.orEmpty())
-                .copy(mentions = mentions, repostOfId = null),
+                .copy(mentions = mentions, repostOfId = null, allowSoundExtraction = post.allowSoundExtraction),
         ).mirrorDraftToSelection()
     }
 

@@ -2,4 +2,5 @@
 <resources>
     <string name="story_edit_unavailable">تعذّر إعادة فتح هذه القصة</string>
     <string name="story_edit_one_slide">القصة المنشورة تحتوي على شريحة واحدة فقط: احذف الشرائح الأخرى لحفظها</string>
+    <string name="story_edit_no_add_slide">القصة المنشورة تتكون من شريحة واحدة: لا يمكن إضافة شريحة أخرى</string>
 </resources>

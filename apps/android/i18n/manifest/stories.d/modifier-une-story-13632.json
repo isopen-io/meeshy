@@ -23,6 +23,16 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "common.save",
+          "androidName": "story_edit_save",
+          "status": "adopted"
+        },
+        {
+          "androidName": "story_edit_no_add_slide",
+          "status": "android-only"
+        },
+        {
           "androidName": "story_edit_unavailable",
           "status": "android-only"
         },

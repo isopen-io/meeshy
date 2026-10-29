@@ -266,6 +266,7 @@
     <string name="story_composer_undo">Annulla</string>
     <string name="story_edit_error">Impossibile aggiornare la storia</string>
     <string name="story_edit_offline">Connessione necessaria per modificare la storia</string>
+    <string name="story_edit_save">Salva</string>
     <string name="story_language_close">Chiudi</string>
     <string name="story_language_original">Originale</string>
     <string name="story_language_original_hint">Ogni testo nella sua lingua</string>

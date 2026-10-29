@@ -131,4 +131,15 @@ class StoryComposerEditModeTest {
 
         assertThat(drafts.load()).isNull()
     }
+
+    @Test
+    fun `en edition ajouter ou dupliquer une slide ne change rien`() {
+        val vm = viewModel()
+        vm.onEditing(opening, editor)
+
+        vm.onAddSlide()
+        vm.onDuplicateSelectedSlide()
+
+        assertThat(vm.state.value.deck.slides).hasSize(1)
+    }
 }

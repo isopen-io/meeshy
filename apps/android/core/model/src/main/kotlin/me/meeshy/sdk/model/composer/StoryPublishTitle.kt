@@ -9,6 +9,9 @@ sealed interface StoryPublishTitle {
     data class Many(val count: Int) : StoryPublishTitle
     data object StoryAndReel : StoryPublishTitle
 
+    /** Une story publiée rouverte : le bouton ENREGISTRE la modification, il ne publie rien (#13697). */
+    data object Save : StoryPublishTitle
+
     companion object {
         fun of(slideCount: Int, alsoAsReel: Boolean): StoryPublishTitle = when {
             alsoAsReel -> StoryAndReel

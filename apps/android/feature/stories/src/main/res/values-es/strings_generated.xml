@@ -266,6 +266,7 @@
     <string name="story_composer_undo">Deshacer</string>
     <string name="story_edit_error">Error al actualizar la historia</string>
     <string name="story_edit_offline">Se requiere conexión para editar la historia</string>
+    <string name="story_edit_save">Guardar</string>
     <string name="story_language_close">Cerrar</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Cada texto en su idioma</string>

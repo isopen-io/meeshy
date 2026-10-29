@@ -78,6 +78,7 @@ internal fun StoryRingCell(
     onAppeared: (String?) -> Unit,
     onAdd: (() -> Unit)? = null,
     onManage: (() -> Unit)? = null,
+    onEdit: ((String) -> Unit)? = null,
     onAddStatus: (() -> Unit)? = null,
     onMoodTap: (() -> Unit)? = null,
 ) {
@@ -132,12 +133,13 @@ internal fun StoryRingCell(
                 onViewStories = { menuOpen = false; onOpen() },
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
                 selfActions = if (onAdd != null) {
-                    StoryTraySelfMenu.actions(ring, canChangeMood = onAddStatus != null, canViewProfile = onShowProfile != null)
+                    StoryTraySelfMenu.actions(ring, canEdit = onEdit != null, canChangeMood = onAddStatus != null, canViewProfile = onShowProfile != null)
                 } else {
                     null
                 },
                 onAdd = { menuOpen = false; onAdd?.invoke() },
                 onManage = { menuOpen = false; onManage?.invoke() },
+                onEdit = { menuOpen = false; ring.displayedStoryId?.let { onEdit?.invoke(it) } },
                 onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
             )
         }
@@ -160,6 +162,7 @@ internal fun StoryRingMenu(
     selfActions: List<StoryTraySelfAction>? = null,
     onAdd: () -> Unit = {},
     onManage: () -> Unit = {},
+    onEdit: () -> Unit = {},
     onChangeMood: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -170,6 +173,11 @@ internal fun StoryRingMenu(
                         text = { Text(stringResource(R.string.stories_tray_view_my_story)) },
                         leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                         onClick = onViewStories,
+                    )
+                    StoryTraySelfAction.EditStory -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.my_stories_edit)) },
+                        leadingIcon = { Icon(MeeshyIcons.Edit, contentDescription = null) },
+                        onClick = onEdit,
                     )
                     StoryTraySelfAction.ManageStories -> DropdownMenuItem(
                         text = { Text(stringResource(R.string.stories_tray_manage)) },
