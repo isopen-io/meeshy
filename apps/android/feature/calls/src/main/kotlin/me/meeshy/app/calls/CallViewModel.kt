@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.call.CallStateMachine
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TelecomCallPolicy
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
@@ -359,6 +360,19 @@ class CallViewModel @Inject constructor(
                 publish()
             }
         }
+    }
+
+    /**
+     * « Choisir la caméra » (iOS `selectCamera(id:)`) quand une caméra est branchée : sans effet caméra coupée,
+     * jamais signalé. Le miroir de mon aperçu suit la face que la capture a réellement ouverte.
+     */
+    fun selectCamera(id: String) {
+        if (!media.isCameraOn) return
+        val zoom = coordinator.cameraZoom
+        if (!zoom.selectCamera(id)) return
+        val facing = zoom.state.value.facing ?: return
+        media = media.copy(isFrontCamera = facing == CameraFacing.Front)
+        publish()
     }
 
     /** « Activer l'audio » de l'écran entrant : entendre l'appelant avant de décrocher. */

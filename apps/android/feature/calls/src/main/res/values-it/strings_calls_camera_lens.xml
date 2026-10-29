@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="call_camera_hold_hint">Tieni premuto per spegnere o riaccendere la fotocamera</string>
     <string name="call_camera_state_on">Fotocamera attiva</string>
     <string name="call_camera_state_off">Fotocamera spenta</string>
     <string name="call_camera_toggle_off">Spegni la fotocamera</string>

@@ -227,6 +227,19 @@ internal fun CallConnectedColumn(
         }
     }
 
+    val pickerBridge: CallCameraPickerViewModel = hiltViewModel()
+    val pickerOpen by pickerBridge.controller.isOpen.collectAsStateWithLifecycle()
+    if (pickerOpen) {
+        val camera by viewModel.cameraZoom.state.collectAsStateWithLifecycle()
+        CallCameraPickerSheet(
+            cameras = camera.cameras,
+            selectedId = camera.selectedCameraId,
+            accent = accent,
+            onSelect = viewModel::selectCamera,
+            onDismiss = pickerBridge.controller::close,
+        )
+    }
+
     if (routeSheetOpen) {
         CallAudioRouteSheet(
             state = route.route,

@@ -17,6 +17,10 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.call.camera.CameraZoomActuator
+import me.meeshy.sdk.model.call.camera.CameraDeviceOption
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.CallCue
@@ -395,6 +399,52 @@ class CallViewModelTest {
         vm.flipCamera()
 
         verify(exactly = 0) { coordinator.switchCamera(any()) }
+    }
+
+    @Test
+    fun `choosing a plugged camera opens it and mirrors the preview by the face it opened on`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("10")
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `choosing a camera with the camera off does nothing`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("1")
+    }
+
+    private fun pickableZoom(): CallCameraZoom {
+        val cameras = listOf(
+            CameraDeviceOption("1", CameraFacing.Front),
+            CameraDeviceOption("0", CameraFacing.Back),
+            CameraDeviceOption("10", CameraFacing.External),
+        )
+        lateinit var zoom: CallCameraZoom
+        zoom = CallCameraZoom(object : CameraZoomActuator {
+            override fun setCrop(zoom: Float, rampRate: Float?) = Unit
+            override fun openLens(lensId: String) = Unit
+            override fun openCamera(cameraId: String): Boolean {
+                zoom.attach(null, cameraId, cameras, cameraId, cameras.first { it.id == cameraId }.facing)
+                return true
+            }
+        })
+        zoom.attach(null, "1", cameras, "1", CameraFacing.Front)
+        return zoom
     }
 
     @Test

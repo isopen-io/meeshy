@@ -32,11 +32,15 @@ internal data class CallPillItem(
 internal object CallPillModel {
 
     /** The context of the action law, read from the call snapshot. */
-    fun actionContext(state: CallUiState, isRegistered: (CallAction) -> Boolean): CallActionContext =
+    fun actionContext(
+        state: CallUiState,
+        isRegistered: (CallAction) -> Boolean,
+        hasSelectableCameras: Boolean = false,
+    ): CallActionContext =
         CallActionContext(
             isDesktop = false,
             isVideoEnabled = state.isVideoCall && state.isCameraOn,
-            hasSelectableCameras = false,
+            hasSelectableCameras = hasSelectableCameras,
             isConnected = state.status == CallStatus.CONNECTED,
             mayRecord = isRegistered(CallAction.Recording),
             canPictureInPicture = isRegistered(CallAction.PictureInPicture),
@@ -97,7 +101,8 @@ internal object CallPillModel {
         items: Map<CallAction, CallPillItem>,
         isRegistered: (CallAction) -> Boolean,
     ): CallActionSet {
-        val set = CallActionSet.resolve(actionContext(state, isRegistered))
+        // « Choisir la caméra » n'est présenté que lorsqu'une caméra est branchée : il remplace alors la bascule.
+        val set = CallActionSet.resolve(actionContext(state, isRegistered, hasSelectableCameras = CallAction.CameraPicker in items))
         return CallActionSet(
             myImage = set.myImage.filter { it in items },
             theCall = set.theCall.filter { it in items },

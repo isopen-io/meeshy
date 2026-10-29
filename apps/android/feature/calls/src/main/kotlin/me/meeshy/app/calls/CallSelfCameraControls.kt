@@ -1,18 +1,25 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
@@ -38,8 +46,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -51,14 +58,21 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
+import me.meeshy.sdk.model.call.CallCameraRail
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
+import me.meeshy.sdk.model.call.CallZoomControl
+import me.meeshy.sdk.model.call.camera.CameraPickerLaw
 import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
+import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.runtime.collectAsState
 import java.util.Locale
+import kotlin.math.abs
 
 /** Ce que les commandes de ma caméra savent faire : zoomer, retourner, couper/rallumer. */
 internal class CallSelfCameraActions(
@@ -71,40 +85,138 @@ private const val CHIP_SCRIM_ALPHA = 0.4f
 private const val INDICATOR_LINGER_MILLIS = 1_000L
 private val CHIP_VISUAL = 36.dp
 
-/** Combien de boutons porte la rangée : une pastille par cran d'objectif tant que la caméra émet, plus la bascule. */
+/**
+ * La rangée de ma caméra (iOS `CallCameraRail.cameraRow`) : « Retourner » — ou « Choisir la caméra » quand une
+ * caméra est branchée — puis « Allumer / couper ». Caméra coupée, il ne reste que l'allumage.
+ */
 @Composable
-internal fun rememberSelfCameraControlCount(actions: CallSelfCameraActions?, isCameraOn: Boolean): Int {
-    if (actions == null) return 0
-    val stops by remember(actions.zoom) {
-        actions.zoom.state.map { it.profile?.quickStops?.size ?: 0 }.distinctUntilChanged()
-    }.collectAsState(initial = actions.zoom.state.value.profile?.quickStops?.size ?: 0)
-    return 1 + if (isCameraOn && stops > 1) stops else 0
+internal fun rememberSelfCameraControlCount(actions: CallSelfCameraActions?, isCameraOn: Boolean): Int = when {
+    actions == null -> 0
+    isCameraOn -> 2
+    else -> 1
+}
+
+/** Une caméra est-elle branchée ? Alors « Choisir la caméra » remplace la bascule, à la même place (iOS). */
+@Composable
+internal fun rememberHasSelectableCameras(zoom: CallCameraZoom): Boolean {
+    val selectable by remember(zoom) {
+        zoom.state.map { CameraPickerLaw.hasSelectableCameras(it.cameras) }.distinctUntilChanged()
+    }.collectAsState(initial = CameraPickerLaw.hasSelectableCameras(zoom.state.value.cameras))
+    return selectable
 }
 
 /**
- * La rangée posée contre le cadre de ma vignette : les pastilles d'objectifs « 0,5× · 1× · 2× · 3× »
- * (seulement ceux que l'appareil possède) puis, à côté, la bascule avant / arrière. UN APPUI LONG sur
- * la bascule coupe ou rallume la caméra — haptique, icône barrée tant qu'elle est coupée, annoncé par
- * TalkBack (état + action personnalisée).
+ * La rangée posée contre le cadre de ma vignette — ou dans le rail du haut quand mon image est en plein écran :
+ * la bascule avant / arrière (ou le choix de caméra, [onPickCamera]) puis l'allumage de la caméra, chacun une
+ * cible de 44 dp. Le zoom n'y est pas : il vit dans la vignette ([CallZoomCycleButton]) ou sous la rangée
+ * ([CallZoomLensChips]).
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun CallSelfTileControlsRow(actions: CallSelfCameraActions, isCameraOn: Boolean, modifier: Modifier = Modifier) {
-    val state by actions.zoom.state.collectAsState()
-    val stops = state.profile?.quickStops.orEmpty().takeIf { isCameraOn && it.size > 1 }.orEmpty()
+internal fun CallSelfTileControlsRow(
+    actions: CallSelfCameraActions,
+    isCameraOn: Boolean,
+    modifier: Modifier = Modifier,
+    onPickCamera: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.callCameraRailSemantics(),
+        horizontalArrangement = Arrangement.spacedBy(CallSelfTileControlsLaw.SPACING_DP.dp),
+    ) {
+        if (isCameraOn) {
+            if (onPickCamera != null) {
+                CallSelfCameraButton(
+                    icon = MeeshyIcons.Camera,
+                    label = stringResource(R.string.call_control_camera),
+                    onClick = onPickCamera,
+                )
+            } else {
+                CallSelfCameraButton(
+                    icon = MeeshyIcons.FlipCamera,
+                    label = stringResource(R.string.call_control_flip_camera),
+                    hint = stringResource(R.string.call_control_flip_camera_hint),
+                    onClick = actions.onFlip,
+                )
+            }
+        }
+        CameraToggleButton(actions, isCameraOn)
+    }
+}
+
+@Composable
+private fun Modifier.callCameraRailSemantics(): Modifier {
+    val label = stringResource(R.string.call_control_camera_rail)
+    return semantics(mergeDescendants = false) {
+        contentDescription = label
+        isTraversalGroup = true
+    }
+}
+
+@Composable
+private fun CallSelfCameraButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    hint: String? = null,
+    background: Color = Color.Black.copy(alpha = CHIP_SCRIM_ALPHA),
+    toggleState: String? = null,
+) {
+    val haptics = LocalHapticFeedback.current
+    Box(
+        modifier = Modifier
+            .size(CallSelfTileControlsLaw.BUTTON_DP.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClickLabel = hint) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .semantics {
+                contentDescription = label
+                toggleState?.let {
+                    stateDescription = it
+                    liveRegion = LiveRegionMode.Polite
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(CHIP_VISUAL).clip(CircleShape).background(background), contentAlignment = Alignment.Center) {
+            Icon(imageVector = icon, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+/** Allumer / couper : l'état bascule tout de suite (`toggleCamera` est optimiste) ; coupée, le disque passe au rouge. */
+@Composable
+private fun CameraToggleButton(actions: CallSelfCameraActions, isCameraOn: Boolean) {
+    CallSelfCameraButton(
+        icon = if (isCameraOn) MeeshyIcons.Video else MeeshyIcons.VideoOff,
+        label = stringResource(if (isCameraOn) R.string.call_camera_toggle_off else R.string.call_camera_toggle_on),
+        onClick = actions.onToggleCamera,
+        background = if (isCameraOn) Color.Black.copy(alpha = CHIP_SCRIM_ALPHA) else MeeshyPalette.Error.copy(alpha = 0.85f),
+        toggleState = stringResource(if (isCameraOn) R.string.call_camera_state_on else R.string.call_camera_state_off),
+    )
+}
+
+/**
+ * Les pastilles « 0,5× · 1× · 2× · 3× » de mon image en plein écran (iOS `CallZoomLensChips`) : seuls les
+ * objectifs que l'appareil possède, plus 2×. Celle du facteur courant est ambrée et dit le facteur exact.
+ */
+@Composable
+internal fun CallZoomLensChips(zoom: CallCameraZoom, stops: List<Float>, modifier: Modifier = Modifier) {
+    val state by zoom.state.collectAsState()
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val haptics = LocalHapticFeedback.current
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(CallSelfTileControlsLaw.SPACING_DP.dp)) {
+    val label = stringResource(R.string.call_zoom_label)
+    Row(modifier.semantics { contentDescription = label; isTraversalGroup = true }) {
         stops.forEach { stop ->
-            val active = kotlin.math.abs(state.displayFactor - stop) / stop <= CameraZoomPolicy.SNAP_TOLERANCE
-            val label = CameraZoomPolicy.label(if (active) state.displayFactor else stop, locale)
+            val active = abs(state.displayFactor - stop) / stop <= CameraZoomPolicy.SNAP_TOLERANCE
+            val shown = CameraZoomPolicy.label(if (active) state.displayFactor else stop, locale)
             val spoken = stringResource(R.string.call_zoom_lens, CameraZoomPolicy.label(stop, locale))
             Box(
                 modifier = Modifier
-                    .size(CallSelfTileControlsLaw.BUTTON_DP.dp)
+                    .size(CallCameraRail.TARGET_SIDE_DP.dp)
                     .clip(CircleShape)
-                    .combinedClickable(role = Role.Button, onClickLabel = spoken) {
-                        actions.zoom.select(stop)
+                    .clickable(role = Role.Button) {
+                        zoom.select(stop)
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
                     .semantics {
@@ -113,67 +225,102 @@ internal fun CallSelfTileControlsRow(actions: CallSelfCameraActions, isCameraOn:
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier.size(CHIP_VISUAL).clip(CircleShape).background(Color.Black.copy(alpha = CHIP_SCRIM_ALPHA)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (active) MeeshyTheme.tokens.warning else CallPalette.Ink,
-                        modifier = Modifier.clearAndSetSemantics { },
-                    )
-                }
+                Text(
+                    text = shown,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    color = if (active) MeeshyTheme.tokens.warning else CallPalette.Ink,
+                    modifier = Modifier.clearAndSetSemantics { },
+                )
             }
         }
-        FlipOrToggleButton(actions, isCameraOn)
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Dans ma vignette, en haut côté fin (iOS `CallZoomCycleButton`) : un seul bouton qui affiche le facteur courant
+ * et passe au palier suivant, puis revient au plus large.
+ */
 @Composable
-private fun FlipOrToggleButton(actions: CallSelfCameraActions, isCameraOn: Boolean) {
+internal fun CallZoomCycleButton(zoom: CallCameraZoom, modifier: Modifier = Modifier) {
+    val state by zoom.state.collectAsState()
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val haptics = LocalHapticFeedback.current
-    val flipLabel = stringResource(R.string.call_control_flip_camera)
-    val flipHint = stringResource(R.string.call_camera_hold_hint)
-    val stateText = stringResource(if (isCameraOn) R.string.call_camera_state_on else R.string.call_camera_state_off)
-    val toggleLabel = stringResource(if (isCameraOn) R.string.call_camera_toggle_off else R.string.call_camera_toggle_on)
+    val label = stringResource(R.string.call_zoom_label)
+    val hint = stringResource(R.string.call_zoom_cycle_hint)
+    val value = CameraZoomPolicy.label(state.displayFactor, locale)
     Box(
-        modifier = Modifier
-            .size(CallSelfTileControlsLaw.BUTTON_DP.dp)
+        modifier = modifier
+            .size(CallCameraRail.TARGET_SIDE_DP.dp)
             .clip(CircleShape)
-            .combinedClickable(
-                role = Role.Button,
-                onClickLabel = flipLabel,
-                onLongClickLabel = toggleLabel,
-                onClick = actions.onFlip,
-                onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    actions.onToggleCamera()
-                },
-            )
+            .clickable(role = Role.Button, onClickLabel = hint) {
+                zoom.cycleQuickStop()
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
             .semantics {
-                contentDescription = "$flipLabel. $flipHint"
-                stateDescription = stateText
-                liveRegion = LiveRegionMode.Polite
-                customActions = listOf(CustomAccessibilityAction(toggleLabel) { actions.onToggleCamera(); true })
+                contentDescription = label
+                stateDescription = value
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .size(CHIP_VISUAL)
-                .clip(CircleShape)
-                .background(if (isCameraOn) Color.Black.copy(alpha = CHIP_SCRIM_ALPHA) else MeeshyPalette.Error.copy(alpha = 0.85f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (isCameraOn) MeeshyIcons.FlipCamera else MeeshyIcons.VideoOff,
-                contentDescription = null,
-                tint = CallPalette.Ink,
-                modifier = Modifier.size(18.dp),
+        Box(Modifier.size(CHIP_VISUAL).clip(CircleShape).background(Color.Black.copy(alpha = CHIP_SCRIM_ALPHA)), contentAlignment = Alignment.Center) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                color = CallPalette.Ink,
+                modifier = Modifier.clearAndSetSemantics { },
             )
+        }
+    }
+}
+
+/**
+ * La place du zoom dans ma vignette, décidée par [CallCameraRail.zoomControl] : le bouton de palier au coin haut
+ * côté fin dès qu'une cible de 44 dp y tient, rien tant que la caméra n'est pas zoomable.
+ */
+@Composable
+internal fun BoxScope.CallSelfTileZoomSlot(zoom: CallCameraZoom, visible: Boolean) {
+    val profile by remember(zoom) { zoom.state.map { it.profile }.distinctUntilChanged() }.collectAsState(initial = zoom.state.value.profile)
+    BoxWithConstraints(Modifier.matchParentSize()) {
+        val control = CallCameraRail.zoomControl(profile, CallCameraControlsPlacement.SelfTile, maxWidth.value, maxHeight.value)
+        if (control == CallZoomControl.CycleButton) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                modifier = Modifier.align(Alignment.TopEnd).padding(CallCameraRail.TILE_INSET_DP.dp),
+            ) { CallZoomCycleButton(zoom) }
+        }
+    }
+}
+
+/**
+ * Mon image en plein écran (iOS `cameraRail`, placement `topCenter`) : les commandes de ma caméra se posent en
+ * haut au centre, sous l'en-tête, dans une capsule de verre — la rangée de la caméra puis, dessous, les pastilles
+ * de zoom.
+ */
+@Composable
+internal fun CallMyImageTopRail(
+    actions: CallSelfCameraActions,
+    isCameraOn: Boolean,
+    modifier: Modifier = Modifier,
+    onPickCamera: (() -> Unit)? = null,
+) {
+    val profile by remember(actions.zoom) {
+        actions.zoom.state.map { it.profile }.distinctUntilChanged()
+    }.collectAsState(initial = actions.zoom.state.value.profile)
+    val chips = CallCameraRail.zoomControl(profile, CallCameraControlsPlacement.TopCenter, null, null) as? CallZoomControl.LensChips
+    MeeshyGlassSurface(modifier = modifier, shape = RoundedCornerShape(percent = 50)) {
+        Column(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xsPlus),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
+        ) {
+            CallSelfTileControlsRow(actions, isCameraOn, onPickCamera = onPickCamera)
+            if (isCameraOn && chips != null) CallZoomLensChips(actions.zoom, chips.stops)
         }
     }
 }

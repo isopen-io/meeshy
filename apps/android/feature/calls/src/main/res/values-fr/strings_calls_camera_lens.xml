@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="call_camera_hold_hint">Appui long : couper ou rallumer la caméra</string>
     <string name="call_camera_state_on">Caméra active</string>
     <string name="call_camera_state_off">Caméra coupée</string>
     <string name="call_camera_toggle_off">Couper la caméra</string>

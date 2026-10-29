@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="call_camera_hold_hint">Gedrückt halten, um die Kamera aus- oder einzuschalten</string>
     <string name="call_camera_state_on">Kamera an</string>
     <string name="call_camera_state_off">Kamera aus</string>
     <string name="call_camera_toggle_off">Kamera ausschalten</string>

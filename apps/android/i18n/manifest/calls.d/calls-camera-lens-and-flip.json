@@ -17,10 +17,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "call_camera_hold_hint",
-          "status": "android-only"
-        },
-        {
           "androidName": "call_camera_state_on",
           "status": "android-only"
         },

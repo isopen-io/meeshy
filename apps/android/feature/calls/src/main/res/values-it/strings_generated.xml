@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_camera">Scegli la fotocamera</string>
+    <string name="call_control_camera_rail">Opzioni della mia fotocamera</string>
     <string name="call_control_capture">Cattura la chiamata</string>
     <string name="call_control_capture_caption">Cattura</string>
     <string name="call_control_capture_hint">Libera lo schermo per scegliere un montaggio e catturare la chiamata</string>
@@ -87,6 +89,7 @@
     <string name="call_transcript_participant">Partecipante</string>
     <string name="call_transcript_show_original">Mostra il testo originale</string>
     <string name="call_transcript_show_translated">Mostra la traduzione</string>
+    <string name="call_zoom_cycle_hint">Tocca per passare al fattore di zoom successivo</string>
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
 </resources>

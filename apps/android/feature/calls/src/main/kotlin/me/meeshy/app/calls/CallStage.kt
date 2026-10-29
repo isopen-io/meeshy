@@ -3,6 +3,10 @@ package me.meeshy.app.calls
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -32,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -41,6 +46,7 @@ import org.webrtc.VideoTrack
 private const val PAUSED_SCRIM_ALPHA = 0.85f
 private val MUTED_BADGE_TOP = 52.dp
 private val ZOOM_INDICATOR_BOTTOM = 220.dp
+private val CAMERA_RAIL_TOP = 56.dp
 
 /**
  * La scène vidéo du duo (miroir de iOS `videoCallLayout` + `duoOverlays`). Connecté : la vidéo du
@@ -115,6 +121,19 @@ internal fun CallDuoVideoStage(
             if (pinchZoom != null) {
                 CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))
             }
+            // iOS `CallCameraRail.placement` : mon image en plein écran, les commandes de ma caméra montent en haut au
+            // centre ; dans la vignette, elles l'entourent et le zoom s'y loge. Jamais deux fois le même bouton.
+            val pickCamera = selfCamera?.let { if (rememberHasSelectableCameras(it.zoom)) rememberCameraPickerOpener() else null }
+            if (featuresLocal && selfCamera != null) {
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                    exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = CAMERA_RAIL_TOP),
+                ) {
+                    CallMyImageTopRail(selfCamera, state.isCameraOn, onPickCamera = pickCamera)
+                }
+            }
             if (state.isPeerMuted && !featuresLocal) {
                 CallPeerMutedBadge(
                     compact = false,
@@ -123,7 +142,8 @@ internal fun CallDuoVideoStage(
             }
             val showsSelfTile = !framed && (!state.isCameraOn || localTrack != null || state.isVideoAutoPaused)
             if (showsSelfTile) {
-                val controlCount = rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
+                val controlCount = if (featuresLocal) 0 else rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
+                val showsMyImage = !featuresLocal && state.isCameraOn && localTrack != null && !state.isVideoAutoPaused
                 CallSelfTile(
                     callKey = callKey,
                     memory = selfTileMemory,
@@ -132,9 +152,10 @@ internal fun CallDuoVideoStage(
                     onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
                     controlCount = controlCount,
                     controlsVisible = controlsVisible,
-                    controls = { selfCamera?.let { CallSelfTileControlsRow(it, state.isCameraOn) } },
+                    controls = { selfCamera?.let { CallSelfTileControlsRow(it, state.isCameraOn, onPickCamera = pickCamera) } },
                     modifier = Modifier.fillMaxSize(),
                     overlay = {
+                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                         if (state.isPeerMuted && featuresLocal) {
                             CallPeerMutedBadge(
                                 compact = true,
