@@ -63,6 +63,7 @@ internal fun CallDuoVideoStage(
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
     controlsVisible: Boolean = true,
+    framed: Boolean = false,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -71,23 +72,25 @@ internal fun CallDuoVideoStage(
             }
         } else {
             var swapped by remember(callKey) { mutableStateOf(false) }
-            val featuresLocal = swapped && localTrack != null && state.isCameraOn
+            val featuresLocal = !framed && swapped && localTrack != null && state.isCameraOn
             val fit = rememberCallVideoFit()
-            if (featuresLocal && localTrack != null) {
-                VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera, fit = fit)
-            } else {
-                CallRemoteVideoStage(
-                    callKey = callKey,
-                    hasTrack = remoteTrack != null,
-                    peerVideoEnabled = !state.isPeerCameraOff,
-                    hasEstablishedMedia = connected,
-                    track = remoteTrack,
-                    eglContext = eglContext,
-                    peerName = state.peerName,
-                    avatarUrl = peerAvatarUrl,
-                    modifier = Modifier.fillMaxSize(),
-                    fit = fit,
-                )
+            if (!framed) {
+                if (featuresLocal && localTrack != null) {
+                    VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera, fit = fit)
+                } else {
+                    CallRemoteVideoStage(
+                        callKey = callKey,
+                        hasTrack = remoteTrack != null,
+                        peerVideoEnabled = !state.isPeerCameraOff,
+                        hasEstablishedMedia = connected,
+                        track = remoteTrack,
+                        eglContext = eglContext,
+                        peerName = state.peerName,
+                        avatarUrl = peerAvatarUrl,
+                        modifier = Modifier.fillMaxSize(),
+                        fit = fit,
+                    )
+                }
             }
             // Le toucher de la scène vit ICI, SOUS la vignette : un détecteur posé sur la colonne du
             // chrome, au-dessus, avalait tous les touchers et la vignette ne glissait ni ne permutait plus.
@@ -118,7 +121,7 @@ internal fun CallDuoVideoStage(
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MUTED_BADGE_TOP),
                 )
             }
-            val showsSelfTile = !state.isCameraOn || localTrack != null || state.isVideoAutoPaused
+            val showsSelfTile = !framed && (!state.isCameraOn || localTrack != null || state.isVideoAutoPaused)
             if (showsSelfTile) {
                 val controlCount = rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
                 CallSelfTile(

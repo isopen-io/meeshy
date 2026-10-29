@@ -137,6 +137,22 @@ internal object CallLiveFrameSources {
     }.toMap()
 }
 
+/**
+ * Un cadre affiché tient la scène du duo : il pose lui-même chaque vidéo dans sa case. La scène ne
+ * dessine alors ni la vidéo plein écran du pair, décodée pour rien sous le cadre, ni ma vignette, qui
+ * percerait sa fenêtre. Même condition que le calque qui peint le cadre : suspendu, il n'est pas peint.
+ */
+internal object CallLiveFrameStage {
+    fun framesTheDuo(
+        frameId: String?,
+        isVideoCall: Boolean,
+        showsConnectedLayout: Boolean,
+        constrained: Boolean,
+        reduceMotion: Boolean,
+    ): Boolean = isVideoCall && showsConnectedLayout &&
+        CallLiveFrameRule.display(frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design != null
+}
+
 /** Ce qui se dit du cadre en haut de l'écran, sous l'en-tête : une proposition à trancher, une réponse, un échec. */
 @Singleton
 class CallLiveFrameStatusOverlay @Inject constructor(

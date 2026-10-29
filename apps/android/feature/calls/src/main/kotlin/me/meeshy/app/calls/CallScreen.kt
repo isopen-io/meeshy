@@ -157,6 +157,15 @@ fun CallScreen(
             val selfCamera = remember(viewModel) {
                 CallSelfCameraActions(viewModel.cameraZoom, onFlip = viewModel::flipCamera, onToggleCamera = viewModel::toggleCamera)
             }
+            val liveFrame: CallLiveFrameViewModel = hiltViewModel()
+            val liveFrameState by liveFrame.controller.state.collectAsStateWithLifecycle()
+            val framed = CallLiveFrameStage.framesTheDuo(
+                frameId = liveFrameState.frameId,
+                isVideoCall = state.isVideoCall,
+                showsConnectedLayout = state.showsConnectedLayout,
+                constrained = rememberCallDeviceConstrained(),
+                reduceMotion = reduceMotion,
+            )
             if (videoStage) {
                 CallDuoVideoStage(
                     state = state,
@@ -170,6 +179,7 @@ fun CallScreen(
                     onSceneTap = sceneTap,
                     selfCamera = selfCamera,
                     controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
+                    framed = framed,
                 )
             }
 
