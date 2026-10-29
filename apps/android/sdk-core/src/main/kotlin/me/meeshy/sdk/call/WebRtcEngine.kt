@@ -80,6 +80,8 @@ class WebRtcEngine internal constructor(
     private var configuration: PeerConnection.RTCConfiguration? = null
     private var dataChannel: CallDataChannel? = null
     private var groupVideoCeiling: CallVideoBudget? = null
+    private var cameraBudget: CallVideoBudget = CallVideoBudget.CAMERA
+    private var cameraFrozen: Boolean = false
 
     /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
     val eglBase: EglBase get() = stack.value.eglBase
@@ -202,7 +204,19 @@ class WebRtcEngine internal constructor(
         meshPeers.forEach { it.setScreenTrack(null) }
         if (peerConnection == null) return screenShare.release()
         if (screenShare.end()) renegotiations.tryEmit(Unit)
-        if (groupVideoCeiling != null) applyCameraEncoding()
+        applyCameraEncoding()
+    }
+
+    /**
+     * Le palier de la caméra (#13767, iOS `applyVideoQuality`) : réécrit tout de suite sur l'émetteur vidéo, puis à
+     * chaque négociation. [frozen] = plancher de survie, que le plafond du maillage ne touche pas (iOS
+     * `applySurvivalFloorEncoding`). Pendant un partage d'écran, l'écran garde son encodage ; la caméra retrouve ce
+     * palier à l'arrêt.
+     */
+    fun setCameraVideoBudget(budget: CallVideoBudget, frozen: Boolean = false) {
+        cameraBudget = budget
+        cameraFrozen = frozen
+        applyCameraEncoding()
     }
 
     /**
@@ -219,8 +233,9 @@ class WebRtcEngine internal constructor(
     private fun applyCameraEncoding() {
         if (screenShare.isSharing) return
         val sender = primaryVideoSender() ?: return
-        val camera = CallVideoBudget.CAMERA
-        runCatching { VideoSenderEncoding.apply(sender, groupVideoCeiling?.capping(camera) ?: camera) }
+        val camera = cameraBudget
+        val budget = if (cameraFrozen) camera else groupVideoCeiling?.capping(camera) ?: camera
+        runCatching { VideoSenderEncoding.apply(sender, budget) }
     }
 
     private fun primaryVideoSender(): RtpSender? {
@@ -241,6 +256,7 @@ class WebRtcEngine internal constructor(
     private suspend fun createSdp(isOffer: Boolean): SessionDescription {
         if (isOffer) {
             peerConnection?.let { media.attachForOffer(it) }
+            applyCameraEncoding()
             ensureDataChannel()
         }
         val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
@@ -249,6 +265,7 @@ class WebRtcEngine internal constructor(
 
     suspend fun setLocalDescription(desc: SessionDescription) {
         applyDescription(desc, local = true)
+        applyCameraEncoding()
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
     }
 
@@ -268,7 +285,10 @@ class WebRtcEngine internal constructor(
         if (remoteDescriptions.judge(type, desc.description) != Verdict.Apply) return
         applyDescription(desc, local = false)
         val pc = peerConnection ?: return
-        if (type == DescriptionType.Offer) media.attachForAnswer(pc)
+        if (type == DescriptionType.Offer) {
+            media.attachForAnswer(pc)
+            applyCameraEncoding()
+        }
         remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
 
@@ -342,6 +362,8 @@ class WebRtcEngine internal constructor(
         dataChannel = null
         screenShare.release()
         groupVideoCeiling = null
+        cameraBudget = CallVideoBudget.CAMERA
+        cameraFrozen = false
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()

@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.plus
+import me.meeshy.sdk.call.CallQualityStatsFeed
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
@@ -37,6 +38,7 @@ class WebRtcCallCoordinator @Inject constructor(
     signals: CallSignalManager,
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
+    statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
 ) {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
@@ -75,6 +77,14 @@ class WebRtcCallCoordinator @Inject constructor(
                 )
             }
         },
+    )
+
+    /** L'échelle adaptative de ma caméra et la survie vidéo, propagée au maillage (#13767, #13752). */
+    private val videoEncoding = CallVideoEncodingController(
+        ticks = statsFeed.ticks,
+        thermal = { appContext.callThermalState() },
+        apply = { budget, frozen -> engine.setCameraVideoBudget(budget, frozen) },
+        onSurvivalFloor = { mesh.setSurvivalFloor(it) },
     )
 
     init {
@@ -182,6 +192,7 @@ class WebRtcCallCoordinator @Inject constructor(
         }
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
             sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo, conversationId = conversationId)
+        videoEncoding.begin(cs, wantsVideo = isVideo)
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->
@@ -245,6 +256,7 @@ class WebRtcCallCoordinator @Inject constructor(
     fun setCameraEnabled(enabled: Boolean) {
         engine.setVideoEnabled(enabled)
         mesh.setSendsVideo(enabled)
+        videoEncoding.setUserWantsVideo(enabled)
     }
 
     /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
@@ -274,6 +286,7 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun teardown() {
+        videoEncoding.end()
         mesh.teardown()
         callScope?.cancel()
         callScope = null

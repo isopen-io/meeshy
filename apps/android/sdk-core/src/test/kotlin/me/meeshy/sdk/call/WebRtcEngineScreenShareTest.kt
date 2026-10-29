@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.screen.ScreenFeed
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.model.call.screenshare.VideoDegradation
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.webrtc.AudioSource
@@ -100,10 +102,10 @@ class WebRtcEngineScreenShareTest {
     }
 
     @Test
-    fun `the screen is encoded like iOS, keeping its resolution at 15 fps, and the camera encoding comes back`() {
+    fun `the screen is encoded like iOS, keeping its resolution at 15 fps, and the camera gets its current tier back`() {
         val rig = Rig(RtpTransceiverDirection.SEND_RECV)
-        val camera = rig.encoding
         rig.engine.createConnection(emptyList())
+        rig.engine.setCameraVideoBudget(CallVideoBudget(800_000, 20, 1.5, VideoDegradation.MaintainFramerate))
 
         rig.engine.beginScreenShare(rig.projection)
 
@@ -112,7 +114,9 @@ class WebRtcEngineScreenShareTest {
         )
         rig.engine.endScreenShare()
 
-        assertThat(rig.encoding).isEqualTo(camera)
+        assertThat(rig.encoding).isEqualTo(
+            Encoded(DegradationPreference.MAINTAIN_FRAMERATE, maxBitrateBps = 800_000, maxFramerate = 20, scale = 1.5),
+        )
     }
 
     @Test

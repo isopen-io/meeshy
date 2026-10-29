@@ -3,12 +3,14 @@ package me.meeshy.sdk.call.screen
 import me.meeshy.sdk.model.call.screenshare.SenderEncodingLimits
 import me.meeshy.sdk.model.call.screenshare.SenderEncodingSnapshot
 import me.meeshy.sdk.model.call.screenshare.VideoDegradation
+import org.webrtc.Priority
 import org.webrtc.RtpParameters.DegradationPreference
 import org.webrtc.RtpSender
 
 /**
  * Le pont entre les paramètres d'encodage d'un émetteur WebRTC et leur instantané pur (#13735) : relevé
- * au début du partage, réécrit pour l'écran, puis rendu tel quel à l'arrêt. Chaque écriture repart de
+ * au début du partage, réécrit pour l'écran, puis rendu à l'arrêt, toujours avec la priorité réseau haute d'iOS
+ * (#13767). Chaque écriture repart de
  * paramètres FRAIS — WebRTC refuse un `setParameters` dont la transaction est périmée.
  */
 internal object ScreenShareSenderEncoding {
@@ -30,6 +32,7 @@ internal object ScreenShareSenderEncoding {
             encoding.maxBitrateBps = limits.maxBitrateBps
             encoding.maxFramerate = limits.maxFramerate
             encoding.scaleResolutionDownBy = limits.scaleResolutionDownBy
+            encoding.networkPriority = Priority.HIGH
         }
         return sender.setParameters(parameters)
     }
