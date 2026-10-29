@@ -11,6 +11,7 @@ internal fun FileViewerHost(request: FileViewerRequest?, accent: Color, onOpenCo
     when (val kind = request.kind) {
         FileViewerKind.ContactCard -> ContactCardHost(request, accent, onOpenConversation, onDismiss)
         is FileViewerKind.Code -> CodeViewerSheet(request, kind.language, accent, onDismiss)
+        is FileViewerKind.Text -> TextDocumentSheet(request, kind.isMarkdown, accent, onDismiss)
         FileViewerKind.Pdf -> DocumentViewerSheet(request, isPdf = true, accent = accent, onDismiss = onDismiss)
         FileViewerKind.Document -> DocumentViewerSheet(request, isPdf = false, accent = accent, onDismiss = onDismiss)
     }

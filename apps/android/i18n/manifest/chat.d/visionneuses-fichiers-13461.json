@@ -187,6 +187,18 @@
         {
           "androidName": "viewer_code_truncated",
           "status": "android-only"
+        },
+        {
+          "androidName": "viewer_doc_open_with",
+          "status": "android-only"
+        },
+        {
+          "androidName": "viewer_text_show_source",
+          "status": "android-only"
+        },
+        {
+          "androidName": "viewer_text_show_rendered",
+          "status": "android-only"
         }
       ]
     }

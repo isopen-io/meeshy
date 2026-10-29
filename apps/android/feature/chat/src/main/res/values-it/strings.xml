@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="viewer_code_truncated">File troncato: vengono mostrati solo i primi 512 KB.</string>
+    <string name="viewer_doc_open_with">Apri con un\'altra app</string>
+    <string name="viewer_text_show_source">Mostra il sorgente</string>
+    <string name="viewer_text_show_rendered">Mostra il risultato</string>
 </resources>
