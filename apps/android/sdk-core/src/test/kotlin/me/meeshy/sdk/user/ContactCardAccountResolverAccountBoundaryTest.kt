@@ -65,4 +65,50 @@ class ContactCardAccountResolverAccountBoundaryTest {
         assertThat(served).isEmpty()
         assertThat(subject.cached(request)).isNull()
     }
+
+    @Test
+    fun `B ne rejoint pas le vol encore ouvert de A et recoit ses propres relations`() = runTest {
+        val owner = Owner("A")
+        val fence = AccountFence(owner)
+        val gate = CompletableDeferred<Unit>()
+        val strangerOfB = PublicContactAccount(userId = "u1", username = "u1", relation = "none")
+        val askedBy = mutableListOf<String?>()
+        val subject = resolver(fence) {
+            val asker = owner.id
+            askedBy += asker
+            gate.await()
+            NetworkResult.Success(listOf(if (asker == "A") friendOfA else strangerOfB))
+        }
+
+        val underA = async { subject.resolve(request) }
+        runCurrent()
+        fence.close { (subject as PerAccountCache).clear(); owner.id = null }
+        owner.id = "B"
+        val underB = async { subject.resolve(request) }
+        runCurrent()
+        gate.complete(Unit)
+
+        assertThat(underA.await()).isEmpty()
+        assertThat(underB.await()).containsExactly(strangerOfB)
+        assertThat(askedBy).containsExactly("A", "B").inOrder()
+        assertThat(subject.cached(request)).containsExactly(strangerOfB)
+    }
+
+    @Test
+    fun `l'appelant qui part n'annule pas le vol de celui qui attend`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var calls = 0
+        val subject = resolver(null) { calls += 1; gate.await(); NetworkResult.Success(listOf(friendOfA)) }
+
+        val leaving = async { subject.resolve(request) }
+        runCurrent()
+        val waiting = async { subject.resolve(request) }
+        runCurrent()
+        leaving.cancel()
+        runCurrent()
+        gate.complete(Unit)
+
+        assertThat(waiting.await()).containsExactly(friendOfA)
+        assertThat(calls).isAtMost(2)
+    }
 }

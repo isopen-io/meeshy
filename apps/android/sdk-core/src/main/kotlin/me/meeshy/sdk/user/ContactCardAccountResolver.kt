@@ -7,6 +7,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ContactResolveRequest
 import me.meeshy.sdk.net.api.PublicContactAccount
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.commitOrWrite
 
@@ -23,8 +24,9 @@ fun interface ContactAccountsSource {
  * Rien n'est jamais persisté ni journalisé : le numéro d'un non-inscrit part dans la requête de résolution, que
  * le serveur ne retient pas (#9225) ; seuls les comptes inscrits reviennent. La résolution ne JETTE jamais : un
  * refus ou un réseau absent rend le dernier résultat connu, ou une liste vide — la carte s'affiche alors sans
- * section Meeshy, et un échec n'est pas rejoué avant [failureBackoffMillis]. Un seul vol par requête : deux appelants
- * simultanés (deux pièces portant la même carte, la rangée et la fiche) partagent la même réponse.
+ * section Meeshy, et un échec n'est pas rejoué avant [failureBackoffMillis]. Un seul vol par requête ET par compte : deux
+ * appelants simultanés du même compte (deux pièces portant la même carte, la rangée et la fiche) partagent la même
+ * réponse ; un appelant d'un autre compte ne rejoint jamais le vol ouvert sous le précédent.
  *
  * **Par compte** (#13560) : les relations résolues (« vous », « ami », « demande envoyée ») sont celles du compte qui
  * a demandé. [clear] vide tout à la fin de session ([PerAccountCache]), et une réponse ne s'écrit que sous le ticket
@@ -56,7 +58,7 @@ class ContactCardAccountResolver internal constructor(
     private val lock = Any()
     private val entries = LinkedHashMap<ContactResolveRequest, Entry>()
     private val failures = HashMap<ContactResolveRequest, Long>()
-    private val flights = SingleFlight<ContactResolveRequest, List<PublicContactAccount>>()
+    private val flights = SingleFlight<Pair<AccountTicket?, ContactResolveRequest>, List<PublicContactAccount>>()
 
     fun cached(request: ContactResolveRequest): List<PublicContactAccount>? =
         synchronized(lock) { entries[request]?.accounts }
@@ -70,11 +72,11 @@ class ContactCardAccountResolver internal constructor(
             val failedAt = failures[request]
             if (failedAt != null && now - failedAt < failureBackoffMillis) return entry?.accounts.orEmpty()
         }
-        return flights.run(request) { fetch(request) }
+        val ticket = fence?.currentTicket()
+        return flights.run(ticket to request) { fetch(request, ticket) }
     }
 
-    private suspend fun fetch(request: ContactResolveRequest): List<PublicContactAccount> {
-        val ticket = fence?.currentTicket()
+    private suspend fun fetch(request: ContactResolveRequest, ticket: AccountTicket?): List<PublicContactAccount> {
         val result = source.resolve(request)
         return fence.commitOrWrite(ticket) {
             when (result) {
