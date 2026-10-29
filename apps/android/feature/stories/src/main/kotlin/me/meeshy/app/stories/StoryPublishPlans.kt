@@ -29,6 +29,7 @@ internal fun publishPlans(current: StoryComposerUiState, language: String): List
             durationSecondsPin = slide.durationSecondsPin,
             background = slide.background,
             backgroundMedia = StoryPublishBackground.resolve(slide, current),
+            placedMedia = StoryPublishPlacedMedia.resolve(slide, current),
             repostOfId = current.draft.repostOfId,
             visibilityUserIds = current.draft.visibilityUserIds,
             mentions = current.draft.mentions,
