@@ -74,7 +74,7 @@ class PackShopRepository(
     val installations: SharedFlow<PackInstallationUpdatedEvent> = _installations.asSharedFlow()
 
     private val writes = Mutex()
-    private var confirmedPurchases = 0L
+    private var localWrites = 0L
 
     fun shop(onSyncError: (Throwable) -> Unit = {}): Flow<CacheResult<PackShopResponse>> = cacheFirstFlowOf(
         policy = POLICY,
@@ -86,10 +86,10 @@ class PackShopRepository(
 
     suspend fun refresh() {
         val ticket = cache.ticket()
-        val before = writes.withLock { confirmedPurchases }
+        val before = writes.withLock { localWrites }
         val served = fetchShop()
         writes.withLock {
-            if (confirmedPurchases == before) cache.put(NAMESPACE, KEY, served, PackShopResponse.serializer(), ticket)
+            if (localWrites == before) cache.put(NAMESPACE, KEY, served, PackShopResponse.serializer(), ticket)
         }
     }
 
@@ -99,7 +99,7 @@ class PackShopRepository(
         return when (val result = apiCall { api.purchase(domain, slug, requestId) }) {
             is NetworkResult.Success -> {
                 writes.withLock {
-                    confirmedPurchases += 1
+                    localWrites += 1
                     cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.applying(domain, result.data) }
                 }
                 PackPurchaseOutcome.Done(result.data)
@@ -111,11 +111,15 @@ class PackShopRepository(
 
     /**
      * `pack:installation-updated` reçu sous [ticket] (pris AU REÇU) : la charge suffit, la vitrine en cache la reprend
-     * sans relire le réseau, puis les écrans la reçoivent. Un compte clos depuis ne reçoit rien et n'écrit rien.
+     * sans relire le réseau, puis les écrans la reçoivent. Un compte clos depuis ne reçoit rien et n'écrit rien. Une
+     * lecture de la vitrine partie AVANT l'événement ne l'efface pas en revenant, comme pour un achat confirmé.
      */
     suspend fun onInstallationUpdated(event: PackInstallationUpdatedEvent, ticket: AccountTicket?) {
         if (fence != null && ticket != null && !fence.isCurrent(ticket)) return
-        cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.applying(event) }
+        writes.withLock {
+            localWrites += 1
+            cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.applying(event) }
+        }
         if (fence == null || ticket == null || fence.isCurrent(ticket)) _installations.emit(event)
     }
 

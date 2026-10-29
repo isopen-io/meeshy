@@ -243,4 +243,25 @@ class PackShopRepositoryTest {
 
         assertThat(announced.await()).isEqualTo(ringEvent)
     }
+
+    @Test fun `a shop read that left before an installation event does not erase it when it lands`() = runTest {
+        coEvery { api.shop(domains) } returns ApiResponse(success = true, data = ringShop())
+        val repository = repository()
+        repository.refresh()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { api.shop(domains) } coAnswers {
+            gate.await()
+            ApiResponse(success = true, data = ringShop())
+        }
+        val reading = async { repository.refresh() }
+        testScheduler.runCurrent()
+
+        repository.onInstallationUpdated(ringEvent, ticket = null)
+        gate.complete(Unit)
+        reading.await()
+
+        val cached = cache().get("pack-shop", "offered", PackShopResponse.serializer())!!.value
+        assertThat(cached.packs(AppearancePackDomain.AVATAR_RING).single().isOwned).isTrue()
+        assertThat(cached.packs(AppearancePackDomain.AVATAR_RING).single().installed).isTrue()
+    }
 }
