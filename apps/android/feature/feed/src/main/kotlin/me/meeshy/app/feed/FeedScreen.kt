@@ -187,6 +187,7 @@ fun FeedScreen(
                             // A tap on the embedded repost opens the ORIGINAL post's detail,
                             // never the outer reposter card.
                             onOpenPost = onOpenPost,
+                            onOpenReel = onPostClick,
                             // Tapping an image tile opens the fullscreen media gallery on it.
                             onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                             isOwn = post.authorId != null && post.authorId == state.currentUserId,

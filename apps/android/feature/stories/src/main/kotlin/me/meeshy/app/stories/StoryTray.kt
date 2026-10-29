@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
-import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -108,8 +107,9 @@ fun StoryTray(
 }
 
 /**
- * La rangée d'anneaux : elle cède, de chaque côté, la place des disques flottants parqués à sa hauteur — « Votre story »
- * ne reste pas sous le disque de gauche (#12497) ; les anneaux défilent dans ce qui reste.
+ * La rangée d'anneaux, collée au bord comme le `LazyHStack` d'iOS (`StoryTrayView`) : elle ne cède rien aux disques
+ * flottants — iOS réserve la bande de stories au-dessus de leur zone de parcage (`FloatingButtonSafeZone.storyBand`),
+ * il ne décale pas le rail. Au fil comme en tête de la liste des conversations, « Votre story » est à la même place (#13665).
  */
 @Composable
 internal fun StoryTrayRail(
@@ -125,9 +125,7 @@ internal fun StoryTrayRail(
     onMoodTap: ((String) -> Unit)? = null,
 ) {
     LazyRow(
-        modifier = Modifier
-            .floatingChromeLateralReserve(yieldsBothSides = true)
-            .heightIn(min = StoryEntryMetrics.height),
+        modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
         horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
         contentPadding = PaddingValues(
             horizontal = StoryEntryMetrics.paddingHorizontal,

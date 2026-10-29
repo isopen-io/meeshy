@@ -61,14 +61,15 @@ import java.util.Locale
  * read-only, and its tap opens the ORIGINAL reposted post ([RepostEmbedPresentation.id]),
  * never the outer card — mirrors iOS `FeedPostCard.repostTapTargetId`.
  *
- * A full story/reel canvas embed is out of scope for this slice: STORY/REEL
- * reposts render the same quote block with a discreet kind badge (there is no
- * Android story-canvas renderer yet).
+ * A reposted STORY plays through the shared scene renderer; a reposted REEL shows
+ * its cover above the quote (poster, resting scene or accent backdrop — never a
+ * player per card) and opens the reels player on that reel (iOS `ReelRepostEmbedCell`).
  */
 @Composable
 fun RepostEmbedCell(
     embed: RepostEmbedPresentation,
     onOpen: (String) -> Unit,
+    onOpenReel: ((String) -> Unit)? = null,
 ) {
     if (embed.isUnavailable) {
         UnavailableRepostCell(embed)
@@ -176,7 +177,17 @@ fun RepostEmbedCell(
             }
         }
 
-        embed.previewImageUrl?.let { url ->
+        embed.reelCover?.let { cover ->
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            ReelCoverView(
+                cover = cover,
+                authorName = embed.authorName,
+                onOpen = { (onOpenReel ?: onOpen)(embed.id) },
+                modifier = Modifier.fillMaxWidth().height(REEL_STRIP_HEIGHT),
+            )
+        }
+
+        embed.previewImageUrl?.takeIf { embed.reelCover == null }?.let { url ->
             Spacer(Modifier.height(MeeshySpacing.sm))
             Box(
                 modifier = Modifier

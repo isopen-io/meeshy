@@ -2,9 +2,11 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.story.toStoryItem
@@ -61,6 +63,8 @@ data class RepostEmbedPresentation(
      * d'un bloc vide, et n'ouvre rien.
      */
     val isUnavailable: Boolean = false,
+    /** Ce que le réel cité montre au repos (iOS `ReelRepostEmbedCell.poster`) ; `null` pour tout autre repost. */
+    val reelCover: ReelCover? = null,
 )
 
 object RepostEmbedBuilder {
@@ -76,7 +80,17 @@ object RepostEmbedBuilder {
         mediaBaseUrl: String?,
     ): RepostEmbedPresentation? {
         val quoted = build(post.repostOf, preferences, mediaBaseUrl) ?: return unavailable(post)
-        return if (quoted.isStory) quoted.copy(storyItem = post.toStoryItem()) else quoted
+        return when {
+            quoted.isStory -> quoted.copy(storyItem = post.toStoryItem())
+            quoted.isReel -> quoted.copy(reelCover = quoted.reelCover.orScene { post.toStoryItem() })
+            else -> quoted
+        }
+    }
+
+    /** Un réel cité sans visuel se rejoue par sa scène — celle que la republication sert, `playedEffects` — quand il en est une. */
+    private fun ReelCover?.orScene(scene: () -> StoryItem): ReelCover? {
+        if (this !is ReelCover.Backdrop || isVideo) return this
+        return scene().takeIf { it.storyEffects.composesScene() }?.let { ReelCover.Scene(it) } ?: this
     }
 
     private fun unavailable(post: ApiPost): RepostEmbedPresentation? {
@@ -136,6 +150,11 @@ object RepostEmbedBuilder {
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
             location = FeedPostLocationBuilder.build(repost.location),
+            reelCover = repost.takeIf { it.type.equals("reel", ignoreCase = true) }?.let {
+                ReelCoverResolver.resolve(
+                    FeedMediaMapper.map(it.media, preferredContentLanguages(preferences), mediaBaseUrl),
+                ) { null }
+            },
         )
     }
 }

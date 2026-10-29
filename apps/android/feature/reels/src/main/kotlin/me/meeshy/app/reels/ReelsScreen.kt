@@ -37,6 +37,7 @@ import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.ReelSwitchWork
+import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.fullscreen.FullscreenScrims
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -84,6 +85,8 @@ fun ReelsScreen(
     val pagerState = rememberPagerState(pageCount = { state.reels.size })
 
     LaunchedEffect(seed) { viewModel.load(seed) }
+    // Fond noir en plein cadre : heure et icônes claires, rendues à la fenêtre en quittant l'écran.
+    StatusBarIconsOverDark()
 
     // Leaving the reels thread closes the last dwell session (records its view if
     // it qualified) — the pager's per-settle end never fires for the final reel.

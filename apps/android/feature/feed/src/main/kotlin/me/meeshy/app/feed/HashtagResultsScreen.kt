@@ -116,6 +116,7 @@ fun HashtagResultsScreen(
                                 onFlagTap = {},
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                                 onImageTap = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 isOwn = post.isAuthor,
                                 onOpenProfile = onOpenProfile,

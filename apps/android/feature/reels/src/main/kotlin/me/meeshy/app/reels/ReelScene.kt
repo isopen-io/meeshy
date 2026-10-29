@@ -6,6 +6,7 @@ import me.meeshy.app.stories.StorySlideView
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.story.toStoryItem
 import me.meeshy.sdk.theme.DynamicColorGenerator
 
@@ -17,13 +18,7 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 internal object ReelScene {
 
     /** Les effets portent-ils de quoi composer une scène (objets posés, sons, dessin) ? Un fond seul n'en est pas une. */
-    fun isScene(effects: StoryEffects?): Boolean = effects != null && (
-        effects.mediaObjects.orEmpty().isNotEmpty() ||
-            effects.textObjects.isNotEmpty() ||
-            effects.stickerObjects.orEmpty().isNotEmpty() ||
-            effects.audioPlayerObjects.orEmpty().isNotEmpty() ||
-            effects.drawingStrokes.orEmpty().isNotEmpty()
-        )
+    fun isScene(effects: StoryEffects?): Boolean = effects.composesScene()
 
     fun project(
         post: ApiPost,

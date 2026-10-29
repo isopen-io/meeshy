@@ -13,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** #12497 — « Votre story » ne reste pas sous le disque flottant de gauche au repos (360 dp). */
+/** #13665 — le rail est collé au bord, à la même place au-dessus et à côté des disques flottants au repos (360 dp) : le fil et la liste des conversations montent le même rail. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w360dp-h740dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -32,19 +32,24 @@ class StoryTrayRailRestingDiscsTest {
         stories = listOf(StoryItem(id = "$id-0", createdAt = now.minusSeconds(3600).toString(), expiresAt = now.plusSeconds(3600).toString())),
     )
 
-    @Test
-    fun `au repos Votre story reste a droite du disque de gauche`() {
-        val tray = StoryTrayBuilder.build(
-            groups = listOf(group("me"), group("u2"), group("u3"), group("u4")),
-            currentUserId = "me",
-            mediaBaseUrl = null,
-            nowMillis = now.toEpochMilli(),
-        )
+    private fun tray() = StoryTrayBuilder.build(
+        groups = listOf(group("me"), group("u2"), group("u3"), group("u4")),
+        currentUserId = "me",
+        mediaBaseUrl = null,
+        nowMillis = now.toEpochMilli(),
+    )
+
+    private fun mineLeftBesideDiscs(): Float {
         compose.setContentBesideRestingDiscs {
-            StoryTrayRail(tray, moodEmojiOf = { null }, onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {})
+            StoryTrayRail(tray(), moodEmojiOf = { null }, onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {})
         }
-        val mine = compose.onNodeWithText("Your story").getBoundsInRoot()
-        assertThat(mine.left.value).isAtLeast(RestingDiscs.leadingEdge)
-        assertThat(compose.scrollerBounds().right.value).isAtMost(RestingDiscs.trailingEdge)
+        return compose.onNodeWithText("Your story").getBoundsInRoot().left.value
+    }
+
+    @Test
+    fun `Votre story ne se decale pas vers le milieu a la hauteur des disques`() {
+        val besideDiscs = mineLeftBesideDiscs()
+        assertThat(compose.scrollerBounds().left.value).isEqualTo(0f)
+        assertThat(besideDiscs).isLessThan(RestingDiscs.leadingEdge)
     }
 }

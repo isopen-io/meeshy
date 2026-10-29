@@ -19,6 +19,7 @@ internal fun PostCard(
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
     onImageTap: (Int) -> Unit,
     isOwn: Boolean = false,
     onShare: () -> Unit = {},
@@ -64,7 +65,7 @@ internal fun PostCard(
                 translatingCodes = translatingCodes,
                 onSelectLanguage = onSelectLanguage,
             )
-            FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost)
+            FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,
