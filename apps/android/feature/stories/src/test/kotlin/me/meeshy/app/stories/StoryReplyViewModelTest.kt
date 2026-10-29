@@ -23,6 +23,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -57,6 +59,16 @@ class StoryReplyViewModelTest {
         mockk(relaxed = true) { every { this@mockk.id } returns id; every { encryptionMode } returns "e2ee" },
         fromCache = false,
     )
+
+    private fun cached(id: String, mode: String? = null) = DirectConversationResolution.Found(
+        mockk(relaxed = true) { every { this@mockk.id } returns id; every { encryptionMode } returns mode },
+        fromCache = true,
+    )
+
+    private fun served(id: String, mode: String?) =
+        NetworkResult.Success(mockk<me.meeshy.sdk.model.ApiConversation>(relaxed = true) { every { this@mockk.id } returns id; every { encryptionMode } returns mode })
+
+    private fun noSend() = coVerify(exactly = 0) { messages.sendOptimistic(conversationId = any(), content = any(), originalLanguage = any(), sender = any(), storyReplyToId = any()) }
 
     private fun direct(id: String) = DirectConversationResolution.Found(mockk(relaxed = true) { every { this@mockk.id } returns id }, fromCache = false)
 
@@ -167,5 +179,75 @@ class StoryReplyViewModelTest {
 
         assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
         coVerify(exactly = 0) { messages.sendOptimistic(conversationId = any(), content = any(), originalLanguage = any(), sender = any(), storyReplyToId = any()) }
+    }
+
+    @Test
+    fun `a cached conversation with no known mode is read again, and a server that says end-to-end refuses the reply (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns cached("c1")
+        coEvery { conversations.getById("c1") } returns served("c1", "e2ee")
+        val vm = viewModel()
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
+        assertThat(vm.state.value.text).isEqualTo("trop bien")
+        noSend()
+        verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun `a cached conversation with no known mode that the server says is clear lets the reply leave (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns cached("c1")
+        coEvery { conversations.getById("c1") } returns served("c1", "server")
+        val vm = viewModel()
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        coVerify(exactly = 1) { conversations.getById("c1") }
+        coVerify(exactly = 1) { messages.sendOptimistic(conversationId = "c1", content = "trop bien", originalLanguage = any(), sender = any(), storyReplyToId = "story-1") }
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.SENT)
+    }
+
+    @Test
+    fun `a cached conversation with no known mode while offline sends nothing and keeps the words (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns cached("c1")
+        coEvery { conversations.getById("c1") } returns NetworkResult.Failure(ApiError(message = "offline", code = "OFFLINE"))
+        val vm = viewModel()
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.FAILED)
+        assertThat(vm.state.value.text).isEqualTo("trop bien")
+        noSend()
+        verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun `a cached conversation whose mode is known is not read again, and a known end-to-end one is refused at once (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns cached("c1", "e2ee")
+        val vm = viewModel()
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
+        coVerify(exactly = 0) { conversations.getById(any()) }
+        noSend()
+    }
+
+    @Test
+    fun `a conversation sealed in the ledger is refused without reading the server (#13621)`() = runTest(dispatcher) {
+        coEvery { conversations.directConversationWith("author") } returns cached("c1")
+        val vm = viewModel(ledger = InMemoryEndToEndRegimeLedger().also { it.learn("c1") })
+        vm.onTextChange("trop bien")
+
+        vm.send("story-1", "author")
+
+        assertThat(vm.state.value.phase).isEqualTo(StoryReplyPhase.ENCRYPTED)
+        coVerify(exactly = 0) { conversations.getById(any()) }
+        noSend()
     }
 }
