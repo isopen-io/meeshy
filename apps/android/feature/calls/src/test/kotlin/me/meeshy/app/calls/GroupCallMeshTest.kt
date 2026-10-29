@@ -3,6 +3,8 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -12,6 +14,8 @@ import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.group.GroupCallArrival
+import me.meeshy.sdk.model.call.group.GroupCallDirectory
+import me.meeshy.sdk.model.call.group.GroupCallTitle
 import me.meeshy.sdk.model.call.group.GroupCallLinkState
 import org.junit.Test
 import org.webrtc.IceCandidate
@@ -76,7 +80,11 @@ class GroupCallMeshTest {
     private data class Sent(val to: String, val from: String, val signal: GroupMeshSignal)
 
     /** Sans [samplingMillis], le détecteur de parole ne relève rien : `advanceUntilIdle` reste atteignable. */
-    private class Harness(clock: () -> Long = { 0L }, samplingMillis: Long = Long.MAX_VALUE) {
+    private class Harness(
+        clock: () -> Long = { 0L },
+        samplingMillis: Long = Long.MAX_VALUE,
+        names: GroupCallNameSource = GroupCallNameSource.NONE,
+    ) {
         val opened = mutableListOf<FakePort>()
         val sent = mutableListOf<Sent>()
         var primaryLevel: Double? = null
@@ -88,6 +96,7 @@ class GroupCallMeshTest {
                 }
             },
             sender = { _, to, from, signal -> sent += Sent(to, from, signal) },
+            names = names,
             primaryAudioLevel = { primaryLevel },
             samplingIntervalMillis = samplingMillis,
             clock = clock,
@@ -95,6 +104,7 @@ class GroupCallMeshTest {
 
         fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m") = mesh.bind(
             scope, CALL, self, isOutgoing, primaryUserId = "", iceServers = emptyList(), sendsAudio = true, sendsVideo = false,
+            conversationId = CONVERSATION,
         )
 
         fun signal(type: String, from: String, negotiationId: Int = 1, sdp: String? = "v=0 x") =
@@ -256,7 +266,89 @@ class GroupCallMeshTest {
 
     private companion object {
         const val CALL = "call-1"
+        const val CONVERSATION = "conv-1"
     }
+
+    /** Un annuaire qu'on fait parler à la main, et qui compte ses lectures. */
+    private class FakeNames : GroupCallNameSource {
+        val reads = mutableListOf<Pair<String, String>>()
+        val directories = MutableSharedFlow<GroupCallDirectory>(replay = 0, extraBufferCapacity = 4)
+        override fun directoryFor(conversationId: String, callId: String): Flow<GroupCallDirectory> {
+            reads += conversationId to callId
+            return directories
+        }
+    }
+
+    private fun named(vararg names: Pair<String, String>, groupTitle: String? = null, present: Set<String> = emptySet()) =
+        GroupCallDirectory(groupTitle, names.associate { (id, name) -> id to GroupCallArrival(id, displayName = name) }, present)
+
+    @Test
+    fun `a member known only by its offer is named by the directory, read once per call`() = runTest(UnconfinedTestDispatcher()) {
+        val names = FakeNames()
+        val h = Harness(names = names)
+        h.bind(this, isOutgoing = false)
+        h.signal("offer", from = "alice")
+        h.signal("offer", from = "bob", negotiationId = 4)
+        assertThat(h.mesh.ui.value.roster.member("bob")!!.displayName).isEmpty()
+
+        names.directories.emit(named("alice" to "Alice", "bob" to "Bob", "cleo" to "Cléo"))
+        assertThat(h.mesh.ui.value.roster.members.map { it.displayName }).containsExactly("Alice", "Bob").inOrder()
+
+        h.signal("offer", from = "cleo", negotiationId = 2)
+        assertThat(h.mesh.ui.value.roster.member("cleo")!!.displayName).isEqualTo("Cléo")
+        assertThat(names.reads).containsExactly(CONVERSATION to CALL)
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `an announced name is never replaced by the directory`() = runTest(UnconfinedTestDispatcher()) {
+        val names = FakeNames()
+        val h = Harness(names = names)
+        h.bind(this, isOutgoing = true)
+        h.mesh.claimsArrival("alice")
+        h.mesh.claimsArrival("bob")
+        h.mesh.onArrivalDetails(CALL, GroupCallArrival("bob", displayName = "Bobby"))
+        names.directories.emit(named("bob" to "Bob"))
+        assertThat(h.mesh.ui.value.roster.member("bob")!!.displayName).isEqualTo("Bobby")
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `when the primary leaves the call is named by who remains, or by its group`() = runTest(UnconfinedTestDispatcher()) {
+        val names = FakeNames()
+        val h = Harness(names = names)
+        h.bind(this, isOutgoing = true)
+        h.mesh.claimsArrival("alice")
+        h.mesh.claimsArrival("bob")
+        h.mesh.claimsArrival("cleo")
+        names.directories.emit(named("alice" to "Alice", "bob" to "Bob"))
+        assertThat(h.mesh.ui.value.title).isNull()
+
+        h.mesh.onParticipantLeft(CALL, "alice")
+        assertThat(h.mesh.ui.value.title).isEqualTo(GroupCallTitle.Members(listOf("Bob", ""), more = 0))
+
+        names.directories.emit(named("cleo" to "Cléo", groupTitle = "Famille"))
+        assertThat(h.mesh.ui.value.title).isEqualTo(GroupCallTitle.Group("Famille"))
+        h.mesh.teardown()
+        assertThat(h.mesh.ui.value.title).isNull()
+    }
+
+    @Test
+    fun `a member the gateway still counts keeps the group going when the primary leaves, a departed one does not`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val names = FakeNames()
+            val h = Harness(names = names)
+            h.bind(this, isOutgoing = true)
+            h.mesh.claimsArrival("alice")
+            h.mesh.claimsArrival("bob")
+            h.mesh.onParticipantLeft(CALL, "bob")
+            names.directories.emit(named(present = setOf("alice", "bob")))
+            assertThat(h.mesh.primaryDidLeave()).isFalse()
+
+            names.directories.emit(named(present = setOf("alice", "dan")))
+            assertThat(h.mesh.primaryDidLeave()).isTrue()
+            h.mesh.teardown()
+        }
 
     private fun TestScope.callerTrio(): Harness {
         val h = Harness(clock = { testScheduler.currentTime }, samplingMillis = 400)

@@ -74,7 +74,7 @@ class WebRtcCallCoordinatorTest {
 
     @Before
     fun setUp() {
-        coordinator = WebRtcCallCoordinator(engine, signals, context)
+        coordinator = WebRtcCallCoordinator(engine, signals, context, GroupCallNameSource.NONE)
     }
 
     private fun CoroutineScope.startAsCaller(isVideo: Boolean = false) = coordinator.startOutgoing(

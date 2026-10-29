@@ -36,6 +36,7 @@ class WebRtcCallCoordinator @Inject constructor(
     private val engine: WebRtcEngine,
     signals: CallSignalManager,
     @ApplicationContext appContext: Context,
+    names: GroupCallNameSource,
 ) {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
@@ -55,6 +56,7 @@ class WebRtcCallCoordinator @Inject constructor(
      */
     private val mesh = GroupCallMesh(
         factory = EngineGroupMeshPeerFactory(engine),
+        names = names,
         primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
         sender = { callId, to, from, signal ->
             when (signal.kind) {
@@ -122,9 +124,10 @@ class WebRtcCallCoordinator @Inject constructor(
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
         speakerOn: Boolean = isVideo,
+        conversationId: String = "",
     ) = begin(
         scope, callId, iceServers, peerId, selfId, isVideo, isCaller = true,
-        onMediaConnected, onMediaStalled, speakerOn,
+        onMediaConnected, onMediaStalled, speakerOn, conversationId,
     )
 
     /** Callee: opens the connection now; the remote offer arrives via the incoming signals. */
@@ -138,9 +141,10 @@ class WebRtcCallCoordinator @Inject constructor(
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
         speakerOn: Boolean = isVideo,
+        conversationId: String = "",
     ) = begin(
         scope, callId, iceServers, peerId, selfId, isVideo, isCaller = false,
-        onMediaConnected, onMediaStalled, speakerOn,
+        onMediaConnected, onMediaStalled, speakerOn, conversationId,
     )
 
     private fun begin(
@@ -154,6 +158,7 @@ class WebRtcCallCoordinator @Inject constructor(
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit,
         speakerOn: Boolean,
+        conversationId: String,
     ) {
         teardown()
         negotiator.begin(callId, peerId, selfId, isCaller)
@@ -174,7 +179,7 @@ class WebRtcCallCoordinator @Inject constructor(
             return
         }
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
-            sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo)
+            sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo, conversationId = conversationId)
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->

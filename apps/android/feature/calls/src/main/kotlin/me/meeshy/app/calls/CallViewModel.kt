@@ -211,7 +211,7 @@ class CallViewModel @Inject constructor(
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
-            ::onMediaConnected, ::onMediaStalled,
+            ::onMediaConnected, ::onMediaStalled, conversationId = config.conversationId,
         )
     }
 
@@ -279,7 +279,7 @@ class CallViewModel @Inject constructor(
                     callId = result.ack.callId
                     coordinator.startOutgoing(
                         viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
-                        config.isVideo, ::onMediaConnected, ::onMediaStalled,
+                        config.isVideo, ::onMediaConnected, ::onMediaStalled, conversationId = config.conversationId,
                     )
                     preview.adoptIceServers(callId, result.ack.iceServers)
                     syncPreview()
@@ -304,6 +304,7 @@ class CallViewModel @Inject constructor(
                 is CallJoinResult.Success -> coordinator.startIncoming(
                     viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
                     ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
+                    conversationId = config.conversationId,
                 )
                 is CallJoinResult.Failure -> {
                     coordinator.end()

@@ -67,7 +67,9 @@ fun CallScreen(
     val captionsViewModel: CallCaptionsViewModel = hiltViewModel()
     val captionsChip by remember(captionsViewModel) { captionsViewModel.state.map(CallCaptionsChip::of).distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = CallCaptionsChip.of(captionsViewModel.state.value))
-    val state = callState.withCaptions(captionsChip)
+    // Le principal parti d'un groupe qui continue, l'appel se nomme par ceux qui restent (#13754, iOS #9091).
+    val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
+    val state = callState.withCaptions(captionsChip).withGroupTitle(groupCallTitleText(groupMesh.title))
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
@@ -115,7 +117,6 @@ fun CallScreen(
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
-    val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
     val groupShown = groupStageShown(state, groupMesh)
     val reduceMotion = rememberCallReduceMotion()
     val peer by viewModel.peerVisual.collectAsStateWithLifecycle()

@@ -13,12 +13,15 @@ import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.group.ActiveSpeakerDetector
 import me.meeshy.sdk.model.call.group.GroupCallArrival
+import me.meeshy.sdk.model.call.group.GroupCallDirectory
 import me.meeshy.sdk.model.call.group.GroupCallEvidence
 import me.meeshy.sdk.model.call.group.GroupCallLinkState
 import me.meeshy.sdk.model.call.group.GroupCallMediaKind
 import me.meeshy.sdk.model.call.group.GroupCallRoster
+import me.meeshy.sdk.model.call.group.GroupCallTitle
 import me.meeshy.sdk.model.call.group.GroupSignalDestination
 import me.meeshy.sdk.model.call.group.GroupSignalRouting
+import me.meeshy.sdk.model.call.group.named
 import org.webrtc.VideoTrack
 
 /** Ce que la scène lit du maillage : le registre, et la vidéo reçue de chaque membre du maillage. */
@@ -30,6 +33,8 @@ data class GroupCallMeshUi(
     val videoTracks: Map<String, VideoTrack> = emptyMap(),
     /** Qui parle maintenant (#13751) : le principal et les membres du maillage, jamais moi. */
     val speakingUserIds: Set<String> = emptySet(),
+    /** Le nom de l'appel une fois le siège du principal libéré (#13754, iOS `retitleIfVacated`) ; `null` avant. */
+    val title: GroupCallTitle? = null,
 )
 
 /** Ce que le maillage émet : un `call:signal` adressé à UN membre. */
@@ -50,6 +55,8 @@ internal fun interface GroupMeshSignalSender {
 internal class GroupCallMesh(
     private val factory: GroupMeshPeerFactory,
     private val sender: GroupMeshSignalSender,
+    /** Les noms des membres et le titre du groupe, lus une fois par appel de groupe (#13754). */
+    private val names: GroupCallNameSource = GroupCallNameSource.NONE,
     /** Le niveau sonore reçu du pair principal, que la connexion de l'appel tient — iOS `primaryAudioLevel`. */
     private val primaryAudioLevel: suspend () -> Double? = { null },
     private val samplingIntervalMillis: Long = ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS,
@@ -60,6 +67,7 @@ internal class GroupCallMesh(
 
     private var scope: CoroutineScope? = null
     private var callId: String = ""
+    private var conversationId: String = ""
     private var selfId: String = ""
     private var isOutgoing: Boolean = false
     private var iceServers: List<SocketIceServer> = emptyList()
@@ -73,6 +81,9 @@ internal class GroupCallMesh(
     private val links = LinkedHashMap<String, GroupPeerLink>()
     private val knownArrivals = HashMap<String, GroupCallArrival>()
     private val servedMemberIds = HashSet<String>()
+    private val departedMemberIds = HashSet<String>()
+    private var directory = GroupCallDirectory.EMPTY
+    private var namesJob: Job? = null
     private var detector = ActiveSpeakerDetector()
     private var speakingUserIds: Set<String> = emptySet()
     private var samplingJob: Job? = null
@@ -89,10 +100,12 @@ internal class GroupCallMesh(
         iceServers: List<SocketIceServer>,
         sendsAudio: Boolean,
         sendsVideo: Boolean,
+        conversationId: String = "",
     ) {
         teardown()
         this.scope = scope
         this.callId = callId
+        this.conversationId = conversationId
         this.selfId = selfId
         this.isOutgoing = isOutgoing
         this.primaryUserId = primaryUserId?.takeIf { it.isNotBlank() && it != selfId }
@@ -143,8 +156,9 @@ internal class GroupCallMesh(
         if (!isGroupCall) return false
         if (userId == primaryUserId && !primaryVacated) return false
         servedMemberIds += userId
+        departedMemberIds -= userId
         if (userId !in roster && roster.isFull) return true
-        roster = roster.admitting(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
+        admit(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
         publish()
         if (GroupSignalRouting.shouldOfferToArrival(userId, selfId, primaryUserId, isInCall = true, primaryVacated)) offer(userId)
         return true
@@ -163,6 +177,7 @@ internal class GroupCallMesh(
     fun onParticipantLeft(callId: String, userId: String?) {
         if (callId != this.callId || userId.isNullOrBlank()) return
         servedMemberIds -= userId
+        departedMemberIds += userId
         if (userId == primaryUserId && !primaryVacated) {
             primaryDidLeave()
             return
@@ -215,6 +230,11 @@ internal class GroupCallMesh(
     fun teardown() {
         samplingJob?.cancel()
         samplingJob = null
+        namesJob?.cancel()
+        namesJob = null
+        directory = GroupCallDirectory.EMPTY
+        departedMemberIds.clear()
+        conversationId = ""
         detector = ActiveSpeakerDetector()
         speakingUserIds = emptySet()
         links.values.forEach { it.close() }
@@ -233,10 +253,36 @@ internal class GroupCallMesh(
     private fun becomeGroup() {
         isGroupCall = true
         startSampling()
+        readNames()
         val primary = primaryUserId ?: return
-        roster = roster.admitting(knownArrivals[primary] ?: GroupCallArrival(primary), isPrimary = true)
-            .updatingLink(GroupCallLinkState.Connected, primary)
+        admit(knownArrivals[primary] ?: GroupCallArrival(primary), isPrimary = true)
+        roster = roster.updatingLink(GroupCallLinkState.Connected, primary)
         publish()
+    }
+
+    /** Admet un membre, nommé par l'annuaire là où son arrivée ne l'a pas fait. */
+    private fun admit(arrival: GroupCallArrival, isPrimary: Boolean = false) {
+        roster = roster.admitting(arrival, isPrimary).named(directory)
+    }
+
+    /**
+     * Un membre découvert par son offre n'a jamais été annoncé : son nom vient de la conversation en cache, puis de
+     * l'appel actif, lus UNE fois par appel (iOS `enrichNamesIfNeeded`) et réappliqués à chaque membre admis ensuite.
+     * Les présents de la passerelle comptent quand le principal part, sauf ceux déjà partis.
+     */
+    private fun readNames() {
+        val scope = scope ?: return
+        if (namesJob != null) return
+        val boundCall = callId
+        namesJob = scope.launch {
+            names.directoryFor(conversationId, boundCall).collect { read ->
+                if (boundCall != callId) return@collect
+                directory = read
+                servedMemberIds += read.presentIds.filter { it != selfId && it !in departedMemberIds }
+                roster = roster.named(read)
+                publish()
+            }
+        }
     }
 
     private fun offer(userId: String) {
@@ -249,7 +295,7 @@ internal class GroupCallMesh(
         if (existing == null && signal.kind != GroupMeshSignalKind.Offer) return
         if (existing == null) {
             if (userId !in roster && roster.isFull) return
-            roster = roster.admitting(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
+            admit(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
             publish()
         }
         (existing ?: makeLink(userId))?.receive(signal)
@@ -338,6 +384,7 @@ internal class GroupCallMesh(
             isPrimaryVacated = primaryVacated,
             videoTracks = links.mapNotNull { (id, link) -> link.remoteVideoTrack?.let { id to it } }.toMap(),
             speakingUserIds = speakingUserIds,
+            title = if (primaryVacated) GroupCallTitle.of(roster, directory.groupTitle) else null,
         )
     }
 
