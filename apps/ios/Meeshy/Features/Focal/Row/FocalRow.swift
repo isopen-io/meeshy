@@ -589,6 +589,7 @@ struct FocalRow: View {
                 location: content.location,
                 accentHex: input.accentHex,
                 isMe: content.isMe,
+                contactCardScope: content.contactCardScope,
                 onTapLocation: actions.onTapLocation,
                 onShareFile: actions.onShareFile
             )

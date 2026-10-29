@@ -20458,6 +20458,53 @@
         }
       }
     },
+    "contact-card.lookup-unavailable-encrypted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق «على Meeshy» غير متاح في محادثة مشفّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Prüfung „Auf Meeshy“ ist in einer verschlüsselten Unterhaltung nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“On Meeshy” check unavailable in an encrypted conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La verificación «En Meeshy» no está disponible en una conversación cifrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérification « Sur Meeshy » indisponible dans une conversation chiffrée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La verifica «Su Meeshy» non è disponibile in una conversazione cifrata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificação «No Meeshy» indisponível em uma conversa criptografada"
+          }
+        }
+      }
+    },
     "contact-card.on-meeshy": {
       "extractionState": "manual",
       "localizations": {

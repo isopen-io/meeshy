@@ -99,9 +99,9 @@ extension BubbleContent {
         let preferredAudioLangCode = withholdsContent ? nil : preferredAudioLangCode
 
         self.messageId = message.id
+        self.contactCardScope = ContactCardResolutionScope.of(message: message)
         self.isMe = message.isMe
         self.senderName = message.senderName
-
         // --- Kind ---
         // Une vue unique se consomme PAR PERSONNE (#7579) : l'état « déjà
         // ouvert » vient de la colonne locale de CE lecteur
