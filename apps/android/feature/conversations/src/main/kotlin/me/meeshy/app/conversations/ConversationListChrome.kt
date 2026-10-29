@@ -6,10 +6,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * La tête de la liste des conversations (#13653) : les filtres, épinglés, puis le rail de stories À LA MÊME PLACE quel
- * que soit l'état. Liste peuplée ([railInList]), le rail est sa première ligne et défile avec elle ; squelette, erreur,
- * filtre ou recherche sans résultat, il se pose juste sous les filtres. Un filtre qui vide la liste ne fait donc
- * jamais sauter la rangée de filtres sous le doigt.
+ * La tête de la liste des conversations, dans l'ordre d'iOS (`ConversationListView`) : le rail de stories, puis les
+ * filtres SOUS lui (#4069). Le rail se pose ainsi juste sous l'en-tête, dans la bande que les disques flottants laissent
+ * libre au-dessus de leur zone de parcage (`FloatingButtonSafeZone.STORY_BAND`) ; posé sous les filtres, son bas passait
+ * sous le disque de gauche (#13665). Liste peuplée ([railInList]), la tête est la première ligne de la liste — [content]
+ * la reçoit — et défile avec elle ; squelette, erreur, filtre ou recherche sans résultat, elle se pose au même endroit,
+ * au-dessus du contenu : au repos, la rangée de filtres ne saute pas sous le doigt (#13653).
  */
 @Composable
 internal fun ConversationListChrome(
@@ -17,11 +19,16 @@ internal fun ConversationListChrome(
     filters: @Composable () -> Unit,
     rail: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.(head: @Composable () -> Unit) -> Unit,
 ) {
+    val head: @Composable () -> Unit = {
+        Column {
+            rail()
+            filters()
+        }
+    }
     Column(modifier = modifier) {
-        filters()
-        if (!railInList) rail()
-        content()
+        if (!railInList) head()
+        content(head)
     }
 }

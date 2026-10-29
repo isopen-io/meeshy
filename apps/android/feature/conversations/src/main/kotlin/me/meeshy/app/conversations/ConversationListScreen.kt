@@ -162,20 +162,20 @@ fun ConversationListScreen(
         ) {
             ConnectionBannerStrip(state.banner)
             val content = ConversationListContent.of(state)
-            // iOS : le rail défile avec la liste ; hors liste peuplée (squelette, vide, erreur) il garde sa place, sous les filtres.
+            // iOS : le rail puis les filtres défilent avec la liste ; hors liste peuplée (squelette, vide, erreur) ils gardent leur place.
             ConversationListChrome(
                 railInList = content == ConversationListContent.Populated,
                 filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
                 rail = header,
                 modifier = Modifier.weight(1f),
-            ) {
+            ) { head ->
                 Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
                     ConversationListStateHost(
                         content = content,
                         onRetry = viewModel::refresh,
                         onNewConversation = onNewConversation,
                     ) {
-                        ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh, rowNavigation = rowNavigation, header = header)
+                        ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh, rowNavigation = rowNavigation, header = head)
                     }
                 }
             }

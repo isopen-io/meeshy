@@ -3,7 +3,9 @@ package me.meeshy.app.stories
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.height
 import me.meeshy.sdk.model.StoryGroup
+import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
 import me.meeshy.sdk.model.StoryItem
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -51,5 +53,19 @@ class StoryTrayRailRestingDiscsTest {
         val besideDiscs = mineLeftBesideDiscs()
         assertThat(compose.scrollerBounds().left.value).isEqualTo(0f)
         assertThat(besideDiscs).isLessThan(RestingDiscs.leadingEdge)
+    }
+    /**
+     * Posé sous la barre d'état d'un S8 (24 dp) et l'en-tête, le rail finit au-dessus des disques au repos — c'est ce
+     * qu'iOS tient en posant le rail juste sous l'en-tête, les filtres de la liste sous lui (#13665).
+     */
+    @Test
+    fun `sous l en-tete d un S8 le rail finit au-dessus des disques au repos`() {
+        mineLeftBesideDiscs()
+        val clearance = RestingDiscs.top - S8_STATUS_BAR - CollapsibleHeaderMetrics.EXPANDED_HEIGHT
+        assertThat(compose.scrollerBounds().height.value).isAtMost(clearance)
+    }
+
+    private companion object {
+        const val S8_STATUS_BAR = 24f
     }
 }
