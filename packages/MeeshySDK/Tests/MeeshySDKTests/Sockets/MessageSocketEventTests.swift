@@ -948,6 +948,28 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.notificationType, .system)
     }
 
+    // MARK: - AttachmentDeletedEvent (attachment:deleted)
+
+    func testAttachmentDeleted_decodesTheThreeIdentifiers() throws {
+        let json = Data(#"{"conversationId":"c1","messageId":"m1","attachmentId":"a1","extra":1}"#.utf8)
+
+        let event = try decoder.decode(AttachmentDeletedEvent.self, from: json)
+
+        XCTAssertEqual(event, AttachmentDeletedEvent(conversationId: "c1", messageId: "m1", attachmentId: "a1"))
+    }
+
+    func testAttachmentDeleted_failsClosedOnAnIncompleteOrBlankPayload() {
+        let payloads = [
+            #"{"conversationId":"c1","messageId":"m1"}"#,
+            #"{"messageId":"m1","attachmentId":"a1"}"#,
+            #"{"conversationId":"c1","messageId":"","attachmentId":"a1"}"#,
+            #"{"conversationId":"c1","messageId":"m1","attachmentId":7}"#,
+        ]
+        for payload in payloads {
+            XCTAssertThrowsError(try decoder.decode(AttachmentDeletedEvent.self, from: Data(payload.utf8)), payload)
+        }
+    }
+
     // MARK: - AttachmentUpdatedEvent (message:attachment-updated)
 
     /// Regression test for the Prisme Linguistique fault-isolation guard

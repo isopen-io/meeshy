@@ -26,6 +26,9 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// Distinct de `.deleted` : l'hôte l'applique comme la conversation
     /// OUVERTE (`ConversationSocketHandler`), sans épargner une vue unique.
     case expired(messageId: String, expiredAt: Date)
+    /// `attachment:deleted` — une pièce retirée d'un message par un membre. L'hôte l'écrit dans la base du compte qui
+    /// l'a reçue ; un message laissé sans texte ni pièce y devient une pierre tombale.
+    case attachmentRemoved(messageId: String, conversationId: String, attachmentId: String, at: Date)
     /// `message:cited-post-withdrawn` (#7969) — le post que des messages de
     /// `conversationId` citent a été retiré : chaque citation devient
     /// « Story indisponible ».

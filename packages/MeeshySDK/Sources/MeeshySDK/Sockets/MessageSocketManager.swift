@@ -49,12 +49,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — attachment status
     public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     public let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
+    public let attachmentDeleted = PassthroughSubject<AttachmentDeletedEvent, Never>()
 
     // Combine publishers — conversation participation
     public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     public let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     public let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
-
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     /// Un hôte a modifié les droits d'un visiteur sans compte. Distinct du

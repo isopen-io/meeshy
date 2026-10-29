@@ -154,6 +154,15 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         )
     }
 
+    /// La même nature, son résumé de pièces remplacé — une pièce retirée laisse le reste du message tel quel.
+    public func replacingAttachmentSummary(_ summary: LastMessageAttachmentSummary?) -> LastMessageNature {
+        LastMessageNature(
+            messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted, isForwarded: isForwarded, systemEvent: systemEvent,
+            callSummary: callSummary, attachmentSummary: summary, sticker: sticker
+        )
+    }
+
     /// La même nature, déclarée chiffrée de bout en bout (#12999).
     public var sealedEndToEnd: LastMessageNature {
         LastMessageNature(
