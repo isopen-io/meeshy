@@ -167,6 +167,10 @@ public class CallMeshPeer internal constructor(
         return peer.setConfiguration(configuration)
     }
 
+    /** Le niveau sonore reçu de ce membre (`inbound-rtp` audio), `null` une fois fermé ou sans mesure. */
+    public suspend fun inboundAudioLevel(): Double? =
+        if (closed.get()) null else CallInboundAudioLevel.read { callback -> live().getStats(callback) }
+
     /** Libère le pair et ses pistes ; idempotent. */
     public fun close() {
         if (!closed.compareAndSet(false, true)) return

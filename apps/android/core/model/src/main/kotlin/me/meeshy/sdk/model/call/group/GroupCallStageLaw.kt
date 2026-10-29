@@ -26,6 +26,8 @@ data class GroupCallStageTile(
     val showsVideo: Boolean,
     val isScreenSharing: Boolean,
     val isReconnecting: Boolean,
+    /** Le membre parle ([ActiveSpeakerDetector]) : son liseré s'épaissit. Jamais ma vignette, comme iOS. */
+    val isSpeaking: Boolean = false,
 )
 
 /** Ce que la scène d'un appel de groupe dessine — iOS `GroupCallStage`. */
@@ -44,6 +46,7 @@ object GroupCallStageLaw {
     fun tiles(
         roster: GroupCallRoster,
         localName: String,
+        speakingUserIds: Set<String> = emptySet(),
         isLocalMicMuted: Boolean,
         isLocalVideoEnabled: Boolean,
         isPrimaryVideoActive: Boolean,
@@ -70,6 +73,7 @@ object GroupCallStageLaw {
                 showsVideo = if (member.isPrimary) isPrimaryVideoActive else member.isCameraOn || member.isScreenSharing,
                 isScreenSharing = member.isScreenSharing,
                 isReconnecting = member.link == GroupCallLinkState.Reconnecting,
+                isSpeaking = member.userId in speakingUserIds,
             )
         }
         return listOf(local) + remote

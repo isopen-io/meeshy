@@ -56,4 +56,14 @@ class GroupCallStageLawTest {
         assertThat(CallInviteCandidates.remainingSeats(GroupCallRoster("me"), hasPrimaryOutsideRoster = true, ringingCount = 0)).isEqualTo(4)
         assertThat(CallInviteCandidates.remainingSeats(trio, hasPrimaryOutsideRoster = false, ringingCount = 9)).isEqualTo(0)
     }
+
+    @Test
+    fun `a member who speaks is marked, my tile never is`() {
+        val tiles = GroupCallStageLaw.tiles(
+            trio, "You", speakingUserIds = setOf("bob", "me"),
+            isLocalMicMuted = false, isLocalVideoEnabled = false, isPrimaryVideoActive = false,
+        )
+        assertThat(tiles.map { it.id to it.isSpeaking })
+            .containsExactly(GroupCallStageLaw.LOCAL_TILE_ID to false, "alice" to false, "bob" to true).inOrder()
+    }
 }
