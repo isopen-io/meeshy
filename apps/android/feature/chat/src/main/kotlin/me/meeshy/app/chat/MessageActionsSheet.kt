@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,8 +73,10 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.icons.MeeshyIcons
@@ -128,6 +131,8 @@ internal fun MessageActionsSheet(
     onSharePiece: (attachmentId: String) -> Unit = {},
     onTranscription: () -> Unit = {},
     onReactions: () -> Unit = {},
+    /** #13790 — réagir, épingler et supprimer pour tous n'existent que vers une conversation connue claire ; fermé par défaut. */
+    signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
 ) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
@@ -142,6 +147,7 @@ internal fun MessageActionsSheet(
         hasThread = hasThread,
         conversationIsEndToEnd = conversationIsEndToEnd,
         nowMillis = nowMillis,
+        signalClearance = signalClearance,
     )
     val entryFacts = bubble.menuEntryFacts(hasThread, conversationIsEndToEnd, nowMillis)
     val shareTitle = stringResource(R.string.chat_action_share)
@@ -178,7 +184,7 @@ internal fun MessageActionsSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = MeeshySpacing.xl),
         ) {
-            if (ctx.isActionable) {
+            if (ctx.offersReaction) {
                 EmojiQuickStrip(
                     emojis = quickReactions,
                     ownReactions = ownReactions,
@@ -390,7 +396,10 @@ internal fun MessageActionsSheet(
                 }
             }
             if (MessageMenuEntries.saysServerFeaturesAbsent(entryFacts)) {
-                EndToEndMenuNotice()
+                EndToEndMenuNotice(R.string.chat_menu_e2ee_notice)
+            }
+            if (PlainSignalAdmission.saysWhy(signalClearance)) {
+                EndToEndMenuNotice(R.string.chat_menu_e2ee_signals_notice)
             }
         }
     }
@@ -469,9 +478,12 @@ private fun OverlayDragHandle(
     }
 }
 
-/** iOS `MessageMoreSheet.endToEndNotice` : la feuille DIT l'absence des services du serveur, elle ne les offre pas. */
+/**
+ * iOS `MessageMoreSheet.endToEndNotice` : la feuille DIT l'absence des services du serveur, elle ne les offre pas — et,
+ * propre à cet appareil (#13790), celle des gestes qui voyagent en signal chiffré (réagir, épingler, supprimer pour tous).
+ */
 @Composable
-private fun EndToEndMenuNotice() {
+private fun EndToEndMenuNotice(@StringRes text: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -482,7 +494,7 @@ private fun EndToEndMenuNotice() {
     ) {
         Icon(imageVector = MeeshyIcons.LockFilled, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(16.dp))
         Text(
-            text = stringResource(R.string.chat_menu_e2ee_notice),
+            text = stringResource(text),
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textMuted,
         )

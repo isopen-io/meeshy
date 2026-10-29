@@ -91,13 +91,23 @@ internal object PlaintextRefusal {
         lane.takeIf { it.startsWith(MESSAGE_LANE_PREFIX) }?.removePrefix(MESSAGE_LANE_PREFIX)?.takeIf { it.isNotBlank() }
 }
 
-/** `DELETE_MESSAGE`: deletes the message. */
+/**
+ * `DELETE_MESSAGE`: deletes the message for everyone. An exhausted deletion (refused in clear for an end-to-end
+ * conversation, #13790, or retries spent) refreshes the conversation of its lane, so the tombstone gives way to the
+ * server's message.
+ */
 public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
+    private val messageRepository: MessageRepository,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { messageApi.delete(row.targetId) }.toSendResult()
+        apiCall { messageApi.delete(row.targetId) }.toSendResult(PlaintextRefusal.laneConversation(row.lane), ledger)
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refresh(it) }
+    }
 }
 
 /**
@@ -108,11 +118,12 @@ public class PinMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<PinPayload>(row) { payload ->
-            apiCall { messageApi.pin(payload.conversationId, row.targetId) }.toSendResult()
+            apiCall { messageApi.pin(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId, ledger)
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
@@ -125,11 +136,12 @@ public class UnpinMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<PinPayload>(row) { payload ->
-            apiCall { messageApi.unpin(payload.conversationId, row.targetId) }.toSendResult()
+            apiCall { messageApi.unpin(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId, ledger)
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {

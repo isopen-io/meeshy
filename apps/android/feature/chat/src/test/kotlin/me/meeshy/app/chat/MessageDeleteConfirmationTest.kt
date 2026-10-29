@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.PinAction
 import org.junit.Test
 
@@ -18,6 +19,7 @@ class MessageDeleteConfirmationTest {
             canEdit = false,
             canDeleteForEveryone = canDeleteForEveryone,
             pinAction = PinAction.Unavailable,
+            signalClearance = ConversationClearance.CLEAR,
         ),
     )
 

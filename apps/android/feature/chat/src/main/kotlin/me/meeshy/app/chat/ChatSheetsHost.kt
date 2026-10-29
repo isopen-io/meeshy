@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
@@ -101,6 +102,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
+    val signalClearance = LocalChatSignalClearance.current
     val actionTarget = state.actionMessageId?.let { id ->
         state.messages.firstOrNull { it.messageId == id }
     }
@@ -179,6 +181,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onSharePiece = { pieceId -> actions.onFileAttachmentShare(actionTarget.messageId, pieceId) },
             onTranscription = { localRoute.open(MessageDetailRoute.Transcription(actionTarget.messageId)) },
             onReactions = { actions.openReactionDetails(actionTarget.messageId) },
+            signalClearance = signalClearance,
         )
     }
 
@@ -389,8 +392,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     details = details,
                     accentColor = accentColor,
                     onSelectTab = actions.selectReactionTab,
-                    onReact = { emoji -> actions.addReactionFromDetails(details.messageId, emoji) },
-                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) },
+                    // #13790 — la fiche « qui a réagi » se lit partout ; elle ne fait réagir que vers une conversation connue claire.
+                    onReact = { emoji: String -> actions.addReactionFromDetails(details.messageId, emoji) }
+                        .takeIf { PlainSignalAdmission.offers(signalClearance) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) }.takeIf { PlainSignalAdmission.offers(signalClearance) },
                     modifier = Modifier.navigationBarsPadding(),
                 )
             }

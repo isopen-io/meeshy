@@ -1,9 +1,11 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageExit
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.sdk.model.PlainSignalAdmission
 
 /**
  * A single action offered in the long-press message overlay menu (the "action grid").
@@ -106,7 +108,20 @@ data class MessageActionContext(
     val isEndToEndSealed: Boolean = false,
     /** The iOS entries the law offers ([MessageMenuEntries]) — each still needs its host ([hostedEntries]). */
     val entries: Set<MessageMenuEntries.Entry> = emptySet(),
+    /**
+     * What the device knows of the conversation's mode, the thread included (#13790): reacting, pinning and deleting for
+     * everyone are offered only when it is known clear ([PlainSignalAdmission]). Closed (unknown) until the host says.
+     */
+    val signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
 ) {
+    /** The gestures an end-to-end conversation carries as encrypted signals, which this device cannot seal yet. */
+    val offersPlainSignals: Boolean
+        get() = PlainSignalAdmission.offers(signalClearance)
+
+    /** The quick reaction strip of the menu (and its full picker). */
+    val offersReaction: Boolean
+        get() = isActionable && offersPlainSignals
+
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
      * only once it exists and is neither a still-in-flight nor a failed send. A deleted
@@ -161,10 +176,12 @@ object MessageActionMenu {
             if (MessageAction.Select in ctx.hostedEntries) add(MessageAction.Select)
             if (MessageAction.ExportCard in ctx.hostedEntries && ctx.hasText && ctx.exitOffer.offers(MessageExit.IMAGINE)) add(MessageAction.ExportCard)
         }
-        when (ctx.pinAction) {
-            PinAction.Pin -> add(MessageAction.Pin)
-            PinAction.Unpin -> add(MessageAction.Unpin)
-            PinAction.Unavailable -> Unit
+        if (ctx.offersPlainSignals) {
+            when (ctx.pinAction) {
+                PinAction.Pin -> add(MessageAction.Pin)
+                PinAction.Unpin -> add(MessageAction.Unpin)
+                PinAction.Unavailable -> Unit
+            }
         }
         if (ctx.isActionable) {
             add(if (ctx.isStarred) MessageAction.Unstar else MessageAction.Star)
@@ -172,7 +189,7 @@ object MessageActionMenu {
         if (ctx.isOutgoing && ctx.isActionable && ctx.canEdit) {
             add(MessageAction.Edit)
         }
-        if (ctx.isOutgoing && ctx.isActionable && ctx.canDeleteForEveryone) {
+        if (ctx.isOutgoing && ctx.isActionable && ctx.canDeleteForEveryone && ctx.offersPlainSignals) {
             add(MessageAction.DeleteForEveryone)
         }
         if (ctx.isActionable) {

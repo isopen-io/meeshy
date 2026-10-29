@@ -2,8 +2,11 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.Test
 
 class MessageActionMenuTest {
@@ -25,6 +28,7 @@ class MessageActionMenuTest {
         hasPlace: Boolean = false,
         hostedEntries: Set<MessageAction> = emptySet(),
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+        signalClearance: ConversationClearance = ConversationClearance.CLEAR,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -42,6 +46,7 @@ class MessageActionMenuTest {
         hasPlace = hasPlace,
         hostedEntries = hostedEntries,
         exitOffer = exitOffer,
+        signalClearance = signalClearance,
     )
 
     private fun offer(law: ContentExitLaw, blur: Boolean = false) =
@@ -440,5 +445,54 @@ class MessageActionMenuTest {
 
         assertThat(actions).doesNotContain(MessageAction.Copy)
         assertThat(actions).doesNotContain(MessageAction.Forward)
+    }
+
+    @Test
+    fun `an end-to-end conversation offers no reaction, no pin and no deletion for everyone, only for me (#13790)`() {
+        listOf(PinAction.Pin, PinAction.Unpin).forEach { pin ->
+            val context = ctx(isOutgoing = true, canDeleteForEveryone = true, pinAction = pin, signalClearance = ConversationClearance.END_TO_END)
+
+            assertThat(MessageActionMenu.actions(context))
+                .containsNoneOf(MessageAction.Pin, MessageAction.Unpin, MessageAction.DeleteForEveryone)
+            assertThat(MessageActionMenu.actions(context)).contains(MessageAction.DeleteForMe)
+            assertThat(context.offersReaction).isFalse()
+        }
+    }
+
+    @Test
+    fun `a conversation whose mode is not known yet offers none of them either (#13790)`() {
+        val context = ctx(isOutgoing = true, canDeleteForEveryone = true, signalClearance = ConversationClearance.UNKNOWN)
+
+        assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isFalse()
+    }
+
+    @Test
+    fun `a conversation known clear keeps the reaction strip, the pin and the deletion for everyone (#13790)`() {
+        val context = ctx(isOutgoing = true, canDeleteForEveryone = true)
+
+        assertThat(MessageActionMenu.actions(context)).containsAtLeast(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isTrue()
+        assertThat(ctx(isPending = true).offersReaction).isFalse()
+    }
+
+    @Test
+    fun `the one factory of the menu context is closed until the host says what it knows of the conversation (#13790)`() {
+        val context = BubbleContent(
+            messageId = "65f000000000000000000001",
+            text = "salut",
+            isOutgoing = true,
+            isTranslated = false,
+            originalText = null,
+            senderName = null,
+            showSenderName = false,
+            isEdited = false,
+            isDeleted = false,
+            createdAtIso = null,
+            deliveryStatus = DeliveryStatus.Sent,
+        ).actionContext(canWrite = true, canDeleteForEveryone = true, pinAction = PinAction.Pin)
+
+        assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isFalse()
     }
 }

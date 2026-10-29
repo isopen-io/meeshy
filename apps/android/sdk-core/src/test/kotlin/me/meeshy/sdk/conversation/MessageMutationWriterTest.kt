@@ -5,8 +5,11 @@ import java.time.Instant
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiTextTranslation
+import kotlinx.serialization.decodeFromString
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.ReactionPayload
 import me.meeshy.sdk.outbox.kindEnum
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -48,6 +51,17 @@ class MessageMutationWriterTest {
         assertThat(queued.targetId).isEqualTo("m1")
         assertThat(queued.payload).contains("❤️")
     }
+
+    @Test
+    fun `a queued reaction names its conversation, so the plaintext guard keeps it even once its message leaves Room`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message(conversationId = "c-7"))
+
+            writer(harness).toggleReactionOptimistic("m1", "❤️", isAdding = true)
+
+            val payload = harness.outbox.deliverable(OutboxLanes.REACTION).single().payload
+            assertThat(MeeshyApi.json.decodeFromString<ReactionPayload>(payload).conversationId).isEqualTo("c-7")
+        }
 
     @Test
     fun `removing a reaction decrements it and drops the emoji at zero`() = runHarnessTest { harness ->

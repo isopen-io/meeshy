@@ -217,9 +217,12 @@ public object OutboxDependencies {
     }
 }
 
-/** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
+/**
+ * Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. [conversationId] (#13790) lets the plaintext guard judge the
+ * row even once its message left Room; a row queued by an older build carries none and is judged by its cached message.
+ */
 @kotlinx.serialization.Serializable
-public data class ReactionPayload(val emoji: String)
+public data class ReactionPayload(val emoji: String, val conversationId: String? = null)
 
 /**
  * Payload of an `UPLOAD_MEDIA` outbox row. [uploadContext] is the TUS

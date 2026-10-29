@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
@@ -40,7 +41,8 @@ class SelectionOfferTest {
         isEndToEndSealed = sealed,
     )
 
-    private fun offer(vararg bubbles: BubbleContent) = SelectionOffer.of(bubbles.toList(), canWrite = true, nowMillis = 0)
+    private fun offer(vararg bubbles: BubbleContent) =
+        SelectionOffer.of(bubbles.toList(), canWrite = true, nowMillis = 0, signalClearance = ConversationClearance.CLEAR)
 
     @Test
     fun `an empty selection offers nothing`() {
@@ -90,5 +92,17 @@ class SelectionOfferTest {
     fun `idsOffering reads the same law as the menu, in the received order`() {
         val bubbles = listOf(bubble("m1", exitOffer = viewOnceExit), bubble("m2"), bubble("m3"))
         assertThat(SelectionOffer.idsOffering(MessageAction.Forward, bubbles, true, 0)).containsExactly("m2", "m3").inOrder()
+    }
+
+    @Test
+    fun `a selection in an end-to-end conversation, or one whose mode is unknown, is never deleted for everyone (#13790)`() {
+        val mine = listOf(bubble("m1", isOutgoing = true), bubble("m2", isOutgoing = true))
+
+        listOf(ConversationClearance.END_TO_END, ConversationClearance.UNKNOWN).forEach { clearance ->
+            val offer = SelectionOffer.of(mine, canWrite = true, nowMillis = 0, signalClearance = clearance)
+            assertThat(offer.deleteForEveryone).isFalse()
+            assertThat(offer.deleteForMe).isTrue()
+            assertThat(SelectionOffer.idsOffering(MessageAction.DeleteForEveryone, mine, true, 0, clearance)).isEmpty()
+        }
     }
 }

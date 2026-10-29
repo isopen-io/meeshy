@@ -94,8 +94,10 @@ internal class ChatReactionController(
         }
     }
 
+    /** #13790 — an end-to-end conversation carries reactions as encrypted signals this device cannot seal: no picker opens. */
     fun openEmojiPicker(messageId: String) {
-        state.update { it.copy(emojiPickerMessageId = messageId, actionMessageId = null) }
+        val picked = messageId.takeUnless { state.value.isEndToEnd }
+        state.update { it.copy(emojiPickerMessageId = picked, actionMessageId = null) }
     }
 
     fun dismissEmojiPicker() {
@@ -111,11 +113,12 @@ internal class ChatReactionController(
      * One toggle per `message + emoji` is in flight at a time: a second tap while the first
      * is still being persisted is inert, so a burst of taps can never send two mutations
      * that race each other's rollback snapshot. Either way the action sheet and the
-     * picker close.
+     * picker close. In an end-to-end conversation (#13790) the toggle has no effect at all:
+     * the reaction would leave in clear, which the gateway refuses.
      */
     fun toggle(messageId: String, emoji: String) {
         val key = "$messageId|$emoji"
-        if (!togglesInFlight.add(key)) {
+        if (state.value.isEndToEnd || !togglesInFlight.add(key)) {
             state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
             return
         }

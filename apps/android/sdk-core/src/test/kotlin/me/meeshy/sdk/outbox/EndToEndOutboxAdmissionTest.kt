@@ -3,6 +3,8 @@ package me.meeshy.sdk.outbox
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -14,6 +16,8 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.api.ReactionApi
+import me.meeshy.sdk.outbox.senders.AddReactionHandler
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -337,6 +341,129 @@ class EndToEndOutboxAdmissionTest {
         ledger.confirmClear(listOf("c5"))
 
         assertThat(admission.verdictFor("c5")).isEqualTo(OutboxAdmissionVerdict.ADMIT)
+        assertThat(reads).isEmpty()
+    }
+
+    // ── #13790 — réagir, épingler, supprimer pour tous : des gestes en clair que le bout en bout refuse ──
+
+    private suspend fun cacheMessage(id: String, conversationId: String) {
+        db.messageDao().upsertAll(listOf(MessageEntityFactory.cached(ApiMessage(id = id, conversationId = conversationId, content = "x"), 0)))
+    }
+
+    private suspend fun enqueueReaction(cmid: String, messageId: String, conversationId: String? = null) {
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.ADD_REACTION,
+                OutboxLanes.REACTION,
+                targetId = messageId,
+                payload = MeeshyApi.json.encodeToString(ReactionPayload("🔥", conversationId)),
+                cmid = cmid,
+            ),
+        )
+    }
+
+    private suspend fun enqueuePin(kind: OutboxKind, cmid: String, messageId: String, conversationId: String) {
+        outbox.enqueue(
+            OutboxMutation(kind, OutboxLanes.PIN, targetId = messageId, payload = MeeshyApi.json.encodeToString(PinPayload(conversationId)), cmid = cmid),
+        )
+    }
+
+    @Test
+    fun `une reaction vers une conversation chiffree de bout en bout n'atteint jamais le client HTTP`() = runTest {
+        cache("c-e2ee", "e2ee")
+        cacheMessage("msg-1", "c-e2ee")
+        enqueueReaction("r1", "msg-1")
+        val reactionApi = mockk<ReactionApi>()
+        val drainer = OutboxDrainer(
+            outbox = outbox,
+            senders = mapOf(OutboxKind.ADD_REACTION to AddReactionHandler(reactionApi, mockk(relaxed = true), MeeshyApi.json)),
+            plaintextAdmission = admission,
+        )
+
+        val report = drainer.drainLane(OutboxLanes.REACTION)
+
+        coVerify(exactly = 0) { reactionApi.add(any()) }
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(outbox.row("r1")?.lastError).isEqualTo(OutboxPlaintextAdmission.REASON_END_TO_END)
+    }
+
+    @Test
+    fun `une reaction portant sa conversation reste gardee quand son message a quitte Room`() = runTest {
+        ledger.learn("c-sealed")
+        enqueueReaction("r1", "msg-absent", conversationId = "c-sealed")
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.REACTION)
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `une reaction dont la conversation ne se retrouve pas ne part pas en clair`() = runTest {
+        enqueueReaction("r1", "msg-absent")
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.REACTION)
+
+        assertThat(sent).isEmpty()
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(outbox.row("r1")?.lastError).isEqualTo(OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE)
+    }
+
+    @Test
+    fun `une reaction vers un mode inconnu et illisible attend sans essai compte, jamais envoyee`() = runTest {
+        cache("c-stale", null)
+        cacheMessage("msg-1", "c-stale")
+        enqueueReaction("r1", "msg-1")
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.REACTION)
+
+        assertThat(sent).isEmpty()
+        assertThat(report.stoppedOnTransientFailure).isTrue()
+        assertThat(outbox.row("r1")?.stateEnum).isEqualTo(OutboxState.PENDING)
+        assertThat(outbox.row("r1")?.attempts).isEqualTo(0)
+    }
+
+    @Test
+    fun `epingler ou desepingler dans une conversation e2ee ne part pas`() = runTest {
+        cache("c-e2ee", "e2ee")
+        enqueuePin(OutboxKind.PIN_MESSAGE, "p1", "msg-1", "c-e2ee")
+        enqueuePin(OutboxKind.UNPIN_MESSAGE, "p2", "msg-2", "c-e2ee")
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.PIN)
+
+        assertThat(sent).isEmpty()
+        assertThat(report.exhausted).isEqualTo(2)
+    }
+
+    @Test
+    fun `supprimer pour tous dans une conversation e2ee ne part pas, meme quand le message a quitte Room`() = runTest {
+        ledger.learn("c-e2ee")
+        enqueue(OutboxKind.DELETE_MESSAGE, "d1", targetId = "msg-absent", lane = OutboxLanes.forMessage("c-e2ee"))
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-e2ee"))
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `reagir, epingler et supprimer pour tous partent vers une conversation connue claire`() = runTest {
+        cache("c-plain", null)
+        ledger.confirmClear(listOf("c-plain"))
+        cacheMessage("msg-1", "c-plain")
+        enqueueReaction("r1", "msg-1")
+        enqueuePin(OutboxKind.PIN_MESSAGE, "p1", "msg-1", "c-plain")
+        enqueue(OutboxKind.DELETE_MESSAGE, "d1", targetId = "msg-1", lane = OutboxLanes.forMessage("c-plain"))
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.REACTION)
+        drainer(sent).drainLane(OutboxLanes.PIN)
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-plain"))
+
+        assertThat(sent).containsExactly("r1", "p1", "d1").inOrder()
         assertThat(reads).isEmpty()
     }
 }

@@ -33,7 +33,7 @@ internal class MessageMutationWriter(
      * whether the toggle was applied.
      */
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
-        updater.update(messageId, requireSynced = true) { message ->
+        val updated = updater.update(messageId, requireSynced = true) { message ->
             message.copy(reactionSummary = message.reactionSummary.shifted(emoji, if (isAdding) 1 else -1))
         } ?: return false
         outboxRepository.enqueue(
@@ -41,7 +41,7 @@ internal class MessageMutationWriter(
                 kind = if (isAdding) OutboxKind.ADD_REACTION else OutboxKind.REMOVE_REACTION,
                 lane = OutboxLanes.REACTION,
                 targetId = messageId,
-                payload = MeeshyApi.json.encodeToString(ReactionPayload(emoji)),
+                payload = MeeshyApi.json.encodeToString(ReactionPayload(emoji, updated.conversationId)),
             ),
         )
         return true

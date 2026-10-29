@@ -868,9 +868,15 @@ class ChatViewModel @Inject constructor(
      * "Delete for everyone" — a server round-trip that tombstones the message
      * for all participants. Only offered for an own message within the
      * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
+     *
+     * #13790 — reacting, pinning and deleting for everyone travel as encrypted signals in an
+     * end-to-end conversation, which this device cannot seal: there they have no effect at all
+     * (no optimistic change, no outbox row), whichever path called. An unknown mode is queued —
+     * the outbox reads the mode before anything leaves (`EndToEndOutboxAdmission`).
      */
     fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
+        if (_state.value.isEndToEnd) return
         viewModelScope.launch {
             try {
                 if (messageRepository.deleteOptimistic(messageId)) {
@@ -910,6 +916,10 @@ class ChatViewModel @Inject constructor(
      * A deleted (or otherwise unresolvable) bubble is inert — see [MessagePinToggle].
      */
     fun togglePin(messageId: String) {
+        if (_state.value.isEndToEnd) {
+            _state.update { it.copy(actionMessageId = null) }
+            return
+        }
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         val pin = when (MessagePinToggle.resolve(bubble?.isDeleted ?: true, bubble?.pinnedAtIso)) {
             PinAction.Pin -> true

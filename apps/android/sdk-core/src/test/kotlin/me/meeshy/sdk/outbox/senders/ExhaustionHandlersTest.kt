@@ -21,6 +21,7 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
+import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.post.PostRepository
@@ -107,6 +108,14 @@ class ExhaustionHandlersTest {
     }
 
     @Test
+    fun `an exhausted delete for everyone refreshes the conversation of its lane, so the message comes back`() = runTest {
+        DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
+            .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
+
+        coVerify(exactly = 1) { messageRepository.refresh("c1") }
+    }
+
+    @Test
     fun `an exhausted pin whose payload cannot be read refreshes nothing`() = runTest {
         PinMessageHandler(mockk<MessageApi>(), messageRepository, senderJson)
             .onExhausted(outboxRow(OutboxKind.PIN_MESSAGE, payload = "garbage"))
@@ -143,9 +152,6 @@ class ExhaustionHandlersTest {
         val outboxRepository = mockk<OutboxRepository>()
         val untouchable: Map<OutboxKind, OutboxKindHandler> = mapOf(
             OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
-            OutboxKind.DELETE_MESSAGE to DeleteMessageHandler(messageApi),
-            OutboxKind.ADD_REACTION to AddReactionHandler(reactionApi, senderJson),
-            OutboxKind.REMOVE_REACTION to RemoveReactionHandler(reactionApi, senderJson),
             OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi),
             OutboxKind.MARK_UNREAD to MarkUnreadHandler(conversationApi),
             OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson),

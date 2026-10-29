@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.selection.MessageSelection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.unit.Dp
@@ -345,7 +346,8 @@ internal fun ChatListHost(
             },
             onForward = { attachmentId -> actions.openForwardPiece(overlay.messageId, attachmentId) },
             onDelete = { attachmentId -> actions.onPieceDelete(overlay.messageId, attachmentId) },
-            quickReactions = state.quickReactions,
+            // #13790 — la bande d'une pièce ne fait réagir que vers une conversation connue claire.
+            quickReactions = if (PlainSignalAdmission.offers(LocalChatSignalClearance.current)) state.quickReactions else emptyList(),
             onReact = { attachmentId, emoji -> actions.onPieceReact(overlay.messageId, attachmentId, emoji) },
             onDismiss = { pieceOverlay = null },
         )

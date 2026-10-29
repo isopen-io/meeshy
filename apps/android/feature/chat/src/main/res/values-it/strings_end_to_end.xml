@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="chat_composer_end_to_end">Questa conversazione è crittografata end-to-end: scrivi dall’app Meeshy su iPhone</string>
+    <string name="chat_menu_e2ee_signals_notice">Crittografata end-to-end: reagire, fissare ed eliminare per tutti si fanno dall’app Meeshy su iPhone.</string>
 </resources>

@@ -30,6 +30,9 @@ public interface OutboxPlaintextAdmission {
     public companion object {
         public const val REASON_END_TO_END: String = "E2EE_PLAINTEXT_WITHHELD: end-to-end encrypted conversation"
 
+        /** #13790 — la passerelle a refusé un geste en clair (réaction, épingle, suppression pour tous) : il voyage en signal chiffré. */
+        public const val REASON_SIGNAL_CHANNEL_REQUIRED: String = "E2EE_SIGNAL_CHANNEL_REQUIRED: plaintext gesture refused in an end-to-end conversation"
+
         /** #13628 — la passerelle refuse de servir la conversation (404, 403, 410) : son mode ne sera jamais connu, la ligne est épuisée. */
         public const val REASON_CONVERSATION_UNREACHABLE: String = "CONVERSATION_UNREACHABLE: mode cannot be learned, plaintext withheld"
 
@@ -99,8 +102,9 @@ public class RepositoryConversationModeReader @Inject constructor(
 /**
  * Le régime lu pour chaque ligne qui porte du contenu vers une conversation : le registre du
  * compte, puis le mode de la ligne Room (que `ConversationCacheSource` ne rétrograde jamais).
- * `SEND_MESSAGE` vise sa conversation, `EDIT_MESSAGE` le message dont on lit la conversation, et
- * `UPLOAD_MEDIA` les messages qui l'attendent. Une conversation introuvable ou jamais servie est INCONNUE
+ * `SEND_MESSAGE` vise sa conversation, `EDIT_MESSAGE` le message dont on lit la conversation,
+ * `UPLOAD_MEDIA` les messages qui l'attendent, et réagir, épingler ou supprimer pour tous la conversation du message visé
+ * (#13790) — introuvable, le geste ne part pas. Une conversation introuvable ou jamais servie est INCONNUE
  * (#13628), et le clair n'en part pas avant qu'on l'ait relue.
  *
  * **Fail-closed sur l'INCONNU (#13628)** : un mode nul n'est « clair » que si la passerelle l'a SERVI nul
@@ -116,7 +120,12 @@ public class EndToEndOutboxAdmission @Inject constructor(
     private val modeReader: ConversationModeReader = ConversationModeReader.Unavailable,
 ) : OutboxPlaintextAdmission {
 
-    override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict = judgeConversations(conversationsOf(row))
+    override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
+        val conversations = conversationsOf(row)
+        // #13790 — un geste en clair dont la conversation ne se retrouve pas ne part pas : rien ne dit qu'elle est claire.
+        if (conversations.isEmpty() && row.kindEnum in PLAIN_SIGNAL_KINDS) return OutboxAdmissionVerdict.UNREACHABLE
+        return judgeConversations(conversations)
+    }
 
     /**
      * Le verdict du clair pour UNE conversation, AVANT qu'une bulle n'y naisse (la réponse d'une bannière, #13678) : la même
@@ -166,8 +175,21 @@ public class EndToEndOutboxAdmission @Inject constructor(
             outbox.dependentsOf(row.cmid)
                 .filter { it.kindEnum == OutboxKind.SEND_MESSAGE }
                 .map { it.targetId }
+        // #13790 — réagir, épingler, supprimer pour tous : des gestes en clair que le bout en bout refuse (canal des signaux).
+        // La conversation inscrite par la ligne d'abord (file du message, charge), puis celle du message en cache.
+        OutboxKind.DELETE_MESSAGE -> listOfNotNull(laneConversation(row.lane), messageConversation(row.targetId)).distinct()
+        OutboxKind.ADD_REACTION, OutboxKind.REMOVE_REACTION ->
+            listOfNotNull(payloadOf<ReactionPayload>(row)?.conversationId, messageConversation(row.targetId)).distinct()
+        OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE ->
+            listOfNotNull(payloadOf<PinPayload>(row)?.conversationId, messageConversation(row.targetId)).distinct()
         else -> emptyList()
     }
+
+    private suspend fun messageConversation(messageId: String): String? =
+        messageDao.find(messageId)?.conversationId?.takeIf { it.isNotBlank() }
+
+    private inline fun <reified P> payloadOf(row: OutboxEntity): P? =
+        row.payload.takeIf { it.isNotBlank() }?.let { runCatching { MeeshyApi.json.decodeFromString<P>(it) }.getOrNull() }
 
     private fun laneConversation(lane: String): String? =
         lane.takeIf { it.startsWith(MESSAGE_LANE_PREFIX) }?.removePrefix(MESSAGE_LANE_PREFIX)?.takeIf { it.isNotBlank() }
@@ -188,6 +210,14 @@ public class EndToEndOutboxAdmission @Inject constructor(
 
     private companion object {
         val MESSAGE_LANE_PREFIX: String = OutboxLanes.forMessage("")
+
+        val PLAIN_SIGNAL_KINDS: Set<OutboxKind> = setOf(
+            OutboxKind.DELETE_MESSAGE,
+            OutboxKind.ADD_REACTION,
+            OutboxKind.REMOVE_REACTION,
+            OutboxKind.PIN_MESSAGE,
+            OutboxKind.UNPIN_MESSAGE,
+        )
     }
 }
 
