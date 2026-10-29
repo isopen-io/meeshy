@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -19,6 +22,7 @@ import kotlinx.coroutines.isActive
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.ui.component.audio.AudioTrackSurface
 import me.meeshy.ui.component.media.rememberThumbHashPainter
+import me.meeshy.ui.component.video.ReelPlayerHandle
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.theme.hexColor
@@ -42,8 +46,10 @@ internal fun StorySceneBackground(
     playing: Boolean,
     muted: Boolean,
     loads: Boolean = true,
+    rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
+    onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
 ) {
     when {
         slide.backgroundVideoUrl != null -> {
@@ -51,7 +57,7 @@ internal fun StorySceneBackground(
             ReelVideoSurface(
                 mediaUrl = slide.backgroundVideoUrl,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 muted = muted,
                 loads = loads,
                 // Un vocal ou un appel prend le son : la scène se fige avec la vidéo.
@@ -59,6 +65,7 @@ internal fun StorySceneBackground(
                 // La fenêtre de lecture que l'auteur a posée (#5129) — `null` quand la source joue en entier.
                 sourceStartMs = slide.backgroundVideoWindow?.startMs,
                 sourceEndMs = slide.backgroundVideoWindow?.endMs,
+                onPlayer = onBackgroundPlayer,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
             )
         }
@@ -85,15 +92,24 @@ internal fun StorySceneBackground(
     }
 }
 
-/** Les pistes sonores de la scène (fond puis premier plan) ; [muted] les ramène à 0. */
+/**
+ * Les pistes sonores de la scène (fond puis premier plan) ; [muted] les ramène à 0. [lap] : le tour d'une scène
+ * rejouée en boucle — une piste qui ne boucle pas d'elle-même repart à chaque tour ([StorySceneLoop]).
+ */
 @Composable
-internal fun StorySceneAudio(slide: StorySlideView, playing: Boolean, muted: Boolean) {
+internal fun StorySceneAudio(
+    slide: StorySlideView,
+    playing: Boolean,
+    muted: Boolean,
+    rewindWhenInactive: Boolean = false,
+    lap: Int = 0,
+) {
     slide.backgroundAudioUrl?.let { url ->
-        key(url) {
+        key(url, StorySceneLoop.restartKey(loops = slide.backgroundLoop, lap = lap)) {
             AudioTrackSurface(
                 mediaUrl = url,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 volume = if (muted) 0f else 1f,
                 loop = slide.backgroundLoop,
                 sourceStartMs = slide.backgroundAudioWindow?.startMs,
@@ -102,11 +118,11 @@ internal fun StorySceneAudio(slide: StorySlideView, playing: Boolean, muted: Boo
         }
     }
     slide.foregroundAudioUrl?.let { url ->
-        key(url) {
+        key(url, StorySceneLoop.restartKey(loops = false, lap = lap)) {
             AudioTrackSurface(
                 mediaUrl = url,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 volume = if (muted) 0f else 1f,
                 loop = false,
                 // Un vocal rogné compte autant qu'une vidéo rognée (#5129).
@@ -123,7 +139,9 @@ internal fun StorySceneAudio(slide: StorySlideView, playing: Boolean, muted: Boo
  *
  * [loads] : les décodeurs (vidéos, sons) ne naissent que pour la page affichée et ses voisines ; hors de cette
  * fenêtre la scène n'est que son fond statique, ses textes et ses stickers. [playing] : l'horloge avance et les
- * médias jouent. Une scène qui n'est plus [playing] sans être [rewindWhenIdle] garde sa position.
+ * médias jouent. Une scène qui n'est plus [playing] sans être [rewindWhenIdle] garde sa position ; avec, l'horloge
+ * ET les médias repartent de zéro, ensemble. [onBackgroundPlayer] tend le lecteur de la vidéo de fond (sonde de sa
+ * piste audio).
  */
 @Composable
 fun StoryScenePlayer(
@@ -134,8 +152,10 @@ fun StoryScenePlayer(
     rewindWhenIdle: Boolean,
     modifier: Modifier = Modifier,
     onAudioFocusLost: () -> Unit = {},
+    onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
 ) {
     val progress = remember(slide.id) { Animatable(0f) }
+    var lap by remember(slide.id) { mutableIntStateOf(0) }
     val durationMs = slide.autoAdvanceMillis.coerceAtLeast(1)
     LaunchedEffect(slide.id, playing, loads) {
         if (!playing || !loads) return@LaunchedEffect
@@ -143,6 +163,7 @@ fun StoryScenePlayer(
             val remainingMs = ((1f - progress.value) * durationMs).roundToInt().coerceAtLeast(0)
             progress.animateTo(1f, tween(durationMillis = remainingMs, easing = LinearEasing))
             progress.snapTo(0f)
+            lap += 1
         }
     }
     LaunchedEffect(rewindWhenIdle) {
@@ -154,7 +175,9 @@ fun StoryScenePlayer(
             playing = playing,
             muted = muted,
             loads = loads,
+            rewindWhenInactive = rewindWhenIdle,
             onAudioFocusLost = onAudioFocusLost,
+            onBackgroundPlayer = onBackgroundPlayer,
         )
         if (loads) {
             StorySceneOverlays(
@@ -163,9 +186,19 @@ fun StoryScenePlayer(
                 slideDurationMs = durationMs,
                 playing = playing,
                 muted = muted,
+                rewindWhenInactive = rewindWhenIdle,
                 onAudioFocusLost = onAudioFocusLost,
             )
-            StorySceneAudio(slide = slide, playing = playing, muted = muted)
+            StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
         }
     }
+}
+
+/**
+ * Le tour d'une scène rejouée en boucle (réel, iOS `MeeshyScenePlayer` en mode `.reel`) : une piste qui boucle
+ * d'elle-même garde son fil d'un tour à l'autre, une piste qui ne boucle pas (un vocal posé) repart avec la scène —
+ * sinon elle se tairait dès le deuxième tour.
+ */
+object StorySceneLoop {
+    fun restartKey(loops: Boolean, lap: Int): Int = if (loops) 0 else lap
 }

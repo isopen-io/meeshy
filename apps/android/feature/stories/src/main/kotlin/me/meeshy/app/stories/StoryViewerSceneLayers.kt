@@ -143,6 +143,7 @@ internal fun StoryForegroundLayer(
     playing: Boolean,
     muted: Boolean,
     modifier: Modifier = Modifier,
+    rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
 ) {
     val animated = media.animated(playheadSeconds)
@@ -166,7 +167,7 @@ internal fun StoryForegroundLayer(
             ReelVideoSurface(
                 mediaUrl = media.url,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 muted = muted,
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
