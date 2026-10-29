@@ -104,6 +104,9 @@ data class PackShopResponse(
         balance = purchase.balance ?: balance,
     )
 
+    /** Le solde que dit `game:updated` : le serveur seul le fixe, la vitrine le reprend tel quel. */
+    fun withBalance(balance: Int): PackShopResponse = copy(balance = balance)
+
     companion object {
         /** Les domaines que la boutique Android propose, dans l'ordre des puces. */
         val OFFERED: List<AppearancePackDomain> = listOf(

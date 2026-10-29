@@ -152,6 +152,9 @@ object SocketEventNames {
     const val PRESENCE_APP_STATE = "presence:app-state"
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
+    // game
+    const val GAME_UPDATED = "game:updated"
+
     // pack
     const val PACK_INSTALLATION_UPDATED = "pack:installation-updated"
 
@@ -305,6 +308,7 @@ object SocketEventNames {
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
         ENGAGEMENT_CONVERSATION_UPDATED,
+        GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
         LOCATION_LIVE_STOP,

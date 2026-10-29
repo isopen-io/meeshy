@@ -36,3 +36,28 @@ class MessageSocketManagerPackInstallationTest {
         }
     }
 }
+
+@RunWith(RobolectricTestRunner::class)
+class MessageSocketManagerGameUpdatedTest {
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false; coerceInputValues = true }
+
+    @Test
+    fun `game updated is routed with the shape the gateway emits and a bad block does not drop it`() = runTest {
+        val socket: SocketManager = mockk(relaxed = true)
+        val handlers = mutableMapOf<String, (Array<Any>) -> Unit>()
+        every { socket.on(any(), any()) } answers { handlers[firstArg()] = secondArg() }
+        val manager = MessageSocketManager(socket, json, SyncSeqTracker()).also { it.attach() }
+
+        manager.gameUpdated.test {
+            handlers.getValue("game:updated").invoke(
+                arrayOf(JSONObject("""{"gameRevision":1761700000000,"reason":"spend","game":{"treasury":"oops"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.gameRevision).isEqualTo(1_761_700_000_000)
+            assertThat(event.reason).isEqualTo("spend")
+            assertThat(event.balance).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+}

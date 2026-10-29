@@ -21,6 +21,8 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlowOf
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
+import me.meeshy.sdk.model.game.GameUpdatedEvent
+import me.meeshy.sdk.model.game.shouldApplyGameState
 import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.packs.PackPurchaseRefusal
 import me.meeshy.sdk.model.packs.PackPurchaseResponse
@@ -75,6 +77,7 @@ class PackShopRepository(
 
     private val writes = Mutex()
     private var localWrites = 0L
+    private var appliedGameRevision: Long? = null
 
     fun shop(onSyncError: (Throwable) -> Unit = {}): Flow<CacheResult<PackShopResponse>> = cacheFirstFlowOf(
         policy = POLICY,
@@ -123,9 +126,33 @@ class PackShopRepository(
         if (fence == null || ticket == null || fence.isCurrent(ticket)) _installations.emit(event)
     }
 
+    /**
+     * `game:updated` reçu sous [ticket] (pris AU REÇU) : le solde de Meeshes servi par le trésor de l'événement remplace
+     * celui de la vitrine en cache, sans débit ni calcul local. Un état STRICTEMENT plus ancien que le dernier appliqué
+     * est ignoré (deux écritures qui se croisent) ; un événement sans bloc lisible relit la vitrine. Un compte clos
+     * depuis ne reçoit rien.
+     */
+    suspend fun onGameUpdated(event: GameUpdatedEvent, ticket: AccountTicket?) {
+        if (fence != null && ticket != null && !fence.isCurrent(ticket)) return
+        val balance = event.balance
+        val applied = writes.withLock {
+            if (!shouldApplyGameState(event.gameRevision, appliedGameRevision)) return
+            event.gameRevision?.let { appliedGameRevision = maxOf(it, appliedGameRevision ?: it) }
+            if (balance != null) {
+                localWrites += 1
+                cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.withBalance(balance) }
+            }
+            balance != null
+        }
+        if (!applied && cache.get(NAMESPACE, KEY, PackShopResponse.serializer()) != null) refresh()
+    }
+
     suspend fun installationTicket(): AccountTicket? = cache.ticket()
 
-    override suspend fun clear() = cache.clearNamespace(NAMESPACE)
+    override suspend fun clear() {
+        writes.withLock { appliedGameRevision = null }
+        cache.clearNamespace(NAMESPACE)
+    }
 
     private suspend fun fetchShop(): PackShopResponse =
         when (val result = apiCall { api.shop(PackShopResponse.OFFERED) }) {
