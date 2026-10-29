@@ -1,11 +1,15 @@
 package me.meeshy.app.onboarding
 
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
 import me.meeshy.sdk.game.OnboardingPresence
@@ -24,7 +28,11 @@ import org.robolectric.annotation.Config
 
 private class LayerGateway(var served: ApiOnboardingState? = ApiOnboardingState(eligible = true)) : OnboardingGateway {
     val settled = mutableSetOf<String>()
-    override suspend fun fetchState() = served
+    var fetches = 0
+    override suspend fun fetchState(): ApiOnboardingState? {
+        fetches += 1
+        return served
+    }
     override suspend fun record(step: OnboardingStepId, outcome: OnboardingStepOutcome) = Unit
     override suspend fun finish() = Unit
     override suspend fun updateLanguages(primary: String, secondary: String?) = true
@@ -48,6 +56,17 @@ private object LayerTexts : OnboardingTexts {
     override fun join(names: List<String>) = names.joinToString("+")
 }
 
+private class TestLifecycle : LifecycleOwner {
+    val registry: LifecycleRegistry = LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
+    override val lifecycle: Lifecycle get() = registry
+}
+
+private val emailFirst = ApiOnboardingState(
+    eligible = true,
+    emailVerified = false,
+    seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.AGE),
+)
+
 private val ada = MeeshyUser(id = "u1", username = "ada", displayName = "Ada", email = "ada@example.com", systemLanguage = "fr")
 
 @RunWith(RobolectricTestRunner::class)
@@ -60,21 +79,26 @@ class OnboardingLayerTest {
     private fun mount(
         gateway: LayerGateway = LayerGateway(),
         presence: OnboardingPresence = OnboardingPresence(),
-        user: MeeshyUser? = ada,
+        user: MutableState<MeeshyUser?> = mutableStateOf(ada),
         composerOpen: Boolean = false,
+        callOpen: MutableState<Boolean> = mutableStateOf(false),
+        lifecycle: TestLifecycle = TestLifecycle(),
     ): Pair<OnboardingPresence, OnboardingViewModel> {
         val model = OnboardingViewModel(gateway, LayerTexts).apply { pause = { } }
         compose.setContent {
-            MeeshyTheme {
-                OnboardingLayer(
-                    viewModel = model,
-                    presence = presence,
-                    user = user,
-                    isRoutedElsewhere = false,
-                    isCelebrating = false,
-                    isStoryComposerOpen = composerOpen,
-                    navigation = OnboardingNavigation(),
-                )
+            CompositionLocalProvider(LocalLifecycleOwner provides lifecycle) {
+                MeeshyTheme {
+                    OnboardingLayer(
+                        viewModel = model,
+                        presence = presence,
+                        user = user.value,
+                        isRoutedElsewhere = false,
+                        isCelebrating = false,
+                        isStoryComposerOpen = composerOpen,
+                        isCallOpen = callOpen.value,
+                        navigation = OnboardingNavigation(),
+                    )
+                }
             }
         }
         compose.waitForIdle()
@@ -100,7 +124,7 @@ class OnboardingLayerTest {
 
     @Test
     fun `sans utilisateur connu rien ne demarre`() {
-        val (presence, _) = mount(user = null)
+        val (presence, _) = mount(user = mutableStateOf(null))
 
         compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertDoesNotExist()
         assertThat(presence.isPresented.value).isFalse()
@@ -123,5 +147,58 @@ class OnboardingLayerTest {
 
         compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertDoesNotExist()
         assertThat(presence.isPresented.value).isTrue()
+    }
+
+    @Test
+    fun `la session fermee pendant le parcours retire le calque et libere la revelation d'un palier`() {
+        val user = mutableStateOf<MeeshyUser?>(ada)
+        val (presence, _) = mount(user = user)
+
+        user.value = null
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertDoesNotExist()
+        assertThat(presence.isPresented.value).isFalse()
+    }
+
+    @Test
+    fun `un appel ouvert passe devant le calque, qui revient a sa fin`() {
+        val call = mutableStateOf(true)
+        val (presence, _) = mount(callOpen = call)
+
+        compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertDoesNotExist()
+        assertThat(presence.isPresented.value).isTrue()
+
+        call.value = false
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(ONBOARDING_OVERLAY_TAG).assertExists()
+    }
+
+    @Test
+    fun `la carte adresse relit l'etat toutes les cinq secondes au premier plan`() {
+        val gateway = LayerGateway(served = emailFirst)
+        mount(gateway = gateway)
+        val before = gateway.fetches
+
+        compose.mainClock.advanceTimeBy(5_100)
+        compose.waitForIdle()
+
+        assertThat(gateway.fetches).isGreaterThan(before)
+    }
+
+    @Test
+    fun `en arriere-plan la carte adresse ne relit plus rien`() {
+        val gateway = LayerGateway(served = emailFirst)
+        val lifecycle = TestLifecycle()
+        mount(gateway = gateway, lifecycle = lifecycle)
+
+        compose.runOnIdle { lifecycle.registry.currentState = Lifecycle.State.CREATED }
+        compose.waitForIdle()
+        val before = gateway.fetches
+        compose.mainClock.advanceTimeBy(20_000)
+        compose.waitForIdle()
+
+        assertThat(gateway.fetches).isEqualTo(before)
     }
 }

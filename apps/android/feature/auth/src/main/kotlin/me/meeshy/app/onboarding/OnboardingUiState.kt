@@ -32,6 +32,8 @@ data class OnboardingUiState(
     val storyReward: Int? = null,
     val storyVisibility: OnboardingStoryVisibility = OnboardingStoryVisibility.FRIENDS,
     val storyNeedsEmailVerification: Boolean = false,
+    /** Le composeur s'est refermé sur une publication que le serveur n'a pas encore vue : la carte relit l'état. */
+    val storyAwaitsPublication: Boolean = false,
     val verificationLinkState: OnboardingSendState = OnboardingSendState.IDLE,
     val accountEmail: String? = null,
     val userDisplayName: String = "",

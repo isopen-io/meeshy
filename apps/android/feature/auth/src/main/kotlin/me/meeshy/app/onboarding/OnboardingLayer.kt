@@ -13,7 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.auth.R
@@ -34,7 +36,7 @@ class OnboardingNavigation(
     val signOut: () -> Unit = {},
 )
 
-/** Le délai entre deux relectures de l'état de vérification tant qu'une carte l'attend. */
+/** Le délai entre deux relectures de l'état serveur tant qu'une carte l'attend (adresse vérifiée, story publiée). */
 private const val VERIFICATION_WATCH_MS = 5_000L
 
 /**
@@ -43,8 +45,14 @@ private const val VERIFICATION_WATCH_MS = 5_000L
  * attendent), et les portes qui sortent du calque.
  *
  * Le calque s'efface pendant que le composeur de story est ouvert ([isStoryComposerOpen]) sans que le parcours finisse ;
- * à sa fermeture le modèle relit si la story est partie. Le retour système ne ferme rien, comme iOS : « Tout passer » est
- * visible dès la première carte, et le récapitulatif a ses deux sorties.
+ * à sa fermeture le modèle relit si la story est partie. Il s'efface de même devant un appel ([isCallOpen]) : sur iOS
+ * l'écran d'appel est une présentation modale, PAR-DESSUS le calque, et un appel entrant ne se cache jamais derrière
+ * une carte. Le retour système ne ferme rien, comme iOS : « Tout passer » est visible dès la première carte, et le
+ * récapitulatif a ses deux sorties.
+ *
+ * Le modèle vit avec l'activité, pas avec la session : une session fermée ([user] nul) le remet à zéro, sans quoi le
+ * calque recouvrirait l'écran de connexion. Les relectures périodiques ne tournent qu'au premier plan — iOS suspend
+ * l'app en arrière-plan, Android non.
  */
 @Composable
 fun OnboardingLayer(
@@ -55,6 +63,7 @@ fun OnboardingLayer(
     isCelebrating: Boolean,
     isStoryComposerOpen: Boolean,
     navigation: OnboardingNavigation,
+    isCallOpen: Boolean = false,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -64,7 +73,7 @@ fun OnboardingLayer(
 
     LaunchedEffect(isRoutedElsewhere) { viewModel.routingChanged(isRoutedElsewhere) }
     LaunchedEffect(isCelebrating) { viewModel.celebrationChanged(isCelebrating) }
-    LaunchedEffect(user?.id) { user?.let { viewModel.start(it) } }
+    LaunchedEffect(user?.id) { if (user == null) viewModel.sessionEnded() else viewModel.start(user) }
     LaunchedEffect(state.isPresented) { presence.update(state.isPresented) }
     LaunchedEffect(state.signOutRequested) { if (state.signOutRequested) navigation.signOut() }
 
@@ -81,14 +90,19 @@ fun OnboardingLayer(
 
     val card = state.card
     LaunchedEffect(card) { if (card == OnboardingCard.Step(OnboardingStepId.FRIENDS)) viewModel.friendsCardAppeared() }
-    val watchesVerification = state.isPresented && (
+    val onStoryCard = card == OnboardingCard.Step(OnboardingStepId.STORY)
+    val watchesServer = state.isPresented && (
         card == OnboardingCard.Step(OnboardingStepId.EMAIL) ||
-            (state.storyNeedsEmailVerification && card == OnboardingCard.Step(OnboardingStepId.STORY))
+            (onStoryCard && (state.storyNeedsEmailVerification || state.storyAwaitsPublication))
         )
-    LaunchedEffect(watchesVerification) {
-        while (watchesVerification) {
-            delay(VERIFICATION_WATCH_MS)
-            viewModel.refreshVerification()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(watchesServer, lifecycle) {
+        if (!watchesServer) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(VERIFICATION_WATCH_MS)
+                viewModel.refreshVerification()
+            }
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -98,7 +112,7 @@ fun OnboardingLayer(
         }
     }
 
-    val visible = state.isPresented && !isStoryComposerOpen
+    val visible = state.isPresented && !isStoryComposerOpen && !isCallOpen
     BackHandler(enabled = visible) { }
     if (!visible) return
 

@@ -32,4 +32,12 @@ class OnboardingRootRulesTest {
         assertThat(OnboardingRootRules.isStoryComposer(Routes.FEED)).isFalse()
         assertThat(OnboardingRootRules.isStoryComposer(null)).isFalse()
     }
+
+    @Test
+    fun `l'ecran d'appel passe devant le calque, comme sa presentation modale sur iOS`() {
+        assertThat(OnboardingRootRules.isCallOpen(CallRoute.PATTERN)).isTrue()
+        assertThat(OnboardingRootRules.isCallOpen(Routes.CONVERSATIONS)).isFalse()
+        assertThat(OnboardingRootRules.isCallOpen(null)).isFalse()
+        assertThat(OnboardingRootRules.coversRoot(isPresented = true, currentRoute = CallRoute.PATTERN)).isFalse()
+    }
 }
