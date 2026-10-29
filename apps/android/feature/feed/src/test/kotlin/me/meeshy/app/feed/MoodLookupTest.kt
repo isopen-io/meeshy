@@ -55,4 +55,11 @@ class MoodLookupTest {
         val lookup = MoodLookup.from(StatusesUiState(statuses = listOf(entry("s1", "u1", " "))))
         assertThat(lookup.emojiOf("u1")).isNull()
     }
+
+    @Test
+    fun `la bulle lit l humeur vivante de l ami`() {
+        val lookup = MoodLookup.from(StatusesUiState(statuses = listOf(entry("s1", "u1", "🔥"))))
+        assertThat(lookup.entryOf("u1")?.id).isEqualTo("s1")
+        assertThat(lookup.entryOf("inconnu")).isNull()
+    }
 }

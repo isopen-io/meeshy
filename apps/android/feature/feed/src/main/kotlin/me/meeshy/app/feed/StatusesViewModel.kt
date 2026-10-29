@@ -428,6 +428,7 @@ class StatusesViewModel @Inject constructor(
                 )
                 when (result) {
                     is NetworkResult.Success -> {
+                        if (statusBarCacheRepository.accountChanged(ticket)) return@launch
                         listState.update { it.created(result.data) }
                         statusBarCache.save(mode.value, listState.value.statuses)
                         statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
@@ -478,17 +479,19 @@ class StatusesViewModel @Inject constructor(
     fun react(statusId: String, emoji: String) {
         val snapshot = listState.value
         if (snapshot.statuses.none { it.id == statusId }) return
+        val ticket = statusBarCacheRepository.ticket()
         listState.update { it.reacted(statusId, emoji) }
         viewModelScope.launch {
             try {
                 val result = statusRepository.react(statusId, emoji)
-                if (result is NetworkResult.Failure) {
+                if (result is NetworkResult.Failure && !statusBarCacheRepository.accountChanged(ticket)) {
                     listState.value = snapshot
                     status.update { it.copy(error = result.error.message) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (statusBarCacheRepository.accountChanged(ticket)) return@launch
                 listState.value = snapshot
                 status.update { it.copy(error = e.message) }
             }

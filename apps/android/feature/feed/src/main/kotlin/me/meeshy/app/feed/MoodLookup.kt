@@ -24,6 +24,9 @@ data class MoodLookup(
     /** L'identifiant du statut de [userId] — la porte vers l'écran d'humeur. */
     fun statusIdOf(userId: String): String? = byUser[userId]?.id
 
+    /** L'humeur vivante de [userId] — ce que sa bulle montre (#13662). */
+    fun entryOf(userId: String): StatusEntry? = byUser[userId]
+
     /** L'humeur du compte courant, présente même sans anneau de story. */
     val myEmoji: String? get() = mine?.moodEmoji?.takeIf { it.isNotBlank() }
 

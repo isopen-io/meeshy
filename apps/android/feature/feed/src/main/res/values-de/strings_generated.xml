@@ -99,6 +99,8 @@
     <string name="feed_unknown_author">Unbekannt</string>
     <string name="feed_unlike">Gefällt mir nicht mehr</string>
     <string name="hashtag_results_empty">Keine Beiträge mit #%1$s</string>
+    <string name="mood_bubble_react">Reaktion %1$s</string>
+    <string name="mood_bubble_reply">Antworten</string>
     <string name="mood_spotlight_close">Schließen</string>
     <string name="mood_spotlight_loading">Stimmung wird geladen</string>
     <string name="mood_spotlight_reply_failed">Die Antwort wurde nicht gesendet</string>
@@ -137,6 +139,8 @@
     <string name="post_detail_back">Zurück</string>
     <string name="post_detail_title">Beitrag</string>
     <string name="post_detail_viewers">Aufrufe</string>
+    <string name="status_bubble_republish">Erneut posten</string>
+    <string name="status_bubble_via">über @%1$s</string>
     <string name="status_composer_bare_add">Ein Wort hinzufügen</string>
     <string name="status_composer_bare_publish">Trotzdem veröffentlichen</string>
     <string name="status_composer_bare_title">Deine Stimmung ohne ein paar Worte veröffentlichen?</string>

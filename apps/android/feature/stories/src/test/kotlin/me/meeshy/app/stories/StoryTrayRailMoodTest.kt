@@ -99,6 +99,23 @@ class StoryTrayRailMoodTest {
     }
 
     @Test
+    fun `chaque humeur d un autre vue sur le rail est annoncee, jamais la sienne ni un anneau sans humeur`() {
+        val shown = mutableListOf<String>()
+        compose.setContent {
+            StoryTrayRail(
+                tray = tray("me", "u2", "u3"),
+                moodEmojiOf = { userId -> "🔥".takeIf { userId == "u2" || userId == "me" } },
+                myMoodEmoji = "😀",
+                onOpenStory = {}, onAddStory = {}, onManageStories = {}, onShowProfile = null, onAppeared = {},
+                onAddStatus = {},
+                onMoodShown = { shown += it },
+            )
+        }
+        compose.waitForIdle()
+        assertThat(shown).containsExactly("u2")
+    }
+
+    @Test
     fun `le badge plus de Votre story offre une cible de 48 dp, comme le badge d humeur`() {
         compose.setContent {
             StoryTrayRail(

@@ -943,4 +943,51 @@ class StatusesViewModelTest {
         // regardless of consent); only the dwell enrichment is gated.
         coVerify(exactly = 1) { postRepository.viewPost("a") }
     }
+    @Test
+    fun `a reaction that fails after the account changed does not restore the previous account's bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            NetworkResult.Failure(ApiError("rip"))
+        }
+
+        val vm = viewModel()
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.statuses.first().reactionSummary).containsExactly("❤️", 1)
+            assertThat(s.errorMessage).isNull()
+        }
+    }
+
+    @Test
+    fun `a status created after the account changed is not inserted into the new account's bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            NetworkResult.Success(entry("new", userId = "me-id", emoji = "🔥"))
+        }
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.setStatus(emoji = "🔥")
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("a")
+        }
+    }
+
+    @Test
+    fun `a mood seen on the rail is counted once through the impression batch`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        val vm = viewModel()
+
+        vm.trackImpression("a")
+        vm.markStatusViewed("a")
+
+        coVerify(exactly = 1) { postRepository.viewPost("a") }
+    }
 }

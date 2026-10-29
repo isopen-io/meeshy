@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +73,7 @@ fun StoryTray(
     myMoodEmoji: String? = null,
     onAddStatus: (() -> Unit)? = null,
     onMoodTap: ((String) -> Unit)? = null,
+    onMoodShown: ((String) -> Unit)? = null,
     viewModel: StoriesViewModel = hiltViewModel(),
     impressions: StoryTrayImpressionsViewModel = hiltViewModel(),
 ) {
@@ -102,6 +104,7 @@ fun StoryTray(
             onAppeared = impressions::onRingAppeared,
             onAddStatus = onAddStatus,
             onMoodTap = onMoodTap,
+            onMoodShown = onMoodShown,
         )
     }
 }
@@ -123,6 +126,7 @@ internal fun StoryTrayRail(
     myMoodEmoji: String? = null,
     onAddStatus: (() -> Unit)? = null,
     onMoodTap: ((String) -> Unit)? = null,
+    onMoodShown: ((String) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
@@ -161,11 +165,15 @@ internal fun StoryTrayRail(
             }
         }
         itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
+            val moodEmoji = moodEmojiOf(ring.userId)
+            if (onMoodShown != null && !moodEmoji.isNullOrEmpty()) {
+                LaunchedEffect(ring.userId, moodEmoji) { onMoodShown(ring.userId) }
+            }
             StoryRingCell(
                 ring = ring,
                 label = ring.displayName,
                 cascadeIndex = index + 1,
-                moodEmoji = moodEmojiOf(ring.userId),
+                moodEmoji = moodEmoji,
                 showAddBadge = false,
                 onOpen = { onOpenStory(ring.userId) },
                 onShowProfile = onShowProfile?.let { open -> { open(ring.userId) } },

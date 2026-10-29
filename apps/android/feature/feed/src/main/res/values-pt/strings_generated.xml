@@ -101,6 +101,8 @@
     <string name="feed_unknown_author">Desconhecido</string>
     <string name="feed_unlike">Descurtir</string>
     <string name="hashtag_results_empty">Nenhuma postagem com #%1$s</string>
+    <string name="mood_bubble_react">Reação %1$s</string>
+    <string name="mood_bubble_reply">Responder</string>
     <string name="mood_spotlight_close">Fechar</string>
     <string name="mood_spotlight_loading">Carregando o humor</string>
     <string name="mood_spotlight_reply_failed">A resposta não foi enviada</string>
@@ -141,6 +143,8 @@
     <string name="post_detail_back">Voltar</string>
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
+    <string name="status_bubble_republish">Republicar</string>
+    <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Adicionar uma palavra</string>
     <string name="status_composer_bare_publish">Publicar mesmo assim</string>
     <string name="status_composer_bare_title">Publicar seu humor sem uma palavrinha?</string>

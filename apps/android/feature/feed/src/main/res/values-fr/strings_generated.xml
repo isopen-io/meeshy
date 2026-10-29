@@ -101,6 +101,8 @@
     <string name="feed_unknown_author">Inconnu</string>
     <string name="feed_unlike">Je n\'aime plus</string>
     <string name="hashtag_results_empty">Aucun post avec #%1$s</string>
+    <string name="mood_bubble_react">Réaction %1$s</string>
+    <string name="mood_bubble_reply">Répondre</string>
     <string name="mood_spotlight_close">Fermer</string>
     <string name="mood_spotlight_loading">Chargement de l\'humeur</string>
     <string name="mood_spotlight_reply_failed">La réponse n\'est pas partie</string>
@@ -141,6 +143,8 @@
     <string name="post_detail_back">Retour</string>
     <string name="post_detail_title">Publication</string>
     <string name="post_detail_viewers">Vues</string>
+    <string name="status_bubble_republish">Republier</string>
+    <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Ajouter un mot</string>
     <string name="status_composer_bare_publish">Publier quand même</string>
     <string name="status_composer_bare_title">Publier ton humeur sans un petit mot ?</string>

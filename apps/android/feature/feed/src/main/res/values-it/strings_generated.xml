@@ -101,6 +101,8 @@
     <string name="feed_unknown_author">Sconosciuto</string>
     <string name="feed_unlike">Non mi piace più</string>
     <string name="hashtag_results_empty">Nessun post con #%1$s</string>
+    <string name="mood_bubble_react">Reazione %1$s</string>
+    <string name="mood_bubble_reply">Rispondi</string>
     <string name="mood_spotlight_close">Chiudi</string>
     <string name="mood_spotlight_loading">Caricamento dell\'umore</string>
     <string name="mood_spotlight_reply_failed">La risposta non è stata inviata</string>
@@ -141,6 +143,8 @@
     <string name="post_detail_back">Indietro</string>
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
+    <string name="status_bubble_republish">Ricondividi</string>
+    <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Aggiungi una parola</string>
     <string name="status_composer_bare_publish">Pubblica comunque</string>
     <string name="status_composer_bare_title">Pubblicare il tuo umore senza due parole?</string>

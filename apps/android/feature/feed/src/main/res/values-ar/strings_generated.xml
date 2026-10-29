@@ -107,6 +107,8 @@
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
+    <string name="mood_bubble_react">تفاعل %1$s</string>
+    <string name="mood_bubble_reply">رد</string>
     <string name="mood_spotlight_close">إغلاق</string>
     <string name="mood_spotlight_loading">جارٍ تحميل المزاج</string>
     <string name="mood_spotlight_reply_failed">لم يتم إرسال الرد</string>
@@ -153,6 +155,8 @@
     <string name="post_detail_back">رجوع</string>
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
+    <string name="status_bubble_republish">إعادة النشر</string>
+    <string name="status_bubble_via">عبر @%1$s</string>
     <string name="status_composer_bare_add">إضافة كلمة</string>
     <string name="status_composer_bare_publish">النشر على أي حال</string>
     <string name="status_composer_bare_title">هل تريد نشر مزاجك دون كلمة قصيرة؟</string>
