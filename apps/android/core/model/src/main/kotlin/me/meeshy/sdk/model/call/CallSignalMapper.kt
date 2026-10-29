@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call
 
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.call.group.GroupCallArrival
 
 /**
  * Pure mapper: an inbound `call:*` Socket.IO frame → the [CallEvent] the
@@ -135,6 +136,28 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
+     * Decode a `call:participant-joined` frame into the call it joins and the arrival a group call admits to its
+     * roster (name, avatar, media) — the FSM-facing [map] keeps only the joiner's id. `null` on a malformed frame,
+     * a blank call id or a joiner without id.
+     */
+    fun participantArrival(rawJson: String): CallParticipantArrival? = runCatching {
+        val payload = json.decodeFromString<CallParticipantPayload>(rawJson)
+        val ref = payload.participant
+        val userId = ref?.userId?.takeIf { it.isNotBlank() }
+        if (payload.callId.isBlank() || userId == null) return@runCatching null
+        CallParticipantArrival(
+            callId = payload.callId,
+            arrival = GroupCallArrival(
+                userId = userId,
+                displayName = ref.displayName?.takeIf { it.isNotBlank() } ?: ref.username?.takeIf { it.isNotBlank() },
+                avatarUrl = ref.avatar?.takeIf { it.isNotBlank() },
+                isAudioEnabled = ref.isAudioEnabled,
+                isVideoEnabled = ref.isVideoEnabled,
+            ),
+        )
+    }.getOrNull()
+
+    /**
      * Decode a `call:participant-left` frame — a participant left the room
      * without ending the call (group calls; a 1:1 teardown rides `call:ended`).
      * `null` on a malformed frame or a blank call id, so an untargetable roster
@@ -217,3 +240,6 @@ object CallSignalMapper {
     private fun mapError(payload: CallErrorPayload): CallEvent =
         CallEvent.ConnectionFailed(payload.message ?: payload.code ?: "Call error")
 }
+
+/** A `call:participant-joined` frame, decoded for a group call's roster. */
+data class CallParticipantArrival(val callId: String, val arrival: GroupCallArrival)

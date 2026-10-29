@@ -75,6 +75,11 @@ data class CallParticipantPayload(
 @Serializable
 data class CallParticipantRef(
     val userId: String? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val isAudioEnabled: Boolean? = null,
+    val isVideoEnabled: Boolean? = null,
 )
 
 /** `call:ended` — the definitive teardown, carrying the end [reason]. */
