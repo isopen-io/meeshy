@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -109,6 +110,7 @@ class PostCommentsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val mediaUploader: CommentMediaUploader? = null,
+    private val unsentComments: UnsentCommentStore? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -168,8 +170,16 @@ class PostCommentsViewModel @Inject constructor(
             }.combine(attachments) { projected, tray -> projected.copy(attachments = tray) }
                 .collect { projected -> _state.value = projected }
         }
+        restoreUnsentComment()
         observeRealtime()
         loadInitial()
+    }
+
+    /** #13693 — a comment typed in a banner and refused for good comes back in this post's field (it leaves the store). */
+    private fun restoreUnsentComment() {
+        if (postId.isBlank()) return
+        val kept = unsentComments?.take(postId) ?: return
+        composerDraft.update { draft -> if (draft.text.isBlank()) draft.copy(text = kept) else draft }
     }
 
     /**

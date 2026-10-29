@@ -13,6 +13,8 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.post.InMemoryUnsentCommentStore
 import me.meeshy.sdk.outbox.UnsentCommentNotice
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.post.PostRepository
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
@@ -139,9 +141,46 @@ class CreateCommentHandlerTest {
     fun `un avis qui echoue ne defait pas le retour du compteur ni le texte garde`() = runTest {
         val failing = CreateCommentHandler(postApi, senderJson, postRepository, unsent, UnsentCommentNotice { _, _, _ -> error("channel") })
 
-        failing.onExhausted(row())
+        failing.onExhausted(row().copy(ownerId = "me"))
 
         assertThat(unsent.peek("p1")).isEqualTo("Bravo")
         coVerify(exactly = 1) { postRepository.rollbackQueuedComment("p1") }
+    }
+
+    @Test
+    fun `une ligne sans auteur ne garde ni n annonce son texte`() = runTest {
+        handler.onExhausted(row())
+
+        assertThat(notices).isEmpty()
+        assertThat(unsent.peek("p1")).isNull()
+        coVerify(exactly = 1) { postRepository.rollbackQueuedComment("p1") }
+    }
+
+    @Test
+    fun `un autre compte connecte ne recoit pas les mots de l auteur`() = runTest {
+        val fenced = CreateCommentHandler(
+            postApi, senderJson, postRepository, unsent,
+            UnsentCommentNotice { owner, post, text -> notices += Triple(owner, post, text) },
+            AccountFence(OutboxOwnerSource { "other" }),
+        )
+
+        fenced.onExhausted(row().copy(ownerId = "me"))
+
+        assertThat(unsent.peek("p1")).isNull()
+        assertThat(notices).isEmpty()
+    }
+
+    @Test
+    fun `l auteur toujours connecte garde son texte sous la barriere du compte`() = runTest {
+        val fenced = CreateCommentHandler(
+            postApi, senderJson, postRepository, unsent,
+            UnsentCommentNotice { owner, post, text -> notices += Triple(owner, post, text) },
+            AccountFence(OutboxOwnerSource { "me" }),
+        )
+
+        fenced.onExhausted(row().copy(ownerId = "me"))
+
+        assertThat(unsent.peek("p1")).isEqualTo("Bravo")
+        assertThat(notices).containsExactly(Triple<String?, String, String>("me", "p1", "Bravo"))
     }
 }

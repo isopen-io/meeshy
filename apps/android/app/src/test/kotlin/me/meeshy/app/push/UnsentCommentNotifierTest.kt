@@ -4,11 +4,14 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.push.PushTapDestination
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import io.mockk.every
+import io.mockk.mockk
+import me.meeshy.sdk.outbox.SessionOutboxOwnerSource
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.net.TokenStore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,8 +24,7 @@ class UnsentCommentNotifierTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val session = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns "me" }
-    private val notifier = UnsentCommentNotifier(context, session)
+    private val notifier = UnsentCommentNotifier(context, OutboxOwnerSource { "me" })
 
     init {
         shadowOf(context as android.app.Application).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -48,6 +50,27 @@ class UnsentCommentNotifierTest {
         manager.cancelAll()
 
         notifier.commentNotSent("someone-else", "p1", "mots du premier compte")
+
+        assertThat(shadowOf(manager).allNotifications).isEmpty()
+    }
+
+    @Test
+    fun `un processus reveille par la file, session pas encore relue, previent tout de meme l auteur`() = runTest {
+        manager.cancelAll()
+        val session = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns null }
+        val tokens = mockk<TokenStore>(relaxed = true) { every { userId } returns "me" }
+        val cold = UnsentCommentNotifier(context, SessionOutboxOwnerSource(session, tokens))
+
+        cold.commentNotSent("me", "p1", "Bravo")
+
+        assertThat(shadowOf(manager).allNotifications).hasSize(1)
+    }
+
+    @Test
+    fun `une ligne sans auteur ne s affiche sous aucun compte`() = runTest {
+        manager.cancelAll()
+
+        notifier.commentNotSent(null, "p1", "mots de personne")
 
         assertThat(shadowOf(manager).allNotifications).isEmpty()
     }

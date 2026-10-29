@@ -23,6 +23,7 @@ import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.AccountClosedException
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.session.withAccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import timber.log.Timber
@@ -125,17 +126,26 @@ class PushNotificationActionHandler @Inject constructor(
     private suspend fun boundedVerdict(conversationId: String): OutboxAdmissionVerdict =
         withTimeoutOrNull(MODE_READ_BUDGET_MILLIS) { admission.verdictFor(conversationId) } ?: OutboxAdmissionVerdict.WAIT
 
-    /** Le texte reste local au compte (le magasin est vidé avec lui, et un compte changé pendant la relecture n'y écrit rien) ; jamais envoyé, jamais en file. */
+    /**
+     * Le texte reste local au compte, jamais envoyé, jamais en file. L'écriture passe par la barrière du compte
+     * ([AccountFence.commit]) : un compte changé pendant la relecture n'y écrit rien, et une déconnexion qui survient
+     * pendant l'écriture attend qu'elle finisse pour vider le magasin — les mots du compte parti ne restent jamais au suivant.
+     */
     private suspend fun keepAsDraft(conversationId: String, content: String, replyToId: String?, gesture: AccountTicket?): Outcome {
-        if (gesture != null && fence?.isCurrent(gesture) == false) return Outcome.ACCOUNT_CHANGED
         val kept = runCatching {
-            val draft = KeptReplyDraft.keep(draftStore.load(conversationId), conversationId, content, replyToId, java.time.Instant.now().toString())
-            draftStore.save(draft)
+            fence.commitOrWrite(gesture) {
+                val draft = KeptReplyDraft.keep(draftStore.load(conversationId), conversationId, content, replyToId, java.time.Instant.now().toString())
+                draftStore.save(draft)
+            }
         }.onFailure {
             if (it is CancellationException) throw it
             Timber.w(it, "Offline reply could not be kept as a draft")
         }
-        return if (kept.isSuccess) Outcome.DRAFT_KEPT else Outcome.MODE_UNKNOWN
+        return when {
+            kept.isFailure -> Outcome.MODE_UNKNOWN
+            kept.getOrNull() == null -> Outcome.ACCOUNT_CHANGED
+            else -> Outcome.DRAFT_KEPT
+        }
     }
 
     /**

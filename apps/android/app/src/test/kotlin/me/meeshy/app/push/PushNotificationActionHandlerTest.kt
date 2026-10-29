@@ -9,6 +9,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
@@ -211,6 +213,32 @@ class PushNotificationActionHandlerTest {
 
         assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
         assertThat(f.drafts.load("c1")).isNull()
+    }
+
+    @Test
+    fun `une deconnexion pendant l ecriture du brouillon ne laisse pas les mots du compte parti au suivant`() = runTest {
+        var owner: String? = "me"
+        val fence = AccountFence(OutboxOwnerSource { owner })
+        val inner = InMemoryConversationDraftStore()
+        val scope = this
+        val racing = object : ConversationDraftStore by inner {
+            override suspend fun load(conversationId: String): ConversationDraft? {
+                scope.launch {
+                    fence.close {
+                        owner = null
+                        inner.clearAll()
+                    }
+                }
+                kotlinx.coroutines.yield()
+                return inner.load(conversationId)
+            }
+        }
+        val f = Fixture(me, OutboxAdmissionVerdict.WAIT, fence = fence, drafts = racing)
+
+        f.handler.reply("c1", "les mots de me", accountId = "me")
+        advanceUntilIdle()
+
+        assertThat(inner.load("c1")).isNull()
     }
 
     @Test

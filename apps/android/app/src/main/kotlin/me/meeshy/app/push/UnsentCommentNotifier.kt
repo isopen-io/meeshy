@@ -13,7 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.sdk.outbox.UnsentCommentNotice
-import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.outbox.OutboxOwnerSource
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,13 +23,14 @@ import javax.inject.Singleton
  * son texte. Toucher ouvre le post (la destination d'un `post_comment`) ; le texte, gardé par
  * [me.meeshy.sdk.post.UnsentCommentStore], revient dans le champ de commentaire du post.
  *
- * Le texte n'apparaît jamais sur l'écran verrouillé (version publique sans corps), et la notification n'est posée que sous
- * le compte auteur de la ligne : sous un autre compte, les mots du premier ne s'affichent à personne.
+ * Sur un écran verrouillé qui masque le contenu sensible, seule la version publique (sans corps) s'affiche ; la
+ * notification n'est posée que sous le compte AUTEUR de la ligne, lu comme la file le lit ([OutboxOwnerSource] : la session,
+ * sinon l'identité gardée d'un processus réveillé par la file) — une ligne sans auteur ne s'affiche sous aucun compte.
  */
 @Singleton
 class UnsentCommentNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val session: SessionRepository,
+    private val owner: OutboxOwnerSource,
 ) : UnsentCommentNotice {
 
     override suspend fun commentNotSent(ownerId: String?, postId: String, text: String) {
@@ -58,7 +59,7 @@ class UnsentCommentNotifier @Inject constructor(
     }
 
     private fun addressesCurrentAccount(ownerId: String?): Boolean =
-        ownerId == null || session.currentUserId == ownerId
+        ownerId != null && owner.currentOwnerId() == ownerId
 
     private fun openPost(postId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
