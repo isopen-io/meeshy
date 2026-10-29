@@ -5,13 +5,18 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * Ce que la carte de présence garde sur disque (miroir de la persistance `presence_map.json` d'iOS) :
- * 24 h au plus, jamais le compte courant, jamais une entrée sans date lisible ni datée dans le futur — on
- * ne restitue que ce que le serveur a servi, et seule une date passée permet de dire depuis quand.
+ * tant que son point se dessine, jamais le compte courant, jamais une entrée sans date lisible ni datée
+ * dans le futur — on ne restitue que ce que le serveur a servi, et seule une date passée permet de dire
+ * depuis quand.
+ *
+ * La borne est la vie du POINT (5 min), pas 24 h (#13774) : au-delà, l'entrée ne dessine plus rien dans
+ * la liste et ne servirait qu'à dater la fiche profil ou l'infobulle « vu il y a X » — une date que le
+ * serveur a pu retirer depuis (ami retiré, dernière activité masquée) sans qu'aucune page ne le dise.
  */
 object PresenceRetention {
 
-    /** Au-delà, une présence n'est plus un renseignement : elle n'est ni écrite ni relue. */
-    const val MAX_AGE_MS: Long = 24L * 60 * 60 * 1000
+    /** Au-delà, le point s'est éteint : la présence n'est plus un renseignement, ni écrite, ni relue, ni gardée relue. */
+    const val MAX_AGE_MS: Long = UserPresence.IDLE_WINDOW_MS
 
     /**
      * L'avance tolérée d'une date sur l'horloge de l'appareil (dérive entre serveur et appareil) ; au-delà,
@@ -32,6 +37,13 @@ object PresenceRetention {
      */
     fun restoredAtLaunch(persisted: PresenceMap, currentUserId: String?, nowMillis: Long): PresenceMap =
         PresenceMapReducer.socketDisconnected(retained(persisted, currentUserId, nowMillis))
+
+    /** Vrai tant que [presence] a le droit d'être gardée (écrite, relue, ou gardée en mémoire après relecture). */
+    fun isRetained(presence: UserPresence, nowMillis: Long): Boolean = isFresh(presence, nowMillis)
+
+    /** L'instant où la première des entrées [readBack] de [map] (relues du disque) cesse d'être gardée ; `null` sans relue. */
+    fun nextReadBackExpiry(map: PresenceMap, readBack: Set<String>): Long? =
+        readBack.mapNotNull { userId -> isoToEpochMillisOrNull(map[userId]?.lastActiveAt) }.minOrNull()?.plus(MAX_AGE_MS + 1)
 
     private fun isFresh(presence: UserPresence, nowMillis: Long): Boolean {
         val last = isoToEpochMillisOrNull(presence.lastActiveAt) ?: return false

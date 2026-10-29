@@ -72,4 +72,14 @@ class FilePresenceMapPersistenceTest {
         assertThat(disk().load("me").keys).containsExactly("u2")
         assertThat(File(folder.root, "presence").list().orEmpty().toList()).containsExactly("presence_map.json")
     }
+
+    @Test
+    fun `clear also removes the temporary file a save interrupted halfway left behind`() = runTest {
+        disk().save("me", mapOf("u1" to UserPresence(true, "2026-10-29T10:00:00Z")))
+        File(folder.root, "presence/presence_map.json.tmp").writeText("""{"accountId":"me","entries":{"u2":{}}}""")
+
+        disk().clear()
+
+        assertThat(File(folder.root, "presence").list().orEmpty().toList()).isEmpty()
+    }
 }

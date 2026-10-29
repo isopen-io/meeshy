@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -16,13 +17,14 @@ import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.presence.PresenceMap
 import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.model.profile.ProfileLivePresence
 import me.meeshy.sdk.session.PerAccountCache
 import org.junit.Test
 import java.time.Instant
 
 /**
  * La carte de présence au démarrage à froid (#13746) : semée par la page servie, relue du disque
- * (24 h au plus), effacée au changement de compte, et jamais au profit d'un autre compte.
+ * (tant que son point se dessine, #13774), effacée au changement de compte, et jamais au profit d'un autre compte.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PresenceStorePersistenceTest {
@@ -105,16 +107,90 @@ class PresenceStorePersistenceTest {
     }
 
     @Test
-    fun `an entry older than 24 hours is ignored on read`() = runTest {
+    fun `an entry whose dot is already out is ignored on read`() = runTest {
         val disk = FakePersistence().apply {
             file = "me" to mapOf(
                 "old" to UserPresence(false, iso(epoch - 25 * hour)),
-                "ok" to UserPresence(false, iso(epoch - 23 * hour)),
+                "hours" to UserPresence(false, iso(epoch - 2 * hour)),
+                "ok" to UserPresence(false, iso(epoch - 4 * 60_000)),
             )
         }
         val f = fixture(disk)
 
         assertThat(f.store.entries.value.keys).containsExactly("ok")
+    }
+
+    @Test
+    fun `a disk entry dated three hours ago never reaches the profile line, even when no page names the user`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 3 * hour))) }
+        val f = fixture(disk)
+
+        val live = f.store.entryOf("u1").first()
+
+        assertThat(ProfileLivePresence.line(live, null, null, f.clock.nowMillis())).isNull()
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `what was read back leaves the map and the disk when its dot goes out, without any page`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        assertThat(f.store.entries.value).containsKey("u1")
+
+        testScheduler.advanceTimeBy(61_000)
+        testScheduler.runCurrent()
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entryOf("u1").first()).isNull()
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `what the socket says before the read back expires is never expired with it`() = runTest {
+        val disk = FakePersistence().apply { file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 4 * 60_000))) }
+        val f = fixture(disk)
+        f.userStatus.emit(UserStatusEvent("u1", "a", false, iso(epoch - 4 * 60_000)))
+        testScheduler.runCurrent()
+
+        testScheduler.advanceTimeBy(2 * 60_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value).containsKey("u1")
+    }
+
+    @Test
+    fun `a late read back never reinjects a user the served page already masked`() = runTest {
+        val disk = FakePersistence().apply {
+            file = "me" to mapOf("u1" to UserPresence(false, iso(epoch - 60_000)), "u2" to UserPresence(false, iso(epoch - 60_000)))
+            gate = CompletableDeferred()
+        }
+        val f = fixture(disk)
+
+        f.store.seed(ServedPresencePage(masked = setOf("u1")))
+        disk.gate!!.complete(Unit)
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value).doesNotContainKey("u1")
+        assertThat(f.store.entries.value).containsKey("u2")
+        assertThat(f.disk.file?.second.orEmpty()).doesNotContainKey("u1")
+    }
+
+    @Test
+    fun `an account adopted while the session teardown runs keeps a living map instead of a frozen one`() = runTest {
+        val f = fixture(account = "A")
+        switchTo(f, "B")
+
+        (f.store as PerAccountCache).clear()
+        f.userStatus.emit(UserStatusEvent("u7", "s", true, iso(epoch)))
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+
+        assertThat(f.store.entries.value.keys).containsExactly("u7")
+        assertThat(f.disk.file?.first).isEqualTo("B")
+        assertThat(f.disk.file?.second?.keys).containsExactly("u7")
     }
 
     @Test

@@ -48,7 +48,7 @@ private fun UserPresence.isNewerThan(other: UserPresence): Boolean {
 
 /**
  * La copie à ranger dans le cache : sans la présence servie. La carte de présence est l'unique
- * porteuse (bornée à 24 h, effacée au changement de compte) ; une copie dans les lignes Room serait
+ * porteuse (bornée à la vie de son point, effacée au changement de compte) ; une copie dans les lignes Room serait
  * une seconde mémoire, sans borne ni source, que rien ne relit.
  */
 fun ApiConversation.withoutServedPresence(): ApiConversation {

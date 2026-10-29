@@ -26,7 +26,7 @@ import javax.inject.Singleton
 /**
  * La mémoire disque de la carte de présence (miroir de `presence_map.json` d'iOS). Une écriture porte
  * le compte qui l'a reçue : une lecture pour un AUTRE compte ne rend rien et EFFACE le fichier — ce que
- * le compte précédent a laissé ne survit pas à sa première lecture par un autre. Ni l'âge (24 h) ni le
+ * le compte précédent a laissé ne survit pas à sa première lecture par un autre. Ni l'âge (la vie du point, 5 min) ni le
  * compte courant ne se décident ici — c'est la loi pure `PresenceRetention`.
  */
 interface PresenceMapPersistence {
@@ -59,12 +59,15 @@ class FilePresenceMapPersistence(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /** L'écriture en cours, renommée sur [file] quand elle est complète ; une écriture interrompue la laisse. */
+    private val pending: File get() = File(file.parentFile, file.name + ".tmp")
+
     override suspend fun load(accountId: String): PresenceMap = withContext(io) {
         attempt {
             if (!file.exists()) return@attempt emptyMap()
             val persisted = json.decodeFromString<PersistedPresenceMap>(file.readText())
             if (persisted.accountId == accountId) return@attempt persisted.entries
-            file.delete()
+            forget()
             emptyMap()
         } ?: emptyMap()
     }
@@ -72,16 +75,21 @@ class FilePresenceMapPersistence(
     override suspend fun save(accountId: String, entries: PresenceMap) = withContext(io) {
         attempt {
             file.parentFile?.mkdirs()
-            val pending = File(file.parentFile, file.name + ".tmp")
             pending.writeText(json.encodeToString(PersistedPresenceMap.serializer(), PersistedPresenceMap(accountId, entries)))
             Files.move(pending.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         }
         Unit
     }
 
+    /** Efface le fichier ET une écriture interrompue : ni l'un ni l'autre ne survit à la fin de session. */
     override suspend fun clear() = withContext(io) {
-        attempt { file.delete() }
+        attempt { forget() }
         Unit
+    }
+
+    private fun forget() {
+        file.delete()
+        pending.delete()
     }
 
     private inline fun <T> attempt(block: () -> T): T? =

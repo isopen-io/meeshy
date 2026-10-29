@@ -5,25 +5,53 @@ import me.meeshy.sdk.model.UserPresence
 import org.junit.Test
 import java.time.Instant
 
-/** Ce que la carte de présence garde sur disque : 24 h au plus, jamais le compte courant, jamais une date inventée. */
+/**
+ * Ce que la carte de présence garde sur disque : tant que son point se dessine (5 min), jamais le compte courant,
+ * jamais une date inventée (#13774).
+ */
 class PresenceRetentionTest {
 
     private val now = 1_700_000_000_000L
     private fun iso(offsetMs: Long) = Instant.ofEpochMilli(now + offsetMs).toString()
     private val hour = 3_600_000L
 
+    private val dotLifetime = UserPresence.IDLE_WINDOW_MS
+
     @Test
-    fun `an entry active within 24 hours is kept`() {
-        val kept = PresenceRetention.retained(mapOf("u1" to UserPresence(false, iso(-23 * hour))), "me", now)
+    fun `an entry whose dot still shows is kept`() {
+        val kept = PresenceRetention.retained(mapOf("u1" to UserPresence(false, iso(-dotLifetime))), "me", now)
 
         assertThat(kept).containsKey("u1")
     }
 
     @Test
-    fun `an entry older than 24 hours is dropped`() {
-        val kept = PresenceRetention.retained(mapOf("u1" to UserPresence(false, iso(-24 * hour - 1))), "me", now)
+    fun `an entry whose dot is out is dropped - a date the server may withdraw is not kept for the profile line`() {
+        val kept = PresenceRetention.retained(
+            mapOf("u1" to UserPresence(false, iso(-dotLifetime - 1)), "u2" to UserPresence(false, iso(-3 * hour))),
+            "me",
+            now,
+        )
 
         assertThat(kept).isEmpty()
+    }
+
+    @Test
+    fun `what was read back expires when the first of its dots goes out`() {
+        val due = PresenceRetention.nextReadBackExpiry(
+            mapOf(
+                "u1" to UserPresence(false, iso(-4 * 60_000)),
+                "u2" to UserPresence(false, iso(-2 * 60_000)),
+                "live" to UserPresence(false, iso(-10 * 60_000)),
+            ),
+            readBack = setOf("u1", "u2"),
+        )
+
+        assertThat(due).isEqualTo(now - 4 * 60_000 + dotLifetime + 1)
+    }
+
+    @Test
+    fun `nothing read back means nothing to expire`() {
+        assertThat(PresenceRetention.nextReadBackExpiry(mapOf("u1" to UserPresence(false, iso(0))), emptySet())).isNull()
     }
 
     @Test
@@ -62,7 +90,8 @@ class PresenceRetentionTest {
             mapOf(
                 "old" to UserPresence(false, iso(-25 * hour)),
                 "me" to UserPresence(false, iso(0)),
-                "ok" to UserPresence(false, iso(-hour)),
+                "ok" to UserPresence(false, iso(-4 * 60_000)),
+                "hour" to UserPresence(false, iso(-hour)),
             ),
             "me",
             now,

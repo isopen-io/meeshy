@@ -164,4 +164,36 @@ class PresenceMapReducerTest {
 
         assertThat(after.entries).isSameInstanceAs(live)
     }
+
+    @Test
+    fun `a read back never reinjects a user a page already masked`() {
+        val after = PresenceMapReducer.restore(
+            emptyMap(),
+            mapOf("u1" to UserPresence(false, iso(-60_000)), "u2" to UserPresence(false, iso(-60_000))),
+            withheld = setOf("u1"),
+        )
+
+        assertThat(after.keys).containsExactly("u2")
+    }
+
+    @Test
+    fun `what was only read back leaves the map when its dot goes out, a live entry stays`() {
+        val map: PresenceMap = mapOf(
+            "old" to UserPresence(false, iso(-UserPresence.IDLE_WINDOW_MS - 1)),
+            "young" to UserPresence(false, iso(-60_000)),
+            "live" to UserPresence(false, iso(-3_600_000)),
+        )
+
+        val after = PresenceMapReducer.expireReadBack(map, readBack = setOf("old", "young"), nowMillis = now)
+
+        assertThat(after.entries.keys).containsExactly("young", "live")
+        assertThat(after.restored).containsExactly("young")
+    }
+
+    @Test
+    fun `an expiry that removes nothing gives back the same map`() {
+        val map: PresenceMap = mapOf("young" to UserPresence(false, iso(-60_000)))
+
+        assertThat(PresenceMapReducer.expireReadBack(map, setOf("young"), now).entries).isSameInstanceAs(map)
+    }
 }

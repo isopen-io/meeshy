@@ -158,7 +158,8 @@ class PresenceStore internal constructor(
         if (page.served.isEmpty() && page.masked.isEmpty()) return
         mutate { map, current ->
             val seeded = PresenceMapReducer.seed(map, current.restored, page, current.owner)
-            seeded.entries to current.copy(restored = seeded.restored)
+            val withheld = if (current.readBack) current.withheld else current.withheld - page.served.keys + page.masked
+            seeded.entries to current.copy(restored = seeded.restored, withheld = withheld)
         }
     }
 
@@ -166,13 +167,15 @@ class PresenceStore internal constructor(
      * La carte appartient à UNE génération de compte : l'identifiant du compte qui la possède et un
      * numéro qui change à chaque passage de propriétaire (vers ou depuis aucun compte compris).
      * [readBack] : la relecture du disque de cette génération est faite ; [restored] : les comptes dont
-     * l'entrée ne vient encore que de cette relecture (une page servie les remplace).
+     * l'entrée ne vient encore que de cette relecture (une page servie les remplace, l'extinction de leur
+     * point les retire) ; [withheld] : ceux qu'une page a masqués AVANT la relecture, qu'elle ne réinjecte pas.
      */
     private data class Generation(
         val id: Long = 0,
         val owner: String? = null,
         val readBack: Boolean = false,
         val restored: Set<String> = emptySet(),
+        val withheld: Set<String> = emptySet(),
     ) {
         val adopted: Boolean get() = id > 0
     }
@@ -228,8 +231,9 @@ class PresenceStore internal constructor(
 
     /**
      * Relit le disque pour [account] dans la génération [id] et comble les inconnus de la carte (une
-     * entrée vivante gagne toujours). Le résultat n'est versé que sous le verrou de la carte et si la
-     * génération n'a pas changé pendant la lecture : un vidage survenu entre-temps n'est jamais rattrapé.
+     * entrée vivante gagne toujours, un compte qu'une page a déjà masqué ne revient pas). Le résultat
+     * n'est versé que sous le verrou de la carte et si la génération n'a pas changé pendant la lecture :
+     * un vidage survenu entre-temps n'est jamais rattrapé. Ce qui est relu s'éteint avec son point.
      */
     private suspend fun restore(id: Long, account: String) {
         disk.withLock {
@@ -240,17 +244,43 @@ class PresenceStore internal constructor(
                 if (generation.id != id || currentUserId() != account) return@synchronized false
                 val readBack = PresenceRetention.restoredAtLaunch(persisted, account, now)
                 val before = _entries.value
-                val added = readBack.keys - before.keys
-                generation = generation.copy(readBack = true, restored = generation.restored + added)
-                _entries.value = PresenceMapReducer.restore(before, readBack)
+                val after = PresenceMapReducer.restore(before, readBack, generation.withheld)
+                generation = generation.copy(
+                    readBack = true,
+                    restored = generation.restored + (after.keys - before.keys),
+                    withheld = emptySet(),
+                )
+                _entries.value = after
                 true
             }
             if (merged) onDisk = PresenceRetention.retained(persisted, account, now)
         }
         persistNow()
+        scope.launch { expireReadBack(id) }
     }
 
-    /** Écrit la carte, bornée à 24 h et sans le compte courant, sous la clé du compte qui la possède — une fois son disque relu. */
+    /**
+     * Retire de la carte, à l'extinction de son point, ce qui n'a été que relu du disque dans la
+     * génération [id] (#13774) : sans page ni socket pour le confirmer, aucune fiche profil ni infobulle
+     * ne date un pair d'après le disque. S'arrête quand plus rien n'est relu ou que la génération change.
+     */
+    private suspend fun expireReadBack(id: Long) {
+        while (true) {
+            val due = synchronized(lock) {
+                if (generation.id != id) return
+                PresenceRetention.nextReadBackExpiry(_entries.value, generation.restored) ?: return
+            }
+            delay((due - clock.nowMillis()).coerceAtLeast(0))
+            synchronized(lock) {
+                if (generation.id != id) return
+                val expired = PresenceMapReducer.expireReadBack(_entries.value, generation.restored, clock.nowMillis())
+                generation = generation.copy(restored = expired.restored)
+                _entries.value = expired.entries
+            }
+        }
+    }
+
+    /** Écrit la carte, bornée à la vie du point et sans le compte courant, sous la clé du compte qui la possède — une fois son disque relu. */
     private suspend fun persistNow() = disk.withLock {
         val (owner, entries) = synchronized(lock) {
             val owner = generation.owner?.takeIf { generation.readBack && it == currentUserId() } ?: return@withLock
@@ -268,16 +298,20 @@ class PresenceStore internal constructor(
     }
 
     /**
-     * Le vidage de [me.meeshy.sdk.session.SessionTeardown.wipe] : la carte quitte tout compte sur-le-champ
-     * (plus rien ne s'y écrit jusqu'au compte suivant), puis le fichier est effacé — ATTENDU, une relecture
-     * en cours achevée d'abord, et rien de ce qu'elle a lu n'est versé.
+     * Le vidage de [me.meeshy.sdk.session.SessionTeardown.wipe] : la carte est vidée sur-le-champ et passe
+     * à une nouvelle génération, celle du compte connu À CET INSTANT — aucun après une déconnexion, ou celui
+     * qui s'est connecté pendant le vidage (sans quoi la carte resterait sans propriétaire, figée jusqu'au
+     * redémarrage). Puis le fichier est effacé — ATTENDU, une relecture en cours achevée d'abord, et rien de
+     * ce qu'elle a lu n'est versé — et le compte connu relit le sien.
      */
     override suspend fun clear() {
-        synchronized(lock) {
-            generation = Generation(id = adoptedLocked().id + 1, owner = null)
+        val next = synchronized(lock) {
+            generation = Generation(id = adoptedLocked().id + 1, owner = currentUserId())
             _entries.value = emptyMap()
+            generation
         }
         clearDisk()
+        next.owner?.let { restore(next.id, it) }
     }
 
     /**

@@ -94,9 +94,24 @@ object PresenceMapReducer {
         return Seeded(map - withdrawn + accepted, restored - accepted.keys - withdrawn)
     }
 
-    /** Relecture du disque : elle comble les inconnus et cède à toute entrée vivante déjà posée. */
-    fun restore(map: PresenceMap, restored: PresenceMap): PresenceMap {
-        val unknown = restored.filterKeys { it !in map }
+    /**
+     * Ce qui n'a été que relu du disque ([readBack]) quitte la carte quand son point s'éteint : aucune
+     * source vivante ni page ne l'a confirmé, sa date ne vaut plus rien et ne doit dater aucune fiche.
+     * Une entrée vivante n'est jamais touchée ; rien d'éteint rend la MÊME carte.
+     */
+    fun expireReadBack(map: PresenceMap, readBack: Set<String>, nowMillis: Long): Seeded {
+        val expired = readBack.filter { userId -> map[userId]?.let { !PresenceRetention.isRetained(it, nowMillis) } ?: true }.toSet()
+        if (expired.isEmpty()) return Seeded(map, readBack)
+        val next = map - expired
+        return Seeded(if (next.size == map.size) map else next, readBack - expired)
+    }
+
+    /**
+     * Relecture du disque : elle comble les inconnus et cède à toute entrée vivante déjà posée. [withheld] :
+     * ceux qu'une page servie avant la relecture a MASQUÉS — le disque parlait d'avant, ils ne reviennent pas.
+     */
+    fun restore(map: PresenceMap, restored: PresenceMap, withheld: Set<String> = emptySet()): PresenceMap {
+        val unknown = restored.filterKeys { it !in map && it !in withheld }
         return if (unknown.isEmpty()) map else map + unknown
     }
 }
