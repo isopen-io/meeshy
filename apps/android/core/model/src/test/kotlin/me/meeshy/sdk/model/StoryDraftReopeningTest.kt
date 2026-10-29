@@ -78,4 +78,33 @@ class StoryDraftReopeningTest {
 
         assertThat(reopened.slides.single().mediaIds).containsExactly("cmid-a", "cmid-b").inOrder()
     }
+
+    @Test
+    fun `a slide that publishes only its sound takes its own publication, never the next slide's media`() {
+        val soundOnly = StoryDraftSlideSnapshot(
+            id = "s1",
+            text = "en musique",
+            audio = listOf(StoryAudioPlayerObject(id = "a1", postMediaId = "sound-1")),
+        )
+        val kept = awaiting(
+            soundOnly,
+            slide("s2", "cmid-b"),
+            annotations = StoryDraftAnnotations(mediaAlt = mapOf("cmid-b" to "un chat")),
+        )
+
+        val reopened = StoryDraftReopening.reopened(kept, publishedMediaIds = listOf(listOf("sound-1"), listOf("srv-b")))
+
+        assertThat(reopened.slides.map { it.mediaIds }).containsExactly(emptyList<String>(), listOf("srv-b")).inOrder()
+        assertThat(reopened.annotations.mediaAlt).containsExactly("srv-b", "un chat")
+    }
+
+    @Test
+    fun `publications that do not pair one to one with the slides rename nothing`() {
+        val kept = awaiting(slide("s1", "t1"), slide("s2", "cmid-b"))
+
+        val reopened = StoryDraftReopening.reopened(kept, publishedMediaIds = listOf(listOf("sticker-1"), listOf("t1"), listOf("srv-b")))
+
+        assertThat(reopened.slides.map { it.mediaIds }).containsExactly(listOf("t1"), listOf("cmid-b")).inOrder()
+        assertThat(reopened.isAwaitingPublication).isFalse()
+    }
 }
