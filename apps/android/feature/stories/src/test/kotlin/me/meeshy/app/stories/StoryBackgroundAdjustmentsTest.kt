@@ -13,8 +13,10 @@ import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaEditTool
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.scene.SceneLookParams
 import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -294,6 +296,9 @@ class StoryBackgroundAdjustmentsTest {
         val background = (StoryEditMerge.plan(opening, state, "fr") as StoryEditPlan.Ready).optimistic.storyEffects!!.mediaObjects!!.first { it.isBackground }
 
         assertThat(background.adjustments).isEqualTo(contrasted)
+        assertThat(background.x).isEqualTo(0.4)
+        assertThat(background.y).isEqualTo(0.6)
+        assertThat(background.scale).isEqualTo(0.9)
         assertThat(background.keyframes).isNotNull()
         assertThat(background.crop).isEqualTo(opening.effects.mediaObjects!!.first { it.isBackground }.crop)
     }
@@ -309,5 +314,47 @@ class StoryBackgroundAdjustmentsTest {
         val merged = StoryEditMerge.effects(opening, opened.deck.selectedSlide, publishPlans(opened, "fr").single().request.storyEffects)
 
         assertThat(merged).isEqualTo(opening.effects)
+    }
+
+    private fun reopenedBackground(change: (StorySlide) -> StorySlide): StoryMediaObject {
+        val opening = StoryEditFixtures.opening()
+        val opened = StoryEditFixtures.opened(opening)
+        val slide = change(opened.deck.selectedSlide)
+        val state = opened.copy(deck = StorySlideDeck(listOf(slide), slide.id)).mirrorDraftToSelection()
+        return (StoryEditMerge.plan(opening, state, "fr") as StoryEditPlan.Ready).optimistic.storyEffects!!.mediaObjects!!.first { it.isBackground }
+    }
+
+    @Test
+    fun `monter la luminosite du fond d une story iOS rouverte ecrit les reglages et garde son cadrage`() {
+        val brighter = ImageAdjustments().with(AdjustmentKind.BRIGHTNESS, 0.2f)
+
+        val background = reopenedBackground { it.copy(backgroundAdjustments = brighter) }
+
+        assertThat(background.adjustments).isEqualTo(brighter)
+        assertThat(background.x).isEqualTo(0.4)
+        assertThat(background.y).isEqualTo(0.6)
+        assertThat(background.scale).isEqualTo(0.9)
+        assertThat(background.loop).isTrue()
+    }
+
+    @Test
+    fun `basculer la boucle du fond d une video rouverte garde son cadrage et ses reglages`() {
+        val background = reopenedBackground { it.copy(backgroundLoop = !it.backgroundLoop) }
+
+        assertThat(background.loop).isFalse()
+        assertThat(background.x).isEqualTo(0.4)
+        assertThat(background.y).isEqualTo(0.6)
+        assertThat(background.scale).isEqualTo(0.9)
+        assertThat(background.adjustments).isNull()
+    }
+
+    @Test
+    fun `un vrai changement de cadrage du fond rouvert est ecrit, sans toucher la boucle ni les reglages`() {
+        val background = reopenedBackground { it.copy(transform = StoryCanvasTransform(scale = 2f)) }
+
+        assertThat(background.scale).isEqualTo(2.0)
+        assertThat(background.x).isNotEqualTo(0.4)
+        assertThat(background.loop).isTrue()
+        assertThat(background.adjustments).isNull()
     }
 }

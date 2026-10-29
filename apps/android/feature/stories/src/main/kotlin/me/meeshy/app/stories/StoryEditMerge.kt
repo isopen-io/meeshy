@@ -179,11 +179,22 @@ internal object StoryEditMerge {
             slide.backgroundAdjustments == hydrated.backgroundAdjustments
         val nowBackground = built.firstOrNull { it.isBackground }
         val background = if (backgroundKept) opening.originalBackground else nowBackground?.let { fresh ->
-            opening.originalBackground?.takeIf { it.postMediaId == fresh.postMediaId }
-                ?.copy(x = fresh.x, y = fresh.y, scale = fresh.scale, loop = fresh.loop, adjustments = fresh.adjustments) ?: fresh
+            opening.originalBackground?.takeIf { it.postMediaId == fresh.postMediaId }?.let { served ->
+                changedBackground(served, fresh, slide, hydrated)
+            } ?: fresh
         }
         return (listOfNotNull(background) + foreground).ifEmpty { null }
     }
+
+    /** Le fond servi, dont seuls les traits que le geste a changés (cadrage, boucle, réglages) prennent la forme du composeur. */
+    private fun changedBackground(served: StoryMediaObject, fresh: StoryMediaObject, slide: StorySlide, hydrated: StorySlide): StoryMediaObject =
+        BACKGROUND_TRAITS.filter { (changed, _) -> changed(slide, hydrated) }.fold(served) { background, (_, take) -> take(background, fresh) }
+
+    private val BACKGROUND_TRAITS: List<Pair<(StorySlide, StorySlide) -> Boolean, (StoryMediaObject, StoryMediaObject) -> StoryMediaObject>> = listOf(
+        { a: StorySlide, b: StorySlide -> a.transform != b.transform } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(x = w.x, y = w.y, scale = w.scale) },
+        { a: StorySlide, b: StorySlide -> a.backgroundLoop != b.backgroundLoop } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(loop = w.loop) },
+        { a: StorySlide, b: StorySlide -> a.backgroundAdjustments != b.backgroundAdjustments } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(adjustments = w.adjustments) },
+    )
 
     /** Les médias que la slide tenait et qu'elle ne tient plus : seuls ceux-là sont retirés du post. */
     private fun removedMedia(opening: StoryEditOpening, slide: StorySlide): List<String> =

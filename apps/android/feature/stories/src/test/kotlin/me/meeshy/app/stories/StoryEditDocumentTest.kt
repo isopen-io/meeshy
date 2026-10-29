@@ -9,6 +9,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import me.meeshy.app.stories.StoryEditFixtures.FOREGROUND_PHOTO
+import me.meeshy.sdk.model.AdjustmentKind
+import me.meeshy.sdk.model.CanvasV3Migration
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import me.meeshy.sdk.model.StoryVisibility
@@ -174,5 +177,25 @@ class StoryEditDocumentTest {
         assertThat(ids).containsExactly(JsonPrimitive("m"))
         assertThat(StoryEditDocument.written(serverOnly, opened, opened)).isNull()
         assertThat(removed["scenes"]).isInstanceOf(JsonArray::class.java)
+    }
+
+    @Test
+    fun `regler le fond d'une story v3 ecrit ses reglages dans l'objet de fond et garde son cadrage`() {
+        val ios = StoryEditFixtures.iosPost
+        val document = CanvasV3Migration.wireDocument(ios.storyEffects!!)
+        val post = ios.copy(storyEffects = production.decodeFromJsonElement(StoryEffectsWireSerializer, document))
+        val opening = StoryEditFixtures.opening(post, served = ServedStoryEffects(document))
+        val tuned = ImageAdjustments().with(AdjustmentKind.BRIGHTNESS, 0.3f)
+        val state = edited(StoryEditFixtures.opened(opening)) { it.copy(backgroundAdjustments = tuned) }
+
+        val body = written(state, opening)
+
+        fun JsonObject.background(): JsonObject = scene(0)["objects"]!!.jsonArray.map { it.jsonObject }
+            .first { (it["payload"] as? JsonObject)?.get("isBackground") == JsonPrimitive(true) }
+        val before = asWritten(document).background()
+        val after = body.background()
+        assertThat(after["payload"]!!.jsonObject["adjustments"]!!.jsonObject["brightness"]).isEqualTo(JsonPrimitive(0.3))
+        assertThat(after["anchor"]).isEqualTo(before["anchor"])
+        assertThat(after["transform"]).isEqualTo(before["transform"])
     }
 }

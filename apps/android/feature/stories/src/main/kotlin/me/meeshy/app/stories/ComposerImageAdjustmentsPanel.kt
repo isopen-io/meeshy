@@ -40,10 +40,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -187,6 +189,7 @@ private fun ActionCapsule(label: String, icon: ImageVector, highlighted: Boolean
 }
 
 /** Le curseur du réglage choisi et sa valeur lue ; toucher deux fois la valeur (ou l'action d'accessibilité) le remet au neutre. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun AdjustmentSlider(kind: AdjustmentKind, value: Float, accent: Color, onChange: (Float) -> Unit) {
     val label = stringResource(kind.labelRes())
@@ -216,6 +219,7 @@ private fun AdjustmentSlider(kind: AdjustmentKind, value: Float, accent: Color, 
             maxLines = 1,
             modifier = Modifier
                 .testTag("adjust-value")
+                .semantics { invisibleToUser() }
                 .defaultMinSize(minWidth = 40.dp, minHeight = 48.dp)
                 .pointerInput(kind) { detectTapGestures(onDoubleTap = { onChange(kind.neutral) }) },
         )

@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -76,6 +79,15 @@ class ComposerImageAdjustmentsPanelTest {
         AdjustmentKind.entries.filter { it.family == AdjustmentFamily.TONE }.forEach {
             compose.onNodeWithTag("adjust-kind-${it.wireName}").assertExists()
         }
+    }
+
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test
+    fun `la valeur lue n est annoncee qu une fois, par le curseur, pas par le texte voisin`() {
+        show()
+
+        compose.onNodeWithTag("adjust-value").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.InvisibleToUser))
+        compose.onNodeWithTag("adjust-slider").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.StateDescription))
     }
 
     @Test
