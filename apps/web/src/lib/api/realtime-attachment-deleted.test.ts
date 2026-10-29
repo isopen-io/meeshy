@@ -6,7 +6,9 @@ import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
 import { mediaHubConversationKey } from './media-hub-cache';
 import { messagesQueryKey } from './messages';
-import { applyAttachmentDeleted, isAttachmentDeletedEvent } from './realtime-attachment-deleted';
+import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
+
+import { applyAttachmentDeleted, decodeAttachmentDeletedEvent } from './realtime-attachment-deleted';
 import type { Attachment, Conversation, Message } from './types';
 
 /**
@@ -20,12 +22,14 @@ const NOW = new Date('2026-10-29T10:00:00.000Z');
 const piece = (id: string, partial: Partial<Attachment> = {}): Attachment =>
   ({ id, messageId: 'm-1', mimeType: 'image/png', fileUrl: `https://cdn.example/${id}.png`, fileSize: 100, ...partial }) as Attachment;
 
-const event = (partial: Record<string, unknown> = {}): Record<string, unknown> => ({
+const event = (partial: Partial<AttachmentDeletedEventData> = {}): AttachmentDeletedEventData => ({
   conversationId: 'c-a',
   messageId: 'm-1',
   attachmentId: 'a-1',
   ...partial,
 });
+
+const wire = (partial: Record<string, unknown> = {}): Record<string, unknown> => ({ ...event(), ...partial });
 
 const listRow = (lastMessage: Message | undefined): Conversation =>
   ({ id: 'c-a', lastMessage, lastMessageAt: lastMessage?.createdAt }) as unknown as Conversation;
@@ -49,20 +53,20 @@ const seed = (
 const rowOf = (client: QueryClient): Message | undefined => threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
 const hubOf = (client: QueryClient): readonly Message[] =>
   (client.getQueryData<{ pages: { messages: Message[] }[] }>(mediaHubConversationKey('c-a'))?.pages ?? []).flatMap((p) => p.messages);
-const apply = (client: QueryClient, partial: Record<string, unknown> = {}): void =>
-  applyAttachmentDeleted(client, event(partial) as never, NOW);
+const apply = (client: QueryClient, partial: Partial<AttachmentDeletedEventData> = {}): void =>
+  applyAttachmentDeleted(client, event(partial), NOW);
 
-describe('isAttachmentDeletedEvent — garde de forme, fail-closed', () => {
-  test('la charge servie passe', () => {
-    expect(isAttachmentDeletedEvent(event())).toBe(true);
+describe('decodeAttachmentDeletedEvent — schéma de la charge, fail-closed', () => {
+  test('la charge servie passe, réduite aux trois identifiants', () => {
+    expect(decodeAttachmentDeletedEvent(wire({ extra: 'ignoré' }))).toEqual(event());
   });
 
   test('une charge incomplète ou mal typée est ignorée', () => {
-    expect(isAttachmentDeletedEvent(event({ attachmentId: undefined }))).toBe(false);
-    expect(isAttachmentDeletedEvent(event({ messageId: 7 }))).toBe(false);
-    expect(isAttachmentDeletedEvent(event({ conversationId: '' }))).toBe(false);
-    expect(isAttachmentDeletedEvent(null)).toBe(false);
-    expect(isAttachmentDeletedEvent('attachment:deleted')).toBe(false);
+    expect(decodeAttachmentDeletedEvent(wire({ attachmentId: undefined }))).toBeNull();
+    expect(decodeAttachmentDeletedEvent(wire({ messageId: 7 }))).toBeNull();
+    expect(decodeAttachmentDeletedEvent(wire({ conversationId: '' }))).toBeNull();
+    expect(decodeAttachmentDeletedEvent(null)).toBeNull();
+    expect(decodeAttachmentDeletedEvent('attachment:deleted')).toBeNull();
   });
 });
 

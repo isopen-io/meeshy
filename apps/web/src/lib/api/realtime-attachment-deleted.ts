@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as z from 'zod/mini';
 import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
 import type { LastMessageAttachmentSummary, PreviewAttachmentKind } from '@meeshy/shared/types/conversation-preview';
 
@@ -34,10 +35,17 @@ import type { Attachment, Message } from './types';
  * on ne peut pas savoir, depuis le cache, si le message est vidé, n'est pas
  * devinée : la liste est relue.
  */
-export function isAttachmentDeletedEvent(payload: unknown): payload is AttachmentDeletedEventData {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  return [p.conversationId, p.messageId, p.attachmentId].every((id) => typeof id === 'string' && id !== '');
+const presentId = z.string().check(z.minLength(1));
+
+const attachmentDeletedEventSchema = z.object({
+  conversationId: presentId,
+  messageId: presentId,
+  attachmentId: presentId,
+});
+
+export function decodeAttachmentDeletedEvent(payload: unknown): AttachmentDeletedEventData | null {
+  const parsed = attachmentDeletedEventSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
 }
 
 const holds = (pieces: readonly Attachment[] | undefined, attachmentId: string): boolean =>
@@ -46,7 +54,7 @@ const holds = (pieces: readonly Attachment[] | undefined, attachmentId: string):
 const hasNothingLeft = (message: Message, remaining: readonly Attachment[]): boolean =>
   remaining.length === 0 &&
   (message.content ?? '').trim() === '' &&
-  ((message as Message & { readonly location?: unknown }).location ?? null) === null &&
+  (message.location ?? null) === null &&
   (message.sticker === undefined || message.sticker === null);
 
 const without = (pieces: readonly Attachment[], attachmentId: string): readonly Attachment[] =>
@@ -100,6 +108,19 @@ const relistConversations = (queryClient: QueryClient): void => {
   void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY, exact: true });
 };
 
+function withoutPiece(
+  current: ListLastMessage,
+  remaining: readonly Attachment[],
+  summary: LastMessageAttachmentSummary | undefined,
+): ListLastMessage {
+  const { attachmentSummary: previous, ...rest } = current;
+  return {
+    ...rest,
+    ...(current.attachments === undefined ? {} : { attachments: [...remaining] }),
+    ...(previous === undefined || summary === undefined ? {} : { attachmentSummary: summary }),
+  };
+}
+
 function updateListPreview(
   queryClient: QueryClient,
   data: AttachmentDeletedEventData,
@@ -116,7 +137,7 @@ function updateListPreview(
 
   const pieces = last.attachments ?? known?.attachments;
   if (pieces === undefined) {
-    if ((last as ListLastMessage).attachmentSummary !== undefined) relistConversations(queryClient);
+    if ('attachmentSummary' in last && last.attachmentSummary !== undefined) relistConversations(queryClient);
     return;
   }
   if (!holds(pieces, data.attachmentId)) return;
@@ -131,17 +152,9 @@ function updateListPreview(
 
   const summary = summaryOf(remaining);
   patchConversation(queryClient, data.conversationId, (conversation) => {
-    const current = conversation.lastMessage as ListLastMessage | undefined | null;
+    const current = conversation.lastMessage;
     if (current === undefined || current === null || current.id !== data.messageId) return conversation;
-    const { attachmentSummary: previous, ...rest } = current;
-    return {
-      ...conversation,
-      lastMessage: {
-        ...rest,
-        ...(current.attachments === undefined ? {} : { attachments: [...remaining] }),
-        ...(previous === undefined || summary === undefined ? {} : { attachmentSummary: summary }),
-      } as Message,
-    };
+    return { ...conversation, lastMessage: withoutPiece(current, remaining, summary) };
   });
 }
 
