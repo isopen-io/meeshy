@@ -25,6 +25,8 @@ import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
+import me.meeshy.app.chat.options.ConversationOptionsExit
+import me.meeshy.app.chat.options.rememberConversationOptionsSlots
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
@@ -233,19 +235,29 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
             add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
-            add(ConversationInfoEntry(MeeshyIcons.Palette, stringResource(R.string.conversation_appearance_entry_title), openFrom { sheets.appearance = true }))
             add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
-            // Moderator+ viewers of a group get the admin surfaces: the share-link creator
-            // and the conversation-settings sheet (write-role / announcement / slow-mode).
-            if (host.navigation.mayInviteFriends) {
-                add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
-            }
+            // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
+            // announcement / slow-mode); the share link is the « Partager » button of the Options.
             if (state.slowModeExempt) {
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }
+        val infoTitle = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title)
+        // L'onglet Options d'iOS (#13777) : une conversation quittée ou supprimée referme aussi le fil.
+        val options = rememberConversationOptionsSlots(
+            conversationId = state.conversationId,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            title = infoTitle,
+            accentColor = accentColor,
+            onOpenAppearance = openFrom { sheets.appearance = true },
+            onShare = openFrom(host.navigation.onCreateShareLink),
+            onExit = { exit ->
+                sheets.info = false
+                if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
+            },
+        )
         ConversationInfoSheet(
-            title = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
                 stringResource(R.string.chat_header_members, state.memberCount)
             } else {
@@ -257,6 +269,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             conversationId = state.conversationId,
             entries = entries,
             onDismiss = { sheets.info = false },
+            headerActions = options.header,
+            options = options.body,
         )
     }
 

@@ -50,10 +50,11 @@ internal class ConversationInfoEntry(
 )
 
 /**
- * La fiche Conversation (pendant minimal de `ConversationInfoSheet` iOS) : ouverte par le
- * toucher de l'avatar d'un groupe ou l'entrée « Conversation » du menu de l'avatar. Elle
- * accueille ce que l'en-tête iOS ne montre pas : membres, statistiques, analyse, lien de
- * partage et réglages, chacun ouvrant sa feuille.
+ * La fiche Conversation (pendant de `ConversationInfoSheet` iOS) : ouverte par le toucher de
+ * l'avatar d'un groupe ou l'entrée « Conversation » du menu de l'avatar. Sous l'en-tête,
+ * [headerActions] (Bloquer, Partager, Quitter) ; puis les entrées qui ouvrent chacune leur feuille
+ * (membres, chiffrement, statistiques, analyse, médias, réglages) ; enfin [options], l'onglet
+ * Options d'iOS (#13777).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +67,8 @@ internal fun ConversationInfoSheet(
     conversationId: String?,
     entries: List<ConversationInfoEntry>,
     onDismiss: () -> Unit,
+    headerActions: @Composable () -> Unit = {},
+    options: @Composable () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -109,6 +112,8 @@ internal fun ConversationInfoSheet(
                 )
             }
             Spacer(Modifier.size(MeeshySpacing.lg))
+            headerActions()
+            Spacer(Modifier.size(MeeshySpacing.md))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,6 +151,8 @@ internal fun ConversationInfoSheet(
                     }
                 }
             }
+            Spacer(Modifier.size(MeeshySpacing.lg))
+            options()
         }
     }
 }

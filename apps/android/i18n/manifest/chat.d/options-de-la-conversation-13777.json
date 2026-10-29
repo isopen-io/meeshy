@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.section.display",
+          "androidName": "conversation_options_section_display",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.custom-name",
+          "androidName": "conversation_options_custom_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.custom-name.placeholder",
+          "androidName": "conversation_options_custom_name_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.custom-name.clear",
+          "androidName": "conversation_options_custom_name_clear",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.favorite",
+          "androidName": "conversation_options_favorite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.reaction.none",
+          "androidName": "conversation_options_reaction_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.section.organization",
+          "androidName": "conversation_options_section_organization",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.pin",
+          "androidName": "conversation_options_pin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.category",
+          "androidName": "conversation_options_category",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.tags",
+          "androidName": "conversation_options_tags",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.section.notifications",
+          "androidName": "conversation_options_section_notifications",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.muted",
+          "androidName": "conversation_options_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.mentions-only",
+          "androidName": "conversation_options_mentions_only",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.section.actions",
+          "androidName": "conversation_options_section_actions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.archive",
+          "androidName": "conversation_options_archive",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.unarchive",
+          "androidName": "conversation_options_unarchive",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.archive.title",
+          "androidName": "conversation_options_archive_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.unarchive.title",
+          "androidName": "conversation_options_unarchive_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.leave-group",
+          "androidName": "conversation_options_leave_group",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.leave.title",
+          "androidName": "conversation_options_leave_group_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.leave",
+          "androidName": "conversation_options_leave_group_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.leave.message",
+          "androidName": "conversation_options_leave_group_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.delete-for-me",
+          "androidName": "conversation_options_delete_for_me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.delete.title",
+          "androidName": "conversation_options_delete_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.delete.message",
+          "androidName": "conversation_options_delete_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.delete",
+          "androidName": "conversation_options_delete_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "conversation_options_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.share",
+          "androidName": "conversation_options_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.confirm",
+          "androidName": "conversation_options_leave",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.title",
+          "androidName": "conversation_options_leave_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.message",
+          "androidName": "conversation_options_leave_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.title",
+          "androidName": "conversation_options_block_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.confirm",
+          "androidName": "conversation_options_block_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.message",
+          "androidName": "conversation_options_block_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.a11y",
+          "androidName": "conversation_options_block_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.success",
+          "androidName": "conversation_options_block_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.options.error.save",
+          "androidName": "conversation_options_error_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.options.error.createCategory",
+          "androidName": "conversation_options_error_create_category",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.options.error.deleteConversation",
+          "androidName": "conversation_options_error_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.options.error.leaveConversation",
+          "androidName": "conversation_options_error_leave",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "tag.placeholder",
+          "androidName": "conversation_options_tag_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "tag.remove",
+          "androidName": "conversation_options_tag_remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "tag.add",
+          "androidName": "conversation_options_tag_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "category.create",
+          "androidName": "conversation_options_category_create",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "category.select",
+          "androidName": "conversation_options_category_select",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversation_options_category_placeholder",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
