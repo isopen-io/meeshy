@@ -416,17 +416,26 @@ internal class ConversationCacheSource(
      * or created for a story/mood reply or a profile's Message button), so the chat screen — which
      * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
      */
-    suspend fun remember(conversation: ApiConversation) {
+    suspend fun remember(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = false)
+
+    /**
+     * #13628 — [remember] for a conversation the gateway has JUST served (a `NetworkResult.Success` body): only such a row
+     * confirms a null mode as clear. A conversation rebuilt from the cache or composed locally goes through [remember] and
+     * confirms nothing — its null mode stays unknown, and the outbox re-reads it before any plaintext.
+     */
+    suspend fun rememberServed(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = true)
+
+    private suspend fun rememberAs(conversation: ApiConversation, servedByGateway: Boolean) {
         val ticket = fence?.currentTicket()
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { rememberNow(conversation, now) }
+        fence.commitOrWrite(ticket) { rememberNow(conversation, now, servedByGateway) }
     }
 
-    private suspend fun rememberNow(conversation: ApiConversation, now: Long) {
+    private suspend fun rememberNow(conversation: ApiConversation, now: Long, servedByGateway: Boolean) {
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = keepingEndToEnd(carryingKnownPeers(conversation))
-            confirmServedClear(listOf(carried))
+            if (servedByGateway) confirmServedClear(listOf(carried))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
         }

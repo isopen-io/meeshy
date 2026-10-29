@@ -128,7 +128,7 @@ class StoryReplyViewModel @Inject constructor(
         val cachedOnly = resolution is DirectConversationResolution.Found && resolution.fromCache
         if (!cachedOnly || !served.encryptionMode.isNullOrBlank()) return KnownMode(served.encryptionMode)
         val fresh = (conversationRepository.getById(conversationId) as? NetworkResult.Success)?.data ?: return null
-        conversationRepository.remember(fresh)
+        conversationRepository.rememberServed(fresh)
         return KnownMode(fresh.encryptionMode)
     }
 
