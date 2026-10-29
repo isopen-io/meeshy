@@ -57,7 +57,15 @@
     <string name="call_frames_mood_signature">Markenzeichen</string>
     <string name="call_frames_more">Mehr Stimmungen</string>
     <string name="call_frames_more_hint">Zeigt alle Stimmungen und alle Rahmen</string>
+    <string name="call_group_fullscreen_enter">Vollbild</string>
+    <string name="call_group_fullscreen_exit">Vollbild verlassen</string>
+    <string name="call_group_grid">Zurück zum Raster</string>
+    <string name="call_group_spotlight_hint">Tippen, um hervorzuheben</string>
     <string name="call_group_stage">Anrufteilnehmer</string>
+    <string name="call_group_tile_camera_off">Kamera aus</string>
+    <string name="call_group_tile_mic_muted">Mikrofon stumm</string>
+    <string name="call_group_tile_reconnecting">Verbindung wird wiederhergestellt…</string>
+    <string name="call_group_tile_screen_sharing">Teilt den Bildschirm</string>
     <string name="call_group_tile_unknown">Teilnehmer</string>
     <string name="call_group_tile_you">Du</string>
     <string name="call_invite_failed">Diese Person konnte nicht eingeladen werden</string>
@@ -121,6 +129,7 @@
     <string name="call_screen_share_error">Bildschirm konnte nicht geteilt werden</string>
     <string name="call_screen_share_hint">Zeigt Ihrem Gesprächspartner während des Anrufs Ihren Bildschirm</string>
     <string name="call_screen_share_local_banner">Sie teilen Ihren Bildschirm</string>
+    <string name="call_screen_share_of">Bildschirm von %1$s</string>
     <string name="call_screen_share_remote_banner">%1$s teilt den Bildschirm</string>
     <string name="call_screen_share_remote_banner_generic">Ihr Gesprächspartner teilt den Bildschirm</string>
     <string name="call_screen_share_start">Bildschirm teilen</string>

@@ -57,7 +57,15 @@
     <string name="call_frames_mood_signature">Assinatura</string>
     <string name="call_frames_more">Mais climas</string>
     <string name="call_frames_more_hint">Mostra todos os climas e todas as molduras</string>
+    <string name="call_group_fullscreen_enter">Tela cheia</string>
+    <string name="call_group_fullscreen_exit">Sair da tela cheia</string>
+    <string name="call_group_grid">Voltar à grade</string>
+    <string name="call_group_spotlight_hint">Toque para destacar</string>
     <string name="call_group_stage">Participantes da chamada</string>
+    <string name="call_group_tile_camera_off">Câmera desligada</string>
+    <string name="call_group_tile_mic_muted">Microfone desativado</string>
+    <string name="call_group_tile_reconnecting">Reconectando…</string>
+    <string name="call_group_tile_screen_sharing">Compartilhando a tela</string>
     <string name="call_group_tile_unknown">Participante</string>
     <string name="call_group_tile_you">Você</string>
     <string name="call_invite_failed">Não foi possível convidar esta pessoa</string>
@@ -121,6 +129,7 @@
     <string name="call_screen_share_error">Não foi possível compartilhar a tela</string>
     <string name="call_screen_share_hint">Mostra sua tela ao seu contato durante a chamada</string>
     <string name="call_screen_share_local_banner">Você está compartilhando sua tela</string>
+    <string name="call_screen_share_of">Tela de %1$s</string>
     <string name="call_screen_share_remote_banner">%1$s está compartilhando a tela</string>
     <string name="call_screen_share_remote_banner_generic">Seu contato está compartilhando a tela</string>
     <string name="call_screen_share_start">Compartilhar tela</string>

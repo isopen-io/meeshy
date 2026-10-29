@@ -57,7 +57,15 @@
     <string name="call_frames_mood_signature">بصمة</string>
     <string name="call_frames_more">المزيد من الأجواء</string>
     <string name="call_frames_more_hint">يعرض كل الأجواء وكل الإطارات</string>
+    <string name="call_group_fullscreen_enter">ملء الشاشة</string>
+    <string name="call_group_fullscreen_exit">الخروج من ملء الشاشة</string>
+    <string name="call_group_grid">العودة إلى الشبكة</string>
+    <string name="call_group_spotlight_hint">اضغط للإبراز</string>
     <string name="call_group_stage">المشاركون في المكالمة</string>
+    <string name="call_group_tile_camera_off">الكاميرا متوقفة</string>
+    <string name="call_group_tile_mic_muted">الميكروفون مكتوم</string>
+    <string name="call_group_tile_reconnecting">جارٍ إعادة الاتصال…</string>
+    <string name="call_group_tile_screen_sharing">يشارك شاشته</string>
     <string name="call_group_tile_unknown">مشارك</string>
     <string name="call_group_tile_you">أنت</string>
     <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
@@ -121,6 +129,7 @@
     <string name="call_screen_share_error">تعذّرت مشاركة الشاشة</string>
     <string name="call_screen_share_hint">يعرض شاشتك على الطرف الآخر أثناء المكالمة</string>
     <string name="call_screen_share_local_banner">أنت تشارك شاشتك</string>
+    <string name="call_screen_share_of">شاشة %1$s</string>
     <string name="call_screen_share_remote_banner">%1$s يشارك شاشته</string>
     <string name="call_screen_share_remote_banner_generic">الطرف الآخر يشارك شاشته</string>
     <string name="call_screen_share_start">مشاركة الشاشة</string>

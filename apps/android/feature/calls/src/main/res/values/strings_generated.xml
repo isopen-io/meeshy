@@ -57,7 +57,15 @@
     <string name="call_frames_mood_signature">Signature</string>
     <string name="call_frames_more">More moods</string>
     <string name="call_frames_more_hint">Shows every mood and every frame</string>
+    <string name="call_group_fullscreen_enter">Full screen</string>
+    <string name="call_group_fullscreen_exit">Exit full screen</string>
+    <string name="call_group_grid">Back to grid</string>
+    <string name="call_group_spotlight_hint">Tap to spotlight</string>
     <string name="call_group_stage">Call participants</string>
+    <string name="call_group_tile_camera_off">Camera off</string>
+    <string name="call_group_tile_mic_muted">Microphone muted</string>
+    <string name="call_group_tile_reconnecting">Reconnecting…</string>
+    <string name="call_group_tile_screen_sharing">Sharing their screen</string>
     <string name="call_group_tile_unknown">Participant</string>
     <string name="call_group_tile_you">You</string>
     <string name="call_invite_failed">Couldn’t invite this person</string>
@@ -121,6 +129,7 @@
     <string name="call_screen_share_error">Couldn\'t share your screen</string>
     <string name="call_screen_share_hint">Shows your screen to the other person during the call</string>
     <string name="call_screen_share_local_banner">You\'re sharing your screen</string>
+    <string name="call_screen_share_of">%1$s\'s screen</string>
     <string name="call_screen_share_remote_banner">%1$s is sharing their screen</string>
     <string name="call_screen_share_remote_banner_generic">The other person is sharing their screen</string>
     <string name="call_screen_share_start">Share screen</string>

@@ -1,7 +1,7 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,23 +21,35 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.call.GroupStageTapOutcome
+import me.meeshy.sdk.model.call.GroupStageTapRule
 import me.meeshy.sdk.model.call.group.CallInviteCandidates
 import me.meeshy.sdk.model.call.group.GroupCallGridLayout
+import me.meeshy.sdk.model.call.group.GroupCallSpotlight
+import me.meeshy.sdk.model.call.group.GroupCallSpotlightChoice
+import me.meeshy.sdk.model.call.group.GroupCallStageFocus
 import me.meeshy.sdk.model.call.group.GroupCallStageLaw
 import me.meeshy.sdk.model.call.group.GroupCallStageTile
 import me.meeshy.ui.component.MeeshyAvatar
@@ -53,9 +63,10 @@ internal fun groupStageShown(state: CallUiState, mesh: GroupCallMeshUi): Boolean
     state.showsConnectedLayout && GroupCallStageLaw.isShown(mesh.isActive, mesh.roster)
 
 /**
- * La scène d'un appel de groupe (iOS `GroupCallStageView`, grille), posée ENTRE l'en-tête et la pilule : ma
- * vignette d'abord, puis les membres dans l'ordre d'arrivée — la grille ne se réagence jamais. Une vignette sans
- * vidéo montre l'avatar ; toucher la scène rallume ou éteint le chrome, comme partout sur l'écran d'appel.
+ * La scène d'un appel de groupe (iOS `GroupCallStageView`), posée ENTRE l'en-tête et la pilule. Grille par défaut :
+ * ma vignette d'abord, puis les membres dans l'ordre d'arrivée — la grille ne se réagence jamais. Toucher une vignette
+ * la met à la une avec la pellicule des autres ([GroupCallSpotlight]) ; un partage d'écran d'un membre y monte seul ;
+ * « Revenir à la grille » rend la grille. Le choix reste LOCAL, jamais partagé.
  */
 @Composable
 internal fun CallGroupStage(
@@ -64,6 +75,9 @@ internal fun CallGroupStage(
     localTrack: VideoTrack?,
     primaryTrack: VideoTrack?,
     eglContext: EglBase.Context,
+    isChromeVisible: Boolean,
+    isFullScreen: Boolean,
+    onFullScreenChange: (Boolean) -> Unit,
     onStageTap: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -74,77 +88,94 @@ internal fun CallGroupStage(
         isLocalVideoEnabled = state.isVideoCall && state.isCameraOn && localTrack != null,
         isPrimaryVideoActive = primaryTrack != null && !state.isPeerCameraOff,
     )
-    val stageLabel = stringResource(R.string.call_group_stage)
-    BoxWithConstraints(modifier.semantics { contentDescription = stageLabel }) {
-        val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = maxWidth > maxHeight)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(GRID_SPACING)) {
-            tiles.chunked(layout.columns).forEach { row ->
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(GRID_SPACING)) {
-                    row.forEach { tile ->
-                        val track = when {
-                            tile.isLocal -> localTrack
-                            tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
-                            else -> mesh.videoTracks[tile.id]
-                        }
-                        CallGroupTile(
-                            tile = tile,
-                            track = track.takeIf { tile.showsVideo },
-                            eglContext = eglContext,
-                            mirror = tile.isLocal && state.isFrontCamera,
-                            onTap = onStageTap,
-                            modifier = Modifier.weight(1f).fillMaxSize(),
-                        )
-                    }
-                    repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
-                }
-            }
+    var choice by remember { mutableStateOf<GroupCallSpotlightChoice?>(null) }
+    val sharer = GroupCallSpotlight.sharerId(tiles)
+    val lastSharer = remember { mutableStateOf(sharer) }
+    LaunchedEffect(sharer) {
+        if (sharer != lastSharer.value) {
+            choice = GroupCallSpotlight.choiceAfterSharerChanged(choice, lastSharer.value, sharer)
+            lastSharer.value = sharer
         }
+    }
+    val focus = GroupCallSpotlight.focus(tiles, choice)
+    var zoom by remember { mutableFloatStateOf(1f) }
+    val fullScreenChange by rememberUpdatedState(onFullScreenChange)
+    val fullScreenNow by rememberUpdatedState(isFullScreen)
+    LaunchedEffect(focus) {
+        zoom = 1f
+        if (focus == GroupCallStageFocus.Grid && fullScreenNow) fullScreenChange(false)
+    }
+    DisposableEffect(Unit) { onDispose { if (fullScreenNow) fullScreenChange(false) } }
+
+    val haptics = LocalHapticFeedback.current
+    val choose: (GroupCallSpotlightChoice) -> Unit = { next ->
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        choice = next
+    }
+    val scope = CallGroupStageScope(
+        trackOf = { tile ->
+            when {
+                !tile.showsVideo -> null
+                tile.isLocal -> localTrack
+                tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
+                else -> mesh.videoTracks[tile.id]
+            }
+        },
+        eglContext = eglContext,
+        mirrorsLocal = state.isFrontCamera,
+        onTileTap = { tile ->
+            when (GroupStageTapRule.outcome(isChromeVisible)) {
+                GroupStageTapOutcome.RevealChrome -> onStageTap?.invoke()
+                GroupStageTapOutcome.Spotlight -> choose(GroupCallSpotlightChoice.Tile(tile.id))
+            }
+        },
+    )
+    val stageLabel = stringResource(R.string.call_group_stage)
+    val stageModifier = modifier.semantics { contentDescription = stageLabel }
+    val spotlight = focus as? GroupCallStageFocus.Spotlight
+    val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
+    if (spotlight == null || featured == null) {
+        CallGroupGrid(tiles, scope, onStageTap, stageModifier)
+    } else {
+        CallGroupSpotlightStage(
+            tiles = tiles,
+            featured = featured,
+            isScreenShare = spotlight.isScreenShare,
+            isFullScreen = isFullScreen,
+            zoom = zoom,
+            onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
+            onResetZoom = { zoom = 1f },
+            onGrid = { choose(GroupCallSpotlightChoice.Grid) },
+            onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
+            onStageTap = onStageTap,
+            scope = scope,
+            modifier = stageModifier,
+        )
     }
 }
 
+/** La grille — iOS `GroupCallStageView.grid` ; l'espace entre les vignettes rallume ou éteint le chrome. */
 @Composable
-private fun CallGroupTile(
-    tile: GroupCallStageTile,
-    track: VideoTrack?,
-    eglContext: EglBase.Context,
-    mirror: Boolean,
-    onTap: (() -> Unit)?,
-    modifier: Modifier = Modifier,
+private fun CallGroupGrid(
+    tiles: List<GroupCallStageTile>,
+    scope: CallGroupStageScope,
+    onStageTap: (() -> Unit)?,
+    modifier: Modifier,
 ) {
-    val name = tile.displayName.ifBlank { stringResource(R.string.call_group_tile_unknown) }
-    Box(
-        modifier
-            .clip(RoundedCornerShape(TILE_RADIUS))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .alpha(if (tile.isReconnecting) RECONNECTING_ALPHA else 1f)
-            .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
-            .semantics(mergeDescendants = true) {},
-    ) {
-        if (track != null) {
-            VideoRenderer(track = track, eglContext = eglContext, mirror = mirror, modifier = Modifier.fillMaxSize())
-        } else {
-            MeeshyAvatar(name = name, imageUrl = tile.avatarUrl, size = AVATAR_SIZE, modifier = Modifier.align(Alignment.Center))
-        }
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(MeeshySpacing.sm)
-                .clip(RoundedCornerShape(TILE_RADIUS))
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = LABEL_SCRIM_ALPHA))
-                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            if (tile.isMicMuted) {
-                Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(14.dp))
+    val stageTap = if (onStageTap != null) {
+        Modifier.pointerInput(onStageTap) { detectTapGestures(onTap = { onStageTap() }) }
+    } else {
+        Modifier
+    }
+    BoxWithConstraints(modifier.then(stageTap)) {
+        val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = maxWidth > maxHeight)
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+            tiles.chunked(layout.columns).forEach { row ->
+                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+                    row.forEach { tile -> CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
+                    repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
+                }
             }
-            Text(
-                text = name,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
@@ -217,8 +248,3 @@ private fun CallInviteRow(friend: FriendRequestUser, onClick: () -> Unit) {
     }
 }
 
-private val GRID_SPACING = 8.dp
-private val TILE_RADIUS = 16.dp
-private val AVATAR_SIZE = 72.dp
-private const val RECONNECTING_ALPHA = 0.6f
-private const val LABEL_SCRIM_ALPHA = 0.55f

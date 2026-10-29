@@ -180,7 +180,8 @@ internal fun CallConnectedColumn(
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
-            CallChromeFade(
+            // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
+            if (!chromeState.isStageFullScreen) CallChromeFade(
                 isVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 modifier = Modifier.padding(bottom = MeeshySpacing.xl),

@@ -57,7 +57,15 @@
     <string name="call_frames_mood_signature">Firma</string>
     <string name="call_frames_more">Altre atmosfere</string>
     <string name="call_frames_more_hint">Mostra tutte le atmosfere e tutte le cornici</string>
+    <string name="call_group_fullscreen_enter">Schermo intero</string>
+    <string name="call_group_fullscreen_exit">Esci dallo schermo intero</string>
+    <string name="call_group_grid">Torna alla griglia</string>
+    <string name="call_group_spotlight_hint">Tocca per mettere in primo piano</string>
     <string name="call_group_stage">Partecipanti alla chiamata</string>
+    <string name="call_group_tile_camera_off">Fotocamera disattivata</string>
+    <string name="call_group_tile_mic_muted">Microfono disattivato</string>
+    <string name="call_group_tile_reconnecting">Riconnessione…</string>
+    <string name="call_group_tile_screen_sharing">Condivide lo schermo</string>
     <string name="call_group_tile_unknown">Partecipante</string>
     <string name="call_group_tile_you">Tu</string>
     <string name="call_invite_failed">Impossibile invitare questa persona</string>
@@ -121,6 +129,7 @@
     <string name="call_screen_share_error">Impossibile condividere lo schermo</string>
     <string name="call_screen_share_hint">Mostra il tuo schermo all\'interlocutore durante la chiamata</string>
     <string name="call_screen_share_local_banner">Stai condividendo il tuo schermo</string>
+    <string name="call_screen_share_of">Schermo di %1$s</string>
     <string name="call_screen_share_remote_banner">%1$s sta condividendo lo schermo</string>
     <string name="call_screen_share_remote_banner_generic">L\'interlocutore sta condividendo lo schermo</string>
     <string name="call_screen_share_start">Condividi schermo</string>

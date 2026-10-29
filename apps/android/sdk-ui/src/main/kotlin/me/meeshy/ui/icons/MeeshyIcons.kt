@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Check as FiCheck
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank as FiCheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle as FiCheckCircle
 import androidx.compose.material.icons.filled.Close as FiClose
+import androidx.compose.material.icons.filled.CloseFullscreen as FiCloseFullscreen
 import androidx.compose.material.icons.filled.Code as FiCode
 import androidx.compose.material.icons.filled.ContentCopy as FiContentCopy
 import androidx.compose.material.icons.filled.ContentCut as FiContentCut
@@ -346,6 +347,7 @@ public object MeeshyIcons {
     public val Close: ImageVector get() = Icons.Filled.FiClose
     public val CloseCircle: ImageVector get() = Icons.Outlined.OuCancel
     public val CloseCircleFilled: ImageVector get() = Icons.Filled.FiCancel
+    public val CloseFullscreen: ImageVector get() = Icons.Filled.FiCloseFullscreen
     public val Cloud: ImageVector get() = Icons.Outlined.OuCloud
     public val Code: ImageVector get() = Icons.Filled.FiCode
     public val ComposeNew: ImageVector get() = Icons.Outlined.OuEditNote

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.group.spotlight.hint",
+          "androidName": "call_group_spotlight_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.grid",
+          "androidName": "call_group_grid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.fullscreen.enter",
+          "androidName": "call_group_fullscreen_enter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.fullscreen.exit",
+          "androidName": "call_group_fullscreen_exit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.of",
+          "androidName": "call_screen_share_of",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.micMuted",
+          "androidName": "call_group_tile_mic_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.cameraOff",
+          "androidName": "call_group_tile_camera_off",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.screenSharing",
+          "androidName": "call_group_tile_screen_sharing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.reconnecting",
+          "androidName": "call_group_tile_reconnecting",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
