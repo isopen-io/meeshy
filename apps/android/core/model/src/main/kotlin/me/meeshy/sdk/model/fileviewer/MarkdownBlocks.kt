@@ -22,17 +22,20 @@ sealed interface MarkdownBlock {
  * citations, blocs de code, règles, et gras / italique / code en ligne. Pas de HTML (gardé tel quel, comme du texte),
  * pas d'image, pas de lien actif (le libellé est suivi de sa cible, écrite en clair), pas de tableau. Le nombre de
  * blocs est borné : le texte d'entrée l'est déjà (512 Kio) mais un fichier d'un million de lignes vides ne doit
- * pas devenir un million de lignes de liste.
+ * pas devenir un million de lignes de liste. L'analyse est LINÉAIRE et sans expression régulière à retours arrière
+ * sur le texte d'un bloc : une ligne hostile de 512 Kio (crochets jamais fermés, titre suivi d'un blanc immense,
+ * cible de lien démesurée) ne gèle ni ne fait déborder la pile ; le texte d'un bloc est écrêté à [MAX_BLOCK_CHARS].
  */
 object MarkdownBlocks {
     const val MAX_BLOCKS = 5_000
 
-    private val heading = Regex("^(#{1,6})\\s+(.*?)\\s*#*\\s*$")
+    /** La borne du texte d'un bloc : celle des lignes de la vue source, au-delà le bloc finit par « … ». */
+    const val MAX_BLOCK_CHARS = 4_000
+
     private val bullet = Regex("^(\\s*)[-*+]\\s+(.*)$")
     private val numbered = Regex("^(\\s*)(\\d{1,9})[.)]\\s+(.*)$")
     private val rule = Regex("^\\s{0,3}([-*_])(\\s*\\1){2,}\\s*$")
     private val fence = Regex("^\\s{0,3}```")
-    private val link = Regex("\\[([^\\]\\n]*)]\\(((?:[^()\\s]|\\([^()\\s]*\\))*)\\)")
 
     fun parse(text: String): List<MarkdownBlock> {
         val blocks = mutableListOf<MarkdownBlock>()
@@ -55,10 +58,10 @@ object MarkdownBlocks {
                 }
                 line.isBlank() -> flush()
                 rule.matches(line) -> { flush(); blocks += MarkdownBlock.Rule }
-                heading.matches(line) -> {
+                headingOf(line) != null -> {
                     flush()
-                    val match = heading.matchEntire(line)!!
-                    blocks += MarkdownBlock.Heading(match.groupValues[1].length, spans(match.groupValues[2]))
+                    val (level, content) = headingOf(line)!!
+                    blocks += MarkdownBlock.Heading(level, spans(content))
                 }
                 line.trimStart().startsWith(">") -> {
                     flush()
@@ -85,11 +88,69 @@ object MarkdownBlocks {
 
     private fun depth(indent: String): Int = (indent.replace("\t", "  ").length / 2).coerceAtMost(6)
 
-    private fun spans(raw: String): List<MarkdownSpan> {
-        val flattened = link.replace(raw) { m ->
-            val target = m.groupValues[2]
-            if (target.isEmpty()) m.groupValues[1] else "${m.groupValues[1]} ($target)"
+    private fun isBlank(c: Char): Boolean = c == ' ' || c == '\t' || c == '\u000B' || c == '\u000C'
+
+    /** `#`×1…6, au moins un blanc, puis le texte sans sa séquence fermante (`## Titre ##` → « Titre »). */
+    private fun headingOf(line: String): Pair<Int, String>? {
+        val level = line.takeWhile { it == '#' }.length
+        if (level !in 1..6 || level >= line.length || !isBlank(line[level])) return null
+        val content = line.substring(level).trimStart(::isBlank).trimEnd(::isBlank).trimEnd('#').trimEnd(::isBlank)
+        return level to content
+    }
+
+    private fun clipped(raw: String): String =
+        if (raw.length > MAX_BLOCK_CHARS) raw.take(MAX_BLOCK_CHARS) + "…" else raw
+
+    /**
+     * `[libellé](cible)` → « libellé (cible) » (ou « libellé » sans cible), en un passage LINÉAIRE : la fin d'un libellé
+     * et la fin d'une cible sont lues dans deux tables calculées de droite à gauche, jamais par un balayage répété.
+     */
+    private fun flattenLinks(text: String): String {
+        val n = text.length
+        val closeOrBreak = IntArray(n + 1) { n }
+        val nextParenOrBlank = IntArray(n + 1) { n }
+        for (k in n - 1 downTo 0) {
+            val c = text[k]
+            closeOrBreak[k] = if (c == ']' || c == '\n') k else closeOrBreak[k + 1]
+            nextParenOrBlank[k] = if (c == '(' || c == ')' || c.isWhitespace()) k else nextParenOrBlank[k + 1]
         }
+        // bodyEnd[k] : l'indice du `)` qui ferme une cible dont le corps reprend en k (un niveau de parenthèses
+        // équilibrées, aucun blanc), sinon -1.
+        val bodyEnd = IntArray(n + 1) { -1 }
+        for (k in n - 1 downTo 0) {
+            val c = text[k]
+            bodyEnd[k] = when {
+                c == ')' -> k
+                c.isWhitespace() -> -1
+                c == '(' -> {
+                    val m = nextParenOrBlank[k + 1]
+                    if (m < n && text[m] == ')') bodyEnd[m + 1] else -1
+                }
+                else -> bodyEnd[k + 1]
+            }
+        }
+        val out = StringBuilder(n)
+        var i = 0
+        while (i < n) {
+            if (text[i] == '[') {
+                val close = closeOrBreak[i + 1]
+                val end = if (close + 1 < n && text[close] == ']' && text[close + 1] == '(') bodyEnd[close + 2] else -1
+                if (end >= 0) {
+                    val label = text.substring(i + 1, close)
+                    val target = text.substring(close + 2, end)
+                    out.append(if (target.isEmpty()) label else "$label ($target)")
+                    i = end + 1
+                    continue
+                }
+            }
+            out.append(text[i])
+            i++
+        }
+        return out.toString()
+    }
+
+    private fun spans(raw: String): List<MarkdownSpan> {
+        val flattened = flattenLinks(clipped(raw))
         val out = mutableListOf<MarkdownSpan>()
         val plain = StringBuilder()
         fun emitPlain() {
