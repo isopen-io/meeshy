@@ -75,5 +75,28 @@ class DraftResumeEntriesTest {
         assertThat(entries.map { it.kind }).containsExactly(DraftResumeKind.POST, DraftResumeKind.STORY).inOrder()
     }
 
+    private fun media(mime: String, durationMs: Long? = null) = UploadedMedia("m-$mime", "", mime, 0L, null, null, durationMs, null)
+
+    @Test
+    fun `a post draft whose composition is a reel is offered as a reel, and what the author forced to a plain post is not`() {
+        val video = PostComposerDraftSnapshot(media = listOf(media("video/mp4", durationMs = 12_000L)), updatedAtMillis = 1L)
+        val twoImages = PostComposerDraftSnapshot(media = listOf(media("image/jpeg"), media("image/jpeg")), updatedAtMillis = 1L)
+        val oneImage = PostComposerDraftSnapshot(media = listOf(media("image/jpeg")), updatedAtMillis = 1L)
+
+        assertThat(DraftResumeEntries.from(video, null).single().kind).isEqualTo(DraftResumeKind.REEL)
+        assertThat(DraftResumeEntries.from(twoImages, null).single().kind).isEqualTo(DraftResumeKind.REEL)
+        assertThat(DraftResumeEntries.from(video.copy(forcePlainPost = true), null).single().kind).isEqualTo(DraftResumeKind.POST)
+        assertThat(DraftResumeEntries.from(oneImage, null).single().kind).isEqualTo(DraftResumeKind.POST)
+    }
+
+    @Test
+    fun `a reel draft sorts with the others by the moment it was touched`() {
+        val reel = PostComposerDraftSnapshot(media = listOf(media("video/mp4", 5_000L)), updatedAtMillis = Instant("2026-10-28T11:00:00Z"))
+
+        val entries = DraftResumeEntries.from(reel, story(at = "2026-10-28T10:00:00Z"))
+
+        assertThat(entries.map { it.kind }).containsExactly(DraftResumeKind.REEL, DraftResumeKind.STORY).inOrder()
+    }
+
     private fun Instant(iso: String): Long = java.time.Instant.parse(iso).toEpochMilli()
 }
