@@ -92,10 +92,11 @@ class PostPhotoScenesTest {
     }
 
     @Test
-    fun `no document for one photo, a video, a sound, a reel or more scenes than the contract allows`() {
+    fun `no document for a video, a sound, a sound, a reel or more scenes than the contract allows`() {
         val video = photo("v1", mime = "video/mp4")
         val sound = photo("s1", mime = "audio/ogg")
-        assertThat(PostPhotoScenes.effects(listOf(photo("a1")), "fr", null)).isNull()
+        assertThat(PostPhotoScenes.effects(listOf(video), "fr", null)).isNull()
+        assertThat(PostPhotoScenes.effects(listOf(sound), "fr", null, "302B63")).isNull()
         assertThat(PostPhotoScenes.effects(two + video, "fr", null)).isNull()
         assertThat(PostPhotoScenes.effects(two + sound, "fr", null)).isNull()
         assertThat(PostPhotoScenes.sceneCount(listOf("image/png", "image/png"), ComposerFormat.REEL)).isEqualTo(0)
@@ -106,7 +107,8 @@ class PostPhotoScenesTest {
     @Test
     fun `a layout is written only where the control is offered, a reel or a lone photo never carries one`() {
         assertThat(PostPhotoScenes.storyEffects("REEL", two, "fr", MosaicLayoutMode.HERO, null)).isNull()
-        assertThat(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", MosaicLayoutMode.HERO, null)).isNull()
+        val lone = wire(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", MosaicLayoutMode.HERO, null)).jsonObject
+        assertThat(lone.keys).containsExactly("v", "scenes").inOrder()
         val none = PostPhotoScenes.storyEffects("POST", two, "fr", null, null)!!.canvas!!
         assertThat(none.layout).isNull()
     }
@@ -116,7 +118,41 @@ class PostPhotoScenesTest {
         assertThat(PostPhotoScenes.storyEffects("POST", emptyList(), "fr", null, "302B63"))
             .isEqualTo(StoryEffects(background = "302B63"))
         assertThat(PostPhotoScenes.storyEffects("POST", two + photo("v1", mime = "video/mp4"), "fr", null, "302B63")).isNull()
-        assertThat(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", null, null)).isNull()
+        assertThat(PostPhotoScenes.storyEffects("POST", listOf(photo("v1", mime = "video/mp4")), "fr", null, "302B63")).isNull()
+    }
+
+    @Test
+    fun `a single photo without colour leaves as a one scene document, no layout, the photo designated by its post media`() {
+        val document = wire(PostPhotoScenes.storyEffects("POST", listOf(photo("a1", 1200, 800)), "fr", MosaicLayoutMode.HERO, null))
+            .jsonObject
+
+        assertThat(document.keys).containsExactly("v", "scenes").inOrder()
+        val scene = document["scenes"]!!.jsonArray.single()
+        assertThat(backgroundOf(scene)).isNull()
+        assertThat(scene.toString()).contains("\"postMediaId\":\"a1\"")
+        assertThat(scene.toString()).contains("\"aspectRatio\":1.5")
+    }
+
+    @Test
+    fun `a single photo still in the queue designates its cmid without an address and keeps its measured shape`() {
+        val pending = UploadedMedia("cmid_11111111-1111-1111-1111-111111111111", "", "image/jpeg", 0L, 900, 1200, null, null)
+
+        val scene = wire(PostPhotoScenes.storyEffects("POST", listOf(pending), "fr", null, null))
+            .jsonObject["scenes"]!!.jsonArray.single().toString()
+
+        assertThat(scene).contains("\"postMediaId\":\"cmid_11111111-1111-1111-1111-111111111111\"")
+        assertThat(scene).doesNotContain("mediaURL")
+        assertThat(scene).contains("\"aspectRatio\":0.75")
+    }
+
+    @Test
+    fun `read back after the outbox, a single photo without colour keeps its one scene document`() {
+        val text = json.encodeToString(Body(PostPhotoScenes.storyEffects("POST", listOf(photo("a1")), "fr", null, null)))
+
+        val back = json.decodeFromString<Body>(text).storyEffects!!
+
+        assertThat(back.canvas!!.scenes).hasSize(1)
+        assertThat(json.encodeToString(Body(back))).isEqualTo(text)
     }
 
     private fun backgroundOf(scene: JsonElement): JsonElement? =

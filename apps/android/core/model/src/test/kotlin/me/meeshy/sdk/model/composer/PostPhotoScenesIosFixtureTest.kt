@@ -18,7 +18,7 @@ import org.junit.Test
 
 /**
  * #13612 — the document Android publishes for a post of photos is the one iOS publishes, read off the shared fixtures
- * `post-photo-scenes-2` and `post-photo-scenes-3-hero`. Those two files were PRODUCED by the iOS composer itself (its
+ * `post-photo-scenes-1`, `post-photo-scenes-2` and `post-photo-scenes-3-hero`. Those files were PRODUCED by the iOS composer itself (its
  * `StoryComposerViewModel.applyContentMedia` per slide, `ComposerStoryCanvas.publishedSlide`, then the outbox's
  * `CanvasMediaAdoption.adopting` and `sanitizedForServerPublish`), not written by hand. Only the values iOS draws from a
  * counter or a clock are set aside: the content object's id (a UUID), `z`, and the last digits of an aspect ratio iOS
@@ -51,6 +51,14 @@ class PostPhotoScenesIosFixtureTest {
         )
         is JsonArray -> JsonArray(element.map { withoutCounters(it) })
         is JsonPrimitive -> if (key == "aspectRatio") JsonPrimitive(Math.round(element.doubleOrNull!! * 1000) / 1000.0) else element
+    }
+
+    @Test
+    fun `a single photo without colour publishes the very document iOS publishes`() {
+        CanvasV3FixtureSupport.assertSameJson(
+            withoutCounters(CanvasV3FixtureSupport.fixture("post-photo-scenes-1")),
+            withoutCounters(published(1, null)),
+        )
     }
 
     @Test
