@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_saved">Acquisizione salvata</string>
+    <string name="call_capture_video_saved">Video salvato</string>
+    <string name="call_capture_denied">Consenti a Meeshy di salvare nella galleria dalle Impostazioni per conservare le tue acquisizioni.</string>
+    <string name="call_capture_no_video">Ancora nessuna immagine da acquisire</string>
+    <string name="call_capture_failed">Impossibile salvare l\'acquisizione</string>
+    <string name="call_capture_preview">Anteprima del montaggio</string>
+    <string name="call_capture_working">Salvataggio…</string>
+    <string name="call_mode_gesture_hint">Doppio tocco: foto · Pressione lunga: video</string>
+    <string name="call_mode_photo">Scatta una foto</string>
+    <string name="call_mode_record">Registra</string>
+    <string name="call_mode_record_stop">Interrompi la registrazione</string>
+    <string name="call_mode_record_stop_hint">Salva il video nella tua galleria</string>
+</resources>

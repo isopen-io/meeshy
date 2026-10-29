@@ -288,14 +288,16 @@ fun CallScreen(
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
 
-            // Le mode « Capturer l'appel » : le choix du cadre en direct, qui libère l'écran de son chrome.
+            // Le mode « Capturer l'appel » : la scène qui se photographie (deux tapes) ou se filme (appui
+            // long), sous le choix du cadre en direct ; le chrome de l'appel s'efface.
             if (chromeState.layer.activeMode == CallScreenMode.Montage) {
-                val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
-                CallLiveFramePicker(
-                    controller = frameViewModel.controller,
-                    peerName = state.peerName,
+                CallMontageMode(
+                    state = state,
+                    localTrack = viewModel.localVideoTrack,
+                    remoteTrack = remoteVideo,
+                    reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
-                    modifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+                    pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
                 )
             }
 
