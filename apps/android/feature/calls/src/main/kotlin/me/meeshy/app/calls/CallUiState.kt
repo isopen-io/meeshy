@@ -157,6 +157,11 @@ data class CallUiState(
      */
     val isPeerCameraOff: Boolean = false,
     /**
+     * `true` while the remote peer shares their screen (`call:media-toggled` screen) — iOS
+     * `isRemoteSharing`: their stream shows even with their camera off, and the banner says so (#13332).
+     */
+    val isPeerScreenSharing: Boolean = false,
+    /**
      * `true` while the app itself froze the outgoing video to keep a poor link
      * alive ([CallVideoHealth]) — the user did NOT turn the camera off, so the
      * screen says « video paused » rather than showing a lie. Only on the media
@@ -251,6 +256,7 @@ object CallPresenter {
         peerVideoEnabled: Boolean = true,
         videoAutoPaused: Boolean = false,
         mediaEstablished: Boolean = false,
+        peerScreenSharing: Boolean = false,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -275,7 +281,9 @@ object CallPresenter {
             isPeerMuted = onMediaPhase && !peerAudioEnabled,
             // Only a VIDEO call renders a camera indicator — an audio call's
             // peer "camera off" is its permanent, unremarkable state.
-            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
+            // A shared screen travels on the video sender: it shows even with the camera off (iOS `isRemoteVideoVisible`).
+            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled && !peerScreenSharing,
+            isPeerScreenSharing = onMediaPhase && peerScreenSharing,
             isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
             showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),
             durationSeconds = elapsedSeconds.coerceAtLeast(0),

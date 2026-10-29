@@ -565,6 +565,7 @@ class CallViewModel @Inject constructor(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
+            peerScreenSharing = peer.screenSharing,
         )
         syncPreview()
     }

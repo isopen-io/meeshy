@@ -28,6 +28,8 @@ data class PeerIndicators(
     val audioEnabled: Boolean = true,
     /** The peer's camera state (`call:media-toggled` video). */
     val videoEnabled: Boolean = true,
+    /** The peer shares their screen (`call:media-toggled` screen) — iOS `isRemoteSharing`, #13332. */
+    val screenSharing: Boolean = false,
 )
 
 /**
@@ -122,6 +124,7 @@ class CallPeerIndicatorsController @Inject constructor(
         indicators = when (toggle.mediaType) {
             "audio" -> indicators.copy(audioEnabled = toggle.enabled)
             "video" -> indicators.copy(videoEnabled = toggle.enabled)
+            "screen" -> indicators.copy(screenSharing = toggle.enabled)
             else -> return
         }
         host.publish()

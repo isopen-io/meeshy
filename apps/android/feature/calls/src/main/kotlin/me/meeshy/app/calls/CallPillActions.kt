@@ -29,7 +29,9 @@ internal fun rememberCallPillActions(
     val dispatcher = viewModel.extensions.actions
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
     val recording by recordingViewModel.state.collectAsStateWithLifecycle()
-    val offered = remember(state, recording) { dispatcher.offered(state) }
+    val screenShareViewModel: CallScreenShareViewModel = hiltViewModel()
+    val screenShare by screenShareViewModel.state.collectAsStateWithLifecycle()
+    val offered = remember(state, recording, screenShare.phase) { dispatcher.offered(state) }
     val items = remember(state, offered) { CallPillModel.items(state, offered) }
     val available = remember(state, items) { CallPillModel.available(state, items, dispatcher::isRegistered) }
     val isRecording = recording.phase.isActive

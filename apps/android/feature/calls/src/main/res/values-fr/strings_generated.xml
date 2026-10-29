@@ -101,6 +101,14 @@
     <string name="call_recording_stopped_timeout">Tout le monde n’a pas répondu : pas d’enregistrement</string>
     <string name="call_recording_unavailable">Enregistrement impossible pour le moment</string>
     <string name="call_recording_waiting">En attente de l’accord de tous…</string>
+    <string name="call_screen_share_error">Impossible de partager l\'écran</string>
+    <string name="call_screen_share_hint">Montre votre écran au correspondant pendant l\'appel</string>
+    <string name="call_screen_share_local_banner">Vous partagez votre écran</string>
+    <string name="call_screen_share_remote_banner">%1$s partage son écran</string>
+    <string name="call_screen_share_remote_banner_generic">Votre correspondant partage son écran</string>
+    <string name="call_screen_share_start">Partager l\'écran</string>
+    <string name="call_screen_share_stop">Arrêter le partage d\'écran</string>
+    <string name="call_screen_share_stop_caption">Arrêter</string>
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Afficher le texte original</string>
     <string name="call_transcript_show_translated">Afficher la traduction</string>

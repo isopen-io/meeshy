@@ -101,6 +101,14 @@
     <string name="call_recording_stopped_timeout">Not everyone answered: no recording</string>
     <string name="call_recording_unavailable">Recording is not available right now</string>
     <string name="call_recording_waiting">Waiting for everyone’s consent…</string>
+    <string name="call_screen_share_error">Couldn\'t share your screen</string>
+    <string name="call_screen_share_hint">Shows your screen to the other person during the call</string>
+    <string name="call_screen_share_local_banner">You\'re sharing your screen</string>
+    <string name="call_screen_share_remote_banner">%1$s is sharing their screen</string>
+    <string name="call_screen_share_remote_banner_generic">The other person is sharing their screen</string>
+    <string name="call_screen_share_start">Share screen</string>
+    <string name="call_screen_share_stop">Stop sharing screen</string>
+    <string name="call_screen_share_stop_caption">Stop</string>
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Show original text</string>
     <string name="call_transcript_show_translated">Show translation</string>

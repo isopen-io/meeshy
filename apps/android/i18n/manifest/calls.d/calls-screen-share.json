@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.start",
+          "androidName": "call_screen_share_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.stop",
+          "androidName": "call_screen_share_stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.hint",
+          "androidName": "call_screen_share_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.local.banner",
+          "androidName": "call_screen_share_local_banner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.remote.banner",
+          "androidName": "call_screen_share_remote_banner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.remote.banner.generic",
+          "androidName": "call_screen_share_remote_banner_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.error",
+          "androidName": "call_screen_share_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.screenShare.stop.caption",
+          "androidName": "call_screen_share_stop_caption",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

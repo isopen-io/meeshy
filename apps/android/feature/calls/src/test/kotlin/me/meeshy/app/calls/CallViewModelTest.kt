@@ -1126,6 +1126,23 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `a peer sharing their screen with the camera off shows their stream and the banner`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio.copy(isVideo = true))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = true))
+
+        assertThat(vm.state.value.isPeerScreenSharing).isTrue()
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = false))
+        assertThat(vm.state.value.isPeerScreenSharing).isFalse()
+        assertThat(vm.state.value.isPeerCameraOff).isTrue()
+    }
+
+    @Test
     fun `a peer camera-off during an audio call never raises the camera indicator`() = runTest {
         val vm = connectedIncoming()
 

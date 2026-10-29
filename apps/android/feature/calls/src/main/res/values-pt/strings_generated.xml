@@ -101,6 +101,14 @@
     <string name="call_recording_stopped_timeout">Nem todos responderam: sem gravação</string>
     <string name="call_recording_unavailable">Gravação indisponível de momento</string>
     <string name="call_recording_waiting">À espera do consentimento de todos…</string>
+    <string name="call_screen_share_error">Não foi possível compartilhar a tela</string>
+    <string name="call_screen_share_hint">Mostra sua tela ao seu contato durante a chamada</string>
+    <string name="call_screen_share_local_banner">Você está compartilhando sua tela</string>
+    <string name="call_screen_share_remote_banner">%1$s está compartilhando a tela</string>
+    <string name="call_screen_share_remote_banner_generic">Seu contato está compartilhando a tela</string>
+    <string name="call_screen_share_start">Compartilhar tela</string>
+    <string name="call_screen_share_stop">Parar de compartilhar a tela</string>
+    <string name="call_screen_share_stop_caption">Parar</string>
     <string name="call_transcript_participant">Participante</string>
     <string name="call_transcript_show_original">Mostrar o texto original</string>
     <string name="call_transcript_show_translated">Mostrar a tradução</string>

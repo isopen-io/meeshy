@@ -101,6 +101,14 @@
     <string name="call_recording_stopped_timeout">لم يُجب الجميع: لا تسجيل</string>
     <string name="call_recording_unavailable">التسجيل غير متاح حاليًا</string>
     <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
+    <string name="call_screen_share_error">تعذّرت مشاركة الشاشة</string>
+    <string name="call_screen_share_hint">يعرض شاشتك على الطرف الآخر أثناء المكالمة</string>
+    <string name="call_screen_share_local_banner">أنت تشارك شاشتك</string>
+    <string name="call_screen_share_remote_banner">%1$s يشارك شاشته</string>
+    <string name="call_screen_share_remote_banner_generic">الطرف الآخر يشارك شاشته</string>
+    <string name="call_screen_share_start">مشاركة الشاشة</string>
+    <string name="call_screen_share_stop">إيقاف مشاركة الشاشة</string>
+    <string name="call_screen_share_stop_caption">إيقاف</string>
     <string name="call_transcript_participant">مشارك</string>
     <string name="call_transcript_show_original">عرض النص الأصلي</string>
     <string name="call_transcript_show_translated">عرض الترجمة</string>

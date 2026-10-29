@@ -84,8 +84,8 @@ internal class CallSelfCameraActions(
 
 /**
  * « Effets · Écran », la rangée au-dessus de ma vignette (iOS `CallCameraRail.effectsRow`) : ce qui part AVEC mon
- * image. Seules les actions que l'appel offre maintenant ([CallPillModel.selfEffects]) — Android n'a pas de partage
- * d'écran : la rangée ne porte qu'« Effets ».
+ * image. Seules les actions que l'appel offre maintenant ([CallPillModel.selfEffects]) : « Effets » caméra allumée,
+ * « Partager l'écran » dès l'appel établi (#13332).
  */
 internal class CallSelfEffects(val items: List<CallPillItem>, val onAction: (CallAction) -> Unit)
 
