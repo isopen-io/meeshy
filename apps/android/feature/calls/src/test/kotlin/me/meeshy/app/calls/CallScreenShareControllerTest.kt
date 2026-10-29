@@ -7,6 +7,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndReason
@@ -55,11 +56,13 @@ class CallScreenShareControllerTest {
         val media = FakeMedia(fails)
         val announced = mutableListOf<Pair<String, Boolean>>()
         var failures = 0
+        val socketConnected = MutableStateFlow(true)
         val controller = CallScreenShareController(
             projections = projections,
             media = media,
             announcer = { callId, enabled -> announced += callId to enabled },
             reportFailure = { failures++ },
+            socketConnected = socketConnected,
             scope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         val projection: MediaProjection = mockk(relaxed = true)
@@ -182,6 +185,28 @@ class CallScreenShareControllerTest {
         rig.controller.onTransition(CallState.Reconnecting(attempt = 1), CallState.Connected, rig.info)
 
         assertThat(rig.announced).containsExactly("call-7" to true, "call-7" to true, "call-7" to true)
+    }
+
+    @Test
+    fun `the signalling socket coming back announces the share in flight again, like iOS`() {
+        val rig = Rig().apply { connect() }
+        rig.controller.toggle()
+        rig.grantAndAcquire()
+
+        rig.socketConnected.value = false
+        rig.socketConnected.value = true
+
+        assertThat(rig.announced).containsExactly("call-7" to true, "call-7" to true)
+    }
+
+    @Test
+    fun `the socket coming back without a share announces nothing`() {
+        val rig = Rig().apply { connect() }
+
+        rig.socketConnected.value = false
+        rig.socketConnected.value = true
+
+        assertThat(rig.announced).isEmpty()
     }
 
     @Test

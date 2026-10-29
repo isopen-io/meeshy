@@ -137,7 +137,13 @@ fun CallScreen(
         }
     }
     val chromeState by chrome.state.collectAsStateWithLifecycle()
-    val overlayContext = CallOverlayContext(state = state, accent = accent, activeMode = chromeState.layer.activeMode)
+    val overlayContext = CallOverlayContext(
+        state = state,
+        accent = accent,
+        activeMode = chromeState.layer.activeMode,
+        chrome = chromeVisibility,
+        onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+    )
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
 

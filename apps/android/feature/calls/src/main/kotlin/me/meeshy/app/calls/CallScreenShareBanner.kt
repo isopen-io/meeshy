@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
@@ -45,7 +46,9 @@ import javax.inject.Singleton
 /**
  * Le partage d'écran sur l'écran d'appel (#13332), comme iOS `CallScreenShareBanner` : « Vous partagez
  * votre écran · Arrêter » chez le partageur, « Alice partage son écran » chez l'autre. Il porte aussi le
- * dialogue système de consentement, lancé une fois par demande — même après une rotation.
+ * dialogue système de consentement, lancé une fois par demande — même après une rotation. La bannière
+ * s'efface avec les commandes de l'appel (`CallChromeElement.ScreenShareBanner`, #13736) ; le dialogue, lui,
+ * reste composé.
  */
 @Singleton
 class CallScreenShareBannerOverlay @Inject constructor(
@@ -59,22 +62,28 @@ class CallScreenShareBannerOverlay @Inject constructor(
     override fun Content(context: CallOverlayContext) {
         val share by controller.state.collectAsState()
         ScreenShareConsentRequest(share, controller::onConsent)
-        val modifier = Modifier.padding(top = MeeshySpacing.sm)
-        when {
-            share.phase == CallScreenSharePhase.Sharing -> ScreenShareBanner(
-                text = stringResource(R.string.call_screen_share_local_banner),
-                onStop = controller::toggle,
-                modifier = modifier,
-            )
-            context.state.isPeerScreenSharing -> ScreenShareBanner(
-                text = context.state.peerName.takeIf { it.isNotBlank() }
-                    ?.let { stringResource(R.string.call_screen_share_remote_banner, it) }
-                    ?: stringResource(R.string.call_screen_share_remote_banner_generic),
-                onStop = null,
-                modifier = modifier,
+        val text = bannerText(share, context.state) ?: return
+        CallChromeFade(
+            isVisible = context.chrome.isVisible(CallChromeElement.ScreenShareBanner),
+            onRevive = context.onChromeRevive,
+        ) {
+            ScreenShareBanner(
+                text = text,
+                onStop = if (share.phase == CallScreenSharePhase.Sharing) controller::toggle else null,
+                modifier = Modifier.padding(top = MeeshySpacing.sm),
             )
         }
     }
+}
+
+/** Le texte de la bannière : mon partage d'abord, puis celui du pair ; `null` quand personne ne partage. */
+@Composable
+private fun bannerText(share: CallScreenShareUi, state: CallUiState): String? = when {
+    share.phase == CallScreenSharePhase.Sharing -> stringResource(R.string.call_screen_share_local_banner)
+    state.isPeerScreenSharing -> state.peerName.takeIf { it.isNotBlank() }
+        ?.let { stringResource(R.string.call_screen_share_remote_banner, it) }
+        ?: stringResource(R.string.call_screen_share_remote_banner_generic)
+    else -> null
 }
 
 @Composable

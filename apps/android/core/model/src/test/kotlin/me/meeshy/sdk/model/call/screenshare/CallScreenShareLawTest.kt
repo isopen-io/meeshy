@@ -60,4 +60,12 @@ class CallScreenShareLawTest {
         assertThat(CallScreenShareLaw.isOffered(isEstablished = false, phase = CallScreenSharePhase.Idle)).isFalse()
         assertThat(CallScreenShareLaw.isOffered(isEstablished = false, phase = CallScreenSharePhase.Sharing)).isTrue()
     }
+
+    @Test
+    fun `the share is announced again when the signalling socket comes back, never on its first connection`() {
+        assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = false, isConnected = true)).isTrue()
+        assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = null, isConnected = true)).isFalse()
+        assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = true, isConnected = true)).isFalse()
+        assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = true, isConnected = false)).isFalse()
+    }
 }

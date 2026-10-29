@@ -51,6 +51,12 @@ object CallScreenShareLaw {
         else -> CallScreenSharePhase.Idle
     }
 
+    /**
+     * La passerelle oublie l'état de média d'un socket qui tombe ; iOS réannonce donc le partage au RETOUR
+     * du socket de signalisation (`CallSignalingRouter`). La première connexion n'est pas un retour.
+     */
+    fun reannouncesOnSocket(wasConnected: Boolean?, isConnected: Boolean): Boolean = wasConnected == false && isConnected
+
     /** Offert sur un appel établi ; un partage en cours garde toujours son bouton d'arrêt. */
     fun isOffered(isEstablished: Boolean, phase: CallScreenSharePhase): Boolean =
         isEstablished || phase != CallScreenSharePhase.Idle

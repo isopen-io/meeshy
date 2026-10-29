@@ -14,9 +14,12 @@ import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.WebRtcEngine
@@ -28,6 +31,8 @@ import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.sdk.model.call.screenshare.ScreenShareCapture
 import me.meeshy.sdk.model.call.screenshare.ScreenShareStep
 import me.meeshy.sdk.socket.CallSocialSignalManager
+import me.meeshy.sdk.socket.SocketConnectionState
+import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.ui.icons.MeeshyIcons
 import timber.log.Timber
 import javax.inject.Inject
@@ -67,6 +72,7 @@ class CallScreenShareController internal constructor(
     private val media: CallScreenShareMedia,
     private val announcer: CallScreenShareAnnouncer,
     private val reportFailure: () -> Unit,
+    socketConnected: Flow<Boolean>,
     scope: CoroutineScope,
 ) : CallFeatureController {
     @Inject
@@ -74,6 +80,7 @@ class CallScreenShareController internal constructor(
         projections: MediaProjectionSession,
         engine: WebRtcEngine,
         socials: CallSocialSignalManager,
+        sockets: SocketManager,
         toasts: CallToastBus,
         @ApplicationContext context: Context,
     ) : this(
@@ -84,6 +91,7 @@ class CallScreenShareController internal constructor(
         },
         announcer = CallScreenShareAnnouncer(socials::emitToggleScreen),
         reportFailure = { toasts.error(context.getString(R.string.call_screen_share_error)) },
+        socketConnected = sockets.connectionState.map { it == SocketConnectionState.CONNECTED },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
 
@@ -98,6 +106,13 @@ class CallScreenShareController internal constructor(
 
     init {
         scope.launch { projections.state.collect(::onProjection) }
+        scope.launch {
+            var wasConnected: Boolean? = null
+            socketConnected.distinctUntilChanged().collect { connected ->
+                if (CallScreenShareLaw.reannouncesOnSocket(wasConnected, connected)) announceIfSharing()
+                wasConnected = connected
+            }
+        }
     }
 
     /** Le bouton : demande le partage au repos, l'arrête pendant une demande ou un partage. */
@@ -121,7 +136,10 @@ class CallScreenShareController internal constructor(
         }
     }
 
-    /** Un pair qui (re)joint apprend le partage en cours, comme iOS `announceIfSharing`. */
+    /**
+     * Un pair qui (re)joint apprend le partage en cours, comme iOS `announceIfSharing` ; il le réapprend
+     * aussi au retour du média (Reconnecting → Connected) et au retour du socket de signalisation.
+     */
     override fun onRemoteEvent(event: CallEvent, session: CallSessionInfo) {
         if (event is CallEvent.ParticipantJoined) announceIfSharing()
     }
