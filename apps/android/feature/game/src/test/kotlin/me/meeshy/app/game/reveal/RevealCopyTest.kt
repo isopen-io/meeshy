@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
+import me.meeshy.sdk.model.game.AchievementRarity
 import me.meeshy.sdk.model.game.engagement.AchievementCatalog
 import me.meeshy.sdk.model.game.engagement.EngagementAchievementKey
 import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
@@ -12,6 +13,7 @@ import me.meeshy.sdk.model.game.engagement.EngagementReveal
 import me.meeshy.sdk.model.game.engagement.EngagementRevealPlan
 import me.meeshy.sdk.model.game.engagement.RevealBanner
 import me.meeshy.sdk.model.game.engagement.RevealOccasion
+import me.meeshy.sdk.model.game.engagement.RevealRim
 import me.meeshy.sdk.model.game.engagement.RevealTitle
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -94,5 +96,34 @@ class RevealCopyTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `la ligne de rarete nomme le palier et la part des comptes dans la langue du lecteur`() {
+        val epic = RevealRim.Line.Measured(AchievementRarity.Epic, 4.2)
+
+        assertThat(RevealCopy.rarityLine(resourcesIn("fr"), Locale.FRENCH, epic)).isEqualTo("Épique · 4 % des comptes")
+        assertThat(RevealCopy.rarityLine(resourcesIn("en"), Locale.ENGLISH, epic)).isEqualTo("Epic · 4 % of accounts")
+        assertThat(RevealCopy.rarityLine(resourcesIn("fr"), Locale.FRENCH, RevealRim.Line.Measuring)).isEqualTo("Rareté en cours de mesure")
+        assertThat(RevealCopy.rarityAria(resourcesIn("fr"), Locale.FRENCH, epic)).isEqualTo("Rareté : Épique, 4 % des comptes")
+    }
+
+    @Test
+    fun `la part s'ecrit sans decimale des 1 pour cent, avec une dessous, jamais sous un dixieme`() {
+        assertThat(RevealCopy.rarityPercent(Locale.FRENCH, 40.0)).isEqualTo("40 %")
+        assertThat(RevealCopy.rarityPercent(Locale.FRENCH, 0.6)).isEqualTo("0,6 %")
+        assertThat(RevealCopy.rarityPercent(Locale.FRENCH, 0.01)).isEqualTo("< 0,1 %")
+        assertThat(RevealCopy.rarityPercent(Locale.ENGLISH, 0.6)).isEqualTo("0.6 %")
+    }
+
+    @Test
+    fun `le lecteur d'ecran lit la rarete en toutes lettres seulement quand elle se montre`() {
+        val plan = EngagementRevealPlan.of(EngagementReveal.Achievement(EngagementAchievementKey.FIRST_VOICE), RevealOccasion.Celebration)
+        val res = resourcesIn("fr")
+        val bare = RevealCopy.spoken(res, Locale.FRENCH, plan)
+
+        assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, RevealRim.Line.Measured(AchievementRarity.Legendary, 1.0))).isEqualTo("$bare. Légendaire")
+        assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, RevealRim.Line.Measuring)).isEqualTo(bare)
+        assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, null)).isEqualTo(bare)
     }
 }

@@ -167,6 +167,14 @@
     <string name="game2_prestige_stars">Wiedergeburten: %1$s von %2$s</string>
     <string name="game2_prestige_stay">Weiter strahlen</string>
     <string name="game2_prestige_title">Wiedergeburt</string>
+    <string name="game2_rarity_aria">Seltenheit: %1$s, %2$s</string>
+    <string name="game2_rarity_common">Gewöhnlich</string>
+    <string name="game2_rarity_epic">Episch</string>
+    <string name="game2_rarity_legendary">Legendär</string>
+    <string name="game2_rarity_measuring">Seltenheit wird gemessen</string>
+    <string name="game2_rarity_mythic">Mythisch</string>
+    <string name="game2_rarity_rare">Selten</string>
+    <string name="game2_rarity_share">%1$s der Konten</string>
     <string name="game2_retry">Erneut versuchen</string>
     <string name="game2_season_claim">Rast %1$s abholen</string>
     <string name="game2_season_completed">Reise vollbracht: ein Pokal, eine datierte Medaille und %1$s Ruhm.</string>
@@ -568,7 +576,11 @@
     <string name="game_missions_prism_day">Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.</string>
     <string name="game_missions_prism_hour">Prisma-Stunde: %1$s – %2$s — jeder Akt zählt doppelt.</string>
     <string name="game_missions_title">Der Traum dieser Nacht</string>
+    <string name="game_photo_author_label_achievement">Heldentat von %1$s</string>
+    <string name="game_photo_failed">Das Foto konnte nicht erstellt werden.</string>
+    <string name="game_photo_kicker_achievement">Heldentat</string>
     <string name="game_photo_offer_start">Fotografieren</string>
+    <string name="game_photo_share">Teilen</string>
     <string name="game_progression_empty">Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf.</string>
     <string name="game_progression_load_error">Fortschritt konnte nicht geladen werden</string>
     <string name="game_progression_loading">Fortschritt wird geladen</string>
@@ -692,6 +704,7 @@
         <item quantity="one">%1$d Tag in Folge</item>
         <item quantity="other">%1$d Tage in Folge</item>
     </plurals>
+    <string name="reveal_achievement_photo">Als Karte teilen</string>
     <string name="reveal_badge_achievement">Erfolg freigeschaltet</string>
     <string name="reveal_badge_axis_subtitle">Eine Stufe mehr auf dieser Achse. Die nächste wird freigeschaltet, wenn du weitermachst.</string>
     <string name="reveal_badge_badge">Abzeichen erhalten</string>

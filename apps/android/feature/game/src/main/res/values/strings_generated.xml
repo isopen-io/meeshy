@@ -167,6 +167,14 @@
     <string name="game2_prestige_stars">Rebirths: %1$s of %2$s</string>
     <string name="game2_prestige_stay">Keep shining</string>
     <string name="game2_prestige_title">Rebirth</string>
+    <string name="game2_rarity_aria">Rarity: %1$s, %2$s</string>
+    <string name="game2_rarity_common">Common</string>
+    <string name="game2_rarity_epic">Epic</string>
+    <string name="game2_rarity_legendary">Legendary</string>
+    <string name="game2_rarity_measuring">Rarity being measured</string>
+    <string name="game2_rarity_mythic">Mythic</string>
+    <string name="game2_rarity_rare">Rare</string>
+    <string name="game2_rarity_share">%1$s of accounts</string>
     <string name="game2_retry">Try again</string>
     <string name="game2_season_claim">Claim stop %1$s</string>
     <string name="game2_season_completed">Journey accomplished: a cup, a dated medal and %1$s glory.</string>
@@ -568,7 +576,11 @@
     <string name="game_missions_prism_day">Prism Day: one of the acts is played in a language other than yours.</string>
     <string name="game_missions_prism_hour">Prism Hour: %1$s – %2$s — every act counts double.</string>
     <string name="game_missions_title">Tonight’s dream</string>
+    <string name="game_photo_author_label_achievement">Great deed of %1$s</string>
+    <string name="game_photo_failed">The photo could not be composed.</string>
+    <string name="game_photo_kicker_achievement">Great deed</string>
     <string name="game_photo_offer_start">Take the photo</string>
+    <string name="game_photo_share">Share</string>
     <string name="game_progression_empty">No activity yet. Send a message, post a story… your first medal lights up with your very first move.</string>
     <string name="game_progression_load_error">Couldn’t load your progress</string>
     <string name="game_progression_loading">Loading your progress</string>
@@ -692,6 +704,7 @@
         <item quantity="one">%1$d day in a row</item>
         <item quantity="other">%1$d days in a row</item>
     </plurals>
+    <string name="reveal_achievement_photo">Make it a card</string>
     <string name="reveal_badge_achievement">Achievement unlocked</string>
     <string name="reveal_badge_axis_subtitle">One more tier on this axis. The next one unlocks as you keep going.</string>
     <string name="reveal_badge_badge">Badge earned</string>

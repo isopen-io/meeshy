@@ -2,6 +2,10 @@ package me.meeshy.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
+import me.meeshy.app.game.reveal.shareAchievementCard
 import androidx.compose.runtime.key
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -15,19 +19,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import me.meeshy.app.game.reveal.AchievementRevealScreen
 import me.meeshy.app.navigation.graph.GameRoutes
-import me.meeshy.sdk.game.EngagementRevealCoordinator
-import me.meeshy.sdk.model.game.engagement.EngagementReveal
+import me.meeshy.sdk.game.EngagementRevealPresentation
+import me.meeshy.sdk.game.EngagementRevealPresenter
 
 @HiltViewModel
 class EngagementRevealHostViewModel @Inject constructor(
-    private val coordinator: EngagementRevealCoordinator,
+    private val presenter: EngagementRevealPresenter,
 ) : ViewModel() {
-    /** La célébration à l'écran — rien hors du compte qui l'a reçue, rien sous « Jeu masqué ». */
-    val current: StateFlow<EngagementReveal?> =
-        coordinator.showing.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /**
+     * La célébration à l'écran avec sa rareté, lue AVANT qu'elle ne se présente — rien hors du compte qui l'a reçue,
+     * rien sous « Jeu masqué ».
+     */
+    val current: StateFlow<EngagementRevealPresentation?> =
+        presenter.presentation.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** L'UNIQUE chemin qui fait avancer la file : la fermeture, qu'elle vienne du voile, du retour ou d'un bouton. */
-    fun finish() = coordinator.finish()
+    fun finish() = presenter.finish()
 }
 
 /**
@@ -40,14 +47,24 @@ class EngagementRevealHostViewModel @Inject constructor(
 fun EngagementRevealHost(navController: NavHostController, viewModel: EngagementRevealHostViewModel = hiltViewModel()) {
     val shown by viewModel.current.collectAsStateWithLifecycle()
     val current = shown ?: return
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // Une célébration par palier : le suivant de la file repart de zéro (entrée, halo, haptique), jamais de l'état final du précédent.
-    key(current) {
+    // La clé est le PALIER : une rareté lue après coup ne rejouerait pas l'entrée.
+    key(current.reveal) {
         AchievementRevealScreen(
-            reveal = current,
+            reveal = current.reveal,
             onContinue = viewModel::finish,
             onSeeProgression = {
                 navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true }
                 viewModel.finish()
+            },
+            rarity = current.rarity,
+            // La carte du succès est une proposition de photo : « Jeu masqué » et « Célébrations » coupées la retirent.
+            onPhoto = if (current.offersPhotos) {
+                { moment -> scope.launch { shareAchievementCard(context, moment, current.authorHandle) } }
+            } else {
+                null
             },
         )
     }

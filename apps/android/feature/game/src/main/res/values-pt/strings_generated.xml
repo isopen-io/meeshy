@@ -167,6 +167,14 @@
     <string name="game2_prestige_stars">Renascimentos: %1$s de %2$s</string>
     <string name="game2_prestige_stay">Continuar a brilhar</string>
     <string name="game2_prestige_title">Renascimento</string>
+    <string name="game2_rarity_aria">Raridade: %1$s, %2$s</string>
+    <string name="game2_rarity_common">Comum</string>
+    <string name="game2_rarity_epic">Épico</string>
+    <string name="game2_rarity_legendary">Lendário</string>
+    <string name="game2_rarity_measuring">Raridade sendo medida</string>
+    <string name="game2_rarity_mythic">Mítico</string>
+    <string name="game2_rarity_rare">Raro</string>
+    <string name="game2_rarity_share">%1$s das contas</string>
     <string name="game2_retry">Tentar de novo</string>
     <string name="game2_season_claim">Resgatar a parada %1$s</string>
     <string name="game2_season_completed">Viagem cumprida: uma taça, uma medalha datada e %1$s de glória.</string>
@@ -568,7 +576,11 @@
     <string name="game_missions_prism_day">Dia do Prisma: um dos atos se passa num idioma diferente do seu.</string>
     <string name="game_missions_prism_hour">Hora do Prisma: %1$s – %2$s — cada ato conta em dobro.</string>
     <string name="game_missions_title">O sonho desta noite</string>
+    <string name="game_photo_author_label_achievement">Façanha de %1$s</string>
+    <string name="game_photo_failed">Não foi possível compor a foto.</string>
+    <string name="game_photo_kicker_achievement">Façanha</string>
     <string name="game_photo_offer_start">Fotografar</string>
+    <string name="game_photo_share">Compartilhar</string>
     <string name="game_progression_empty">Nenhuma atividade ainda. Envie uma mensagem, publique uma story… sua primeira medalha se acende no primeiro gesto.</string>
     <string name="game_progression_load_error">Não foi possível carregar o progresso</string>
     <string name="game_progression_loading">Carregando o progresso</string>
@@ -696,6 +708,7 @@
         <item quantity="many">%1$d dias seguidos</item>
         <item quantity="other">%1$d dias seguidos</item>
     </plurals>
+    <string name="reveal_achievement_photo">Fazer um cartão</string>
     <string name="reveal_badge_achievement">Conquista desbloqueada</string>
     <string name="reveal_badge_axis_subtitle">Mais um nível neste eixo. O próximo é desbloqueado ao continuar.</string>
     <string name="reveal_badge_badge">Selo conquistado</string>
