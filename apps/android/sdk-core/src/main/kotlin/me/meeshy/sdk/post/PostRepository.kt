@@ -22,8 +22,6 @@ import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
-import me.meeshy.sdk.model.ApiResponse
-import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -35,7 +33,6 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
-import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.net.api.toUpdateRequest
@@ -65,16 +62,6 @@ import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/** One cursor page of posts plus the pagination watermark to fetch the next. */
-data class PostPage(
-    val posts: List<ApiPost>,
-    val nextCursor: String?,
-    val hasMore: Boolean,
-)
-
-/** Bookmarked-posts page — the same cursor-page shape as any other post list. */
-typealias BookmarkPage = PostPage
 
 /** Posts, comments, reposts and feed variants — port of PostService (PostService.swift). */
 @Singleton
@@ -638,40 +625,6 @@ class PostRepository @Inject constructor(
     ): NetworkResult<PostPage> =
         foldPostPage(rawApiCall { postApi.getNearby(lat = lat, lng = lng, radiusKm = radiusKm, cursor = cursor, limit = limit) })
 
-    /**
-     * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]
-     * passes through; a `success:false`/dataless envelope becomes a [NetworkResult.Failure];
-     * otherwise the posts plus the pagination watermark become a [PostPage] (`hasMore`
-     * defaulting to `false` when the envelope omits pagination). The single page-folding
-     * law shared by every cursor-paginated post list.
-     */
-    private fun foldPostPage(
-        result: NetworkResult<ApiResponse<List<ApiPost>>>,
-    ): NetworkResult<PostPage> =
-        when (result) {
-            is NetworkResult.Success -> {
-                val response = result.data
-                val page = response.data
-                if (!response.success || page == null) {
-                    NetworkResult.Failure(
-                        ApiError(
-                            message = response.error ?: response.message ?: "Unknown error",
-                            code = response.code,
-                        ),
-                    )
-                } else {
-                    NetworkResult.Success(
-                        PostPage(
-                            posts = page,
-                            nextCursor = response.pagination?.nextCursor,
-                            hasMore = response.pagination?.hasMore ?: false,
-                        ),
-                    )
-                }
-            }
-            is NetworkResult.Failure -> result
-        }
-
     suspend fun pinPost(postId: String): NetworkResult<Unit> =
         apiCall { postApi.pin(postId) }
 
@@ -750,7 +703,7 @@ class PostRepository @Inject constructor(
         val ticket = fence?.currentTicket()
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val target = targetLanguage.trim()
-        val translated = translateSource(post.content, post.originalLanguage, target) ?: return false
+        val translated = translationApi.translateSource(post.content, post.originalLanguage, target) ?: return false
         // Fusionné sur la ligne COURANTE au moment d'écrire : un « j'aime » posé pendant la traduction survit, et la copie
         // du compte qui a tapé n'est jamais écrite après la purge (#13577, #13580). Une ligne dont l'auteur a changé le
         // texte pendant la traduction ne reçoit pas la traduction de l'ANCIEN texte.
@@ -854,7 +807,7 @@ class PostRepository @Inject constructor(
      */
     suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? {
         val target = targetLanguage.trim()
-        val translated = translateSource(post.content, post.originalLanguage, target) ?: return null
+        val translated = translationApi.translateSource(post.content, post.originalLanguage, target) ?: return null
         return PostTranslationMerge.mergeTranslation(post, target, translated)
     }
 
@@ -869,41 +822,8 @@ class PostRepository @Inject constructor(
      */
     suspend fun translateComment(comment: ApiPostComment, targetLanguage: String): ApiPostComment? {
         val target = targetLanguage.trim()
-        val translated = translateSource(comment.content, comment.originalLanguage, target) ?: return null
+        val translated = translationApi.translateSource(comment.content, comment.originalLanguage, target) ?: return null
         return PostTranslationMerge.mergeTranslation(comment, target, translated)
-    }
-
-    /**
-     * The shared translate law over any Prisme content: reject a blank [target] or blank
-     * [source] before touching the network, then blocking-translate [source] from
-     * [sourceLanguage] into [target]. Returns the non-blank translated text, or `null`
-     * when nothing should be stored (blank target/source, network failure, or a blank
-     * translation). Callers pass an already-trimmed [target] and fold the result into
-     * their own content type via [PostTranslationMerge].
-     */
-    private suspend fun translateSource(
-        source: String?,
-        sourceLanguage: String?,
-        target: String,
-    ): String? {
-        if (target.isEmpty()) return null
-        if (source.isNullOrBlank()) return null
-
-        val translated = when (
-            val result = apiCall {
-                translationApi.translate(
-                    TranslateRequest(
-                        text = source,
-                        sourceLanguage = sourceLanguage?.trim().orEmpty(),
-                        targetLanguage = target,
-                    ),
-                )
-            }
-        ) {
-            is NetworkResult.Success -> result.data.translatedText
-            is NetworkResult.Failure -> return null
-        }
-        return translated.takeUnless { it.isBlank() }
     }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =
