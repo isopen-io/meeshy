@@ -14,11 +14,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -30,8 +33,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,7 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
+import kotlin.math.PI
+import kotlin.math.cos
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.imageLoader
@@ -191,6 +203,8 @@ public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
  * diminue, l'entrant rebondit) ; rien ne pulse en liste ni sous Reduire les animations. TalkBack lit le nom,
  * l'humeur puis « dans la conversation ».
  *
+ * [onDotTap] = toucher du POINT de presence (iOS `onOnlineTap`) : une zone de [DOT_TOUCH_ZONE] centree sur lui, bornee par le
+ * cadre de l'avatar, donc jamais sur son centre ; le reste de l'avatar garde le geste de son hote. `null` = aucune zone.
  * [isUser] = faux pour une entite (communaute, groupe) : ni humeur ni anneau de story.
  * [ring] = le contour choisi par son porteur (miroir d'`avatarRingWithin`) : il se pose DANS l'empreinte, l'anneau de
  * story reste concentrique dedans, la pastille de presence se pose par-dessus. `null` = rendu historique.
@@ -210,6 +224,7 @@ public fun MeeshyAvatar(
     isUser: Boolean = true,
     enablePulse: Boolean = context.defaultPulse,
     onMoodTap: (() -> Unit)? = null,
+    onDotTap: (() -> Unit)? = null,
     ring: AvatarRingDesign? = null,
     imageUrl: String? = null,
 ) {
@@ -266,6 +281,49 @@ public fun MeeshyAvatar(
             reduceMotion = reduceMotion,
             onMoodTap = onMoodTap,
             modifier = Modifier.align(Alignment.BottomEnd),
+        )
+        if (onDotTap != null && corner is AvatarCornerBadge.Dot) {
+            AvatarDotTouchZone(corner.dot, context.size, frame.value, onDotTap, Modifier.align(Alignment.BottomEnd))
+        }
+    }
+}
+
+/** Etiquette de test de la zone tactile du point. */
+public const val AvatarPresenceDotTouchTestTag: String = "avatar-presence-dot-touch"
+
+/** Cote maximal (dp) de la zone tactile du point, centree sur lui ; le cadre de l'avatar la borne encore. */
+public val DOT_TOUCH_ZONE: Dp = 32.dp
+
+/** Marge (dp) entre le bord de la zone et le centre du cercle : le centre de l'avatar n'est JAMAIS dans la zone. */
+private const val DOT_TOUCH_CENTER_CLEARANCE = 2f
+
+@Composable
+private fun AvatarDotTouchZone(
+    dot: AvatarPresenceDot,
+    avatarSize: Float,
+    frameSize: Float,
+    onTap: () -> Unit,
+    modifier: Modifier,
+) {
+    val diameter = dot.diameter(avatarSize)
+    val fromCentre = avatarSize / 2f * cos(PI / 4).toFloat()
+    val side = minOf(DOT_TOUCH_ZONE.value, 2f * (fromCentre - DOT_TOUCH_CENTER_CLEARANCE))
+    val shift = AvatarPresenceDot.centerOffset(avatarSize, frameSize, diameter) + (side - diameter) / 2f
+    val directed = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -shift else shift
+    // Compose elargit toute cible plus petite que 48 dp : ici elle recouvrirait le centre de l'avatar, que son hote garde.
+    val base = LocalViewConfiguration.current
+    val exact = remember(base) {
+        object : ViewConfiguration by base {
+            override val minimumTouchTargetSize: DpSize = DpSize.Zero
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides exact) {
+        Box(
+            modifier = modifier
+                .offset(directed.dp, shift.dp)
+                .size(side.dp)
+                .testTag(AvatarPresenceDotTouchTestTag)
+                .pointerInput(onTap) { detectTapGestures(onTap = { onTap() }) },
         )
     }
 }

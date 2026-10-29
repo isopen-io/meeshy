@@ -57,7 +57,6 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -110,14 +109,6 @@ class ConversationListViewModelEmptyTest {
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
             every { this@mockk.typingStarted } returns typingStarted
             every { this@mockk.typingStopped } returns typingStopped
-        }
-
-    private fun presenceStore(
-        entries: kotlinx.coroutines.flow.MutableStateFlow<Map<String, me.meeshy.sdk.model.UserPresence>> =
-            kotlinx.coroutines.flow.MutableStateFlow(emptyMap()),
-    ): PresenceStore =
-        mockk<PresenceStore> {
-            every { this@mockk.entries } returns entries
         }
 
     private fun connectionSocket(
@@ -181,7 +172,6 @@ class ConversationListViewModelEmptyTest {
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
-        presence: PresenceStore = presenceStore(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
@@ -192,7 +182,7 @@ class ConversationListViewModelEmptyTest {
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
-        repo, messageRepo, socket, presence, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),

@@ -62,7 +62,7 @@ class ConversationRowManageMembersTest {
                             conversation = conversation,
                             currentUserId = "me",
                             currentUserPrefs = user,
-                            presence = null,
+                            peerUserId = null,
                             storyRing = StoryRingState.None,
                             moodEmoji = null,
                             draft = null,

@@ -12,21 +12,19 @@ import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 
 /**
- * Observateurs decoratifs de la liste : catalogue de categories, presence, frappe,
+ * Observateurs decoratifs de la liste : catalogue de categories, frappe,
  * anneaux de story et humeur. Tous tournent dans le [scope] du ViewModel.
  */
 internal class ConversationListObservers(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ConversationListUiState>,
     private val messageSocketManager: MessageSocketManager,
-    private val presenceStore: PresenceStore,
     private val categoryRepository: CategoryRepository,
     private val categorySocketManager: CategorySocketManager,
     private val storyRepository: StoryRepository,
@@ -55,9 +53,8 @@ internal class ConversationListObservers(
         }
     }
 
-    /** Presence, frappe, anneaux de story, humeur (demarres tot : flux chauds sans rejeu). */
+    /** Frappe, anneaux de story, humeur (demarres tot : flux chauds sans rejeu). */
     fun startLive() {
-        observePresence()
         observeTyping()
         observeStoryGroups()
         paintMoodStatusesFromCache()
@@ -86,12 +83,6 @@ internal class ConversationListObservers(
                 val groups = posts.toStoryGroups(currentUserId = state.value.currentUserId)
                 state.update { it.copy(storyGroups = groups) }
             }
-        }
-    }
-
-    private fun observePresence() {
-        scope.launch {
-            presenceStore.entries.collect { entries -> state.update { it.copy(presenceByUserId = entries) } }
         }
     }
 

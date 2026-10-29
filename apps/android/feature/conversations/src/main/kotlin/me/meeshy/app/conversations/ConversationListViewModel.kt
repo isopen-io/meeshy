@@ -31,7 +31,6 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.story.StoryRepository
@@ -47,7 +46,6 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     messageRepository: MessageRepository,
     messageSocketManager: MessageSocketManager,
-    presenceStore: PresenceStore,
     workManager: WorkManager,
     draftStore: ConversationDraftStore,
     starredStore: StarredMessagesStore,
@@ -127,7 +125,6 @@ class ConversationListViewModel @Inject constructor(
         scope = viewModelScope,
         state = _state,
         messageSocketManager = messageSocketManager,
-        presenceStore = presenceStore,
         categoryRepository = categoryRepository,
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,

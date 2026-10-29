@@ -3,7 +3,6 @@ package me.meeshy.app.conversations
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.StoryRingState
 import org.junit.Test
 
@@ -20,7 +19,7 @@ class ConversationRowModelTest {
         conversation = conversation,
         currentUserId = "me",
         currentUserPrefs = null,
-        presence = PresenceState.ONLINE,
+        peerUserId = "ali",
         storyRing = StoryRingState.None,
         moodEmoji = null,
         draft = null,
@@ -47,6 +46,14 @@ class ConversationRowModelTest {
         val unread = model(ApiConversation(id = "c1", title = "Team", type = "group", unreadCount = 2))
         listOf(pinned, muted, unread, model(isLocked = true), model(isSelected = true), model(isDragging = true), model(nowMillis = 61_000L))
             .forEach { assertThat(it).isNotEqualTo(base) }
+    }
+
+    @Test
+    fun `the snapshot carries the peer id, never a presence that would recompose the whole list`() {
+        val fields = ConversationRowModel::class.java.declaredFields.map { it.type.name }
+        assertThat(fields).doesNotContain(me.meeshy.sdk.model.PresenceState::class.java.name)
+        assertThat(model().peerUserId).isEqualTo("ali")
+        assertThat(model()).isEqualTo(model())
     }
 
     @Test
