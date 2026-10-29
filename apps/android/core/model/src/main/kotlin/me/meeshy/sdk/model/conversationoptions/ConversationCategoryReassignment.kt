@@ -1,4 +1,4 @@
-package me.meeshy.app.conversations
+package me.meeshy.sdk.model.conversationoptions
 
 /**
  * The outcome of reassigning a conversation to a user category (parity §B

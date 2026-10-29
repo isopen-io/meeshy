@@ -66,6 +66,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.conversationoptions.ConversationTagsEditor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -336,7 +337,7 @@ internal fun ConversationContextMenu(
         // whenever the trimmed query matches no known category name. Always shown
         // (not gated on a non-empty catalogue) so a user with zero categories can
         // create their first one from here. Idempotency on selecting an existing
-        // category is enforced by ConversationCategoryReassignment in the ViewModel.
+        // category is enforced by ConversationCategoryReassignment (core:model) in the shared writer.
         var categoryQuery by remember(expanded) { mutableStateOf("") }
         val picker = ConversationCategoryPicker.resolve(categories, currentCategoryId, categoryQuery)
         HorizontalDivider()

@@ -1,4 +1,4 @@
-package me.meeshy.app.conversations
+package me.meeshy.sdk.model.conversationoptions
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -45,5 +45,28 @@ class ConversationTagsEditorTest {
         val next = ConversationTagsEditor.remove(listOf("work"), "family")
 
         assertThat(next).containsExactly("work")
+    }
+
+    @Test
+    fun `suggestions offer the known tags matching the query that are not already chosen, sorted`() {
+        val known = listOf("Work", "family", "workout", "Travel", "work")
+
+        val suggested = ConversationTagsEditor.suggestions(known = known, selected = listOf("work"), query = " WOR ")
+
+        assertThat(suggested).containsExactly("Work", "workout").inOrder()
+    }
+
+    @Test
+    fun `an empty query suggests every known tag not already chosen`() {
+        val suggested = ConversationTagsEditor.suggestions(known = listOf("b", "a", "a", " "), selected = listOf("b"), query = "")
+
+        assertThat(suggested).containsExactly("a")
+    }
+
+    @Test
+    fun `the corpus gathers every distinct tag of the cached conversations`() {
+        val corpus = ConversationTagsEditor.corpus(listOf(listOf("work", " family "), emptyList(), listOf("work", "")))
+
+        assertThat(corpus).containsExactly("family", "work").inOrder()
     }
 }
