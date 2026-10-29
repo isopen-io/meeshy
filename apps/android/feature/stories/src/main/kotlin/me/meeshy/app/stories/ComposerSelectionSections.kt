@@ -46,7 +46,7 @@ private val SECTION_PLAN_MAX_HEIGHT = 220.dp
  * sous la colonne).
  */
 @Composable
-internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
+internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel, comparison: LookComparison) {
     AnimatedContent(
         targetState = state.openMediaSection,
         transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
@@ -59,8 +59,8 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
-            ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel)
-            ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> PlacedAdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> AdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel, comparison)
+            ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> AdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel, comparison)
             else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
                 FilterRow(
                     selected = state.placedFilterOf(mediaId),
@@ -80,19 +80,22 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
     }
 }
 
-/** Les curseurs d'un sous-outil du média posé : chaque image du geste écrit sa valeur, un seul cran d'historique par curseur et par geste. */
+/**
+ * Les curseurs d'un sous-outil du média touché, posé ou de fond : chaque image du geste écrit sa valeur, un seul cran
+ * d'historique par curseur et par geste. « Comparer » ne s'écrit nulle part : il montre l'original sur la scène le temps du geste.
+ */
 @Composable
-private fun PlacedAdjustSection(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily, viewModel: StoryComposerViewModel) {
-    Column(Modifier.heightIn(max = SECTION_PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-        ComposerImageAdjustmentsPanel(
-            adjustments = state.placedAdjustmentsOf(mediaId) ?: ImageAdjustments.NEUTRAL,
-            isVideo = state.placedMediaIsVideo(mediaId),
-            family = family,
-            accent = MaterialTheme.colorScheme.primary,
-            onAdjust = { kind, value -> viewModel.onSceneGesture("adjust-$mediaId-${kind.wireName}") { StoryComposerPlacedMediaReducer.adjusted(it, mediaId, kind, value) } },
-            onReset = { viewModel.onSceneReduce { StoryComposerPlacedMediaReducer.adjustmentsReset(it, mediaId, family) } },
-        )
-    }
+private fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily, viewModel: StoryComposerViewModel, comparison: LookComparison) {
+    ComposerImageAdjustmentsPanel(
+        adjustments = state.adjustmentsOf(mediaId) ?: ImageAdjustments.NEUTRAL,
+        isVideo = state.placedMediaIsVideo(mediaId),
+        family = family,
+        accent = MaterialTheme.colorScheme.primary,
+        carriesLook = state.carriesLook(mediaId),
+        onAdjust = { kind, value -> viewModel.onSceneGesture("adjust-$mediaId-${kind.wireName}") { StoryComposerAdjustReducer.adjusted(it, mediaId, kind, value) } },
+        onReset = { viewModel.onSceneReduce { StoryComposerAdjustReducer.reset(it, mediaId, family) } },
+        onCompare = { holding -> if (holding) comparison.hold(mediaId) else comparison.release(mediaId) },
+    )
 }
 
 /**

@@ -37,6 +37,7 @@ internal fun StoryComposerBody(
     showsToolBand: Boolean = true,
 ) {
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val comparison = remember { LookComparison() }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         onOpenAudience?.let { open ->
             AudiencePill(
@@ -79,8 +80,8 @@ internal fun StoryComposerBody(
                 keyboardVisible = keyboardVisible,
                 drawingActive = state.isDrawingActive,
             ),
-            scene = { sceneModifier -> StoryComposerScene(state, viewModel, sceneExport, sceneModifier) },
-            footer = { StoryComposerFooter(state, viewModel) },
+            scene = { sceneModifier -> StoryComposerScene(state, viewModel, sceneExport, comparison, sceneModifier) },
+            footer = { StoryComposerFooter(state, viewModel, comparison) },
             panel = panel,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )

@@ -32,10 +32,16 @@ class StoryComposerSelectionTest {
         state.copy(deck = state.deck.toggleSelectedBackgroundMedia(id))
 
     @Test
-    fun `a selected media serves filter, description and plan, the first open, with its actions`() {
+    fun `a selected media serves filter, adjust, effects, description and plan, the first open, with its actions`() {
         val state = StoryComposerSelectionReducer.mediaSelected(withMedia("m1"), "m1")
         val focus = state.trailingFocus as Focus.Object
-        assertThat(focus.sections).containsExactly(filterSection, altSection, ComposerObjectEditorSection.Plan).inOrder()
+        assertThat(focus.sections).containsExactly(
+            filterSection,
+            ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
+            ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
+            altSection,
+            ComposerObjectEditorSection.Plan,
+        ).inOrder()
         assertThat(focus.open).isEqualTo(filterSection)
         assertThat(focus.actions).containsExactly(Action.SET_AS_BACKGROUND, Action.DELETE).inOrder()
         assertThat(ComposerTrailingColumn.options(focus).last()).isEqualTo(Entry.ExitObject)

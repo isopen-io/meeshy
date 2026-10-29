@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
@@ -52,6 +53,8 @@ data class StorySlide(
     val soundSources: Map<String, Float> = emptyMap(),
     /** Les médias de la slide POSÉS sur la scène (hors fond), chacun avec sa pose ; ils partent en `mediaObjects[]`. */
     val placedMedia: List<StoryPlacedMedia> = emptyList(),
+    /** Les réglages et effets du média de FOND (iOS `StoryMediaObject.adjustments` de l'objet `isBackground`, #13652) ; `null` : rien de réglé. */
+    val backgroundAdjustments: ImageAdjustments? = null,
 )
 
 /**
@@ -196,6 +199,7 @@ data class StorySlideDeck(
                     placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
+                    backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
                 )
             } else {
                 slide
@@ -563,6 +567,7 @@ data class StorySlideDeck(
                 slide.copy(
                     backgroundMediaId = next,
                     backgroundLoop = true,
+                    backgroundAdjustments = null,
                     placedMedia = if (next == null) slide.placedMedia else slide.placedMedia.filterNot { it.mediaId == next },
                 )
             } else {
@@ -588,6 +593,30 @@ data class StorySlideDeck(
             if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
+    }
+
+    /**
+     * Règle les réglages et effets du fond de la slide choisie (#13652). Le média [mediaId] est le fond désigné ; sans fond
+     * désigné, régler le média que le plateau peint en fond le DÉSIGNE (sinon ses réglages n'auraient pas d'objet de fond à
+     * qui s'écrire au fil). Un sac neutre s'efface (`null`). Inerte si [mediaId] n'est pas le fond ni le candidat, ou si rien ne change.
+     */
+    fun setSelectedBackgroundAdjustments(mediaId: String, adjustments: ImageAdjustments?): StorySlideDeck {
+        val selected = selectedSlide
+        val designated = selected.backgroundMediaId
+        if (mediaId !in selected.mediaIds || (designated != null && designated != mediaId)) return this
+        val next = adjustments?.takeUnless { it.isNeutral }
+        if (designated == mediaId && selected.backgroundAdjustments == next) return this
+        if (designated == null && next == null) return this
+        val index = selectedIndex
+        return copy(slides = slides.mapIndexed { i, slide ->
+            if (i != index) slide
+            else slide.copy(
+                backgroundMediaId = mediaId,
+                backgroundLoop = if (designated == null) true else slide.backgroundLoop,
+                placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
+                backgroundAdjustments = next,
+            )
+        })
     }
 
     /**

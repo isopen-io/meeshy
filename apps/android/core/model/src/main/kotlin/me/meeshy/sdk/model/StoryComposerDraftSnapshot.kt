@@ -182,6 +182,8 @@ data class StoryDraftSlideSnapshot(
     val soundSources: Map<String, Float> = emptyMap(),
     /** Les médias de premier plan posés sur la scène (#13630) ; un blob d'avant se lit « aucun ». */
     val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
+    /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
+    val backgroundAdjustments: ImageAdjustments? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a

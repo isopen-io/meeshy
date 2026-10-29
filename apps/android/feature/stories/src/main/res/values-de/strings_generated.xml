@@ -55,8 +55,13 @@
     <string name="composer_frise_sound">Ton</string>
     <string name="composer_object_editor_adjust_blur">Weichzeichner</string>
     <string name="composer_object_editor_adjust_brightness">Helligkeit</string>
+    <string name="composer_object_editor_adjust_compare">Vergleichen</string>
+    <string name="composer_object_editor_adjust_compare_hint">Zeigt das Originalbild, solange du gedrückt hältst</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">Zeigt das Originalvideo, solange du gedrückt hältst</string>
     <string name="composer_object_editor_adjust_contrast">Kontrast</string>
     <string name="composer_object_editor_adjust_exposure">Belichtung</string>
+    <string name="composer_object_editor_adjust_original">Originalbild</string>
+    <string name="composer_object_editor_adjust_original_video">Originalvideo</string>
     <string name="composer_object_editor_adjust_reset">Zurücksetzen</string>
     <string name="composer_object_editor_adjust_saturation">Sättigung</string>
     <string name="composer_object_editor_adjust_sharpness">Schärfe</string>

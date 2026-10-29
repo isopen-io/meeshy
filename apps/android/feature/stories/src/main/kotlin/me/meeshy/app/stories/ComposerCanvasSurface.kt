@@ -30,8 +30,6 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -51,7 +49,8 @@ import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
-import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.ui.component.imageedit.sceneLook
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -71,7 +70,7 @@ internal fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
     sceneBrush: Brush,
-    colorMatrix: StoryColorMatrix,
+    look: SceneLookRecipe,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
     sceneMenu: SceneObjectContextMenu?,
@@ -171,7 +170,6 @@ internal fun StoryCanvasSurface(
                     model = backgroundModel,
                     contentDescription = null,
                     contentScale = if (filled) ContentScale.Crop else ContentScale.Fit,
-                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -179,7 +177,8 @@ internal fun StoryCanvasSurface(
                             scaleY = transform.scale
                             translationX = transform.offsetX
                             translationY = transform.offsetY
-                        },
+                        }
+                        .sceneLook(look),
                 )
             }
             if (snapFeedback != null && !capturing) {

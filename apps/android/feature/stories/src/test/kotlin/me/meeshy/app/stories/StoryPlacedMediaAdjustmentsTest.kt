@@ -167,11 +167,12 @@ class StoryPlacedMediaAdjustmentsTest {
     }
 
     @Test
-    fun `un media pose offre Reglages et Effets, le fond et un media non pose non`() {
+    fun `un media pose offre Reglages et Effets, un media ni pose ni fond non`() {
         val s = state(StoryPlacedMedia("m1"), background = "bg")
 
         assertThat(s.mediaSectionsFor("m1")).containsAtLeast(adjustSection, effectsSection)
-        assertThat(s.mediaSectionsFor("bg")).containsNoneOf(adjustSection, effectsSection)
+        assertThat(s.copy(deck = s.deck.copy(slides = listOf(s.deck.selectedSlide.copy(mediaIds = s.deck.selectedSlide.mediaIds + "loose")))).mediaSectionsFor("loose"))
+            .containsNoneOf(adjustSection, effectsSection)
     }
 
     @Test

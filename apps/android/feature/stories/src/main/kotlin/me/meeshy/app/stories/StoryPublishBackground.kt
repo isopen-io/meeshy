@@ -24,6 +24,7 @@ internal object StoryPublishBackground {
                 durationSeconds = media.durationMs?.let { it / 1000.0 },
                 loop = slide.backgroundLoop,
                 framing = framing,
+                adjustments = slide.backgroundAdjustments,
             )
         }
         val pending = state.pendingUploads.firstOrNull { it.cmid == designated } ?: return null
@@ -34,6 +35,7 @@ internal object StoryPublishBackground {
             durationSeconds = pending.item.durationMs?.let { it / 1000.0 },
             loop = slide.backgroundLoop,
             framing = framing,
+            adjustments = slide.backgroundAdjustments,
         )
     }
 }

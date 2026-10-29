@@ -175,11 +175,12 @@ internal object StoryEditMerge {
             }
         }
         val backgroundKept = slide.backgroundMediaId == hydrated.backgroundMediaId &&
-            slide.backgroundLoop == hydrated.backgroundLoop && slide.transform == hydrated.transform
+            slide.backgroundLoop == hydrated.backgroundLoop && slide.transform == hydrated.transform &&
+            slide.backgroundAdjustments == hydrated.backgroundAdjustments
         val nowBackground = built.firstOrNull { it.isBackground }
         val background = if (backgroundKept) opening.originalBackground else nowBackground?.let { fresh ->
             opening.originalBackground?.takeIf { it.postMediaId == fresh.postMediaId }
-                ?.copy(x = fresh.x, y = fresh.y, scale = fresh.scale, loop = fresh.loop) ?: fresh
+                ?.copy(x = fresh.x, y = fresh.y, scale = fresh.scale, loop = fresh.loop, adjustments = fresh.adjustments) ?: fresh
         }
         return (listOfNotNull(background) + foreground).ifEmpty { null }
     }

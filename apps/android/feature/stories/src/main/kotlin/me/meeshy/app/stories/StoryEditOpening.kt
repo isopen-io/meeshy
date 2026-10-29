@@ -97,6 +97,7 @@ internal data class StoryEditOpening(
                 background = effects.background?.let(StoryBackgroundValue::parse),
                 backgroundMediaId = backgroundId,
                 backgroundLoop = explicitBackground?.loop ?: true,
+                backgroundAdjustments = explicitBackground?.adjustments,
                 audio = effects.audioPlayerObjects.orEmpty(),
                 frame = SceneFrame(
                     fitMode = effects.backgroundTransform?.videoFitMode,

@@ -5,6 +5,8 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.SceneLookMatrix
+import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.StoryTextDirection
@@ -75,7 +77,7 @@ internal data class SlideThumbnailSpec(
                     Sticker(it.emoji, STICKER_BASE_DESIGN_PX * it.scale, it.x, it.y, it.rotationDeg)
                 },
                 strokes = slide.strokes,
-                look = StoryFilterMatrix.effectiveMatrix(slide.filter, slide.filterIntensity).takeUnless { it == StoryColorMatrix.IDENTITY },
+                look = slide.thumbnailLook().takeUnless { it == StoryColorMatrix.IDENTITY },
                 framing = ThumbFraming.of(slide.transform, canvasWidthPx),
                 filled = StoryFitMode.rendersFilled(ComposerBackdropFraming.fitMode(backgroundTransform)),
                 backdrop = ComposerBackdropFraming.backdrop(backgroundTransform),
@@ -104,3 +106,8 @@ internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide): Thum
     val item = pendingUploads.firstOrNull { it.cmid == id }?.item ?: return null
     return ThumbnailBackground("pending:$id:${item.sizeBytes}", item.previewModel)
 }
+
+/** La couleur d'une vignette : le filtre de la scène, puis les réglages du fond quand il en porte (ce que le plateau peint, au flou et au grain près). */
+private fun StorySlide.thumbnailLook(): StoryColorMatrix =
+    backgroundAdjustments?.let { SceneLookMatrix.composed(SceneLookRecipe.forStory(filter, filterIntensity, it)) }
+        ?: StoryFilterMatrix.effectiveMatrix(filter, filterIntensity)

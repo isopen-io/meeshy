@@ -55,8 +55,13 @@
     <string name="composer_frise_sound">Son</string>
     <string name="composer_object_editor_adjust_blur">Flou</string>
     <string name="composer_object_editor_adjust_brightness">Luminosité</string>
+    <string name="composer_object_editor_adjust_compare">Comparer</string>
+    <string name="composer_object_editor_adjust_compare_hint">Affiche l’image d’origine tant que vous maintenez</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">Affiche la vidéo d’origine tant que vous maintenez</string>
     <string name="composer_object_editor_adjust_contrast">Contraste</string>
     <string name="composer_object_editor_adjust_exposure">Exposition</string>
+    <string name="composer_object_editor_adjust_original">Image d’origine</string>
+    <string name="composer_object_editor_adjust_original_video">Vidéo d’origine</string>
     <string name="composer_object_editor_adjust_reset">Réinitialiser</string>
     <string name="composer_object_editor_adjust_saturation">Saturation</string>
     <string name="composer_object_editor_adjust_sharpness">Netteté</string>

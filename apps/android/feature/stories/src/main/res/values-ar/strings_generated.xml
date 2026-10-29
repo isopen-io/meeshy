@@ -55,8 +55,13 @@
     <string name="composer_frise_sound">صوت</string>
     <string name="composer_object_editor_adjust_blur">التمويه</string>
     <string name="composer_object_editor_adjust_brightness">السطوع</string>
+    <string name="composer_object_editor_adjust_compare">مقارنة</string>
+    <string name="composer_object_editor_adjust_compare_hint">يعرض الصورة الأصلية طوال مدة الضغط</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">يعرض الفيديو الأصلي طوال مدة الضغط</string>
     <string name="composer_object_editor_adjust_contrast">التباين</string>
     <string name="composer_object_editor_adjust_exposure">التعريض</string>
+    <string name="composer_object_editor_adjust_original">الصورة الأصلية</string>
+    <string name="composer_object_editor_adjust_original_video">الفيديو الأصلي</string>
     <string name="composer_object_editor_adjust_reset">إعادة تعيين</string>
     <string name="composer_object_editor_adjust_saturation">التشبع</string>
     <string name="composer_object_editor_adjust_sharpness">الحدة</string>

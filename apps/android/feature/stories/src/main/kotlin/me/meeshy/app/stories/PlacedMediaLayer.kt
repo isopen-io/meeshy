@@ -45,9 +45,11 @@ internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: An
 }
 
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
-internal fun StoryComposerUiState.placedMediaFrames(): List<PlacedMediaFrame> {
+internal fun StoryComposerUiState.placedMediaFrames(comparing: String? = null): List<PlacedMediaFrame> {
     val background = deck.selectedSlide.backgroundMediaId
-    return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.mapNotNull { placed ->
+    return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
+        if (placed.mediaId == comparing) placed.copy(filter = null, adjustments = null) else placed
+    }.mapNotNull { placed ->
         val uploaded = selectedSlideAttachments.firstOrNull { it.id == placed.mediaId }
         val pending = selectedSlidePending.firstOrNull { it.cmid == placed.mediaId }
         when {

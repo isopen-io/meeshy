@@ -44,6 +44,7 @@ internal fun StoryComposerScene(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
     sceneExport: SceneExportHost,
+    comparison: LookComparison,
     modifier: Modifier = Modifier,
 ) {
     var backgroundMenuOpen by remember { mutableStateOf(false) }
@@ -54,7 +55,7 @@ internal fun StoryComposerScene(
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },
-                colorMatrix = state.selectedSlideFilterMatrix,
+                look = state.selectedSlideLook(comparison.mediaId),
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
                 sceneMenu = state.sceneContextMenu,
@@ -80,7 +81,7 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads) { state.placedMediaFrames() },
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(comparison.mediaId) },
                 placedMediaGestures = remember(viewModel) {
                     PlacedMediaGestures(viewModel::onMediaPlacementMoved, viewModel::onMediaPlacementDragEnd, viewModel::onMediaPlacementTransformed)
                 },
@@ -114,7 +115,7 @@ internal fun StoryComposerScene(
 
 /** What the stage leaves under the scene: caption, drawing or text settings, the media row. Never over the scene. */
 @Composable
-internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel, comparison: LookComparison) {
         val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
         val editedSticker = state.selectedSticker.takeIf { editedText == null && !state.isTimelineOpen }
         val onPlateau = LocalOnComposerPlateau.current
@@ -177,7 +178,7 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
             val selectedMedia = state.selectedMedia
             val selectedSound = state.selectedSound
             if (onPlateau && selectedMedia != null) {
-                MediaSectionContent(state, selectedMedia, viewModel)
+                MediaSectionContent(state, selectedMedia, viewModel, comparison)
             } else if (onPlateau && selectedSound != null) {
                 SoundSectionContent(state, selectedSound, viewModel)
             } else {

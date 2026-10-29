@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffects
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
+import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
 import me.meeshy.sdk.model.scene.StoryElementTiming
@@ -30,6 +31,20 @@ internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerOb
 internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
         ComposerObjectEditorSection.Media(MediaEditTool.TRIM),
+        ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
+        ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
+        ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
+        ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT),
+        ComposerObjectEditorSection.Plan,
+    ) }
+
+/**
+ * Les sections du média de FOND (#13652) : le filtre de la scène, ses Réglages et ses Effets (iOS `ComposerObjectEditorRail`
+ * donne au fond, image ou vidéo, ce que la chaîne `StoryBackgroundLook` peint), la description et le plan. Pas de rognage ni
+ * d'actions : le fond n'est pas posé.
+ */
+internal val ServedBackgroundSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
+    .filter { it in setOf(
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
         ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
@@ -76,8 +91,41 @@ internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObj
             else -> ServedPlacedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS)
         }
     }
-    val isSceneMedia = id == (deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id)
-    return if (isSceneMedia) ServedMediaSections else ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
+    if (id == sceneBackgroundMediaId) {
+        return if (placedMediaIsVideo(id)) ServedBackgroundSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) else ServedBackgroundSections
+    }
+    return ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
+}
+
+/** Le média que le plateau peint en fond : celui que la publication désigne, sinon le premier envoyé de la slide. */
+internal val StoryComposerUiState.sceneBackgroundMediaId: String?
+    get() = deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id
+
+/** Les réglages et effets PROPRES du média [id], posé ou de fond ; `null` : rien de réglé, ou ni l'un ni l'autre. */
+internal fun StoryComposerUiState.adjustmentsOf(id: String): ImageAdjustments? =
+    if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) placedAdjustmentsOf(id)
+    else deck.selectedSlide.backgroundAdjustments.takeIf { id == sceneBackgroundMediaId }
+
+/**
+ * Le média [id] porte-t-il un rendu à COMPARER ? Ses réglages, son filtre propre — et, pour le fond, le filtre de la scène
+ * (iOS `ComposerLookComparison.carriesLook`). Sans rendu « Comparer » ne montrerait rien de différent : le contrôle ne se peint pas.
+ */
+internal fun StoryComposerUiState.carriesLook(id: String): Boolean {
+    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }
+    if (placed != null) return placed.adjustments != null || placed.filter != null
+    if (id != sceneBackgroundMediaId) return false
+    return deck.selectedSlide.backgroundAdjustments != null || deck.selectedSlide.filter != null
+}
+
+/**
+ * Le look que le plateau peint pour le FOND : le filtre de la scène puis les réglages du fond (le même que lit
+ * `SceneLookRecipe.forEffects`). Pendant « Comparer » ([comparing] = le fond), son ORIGINAL : sans réglages ni filtre de scène.
+ */
+internal fun StoryComposerUiState.selectedSlideLook(comparing: String?): SceneLookRecipe {
+    val background = sceneBackgroundMediaId
+    if (comparing != null && comparing == background) return SceneLookRecipe.NEUTRAL
+    val slide = deck.selectedSlide
+    return SceneLookRecipe.forStory(slide.filter, slide.filterIntensity, slide.backgroundAdjustments, background?.let(::placedMediaIsVideo) == true)
 }
 
 /** Le média posé [id] est-il une vidéo ? (téléversé ou encore en attente) — elle ne reçoit ni netteté, ni flou, ni effets. */
