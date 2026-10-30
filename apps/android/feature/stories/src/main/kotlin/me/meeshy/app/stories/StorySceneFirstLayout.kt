@@ -1,5 +1,23 @@
 package me.meeshy.app.stories
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.feature.stories.R
+import me.meeshy.ui.component.composer.ComposerPullDismiss
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -46,6 +64,10 @@ import me.meeshy.ui.theme.PlateauTint
  * que ses propres touchers — hors d'elles, la scène garde ses gestes. [reduced] (un panneau monte) réduit la scène, ENTIÈRE,
  * au-dessus du panneau par [StoryCanvasFraming] (échelle et décalage en `graphicsLayer`, sans relayout) ; elle n'est
  * jamais couverte. Un glissé vers le bas de la barre du haut, ou le reste d'un défilement, ferme comme la croix.
+ *
+ * Une [sheet] ouverte (#13838) est ancrée en bas, sur toute la largeur, sans voile : sa hauteur mesurée réduit la scène de
+ * la même façon, et seule la feuille parle — les surimpressions se retirent, toucher la scène ou glisser vers le bas
+ * referme la feuille ([onSheetDismiss]), pas le compositeur.
  */
 @Composable
 internal fun StorySceneFirstLayout(
@@ -59,9 +81,12 @@ internal fun StorySceneFirstLayout(
     modifier: Modifier = Modifier,
     strip: @Composable () -> Unit = {},
     tint: PlateauTint = PlateauTint.DEFAULT,
+    sheet: StoryComposerSheet? = null,
+    onSheetDismiss: () -> Unit = {},
+    sheetContent: @Composable (StoryComposerSheet) -> Unit = {},
 ) {
-    val pull = rememberComposerPullDismiss(onDismiss)
-    Box(
+    val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(tint.color)
@@ -70,12 +95,19 @@ internal fun StorySceneFirstLayout(
             .imePadding()
             .nestedScroll(pull.connection),
     ) {
+        val sheetHeights = remember { mutableStateMapOf<StoryComposerSheet, Int>() }
         var frameBottom by remember { mutableFloatStateOf(0f) }
         var frameHeight by remember { mutableFloatStateOf(0f) }
         var frameWidth by remember { mutableFloatStateOf(0f) }
         var panelTop by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-        val framing = remember(reduced, frameWidth, frameHeight, frameBottom, panelTop) {
-            sceneFraming(reduced, frameWidth, frameHeight, overlap = (frameBottom - panelTop).coerceAtLeast(0f))
+        val sheetTop = sheet?.let { constraints.maxHeight - (sheetHeights[it] ?: 0) }?.toFloat()
+        val overlap = when {
+            sheetTop != null -> frameHeight - sheetTop
+            reduced -> frameBottom - panelTop
+            else -> 0f
+        }.coerceAtLeast(0f)
+        val framing = remember(sheetTop != null || reduced, frameWidth, frameHeight, overlap) {
+            sceneFraming(sheetTop != null || reduced, frameWidth, frameHeight, overlap)
         }
         val scale by animateFloatAsState(framing.scale, label = "sceneFirstScale")
         val offsetY by animateFloatAsState(framing.offsetY, label = "sceneFirstOffset")
@@ -96,34 +128,85 @@ internal fun StorySceneFirstLayout(
                     translationY = offsetY
                 },
             )
-            Column(modifier = Modifier.fillMaxSize().padding(OVERLAY_INSET)) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().draggable(
-                        orientation = Orientation.Vertical,
-                        state = rememberDraggableState { deltaPx -> pull.onDrag(deltaPx) },
-                        onDragStopped = { velocityPx -> pull.onRelease(velocityPx) },
-                    ),
-                ) { top() }
-                strip()
-                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    Spacer(Modifier.weight(1f))
-                    Column(
-                        modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                        content = trailing,
-                    )
-                }
-                Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { panelTop = it.positionInRoot().y }) { panel() }
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                    content = socle,
-                )
+            if (sheet != null) {
+                SheetDismissCatcher(onSheetDismiss)
+            } else {
+                SceneOverlays(pull, top, strip, trailing, panel = panel, onPanelTop = { panelTop = it }, socle = socle)
+            }
+        }
+        AnimatedContent(
+            targetState = sheet,
+            transitionSpec = {
+                slideInVertically { it } togetherWith slideOutVertically { it } using SizeTransform(clip = false)
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .heightIn(max = maxHeight * SHEET_MAX_FRACTION),
+            label = "composerSheet",
+        ) { open ->
+            if (open != null) {
+                Box(Modifier.fillMaxWidth().onSizeChanged { sheetHeights[open] = it.height }) { sheetContent(open) }
             }
         }
     }
 }
+
+/** Les contrôles du geste en cours, posés sur la scène : la barre du haut (qui se tire pour fermer), la colonne, le panneau et le socle. */
+@Composable
+private fun SceneOverlays(
+    pull: ComposerPullDismiss,
+    top: @Composable () -> Unit,
+    strip: @Composable () -> Unit,
+    trailing: @Composable ColumnScope.() -> Unit,
+    panel: @Composable () -> Unit,
+    onPanelTop: (Float) -> Unit,
+    socle: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(OVERLAY_INSET)) {
+        Box(
+            modifier = Modifier.fillMaxWidth().draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { deltaPx -> pull.onDrag(deltaPx) },
+                onDragStopped = { velocityPx -> pull.onRelease(velocityPx) },
+            ),
+        ) { top() }
+        strip()
+        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Spacer(Modifier.weight(1f))
+            Column(
+                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                content = trailing,
+            )
+        }
+        Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { onPanelTop(it.positionInRoot().y) }) { panel() }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            content = socle,
+        )
+    }
+}
+
+/** Une feuille ouverte : toucher la scène, au-dessus d'elle, la referme — sans voile ni ondulation, la scène reste lisible. */
+@Composable
+private fun SheetDismissCatcher(onSheetDismiss: () -> Unit) {
+    val label = stringResource(R.string.composer_sheet_dismiss)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onSheetDismiss)
+            .semantics {
+                contentDescription = label
+                role = Role.Button
+            },
+    )
+}
+
+/** La part de la hauteur utile qu'une feuille peut prendre : la scène garde toujours de quoi se lire au-dessus. */
+private const val SHEET_MAX_FRACTION = 0.55f
 
 private val OVERLAY_INSET = 10.dp
 

@@ -23,6 +23,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.sdk.model.composer.ComposerLimitNotice
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -212,21 +219,49 @@ private fun DurationPanel(state: StoryComposerUiState, viewModel: StoryComposerV
 }
 
 /**
- * La légende de la diapo, ouverte depuis « ⋯ » : le champ et OK, aucun compteur (le blocage de publication dit la limite
- * quand elle est atteinte). Un texte posé sur la scène s'écrit sur la scène même (ComposerInlineTextField).
+ * La légende de la diapo, ouverte depuis « ⋯ » : le champ et OK, aucun compteur ni plafond (#13838). À la limite, et
+ * seulement là, un mot bref lu poliment par TalkBack, et une vibration au geste qui l'atteint. Un texte posé sur la scène
+ * s'écrit sur la scène même (ComposerInlineTextField).
  */
 @Composable
 private fun CaptionPanel(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
+    val used = state.editorText.length
+    val notice = ComposerLimitNotice.visibleAt(used, StoryComposerDraft.MAX_CHARS)
+    LimitReachedHaptic(used, StoryComposerDraft.MAX_CHARS)
     OutlinedTextField(
         value = caption.value,
         onValueChange = caption.onValueChange,
         modifier = Modifier.fillMaxWidth(),
         label = { Text(stringResource(R.string.stories_composer_text_caption)) },
         placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
-        isError = !state.draft.isWithinLimit,
+        isError = notice == ComposerLimitNotice.Kind.EXCEEDED,
+        supportingText = notice?.let { kind ->
+            {
+                Text(
+                    text = stringResource(kind.captionRes()),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+        },
     )
     PanelDone(onDone)
+}
+
+private fun ComposerLimitNotice.Kind.captionRes(): Int = when (this) {
+    ComposerLimitNotice.Kind.REACHED -> R.string.composer_caption_limit_reached
+    ComposerLimitNotice.Kind.EXCEEDED -> R.string.composer_caption_too_long
+}
+
+/** La vibration d'une limite : une seule, au geste qui l'atteint ([ComposerLimitNotice.crossed]), jamais en deçà ni au-delà. */
+@Composable
+internal fun LimitReachedHaptic(used: Int, cap: Int) {
+    val haptics = rememberMeeshyHaptics()
+    var previous by remember { mutableIntStateOf(used) }
+    LaunchedEffect(used) {
+        if (ComposerLimitNotice.crossed(previous, used, cap)) haptics.warning()
+        previous = used
+    }
 }
 
 @Composable
@@ -300,8 +335,6 @@ internal fun StoryComposerPanel(
                 isUploadingMedia = state.isUploadingMedia,
                 uploadingMedia = state.uploadingMedia,
                 isMediaFull = !state.deck.selectedCanAddMedia,
-                mediaCount = state.draft.mediaIds.size + state.selectedSlideAudio.size,
-                hasMedia = state.draft.hasMedia,
                 onDismiss = viewModel::onBandDismiss,
                 onAddText = viewModel::onAddTextElement,
                 onPickMedia = onPickMedia,

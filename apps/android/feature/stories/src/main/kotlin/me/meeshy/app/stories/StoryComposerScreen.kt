@@ -13,7 +13,6 @@ import androidx.compose.runtime.produceState
 import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.StorySourceWindow
 import me.meeshy.sdk.model.StoryVisibility
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
@@ -94,74 +93,89 @@ fun StoryComposerScreen(
 
     val pickMedia = rememberStoryMediaPicker(state.mediaPickMode, viewModel)
 
-    val sheets = rememberStoryComposerSheets()
-    StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheets.soundShelf)
-    StoryComposerSheets(sheets, state, viewModel)
+    var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
+    StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
 
+    val close = rememberConfirmedComposerClose(
+        hasContent = state.hasDraftContent,
+        editingPublished = state.editing,
+        onKeep = onClose,
+        onDiscard = {
+            viewModel.onDiscardDraft()
+            onClose()
+        },
+    )
     var morePanel by rememberSaveable { mutableStateOf<StoryMorePanel?>(null) }
+    ComposerBackHandlers(
+        close = close,
+        onClosePanel = when (state.scenePanel(morePanel)) {
+            StoryScenePanel.TOOL -> viewModel::onBandDismiss
+            StoryScenePanel.DURATION, StoryScenePanel.CAPTION -> ({ morePanel = null })
+            else -> null
+        },
+        onCloseSheet = if (sheet != null) ({ sheet = null }) else null,
+    )
     StoryComposerSceneFirst(
         state = state,
         viewModel = viewModel,
         sceneExport = sceneExport,
         doors = StoryComposerDoors(
-            onClose = onClose,
-            onOpenAudience = { sheets.audience = true },
-            onOpenStickers = { sheets.stickers = true },
+            onClose = close.request,
+            onOpenAudience = { sheet = StoryComposerSheet.AUDIENCE },
+            onOpenStickers = { sheet = StoryComposerSheet.STICKERS },
             onPickMedia = pickMedia,
-            onOpenSoundShelf = { sheets.soundShelf = true },
+            onOpenSoundShelf = { sheet = StoryComposerSheet.SOUND },
         ),
         morePanel = morePanel,
         onMorePanel = { morePanel = it },
         formatChevron = formatChevron,
+        sheet = StorySheetSlot(open = sheet, onDismiss = { sheet = null }) { open ->
+            StoryComposerSheetContent(open, state, viewModel, onDone = { sheet = null })
+        },
     )
 }
 
-/** Les feuilles que l'écran tient ouvertes : l'étagère des sons, les stickers et l'audience (celle-ci survit à une rotation). */
-private class StoryComposerSheetsState(audience: MutableState<Boolean>) {
-    var soundShelf by mutableStateOf(false)
-    var stickers by mutableStateOf(false)
-    var audience by audience
-}
-
+/** La feuille ouverte, dans sa coque ancrée : les stickers, l'étagère des sons, l'audience (#13838). */
 @Composable
-private fun rememberStoryComposerSheets(): StoryComposerSheetsState {
-    val audience = rememberSaveable { mutableStateOf(false) }
-    return remember(audience) { StoryComposerSheetsState(audience) }
-}
-
-@Composable
-private fun StoryComposerSheets(sheets: StoryComposerSheetsState, state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
-    if (sheets.soundShelf) {
-        SoundShelfSheet(
-            onUse = { sound ->
-                viewModel.onBorrowSound(sound)
-                sheets.soundShelf = false
-            },
-            onDismiss = { sheets.soundShelf = false },
-        )
-    }
-    if (sheets.stickers) {
-        StickerPickerDialog(
-            onPick = { emoji ->
-                viewModel.onAddSticker(emoji)
-                sheets.stickers = false
-            },
-            onDismiss = { sheets.stickers = false },
-        )
-    }
-    if (sheets.audience) {
-        StoryAudienceSheet(
-            visibility = state.draft.visibility,
-            userIds = state.draft.visibilityUserIds,
-            mentions = state.draft.mentions,
-            hashtags = state.hashtags,
-            onChooseVisibility = viewModel::onVisibilityChange,
-            onUserIdsChange = viewModel::onAudienceUserIdsChange,
-            onAddMention = viewModel::onAddMention,
-            onRemoveMention = viewModel::onRemoveMention,
-            onRemoveHashtag = viewModel::onRemoveHashtag,
-            onDismiss = { sheets.audience = false },
-        )
+private fun StoryComposerSheetContent(
+    open: StoryComposerSheet,
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    onDone: () -> Unit,
+) {
+    when (open) {
+        StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = true) {
+            StickerPickerPanel(
+                onPick = { emoji ->
+                    viewModel.onAddSticker(emoji)
+                    onDone()
+                },
+                onDismiss = onDone,
+            )
+        }
+        StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
+            SoundShelfSheet(
+                onUse = { sound ->
+                    viewModel.onBorrowSound(sound)
+                    onDone()
+                },
+                onDismiss = onDone,
+            )
+        }
+        StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = false) {
+            StoryAudiencePanel(
+                visibility = state.draft.visibility,
+                userIds = state.draft.visibilityUserIds,
+                mentions = state.draft.mentions,
+                hashtags = state.hashtags,
+                onChooseVisibility = viewModel::onVisibilityChange,
+                onUserIdsChange = viewModel::onAudienceUserIdsChange,
+                onAddMention = viewModel::onAddMention,
+                onRemoveMention = viewModel::onRemoveMention,
+                onRemoveHashtag = viewModel::onRemoveHashtag,
+                onDismiss = onDone,
+            )
+        }
     }
 }
 

@@ -53,8 +53,6 @@ internal fun ComposerToolPanel(
     isUploadingMedia: Boolean,
     uploadingMedia: List<MediaUploadProgress>,
     isMediaFull: Boolean,
-    mediaCount: Int,
-    hasMedia: Boolean,
     onDismiss: () -> Unit,
     onAddText: () -> Unit,
     onPickMedia: () -> Unit,
@@ -97,7 +95,7 @@ internal fun ComposerToolPanel(
                 ) {
                     when (activeTool) {
                         StoryToolMode.MEDIA -> {
-                            MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
+                            MediaTile(isUploadingMedia, isMediaFull, onPickMedia)
                             UploadingMediaLines(uploadingMedia)
                             mediaExtras()
                         }
@@ -143,8 +141,6 @@ private const val DEFAULT_PANEL_HEIGHT_DP = 220f
 private fun MediaTile(
     isUploadingMedia: Boolean,
     isMediaFull: Boolean,
-    mediaCount: Int,
-    hasMedia: Boolean,
     onPickMedia: () -> Unit,
 ) {
     BandTile(
@@ -155,11 +151,8 @@ private fun MediaTile(
                 Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
             }
         },
-        label = if (hasMedia) {
-            stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
-        } else {
-            stringResource(R.string.stories_composer_add_media)
-        },
+        // Aucun compteur avant le plafond (#13838) : le plafond se dit au geste qui l'atteint (rememberGuardedAddition).
+        label = stringResource(R.string.stories_composer_add_media),
         enabled = !isUploadingMedia,
         onClick = rememberGuardedAddition(!isMediaFull, R.string.composer_scene_cap_media, onPickMedia),
         modifier = Modifier.fillMaxWidth(),

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_close_draft_title">Fechar o rascunho?</string>
+    <string name="composer_close_draft_keep">Manter o rascunho</string>
+    <string name="composer_close_draft_discard">Descartar</string>
+    <string name="composer_sheet_dismiss">Fechar o painel</string>
+    <string name="composer_caption_limit_reached">Limite da legenda atingido</string>
+    <string name="composer_caption_too_long">Legenda longa demais</string>
+</resources>

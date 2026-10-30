@@ -42,7 +42,8 @@ internal class StoryComposerDoors(
  * (republication, modification, audience d'onboarding) : la scène plein écran, ✕ et ↶↷ en haut, la rangée des diapos dès
  * deux, les six outils à droite (ou, un objet touché ou le pinceau en main, la colonne de ses réglages), le panneau du
  * geste en cours, puis la pastille d'audience et « Publier la story ▾ ». [formatChevron] est le menu « Publier comme » de
- * l'hôte ; la route autonome n'en a pas.
+ * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience), ancrée en bas : la
+ * scène se réduit au-dessus d'elle (#13838).
  */
 @Composable
 internal fun StoryComposerSceneFirst(
@@ -53,6 +54,7 @@ internal fun StoryComposerSceneFirst(
     morePanel: StoryMorePanel?,
     onMorePanel: (StoryMorePanel?) -> Unit,
     formatChevron: (@Composable () -> Unit)?,
+    sheet: StorySheetSlot = StorySheetSlot(open = null, onDismiss = {}) {},
 ) {
     val comparison = remember { LookComparison() }
     val panel = state.scenePanel(morePanel)
@@ -95,6 +97,9 @@ internal fun StoryComposerSceneFirst(
             }
         },
         socle = { if (chrome) StorySocle(state, viewModel, doors, formatChevron) },
+        sheet = sheet.open,
+        onSheetDismiss = sheet.onDismiss,
+        sheetContent = sheet.content,
     )
 }
 

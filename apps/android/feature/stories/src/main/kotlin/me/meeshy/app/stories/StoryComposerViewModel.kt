@@ -189,6 +189,13 @@ class StoryComposerViewModel @Inject constructor(
     private suspend fun isRestoredMediaAvailable(id: String, swept: Boolean): Boolean =
         if (OutboxIds.isCmid(id)) mediaBlobStore.has(id) else !swept
 
+    /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
+    fun onDiscardDraft() {
+        if (editMode != null) return
+        _state.value.also { _state.value = StoryComposerUiState() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        resetHistory()
+    }
+
     /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
     fun persistDraft() {
         if (editMode != null) return
@@ -686,16 +693,9 @@ class StoryComposerViewModel @Inject constructor(
         record()
     }
 
+    /** Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own; only the scope's cancellation propagates. */
     private fun cancelDurableUpload(cmid: String) {
-        viewModelScope.launch {
-            try {
-                mediaUploadQueue.cancel(cmid)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own.
-            }
-        }
+        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(cmid) }.exceptionOrNull()?.let { if (it is CancellationException) throw it } }
     }
 
     fun publish() {

@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.sdk.model.composer.ComposerAudienceTap
 import me.meeshy.sdk.model.composer.ComposerAudienceReach
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerAudienceSubtitle
@@ -63,9 +64,10 @@ private enum class AudiencePage { AUDIENCE, ONLY, EXCEPT, MENTION }
 
 
 /**
- * La feuille d'AUDIENCE (vue `2l`) — qui verra, qui est nommé et sous quel mode, ce qui part avec
- * (hashtags). Présentée en feuille (croix + glissé vers le bas), comme le `.sheet` iOS. Les types
- * sont ceux de l'application (les six modes du serveur), pas une liste recopiée d'une maquette.
+ * La feuille d'AUDIENCE de la REPUBLICATION (vue `2l`) — qui verra la story republiée. Présentée en feuille (croix +
+ * glissé vers le bas), comme le `.sheet` iOS ; un toucher choisit, et son bouton est une ACTION : il republie. Le
+ * compositeur, lui, monte [StoryAudiencePanel] dans sa feuille ancrée. Les types sont ceux de l'application (les six modes
+ * du serveur), pas une liste recopiée d'une maquette.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,51 +86,120 @@ internal fun StoryAudienceSheet(
     canApply: Boolean = true,
     onApply: () -> Unit = onDismiss,
 ) {
-    var page by rememberSaveable { mutableStateOf(AudiencePage.AUDIENCE) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        AnimatedContent(
-            targetState = page,
-            transitionSpec = {
-                val forward = targetState != AudiencePage.AUDIENCE
-                (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
-                    (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
-            },
-            label = "audience-page",
-        ) { current ->
-            if (current == AudiencePage.AUDIENCE) {
-                AudiencePage(
-                    visibility = visibility,
-                    userIds = userIds,
-                    mentions = mentions,
-                    hashtags = hashtags,
-                    onChoose = { candidate ->
-                        onChooseVisibility(candidate)
-                        if (candidate.requiresUserSelection) {
-                            page = if (candidate == StoryVisibility.ONLY) AudiencePage.ONLY else AudiencePage.EXCEPT
-                        }
-                    },
-                    onAddMention = { page = AudiencePage.MENTION },
-                    onRemoveMention = onRemoveMention,
-                    onRemoveHashtag = onRemoveHashtag,
-                    onClose = onDismiss,
-                    republish = republish,
-                    canApply = canApply,
-                    onApply = onApply,
-                )
-            } else {
-                StoryAudiencePickerPage(
-                    title = stringResource(current.titleRes()),
-                    initialSelection = if (current == AudiencePage.MENTION) emptyList() else userIds,
-                    single = current == AudiencePage.MENTION,
-                    keepsBlocked = current == AudiencePage.EXCEPT,
-                    onCancel = { page = AudiencePage.AUDIENCE },
-                    onDone = { ids, people ->
-                        if (current == AudiencePage.MENTION) people.forEach(onAddMention) else onUserIdsChange(ids)
+        AudiencePages(
+            AudienceSheetData(visibility, userIds, mentions, hashtags),
+            AudienceSheetActions(onChooseVisibility, onUserIdsChange, onAddMention, onRemoveMention, onRemoveHashtag, onDismiss),
+            republish = republish,
+            canApply = canApply,
+            onApply = onApply,
+        )
+    }
+}
+
+/**
+ * L'audience du COMPOSITEUR (#13838), dans sa feuille ancrée : qui verra, qui est nommé et sous quel mode, ce qui part avec
+ * (hashtags). C'est un réglage : un mode touché s'applique et la feuille se ferme, sans « Appliquer » et sans phrase sur la
+ * portée ; un mode à liste ouvre son sélecteur, et le choix s'applique en le quittant ([ComposerAudienceTap]).
+ */
+@Composable
+internal fun StoryAudiencePanel(
+    visibility: StoryVisibility,
+    userIds: List<String>,
+    mentions: List<PostMentionInput>,
+    hashtags: List<String>,
+    onChooseVisibility: (StoryVisibility) -> Unit,
+    onUserIdsChange: (List<String>) -> Unit,
+    onAddMention: (AudienceCandidate) -> Unit,
+    onRemoveMention: (String) -> Unit,
+    onRemoveHashtag: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AudiencePages(
+        AudienceSheetData(visibility, userIds, mentions, hashtags),
+        AudienceSheetActions(onChooseVisibility, onUserIdsChange, onAddMention, onRemoveMention, onRemoveHashtag, onDismiss),
+        republish = false,
+        canApply = true,
+        onApply = onDismiss,
+    )
+}
+
+private class AudienceSheetData(
+    val visibility: StoryVisibility,
+    val userIds: List<String>,
+    val mentions: List<PostMentionInput>,
+    val hashtags: List<String>,
+)
+
+private class AudienceSheetActions(
+    val onChooseVisibility: (StoryVisibility) -> Unit,
+    val onUserIdsChange: (List<String>) -> Unit,
+    val onAddMention: (AudienceCandidate) -> Unit,
+    val onRemoveMention: (String) -> Unit,
+    val onRemoveHashtag: (String) -> Unit,
+    val onDismiss: () -> Unit,
+)
+
+/** La page de l'audience, ou le sélecteur qui la remplace (une feuille montée sur une feuille est irreprésentable). */
+@Composable
+private fun AudiencePages(
+    data: AudienceSheetData,
+    actions: AudienceSheetActions,
+    republish: Boolean,
+    canApply: Boolean,
+    onApply: () -> Unit,
+) {
+    var page by rememberSaveable { mutableStateOf(AudiencePage.AUDIENCE) }
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            val forward = targetState != AudiencePage.AUDIENCE
+            (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
+                (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
+        },
+        label = "audience-page",
+    ) { current ->
+        if (current == AudiencePage.AUDIENCE) {
+            AudiencePage(
+                visibility = data.visibility,
+                userIds = data.userIds,
+                mentions = data.mentions,
+                hashtags = data.hashtags,
+                onChoose = { candidate ->
+                    actions.onChooseVisibility(candidate)
+                    when (ComposerAudienceTap.outcome(candidate, republish)) {
+                        ComposerAudienceTap.Outcome.APPLY_AND_CLOSE -> actions.onDismiss()
+                        ComposerAudienceTap.Outcome.PICK_ONLY -> page = AudiencePage.ONLY
+                        ComposerAudienceTap.Outcome.PICK_EXCEPT -> page = AudiencePage.EXCEPT
+                        ComposerAudienceTap.Outcome.SELECT -> Unit
+                    }
+                },
+                onAddMention = { page = AudiencePage.MENTION },
+                onRemoveMention = actions.onRemoveMention,
+                onRemoveHashtag = actions.onRemoveHashtag,
+                onClose = actions.onDismiss,
+                republish = republish,
+                canApply = canApply,
+                onApply = onApply,
+            )
+        } else {
+            StoryAudiencePickerPage(
+                title = stringResource(current.titleRes()),
+                initialSelection = if (current == AudiencePage.MENTION) emptyList() else data.userIds,
+                single = current == AudiencePage.MENTION,
+                keepsBlocked = current == AudiencePage.EXCEPT,
+                onCancel = { page = AudiencePage.AUDIENCE },
+                onDone = { ids, people ->
+                    if (current == AudiencePage.MENTION) {
+                        people.forEach(actions.onAddMention)
                         page = AudiencePage.AUDIENCE
-                    },
-                )
-            }
+                    } else {
+                        actions.onUserIdsChange(ids)
+                        if (ComposerAudienceTap.closesOnPickerDone(republish)) actions.onDismiss() else page = AudiencePage.AUDIENCE
+                    }
+                },
+            )
         }
     }
 }
@@ -183,10 +254,9 @@ private fun AudiencePage(
             if (!republish) {
                 MentionsSection(visibility, userIds, mentions, onAddMention, onRemoveMention)
                 HashtagsSection(hashtags, onRemoveHashtag)
-                ScopeNote()
             }
         }
-        ApplyBar(visibility, onApply, enabled = canApply, labelRes = if (republish) R.string.my_stories_repost else R.string.composer_audience_apply)
+        if (republish) ApplyBar(visibility, onApply, enabled = canApply, labelRes = R.string.my_stories_repost)
     }
 }
 
@@ -326,16 +396,6 @@ private fun HashtagsSection(hashtags: List<String>, onRemove: (String) -> Unit) 
 }
 
 @Composable
-private fun ScopeNote() {
-    Text(
-        text = stringResource(R.string.composer_audience_scope),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = MeeshySpacing.lg),
-    )
-}
-
-@Composable
 private fun ApplyBar(visibility: StoryVisibility, onApply: () -> Unit, enabled: Boolean, labelRes: Int) {
     val label = stringResource(visibility.labelRes()).uppercase()
     Button(
@@ -346,3 +406,4 @@ private fun ApplyBar(visibility: StoryVisibility, onApply: () -> Unit, enabled: 
         Text("${stringResource(labelRes)} · $label")
     }
 }
+
