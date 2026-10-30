@@ -43,7 +43,8 @@ internal class StoryComposerDoors(
  * deux, les six outils à droite (ou, un objet touché ou le pinceau en main, la colonne de ses réglages), le panneau du
  * geste en cours, puis la pastille d'audience et « Publier la story ▾ ». [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience), ancrée en bas : la
- * scène se réduit au-dessus d'elle (#13838).
+ * scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre.
  */
 @Composable
 internal fun StoryComposerSceneFirst(
@@ -55,14 +56,16 @@ internal fun StoryComposerSceneFirst(
     onMorePanel: (StoryMorePanel?) -> Unit,
     formatChevron: (@Composable () -> Unit)?,
     sheet: StorySheetSlot = StorySheetSlot(open = null, onDismiss = {}) {},
+    keyboard: TypingKeyboard? = null,
 ) {
     val comparison = remember { LookComparison() }
     val panel = state.scenePanel(morePanel)
+    val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
     val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive)
     val tools = ComposerSceneTools.toolsServed(objectFocused = state.selectedObjectControllers != null, drawing = state.isDrawingActive)
     StorySceneFirstLayout(
         onDismiss = doors.onClose,
-        reduced = panel != null,
+        reduced = panel != null && typing == null,
         scene = { modifier -> StoryComposerScene(state, viewModel, sceneExport, comparison, modifier) },
         top = {
             SceneTopBar(
@@ -100,6 +103,7 @@ internal fun StoryComposerSceneFirst(
         sheet = sheet.open,
         onSheetDismiss = sheet.onDismiss,
         sheetContent = sheet.content,
+        typing = typing,
     )
 }
 

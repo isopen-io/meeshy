@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -48,7 +49,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
 import me.meeshy.ui.component.composer.rememberComposerPullDismiss
 import me.meeshy.ui.theme.MeeshySpacing
@@ -68,6 +71,9 @@ import me.meeshy.ui.theme.PlateauTint
  * Une [sheet] ouverte (#13838) est ancrée en bas, sur toute la largeur, sans voile : sa hauteur mesurée réduit la scène de
  * la même façon, et seule la feuille parle — les surimpressions se retirent, toucher la scène ou glisser vers le bas
  * referme la feuille ([onSheetDismiss]), pas le compositeur.
+ *
+ * Pendant la frappe ([typing], #13835), aucune surimpression : la scène se réduit, entière, au-dessus d'une barre de style
+ * collée au clavier, qui suit le clavier image par image sans relayout ; ses choix prennent la place du clavier.
  */
 @Composable
 internal fun StorySceneFirstLayout(
@@ -84,17 +90,22 @@ internal fun StorySceneFirstLayout(
     sheet: StoryComposerSheet? = null,
     onSheetDismiss: () -> Unit = {},
     sheetContent: @Composable (StoryComposerSheet) -> Unit = {},
+    typing: StoryTypingSlot? = null,
 ) {
     val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
+    val windowKeyboard = rememberWindowTypingKeyboard()
+    val measures = remember {
+        TypingMeasures(mutableFloatStateOf(0f), mutableFloatStateOf(ComposerKeyboardOrOptions.BAR_HEIGHT))
+    }
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(tint.color)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .imePadding()
-            .nestedScroll(pull.connection),
+            .then(if (typing == null) Modifier.imePadding().nestedScroll(pull.connection) else Modifier),
     ) {
+        val windowHeight = maxHeight.value
         val sheetHeights = remember { mutableStateMapOf<StoryComposerSheet, Int>() }
         var frameBottom by remember { mutableFloatStateOf(0f) }
         var frameHeight by remember { mutableFloatStateOf(0f) }
@@ -121,33 +132,52 @@ internal fun StorySceneFirstLayout(
                     frameBottom = it.positionInRoot().y + frameHeight
                 },
         ) {
+            val keyboard = typing?.keyboard ?: windowKeyboard
             scene(
-                Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = offsetY
+                if (typing != null) {
+                    Modifier.typingScene(typing, keyboard, measures, { frameWidth to frameHeight }, windowHeight)
+                } else {
+                    Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = offsetY
+                    }
                 },
             )
-            if (sheet != null) {
+            if (typing != null) {
+                TypingKeyboardWatcher(typing, keyboard, measures)
+            } else if (sheet != null) {
                 SheetDismissCatcher(onSheetDismiss)
             } else {
                 SceneOverlays(pull, top, strip, trailing, panel = panel, onPanelTop = { panelTop = it }, socle = socle)
             }
         }
-        AnimatedContent(
-            targetState = sheet,
-            transitionSpec = {
-                slideInVertically { it } togetherWith slideOutVertically { it } using SizeTransform(clip = false)
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .heightIn(max = maxHeight * SHEET_MAX_FRACTION),
-            label = "composerSheet",
-        ) { open ->
-            if (open != null) {
-                Box(Modifier.fillMaxWidth().onSizeChanged { sheetHeights[open] = it.height }) { sheetContent(open) }
-            }
+        typing?.let { TypingDock(it, it.keyboard ?: windowKeyboard, measures, windowHeight) }
+        AnchoredSheetHost(sheet.takeIf { typing == null }, maxHeight * SHEET_MAX_FRACTION, sheetHeights, sheetContent)
+    }
+}
+
+/** La feuille ouverte, ancrée en bas sur toute la largeur et sans voile : sa hauteur mesurée réduit la scène au-dessus d'elle. */
+@Composable
+private fun BoxScope.AnchoredSheetHost(
+    sheet: StoryComposerSheet?,
+    maxHeight: Dp,
+    heights: MutableMap<StoryComposerSheet, Int>,
+    content: @Composable (StoryComposerSheet) -> Unit,
+) {
+    AnimatedContent(
+        targetState = sheet,
+        transitionSpec = {
+            slideInVertically { it } togetherWith slideOutVertically { it } using SizeTransform(clip = false)
+        },
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .heightIn(max = maxHeight),
+        label = "composerSheet",
+    ) { open ->
+        if (open != null) {
+            Box(Modifier.fillMaxWidth().onSizeChanged { heights[open] = it.height }) { content(open) }
         }
     }
 }

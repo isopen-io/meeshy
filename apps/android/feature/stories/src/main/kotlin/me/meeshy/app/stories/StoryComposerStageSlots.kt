@@ -1,10 +1,5 @@
 package me.meeshy.app.stories
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,9 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.runtime.mutableStateOf
@@ -37,11 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
-import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
-import me.meeshy.ui.component.composer.rememberHostedTextField
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -124,7 +113,8 @@ internal fun StoryComposerScene(
 /**
  * Le panneau du geste en cours, monté au bas de la scène (#13834) — un seul à la fois, résolu par [scenePanel] : les
  * réglages du pinceau, les sections de l'objet touché, l'outil ouvert, ce que le « ⋯ » a ouvert, ou le cadre et les effets
- * du fond. Au repos, rien : ni légende, ni compteur, ni trace du son, ni rangée des médias.
+ * du fond. Au repos, rien : ni légende, ni compteur, ni trace du son, ni rangée des médias. Le texte qu'on écrit et la
+ * légende ne passent pas par ici : c'est l'état de frappe, sa barre collée au clavier (#13835).
  */
 @Composable
 internal fun StoryComposerBottomPanel(
@@ -151,7 +141,6 @@ internal fun StoryComposerBottomPanel(
                 onDone = viewModel::onExitDrawingMode,
                 control = state.openDrawingControl,
             )
-            StoryScenePanel.TEXT -> state.selectedTextElement?.let { TextPanel(state, it, viewModel) }
             StoryScenePanel.STICKER -> state.selectedSticker?.let { sticker ->
                 InspectorRow(state, viewModel)
                 StickerSectionContent(state, sticker, viewModel)
@@ -162,9 +151,8 @@ internal fun StoryComposerBottomPanel(
             }
             StoryScenePanel.SOUND -> state.selectedSound?.let { SoundSectionContent(state, it, viewModel) }
             StoryScenePanel.DURATION -> DurationPanel(state, viewModel, onCloseLocal)
-            StoryScenePanel.CAPTION -> CaptionPanel(state, viewModel, onCloseLocal)
             StoryScenePanel.SCENE_EFFECTS -> SceneEffectsDock(state, viewModel)
-            StoryScenePanel.TOOL -> Unit
+            StoryScenePanel.TOOL, StoryScenePanel.TEXT, StoryScenePanel.CAPTION -> Unit
         }
     }
 }
@@ -192,65 +180,11 @@ private fun ColumnScope.InspectorRow(state: StoryComposerUiState, viewModel: Sto
     }
 }
 
-/** Les sections du texte en cours d'écriture : une section chasse l'autre en fondu, sans saut de hauteur. */
-@Composable
-private fun ColumnScope.TextPanel(state: StoryComposerUiState, editedText: StoryTextElement, viewModel: StoryComposerViewModel) {
-    InspectorRow(state, viewModel)
-    AnimatedContent(
-        targetState = state.openTextSection,
-        transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
-        label = "text-section",
-    ) { open ->
-        if (open == ComposerObjectEditorSection.Plan) {
-            Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-                StoryPlanFrise(state, viewModel)
-            }
-        } else {
-            TextSectionToolbar(editedText, open, viewModel, true)
-        }
-    }
-}
-
 /** La durée de la diapo, ouverte depuis « ⋯ » : un réglage court, refermé par OK. */
 @Composable
 private fun DurationPanel(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     DurationRow(seconds = state.selectedSlideDurationSeconds, onSecondsChange = viewModel::onSlideDurationChange)
     PanelDone(onDone)
-}
-
-/**
- * La légende de la diapo, ouverte depuis « ⋯ » : le champ et OK, aucun compteur ni plafond (#13838). À la limite, et
- * seulement là, un mot bref lu poliment par TalkBack, et une vibration au geste qui l'atteint. Un texte posé sur la scène
- * s'écrit sur la scène même (ComposerInlineTextField).
- */
-@Composable
-private fun CaptionPanel(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
-    val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
-    val used = state.editorText.length
-    val notice = ComposerLimitNotice.visibleAt(used, StoryComposerDraft.MAX_CHARS)
-    LimitReachedHaptic(used, StoryComposerDraft.MAX_CHARS)
-    OutlinedTextField(
-        value = caption.value,
-        onValueChange = caption.onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.stories_composer_text_caption)) },
-        placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
-        isError = notice == ComposerLimitNotice.Kind.EXCEEDED,
-        supportingText = notice?.let { kind ->
-            {
-                Text(
-                    text = stringResource(kind.captionRes()),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-        },
-    )
-    PanelDone(onDone)
-}
-
-private fun ComposerLimitNotice.Kind.captionRes(): Int = when (this) {
-    ComposerLimitNotice.Kind.REACHED -> R.string.composer_caption_limit_reached
-    ComposerLimitNotice.Kind.EXCEEDED -> R.string.composer_caption_too_long
 }
 
 /** La vibration d'une limite : une seule, au geste qui l'atteint ([ComposerLimitNotice.crossed]), jamais en deçà ni au-delà. */
@@ -356,7 +290,6 @@ internal fun StoryComposerPanel(
         }
 }
 
-private val PLAN_MAX_HEIGHT = 220.dp
 private val PANEL_MAX_HEIGHT = 320.dp
 
 /**

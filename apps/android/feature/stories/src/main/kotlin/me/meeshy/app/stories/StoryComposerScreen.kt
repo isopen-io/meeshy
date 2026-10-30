@@ -111,6 +111,7 @@ fun StoryComposerScreen(
         onClosePanel = when (state.scenePanel(morePanel)) {
             StoryScenePanel.TOOL -> viewModel::onBandDismiss
             StoryScenePanel.DURATION, StoryScenePanel.CAPTION -> ({ morePanel = null })
+            StoryScenePanel.TEXT -> viewModel::onDeselectTextElement
             else -> null
         },
         onCloseSheet = if (sheet != null) ({ sheet = null }) else null,
