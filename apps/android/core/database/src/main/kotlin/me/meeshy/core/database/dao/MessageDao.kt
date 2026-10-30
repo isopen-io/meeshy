@@ -27,27 +27,17 @@ public interface MessageDao {
     /**
      * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
      * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
-     * comprises) et les avis de désactivation qui les annulent. Le filtre de texte ne court que sur la fenêtre, jamais sur
-     * tout l'historique : la sous-requête ne trie que des identifiants. Un pré-filtre : la loi se lit sur la charge décodée
-     * (`EndToEndRegimeMemory.cachedThreadSeals`).
+     * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
+     * des identifiants, par l'index `(conversationId, createdAt)`. Un pré-filtre : la loi se lit sur la charge décodée
+     * (`EndToEndRegimeMemory.cachedThreadSeals`). Les avis de désactivation n'y sont pas lus : comme iOS et le web, aucun
+     * avis ne rouvre (#12949, #13821), et un serveur compromis ne peut pas rouvrir le clair par un avis.
      */
     @Query(
         "SELECT * FROM messages WHERE id IN (" +
             "SELECT id FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC LIMIT :window) " +
-            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%' " +
-            "OR payload LIKE '%encryption-disabled%')",
+            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
     )
     public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
-
-    /**
-     * #13792 — les avis de désactivation du chiffrement rangés pour la conversation, quel que soit leur âge (pré-filtre :
-     * la loi décode la charge). Lu à l'ingestion seulement, quand des messages servis enseigneraient le bout en bout.
-     */
-    @Query(
-        "SELECT * FROM messages WHERE conversationId = :conversationId " +
-            "AND messageType = 'system' AND payload LIKE '%encryption-disabled%'",
-    )
-    public suspend fun encryptionDisabledNotices(conversationId: String): List<MessageEntity>
 
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>

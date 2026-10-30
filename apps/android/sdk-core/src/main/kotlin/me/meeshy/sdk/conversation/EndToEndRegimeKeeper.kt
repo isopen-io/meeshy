@@ -63,28 +63,18 @@ class EndToEndRegimeKeeper @Inject constructor(
      * ([EndToEndRegimeMemory.teachesEndToEnd]). Les envois hors du fil (réponse d'une bannière, partage, humeur, refus
      * d'appel) lisent ce registre : un mode en cache périmé et une bascule manquée n'y rouvrent plus le clair.
      *
-     * Une trace suivie d'un avis de désactivation (données d'avant #12949) n'apprend rien : la dernière désactivation que le
-     * cache connaît est relue, mais seulement quand ces messages enseigneraient quelque chose.
+     * #13821 — comme iOS et le web, aucun avis ne rouvre (#12949) : un avis `encryption-disabled`, servi ou déjà en cache,
+     * n'empêche aucune trace d'apprendre, et un serveur compromis ne peut pas rouvrir le clair par un avis.
      */
     suspend fun learnFromServed(messages: Collection<ApiMessage>, filedUnder: String? = null) {
         messages.groupBy { filedUnder ?: it.conversationId }.forEach { (conversationId, served) ->
             if (conversationId.isBlank() || ledger.isSealed(conversationId)) return@forEach
-            if (!EndToEndRegimeMemory.teachesEndToEnd(served) { true }) return@forEach
-            val reopenedAt = cachedReopeningAt(conversationId)
             // La ligne en cache n'est relue que si seul un tête-à-tête apprendrait de ces messages.
-            val teaches = EndToEndRegimeMemory.teachesEndToEnd(served, reopenedAt) { false } ||
-                (EndToEndRegimeMemory.teachesEndToEnd(served, reopenedAt) { true } && isCachedDirect(conversationId))
+            val teaches = EndToEndRegimeMemory.teachesEndToEnd(served) { false } ||
+                (EndToEndRegimeMemory.teachesEndToEnd(served) { true } && isCachedDirect(conversationId))
             if (teaches) learn(conversationId)
         }
     }
-
-    /** Le dernier avis de désactivation rangé pour cette conversation, quel que soit son âge (un historique se pagine à rebours). */
-    private suspend fun cachedReopeningAt(conversationId: String): Long? =
-        EndToEndRegimeMemory.lastReopeningAt(
-            database.messageDao().encryptionDisabledNotices(conversationId).mapNotNull { row ->
-                runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
-            },
-        )
 
     /** La forme de la conversation, lue de sa ligne en cache : inconnue, elle n'est pas un tête-à-tête (le fil en cache retient alors l'envoi). */
     private suspend fun isCachedDirect(conversationId: String): Boolean =

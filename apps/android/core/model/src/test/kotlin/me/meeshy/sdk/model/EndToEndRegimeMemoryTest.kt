@@ -9,7 +9,8 @@ import org.junit.Test
  * #12956 — une conversation vue chiffrée de bout en bout reste fermée au clair : toute
  * rétrogradation servie est ignorée (#12949). Les trois classes d'iOS (#13099) : l'avis
  * d'activation s'apprend partout, un message e2ee dans un tête-à-tête ; un chiffré sans mode,
- * d'un mode inconnu, ou un e2ee de groupe retient l'envoi en cours sans s'apprendre.
+ * d'un mode inconnu, ou un e2ee de groupe retient l'envoi en cours sans s'apprendre. Comme iOS
+ * et le web, aucun avis de désactivation ne neutralise une trace (#13821).
  */
 class EndToEndRegimeMemoryTest {
 
@@ -142,19 +143,6 @@ class EndToEndRegimeMemoryTest {
     )
 
     @Test
-    fun `#13792 une trace e2ee suivie d un avis de desactivation n apprend ni ne scelle`() {
-        val legacy = listOf(
-            at(activation, T1),
-            at(message(isEncrypted = true, mode = "e2ee"), T2),
-            at(message(isEncrypted = true), T2),
-            message().copy(attachments = listOf(ApiMessageAttachment(id = "a1", encryptionMode = "e2ee")), createdAt = T2),
-            deactivation(T3),
-        )
-        assertThat(EndToEndRegimeMemory.teachesEndToEnd(legacy) { true }).isFalse()
-        assertThat(EndToEndRegimeMemory.cachedThreadSeals(legacy)).isFalse()
-    }
-
-    @Test
     fun `#13792 une trace posterieure a la derniere desactivation apprend et scelle`() {
         assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(deactivation(T1), at(activation, T2))) { false }).isTrue()
         assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(deactivation(T1), at(message(isEncrypted = true, mode = "e2ee"), T2))) { true }).isTrue()
@@ -163,15 +151,7 @@ class EndToEndRegimeMemoryTest {
     }
 
     @Test
-    fun `#13792 la desactivation deja en cache, hors du lot servi, borne aussi l apprentissage`() {
-        val olderPage = listOf(at(activation, T1), at(message(isEncrypted = true, mode = "e2ee"), T2))
-        assertThat(EndToEndRegimeMemory.teachesEndToEnd(olderPage, reopenedAt = epoch(T3)) { true }).isFalse()
-        assertThat(EndToEndRegimeMemory.teachesEndToEnd(olderPage, reopenedAt = epoch(T1)) { true }).isTrue()
-        assertThat(EndToEndRegimeMemory.lastReopeningAt(listOf(deactivation(T1), deactivation(T3), at(activation, T2)))).isEqualTo(epoch(T3))
-    }
-
-    @Test
-    fun `#13792 une trace sans instant lisible compte toujours, un avis sans instant ne rouvre rien`() {
+    fun `#13792 une trace sans instant lisible compte toujours, un avis sans instant ne rouvre rien non plus`() {
         assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(message(isEncrypted = true, mode = "e2ee"), null), deactivation(T3)))).isTrue()
         assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(activation, T1), deactivation(null)))).isTrue()
     }
@@ -186,11 +166,37 @@ class EndToEndRegimeMemoryTest {
         assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(activation, T1), impostor))).isTrue()
     }
 
+    private fun deactivationOf(iso: String, previousMode: String?) = message(type = "system").copy(
+        createdAt = iso,
+        metadata = buildJsonObject {
+            put("kind", JsonPrimitive("encryption-disabled"))
+            previousMode?.let { put("previousMode", JsonPrimitive(it)) }
+        },
+    )
+
+    @Test
+    fun `#13821 aucun avis de desactivation ne neutralise une trace, quels que soient son mode precedent et sa date`() {
+        val dates = listOf("2026-10-25T12:30:23.999Z", T3, IRREVERSIBLE_SINCE, "2026-10-30T10:00:00.000Z")
+        val previousModes = listOf("e2ee", "E2EE ", "server", "hybrid", "", null)
+        dates.forEach { notice ->
+            previousModes.forEach { previousMode ->
+                val traces = listOf(at(activation, T1), at(message(isEncrypted = true, mode = "e2ee"), T2))
+                val thread = traces + deactivationOf(notice, previousMode)
+                assertThat(EndToEndRegimeMemory.teachesEndToEnd(thread) { true }).isTrue()
+                assertThat(EndToEndRegimeMemory.teachesEndToEnd(thread) { false }).isTrue()
+                assertThat(EndToEndRegimeMemory.cachedThreadSeals(thread)).isTrue()
+                val ambiguous = listOf(at(message(isEncrypted = true), T2), deactivationOf(notice, previousMode))
+                assertThat(EndToEndRegimeMemory.cachedThreadSeals(ambiguous)).isTrue()
+            }
+        }
+    }
+
     private companion object {
         const val T1 = "2026-01-01T10:00:00.000Z"
         const val T2 = "2026-01-02T10:00:00.000Z"
         const val T3 = "2026-01-03T10:00:00.000Z"
 
-        fun epoch(iso: String): Long = java.time.Instant.parse(iso).toEpochMilli()
+        /** Le commit qui a fermé `DELETE /encryption` sur e2ee (a0520388fb, 2026-10-25T13:30:24+01:00, #12949). */
+        const val IRREVERSIBLE_SINCE = "2026-10-25T12:30:24.000Z"
     }
 }

@@ -268,41 +268,36 @@ class ServedMessageEndToEndRegimeTest {
     }
 
     @Test
-    fun `heritage d avant #12949 - une page d historique e2ee anterieure a la desactivation deja en cache ne scelle rien`() = runHarnessTest { harness ->
+    fun `#13821 un avis de desactivation deja en cache ne rouvre rien - la page d historique e2ee anterieure scelle quand meme`() = runHarnessTest { harness ->
         val ledger = InMemoryEndToEndRegimeLedger(Account())
         harness.cacheConversation(DIRECT, type = "direct")
         harness.pipeline(ledger).ingest(listOf(deactivation(), at(clear(id = "m-after"), T4)), harness.clock.now)
 
-        harness.pipeline(ledger).ingest(listOf(activation(), at(sealed(), T2), at(clear(id = "m-amb", mode = "").copy(isEncrypted = true), T2)), harness.clock.now)
+        harness.pipeline(ledger).ingest(listOf(activation(), at(sealed(), T2)), harness.clock.now)
 
-        assertThat(ledger.isSealed(DIRECT)).isFalse()
-        assertThat(harness.cachedConversation(DIRECT).encryptionMode).isEqualTo("server")
-        assertThat(harness.admission(ledger).verdictFor(DIRECT)).isEqualTo(OutboxAdmissionVerdict.ADMIT)
+        assertThat(ledger.isSealed(DIRECT)).isTrue()
+        assertThat(harness.cachedConversation(DIRECT).encryptionMode).isEqualTo("e2ee")
+        assertThat(harness.admission(ledger).verdictFor(DIRECT)).isEqualTo(OutboxAdmissionVerdict.WITHHOLD)
     }
 
     @Test
-    fun `heritage d avant #12949 - une trace e2ee posterieure a la derniere desactivation scelle toujours`() = runHarnessTest { harness ->
+    fun `#13821 un avis de desactivation servi apres l activation ne rouvre rien`() = runHarnessTest { harness ->
         val ledger = InMemoryEndToEndRegimeLedger(Account())
         harness.cacheConversation(DIRECT, type = "direct")
-        harness.pipeline(ledger).ingest(listOf(activation(iso = T1), deactivation(iso = T2)), harness.clock.now)
-        assertThat(ledger.isSealed(DIRECT)).isFalse()
 
-        harness.pipeline(ledger).ingest(listOf(activation(id = "n-on-2", iso = T3), at(sealed(), T4)), harness.clock.now)
+        harness.pipeline(ledger).ingest(listOf(activation(iso = T1), deactivation(iso = T2)), harness.clock.now)
 
         assertThat(ledger.isSealed(DIRECT)).isTrue()
         assertThat(harness.admission(ledger).verdictFor(DIRECT)).isEqualTo(OutboxAdmissionVerdict.WITHHOLD)
     }
 
     @Test
-    fun `heritage d avant #12949 - un chiffre ambigu de groupe ne retient que s il suit la derniere desactivation`() = runHarnessTest { harness ->
+    fun `#13821 un chiffre ambigu de groupe suivi d un avis de desactivation retient toujours le clair`() = runHarnessTest { harness ->
         val ledger = InMemoryEndToEndRegimeLedger(Account())
         harness.cacheConversation(GROUP, type = "group")
-        val ambiguous = at(clear(id = "m-amb", conversationId = GROUP, mode = "").copy(isEncrypted = true), T2)
-        harness.seedSynced(ambiguous)
+        harness.seedSynced(at(clear(id = "m-amb", conversationId = GROUP, mode = "").copy(isEncrypted = true), T2))
         harness.seedSynced(deactivation(conversationId = GROUP, iso = T3))
-        assertThat(harness.admission(ledger).verdictFor(GROUP)).isEqualTo(OutboxAdmissionVerdict.ADMIT)
 
-        harness.seedSynced(ambiguous.copy(id = "m-amb-2", createdAt = T4))
         assertThat(harness.admission(ledger).verdictFor(GROUP)).isEqualTo(OutboxAdmissionVerdict.WITHHOLD)
     }
 
