@@ -116,4 +116,35 @@ class StoryMediaCropTest {
     fun `un media v1 sans recadrage n en porte aucun`() {
         assertThat(json.decodeFromString<StoryMediaObject>("""{"id":"m1"}""").crop).isNull()
     }
+
+    // MARK: - Le RENDU sans cuisson (#13849)
+
+    /**
+     * Un média recadré se peint ENTIER dans un calque plus grand que son cadre, décalé puis rogné par le cadre : aucune
+     * image n'est réécrite. Le cadre [frame] est celui du ratio effectif ; la source pleine le déborde de 1/largeur et
+     * 1/hauteur, et son origine recule de x et y de la source.
+     */
+    @Test
+    fun `a cropped media lays its whole source behind its frame, offset by the crop origin`() {
+        val layout = StoryMediaCrop(x = 0.25, y = 0.5, width = 0.5, height = 0.25).layoutIn(frameWidth = 100.0, frameHeight = 40.0)
+
+        assertThat(layout).isEqualTo(StoryMediaCrop.Layout(sourceWidth = 200.0, sourceHeight = 160.0, offsetX = -50.0, offsetY = -80.0))
+    }
+
+    @Test
+    fun `no crop lays the source exactly on its frame`() {
+        assertThat(StoryMediaCrop.FULL.layoutIn(frameWidth = 30.0, frameHeight = 60.0))
+            .isEqualTo(StoryMediaCrop.Layout(sourceWidth = 30.0, sourceHeight = 60.0, offsetX = 0.0, offsetY = 0.0))
+    }
+
+    /** Les équerres rendent un recadrage normalisé (ou `null`, la source entière) ; il s'écrit borné, jamais plein. */
+    @Test
+    fun `the brackets crop becomes the persisted crop, bounded, and a full frame persists none`() {
+        assertThat(StoryMediaCrop.ofNormalized(me.meeshy.sdk.model.imageedit.NormalizedCrop(0.1f, 0.2f, 0.5f, 0.5f)))
+            .isEqualTo(StoryMediaCrop(x = 0.1f.toDouble(), y = 0.2f.toDouble(), width = 0.5, height = 0.5))
+        assertThat(StoryMediaCrop.ofNormalized(null)).isNull()
+        assertThat(StoryMediaCrop.ofNormalized(me.meeshy.sdk.model.imageedit.NormalizedCrop(0f, 0f, 1f, 1f))).isNull()
+        assertThat(StoryMediaCrop(x = 0.1, y = 0.2, width = 0.5, height = 0.5).normalized)
+            .isEqualTo(me.meeshy.sdk.model.imageedit.NormalizedCrop(0.1f, 0.2f, 0.5f, 0.5f))
+    }
 }

@@ -69,6 +69,8 @@ dependencies {
     implementation(libs.mlkit.language.id)
     implementation(libs.mlkit.segmentation.selfie)
     implementation(libs.mlkit.face.detection)
+    // « Détourer le sujet d'une photo » en sticker (#13847) : module Play Services téléchargé à la demande.
+    implementation(libs.mlkit.subject.segmentation)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 

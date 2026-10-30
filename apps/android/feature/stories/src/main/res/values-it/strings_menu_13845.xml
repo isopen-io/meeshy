@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Anteprima</string>
+    <string name="composer_more_pick_background">Scegli uno sfondo</string>
+    <string name="composer_more_remove_background">Rimuovi lo sfondo della scena</string>
+    <string name="composer_more_clear_all">Cancella tutto</string>
+    <string name="composer_clear_all_title">Cancellare tutto?</string>
+    <string name="composer_clear_all_message">Tutte le diapositive ripartono vuote, sullo sfondo neutro. Annulla ripristina le diapositive.</string>
+    <string name="composer_clear_all_cancel">Annulla</string>
+    <string name="composer_media_from_library">Fototeca</string>
+    <string name="composer_media_from_files">Dai file</string>
+    <string name="composer_media_sources">Scegli una fonte</string>
+    <string name="composer_preview_close">Chiudi l’anteprima</string>
+    <string name="composer_preview_previous">Diapositiva precedente</string>
+    <string name="composer_preview_next">Diapositiva successiva</string>
+</resources>

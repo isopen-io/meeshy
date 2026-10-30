@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.location.GeoPoint
 import me.meeshy.sdk.model.location.GeocodedAddress
 import me.meeshy.sdk.model.location.LocationSearchResult
 import me.meeshy.sdk.model.location.PlaceAddress
+import me.meeshy.sdk.model.composer.NearbyAddress
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
@@ -26,6 +27,9 @@ interface PlaceGeocoder {
     suspend fun reverse(point: GeoPoint): GeocodedAddress?
 
     suspend fun search(query: String, near: GeoPoint?, limit: Int): List<LocationSearchResult>
+
+    /** Les adresses que l'appareil connaît autour de [point], la plus proche d'abord (#13846) ; aucune par défaut. */
+    suspend fun around(point: GeoPoint, limit: Int): List<NearbyAddress> = emptyList()
 }
 
 /**
@@ -45,6 +49,12 @@ class AndroidPlaceGeocoder @Inject constructor(
         fromName(query, near, limit).mapNotNull { address ->
             if (!address.hasLatitude() || !address.hasLongitude()) return@mapNotNull null
             PlaceAddress.searchResult(GeoPoint(address.latitude, address.longitude), address.toParts())
+        }
+
+    override suspend fun around(point: GeoPoint, limit: Int): List<NearbyAddress> =
+        fromLocation(point, limit).mapNotNull { address ->
+            if (!address.hasLatitude() || !address.hasLongitude()) return@mapNotNull null
+            NearbyAddress(GeoPoint(address.latitude, address.longitude), address.toParts())
         }
 
     private fun geocoder(): Geocoder? = if (Geocoder.isPresent()) Geocoder(context) else null

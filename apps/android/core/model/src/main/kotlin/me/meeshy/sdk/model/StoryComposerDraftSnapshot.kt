@@ -76,6 +76,8 @@ data class StoryDraftTextElementSnapshot(
     val y: Float = CANVAS_CENTER,
     val scale: Float = UNIT_SCALE,
     val rotationDeg: Float = 0f,
+    /** La personne que nomme un badge de mention épinglée (#13846) ; un blob d'avant se lit « un texte ». */
+    val referenceUserId: String? = null,
 ) {
     /** True once the element carries publishable content — non-blank [text]. */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -113,9 +115,16 @@ data class StoryDraftStickerElementSnapshot(
     val rotationDeg: Float = 0f,
     val startSeconds: Float = 0f,
     val durationSeconds: Float = 0f,
+    /** #13847 — additifs : un brouillon d'avant les relit vides (un emoji). */
+    val templateId: String = "",
+    val slots: Map<String, String> = emptyMap(),
+    val postMediaId: String = "",
+    val provider: String? = null,
+    val imageUrl: String? = null,
+    val animation: String? = null,
 ) {
-    /** True once the sticker carries publishable content — a non-blank [emoji]. */
-    val isPublishable: Boolean get() = emoji.isNotBlank()
+    /** True once the sticker carries publishable content — an emoji, a template or an uploaded image. */
+    val isPublishable: Boolean get() = emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank()
 }
 
 /** Un média de la slide posé sur la scène : son id et sa pose normalisée (centre 0,5 ; échelle 1 ; droit). */
@@ -133,6 +142,8 @@ data class StoryDraftPlacedMediaSnapshot(
     /** La fenêtre de source d'une vidéo rognée (#13600), en secondes, les deux bornes ou aucune ; un blob d'avant se lit « source entière ». */
     val sourceStart: Double? = null,
     val sourceEnd: Double? = null,
+    /** Le recadrage d'une image posée (#13849), en fractions de la source ; un blob d'avant se lit « source entière ». */
+    val crop: StoryMediaCrop? = null,
 )
 
 /**
@@ -184,6 +195,12 @@ data class StoryDraftSlideSnapshot(
     val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
     /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
     val backgroundAdjustments: ImageAdjustments? = null,
+    /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
+    val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */
+    val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos s'atténuent sous le son de fond ; un blob d'avant se lit « oui ». */
+    val videosDuckUnderSound: Boolean = true,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -199,7 +216,7 @@ data class StoryDraftSlideSnapshot(
      */
     val hasContent: Boolean
         get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty()
+            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty()
 }
 
 /**

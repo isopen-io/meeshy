@@ -1,15 +1,18 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.MobileTranscriptionPayload
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.scene.SceneFrame
+import me.meeshy.sdk.model.composer.sound.SoundTranscriptions
 import me.meeshy.sdk.model.scene.CanvasMediaAdoption
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.wireValue
@@ -54,6 +57,12 @@ data class StoryComposerDraft(
     /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     val frame: SceneFrame = SceneFrame(),
+    /** Les pastilles de lieu de la slide (#13846) : elles partent en `storyEffects.locationObjects`. */
+    val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (identifiant -> charge du fil), faite sur l'appareil ou écrite par l'auteur. */
+    val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos de la slide s'atténuent sous le son de fond ; `false` les laisse à leur niveau. */
+    val videosDuckUnderSound: Boolean = true,
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -97,7 +106,7 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty()) &&
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty() || places.isNotEmpty()) &&
             isWithinLimit && isWithinMediaLimit &&
             ComposerAudienceSelection.isPublishable(visibility, visibilityUserIds)
 
@@ -142,12 +151,14 @@ data class StoryComposerDraft(
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest {
         val effects = storyEffects(originalLanguage)
         val publishedMediaIds = CanvasMediaAdoption.publicationMediaIds(mediaIds, effects)
+        val content = trimmedText.takeIf { it.isNotEmpty() }
+        val transcription = SoundTranscriptions.published(audio, soundTranscriptions)
         return CreateStoryRequest(
             type = STORY_TYPE,
-            content = trimmedText.takeIf { it.isNotEmpty() },
+            content = content,
             storyEffects = effects,
             visibility = visibility.wire,
-            originalLanguage = originalLanguage,
+            originalLanguage = if (content == null) transcription?.language ?: originalLanguage else originalLanguage,
             mediaIds = publishedMediaIds.takeIf { it.isNotEmpty() },
             repostOfId = repostOfId?.takeIf { it.isNotBlank() },
             visibilityUserIds = ComposerAudienceSelection.wireUserIds(visibility, visibilityUserIds),
@@ -155,6 +166,7 @@ data class StoryComposerDraft(
             mediaAlt = MediaDescriptionLaw.wire(mediaAlt, publishedMediaIds),
             mediaCaption = MediaDescriptionLaw.wire(mediaCaption, publishedMediaIds),
             allowSoundExtraction = allowSoundExtraction,
+            mobileTranscription = transcription,
         )
     }
 
@@ -162,9 +174,10 @@ data class StoryComposerDraft(
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
         val stickerObjects = publishableStickers.map { it.toSticker() }
         val mediaObjects = StoryPublishPlacedMedia.withinCaps(backgroundMedia?.toMediaObject(), placedMedia)
+            .map { if (!videosDuckUnderSound && it.mediaType == VIDEO_TYPE) it.copy(isDuckingDisabled = true) else it }
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
-            audio.isEmpty() && frame.isNeutral
+            audio.isEmpty() && frame.isNeutral && places.isEmpty()
         if (hasNothing) return null
         return StoryEffects(
             background = background?.serialized(),
@@ -176,6 +189,7 @@ data class StoryComposerDraft(
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,
             audioPlayerObjects = audio.takeIf { it.isNotEmpty() },
+            locationObjects = places,
             backgroundTransform = frame.backgroundTransform(),
             opening = frame.opening,
             closing = frame.closing,
@@ -188,5 +202,6 @@ data class StoryComposerDraft(
         /** Maximum media attachments per story — 50, la décision porteur 2026-10-28 (#13590). */
         const val MAX_MEDIA: Int = me.meeshy.sdk.model.composer.SceneObjectCaps.MEDIA
         private const val STORY_TYPE = "STORY"
+        private const val VIDEO_TYPE = "video"
     }
 }

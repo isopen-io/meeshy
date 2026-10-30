@@ -39,6 +39,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.composer.capture.SceneHoldRelay
+import me.meeshy.sdk.model.composer.capture.SceneHoldSignal
 import me.meeshy.sdk.model.composer.capture.CameraResult
 import me.meeshy.sdk.model.composer.capture.CaptureAction
 import me.meeshy.sdk.model.composer.capture.CaptureEffect
@@ -72,6 +74,8 @@ import me.meeshy.ui.icons.MeeshyIcons
  * Plein écran : la croix (x) en haut à gauche et le glissé vers le bas ferment ; la caméra est RENDUE quand l'écran
  * s'en va. [onDeliver] reçoit la photo (octets d'origine, EXIF compris) ou la vidéo (segments déjà concaténés, sans
  * ré-encodage). Un accès caméra refusé monte le panneau qui explique et ouvre les Réglages, la croix restant.
+ * [hold] : ouvert en TENANT la scène vide (#13849), le doigt qui tient encore filme dès que la caméra est liée — relâché,
+ * la prise se clôt ; glissé jusqu'au cadenas, elle continue sans lui (iOS `beginHold` / `endHold`).
  */
 @Composable
 public fun CaptureViewfinder(
@@ -80,6 +84,7 @@ public fun CaptureViewfinder(
     modifier: Modifier = Modifier,
     allowsPhoto: Boolean = true,
     allowsVideo: Boolean = true,
+    hold: SceneHoldRelay? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -101,6 +106,7 @@ public fun CaptureViewfinder(
     var microphoneNotice by remember { mutableStateOf(CaptureMicrophoneNoticeLaw.State()) }
     var microphoneDenied by remember { mutableStateOf(false) }
     val pendingFilm = remember { arrayOfNulls<String>(1) }
+    val holdSink = remember { arrayOfNulls<(SceneHoldSignal) -> Unit>(1) }
 
     val dispatchHolder = remember { arrayOfNulls<(CaptureEvent) -> Unit>(1) }
     val dispatch: (CaptureEvent) -> Unit = { event -> dispatchHolder[0]?.invoke(event) }
@@ -111,6 +117,7 @@ public fun CaptureViewfinder(
                     lensMin = signal.lens.minZoom
                     lensMax = signal.lens.maxZoom
                     dispatch(CaptureEvent.FlipFinishedIfSwitching)
+                    hold?.attach { signal -> holdSink[0]?.invoke(signal) }
                 }
                 is CaptureEngineSignal.BindFailed -> unavailable = true
                 is CaptureEngineSignal.PhotoSaved -> {
@@ -176,6 +183,7 @@ public fun CaptureViewfinder(
         step.effects.forEach { run(it, step.state) }
     }
 
+    DisposableEffect(hold) { onDispose { hold?.detach() } }
     DisposableEffect(engine) {
         onDispose {
             engine.release()
@@ -224,6 +232,13 @@ public fun CaptureViewfinder(
     BackHandler { dispatch(CaptureEvent.CloseTapped(SystemClock.elapsedRealtime())) }
 
     val range = lensMin..maxOf(lensMin, minOf(lensMax, CaptureZoom.CEILING))
+    holdSink[0] = { signal ->
+        when (signal) {
+            SceneHoldSignal.Began -> { zoomStart = state.zoom; if (allowsVideo) dispatch(CaptureEvent.HoldBegan) }
+            is SceneHoldSignal.Moved -> holdMoved(state, signal.dxDp, signal.dyDp, zoomStart, range, dispatch, { lockProgress = it })
+            SceneHoldSignal.Released -> { dispatch(CaptureEvent.HoldReleased); lockProgress = 0f }
+        }
+    }
     val sceneGestures = CaptureGestureCallbacks(
         onGestureStart = { zoomStart = state.zoom; holdStartedAt = SystemClock.elapsedRealtime() },
         onTap = { at ->

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_make">Crear un sticker</string>
+    <string name="story_sticker_lift_saved">Sujeto recortado y añadido a Mis stickers</string>
+    <string name="story_sticker_lift_no_subject">No se encontró ningún sujeto en esta foto</string>
+    <string name="story_sticker_lift_unreadable">Imagen ilegible</string>
+    <string name="story_sticker_image_failed">No se pudo añadir este sticker</string>
+</resources>

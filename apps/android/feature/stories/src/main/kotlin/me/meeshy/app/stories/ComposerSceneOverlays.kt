@@ -39,7 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerSceneTool
+import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
@@ -59,7 +61,7 @@ private val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 
 /**
  * Un bouton rond posé sur la scène (#13834) : un disque translucide de 40 dp dans une cible de 48 dp, nommé pour TalkBack.
- * Il consomme ses propres touchers et rien d'autre : hors du disque, la scène garde ses gestes.
+ * Il consomme ses propres touchers et rien d'autre : hors du disque, la scène garde ses gestes. [press] : son appui long.
  */
 @Composable
 internal fun SceneRoundButton(
@@ -69,12 +71,13 @@ internal fun SceneRoundButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     active: Boolean = false,
+    press: ToolLongPress? = null,
 ) {
     Box(
         modifier = modifier
             .size(SCENE_TARGET)
             .clip(CircleShape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .toolPress(onClick, enabled, press)
             .semantics {
                 contentDescription = label
                 selected = active
@@ -113,8 +116,9 @@ internal fun SceneTopBar(
 }
 
 /**
- * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more]. Quand un
- * panneau monte et lui laisse moins de place, elle défile au lieu d'écraser ses cibles de 48 dp.
+ * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
+ * long de Média qui propose ses sources ([onMediaSource], #13845), la caméra de la scène en tête quand elle est servie ([cameraServed], #13849). Quand un panneau monte et lui laisse moins de place, elle
+ * défile au lieu d'écraser ses cibles de 48 dp.
  */
 @Composable
 internal fun SceneToolColumn(
@@ -122,6 +126,8 @@ internal fun SceneToolColumn(
     onTool: (ComposerSceneTool) -> Unit,
     more: @Composable () -> Unit,
     active: ComposerSceneTool? = null,
+    onMediaSource: (ComposerMediaSource) -> Unit = {},
+    cameraServed: Boolean = false,
 ) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -132,7 +138,9 @@ internal fun SceneToolColumn(
             if (tool == ComposerSceneTool.MORE) {
                 more()
             } else {
-                SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active)
+                MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
+                    SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
+                }
             }
         }
     }

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sound_sheet_title">Sonido de la historia</string>
+    <string name="story_sound_sheet_current">En esta diapositiva</string>
+    <string name="story_sound_sheet_role_background">De fondo</string>
+    <string name="story_sound_sheet_role_scene">En la escena</string>
+    <string name="story_sound_sheet_volume">Volumen</string>
+    <string name="story_sound_sheet_language">Idioma del sonido</string>
+    <string name="story_sound_sheet_language_more">Más</string>
+    <string name="story_sound_sheet_transcription">Transcripción</string>
+    <string name="story_sound_sheet_transcription_edit">Editar</string>
+    <string name="story_sound_sheet_transcription_write">Escribir</string>
+    <string name="story_sound_sheet_transcription_retry">Reintentar</string>
+    <string name="story_sound_sheet_transcription_running">Transcribiendo en tu dispositivo…</string>
+    <string name="story_sound_sheet_transcription_server">Tu dispositivo no transcribe este idioma: Meeshy lo hará al publicar.</string>
+    <string name="story_sound_sheet_transcription_failed">La transcripción ha fallado.</string>
+    <string name="story_sound_sheet_transcription_silent">No se oyó nada.</string>
+    <string name="story_sound_sheet_trim">Recortar</string>
+    <string name="story_sound_sheet_ducking">Atenuar los vídeos bajo el sonido de fondo</string>
+    <string name="story_sound_sheet_source_record">Grabar</string>
+    <string name="story_sound_sheet_source_files">Archivos</string>
+    <string name="story_sound_sheet_source_library">Biblioteca</string>
+    <string name="story_sound_sheet_recording">Grabando %1$s</string>
+    <string name="story_sound_sheet_stop">Detener</string>
+    <string name="story_sound_sheet_redo">Rehacer</string>
+    <string name="story_sound_sheet_add">Añadir</string>
+    <string name="story_sound_sheet_uploading">Añadiendo…</string>
+    <string name="story_sound_sheet_mic_denied">Permite el micrófono para grabar un sonido.</string>
+    <string name="story_sound_sheet_import_failed">Este archivo no se pudo leer como sonido.</string>
+    <string name="story_sound_sheet_upload_failed">No se pudo enviar el sonido. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="story_sound_sheet_back">Atrás</string>
+    <string name="story_sound_sheet_new_take">Nuevo sonido</string>
+</resources>

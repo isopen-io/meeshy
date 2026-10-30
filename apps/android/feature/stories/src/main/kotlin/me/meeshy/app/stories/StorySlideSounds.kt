@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.composer.sound.ApiSound
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import me.meeshy.sdk.model.composer.sound.SoundPlacement
+import me.meeshy.sdk.model.composer.sound.SoundTranscriptions
 
 /** Au moins une slide porte un son (fond ou premier plan). */
 val StorySlideDeck.hasSounds: Boolean get() = slides.any { it.audio.isNotEmpty() }
@@ -49,13 +50,21 @@ fun StorySlideDeck.updateSelectedSound(
     transform: (me.meeshy.sdk.model.StoryAudioPlayerObject) -> me.meeshy.sdk.model.StoryAudioPlayerObject,
 ): StorySlideDeck = withSelectedAudio(selectedSlide.audio.map { if (it.id == id) transform(it) else it })
 
-private fun StorySlideDeck.withSelectedAudio(audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>): StorySlideDeck {
+internal fun StorySlideDeck.withSelectedAudio(audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>): StorySlideDeck {
     if (selectedSlide.audio == audio) return this
     val index = selectedIndex
     val kept = audio.mapTo(mutableSetOf()) { it.id }
     return copy(
         slides = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(audio = audio, soundSources = slide.soundSources.filterKeys { it in kept }) else slide
+            if (i != index) {
+                slide
+            } else {
+                slide.copy(
+                    audio = audio,
+                    soundSources = slide.soundSources.filterKeys { it in kept },
+                    soundTranscriptions = SoundTranscriptions.pruned(slide.soundTranscriptions, audio),
+                )
+            }
         },
     )
 }

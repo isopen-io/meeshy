@@ -115,6 +115,8 @@ data class StoryComposerUiState(
     val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
     /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
     val isFrameOpen: Boolean = false,
+    /** La pastille de lieu touchée sur la scène (#13846). */
+    val selectedPlaceId: String? = null,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -124,11 +126,12 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
-            !isUploadingMedia
+            !isUploadingMedia &&
+            !deck.awaitsStickerImage
 
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?
@@ -167,19 +170,21 @@ data class StoryComposerUiState(
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
 
     /**
-     * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
-     * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
+     * Le média que le plateau peint en fond : celui que la publication désigne (envoyé ou encore en attente), sinon le
+     * premier média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas). C'est
+     * aussi celui que « Retirer le fond de la scène » retire : on retire ce que l'on voit.
      */
-    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
-        val designated = deck.selectedSlideBackgroundMediaId
-        val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
-        val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
-        return when {
-            uploaded != null -> ComposerMediaAddress.preview(uploaded, mediaBaseUrl)
-            pending != null -> pending.item.previewModel
-            else -> selectedSlideAttachments.firstOrNull()?.let { ComposerMediaAddress.preview(it, mediaBaseUrl) }
-                ?: selectedSlidePending.firstOrNull()?.item?.previewModel
+    val selectedSlideBackdropMediaId: String?
+        get() {
+            val designated = deck.selectedSlideBackgroundMediaId
+            val served = selectedSlideAttachments.any { it.id == designated } || selectedSlidePending.any { it.cmid == designated }
+            return designated?.takeIf { served } ?: selectedSlideAttachments.firstOrNull()?.id ?: selectedSlidePending.firstOrNull()?.cmid
         }
+
+    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
+        val id = selectedSlideBackdropMediaId ?: return null
+        selectedSlideAttachments.firstOrNull { it.id == id }?.let { return ComposerMediaAddress.preview(it, mediaBaseUrl) }
+        return selectedSlidePending.firstOrNull { it.cmid == id }?.item?.previewModel
     }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
@@ -341,6 +346,7 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         selectedStickerId = if (stickerStillSelected) stickerId else null,
         selectedMediaId = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds },
         selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
+        selectedPlaceId = selectedPlaceId?.takeIf { id -> deck.selectedSlide.places.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
     )
 }

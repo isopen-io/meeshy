@@ -643,6 +643,25 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.currentStoryId).isEqualTo("b1")
     }
 
+    /** #13849, iOS `composableSlide` : « Composer » n'existe que sur une story que le composeur saura reprendre. */
+    @Test
+    fun `Compose is offered on a story the composer can take back, never on one carrying an image sticker`() = runTest {
+        val vm = viewModel(
+            startUserId = "b",
+            posts = listOf(
+                storyPost("b1", "b", hoursAgo = 3),
+                storyPost("b2", "b", hoursAgo = 2, storyEffects = StoryEffects(stickerObjects = listOf(me.meeshy.sdk.model.StorySticker(id = "k", postMediaId = "img")))),
+            ),
+        )
+
+        assertThat(vm.state.value.canCompose).isTrue()
+
+        vm.advance()
+
+        assertThat(vm.state.value.currentStoryId).isEqualTo("b2")
+        assertThat(vm.state.value.canCompose).isFalse()
+    }
+
     @Test
     fun `isOwnStory is true only on the current user's own group`() = runTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)

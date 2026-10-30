@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_capture_hint_hold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_capture_hint_tap_or_hold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_media_crop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_media_from_camera",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_recompose_preparing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_recompose_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_viewer_compose",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

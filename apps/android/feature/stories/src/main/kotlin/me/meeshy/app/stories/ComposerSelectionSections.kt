@@ -59,6 +59,7 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.CROP) -> PlacedCropSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> AdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel, comparison)
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> AdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel, comparison)
             else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
@@ -160,7 +161,7 @@ internal fun SoundSectionContent(state: StoryComposerUiState, sound: StoryAudioP
  * qu'on garde, l'écarté assombri. Chaque image du geste écrit les bornes (un seul cran d'historique par geste).
  */
 @Composable
-private fun SoundTrimSection(state: StoryComposerUiState, sound: StoryAudioPlayerObject, viewModel: StoryComposerViewModel) {
+internal fun SoundTrimSection(state: StoryComposerUiState, sound: StoryAudioPlayerObject, viewModel: StoryComposerViewModel) {
     val source = state.trimSourceOf(sound) ?: return
     MediaTrimStrip(
         content = MediaTrimContent.AUDIO,

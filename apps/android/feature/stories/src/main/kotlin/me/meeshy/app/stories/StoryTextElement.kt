@@ -155,6 +155,8 @@ data class StoryTextElement(
     val y: Float = CENTER,
     val scale: Float = DEFAULT_SCALE,
     val rotationDeg: Float = DEFAULT_ROTATION,
+    /** La personne qu'une pastille de mention ÉPINGLÉE nomme (#13846) ; `null` : un texte ordinaire. */
+    val referenceUserId: String? = null,
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -249,6 +251,7 @@ data class StoryTextElement(
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         sourceLanguage = StoryTextLanguage.normalised(this.sourceLanguage) ?: sourceLanguage,
+        referenceUserId = referenceUserId,
     )
 
     companion object {

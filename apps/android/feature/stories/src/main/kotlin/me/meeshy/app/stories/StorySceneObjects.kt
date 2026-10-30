@@ -27,6 +27,9 @@ data class StoryStickerView(
     val fadeIn: Double = 0.0,
     val fadeOut: Double = 0.0,
     val zIndex: Int = 0,
+    /** Le gabarit qui le dessine (#13847) et ses emplacements ; vide : l'emoji ou l'image. */
+    val templateId: String = "",
+    val slots: Map<String, String> = emptyMap(),
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
@@ -83,7 +86,7 @@ object StorySceneObjectsProjection {
 
     private fun StorySticker.toView(mediaUrlOf: (String) -> String?): StoryStickerView? {
         val image = postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf)
-        if (image == null && emoji.isBlank()) return null
+        if (image == null && emoji.isBlank() && templateId.isBlank()) return null
         return StoryStickerView(
             id = id,
             emoji = emoji,
@@ -97,6 +100,8 @@ object StorySceneObjectsProjection {
             fadeIn = SceneObjectNumbers.seconds(fadeIn ?: 0.0),
             fadeOut = SceneObjectNumbers.seconds(fadeOut ?: 0.0),
             zIndex = zIndex,
+            templateId = templateId,
+            slots = slots,
         )
     }
 

@@ -40,7 +40,7 @@ import me.meeshy.ui.component.imageedit.CropOverlayView
  * recadrage normalisé ([onCrop], `null` ⇒ la prise entière). [aspect] verrouille les proportions d'un preset.
  */
 @Composable
-internal fun RetouchCropBrackets(crop: NormalizedCrop?, aspect: Double?, display: CropRect, onCrop: (NormalizedCrop?) -> Unit) {
+public fun RetouchCropBrackets(crop: NormalizedCrop?, aspect: Double?, display: CropRect, onCrop: (NormalizedCrop?) -> Unit) {
     var frame by remember(display, crop, aspect) { mutableStateOf(CropFrame.initial(crop, aspect, display)) }
     CropOverlayView(
         cropRect = frame,

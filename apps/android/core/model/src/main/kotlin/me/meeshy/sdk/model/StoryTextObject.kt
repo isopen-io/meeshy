@@ -66,4 +66,6 @@ data class StoryTextObject(
     val keyframes: List<StoryKeyframe>? = null,
     /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
     val name: String? = null,
+    /** La personne qu'un badge de mention ÉPINGLÉE nomme (#13846) ; `null` : un texte, que le serveur relit en mention INLINE. */
+    val referenceUserId: String? = null,
 )

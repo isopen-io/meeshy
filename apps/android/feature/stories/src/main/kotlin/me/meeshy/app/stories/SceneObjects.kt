@@ -40,6 +40,7 @@ val StoryComposerUiState.selectedSceneObject: SceneObjectRef?
         ?: selectedSticker?.let { SceneObjectRef(ComposerObjectKind.STICKER, it.id) }
         ?: selectedMedia?.let { SceneObjectRef(ComposerObjectKind.MEDIA, it) }
         ?: selectedSound?.let { SceneObjectRef(ComposerObjectKind.AUDIO, it.id) }
+        ?: selectedPlace?.let { SceneObjectRef(ComposerObjectKind.PLACE, it.id) }
 
 val StoryComposerUiState.sceneContextMenu: SceneObjectContextMenu?
     get() {
@@ -141,7 +142,8 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
         val (subject, served) = when (ref.kind) {
             ComposerObjectKind.TEXT -> textSubject() to controllerActions
             ComposerObjectKind.MEDIA -> mediaSubject(ref.id) to mediaActions
-            ComposerObjectKind.AUDIO -> SceneObjectMenu.Subject(canDuplicate = false) to listOf(SceneObjectMenu.Action.DELETE)
+            ComposerObjectKind.AUDIO, ComposerObjectKind.PLACE ->
+                SceneObjectMenu.Subject(canDuplicate = false) to listOf(SceneObjectMenu.Action.DELETE)
             else -> stickerSubject() to controllerActions
         }
         return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
@@ -166,7 +168,12 @@ val StoryComposerUiState.selectionBar: SceneSelectionBar?
         return SceneSelectionBar(
             ref = controllers.ref,
             actions = ComposerSelectionActions.served(
-                ComposerSelectionActions.Input(offered = offered, editable = true, timed = timed, sceneAnimated = sceneIsAnimated),
+                ComposerSelectionActions.Input(
+                    offered = offered,
+                    editable = controllers.ref.kind != ComposerObjectKind.PLACE,
+                    timed = timed,
+                    sceneAnimated = sceneIsAnimated,
+                ),
             ),
             orderChoices = ComposerSelectionActions.orderChoices(offered),
             sheetActions = ComposerSelectionActions.editSheetActions(offered),

@@ -59,16 +59,23 @@ object ComposerSoundPlacement {
     private fun refusalAfterBorrowing(keptSounds: Int, visualMedia: Int): SceneObjectCaps.Reason? =
         if (keptSounds >= SceneObjectCaps.AUDIO) SceneObjectCaps.Reason.AUDIO_FULL else null
 
-    private fun keptBeforeBorrowing(audios: List<StoryAudioPlayerObject>, soundId: String?): List<StoryAudioPlayerObject> {
-        val superseded = supersededId(background(audios), audios)?.let { id -> audios.first { it.id == id } }
-        return audios.map { track ->
+    /**
+     * Les pistes qui restent quand un NOUVEAU fond arrive : le fond emprunté s'en va (l'étagère le garde), le fond capté
+     * descend au premier plan. [except] désigne la piste qui devient le fond : elle n'est jamais retirée par elle-même.
+     */
+    fun supersedingBackground(audios: List<StoryAudioPlayerObject>, except: String? = null): List<StoryAudioPlayerObject> {
+        val current = background(audios)?.takeIf { it.id != except } ?: return audios
+        return audios.mapNotNull { track ->
             when {
-                track !== superseded -> track
+                track !== current -> track
                 StoryAudioIdentity.isRecording(track) -> track.copy(isBackground = false)
                 else -> null
             }
-        }.filterNotNull().filterNot { soundId != null && it.soundId == soundId }
+        }
     }
+
+    private fun keptBeforeBorrowing(audios: List<StoryAudioPlayerObject>, soundId: String?): List<StoryAudioPlayerObject> =
+        supersedingBackground(audios).filterNot { soundId != null && it.soundId == soundId }
 
     fun borrow(audios: List<StoryAudioPlayerObject>, sound: ApiSound, visualMedia: Int = 0): SoundPlacement {
         if (background(audios)?.soundId == sound.id) return SoundPlacement.Placed(audios)

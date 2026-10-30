@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.Multibinds
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import me.meeshy.core.common.IoDispatcher
 import me.meeshy.core.common.MainDispatcher
 import javax.inject.Singleton
 
@@ -37,6 +38,15 @@ internal object SpeechModule {
         microphonePermitted = context::hasRecordAudioPermission,
         microphoneClaim = MicrophoneClaim { claims.any { it.isHeldByCall() } },
     )
+
+    @Provides
+    @Singleton
+    fun provideSoundFileTranscriber(
+        @ApplicationContext context: Context,
+        recognizer: OnDeviceSpeechRecognizer,
+        languages: SpeechLanguageAvailability,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): SoundFileTranscriber = SoundFileTranscriber.onDevice(context, recognizer, languages, io)
 
     @Provides
     @Singleton

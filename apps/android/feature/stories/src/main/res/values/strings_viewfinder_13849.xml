@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_capture_hint_tap_or_hold">Tap for the camera · hold to film</string>
+    <string name="composer_capture_hint_hold">Hold to film</string>
+    <string name="composer_media_from_camera">Take a photo</string>
+    <string name="composer_column_media_crop">Crop</string>
+    <string name="story_viewer_compose">Compose</string>
+    <string name="story_recompose_preparing">Preparing the media…</string>
+    <string name="story_recompose_unavailable">This media isn\'t available. Check your connection, then try again.</string>
+</resources>

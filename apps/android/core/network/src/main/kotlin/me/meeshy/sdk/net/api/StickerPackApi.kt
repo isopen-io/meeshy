@@ -14,6 +14,10 @@ import retrofit2.http.Path
  * (`/sticker-packs/installed`, `PUT|DELETE /sticker-packs/{slug}/install`).
  */
 interface StickerPackApi {
+    /** La Boutique : les packs intégrés puis les packs publiés, avec leur état d'installation. */
+    @GET(ApiRoutesStickerPacks.ROOT)
+    suspend fun catalogue(): ApiResponse<StickerPackList>
+
     @GET(ApiRoutesStickerPacks.INSTALLED)
     suspend fun installed(): ApiResponse<StickerPackList>
 

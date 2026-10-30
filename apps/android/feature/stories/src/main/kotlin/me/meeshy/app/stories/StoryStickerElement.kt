@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StorySticker
+import me.meeshy.sdk.model.StickerDisplayRank
+import me.meeshy.sdk.model.sticker.StickerTemplateCatalog
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
@@ -27,9 +29,25 @@ data class StoryStickerElement(
     val scale: Float = StoryTextElement.DEFAULT_SCALE,
     val rotationDeg: Float = StoryTextElement.DEFAULT_ROTATION,
     val timing: StoryElementTiming = StoryElementTiming(),
+    /** Le gabarit qui le dessine (#13847) — vide pour un emoji ou une image. */
+    val templateId: String = "",
+    /** Les valeurs des emplacements du gabarit (les mots, l'heure figée). */
+    val slots: Map<String, String> = emptyMap(),
+    /** Le média téléversé qui porte son image (Mee, pack, Mes stickers) ; vide tant qu'il n'est pas arrivé. */
+    val postMediaId: String = "",
+    /** D'où vient l'image (`mee`, `pack`, `library`), tel qu'iOS l'écrit. */
+    val provider: String? = null,
+    /** Ce que le canevas dessine : l'aperçu local pendant l'envoi, l'adresse servie ensuite. */
+    val imageUrl: String? = null,
+    /** Le mouvement, par son nom de fil. */
+    val animation: String? = null,
 ) {
-    /** True once the sticker carries content worth publishing (a non-blank emoji). */
-    val isPublishable: Boolean get() = emoji.isNotBlank()
+    /** Une image posée dont les octets ne sont pas encore arrivés : elle se voit, elle ne part pas. */
+    val isAwaitingImage: Boolean get() = imageUrl != null && postMediaId.isBlank()
+
+    /** True once the sticker carries content worth publishing — an emoji, a template or an arrived image. */
+    val isPublishable: Boolean
+        get() = !isAwaitingImage && (emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank())
 
     /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]
@@ -72,7 +90,12 @@ data class StoryStickerElement(
      */
     fun toSticker(): StorySticker = StorySticker(
         id = id,
-        emoji = emoji,
+        emoji = StickerDisplayRank.wireEmoji(emoji = emoji, templateId = templateId, templateFallback = StickerTemplateCatalog::fallbackEmoji),
+        postMediaId = postMediaId,
+        provider = provider,
+        templateId = templateId,
+        slots = slots,
+        animation = animation,
         x = x.toDouble(),
         y = y.toDouble(),
         scale = scale.toDouble(),

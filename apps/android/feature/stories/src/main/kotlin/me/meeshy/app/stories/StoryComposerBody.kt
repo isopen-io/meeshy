@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
@@ -26,13 +27,18 @@ import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
-/** Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. */
+/**
+ * Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. [onPickFiles] : l'appui
+ * long sur Média, « Depuis les fichiers » ; [onPickBackground] : « ⋯ › Choisir un fond », dont le média devient le fond (#13845).
+ */
 internal class StoryComposerDoors(
     val onClose: () -> Unit,
     val onOpenAudience: () -> Unit,
     val onOpenStickers: () -> Unit,
     val onPickMedia: () -> Unit,
     val onOpenSoundShelf: () -> Unit,
+    val onPickFiles: () -> Unit = {},
+    val onPickBackground: () -> Unit = {},
 )
 
 /**
@@ -58,23 +64,28 @@ internal fun StoryComposerSceneFirst(
     formatChevron: (@Composable () -> Unit)?,
     sheet: StorySheetSlot = StorySheetSlot(open = null, onDismiss = {}) {},
     keyboard: TypingKeyboard? = null,
+    capture: StorySceneCapture? = null,
 ) {
     val comparison = remember { LookComparison() }
-    val panel = state.scenePanel(morePanel)
+    val armed = capture?.armed == true
+    val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
-    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive)
-    val tools = ComposerSceneTools.toolsServed(objectFocused = state.selectedObjectControllers != null, drawing = state.isDrawingActive)
-    val selection = state.selectionBar?.takeIf { panel == null && typing == null }
+    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive) && !armed
+    val tools = if (armed) emptyList() else ComposerSceneTools.toolsServed(objectFocused = state.selectedObjectControllers != null, drawing = state.isDrawingActive)
+    val selection = state.selectionBar?.takeIf { panel == null && typing == null && !armed }
     val openSheet = sheet.open?.takeIf(state::serves)
+    val captureOffered = capture?.offeredOn(state, somethingOpen = panel != null || typing != null || openSheet != null) == true
     StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     val onSelectionAction = { bar: SceneSelectionBar, action: ComposerSelectionAction ->
         viewModel.onSelectionAction(bar.ref, action, sheet.onOpen)
     }
-    val rails = storySceneRails(state, viewModel, sceneExport, doors, selection, onSelectionAction, morePanel, onMorePanel, formatChevron)
+    val dialogs = rememberStoryOverflowDialogs(state, viewModel)
+    val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen, capture)
+    val rails = storySceneRails(state, viewModel, more, selection, onSelectionAction, morePanel, formatChevron)
     StorySceneFirstLayout(
         onDismiss = doors.onClose,
         reduced = panel != null && typing == null,
-        scene = { modifier -> StoryComposerScene(state, viewModel, sceneExport, comparison, modifier) },
+        scene = { modifier -> StoryComposerScene(state, viewModel, sceneExport, comparison, modifier, capture, captureOffered) },
         top = {
             SceneTopBar(
                 onClose = doors.onClose,
@@ -86,7 +97,7 @@ internal fun StoryComposerSceneFirst(
             )
         },
         strip = { if (chrome) StorySlideStrip(state, viewModel) },
-        trailing = { if (tools.isNotEmpty()) StorySceneTools(state, viewModel, sceneExport, doors, tools, onMorePanel) },
+        trailing = { if (tools.isNotEmpty()) StorySceneTools(state, viewModel, more, tools) },
         panel = {
             panel?.let {
                 StoryComposerBottomPanel(
@@ -109,7 +120,7 @@ internal fun StoryComposerSceneFirst(
                     onOrder = { choice -> viewModel.onObjectController(bar.ref, choice) },
                 )
             }
-            if (chrome) StorySocle(state, viewModel, doors, formatChevron)
+            if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen)
         },
         sheet = openSheet,
         onSheetDismiss = sheet.onDismiss,
@@ -143,30 +154,43 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     )
 }
 
-/** Les six outils posés sur la scène ; le « ⋯ » range le reste. */
+/** Ce que les outils et le « ⋯ » atteignent hors du view model : l'export, les portes de l'écran, l'aperçu et l'effacement. */
+private class StoryMoreHost(
+    val sceneExport: SceneExportHost,
+    val doors: StoryComposerDoors,
+    val dialogs: StoryOverflowDialogs,
+    val onMorePanel: (StoryMorePanel?) -> Unit,
+    val onOpenSheet: (StoryComposerSheet) -> Unit,
+    val capture: StorySceneCapture? = null,
+) {
+    /** La caméra de la scène, proposée par l'appui long sur Média tant que le viseur est éteint (#13849). */
+    val cameraServed: Boolean get() = capture?.offer != null && !capture.armed
+}
+
+/** Les six outils posés sur la scène ; le « ⋯ » range le reste, l'appui long sur Média propose ses sources. */
 @Composable
 private fun StorySceneTools(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    sceneExport: SceneExportHost,
-    doors: StoryComposerDoors,
+    more: StoryMoreHost,
     tools: List<ComposerSceneTool>,
-    onMorePanel: (StoryMorePanel?) -> Unit,
 ) {
-    val onTool = rememberSceneToolAction(state, viewModel, doors, onMorePanel)
-    val onEntry = rememberMoreEntryAction(state, viewModel, sceneExport, onMorePanel)
+    val onTool = rememberSceneToolAction(state, viewModel, more.doors, more.onMorePanel)
+    val onEntry = rememberMoreEntryAction(state, viewModel, more)
     SceneToolColumn(
         tools = tools,
         active = state.activeSceneTool(),
         onTool = onTool,
         more = {
             ComposerMoreMenu(
-                entries = moreEntriesOf(state, sceneExport),
+                entries = moreEntriesOf(state, more.sceneExport),
                 animated = state.sceneIsAnimated,
-                exportEnabled = !sceneExport.isExporting && !state.isPublishing,
+                exportEnabled = !more.sceneExport.isExporting && !state.isPublishing,
                 onPick = onEntry,
             )
         },
+        onMediaSource = rememberMediaSourceAction(state, more.doors, more.onMorePanel, more.capture),
+        cameraServed = more.cameraServed,
     )
 }
 
@@ -178,17 +202,18 @@ private fun StorySceneTools(
 private fun storySceneRails(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    sceneExport: SceneExportHost,
-    doors: StoryComposerDoors,
+    more: StoryMoreHost,
     selection: SceneSelectionBar?,
     onSelectionAction: (SceneSelectionBar, ComposerSelectionAction) -> Unit,
     morePanel: StoryMorePanel?,
-    onMorePanel: (StoryMorePanel?) -> Unit,
     formatChevron: (@Composable () -> Unit)?,
 ): StorySceneRails {
-    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive)
-    val onTool = rememberSceneToolAction(state, viewModel, doors, onMorePanel)
-    val onEntry = rememberMoreEntryAction(state, viewModel, sceneExport, onMorePanel)
+    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive) && more.capture?.armed != true
+    val doors = more.doors
+    val sceneExport = more.sceneExport
+    val onTool = rememberSceneToolAction(state, viewModel, doors, more.onMorePanel)
+    val onEntry = rememberMoreEntryAction(state, viewModel, more)
+    val onMediaSource = rememberMediaSourceAction(state, doors, more.onMorePanel, more.capture)
     val model = LeadingRailModel(
         showsClose = chrome,
         showsTools = chrome,
@@ -197,9 +222,10 @@ private fun storySceneRails(
         moreEntries = moreEntriesOf(state, sceneExport),
         animated = state.sceneIsAnimated,
         exportEnabled = !sceneExport.isExporting && !state.isPublishing,
+        cameraServed = more.cameraServed,
     )
     return StorySceneRails(
-        leading = { StoryLeadingRail(model, doors.onClose, onTool, onEntry) },
+        leading = { StoryLeadingRail(model, doors.onClose, onTool, onEntry, onMediaSource) },
         trailing = {
             StoryTrailingRail(
                 bar = selection,
@@ -241,16 +267,14 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val openShelf = rememberGuardedAddition(state.canBorrowSound, state.soundCapRefusal, doors.onOpenSoundShelf)
     val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
-    val hasSound = state.selectedSlideAudio.isNotEmpty()
     return { tool ->
         onMorePanel(null)
         when (tool) {
             ComposerSceneTool.TEXT -> addText()
             ComposerSceneTool.MEDIA -> if (hasMedia) viewModel.onBandToolTap(StoryToolMode.MEDIA) else pickMedia()
             ComposerSceneTool.STICKER -> openStickers()
-            ComposerSceneTool.SOUND -> if (hasSound) viewModel.onBandToolTap(StoryToolMode.AUDIO) else openShelf()
+            ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
             ComposerSceneTool.MORE -> Unit
         }
@@ -265,18 +289,43 @@ private fun moreEntriesOf(state: StoryComposerUiState, sceneExport: SceneExportH
             animated = state.sceneIsAnimated,
             sceneEffects = state.servedSceneEffects,
             exports = sceneExport.entries,
+            hasContent = state.deck.publishableSlides.isNotEmpty(),
+            hasBackground = StoryComposerEraseReducer.hasBackground(state),
+            canPickBackground = StoryComposerEraseReducer.canPickBackground(state),
+            hasSomethingToErase = StoryComposerEraseReducer.hasSomethingToErase(state),
         ),
     )
+
+/** L'appui long sur Média : la caméra de la scène, la photothèque ou les fichiers, sous le même plafond que le toucher. */
+@Composable
+private fun rememberMediaSourceAction(
+    state: StoryComposerUiState,
+    doors: StoryComposerDoors,
+    onMorePanel: (StoryMorePanel?) -> Unit,
+    capture: StorySceneCapture?,
+): (ComposerMediaSource) -> Unit {
+    val camera = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media) { capture?.arm() }
+    val library = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
+    val files = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickFiles)
+    return { source ->
+        onMorePanel(null)
+        when (source) {
+            ComposerMediaSource.CAMERA -> camera()
+            ComposerMediaSource.PHOTO_LIBRARY -> library()
+            ComposerMediaSource.FILES -> files()
+        }
+    }
+}
 
 /** Ce que fait chaque entrée du « ⋯ », qu'on la touche dans le menu de la scène ou dans le rail du grand écran. */
 @Composable
 private fun rememberMoreEntryAction(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    sceneExport: SceneExportHost,
-    onMorePanel: (StoryMorePanel?) -> Unit,
+    more: StoryMoreHost,
 ): (ComposerMoreEntry) -> Unit {
     val addSlide = rememberGuardedAddition(state.canAddSlide, state.addSlideRefusalRes(), action = viewModel::onAddSlide)
+    val onMorePanel = more.onMorePanel
     return { entry ->
         val local = when (entry) {
             ComposerMoreEntry.SLIDE_DURATION -> StoryMorePanel.DURATION
@@ -293,7 +342,14 @@ private fun rememberMoreEntryAction(
             ComposerMoreEntry.FRAME -> viewModel.onSceneReduce(StoryComposerSelectionReducer::frameToggled)
             ComposerMoreEntry.OPENING_EFFECT -> viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, ComposerSceneEffect.OPENING) }
             ComposerMoreEntry.VISUAL_EFFECT -> viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, ComposerSceneEffect.VISUAL) }
-            ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export?.let(sceneExport::start)
+            ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export?.let(more.sceneExport::start)
+            ComposerMoreEntry.PREVIEW -> more.dialogs.preview()
+            ComposerMoreEntry.PICK_BACKGROUND -> more.doors.onPickBackground()
+            ComposerMoreEntry.REMOVE_BACKGROUND -> viewModel.onRemoveSceneBackground()
+            ComposerMoreEntry.CLEAR_ALL -> more.dialogs.clearAll()
+            ComposerMoreEntry.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
+            ComposerMoreEntry.HASHTAGS -> more.onOpenSheet(StoryComposerSheet.HASHTAGS)
+            ComposerMoreEntry.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION -> Unit
         }
     }
@@ -308,7 +364,14 @@ private fun StorySocle(
     viewModel: StoryComposerViewModel,
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
+    onOpenSheet: (StoryComposerSheet) -> Unit,
 ) {
+    ComposerSceneReferenceFooter(
+        hashtags = state.hashtags,
+        mentions = state.draft.mentions,
+        onHashtags = { onOpenSheet(StoryComposerSheet.HASHTAGS) },
+        onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
+    )
     StorySocleNotice(state)
     StoryPublish(state, viewModel, doors, formatChevron)
 }

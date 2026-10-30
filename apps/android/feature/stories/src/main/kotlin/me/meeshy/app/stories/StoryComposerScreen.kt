@@ -31,8 +31,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import me.meeshy.ui.component.audio.AudioTrackSurface
+import me.meeshy.ui.theme.MeeshyTheme
 
 /** Le délai après lequel la fenêtre d'un son rogné est reprise par le lecteur du composeur. */
 private const val SOUND_WINDOW_SETTLE_MS: Long = 300L
@@ -63,6 +65,10 @@ fun StoryComposerScreen(
     editStoryId: String? = null,
     /** Le menu « Publier comme » de l'hôte, posé dans le chevron de Publier ; la route autonome n'en a pas. */
     formatChevron: (@Composable () -> Unit)? = null,
+    /** La porte : ce que la scène vide ouvre d'un toucher ou d'un appui long, photo et vidéo ou vidéo seule (#13849). */
+    opening: ComposerOpening = ComposerOpening.CAMERA_READY,
+    /** La story VUE dont « Composer » sème la scène entière (#13849) : ses médias rapatriés et téléversés à nouveau. */
+    recomposeStoryId: String? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -85,13 +91,18 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor || editStoryId != null, initialVisibility = initialVisibility)
+        viewModel.onEnterComposer(
+            seededByDoor = repostOfId != null || seededByDoor || editStoryId != null || recomposeStoryId != null,
+            initialVisibility = initialVisibility,
+        )
         onDispose { viewModel.persistDraft() }
     }
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
+    StoryRecomposeGate(recomposeStoryId = recomposeStoryId, viewModel = viewModel, onClose = onClose)
+    val capture = rememberStorySceneCapture(opening, viewModel)
 
-    val pickMedia = rememberStoryMediaPicker(state.mediaPickMode, viewModel)
+    val pickers = rememberStoryMediaPickers(state.mediaPickMode, viewModel)
 
     var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
     StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
@@ -113,8 +124,8 @@ fun StoryComposerScreen(
             StoryScenePanel.DURATION, StoryScenePanel.CAPTION -> ({ morePanel = null })
             StoryScenePanel.TEXT -> viewModel::onDeselectTextElement
             else -> if (state.selectedSceneObject != null) viewModel::onSceneBackgroundTap else null
-        },
-        onCloseSheet = if (sheet?.let(state::serves) == true) ({ sheet = null }) else null,
+        }.takeIf { !capture.armed },
+        onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
     StoryComposerSceneFirst(
         state = state,
@@ -124,8 +135,10 @@ fun StoryComposerScreen(
             onClose = close.request,
             onOpenAudience = { sheet = StoryComposerSheet.AUDIENCE },
             onOpenStickers = { sheet = StoryComposerSheet.STICKERS },
-            onPickMedia = pickMedia,
+            onPickMedia = pickers.library,
             onOpenSoundShelf = { sheet = StoryComposerSheet.SOUND },
+            onPickFiles = pickers.files,
+            onPickBackground = pickers.background,
         ),
         morePanel = morePanel,
         onMorePanel = { morePanel = it },
@@ -133,10 +146,11 @@ fun StoryComposerScreen(
         sheet = StorySheetSlot(open = sheet, onDismiss = { sheet = null }, onOpen = { sheet = it }) { open ->
             StoryComposerSheetContent(open, state, viewModel, onDone = { sheet = null })
         },
+        capture = capture,
     )
 }
 
-/** La feuille ouverte, dans sa coque ancrée : les stickers, l'étagère des sons, l'audience (#13838). */
+/** La feuille ouverte, dans sa coque ancrée ; celles qui se lisent sur la scène sont sombres comme elle. */
 @Composable
 private fun StoryComposerSheetContent(
     open: StoryComposerSheet,
@@ -144,24 +158,27 @@ private fun StoryComposerSheetContent(
     viewModel: StoryComposerViewModel,
     onDone: () -> Unit,
 ) {
+    if (open.isDarkOnScene) {
+        MeeshyTheme(darkTheme = true) { StoryComposerSheetBody(open, state, viewModel, onDone) }
+    } else {
+        StoryComposerSheetBody(open, state, viewModel, onDone)
+    }
+}
+
+/** Les stickers, le son, l'audience (#13838), et ce que la publication nomme (#13846). */
+@Composable
+private fun StoryComposerSheetBody(
+    open: StoryComposerSheet,
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    onDone: () -> Unit,
+) {
     when (open) {
         StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = true) {
-            StickerPickerPanel(
-                onPick = { emoji ->
-                    viewModel.onAddSticker(emoji)
-                    onDone()
-                },
-                onDismiss = onDone,
-            )
+            StoryStickerSheetPanel(viewModel = viewModel, onDismiss = onDone)
         }
         StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
-            SoundShelfSheet(
-                onUse = { sound ->
-                    viewModel.onBorrowSound(sound)
-                    onDone()
-                },
-                onDismiss = onDone,
-            )
+            StorySoundSheet(state = state, composer = viewModel, onDone = onDone)
         }
         StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = false) {
             StoryAudiencePanel(
@@ -177,6 +194,8 @@ private fun StoryComposerSheetContent(
                 onDismiss = onDone,
             )
         }
+        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
+            StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP -> Unit
     }
 }
@@ -215,21 +234,25 @@ private fun StoryComposerBackgroundSound(state: StoryComposerUiState, viewModel:
     }
 }
 
+/** Les sélecteurs du système : la photothèque, les fichiers (appui long sur Média), et un média choisi comme fond (#13845). */
+private class StoryMediaPickers(val library: () -> Unit, val files: () -> Unit, val background: () -> Unit)
+
 /**
- * Le sélecteur photo/vidéo du système : il lit les fichiers choisis hors du fil principal et les remet au ViewModel. Le
- * contrat (un seul ou plusieurs) suit les places libres, pour qu'une seule place ne déclenche jamais `maxItems > 1`.
+ * Le sélecteur photo/vidéo du système, et l'importateur de fichiers filtré sur les images et les vidéos : ils lisent les
+ * fichiers choisis hors du fil principal et les remettent au ViewModel. Le contrat de la photothèque (un seul ou plusieurs)
+ * suit les places libres, pour qu'une seule place ne déclenche jamais `maxItems > 1` ; le fond n'en prend qu'un.
  */
 @Composable
-private fun rememberStoryMediaPicker(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): () -> Unit {
+private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): StoryMediaPickers {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    fun dispatchPicked(uris: List<Uri>) {
+    fun dispatchPicked(uris: List<Uri>, asBackground: Boolean = false) {
         if (uris.isEmpty()) return
         scope.launch {
             val items = withContext(Dispatchers.IO) {
                 uris.mapNotNull { context.readMediaUploadItem(it) }
             }
-            if (items.isNotEmpty()) viewModel.onMediaPicked(items)
+            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground)
         }
     }
     val pickSingle = rememberLauncherForActivityResult(
@@ -238,12 +261,24 @@ private fun rememberStoryMediaPicker(mode: StoryMediaPickMode, viewModel: StoryC
     val pickMultiple = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(StoryComposerDraft.MAX_MEDIA),
     ) { uris: List<Uri> -> dispatchPicked(uris) }
+    val pickFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris: List<Uri> -> dispatchPicked(uris) }
+    val pickBackground = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri), asBackground = true) }
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-    return {
-        when (mode) {
-            StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-            StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-            StoryMediaPickMode.None -> Unit
-        }
-    }
+    return StoryMediaPickers(
+        library = {
+            when (mode) {
+                StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                StoryMediaPickMode.None -> Unit
+            }
+        },
+        files = { if (mode != StoryMediaPickMode.None) pickFiles.launch(MEDIA_FILE_TYPES) },
+        background = { if (mode != StoryMediaPickMode.None) pickBackground.launch(imageAndVideo) },
+    )
 }
+
+private val MEDIA_FILE_TYPES = arrayOf("image/*", "video/*")
