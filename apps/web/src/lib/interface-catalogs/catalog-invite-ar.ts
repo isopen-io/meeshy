@@ -97,6 +97,7 @@ const ar = {
   'invite.ended.body': 'عُد عبر رابط دعوة جديد.',
   'invite.ended.join': 'افتح هذا الرابط',
   'invite.missing.nickname': 'اختر اسمًا أول لهذه المحادثة.',
+  'invite.tooShort.nickname': 'يلزم {min} أحرف على الأقل.',
   'invite.missing.email': 'يتطلب هذا الرابط عنوان بريد إلكتروني صالحًا.',
   'invite.missing.birthday': 'يتطلب هذا الرابط تاريخ ميلادك.',
   'invite.missing.language': 'اختر إحدى اللغات التي يقبلها هذا الرابط.',

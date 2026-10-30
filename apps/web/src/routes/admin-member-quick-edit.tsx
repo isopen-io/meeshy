@@ -20,7 +20,9 @@ import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-u
 import { unlockAdminUser } from '@/lib/api/admin-user-security';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
+import { translate } from '@/lib/i18n-catalog';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { isNameTooShort, isUsernameTooShort, NAME_MIN_LENGTH, USERNAME_MIN_LENGTH } from '@/lib/identity-bounds';
 
 import { useMemberGestures, type MemberGesture } from './admin-member-gestures';
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, refusalOf } from './admin-member-parts';
@@ -116,8 +118,21 @@ function useFieldWrites({ userId, language, onAnnounce }: { readonly userId: str
     onAnnounce(message);
   }
 
-  return { statusOf: (id: FieldId): AdminInlineStatus => statuses[id] ?? { phase: 'idle' }, failureOf: (id: FieldId) => failures[id] ?? null, write };
+  /** Un refus posé AVANT l'envoi (#13825) : le champ le dit, rien ne part, le cache ne bouge pas. */
+  function refuse(id: FieldId, message: string): void {
+    set(id, { phase: 'error', message }, null);
+    onAnnounce(message);
+  }
+
+  return { statusOf: (id: FieldId): AdminInlineStatus => statuses[id] ?? { phase: 'idle' }, failureOf: (id: FieldId) => failures[id] ?? null, write, refuse };
 }
+
+/** #13825 — le minimum d'une identité modifiée (pseudo : 3, prénom / nom / nom affiché : 2), `null` quand elle le tient. */
+const identityFloorBroken = (edit: AdminUserEdit): number | null => {
+  if (edit.username !== undefined && isUsernameTooShort(edit.username)) return USERNAME_MIN_LENGTH;
+  const names = [edit.firstName, edit.lastName, edit.displayName];
+  return names.some((name) => name !== undefined && name !== null && isNameTooShort(name)) ? NAME_MIN_LENGTH : null;
+};
 
 const withEdit = (membre: AdminUserDetail, edit: AdminUserEdit): AdminUserDetail => ({
   ...membre,
@@ -168,12 +183,18 @@ export function AdminMemberQuickEdit({
     writeFolded(next);
   };
 
-  const profile = (id: Exclude<FieldId, 'attempts' | 'active'>, edit: AdminUserEdit) =>
+  const profile = (id: Exclude<FieldId, 'attempts' | 'active'>, edit: AdminUserEdit) => {
+    const minimum = identityFloorBroken(edit);
+    if (minimum !== null) {
+      writes.refuse(id, translate(language, 'signup.username.tooShort', { min: String(minimum) }));
+      return;
+    }
     void writes.write(
       id,
       () => updateAdminUser({ ...deps, userId: membre.id, edit }),
       (before) => withEdit(before, edit),
     );
+  };
 
   const changeRole = (role: string) => {
     const label = interpretRole(role, language).label;

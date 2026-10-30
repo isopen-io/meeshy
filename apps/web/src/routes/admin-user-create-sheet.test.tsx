@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -113,6 +114,32 @@ describe('créer un compte', () => {
 
     expect(calls()).toEqual([]);
     expect(host.querySelector('[data-admin-create-refused]')?.textContent).toBe('Renseignez tous les champs.');
+  });
+});
+
+describe('le plancher d\'une identité créée (#13825)', () => {
+  test('un prénom d\'un caractère ne part pas : le minimum se dit SOUS son champ', async () => {
+    const { host, calls } = await monter();
+    remplir(host);
+    mounter.type(host, '#admin-create-firstName', 'A');
+
+    await mounter.submit(host);
+
+    expect(calls()).toEqual([]);
+    expect(host.querySelector('#admin-create-firstName')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.textContent).toContain('2 caractères au moins.');
+  });
+
+  test('« Al » comme pseudo ne part pas : le minimum du pseudo est dit (attend usernameMinLength = 3 du lot partagé)', async () => {
+    const { host, calls } = await monter();
+    remplir(host);
+    mounter.type(host, '#admin-create-username', 'Al');
+
+    await mounter.submit(host);
+
+    expect(calls()).toEqual([]);
+    expect(host.querySelector('#admin-create-username')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.textContent).toContain(`${usernameMinLength} caractères au moins.`);
   });
 });
 

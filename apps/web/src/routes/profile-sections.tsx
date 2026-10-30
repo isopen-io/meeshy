@@ -27,7 +27,8 @@ import { translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
 import { NO_DESIGNS, type DecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
-import type { ProfileDraft } from '@/lib/view/profile-draft';
+import { NAME_MIN_LENGTH } from '@/lib/identity-bounds';
+import { draftIssues, type ProfileDraft } from '@/lib/view/profile-draft';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -126,6 +127,7 @@ export function ProfileHeaderBar({
   onEdit,
   onCancel,
   onSave,
+  saveBlocked = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly editing: boolean;
@@ -136,6 +138,8 @@ export function ProfileHeaderBar({
   readonly onEdit: () => void;
   readonly onCancel: () => void;
   readonly onSave: () => void;
+  /** Un nom du brouillon est trop court (#13825) : rien à enregistrer tant qu'il n'est pas corrigé. */
+  readonly saveBlocked?: boolean;
 }) {
   const actionClass = `grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${BRAND_INK}`;
   const actionStyle = (enabled: boolean) => ({ minHeight: 44, outlineColor: 'var(--color-ios-brand)', opacity: enabled ? 1 : 0.5 });
@@ -165,9 +169,9 @@ export function ProfileHeaderBar({
           type="button"
           data-profile-save
           onClick={onSave}
-          disabled={saving || !online}
+          disabled={saving || !online || saveBlocked}
           className={actionClass}
-          style={actionStyle(!saving && online)}
+          style={actionStyle(!saving && online && !saveBlocked)}
         >
           {translate(language, saving ? 'profile.saving' : 'profile.save')}
         </button>
@@ -412,6 +416,7 @@ export function IdentitySection({
   readonly onDraft: (next: ProfileDraft) => void;
 }) {
   const [focused, setFocused] = useState<keyof ProfileDraft | null>(null);
+  const issues = draft === null ? {} : draftIssues(profile, draft);
   const username = (
     <InfoRow icon={{ set: 'ecran', name: 'at' }} label={translate(language, 'profile.username')}>
       <Value text={`@${profile.username}`} />
@@ -423,11 +428,20 @@ export function IdentitySection({
       <Section id="profile-identity" title={translate(language, 'profile.section.identity')} glyph="identificationCard">
         <div className="grid gap-3 p-3.5">
           {TEXT_FIELDS.map(({ key, label, autoComplete }) => (
-            <Field key={key} id={`profile-${key}`} label={translate(language, label)} icon="user" tint={FIELD_TINT} focused={focused === key}>
+            <Field
+              key={key}
+              id={`profile-${key}`}
+              label={translate(language, label)}
+              icon="user"
+              tint={FIELD_TINT}
+              focused={focused === key}
+              error={issues[key] === undefined ? undefined : translate(language, 'signup.username.tooShort', { min: String(NAME_MIN_LENGTH) })}
+            >
               {({ id, describedBy }) => (
                 <input
                   id={id}
                   aria-describedby={describedBy}
+                  aria-invalid={issues[key] !== undefined}
                   value={draft[key]}
                   autoComplete={autoComplete}
                   onChange={(event) => onDraft({ ...draft, [key]: event.currentTarget.value })}

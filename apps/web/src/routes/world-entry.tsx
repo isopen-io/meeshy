@@ -12,6 +12,7 @@ import { guestRefusalOf, joinLinkAsGuest, linkRefusalOf, type GuestJoinBody, typ
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { loadWorldEntry, WORLD_FALLBACK_TITLE, WORLD_UNAVAILABLE } from '@/lib/api/world';
+import { isGuestNicknameTooShort, USERNAME_MIN_LENGTH } from '@/lib/identity-bounds';
 import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
@@ -200,6 +201,10 @@ export function WorldGuestEntry({
   const enter = async (nickname: string = name.trim(), chosen: InterfaceLanguage = reading) => {
     if (nickname === '') {
       refuseName(translateInvite(language, 'world.name.missing'));
+      return;
+    }
+    if (isGuestNicknameTooShort(nickname)) {
+      refuseName(translateInvite(language, 'invite.tooShort.nickname', { min: String(USERNAME_MIN_LENGTH) }));
       return;
     }
     setNameRefusal(null);

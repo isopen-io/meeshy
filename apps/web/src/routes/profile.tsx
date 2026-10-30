@@ -39,7 +39,7 @@ import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import { useOnline } from '@/lib/net/online';
 import { MY_PROFILE_TABS } from '@/lib/profile/tabs';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
-import { draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
+import { draftIssues, draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
 import { moodsByAuthor } from '@/lib/view/story-tray';
 import {
   ContactSection,
@@ -220,6 +220,7 @@ export default function ProfileScreen() {
 
   const save = async () => {
     if (draft === null || profile === undefined) return;
+    if (Object.keys(draftIssues(profile, draft)).length > 0) return;
     const patch = draftPatch(profile, draft);
     if (Object.keys(patch).length === 0) {
       setDraft(null);
@@ -302,6 +303,7 @@ export default function ProfileScreen() {
         }}
         onCancel={() => setDraft(null)}
         onSave={() => void save()}
+        saveBlocked={profile !== undefined && draft !== null && Object.keys(draftIssues(profile, draft)).length > 0}
       />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
         <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
