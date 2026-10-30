@@ -16,6 +16,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -137,7 +140,10 @@ private fun Context.capturedUploadItem(result: CameraResult): MediaUploadItem? {
     }
 }
 
-/** La ligne d'aide de la scène vide : une seule, discrète, au bas de la scène. */
+/** L'ombre qui détache la ligne d'aide de n'importe quel fond de scène, clair comme sombre. */
+private val SCENE_HINT_SHADOW = Shadow(color = Color.Black.copy(alpha = 0.45f), offset = Offset(0f, 1f), blurRadius = 4f)
+
+/** La ligne d'aide de la scène vide : une seule, discrète, au bas de la scène, à l'encre des contrôles posés sur la scène. */
 @Composable
 internal fun StorySceneCaptureHint(offer: SceneQuickCapture.Offer, modifier: Modifier = Modifier) {
     val label = when (SceneQuickCapture.hint(offer)) {
@@ -147,8 +153,8 @@ internal fun StorySceneCaptureHint(offer: SceneQuickCapture.Offer, modifier: Mod
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Text(
             text = stringResource(label),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium.copy(shadow = SCENE_HINT_SHADOW),
+            color = Color.White.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = 96.dp),
         )

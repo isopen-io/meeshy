@@ -155,6 +155,31 @@ class StoryComposerMoreActionsTest {
     }
 
     @Test
+    fun `a media the scene paints full-bleed without being designated is the background the menu removes`() = runTest {
+        val vm = viewModel()
+        vm.pick("m1")
+        assertThat(vm.state.value.deck.selectedSlide.backgroundMediaId).isNull()
+        assertThat(StoryComposerEraseReducer.hasBackground(vm.state.value)).isTrue()
+
+        vm.onRemoveSceneBackground()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).doesNotContain("m1")
+        assertThat(vm.state.value.selectedSlideBackdropModel(mediaBaseUrl = null)).isNull()
+        assertThat(StoryComposerEraseReducer.hasBackground(vm.state.value)).isFalse()
+    }
+
+    @Test
+    fun `removing the designated background takes off what the scene paints, never a media it does not show`() = runTest {
+        val vm = viewModel()
+        vm.pick("first")
+        vm.pick("chosen", asBackground = true)
+
+        vm.onRemoveSceneBackground()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("first")
+    }
+
+    @Test
     fun `a media chosen as the background becomes the designated background of the scene`() = runTest {
         val vm = viewModel()
         vm.pick("placed")

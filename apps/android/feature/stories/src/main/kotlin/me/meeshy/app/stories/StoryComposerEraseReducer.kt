@@ -13,9 +13,9 @@ internal object StoryComposerEraseReducer {
     fun hasSomethingToErase(state: StoryComposerUiState): Boolean =
         state.deck.size > 1 || state.deck.slides.any { it != StorySlide(id = it.id) }
 
-    /** La diapo sélectionnée porte une couleur de fond ou un média désigné comme fond. */
+    /** La diapo sélectionnée porte une couleur de fond, ou le plateau y peint un média en fond (désigné ou le premier). */
     fun hasBackground(state: StoryComposerUiState): Boolean =
-        state.deck.selectedSlide.background != null || state.deck.selectedSlideBackgroundMediaId != null
+        state.deck.selectedSlide.background != null || state.selectedSlideBackdropMediaId != null
 
     /**
      * Choisir un média comme fond n'a de sens que là où la porte Média ne l'atteint plus : sur une diapo sans média, le

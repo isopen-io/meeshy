@@ -20,6 +20,9 @@ internal enum class StoryComposerSheet {
     STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE;
 
     val servesSelection: Boolean get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP
+
+    /** Les feuilles qui se lisent sur la scène, sombres comme elle : le son et ce qui nomme la publication. */
+    val isDarkOnScene: Boolean get() = this == SOUND || this == MENTION || this == HASHTAGS || this == PLACE
 }
 
 /** La feuille [open] (aucune : `null`), ce qui la referme, ce qui en ouvre une, et ce qu'elle montre. */

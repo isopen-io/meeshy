@@ -57,7 +57,6 @@ import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.MeeshySpacing
 
 /** Les modes qu'une mention prend sur une story : épinglée (pastille), « Avec … », ou silencieuse (iOS `declarable(forCanvas:)`). */
@@ -69,26 +68,24 @@ private fun PostReferenceDisplay.modeLabelRes(): Int = when (this) {
     else -> R.string.story_mention_mode_pinned
 }
 
-/** Les feuilles du « ⋯ » qui nomment la publication (#13846), sombres comme la scène. */
+/** Les feuilles du « ⋯ » qui nomment la publication (#13846) ; l'hôte les peint sombres comme la scène. */
 @Composable
 internal fun StoryReferenceSheet(open: StoryComposerSheet, state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
-    MeeshyTheme(darkTheme = true) {
-        when (open) {
-            StoryComposerSheet.MENTION -> ComposerAnchoredSheet(fill = false) {
-                StoryMentionSheet(referenced = state.referenced, onCancel = onDone) { kept, people, mode ->
-                    viewModel.onReferencesEdited(kept, people, mode)
-                    onDone()
-                }
+    when (open) {
+        StoryComposerSheet.MENTION -> ComposerAnchoredSheet(fill = false) {
+            StoryMentionSheet(referenced = state.referenced, onCancel = onDone) { kept, people, mode ->
+                viewModel.onReferencesEdited(kept, people, mode)
+                onDone()
             }
-            StoryComposerSheet.HASHTAGS -> ComposerAnchoredSheet(fill = false) { StoryHashtagSheet(state, viewModel, onDone) }
-            StoryComposerSheet.PLACE -> ComposerAnchoredSheet(fill = false) {
-                StoryPlaceSheet(onCancel = onDone) { place ->
-                    viewModel.onPosePlace(place)
-                    onDone()
-                }
-            }
-            else -> Unit
         }
+        StoryComposerSheet.HASHTAGS -> ComposerAnchoredSheet(fill = false) { StoryHashtagSheet(state, viewModel, onDone) }
+        StoryComposerSheet.PLACE -> ComposerAnchoredSheet(fill = false) {
+            StoryPlaceSheet(onCancel = onDone) { place ->
+                viewModel.onPosePlace(place)
+                onDone()
+            }
+        }
+        else -> Unit
     }
 }
 

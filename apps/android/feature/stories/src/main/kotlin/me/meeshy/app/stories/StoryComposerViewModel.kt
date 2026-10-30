@@ -514,7 +514,7 @@ class StoryComposerViewModel @Inject constructor(
 
     /** « ⋯ › Retirer le fond de la scène » (#13845) : la couleur et le média de fond partent, en un seul cran. */
     fun onRemoveSceneBackground() {
-        val media = _state.value.deck.selectedSlideBackgroundMediaId
+        val media = _state.value.selectedSlideBackdropMediaId
         _state.update { StoryComposerBackgroundReducer.backgroundChanged(it, null) }
         media?.let(::onRemoveMedia) ?: record()
     }

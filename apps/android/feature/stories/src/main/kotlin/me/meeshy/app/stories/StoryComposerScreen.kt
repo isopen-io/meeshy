@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import me.meeshy.ui.component.audio.AudioTrackSurface
+import me.meeshy.ui.theme.MeeshyTheme
 
 /** Le délai après lequel la fenêtre d'un son rogné est reprise par le lecteur du composeur. */
 private const val SOUND_WINDOW_SETTLE_MS: Long = 300L
@@ -149,9 +150,24 @@ fun StoryComposerScreen(
     )
 }
 
-/** La feuille ouverte, dans sa coque ancrée : les stickers, l'étagère des sons, l'audience (#13838). */
+/** La feuille ouverte, dans sa coque ancrée ; celles qui se lisent sur la scène sont sombres comme elle. */
 @Composable
 private fun StoryComposerSheetContent(
+    open: StoryComposerSheet,
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    onDone: () -> Unit,
+) {
+    if (open.isDarkOnScene) {
+        MeeshyTheme(darkTheme = true) { StoryComposerSheetBody(open, state, viewModel, onDone) }
+    } else {
+        StoryComposerSheetBody(open, state, viewModel, onDone)
+    }
+}
+
+/** Les stickers, le son, l'audience (#13838), et ce que la publication nomme (#13846). */
+@Composable
+private fun StoryComposerSheetBody(
     open: StoryComposerSheet,
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,

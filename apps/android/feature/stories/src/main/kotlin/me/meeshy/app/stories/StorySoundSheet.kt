@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -138,7 +139,7 @@ private fun StorySoundSheetHeader(onDone: () -> Unit) {
 
 /** Les trois sources d'un son, à égalité : le micro, les fichiers, la bibliothèque. */
 @Composable
-private fun StorySoundSources(onRecord: () -> Unit, onFiles: () -> Unit, onLibrary: () -> Unit) {
+internal fun StorySoundSources(onRecord: () -> Unit, onFiles: () -> Unit, onLibrary: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SourceButton(MeeshyIcons.Mic, R.string.story_sound_sheet_source_record, onRecord, Modifier.weight(1f))
         SourceButton(MeeshyIcons.Folder, R.string.story_sound_sheet_source_files, onFiles, Modifier.weight(1f))
@@ -148,7 +149,11 @@ private fun StorySoundSources(onRecord: () -> Unit, onFiles: () -> Unit, onLibra
 
 @Composable
 private fun SourceButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Int, onClick: () -> Unit, modifier: Modifier) {
-    OutlinedButton(onClick = onClick, modifier = modifier.heightIn(min = 56.dp)) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 56.dp),
+        contentPadding = PaddingValues(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.sm),
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, contentDescription = null)
             Text(stringResource(label), style = MaterialTheme.typography.labelMedium, maxLines = 1)

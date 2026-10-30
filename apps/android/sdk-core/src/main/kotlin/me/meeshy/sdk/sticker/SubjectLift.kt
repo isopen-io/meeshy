@@ -50,6 +50,7 @@ public class MlKitSubjectLifter @Inject constructor(@ApplicationContext private 
 
     override suspend fun lift(image: Bitmap): Bitmap? = withContext(Dispatchers.Default) {
         runCatching { segmenter.process(InputImage.fromBitmap(image, 0)).awaitOrNull()?.foregroundBitmap }.getOrNull()
+            ?.takeIf { it.showsSubject() }
     }
 }
 
@@ -65,3 +66,18 @@ public abstract class SubjectLiftModule {
     @Binds
     public abstract fun bindSubjectLifting(impl: MlKitSubjectLifter): SubjectLifting
 }
+
+/**
+ * Le détourage montre-t-il un sujet ? Sur une photo sans sujet, ML Kit rend une image entièrement transparente plutôt que
+ * rien : une image sans un pixel visible n'en montre aucun. Lue ligne à ligne, sans copier l'image entière.
+ */
+public fun Bitmap.showsSubject(): Boolean {
+    val row = IntArray(width)
+    return (0 until height).any { y ->
+        getPixels(row, 0, width, 0, y, width, 1)
+        row.any { pixel -> (pixel ushr ALPHA_SHIFT) > VISIBLE_ALPHA }
+    }
+}
+
+private const val ALPHA_SHIFT = 24
+private const val VISIBLE_ALPHA = 8

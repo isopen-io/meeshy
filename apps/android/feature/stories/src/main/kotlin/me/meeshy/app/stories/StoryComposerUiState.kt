@@ -170,19 +170,21 @@ data class StoryComposerUiState(
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
 
     /**
-     * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
-     * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
+     * Le média que le plateau peint en fond : celui que la publication désigne (envoyé ou encore en attente), sinon le
+     * premier média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas). C'est
+     * aussi celui que « Retirer le fond de la scène » retire : on retire ce que l'on voit.
      */
-    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
-        val designated = deck.selectedSlideBackgroundMediaId
-        val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
-        val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
-        return when {
-            uploaded != null -> ComposerMediaAddress.preview(uploaded, mediaBaseUrl)
-            pending != null -> pending.item.previewModel
-            else -> selectedSlideAttachments.firstOrNull()?.let { ComposerMediaAddress.preview(it, mediaBaseUrl) }
-                ?: selectedSlidePending.firstOrNull()?.item?.previewModel
+    val selectedSlideBackdropMediaId: String?
+        get() {
+            val designated = deck.selectedSlideBackgroundMediaId
+            val served = selectedSlideAttachments.any { it.id == designated } || selectedSlidePending.any { it.cmid == designated }
+            return designated?.takeIf { served } ?: selectedSlideAttachments.firstOrNull()?.id ?: selectedSlidePending.firstOrNull()?.cmid
         }
+
+    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
+        val id = selectedSlideBackdropMediaId ?: return null
+        selectedSlideAttachments.firstOrNull { it.id == id }?.let { return ComposerMediaAddress.preview(it, mediaBaseUrl) }
+        return selectedSlidePending.firstOrNull { it.cmid == id }?.item?.previewModel
     }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
