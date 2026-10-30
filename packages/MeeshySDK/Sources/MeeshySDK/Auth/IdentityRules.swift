@@ -38,10 +38,11 @@ public enum IdentityRules {
 
     // MARK: - Longueur visible d'un nom
 
-    private static let invisibleOrControl: Set<UInt32> = Set(
-        [0x200B, 0xFEFF, 0x000B, 0x000C] + Array(0x0000...0x0008) + Array(0x000E...0x001F)
-            + Array(0x007F...0x009F) + Array(0xFFF9...0xFFFB)
-    )
+    private static let invisibleOrControl: Set<UInt32> = {
+        let singles: [UInt32] = [0x200B, 0xFEFF, 0x000B, 0x000C]
+        let ranges: [ClosedRange<UInt32>] = [0x0000...0x0008, 0x000E...0x001F, 0x007F...0x009F, 0xFFF9...0xFFFB]
+        return Set(singles).union(ranges.flatMap { Array($0) })
+    }()
     private static let hangulFillers: Set<UInt32> = [0x115F, 0x1160, 0x3164, 0xFFA0]
     private static let pictographicPunctuation: Set<UInt32> = [0x203C, 0x2049, 0x3030, 0x303D]
     private static let pictographicPlane: ClosedRange<UInt32> = 0x1F000...0x1FFFD
