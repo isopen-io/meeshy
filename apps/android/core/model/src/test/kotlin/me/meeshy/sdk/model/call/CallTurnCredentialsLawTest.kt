@@ -49,4 +49,15 @@ class CallTurnCredentialsLawTest {
             CallState.Offering, CallState.Connecting, CallState.Ended(CallEndReason.Local),
         ).forEach { assertThat(CallTurnCredentialsLaw.iceAction(it)).isEqualTo(TurnRefreshIceAction.Inert) }
     }
+
+    @Test
+    fun `each new reconnection attempt asks for fresh credentials, a repeated one does not`() {
+        val law = CallTurnCredentialsLaw::requestsFreshOn
+        assertThat(law(CallState.Connected, CallState.Reconnecting(1))).isTrue()
+        assertThat(law(CallState.Reconnecting(1), CallState.Reconnecting(2))).isTrue()
+        assertThat(law(CallState.Reconnecting(2), CallState.Reconnecting(2))).isFalse()
+        assertThat(law(CallState.Reconnecting(2), CallState.Connected)).isFalse()
+        assertThat(law(CallState.Connecting, CallState.Connected)).isFalse()
+        assertThat(law(CallState.Reconnecting(3), CallState.Ended(CallEndReason.ConnectionLost))).isFalse()
+    }
 }

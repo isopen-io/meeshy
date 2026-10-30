@@ -104,4 +104,37 @@ class CallTurnCredentialsControllerTest {
         turnCredentials.cancelAll()
         assertThat(timer.live).isEmpty()
     }
+
+    @Test
+    fun `each reconnection attempt cancels the deadline and asks once for a fresh set, watchdog armed`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (turnCredentials, host) = controller()
+            turnCredentials.afterConfigure("call-1", turn, ttlSeconds = 3_600)
+
+            host.callState = CallState.Reconnecting(1)
+            turnCredentials.onTransition(CallState.Connected, host.callState)
+
+            verify(exactly = 1) { signals.emitRequestIceServers("call-1") }
+            assertThat(timer.live).containsExactly(8_000L)
+
+            turnCredentials.onTransition(host.callState, host.callState)
+            verify(exactly = 1) { signals.emitRequestIceServers("call-1") }
+
+            host.callState = CallState.Reconnecting(2)
+            turnCredentials.onTransition(CallState.Reconnecting(1), host.callState)
+            verify(exactly = 2) { signals.emitRequestIceServers("call-1") }
+            assertThat(timer.live).containsExactly(8_000L)
+
+            turnCredentials.schedule(ttlSeconds = 600)
+            assertThat(timer.live).containsExactly(480_000L)
+        }
+
+    @Test
+    fun `a reconnection without a joined call asks nothing`() = runTest(UnconfinedTestDispatcher()) {
+        val (turnCredentials, host) = controller()
+        host.callId = ""
+        host.callState = CallState.Reconnecting(1)
+        turnCredentials.onTransition(CallState.Connected, host.callState)
+        verify(exactly = 0) { signals.emitRequestIceServers(any()) }
+    }
 }
