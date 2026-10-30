@@ -23,12 +23,14 @@ import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.HistoryGrantUpdate
+import me.meeshy.sdk.model.MemberCountResolution
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.model.applyRemote
+import me.meeshy.sdk.model.withMemberCount
 import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
 import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
 import me.meeshy.sdk.model.conversationlist.UnreadRow
@@ -70,6 +72,9 @@ class ConversationRepository @Inject constructor(
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
+
+    /** Annonces `conversation:new` en cours de lecture : une même conversation n'est jamais lue deux fois à la fois. */
+    private val learning: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     private val cacheSource = ConversationCacheSource(
         database = database,
@@ -236,6 +241,67 @@ class ConversationRepository @Inject constructor(
     /** #13628 — [remember] for a body the gateway has just served: its null mode is confirmed clear. Never for a cached or built copy. */
     suspend fun rememberServed(conversation: ApiConversation) {
         cacheSource.rememberServed(conversation)
+    }
+
+    /**
+     * `conversation:new` (#13795) : lit et mémorise la conversation que la passerelle vient d'annoncer, pour qu'elle
+     * entre dans la liste (Room) sans rafraîchissement, à sa place d'ordre et avec son mode de chiffrement SERVI
+     * ([rememberServed]). `true` quand elle est connue à l'issue (déjà en cache, en cours de lecture par un autre
+     * appel, ou mémorisée) ; `false` quand la lecture a échoué ou que le compte a changé — l'appelant peut alors
+     * demander une relecture de la liste. Une conversation déjà connue n'est jamais relue ni dupliquée, et la ligne
+     * ajoutée est protégée de l'élagage d'un balayage dont l'agrégat n'a pas encore rattrapé la création.
+     *
+     * Le compte est celui sous lequel l'événement est ARRIVÉ ([me.meeshy.sdk.socket.collectArrived]) : un compte clos
+     * ne lit rien (aucune requête sous le jeton du suivant) et n'écrit rien.
+     */
+    suspend fun learnCreated(conversationId: String): Boolean {
+        val ticket = fence?.currentTicket()
+        if (ticket != null && fence?.isCurrent(ticket) == false) return false
+        if (conversationDao.find(conversationId) != null) return true
+        if (!learning.add(conversationId)) return true
+        try {
+            return when (val served = getById(conversationId)) {
+                is NetworkResult.Success -> {
+                    noteCreated(conversationId)
+                    cacheSource.rememberServed(served.data)
+                    true
+                }
+                is NetworkResult.Failure -> false
+            }
+        } finally {
+            learning.remove(conversationId)
+        }
+    }
+
+    /**
+     * #13795 — l'effectif d'une ligne du cache après une adhésion ou un débannissement ([MemberCountResolution] :
+     * l'absolu servi tranche, le delta n'est qu'un repli). `false` quand la conversation est inconnue (rien n'est
+     * fabriqué) ou que le compte de l'événement n'est plus le courant.
+     */
+    suspend fun applyMembership(
+        conversationId: String,
+        absolute: Int?,
+        absoluteCapped: Boolean?,
+        delta: Int,
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val resolved = MemberCountResolution.after(
+                    current = conversation.memberCount,
+                    currentCapped = conversation.memberCountCapped == true,
+                    absolute = absolute,
+                    absoluteCapped = absoluteCapped,
+                    delta = delta,
+                )
+                conversationDao.upsertAll(
+                    listOf(row.copy(payload = MeeshyApi.json.encodeToString(conversation.withMemberCount(resolved)))),
+                )
+                true
+            }
+        } ?: false
     }
 
     suspend fun create(

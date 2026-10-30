@@ -105,6 +105,8 @@ class ConversationListViewModelEmptyTest {
             every { this@mockk.conversationRestored } returns conversationRestored
             every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
+            every { this@mockk.participantJoined } returns MutableSharedFlow()
+            every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.userStatus } returns userStatus
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
             every { this@mockk.typingStarted } returns typingStarted

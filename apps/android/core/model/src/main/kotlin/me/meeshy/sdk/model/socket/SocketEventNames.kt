@@ -95,6 +95,7 @@ object SocketEventNames {
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_ENCRYPTION_CHANGED = "conversation:encryption-changed"
+    const val CONVERSATION_NEW = "conversation:new"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
     const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
@@ -300,6 +301,7 @@ object SocketEventNames {
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,
+        CONVERSATION_NEW,
         CONVERSATION_PARTICIPANT_BANNED,
         CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
