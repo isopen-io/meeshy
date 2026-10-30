@@ -78,6 +78,22 @@ internal fun ConversationMembersSheet(
     onDismiss: () -> Unit,
     viewModel: ConversationMembersViewModel = hiltViewModel(),
 ) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+    ) {
+        ConversationMembersContent(conversationId, accentColor, viewModel = viewModel)
+    }
+}
+
+/** La liste des membres et sa modération, montée par la feuille ou par l'onglet Membres de la fiche (#13785). */
+@Composable
+internal fun ConversationMembersContent(
+    conversationId: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    viewModel: ConversationMembersViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<PaginatedParticipant?>(null) }
@@ -113,11 +129,7 @@ internal fun ConversationMembersSheet(
         )
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
+        Column(modifier = modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -203,7 +215,6 @@ internal fun ConversationMembersSheet(
                 }
             }
         }
-    }
 
     val removalTarget = pendingRemoval
     if (removalTarget != null) {

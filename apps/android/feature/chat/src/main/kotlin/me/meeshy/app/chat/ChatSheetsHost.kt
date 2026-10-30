@@ -1,7 +1,11 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
@@ -24,11 +28,15 @@ import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
 import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
+import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.app.chat.options.ConversationOptionsExit
 import me.meeshy.app.chat.options.rememberConversationOptionsSlots
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.selection.MessageSelectionHost
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ClientStatMessage
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
@@ -44,7 +52,9 @@ import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.bubble.BubbleContent
 
 /**
  * Sheets layer: every overlay of the chat screen (image gallery, message actions, file
@@ -197,6 +207,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
     var hubContactSeeds by remember { mutableStateOf(emptyMap<String, ContactCardResolutionScope>()) }
+    val openHubFile: (ApiMessage, ApiMessageAttachment) -> Unit = { carrier, attachment ->
+        hubContactSeeds = hubContactSeeds + (attachment.id to hubContactSeed(carrier, attachment))
+        actions.onHubFileOpen(carrier.id, attachment)
+    }
     val contactGate = LocalChatContactCardScope.current
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
@@ -215,9 +229,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             ConversationEncryptionRegime.of(state.encryptionMode)
         }
         val entries = buildList {
-            if (state.isGroup) {
-                add(ConversationInfoEntry(MeeshyIcons.Group, stringResource(R.string.conversation_members_open), openFrom { sheets.members = true }))
-            }
             add(
                 ConversationInfoEntry(
                     icon = encryptionRegime.icon(),
@@ -236,9 +247,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     ),
                 )
             }
-            add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
-            add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
-            add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
             // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
             // announcement / slow-mode); the share link is the « Partager » button of the Options.
             if (state.slowModeExempt) {
@@ -259,6 +267,43 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
             },
         )
+        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (l'analyse en tête, comme le tableau de bord iOS), Options.
+        val analysisEntry = ConversationInfoEntry(
+            MeeshyIcons.Sparkles,
+            stringResource(R.string.conversation_analysis_title),
+            openFrom { sheets.analysis = true },
+        )
+        val tabs = ConversationInfoTabSlots(
+            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
+            media = { modifier ->
+                ConversationMediaHubContent(
+                    conversationId = state.conversationId,
+                    accentColor = accentColor,
+                    isEndToEnd = state.isEndToEnd,
+                    conversationTitle = state.conversationTitle,
+                    onGoToMessage = { messageId ->
+                        sheets.info = false
+                        actions.scrollToMessage(messageId)
+                    },
+                    onOpenFile = openHubFile,
+                    modifier = modifier,
+                )
+            },
+            stats = { modifier ->
+                ConversationStatsContent(
+                    conversationId = state.conversationId,
+                    accentColor = accentColor,
+                    clientMessages = rememberClientStatMessages(state.messages),
+                    modifier = modifier,
+                    header = { ConversationInfoEntryRow(analysisEntry, accentColor) },
+                )
+            },
+            options = { modifier ->
+                Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl)) {
+                    options.body()
+                }
+            },
+        )
         ConversationInfoSheet(
             title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
@@ -271,9 +316,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
             conversationId = state.conversationId,
             entries = entries,
+            tabs = tabs,
             onDismiss = { sheets.info = false },
+            pinnedPreview = ConversationInfoPinnedPreview.of(state.pinnedMessages),
+            onOpenPinned = openFrom(actions.openPinnedSheet),
             headerActions = options.header,
-            options = options.body,
         )
     }
 
@@ -310,14 +357,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     }
 
     if (sheets.stats) {
-        val statsZone = remember { ZoneId.systemDefault() }
-        val clientMessages = remember(state.messages) {
-            state.messages.filterNot { it.isDeleted }.map { it.toClientStatMessage(statsZone) }
-        }
         ConversationStatsSheet(
             conversationId = state.conversationId,
             accentColor = accentColor,
-            clientMessages = clientMessages,
+            clientMessages = rememberClientStatMessages(state.messages),
             onDismiss = { sheets.stats = false },
         )
     }
@@ -340,10 +383,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 sheets.media = false
                 actions.scrollToMessage(messageId)
             },
-            onOpenFile = { carrier, attachment ->
-                hubContactSeeds = hubContactSeeds + (attachment.id to hubContactSeed(carrier, attachment))
-                actions.onHubFileOpen(carrier.id, attachment)
-            },
+            onOpenFile = openHubFile,
             onDismiss = { sheets.media = false },
         )
     }
@@ -538,4 +578,11 @@ internal fun hostedDetailEntries(
 ): Set<MessageAction> {
     val served = if (gallerySaveSupported) HOSTED_DETAIL_ENTRIES + MessageAction.SaveMedia else HOSTED_DETAIL_ENTRIES
     return if (showReadReceipts) served else served - MessageAction.Views
+}
+
+/** Les messages chargés, projetés pour les statistiques locales (la feuille Stats et l'onglet Stats de la fiche). */
+@Composable
+private fun rememberClientStatMessages(messages: List<BubbleContent>): List<ClientStatMessage> {
+    val zone = remember { ZoneId.systemDefault() }
+    return remember(messages) { messages.filterNot { it.isDeleted }.map { it.toClientStatMessage(zone) } }
 }
