@@ -135,6 +135,11 @@ public data class BubbleContent(
      */
     val isEndToEndSealed: Boolean = false,
     /**
+     * The server already reads this row — written in clear (or server-encrypted) before end-to-end was turned on (#13804):
+     * deleting it for everyone keeps its clear route, as the gateway judges the erasure on the row. Closed by default.
+     */
+    val isReadByServer: Boolean = false,
+    /**
      * Les pièces d'un message scellé (#13493) : une rangée « chiffrée » par pièce, sans nom ni adresse — la bulle ne
      * dit pas ce qu'elle ne peut pas lire, mais ne se présente jamais comme un document téléchargeable.
      */

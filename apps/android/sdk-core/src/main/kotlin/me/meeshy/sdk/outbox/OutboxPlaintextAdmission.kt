@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.EndToEndRegimeMemory
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import kotlinx.coroutines.withTimeoutOrNull
@@ -170,11 +171,19 @@ public class EndToEndOutboxAdmission @Inject constructor(
 ) : OutboxPlaintextAdmission, ConversationPlaintextVerdict, OutOfThreadSendGate {
 
     override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
+        // #13804 — supprimer pour tous se juge sur la LIGNE, comme la passerelle : un message qu'elle lit déjà part en clair.
+        if (row.kindEnum == OutboxKind.DELETE_MESSAGE && cachedRowReadByServer(row.targetId)) return OutboxAdmissionVerdict.ADMIT
         val conversations = conversationsOf(row)
         // #13790 — un geste en clair dont la conversation ne se retrouve pas ne part pas : rien ne dit qu'elle est claire.
         if (conversations.isEmpty() && row.kindEnum in PLAIN_SIGNAL_KINDS) return OutboxAdmissionVerdict.UNREACHABLE
         return judgeConversations(conversations)
     }
+
+    /** La ligne en cache, lue depuis le message servi ; absente ou illisible, elle ne se dit pas lue (fail-closed). */
+    private suspend fun cachedRowReadByServer(messageId: String): Boolean =
+        messageDao.find(messageId)?.payload
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(it) }.getOrNull() }
+            ?.let(PlainSignalAdmission::rowReadByServer) == true
 
     /**
      * Le verdict du clair pour UNE conversation, AVANT qu'une bulle n'y naisse (la réponse d'une bannière, #13678) : la même

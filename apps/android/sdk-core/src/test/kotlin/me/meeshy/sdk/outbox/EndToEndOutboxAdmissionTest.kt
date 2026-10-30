@@ -494,4 +494,57 @@ class EndToEndOutboxAdmissionTest {
         assertThat(sent).containsExactly("r1", "p1", "d1").inOrder()
         assertThat(reads).isEmpty()
     }
+
+    // ── #13804 — supprimer pour tous se juge sur la LIGNE du message, comme la passerelle (`messageRefusesPlainErasure`) ──
+
+    private suspend fun cacheRow(id: String, conversationId: String, isEncrypted: Boolean?, mode: String?) {
+        db.messageDao().upsertAll(
+            listOf(MessageEntityFactory.cached(ApiMessage(id = id, conversationId = conversationId, content = "x", isEncrypted = isEncrypted, encryptionMode = mode), 0)),
+        )
+    }
+
+    @Test
+    fun `supprimer pour tous un message ecrit en clair avant l'activation part, la conversation e2ee n'y change rien`() = runTest {
+        cache("c-e2ee", "e2ee")
+        ledger.learn("c-e2ee")
+        cacheRow("msg-plain", "c-e2ee", isEncrypted = null, mode = null)
+        cacheRow("msg-server", "c-e2ee", isEncrypted = true, mode = "server")
+        enqueue(OutboxKind.DELETE_MESSAGE, "d1", targetId = "msg-plain", lane = OutboxLanes.forMessage("c-e2ee"))
+        enqueue(OutboxKind.DELETE_MESSAGE, "d2", targetId = "msg-server", lane = OutboxLanes.forMessage("c-e2ee"))
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-e2ee"))
+
+        assertThat(sent).containsExactly("d1", "d2").inOrder()
+        assertThat(reads).isEmpty()
+    }
+
+    @Test
+    fun `supprimer pour tous un message scelle d'une conversation e2ee ne part pas`() = runTest {
+        cache("c-e2ee", "e2ee")
+        cacheRow("msg-sealed", "c-e2ee", isEncrypted = true, mode = "e2ee")
+        cacheRow("msg-unknown", "c-e2ee", isEncrypted = true, mode = null)
+        enqueue(OutboxKind.DELETE_MESSAGE, "d1", targetId = "msg-sealed", lane = OutboxLanes.forMessage("c-e2ee"))
+        enqueue(OutboxKind.DELETE_MESSAGE, "d2", targetId = "msg-unknown", lane = OutboxLanes.forMessage("c-e2ee"))
+        val sent = mutableListOf<String>()
+
+        val report = drainer(sent).drainLane(OutboxLanes.forMessage("c-e2ee"))
+
+        assertThat(sent).isEmpty()
+        assertThat(report.exhausted).isEqualTo(2)
+    }
+
+    @Test
+    fun `reagir ou epingler un message ecrit en clair avant l'activation reste retenu, seul l'effacement se juge sur la ligne`() = runTest {
+        cache("c-e2ee", "e2ee")
+        cacheRow("msg-plain", "c-e2ee", isEncrypted = null, mode = null)
+        enqueueReaction("r1", "msg-plain")
+        enqueuePin(OutboxKind.PIN_MESSAGE, "p1", "msg-plain", "c-e2ee")
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.REACTION)
+        drainer(sent).drainLane(OutboxLanes.PIN)
+
+        assertThat(sent).isEmpty()
+    }
 }

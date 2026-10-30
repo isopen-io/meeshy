@@ -24,6 +24,7 @@ class SelectionOfferTest {
         status: DeliveryStatus = DeliveryStatus.Sent,
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
         sealed: Boolean = false,
+        readByServer: Boolean = false,
     ) = BubbleContent(
         messageId = id,
         text = text,
@@ -39,6 +40,7 @@ class SelectionOfferTest {
         isStarred = isStarred,
         exitOffer = exitOffer,
         isEndToEndSealed = sealed,
+        isReadByServer = readByServer,
     )
 
     private fun offer(vararg bubbles: BubbleContent) =
@@ -104,5 +106,16 @@ class SelectionOfferTest {
             assertThat(offer.deleteForMe).isTrue()
             assertThat(SelectionOffer.idsOffering(MessageAction.DeleteForEveryone, mine, true, 0, clearance)).isEmpty()
         }
+    }
+
+    @Test
+    fun `in an end-to-end conversation, a selection of messages the server reads is still deleted for everyone, only those (#13804)`() {
+        val before = listOf(bubble("m1", isOutgoing = true, readByServer = true), bubble("m2", isOutgoing = true, readByServer = true))
+        val mixed = before + bubble("m3", isOutgoing = true)
+
+        assertThat(SelectionOffer.of(before, canWrite = true, nowMillis = 0, signalClearance = ConversationClearance.END_TO_END).deleteForEveryone).isTrue()
+        assertThat(SelectionOffer.of(mixed, canWrite = true, nowMillis = 0, signalClearance = ConversationClearance.END_TO_END).deleteForEveryone).isFalse()
+        assertThat(SelectionOffer.idsOffering(MessageAction.DeleteForEveryone, mixed, true, 0, ConversationClearance.END_TO_END))
+            .containsExactly("m1", "m2").inOrder()
     }
 }

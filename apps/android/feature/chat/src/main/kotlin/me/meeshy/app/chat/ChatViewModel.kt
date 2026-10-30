@@ -921,13 +921,14 @@ class ChatViewModel @Inject constructor(
      * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
      *
      * #13790 — reacting, pinning and deleting for everyone travel as encrypted signals in an
-     * end-to-end conversation, which this device cannot seal: there they have no effect at all
+     * end-to-end conversation, which this device cannot seal: there they have no effect at all —
+     * except deleting a message the server already reads (#13804, [erasesInClear])
      * (no optimistic change, no outbox row), whichever path called. An unknown mode is queued —
      * the outbox reads the mode before anything leaves (`EndToEndOutboxAdmission`).
      */
     fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
-        if (_state.value.isEndToEnd) return
+        if (_state.value.isEndToEnd && !erasesInClear(messageId)) return
         viewModelScope.launch {
             try {
                 if (messageRepository.deleteOptimistic(messageId)) {
@@ -940,6 +941,13 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * #13804 — in an end-to-end conversation, a message the server already reads (written in clear before the
+     * activation) keeps its clear deletion route, as the gateway judges the erasure on the row; a sealed or absent one does not.
+     */
+    private fun erasesInClear(messageId: String): Boolean =
+        _state.value.messages.firstOrNull { it.messageId == messageId }?.isReadByServer == true
 
     /**
      * "Delete for me" — hides the message locally only (WhatsApp-style), never

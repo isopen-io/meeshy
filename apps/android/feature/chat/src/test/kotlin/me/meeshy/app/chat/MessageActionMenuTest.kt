@@ -1,11 +1,14 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ContentExitLaw
 import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.Test
 
@@ -29,6 +32,7 @@ class MessageActionMenuTest {
         hostedEntries: Set<MessageAction> = emptySet(),
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
         signalClearance: ConversationClearance = ConversationClearance.CLEAR,
+        isReadByServer: Boolean = false,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -47,6 +51,7 @@ class MessageActionMenuTest {
         hostedEntries = hostedEntries,
         exitOffer = exitOffer,
         signalClearance = signalClearance,
+        isReadByServer = isReadByServer,
     )
 
     private fun offer(law: ContentExitLaw, blur: Boolean = false) =
@@ -494,5 +499,48 @@ class MessageActionMenuTest {
 
         assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.DeleteForEveryone)
         assertThat(context.offersReaction).isFalse()
+    }
+
+    // ── #13804 — un message écrit en clair avant l'activation reste supprimable pour tous, jugé sur sa LIGNE ──
+
+    @Test
+    fun `in an end-to-end conversation, an own message the server reads is still deletable for everyone, nothing else comes back (#13804)`() {
+        listOf(ConversationClearance.END_TO_END, ConversationClearance.UNKNOWN).forEach { clearance ->
+            val context = ctx(isOutgoing = true, canDeleteForEveryone = true, signalClearance = clearance, isReadByServer = true)
+
+            assertThat(MessageActionMenu.actions(context)).containsAtLeast(MessageAction.DeleteForEveryone, MessageAction.DeleteForMe)
+            assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.Unpin)
+            assertThat(context.offersReaction).isFalse()
+        }
+    }
+
+    @Test
+    fun `a message the server reads still needs the deletion window and an own message (#13804)`() {
+        assertThat(MessageActionMenu.actions(ctx(isOutgoing = true, canDeleteForEveryone = false, signalClearance = ConversationClearance.END_TO_END, isReadByServer = true)))
+            .doesNotContain(MessageAction.DeleteForEveryone)
+        assertThat(MessageActionMenu.actions(ctx(isOutgoing = false, canDeleteForEveryone = true, signalClearance = ConversationClearance.END_TO_END, isReadByServer = true)))
+            .doesNotContain(MessageAction.DeleteForEveryone)
+    }
+
+    private val prefs = object : LanguageResolver.ContentLanguagePreferences {
+        override val systemLanguage: String? = "fr"
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private fun built(isEncrypted: Boolean?, mode: String?) = BubbleContentBuilder.build(
+        ApiMessage(id = "65f000000000000000000001", conversationId = "c1", senderId = "me", content = "salut", isEncrypted = isEncrypted, encryptionMode = mode),
+        currentUserId = "me",
+        preferences = prefs,
+    ).actionContext(canWrite = true, canDeleteForEveryone = true, signalClearance = ConversationClearance.END_TO_END)
+
+    @Test
+    fun `the bubble built from the served row says whether the server reads it, as the gateway judges the erasure (#13804)`() {
+        listOf(built(null, null), built(false, null), built(true, "server"), built(true, "hybrid")).forEach { context ->
+            assertThat(MessageActionMenu.actions(context)).contains(MessageAction.DeleteForEveryone)
+        }
+        listOf(built(true, "e2ee"), built(true, null), built(null, "e2ee"), built(true, "signal_v4")).forEach { context ->
+            assertThat(MessageActionMenu.actions(context)).doesNotContain(MessageAction.DeleteForEveryone)
+        }
     }
 }

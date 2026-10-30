@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.DeliveryTier
 import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.from
@@ -151,6 +152,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            isReadByServer = PlainSignalAdmission.rowReadByServer(message),
             sealedPieceIds = if (isEndToEndSealed && !isDeleted) message.attachments.map { it.id } else emptyList(),
             holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
