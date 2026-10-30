@@ -176,7 +176,7 @@ class StoryComposerViewModel @Inject constructor(
                             ),
                         ),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
-                ).withAudiencePurged().mirrorDraftToSelection()
+                ).audiencePurged().mirrorDraftToSelection()
             }
             resetHistory()
         }
@@ -351,6 +351,24 @@ class StoryComposerViewModel @Inject constructor(
     /** Adds an emoji sticker to the selected slide and selects it (blank ignored, warns at the cap). */
     fun onAddSticker(emoji: String) = newStickerId().let { id ->
         reduce { StoryComposerSceneReducer.placedAtPlayhead(it) { s -> StoryComposerStickerReducer.added(s, emoji, id) } }
+    }
+
+    /** Un sticker à GABARIT (#13847) : son repli et son mouvement viennent du catalogue ; un gabarit inconnu ne pose rien. */
+    fun onAddTemplateSticker(templateId: String, slots: Map<String, String>) {
+        val sticker = StickerTemplatePose.element(templateId, slots, newStickerId()) ?: return
+        reduce { StoryComposerStickerReducer.posed(it, sticker) }
+    }
+
+    /** Un sticker IMAGE (Mee, pack, Mes stickers) : vu tout de suite, publiable à l'arrivée de ses octets — UN pas d'annulation ; un échec le retire et le dit. */
+    fun onAddImageSticker(pose: StickerImagePose) = newStickerId().let { id ->
+        reduce { StoryComposerStickerReducer.posed(it, pose.awaiting(id)) }
+        if (_state.value.deck.selectedSlide.stickers.none { it.id == id }) return@let
+        stickerImages.started(id)
+        viewModelScope.launch {
+            val uploaded = mediaUploader.uploadSticker(pose)?.let { it.copy(url = ComposerMediaAddress.of(it.url, mediaBaseUrl)) }
+            stickerImages.settled(id, uploaded)
+            _state.update { stickerImages.reconciled(if (uploaded == null) StoryComposerStickerReducer.imageFailed(it, id) else it) }
+        }
     }
 
     fun onSelectSticker(id: String) = reduce { StoryComposerStickerReducer.selected(it, id) }
@@ -578,10 +596,11 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private val buried = BuriedUploads()
+    private val stickerImages = StickerImageUploads()
 
     private fun restore(snapshot: ComposerSnapshot) {
         val before = _state.value.pendingUploads
-        _state.update { it.restoredTo(snapshot, buried.held).withHistoryFlags() }
+        _state.update { stickerImages.reconciled(it.restoredTo(snapshot, buried.held)).withHistoryFlags() }
         buried.settled(before, _state.value.pendingUploads)
     }
 
@@ -695,7 +714,7 @@ class StoryComposerViewModel @Inject constructor(
     fun publish() {
         (editMode as? StoryEditMode.Active)?.let { return it.save(viewModelScope, _state, _published, resolvePublishLanguage()) }
         if (editMode != null) return
-        val current = _state.updateAndGet { it.withAudiencePurged() }
+        val current = _state.updateAndGet { it.audiencePurged() }
         if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
@@ -738,26 +757,9 @@ class StoryComposerViewModel @Inject constructor(
         underOpeningAccount { draftStore.save(snapshot.copy(awaitingPublication = queued)) }
     }
 
-    /**
-     * La liste encore valable pour [visibility]. Sous ONLY, un compte bloqué depuis (et soi) n'est
-     * plus un destinataire. Sous EXCEPT, la liste EXCLUT : retirer un bloqué en ferait de nouveau
-     * un destinataire, donc seul soi en sort — une exclusion existante ne se perd jamais.
-     */
-    private fun reachable(ids: List<String>, visibility: StoryVisibility): List<String> {
-        val selfId = sessionRepository.currentUser.value?.id
-        if (visibility != StoryVisibility.ONLY) return ids.filter { it != selfId }
-        val blocked = blocks.currentBlockedIds
-        return ids.filter { it != selfId && it !in blocked }
-    }
-
-    private fun StoryComposerUiState.withAudiencePurged(): StoryComposerUiState {
-        val blocked = blocks.currentBlockedIds
-        val purged = draft.copy(
-            visibilityUserIds = reachable(draft.visibilityUserIds, draft.visibility),
-            mentions = draft.mentions.filterNot { mention -> mention.userId?.let { it in blocked } == true },
-        )
-        return if (purged == draft) this else copy(draft = purged)
-    }
+    private fun reachable(ids: List<String>, visibility: StoryVisibility) =
+        reachableAudience(ids, visibility, sessionRepository.currentUser.value?.id, blocks.currentBlockedIds)
+    private fun StoryComposerUiState.audiencePurged() = withAudiencePurged(sessionRepository.currentUser.value?.id, blocks.currentBlockedIds)
 
     internal fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
 
@@ -785,6 +787,7 @@ class StoryComposerViewModel @Inject constructor(
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
         const val TEXT_ELEMENT_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
+        const val STICKER_IMAGE_FAILED = "Couldn't add that sticker"
         const val STICKER_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_STICKERS_PER_SLIDE} stickers per slide"
         const val TEXT_LENGTH_LIMIT =

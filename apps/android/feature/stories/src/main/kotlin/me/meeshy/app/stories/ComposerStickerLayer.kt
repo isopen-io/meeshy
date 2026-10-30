@@ -31,9 +31,14 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import me.meeshy.ui.sticker.StickerTemplateArtwork
+import me.meeshy.ui.sticker.stickerTemplateName
 
 /**
- * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
+ * One on-canvas sticker — emoji, template or image ([ComposerStickerArt]): placed at its normalised ([StoryStickerElement.x],
  * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
  * pinch/rotate-able with one gesture, tappable to select and long-pressable for its menu
  * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Selected, it carries the dashed
@@ -59,6 +64,7 @@ internal fun StickerLayer(
     showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    val label = stickerTemplateName(sticker.templateId) ?: sticker.emoji
     val haptics = rememberMeeshyHaptics()
     val currentTap by rememberUpdatedState(onTap)
     val currentLongPress by rememberUpdatedState(onLongPress)
@@ -104,7 +110,7 @@ internal fun StickerLayer(
                 }
             }
             .semantics {
-                contentDescription = sticker.emoji
+                contentDescription = label
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
@@ -112,10 +118,35 @@ internal fun StickerLayer(
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE)
+        ComposerStickerArt(sticker)
         SceneObjectMenuPopup(menu = menu, onAction = onMenuAction, onDismiss = onMenuDismiss)
     }
 }
+
+/**
+ * Ce que le canevas dessine d'un sticker (#13847) : son gabarit s'il est au catalogue, son image (l'aperçu local pendant
+ * l'envoi, puis l'adresse servie) avec l'emoji en attendant, sinon l'emoji.
+ */
+@Composable
+private fun ComposerStickerArt(sticker: StoryStickerElement) {
+    val glyph: @Composable () -> Unit = { Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE) }
+    when {
+        StickerTemplateArtwork.knows(sticker.templateId) ->
+            StickerTemplateArtwork(sticker.templateId, sticker.slots, body = STICKER_TEMPLATE_BODY)
+        sticker.imageUrl != null -> SubcomposeAsyncImage(
+            model = sticker.imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(STICKER_IMAGE_SIDE),
+            loading = { glyph() },
+            error = { glyph() },
+        )
+        else -> glyph()
+    }
+}
+
+private val STICKER_TEMPLATE_BODY = 16.dp
+private val STICKER_IMAGE_SIDE = 72.dp
 
 /** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
 internal val STICKER_BASE_FONT_SIZE = 48.sp

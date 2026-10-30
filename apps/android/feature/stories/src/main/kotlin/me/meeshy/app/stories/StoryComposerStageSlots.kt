@@ -245,6 +245,7 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
 internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
     null -> null
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)

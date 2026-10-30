@@ -115,9 +115,16 @@ data class StoryDraftStickerElementSnapshot(
     val rotationDeg: Float = 0f,
     val startSeconds: Float = 0f,
     val durationSeconds: Float = 0f,
+    /** #13847 — additifs : un brouillon d'avant les relit vides (un emoji). */
+    val templateId: String = "",
+    val slots: Map<String, String> = emptyMap(),
+    val postMediaId: String = "",
+    val provider: String? = null,
+    val imageUrl: String? = null,
+    val animation: String? = null,
 ) {
-    /** True once the sticker carries publishable content — a non-blank [emoji]. */
-    val isPublishable: Boolean get() = emoji.isNotBlank()
+    /** True once the sticker carries publishable content — an emoji, a template or an uploaded image. */
+    val isPublishable: Boolean get() = emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank()
 }
 
 /** Un média de la slide posé sur la scène : son id et sa pose normalisée (centre 0,5 ; échelle 1 ; droit). */

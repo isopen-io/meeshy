@@ -89,6 +89,7 @@ private fun ObjectEditSheet(state: StoryComposerUiState, viewModel: StoryCompose
                 )
             }
             state.selectionBar?.let { bar -> bar.sheetActions.forEach { action -> BackgroundChip(bar.ref, action, viewModel) } }
+            media?.let { MakeStickerChip(state, it, viewModel) }
         }
         when {
             media != null -> MediaSectionContent(state, media, viewModel, comparison)

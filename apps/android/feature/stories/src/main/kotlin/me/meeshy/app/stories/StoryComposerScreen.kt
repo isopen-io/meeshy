@@ -148,13 +148,7 @@ private fun StoryComposerSheetContent(
 ) {
     when (open) {
         StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = true) {
-            StickerPickerPanel(
-                onPick = { emoji ->
-                    viewModel.onAddSticker(emoji)
-                    onDone()
-                },
-                onDismiss = onDone,
-            )
+            StoryStickerSheetPanel(viewModel = viewModel, onDismiss = onDone)
         }
         StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
             SoundShelfSheet(

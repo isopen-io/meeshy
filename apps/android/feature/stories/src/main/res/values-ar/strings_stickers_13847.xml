@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_make">إنشاء ملصق</string>
+    <string name="story_sticker_lift_saved">تم اقتصاص الموضوع وإضافته إلى ملصقاتي</string>
+    <string name="story_sticker_lift_no_subject">لم يُعثر على موضوع في هذه الصورة</string>
+    <string name="story_sticker_lift_unreadable">صورة غير قابلة للقراءة</string>
+    <string name="story_sticker_image_failed">تعذّرت إضافة هذا الملصق</string>
+</resources>

@@ -130,7 +130,8 @@ data class StoryComposerUiState(
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
-            !isUploadingMedia
+            !isUploadingMedia &&
+            !deck.awaitsStickerImage
 
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?

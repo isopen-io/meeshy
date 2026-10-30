@@ -120,6 +120,9 @@ data class StorySlideDeck(
     /** At least one slide carries a place pastille (#13846). */
     val hasPlaces: Boolean get() = slides.any { it.places.isNotEmpty() }
 
+    /** Une image de sticker dont les octets ne sont pas arrivés : la publier la perdrait, la publication l'attend. */
+    val awaitsStickerImage: Boolean get() = slides.any { slide -> slide.stickers.any { it.isAwaitingImage } }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
