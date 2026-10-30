@@ -66,6 +66,7 @@ internal data class LeadingRailModel(
     val moreEntries: List<ComposerMoreEntry>,
     val animated: Boolean,
     val exportEnabled: Boolean,
+    val cameraServed: Boolean = false,
 )
 
 /**
@@ -100,7 +101,7 @@ private fun LeadingRailTools(
     onMediaSource: (ComposerMediaSource) -> Unit,
 ) {
     ComposerLabeledRail.tools.forEach { tool ->
-        MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool), onMediaSource) { press ->
+        MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, rail.cameraServed), onMediaSource) { press ->
             LabeledRailItem(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == rail.activeTool, press = press)
         }
     }

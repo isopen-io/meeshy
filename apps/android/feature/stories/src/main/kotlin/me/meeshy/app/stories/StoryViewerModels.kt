@@ -61,6 +61,8 @@ data class StoryForegroundMediaView(
     /** Le ThumbHash de la pièce : l'affiche de repli quand le serveur n'a pas de vignette. */
     val thumbHash: String? = null,
     val zIndex: Int = 0,
+    /** Le recadrage d'une IMAGE posée (#13849) : le cadre en montre cette part, la source entière peinte derrière. */
+    val crop: me.meeshy.sdk.model.StoryMediaCrop? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -291,6 +293,8 @@ data class StoryViewerUiState(
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
+    /** « Composer » sait reprendre la story courante à l'identique (#13849, iOS `composableSlide`) : sinon l'entrée n'existe pas. */
+    val canCompose: Boolean = false,
     val prefetchUrls: List<String> = emptyList(),
     val canAutoAdvance: Boolean = false,
     val availableLanguages: List<StoryLanguageOption> = emptyList(),

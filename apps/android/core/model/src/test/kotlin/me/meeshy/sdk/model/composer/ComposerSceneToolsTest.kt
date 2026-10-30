@@ -113,6 +113,15 @@ class ComposerSceneToolsTest {
     }
 
     @Test
+    fun `the long press on media offers the scene camera first, only while the viewfinder can be armed`() {
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA, cameraServed = true))
+            .containsExactly(ComposerMediaSource.CAMERA, ComposerMediaSource.PHOTO_LIBRARY, ComposerMediaSource.FILES).inOrder()
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA, cameraServed = false))
+            .doesNotContain(ComposerMediaSource.CAMERA)
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.TEXT, cameraServed = true)).isEmpty()
+    }
+
+    @Test
     fun `the frame is only served over a background media, the timing only for an animated scene`() {
         assertThat(more(hasBackgroundMedia = false)).doesNotContain(ComposerMoreEntry.FRAME)
         assertThat(more(hasBackgroundMedia = true)).contains(ComposerMoreEntry.FRAME)

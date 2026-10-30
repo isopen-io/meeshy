@@ -185,13 +185,15 @@ internal fun StoryForegroundLayer(
                 onAudioFocusLost = onAudioFocusLost,
             )
         } else {
-            AsyncImage(
-                model = media.url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
-                modifier = layerModifier,
-            )
+            Box(layerModifier) {
+                AsyncImage(
+                    model = media.url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
+                    modifier = Modifier.croppedSource(media.crop),
+                )
+            }
         }
     }
 }

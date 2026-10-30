@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StorySourceWindow
@@ -203,7 +204,11 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             y = y,
             scale = scale,
             rotation = rotation,
-            aspectRatio = aspectRatio ?: ForegroundMediaFrame.measuredAspectRatio(piece?.width, piece?.height) ?: servedAspectRatio,
+            aspectRatio = StoryMediaCrop.effectiveRatio(
+                aspectRatio ?: ForegroundMediaFrame.measuredAspectRatio(piece?.width, piece?.height) ?: servedAspectRatio,
+                crop.takeIf { mediaType != "video" },
+            ),
+            crop = crop?.takeIf { mediaType != "video" && !it.isFull }?.let(StoryMediaCrop::clamped),
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
             fadeIn = fadeIn ?: 0.0,

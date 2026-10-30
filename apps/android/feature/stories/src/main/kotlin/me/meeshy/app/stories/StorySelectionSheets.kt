@@ -172,6 +172,7 @@ internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
         MediaEditTool.EFFECTS -> MeeshyIcons.Sparkles
         MediaEditTool.ALT_TEXT -> MeeshyIcons.TextFields
         MediaEditTool.TRIM -> MeeshyIcons.Cut
+        MediaEditTool.CROP -> MeeshyIcons.Crop
         else -> MeeshyIcons.Layers
     }
     ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
@@ -196,6 +197,7 @@ internal fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
         MediaEditTool.EFFECTS -> R.string.stories_composer_band_effets
         MediaEditTool.ALT_TEXT -> R.string.composer_column_media_alt_text
         MediaEditTool.TRIM -> R.string.composer_column_media_trim
+        MediaEditTool.CROP -> R.string.composer_column_media_crop
         else -> R.string.composer_column_text_plan
     }
 }

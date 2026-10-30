@@ -117,7 +117,7 @@ internal fun SceneTopBar(
 
 /**
  * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
- * long de Média qui propose ses sources ([onMediaSource], #13845). Quand un panneau monte et lui laisse moins de place, elle
+ * long de Média qui propose ses sources ([onMediaSource], #13845), la caméra de la scène en tête quand elle est servie ([cameraServed], #13849). Quand un panneau monte et lui laisse moins de place, elle
  * défile au lieu d'écraser ses cibles de 48 dp.
  */
 @Composable
@@ -127,6 +127,7 @@ internal fun SceneToolColumn(
     more: @Composable () -> Unit,
     active: ComposerSceneTool? = null,
     onMediaSource: (ComposerMediaSource) -> Unit = {},
+    cameraServed: Boolean = false,
 ) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -137,7 +138,7 @@ internal fun SceneToolColumn(
             if (tool == ComposerSceneTool.MORE) {
                 more()
             } else {
-                MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool), onMediaSource) { press ->
+                MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
                     SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
                 }
             }

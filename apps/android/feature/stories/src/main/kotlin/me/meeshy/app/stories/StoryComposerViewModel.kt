@@ -122,6 +122,9 @@ class StoryComposerViewModel @Inject constructor(
         resetHistory()
     }
 
+    /** « Composer » depuis une story vue (#13849) : la scène semée devient la composition, son historique repart d'elle. */
+    internal fun onRecomposed(done: StoryRecomposed) { _state.update { StoryRecomposition.applied(it, done.plan, done.uploaded) }; resetHistory() }
+
     /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
     fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
         restoring?.join()

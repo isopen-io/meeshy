@@ -35,7 +35,11 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** The scene of the story composer: the canvas and the long-press menu of its background media. */
+/**
+ * The scene of the story composer: the canvas and the long-press menu of its background media. Blank and at rest
+ * ([captureOffered]), the scene arms [capture]'s viewfinder on a touch, and films on a hold (#13849); armed, the viewfinder
+ * covers the scene alone.
+ */
 @Composable
 internal fun StoryComposerScene(
     state: StoryComposerUiState,
@@ -43,9 +47,12 @@ internal fun StoryComposerScene(
     sceneExport: SceneExportHost,
     comparison: LookComparison,
     modifier: Modifier = Modifier,
+    capture: StorySceneCapture? = null,
+    captureOffered: Boolean = false,
 ) {
     var backgroundMenuOpen by remember { mutableStateOf(false) }
-    Box(modifier) {
+    val armsCapture = capture?.takeIf { captureOffered }
+    Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideBackdropModel(viewModel.mediaBaseUrl),
@@ -87,7 +94,7 @@ internal fun StoryComposerScene(
                         onTap = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                     )
                 },
-                onBackgroundTap = viewModel::onSceneBackgroundTap,
+                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: viewModel::onSceneBackgroundTap,
                 selectedMediaId = state.selectedMedia,
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier.fillMaxSize(),
@@ -95,7 +102,8 @@ internal fun StoryComposerScene(
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
                 capture = sceneExport.capture,
                 onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
-                    ?.let { { backgroundMenuOpen = true } },
+                    ?.let { { backgroundMenuOpen = true } }
+                    ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
                 places = { width, height, capturing ->
                     state.deck.selectedSlide.places.forEach { place ->
                         key(place.id) {
@@ -125,6 +133,8 @@ internal fun StoryComposerScene(
                     }
                 },
             )
+            armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
+            capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
 }
 

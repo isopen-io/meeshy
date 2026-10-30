@@ -146,6 +146,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
+            onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },
             // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
             onStoryMissing = { postId ->
                 navController.navigate(Routes.postDetail(postId)) { popUpTo(Routes.STORY_VIEWER) { inclusive = true } }
@@ -199,6 +200,11 @@ internal fun NavGraphBuilder.feedNavGraph(
                 nullable = true
                 defaultValue = null
             },
+            navArgument(Routes.STORY_COMPOSER_RECOMPOSE_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
         ),
     ) { entry ->
         StoryComposerScreen(
@@ -206,6 +212,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
             initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
             editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG),
+            recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG),
         )
     }
 }

@@ -59,6 +59,7 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
+            ComposerObjectEditorSection.Media(MediaEditTool.CROP) -> PlacedCropSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> AdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel, comparison)
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> AdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel, comparison)
             else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {

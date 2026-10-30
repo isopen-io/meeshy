@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
 import me.meeshy.ui.component.audio.AudioTrackSurface
 
@@ -63,6 +64,10 @@ fun StoryComposerScreen(
     editStoryId: String? = null,
     /** Le menu « Publier comme » de l'hôte, posé dans le chevron de Publier ; la route autonome n'en a pas. */
     formatChevron: (@Composable () -> Unit)? = null,
+    /** La porte : ce que la scène vide ouvre d'un toucher ou d'un appui long, photo et vidéo ou vidéo seule (#13849). */
+    opening: ComposerOpening = ComposerOpening.CAMERA_READY,
+    /** La story VUE dont « Composer » sème la scène entière (#13849) : ses médias rapatriés et téléversés à nouveau. */
+    recomposeStoryId: String? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -85,11 +90,16 @@ fun StoryComposerScreen(
     // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
     // leave — the composer's save-on-dismiss / restore-on-appear seam.
     DisposableEffect(viewModel) {
-        viewModel.onEnterComposer(seededByDoor = repostOfId != null || seededByDoor || editStoryId != null, initialVisibility = initialVisibility)
+        viewModel.onEnterComposer(
+            seededByDoor = repostOfId != null || seededByDoor || editStoryId != null || recomposeStoryId != null,
+            initialVisibility = initialVisibility,
+        )
         onDispose { viewModel.persistDraft() }
     }
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
+    StoryRecomposeGate(recomposeStoryId = recomposeStoryId, viewModel = viewModel, onClose = onClose)
+    val capture = rememberStorySceneCapture(opening, viewModel)
 
     val pickers = rememberStoryMediaPickers(state.mediaPickMode, viewModel)
 
@@ -113,8 +123,8 @@ fun StoryComposerScreen(
             StoryScenePanel.DURATION, StoryScenePanel.CAPTION -> ({ morePanel = null })
             StoryScenePanel.TEXT -> viewModel::onDeselectTextElement
             else -> if (state.selectedSceneObject != null) viewModel::onSceneBackgroundTap else null
-        },
-        onCloseSheet = if (sheet?.let(state::serves) == true) ({ sheet = null }) else null,
+        }.takeIf { !capture.armed },
+        onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
     StoryComposerSceneFirst(
         state = state,
@@ -135,6 +145,7 @@ fun StoryComposerScreen(
         sheet = StorySheetSlot(open = sheet, onDismiss = { sheet = null }, onOpen = { sheet = it }) { open ->
             StoryComposerSheetContent(open, state, viewModel, onDone = { sheet = null })
         },
+        capture = capture,
     )
 }
 

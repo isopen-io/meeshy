@@ -142,6 +142,8 @@ data class StoryDraftPlacedMediaSnapshot(
     /** La fenêtre de source d'une vidéo rognée (#13600), en secondes, les deux bornes ou aucune ; un blob d'avant se lit « source entière ». */
     val sourceStart: Double? = null,
     val sourceEnd: Double? = null,
+    /** Le recadrage d'une image posée (#13849), en fractions de la source ; un blob d'avant se lit « source entière ». */
+    val crop: StoryMediaCrop? = null,
 )
 
 /**

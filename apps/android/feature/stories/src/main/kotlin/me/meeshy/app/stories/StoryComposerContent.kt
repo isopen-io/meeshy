@@ -8,6 +8,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.composer.CarriedMedia
 import me.meeshy.sdk.model.composer.ComposerCarry
+import me.meeshy.sdk.model.composer.ComposerOpening
 
 /**
  * The story body of the ONE composer: [StoryComposerScreen] mounted as a CONTENT of the host. The scene
@@ -29,10 +30,12 @@ fun StoryComposerContent(
     seedMedia: List<MediaUploadItem> = emptyList(),
     seededByDoor: Boolean = false,
     onSeedApplied: () -> Unit = {},
+    /** Ce que la porte promet au geste sur la scène vide : le viseur photo et vidéo, ou vidéo seulement (#13849). */
+    opening: ComposerOpening = ComposerOpening.CAMERA_READY,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, formatChevron = formatChevron, viewModel = viewModel)
+    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, formatChevron = formatChevron, opening = opening, viewModel = viewModel)
     LaunchedEffect(seedMedia) {
         if (seedMedia.isEmpty()) return@LaunchedEffect
         viewModel.onMediaPicked(seedMedia)

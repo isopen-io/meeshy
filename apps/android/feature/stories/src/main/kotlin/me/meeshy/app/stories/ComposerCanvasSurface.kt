@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -111,6 +112,8 @@ internal fun StoryCanvasSurface(
     places: @Composable (canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val backgroundTap by rememberUpdatedState(onBackgroundTap)
+    val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
     val capturing = capture != null && capture.pass != SceneCapturePass.NONE
     val overlayOnly = capture?.pass == SceneCapturePass.OVERLAY_ONLY
     val frameShape = if (capturing) RectangleShape else RoundedCornerShape(16.dp)
@@ -155,8 +158,8 @@ internal fun StoryCanvasSurface(
                         Modifier
                             .pointerInput(onBackgroundLongPress != null) {
                                 detectTapGestures(
-                                    onLongPress = onBackgroundLongPress?.let { longPress -> { _ -> longPress() } },
-                                    onTap = { onBackgroundTap() },
+                                    onLongPress = if (onBackgroundLongPress != null) ({ _ -> backgroundLongPress?.invoke() }) else null,
+                                    onTap = { backgroundTap() },
                                 )
                             }
                             .pointerInput(Unit) {

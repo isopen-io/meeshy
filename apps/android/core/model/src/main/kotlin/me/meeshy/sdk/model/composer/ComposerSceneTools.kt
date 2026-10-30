@@ -6,8 +6,11 @@ import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 /** Les six boutons ronds posés sur la scène de la story au repos (#13834), le « ⋯ » en dernier. */
 enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, MORE }
 
-/** Ce que l'appui long sur Média propose (#13845, iOS `ComposerRailDoorLongPress`) : la photothèque ou les fichiers. */
-enum class ComposerMediaSource { PHOTO_LIBRARY, FILES }
+/**
+ * Ce que l'appui long sur Média propose (#13845, iOS `ComposerRailDoorLongPress`) : le viseur de la scène (#13849, la
+ * seconde entrée de la caméra quand toucher la scène sélectionne au lieu d'armer), la photothèque ou les fichiers.
+ */
+enum class ComposerMediaSource { CAMERA, PHOTO_LIBRARY, FILES }
 
 /**
  * Ce que le « ⋯ » de la scène range (#13834) : l'aperçu, les réglages de la scène que la colonne ne porte pas, ce que la
@@ -84,9 +87,12 @@ object ComposerSceneTools {
         }
     }
 
-    /** L'appui long n'existe que sur Média ; le toucher bref garde son geste (photothèque, ou le panneau des médias). */
-    fun longPressSources(tool: ComposerSceneTool): List<ComposerMediaSource> =
-        if (tool == ComposerSceneTool.MEDIA) ComposerMediaSource.entries else emptyList()
+    /**
+     * L'appui long n'existe que sur Média ; le toucher bref garde son geste (photothèque, ou le panneau des médias). La
+     * caméra n'est proposée que si [cameraServed] : le format a un viseur et il n'est pas déjà armé.
+     */
+    fun longPressSources(tool: ComposerSceneTool, cameraServed: Boolean = false): List<ComposerMediaSource> =
+        if (tool == ComposerSceneTool.MEDIA) ComposerMediaSource.entries.filter { it != ComposerMediaSource.CAMERA || cameraServed } else emptyList()
 
     /** Une seule diapo n'a rien à choisir : la rangée des vignettes n'existe qu'à partir de deux. */
     fun showsSlideStrip(slideCount: Int): Boolean = slideCount >= 2

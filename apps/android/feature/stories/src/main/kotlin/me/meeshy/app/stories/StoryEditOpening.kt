@@ -146,7 +146,7 @@ internal data class StoryEditOpening(
 }
 
 /** Un sticker que le composeur sait éditer : un emoji nu (une image posée ou un modèle ne s'y réduit pas). */
-private val StorySticker.editable: Boolean get() = !hasImage && templateId.isBlank()
+internal val StorySticker.editable: Boolean get() = !hasImage && templateId.isBlank()
 
 internal fun StorySticker.toElement(): StoryStickerElement = StoryStickerElement(
     id = id,
