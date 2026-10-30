@@ -54,7 +54,7 @@ class PushNotificationActionHandlerTest {
             every { currentUser } returns MutableStateFlow(user)
         }
         val admission = mockk<EndToEndOutboxAdmission> {
-            coEvery { verdictFor(any()) } returns verdict
+            coEvery { outOfThreadVerdictFor(any()) } returns verdict
         }
         val posts = mockk<PostRepository>(relaxed = true) {
             coEvery { queueComment(any(), any(), any(), any()) } returns "cmid_c1"
@@ -182,7 +182,7 @@ class PushNotificationActionHandlerTest {
     @Test
     fun `une relecture du mode qui ne rend rien a temps vaut un mode inconnu, rien ne part en clair`() = runTest {
         val f = Fixture(me, OutboxAdmissionVerdict.ADMIT)
-        coEvery { f.admission.verdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
+        coEvery { f.admission.outOfThreadVerdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
 
         val outcome = f.handler.reply("c1", "texte")
 
@@ -204,7 +204,7 @@ class PushNotificationActionHandlerTest {
         var owner: String? = "me"
         val fence = AccountFence(OutboxOwnerSource { owner })
         val f = Fixture(me, fence = fence)
-        coEvery { f.admission.verdictFor("c1") } coAnswers {
+        coEvery { f.admission.outOfThreadVerdictFor("c1") } coAnswers {
             owner = "other"
             OutboxAdmissionVerdict.WAIT
         }
@@ -260,7 +260,7 @@ class PushNotificationActionHandlerTest {
         val f = Fixture(me, OutboxAdmissionVerdict.ADMIT)
         every { f.session.currentUser } returns signedLate
         coEvery { f.session.refresh() } coAnswers { kotlinx.coroutines.delay(PushNotificationActionHandler.SESSION_BUDGET_MILLIS - 100); signedLate.value = me }
-        coEvery { f.admission.verdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
+        coEvery { f.admission.outOfThreadVerdictFor("c1") } coAnswers { kotlinx.coroutines.awaitCancellation() }
 
         val outcome = f.handler.reply("c1", "texte")
 
@@ -366,7 +366,7 @@ class PushNotificationActionHandlerTest {
         var owner: String? = "me"
         val fence = AccountFence(OutboxOwnerSource { owner })
         val f = Fixture(me, fence = fence)
-        coEvery { f.admission.verdictFor("c1") } coAnswers {
+        coEvery { f.admission.outOfThreadVerdictFor("c1") } coAnswers {
             owner = "other"
             OutboxAdmissionVerdict.ADMIT
         }

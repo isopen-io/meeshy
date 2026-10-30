@@ -25,8 +25,9 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
     private val clock: CacheClock,
+    /** #13792 — chaque page préchargée nourrit le registre des régimes : jamais absent. */
+    private val regime: EndToEndRegimeKeeper,
     private val fence: AccountFence? = null,
-    private val regime: EndToEndRegimeKeeper? = null,
 ) : MessagePrefetchStore {
 
     override suspend fun heldWindow(conversationId: String, limit: Int): HeldMessageWindow {

@@ -123,7 +123,8 @@ public class RepositoryConversationModeReader @Inject constructor(
  * **Fail-closed sur l'INCONNU (#13628)** : un mode nul n'est « clair » que si la passerelle l'a SERVI nul
  * ([EndToEndRegimeLedger.isClearConfirmed]). Une conversation jamais servie (cache périmé, hors ligne) est relue au serveur
  * par [ConversationModeReader] AVANT tout clair ; toujours inconnue ⇒ [OutboxAdmissionVerdict.WAIT], la ligne reste en file.
- * Le chemin nominal (mode en cache) ne fait aucun appel de plus.
+ * Le chemin nominal (mode en cache) ne fait aucun appel RÉSEAU de plus ; il relit en Room les [CACHED_THREAD_WINDOW] lignes
+ * les plus récentes du fil (#13792). Un envoi hors du fil relit en plus le mode au serveur ([outOfThreadVerdictFor]).
  */
 public class EndToEndOutboxAdmission @Inject constructor(
     private val ledger: EndToEndRegimeLedger,
@@ -146,6 +147,26 @@ public class EndToEndOutboxAdmission @Inject constructor(
      * conversation chiffrée ni une conversation dont le mode est encore inconnu ne reçoit une bulle condamnée à ne jamais partir.
      */
     override suspend fun verdictFor(conversationId: String): OutboxAdmissionVerdict = judgeConversations(listOf(conversationId))
+
+    /**
+     * #13792 — le verdict d'un envoi HORS DU FIL (la réponse d'une bannière) : un registre non scellé ne suffit pas à admettre.
+     * Un processus réveillé à froid par FCM n'a appris aucun régime — la donnée du push ne dit pas le bout en bout, et le mode
+     * en cache peut être périmé (« server ») —, donc le mode est TOUJOURS relu au serveur avant le clair. Scellée (registre,
+     * mode en cache, fil en cache) ⇒ refus sans relecture ; relecture impossible ⇒ [OutboxAdmissionVerdict.WAIT], jamais d'envoi.
+     */
+    public suspend fun outOfThreadVerdictFor(conversationId: String): OutboxAdmissionVerdict {
+        if (clearanceOf(conversationId) == ConversationClearance.END_TO_END) return OutboxAdmissionVerdict.WITHHOLD
+        return when (val read = modeReader.read(conversationId)) {
+            is ConversationModeRead.Served ->
+                if (ConversationClearance.ofServed(read.conversation.encryptionMode) == ConversationClearance.END_TO_END) {
+                    OutboxAdmissionVerdict.WITHHOLD
+                } else {
+                    OutboxAdmissionVerdict.ADMIT
+                }
+            ConversationModeRead.Unreadable -> OutboxAdmissionVerdict.WAIT
+            ConversationModeRead.Inaccessible -> OutboxAdmissionVerdict.UNREACHABLE
+        }
+    }
 
     private suspend fun judgeConversations(conversations: List<String>): OutboxAdmissionVerdict {
         val clearances = conversations.distinct().associateWith { clearanceOf(it) }
@@ -177,10 +198,12 @@ public class EndToEndOutboxAdmission @Inject constructor(
     /**
      * #13792 — le fil en cache retient le clair comme le fil ouvert retient son composeur : un message scellé reçu (groupe
      * compris, que le registre n'apprend pas) ou un avis d'activation ferme la conversation, quoi que dise le mode de la liste.
+     * Seules les [CACHED_THREAD_WINDOW] lignes les plus récentes sont relues : depuis #12949 une conversation chiffrée ne reçoit
+     * plus de clair, donc son fil récent porte sa trace ; une trace plus ancienne relève du registre, appris à l'ingestion.
      */
     private suspend fun cachedThreadSeals(conversationId: String): Boolean =
         EndToEndRegimeMemory.cachedThreadSeals(
-            messageDao.endToEndCandidates(conversationId).mapNotNull { row ->
+            messageDao.endToEndCandidates(conversationId, CACHED_THREAD_WINDOW).mapNotNull { row ->
                 runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
             },
         )
@@ -235,10 +258,13 @@ public class EndToEndOutboxAdmission @Inject constructor(
         return EndToEndRegime.isEndToEnd(cached.encryptionMode)
     }
 
-    private companion object {
-        val MESSAGE_LANE_PREFIX: String = OutboxLanes.forMessage("")
+    internal companion object {
+        /** #13792 — les lignes récentes du fil que la garde relit (une lecture Room bornée, sans réseau). */
+        internal const val CACHED_THREAD_WINDOW: Int = 200
 
-        val PLAIN_SIGNAL_KINDS: Set<OutboxKind> = setOf(
+        private val MESSAGE_LANE_PREFIX: String = OutboxLanes.forMessage("")
+
+        private val PLAIN_SIGNAL_KINDS: Set<OutboxKind> = setOf(
             OutboxKind.DELETE_MESSAGE,
             OutboxKind.ADD_REACTION,
             OutboxKind.REMOVE_REACTION,

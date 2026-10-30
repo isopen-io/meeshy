@@ -34,24 +34,46 @@ object EndToEndRegimeMemory {
         }
 
     /** Le fil APPREND le bout en bout : l'avis d'activation partout, un message e2ee dans un tête-à-tête. */
-    fun threadShowsEndToEnd(messages: List<ApiMessage>, isDirect: Boolean): Boolean = teachesEndToEnd(messages) { isDirect }
+    fun threadShowsEndToEnd(messages: List<ApiMessage>, isDirect: Boolean): Boolean =
+        messages.any { announcesEndToEnd(it) || (isDirect && carriesEndToEnd(it)) }
 
     /**
-     * #13792 — ce que des messages SERVIS (socket, REST, accusé d'envoi) apprennent au registre de leur conversation : la loi
-     * du fil ([threadShowsEndToEnd]), lue à l'ingestion, fil ouvert ou non. [isDirect] n'est lu que si un message porte le
-     * bout en bout hors avis d'activation : un groupe ne se scelle pas à vie sur une trace (iOS, audit #12985 B2).
+     * #13792 — ce que des messages SERVIS (socket, REST, accusé d'envoi) apprennent au registre de leur conversation, fil
+     * ouvert ou non : l'avis d'activation partout, un message e2ee dans un tête-à-tête. [isDirect] n'est lu que si un message
+     * porte le bout en bout hors avis d'activation : un groupe ne se scelle pas à vie sur une trace (iOS, audit #12985 B2).
+     *
+     * Une trace n'enseigne que si aucun avis de DÉSACTIVATION ne lui est postérieur — celui des messages servis ou
+     * [reopenedAt], le dernier que le cache connaît déjà : une conversation chiffrée puis désactivée avant #12949 garde ses
+     * vieilles traces dans l'historique, et ne se scelle pas à vie en les relisant. Depuis #12949 la passerelle n'émet plus
+     * de désactivation : rien ne rouvre une conversation chiffrée aujourd'hui.
      */
-    fun teachesEndToEnd(messages: List<ApiMessage>, isDirect: () -> Boolean): Boolean =
-        messages.any(::announcesEndToEnd) || (messages.any(::carriesEndToEnd) && isDirect())
+    fun teachesEndToEnd(messages: List<ApiMessage>, reopenedAt: Long? = null, isDirect: () -> Boolean): Boolean {
+        val standing = standingTraces(messages, reopenedAt)
+        return standing.any(::announcesEndToEnd) || (standing.any(::carriesEndToEnd) && isDirect())
+    }
 
     /**
      * #13792 — le fil EN CACHE retient tout envoi qui ne part pas du fil ouvert (réponse d'une bannière, partage, humeur,
      * refus d'appel), comme le fil ouvert retient son composeur (`ChatUiState.isEndToEnd`) : un avis d'activation, un message
-     * scellé, une pièce chiffrée de bout en bout ou un chiffré ambigu, dans un tête-à-tête comme dans un groupe. Miroir
-     * d'iOS (`EndToEndDestinationGuard` relit le fil en cache).
+     * scellé, une pièce chiffrée de bout en bout ou un chiffré ambigu, dans un tête-à-tête comme dans un groupe — chacun
+     * seulement s'il n'est suivi d'aucun avis de désactivation (un chiffré sans mode antérieur est du chiffré au repos
+     * hérité). Miroir d'iOS (`EndToEndDestinationGuard` relit le fil en cache).
      */
     fun cachedThreadSeals(messages: List<ApiMessage>): Boolean =
-        messages.any { announcesEndToEnd(it) || showsSealed(it) || messageHoldsSend(it) }
+        standingTraces(messages, reopenedAt = null).any { announcesEndToEnd(it) || showsSealed(it) || messageHoldsSend(it) }
+
+    /**
+     * #13792 — l'instant du dernier avis de désactivation du chiffrement (`metadata.kind = "encryption-disabled"`, émis par
+     * `DELETE /encryption` avant #12949) ; `null` s'il n'y en a pas, ou si aucun n'a d'instant lisible (rien ne rouvre alors).
+     */
+    fun lastReopeningAt(messages: List<ApiMessage>): Long? =
+        messages.asSequence().filter(::announcesReopening).mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
+
+    /** Les messages qu'aucun avis de désactivation ne suit ; un instant illisible n'est jamais antérieur (fail-closed). */
+    private fun standingTraces(messages: List<ApiMessage>, reopenedAt: Long?): List<ApiMessage> {
+        val cutoff = listOfNotNull(reopenedAt, lastReopeningAt(messages)).maxOrNull() ?: return messages
+        return messages.filter { message -> isoToEpochMillisOrNull(message.createdAt)?.let { it >= cutoff } ?: true }
+    }
 
     /**
      * Le fil RETIENT l'envoi en cours sans rien apprendre : un chiffré sans mode ou d'un mode
@@ -83,6 +105,9 @@ object EndToEndRegimeMemory {
         val mode = message.encryptionMode?.trim()?.lowercase().orEmpty()
         return !EndToEndRegime.isEndToEnd(mode) && mode !in SERVER_READABLE_MODES
     }
+
+    private fun announcesReopening(message: ApiMessage): Boolean =
+        message.messageType == "system" && (message.metadata?.get("kind") as? JsonPrimitive)?.contentOrNull == "encryption-disabled"
 
     private fun announcesEndToEnd(message: ApiMessage): Boolean {
         if (message.messageType != "system") return false

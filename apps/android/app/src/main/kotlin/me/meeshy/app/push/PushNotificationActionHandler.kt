@@ -41,9 +41,12 @@ import javax.inject.Singleton
  *
  * Fail-closed en conversation chiffrée de bout en bout : ce natif ne sait pas chiffrer, donc
  * rien ne part en clair ([Outcome.END_TO_END]) — la même loi que le drainer de la file
- * ([EndToEndOutboxAdmission.verdictFor]), lue AVANT de créer une bulle condamnée. Un mode encore INCONNU est relu au
- * serveur (borné) ; toujours inconnu, aucune bulle ne naît mais la réponse n'est pas perdue : elle est gardée comme
- * brouillon de la conversation ([Outcome.DRAFT_KEPT], #13693), proposé à l'ouverture, jamais envoyé en clair. Une conversation verrouillée par code n'agit pas non plus ([Outcome.LOCKED]).
+ * ([EndToEndOutboxAdmission.outOfThreadVerdictFor]), lue AVANT de créer une bulle condamnée. Hors d'un registre scellé, le
+ * mode est TOUJOURS relu au serveur (borné, #13792) : réveillée à froid par FCM, l'application n'a appris aucun régime — la
+ * donnée du push ne porte ni `encryptionMode` ni `isEncrypted` — et son mode en cache peut être périmé. Relecture en
+ * échec, aucune bulle ne naît mais la réponse n'est pas perdue : elle est gardée comme brouillon de la conversation
+ * ([Outcome.DRAFT_KEPT], #13693), proposé à l'ouverture, jamais envoyé en clair. Une conversation verrouillée par code
+ * n'agit pas non plus ([Outcome.LOCKED]).
  *
  * Le compte de l'action est celui du GESTE : son ticket ([AccountFence.ticket]) est pris dès la session connue, doit
  * désigner le compte de la bannière, et porte toute écriture qui suit — la relecture du mode peut durer, et un autre
@@ -124,7 +127,7 @@ class PushNotificationActionHandler @Inject constructor(
      * vaut un mode inconnu (fail-closed : rien ne part en clair, le texte est gardé).
      */
     private suspend fun boundedVerdict(conversationId: String): OutboxAdmissionVerdict =
-        withTimeoutOrNull(MODE_READ_BUDGET_MILLIS) { admission.verdictFor(conversationId) } ?: OutboxAdmissionVerdict.WAIT
+        withTimeoutOrNull(MODE_READ_BUDGET_MILLIS) { admission.outOfThreadVerdictFor(conversationId) } ?: OutboxAdmissionVerdict.WAIT
 
     /**
      * Le texte reste local au compte, jamais envoyé, jamais en file. L'écriture passe par la barrière du compte

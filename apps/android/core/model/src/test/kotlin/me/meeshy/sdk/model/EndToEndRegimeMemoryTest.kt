@@ -133,4 +133,64 @@ class EndToEndRegimeMemoryTest {
         assertThat(EndToEndRegimeMemory.cachedThreadSeals(quiet)).isFalse()
         assertThat(EndToEndRegimeMemory.cachedThreadSeals(emptyList())).isFalse()
     }
+
+    private fun at(message: ApiMessage, iso: String?) = message.copy(createdAt = iso)
+
+    private fun deactivation(iso: String?) = message(type = "system").copy(
+        createdAt = iso,
+        metadata = buildJsonObject { put("kind", JsonPrimitive("encryption-disabled")); put("previousMode", JsonPrimitive("e2ee")) },
+    )
+
+    @Test
+    fun `#13792 une trace e2ee suivie d un avis de desactivation n apprend ni ne scelle`() {
+        val legacy = listOf(
+            at(activation, T1),
+            at(message(isEncrypted = true, mode = "e2ee"), T2),
+            at(message(isEncrypted = true), T2),
+            message().copy(attachments = listOf(ApiMessageAttachment(id = "a1", encryptionMode = "e2ee")), createdAt = T2),
+            deactivation(T3),
+        )
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(legacy) { true }).isFalse()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(legacy)).isFalse()
+    }
+
+    @Test
+    fun `#13792 une trace posterieure a la derniere desactivation apprend et scelle`() {
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(deactivation(T1), at(activation, T2))) { false }).isTrue()
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(deactivation(T1), at(message(isEncrypted = true, mode = "e2ee"), T2))) { true }).isTrue()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(deactivation(T1), at(message(isEncrypted = true), T2)))).isTrue()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(activation, T1), deactivation(T2), at(activation, T3)))).isTrue()
+    }
+
+    @Test
+    fun `#13792 la desactivation deja en cache, hors du lot servi, borne aussi l apprentissage`() {
+        val olderPage = listOf(at(activation, T1), at(message(isEncrypted = true, mode = "e2ee"), T2))
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(olderPage, reopenedAt = epoch(T3)) { true }).isFalse()
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(olderPage, reopenedAt = epoch(T1)) { true }).isTrue()
+        assertThat(EndToEndRegimeMemory.lastReopeningAt(listOf(deactivation(T1), deactivation(T3), at(activation, T2)))).isEqualTo(epoch(T3))
+    }
+
+    @Test
+    fun `#13792 une trace sans instant lisible compte toujours, un avis sans instant ne rouvre rien`() {
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(message(isEncrypted = true, mode = "e2ee"), null), deactivation(T3)))).isTrue()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(activation, T1), deactivation(null)))).isTrue()
+    }
+
+    @Test
+    fun `#13792 un message ordinaire qui cite le mot ne rouvre rien`() {
+        val impostor = message().copy(
+            createdAt = T3,
+            content = "encryption-disabled",
+            metadata = buildJsonObject { put("kind", JsonPrimitive("encryption-disabled")) },
+        )
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(at(activation, T1), impostor))).isTrue()
+    }
+
+    private companion object {
+        const val T1 = "2026-01-01T10:00:00.000Z"
+        const val T2 = "2026-01-02T10:00:00.000Z"
+        const val T3 = "2026-01-03T10:00:00.000Z"
+
+        fun epoch(iso: String): Long = java.time.Instant.parse(iso).toEpochMilli()
+    }
 }
