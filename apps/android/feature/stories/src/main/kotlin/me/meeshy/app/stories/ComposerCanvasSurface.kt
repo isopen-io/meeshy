@@ -62,8 +62,9 @@ import me.meeshy.ui.theme.hexColor
  * the measured canvas size into normalised fractions), so this Composable stays
  * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
  *
- * Nothing but the scene's own objects is laid on it (#12298): the selected text's settings
- * live in the band under the stage ([TextStyleToolbar]), iOS `apps/ios/CLAUDE.md` § 1.
+ * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by
+ * [StorySceneFirstLayout] (#13834, which replaces the « nothing on the canvas » geography of #4561/#4633 for the story):
+ * that chrome is a sibling, never a child, so [capture] records the scene alone and the published render never shows it.
  */
 @Composable
 internal fun StoryCanvasSurface(

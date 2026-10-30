@@ -27,7 +27,8 @@ import me.meeshy.ui.component.composer.LocalOnComposerPlateau
  * UN composeur : la porte donne le format d'ouverture, le document (texte, médias, scène, audience) est UN, et le
  * format n'est qu'un de ses champs. Les anciennes surfaces — scène de story, feuille de post/réel, feuille de mood —
  * sont les CONTENUS de l'hôte, pas des portes : chacune garde son brouillon, son envoi durable et ses médias.
- * Le choix du format vit dans le couloir du haut de chaque contenu (jamais sur la scène) et grise avec sa raison.
+ * Le choix du format grise avec sa raison : dans le couloir du haut du post et du mood, dans le chevron de « Publier la
+ * story ▾ » pour la story (#13834).
  *
  * [feedOwner] est l'entrée du FIL quand elle est dans la pile : les ViewModels du fil, des moods et de leurs brouillons
  * y sont PARTAGÉS avec l'écran qu'on quitte — une seule instance (pas de second chargement du fil), et une publication
@@ -63,6 +64,16 @@ fun ComposerHostScreen(
             onChooseLayout = viewModel::chooseLayout,
         )
     }
+    val formatChevron: @Composable () -> Unit = {
+        ComposerFormatChevron(
+            selected = state.selectedFormat,
+            verdicts = state.verdicts,
+            onChoose = choose,
+            layouts = state.layoutChoices,
+            armedLayout = state.layout,
+            onChooseLayout = viewModel::chooseLayout,
+        )
+    }
     val hostedSelection = remember(viewModel) { HostedSelection(initial = { viewModel.selection }, onChange = viewModel::onSelection) }
     CompositionLocalProvider(LocalHostedSelection provides hostedSelection) { when (state.selectedFormat) {
         ComposerFormat.STORY -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { StoryComposerContent(
@@ -71,7 +82,7 @@ fun ComposerHostScreen(
             carry = state.carry,
             onCarryApplied = onCarryApplied,
             onClose = onClose,
-            titleContent = formatMenu,
+            formatChevron = formatChevron,
             seedMedia = (seed as? SeedState.Ready)?.items.orEmpty(),
             seededByDoor = viewModel.seededByDoor,
             onSeedApplied = viewModel::onSeedApplied,

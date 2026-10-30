@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -29,23 +27,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.ComposerRailGeometry
-import me.meeshy.sdk.model.composer.PullDownDismiss
-import me.meeshy.sdk.model.composer.PullOutcome
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.PlateauTint
 
@@ -62,7 +49,8 @@ public val LocalOnComposerPlateau: ProvidableCompositionLocal<Boolean> = composi
  * acts on the objects' dimensions (controllers, history, a new slide), the CANONICAL line under the card for what
  * belongs to the publication or the slide, and the SOCLE (audience, publish). Every zone lives in the corridors around
  * the [content] card — never on it (a control over the scene would make the preview lie, and steal the touches of the
- * band it covers). A surface without a scene simply leaves the columns empty.
+ * band it covers). A surface without a scene simply leaves the columns empty. The post and the mood live here; the
+ * story left it for its own scene-first layout (#13834), where the controls are laid on the full-screen scene.
  *
  * A pull down that the content does not absorb, or a drag on the top corridor, calls [onDismiss] like the cross does —
  * the drafts autosave, so leaving never loses the words; with the keyboard up the same pull lowers it first.
@@ -80,23 +68,7 @@ public fun ComposerPlateau(
     socle: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val density = LocalDensity.current.density
-    val dismiss = rememberUpdatedState(onDismiss)
-    val keyboardOpen = rememberUpdatedState(WindowInsets.isImeVisible)
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focus = LocalFocusManager.current
-    val pull = remember {
-        PullDismissTracker(density, keyboardOpen = { keyboardOpen.value }) { outcome ->
-            when (outcome) {
-                PullOutcome.DISMISS -> dismiss.value()
-                PullOutcome.HIDE_KEYBOARD -> {
-                    focus.clearFocus()
-                    keyboard?.hide()
-                }
-                PullOutcome.NONE -> Unit
-            }
-        }
-    }
+    val pull = rememberComposerPullDismiss(onDismiss)
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -173,35 +145,4 @@ internal object ComposerPlateauDimens {
     val ENTRY_SPACING = ComposerRailGeometry.FLOATING_ENTRY_SPACING.dp
     val CORRIDOR_HEIGHT = ComposerRailGeometry.RAIL_WIDTH.dp
     val CARD_RADIUS = 24.dp
-}
-
-/** Feeds [PullDownDismiss] from the leftover scroll of the content and from the corridor drag; allocation-free per frame. */
-private class PullDismissTracker(
-    private val density: Float,
-    private val keyboardOpen: () -> Boolean,
-    private val onOutcome: (PullOutcome) -> Unit,
-) {
-    private var pull = PullDownDismiss()
-
-    val connection = object : NestedScrollConnection {
-        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-            if (source == NestedScrollSource.UserInput) onDrag(available.y)
-            return Offset.Zero
-        }
-
-        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-            onRelease(available.y)
-            return Velocity.Zero
-        }
-    }
-
-    fun onDrag(deltaPx: Float) {
-        pull = pull.pulled(deltaPx / density)
-    }
-
-    fun onRelease(velocityPx: Float) {
-        val outcome = pull.outcome(velocityPx / density, keyboardOpen())
-        pull = pull.released()
-        onOutcome(outcome)
-    }
 }

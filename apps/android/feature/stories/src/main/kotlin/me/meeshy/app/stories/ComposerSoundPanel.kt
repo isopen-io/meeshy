@@ -52,6 +52,8 @@ internal fun ComposerSoundPanel(
     @androidx.annotation.StringRes capRefusal: Int = R.string.composer_scene_cap_sound,
     onToggleMute: (String) -> Unit,
     onRemove: (String) -> Unit,
+    selectedId: String? = null,
+    onSelect: ((String) -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BandTile(
@@ -66,6 +68,8 @@ internal fun ComposerSoundPanel(
                 sound = track,
                 onToggleMute = { onToggleMute(track.id) },
                 onRemove = { onRemove(track.id) },
+                selected = track.id == selectedId,
+                onSelect = onSelect?.let { select -> { select(track.id) } },
             )
         }
     }

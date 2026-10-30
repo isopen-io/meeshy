@@ -48,40 +48,6 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.ui.theme.hexColor
 
-/**
- * La pastille d'audience posée sur la scène — l'icône du mode et son mot, un tap ouvre la feuille
- * d'audience (jamais un menu : un menu liste des choix, pas leurs conséquences). Le nom accessible
- * reste « Audience » et la valeur est annoncée comme valeur.
- */
-@Composable
-internal fun AudiencePill(
-    visibility: StoryVisibility,
-    count: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val name = stringResource(R.string.composer_socle_audience)
-    val label = stringResource(visibility.labelRes())
-    val shown = if (visibility.requiresUserSelection && count > 0) "$label ($count)" else label
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 14.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription = name
-                stateDescription = shown
-            },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(visibility.icon(), contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(shown, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-    }
-}
-
 internal fun StoryVisibility.icon(): ImageVector = when (this) {
     StoryVisibility.PUBLIC -> Icons.Filled.Public
     StoryVisibility.FRIENDS -> Icons.Filled.People

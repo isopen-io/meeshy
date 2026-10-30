@@ -1,26 +1,26 @@
 package me.meeshy.app.stories
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.unit.dp
-import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,15 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
-import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
-import androidx.compose.foundation.layout.ColumnScope
-import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.component.composer.rememberHostedTextField
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
 
 /** The scene of the story composer: the canvas and the long-press menu of its background media. */
 @Composable
@@ -113,22 +114,27 @@ internal fun StoryComposerScene(
     }
 }
 
-/** What the stage leaves under the scene: caption, drawing or text settings, the media row. Never over the scene. */
+/**
+ * Le panneau du geste en cours, monté au bas de la scène (#13834) — un seul à la fois, résolu par [scenePanel] : les
+ * réglages du pinceau, les sections de l'objet touché, l'outil ouvert, ce que le « ⋯ » a ouvert, ou le cadre et les effets
+ * du fond. Au repos, rien : ni légende, ni compteur, ni trace du son, ni rangée des médias.
+ */
 @Composable
-internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewModel: StoryComposerViewModel, comparison: LookComparison) {
-        val editedText = state.selectedTextElement.takeIf { state.isEditingTextElement }
-        val editedSticker = state.selectedSticker.takeIf { editedText == null && !state.isTimelineOpen }
-        val onPlateau = LocalOnComposerPlateau.current
-        state.sceneInspector?.let { inspector ->
-            if (!state.isDrawingActive) {
-                SceneInspectorRow(
-                    inspector = inspector,
-                    onOpenTiming = { viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE) },
-                )
-            }
-        }
-        if (state.isDrawingActive) {
-            StoryDrawingToolbar(
+internal fun StoryComposerBottomPanel(
+    panel: StoryScenePanel,
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    comparison: LookComparison,
+    toolPanel: @Composable () -> Unit,
+    onCloseLocal: () -> Unit,
+) {
+    if (panel == StoryScenePanel.TOOL) {
+        toolPanel()
+        return
+    }
+    ScenePanelSurface {
+        when (panel) {
+            StoryScenePanel.DRAWING -> StoryDrawingToolbar(
                 activeColorHex = state.drawColorHex,
                 activeWidthDesign = state.drawWidthDesign,
                 canUndo = state.drawingBoard.canUndo,
@@ -136,118 +142,151 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
                 onWidthSelected = viewModel::onDrawWidthSelected,
                 onUndo = viewModel::onDrawUndo,
                 onDone = viewModel::onExitDrawingMode,
-                control = state.openDrawingControl.takeIf { onPlateau },
+                control = state.openDrawingControl,
             )
-        } else if (editedText != null && onPlateau) {
-            // Une section chasse l'autre en fondu (iOS : le contenu change sous la colonne, sans saut de hauteur).
-            AnimatedContent(
-                targetState = state.openTextSection,
-                transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
-                label = "text-section",
-            ) { open ->
-                if (open == ComposerObjectEditorSection.Plan) {
-                    Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-                        StoryPlanFrise(state, viewModel)
-                    }
-                } else {
-                    TextSectionToolbar(editedText, open, viewModel, onPlateau)
-                }
+            StoryScenePanel.TEXT -> state.selectedTextElement?.let { TextPanel(state, it, viewModel) }
+            StoryScenePanel.STICKER -> state.selectedSticker?.let { sticker ->
+                InspectorRow(state, viewModel)
+                StickerSectionContent(state, sticker, viewModel)
             }
-        } else if (editedSticker != null && onPlateau) {
-            StickerSectionContent(state, editedSticker, viewModel)
-        } else if (editedText != null) {
-            TextSectionToolbar(editedText, null, viewModel, onPlateau)
-        } else {
-            // La trace du son de FOND, lue dans le couloir — jamais sur la scène (un son ne produit aucun
-            // pixel au rendu final) — et seulement quand aucun outil n'occupe la zone basse.
-            val trace = ComposerSoundPlacement.traceServed(
-                background = state.selectedSlideBackgroundSound,
-                toolIsOpen = state.band.activeTool != null,
-            )
-            AnimatedVisibility(visible = trace != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                trace?.let {
-                    SoundTraceRow(
-                        sound = it,
-                        onToggleMute = { viewModel.onToggleSoundMute(it.id) },
-                        onRemove = { viewModel.onRemoveSound(it.id) },
-                        selected = state.selectedSoundId == it.id,
-                        onSelect = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, it.id) } },
-                    )
-                }
+            StoryScenePanel.MEDIA -> state.selectedMedia?.let { media ->
+                MediaSectionContent(state, media, viewModel, comparison)
+                SlideMediaRows(state, viewModel)
             }
-            val selectedMedia = state.selectedMedia
-            val selectedSound = state.selectedSound
-            if (onPlateau && selectedMedia != null) {
-                MediaSectionContent(state, selectedMedia, viewModel, comparison)
-            } else if (onPlateau && selectedSound != null) {
-                SoundSectionContent(state, selectedSound, viewModel)
-            } else {
-                SceneEffectsDock(state, viewModel)
-                // The slide CAPTION only: a text object is written on the scene itself
-                // (ComposerInlineTextField), so this field never silently changes role.
-                val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
-                OutlinedTextField(
-                    value = caption.value,
-                    onValueChange = caption.onValueChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.stories_composer_text_caption)) },
-                    placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
-                    isError = !state.draft.isWithinLimit,
-                    supportingText = {
-                        Text(
-                            text = when (val error = state.errorMessage) {
-                                null -> stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining)
-                                StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
-                                StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
-                                StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
-                                StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
-                                StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
-                                else -> error
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End,
-                        )
-                    },
-                )
-            }
+            StoryScenePanel.SOUND -> state.selectedSound?.let { SoundSectionContent(state, it, viewModel) }
+            StoryScenePanel.DURATION -> DurationPanel(state, viewModel, onCloseLocal)
+            StoryScenePanel.CAPTION -> CaptionPanel(state, viewModel, onCloseLocal)
+            StoryScenePanel.SCENE_EFFECTS -> SceneEffectsDock(state, viewModel)
+            StoryScenePanel.TOOL -> Unit
         }
-
-        if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
-            MediaPreviewRow(
-                attachments = state.selectedSlideAttachments,
-                pending = state.selectedSlidePending,
-                mediaBaseUrl = viewModel.mediaBaseUrl,
-                backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-                backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-                backgroundLoop = state.selectedSlideBackgroundLoop,
-                onRemove = viewModel::onRemoveMedia,
-                selectedMediaId = state.selectedMedia,
-                onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
-                onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
-                placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
-                onTogglePlaced = viewModel::onTogglePlacedMedia,
-                onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
-            )
-            ComposerMediaDescription(
-                mediaIds = state.deck.selectedSlide.mediaIds,
-                alt = state.draft.mediaAlt,
-                caption = state.draft.mediaCaption,
-                undescribedCount = state.undescribedMediaIds.size,
-                offersSoundExtraction = state.offersSoundExtraction,
-                allowSoundExtraction = state.draft.allowSoundExtraction == true,
-                onAltChange = viewModel::onMediaAltChange,
-                onCaptionChange = viewModel::onMediaCaptionChange,
-                onAllowSoundExtractionChange = viewModel::onAllowSoundExtractionChange,
-            )
-        }
+    }
 }
 
-/** The open tool's panel, slid over the bottom of the stage. */
+/** Le fond lisible d'un panneau posé sur la scène, quelle que soit la couleur de la scène. */
+@Composable
+private fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        color = MeeshyTheme.tokens.backgroundPrimary,
+        shape = RoundedCornerShape(MeeshyRadius.lg),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().heightIn(max = PANEL_MAX_HEIGHT).verticalScroll(rememberScrollState()).padding(MeeshySpacing.smPlus),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.InspectorRow(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    state.sceneInspector?.let { inspector ->
+        SceneInspectorRow(inspector = inspector, onOpenTiming = { viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE) })
+    }
+}
+
+/** Les sections du texte en cours d'écriture : une section chasse l'autre en fondu, sans saut de hauteur. */
+@Composable
+private fun ColumnScope.TextPanel(state: StoryComposerUiState, editedText: StoryTextElement, viewModel: StoryComposerViewModel) {
+    InspectorRow(state, viewModel)
+    AnimatedContent(
+        targetState = state.openTextSection,
+        transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+        label = "text-section",
+    ) { open ->
+        if (open == ComposerObjectEditorSection.Plan) {
+            Column(Modifier.heightIn(max = PLAN_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+                StoryPlanFrise(state, viewModel)
+            }
+        } else {
+            TextSectionToolbar(editedText, open, viewModel, true)
+        }
+    }
+}
+
+/** La durée de la diapo, ouverte depuis « ⋯ » : un réglage court, refermé par OK. */
+@Composable
+private fun DurationPanel(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
+    DurationRow(seconds = state.selectedSlideDurationSeconds, onSecondsChange = viewModel::onSlideDurationChange)
+    PanelDone(onDone)
+}
+
+/**
+ * La légende de la diapo, ouverte depuis « ⋯ » : le champ et OK, aucun compteur (le blocage de publication dit la limite
+ * quand elle est atteinte). Un texte posé sur la scène s'écrit sur la scène même (ComposerInlineTextField).
+ */
+@Composable
+private fun CaptionPanel(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
+    val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
+    OutlinedTextField(
+        value = caption.value,
+        onValueChange = caption.onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.stories_composer_text_caption)) },
+        placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
+        isError = !state.draft.isWithinLimit,
+    )
+    PanelDone(onDone)
+}
+
+@Composable
+private fun PanelDone(onDone: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        TextButton(onClick = onDone, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.composer_scene_done))
+        }
+    }
+}
+
+/** Les médias de la diapo — fond, posé, boucle, retrait — et leur description : dans le panneau Média, jamais au repos. */
+@Composable
+internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    if (state.selectedSlideAttachments.isEmpty() && state.selectedSlidePending.isEmpty()) return
+    MediaPreviewRow(
+        attachments = state.selectedSlideAttachments,
+        pending = state.selectedSlidePending,
+        mediaBaseUrl = viewModel.mediaBaseUrl,
+        backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
+        backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
+        backgroundLoop = state.selectedSlideBackgroundLoop,
+        onRemove = viewModel::onRemoveMedia,
+        selectedMediaId = state.selectedMedia,
+        onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
+        onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
+        placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
+        onTogglePlaced = viewModel::onTogglePlacedMedia,
+        onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
+    )
+    ComposerMediaDescription(
+        mediaIds = state.deck.selectedSlide.mediaIds,
+        alt = state.draft.mediaAlt,
+        caption = state.draft.mediaCaption,
+        undescribedCount = state.undescribedMediaIds.size,
+        offersSoundExtraction = state.offersSoundExtraction,
+        allowSoundExtraction = state.draft.allowSoundExtraction == true,
+        onAltChange = viewModel::onMediaAltChange,
+        onCaptionChange = viewModel::onMediaCaptionChange,
+        onAllowSoundExtractionChange = viewModel::onAllowSoundExtractionChange,
+    )
+}
+
+/** Ce que l'éditeur dit de lui-même, au bas de la scène et seulement quand il a quelque chose à dire. */
+@Composable
+internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
+    null -> null
+    StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+    StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
+    StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
+    StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
+    StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
+    else -> error
+}
+
+/** The open tool's panel, raised over the bottom of the scene, which shrinks whole above it. */
 @Composable
 internal fun StoryComposerPanel(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
     onOpenSoundShelf: () -> Unit,
 ) {
@@ -256,10 +295,8 @@ internal fun StoryComposerPanel(
                 band = state.band,
                 selectedFilter = state.selectedSlideFilter,
                 filterIntensity = state.selectedSlideFilterIntensity,
-                slideDurationSeconds = state.selectedSlideDurationSeconds,
                 selectedBackground = state.selectedSlideBackground,
                 canAddText = state.deck.selectedCanAddTextElement,
-                canAddSticker = state.deck.selectedCanAddSticker,
                 isUploadingMedia = state.isUploadingMedia,
                 uploadingMedia = state.uploadingMedia,
                 isMediaFull = !state.deck.selectedCanAddMedia,
@@ -267,17 +304,18 @@ internal fun StoryComposerPanel(
                 hasMedia = state.draft.hasMedia,
                 onDismiss = viewModel::onBandDismiss,
                 onAddText = viewModel::onAddTextElement,
-                onAddSticker = onAddSticker,
                 onPickMedia = onPickMedia,
                 onEnterDrawing = viewModel::onEnterDrawingMode,
                 onSelectFilter = viewModel::onSelectFilter,
                 onFilterIntensityChange = viewModel::onFilterIntensityChange,
-                onSlideDurationChange = viewModel::onSlideDurationChange,
                 onSelectBackground = viewModel::onSlideBackgroundChange,
                 audio = state.selectedSlideAudio,
                 canAddSound = state.canBorrowSound,
                 soundCapRefusal = state.soundCapRefusal,
                 onOpenSoundShelf = onOpenSoundShelf,
+                selectedSoundId = state.selectedSoundId,
+                onSelectSound = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, id) } },
+                mediaExtras = { SlideMediaRows(state, viewModel) },
                 onToggleSoundMute = viewModel::onToggleSoundMute,
                 onRemoveSound = viewModel::onRemoveSound,
                 timeline = { StoryPlanFrise(state, viewModel) },
@@ -286,6 +324,7 @@ internal fun StoryComposerPanel(
 }
 
 private val PLAN_MAX_HEIGHT = 220.dp
+private val PANEL_MAX_HEIGHT = 320.dp
 
 /**
  * Le plan 2D de la scène (iOS `ComposerObjectPlanControls` → `Plan2DView`) : UN montage, deux portes — l'outil « temps »
