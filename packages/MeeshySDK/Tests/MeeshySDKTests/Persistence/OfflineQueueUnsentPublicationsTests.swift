@@ -43,6 +43,31 @@ final class OfflineQueueUnsentPublicationsTests: XCTestCase {
         XCTAssertTrue(unsent.isEmpty)
     }
 
+    /// #13824 — une ligne restée `.inflight` sans envoi vivant dans ce
+    /// processus (écriture d'issue refusée par la base suspendue, application
+    /// tuée) n'est PAS en cours : elle se dit en échec, avec « Réessayer ».
+    func test_unsentPublications_inflightRowWithoutLiveDispatch_isFailed() async throws {
+        try await insert(cmid: "cmid_orphan", type: "POST", status: .inflight, createdAt: Date(), lastError: nil)
+
+        let unsent = await queue.unsentPublications()
+
+        XCTAssertEqual(unsent.map(\.state), [.failed])
+    }
+
+    func test_unsentPublications_inflightRowWithLiveDispatch_isSending() async throws {
+        try await insert(cmid: "cmid_live", type: "POST", status: .inflight, createdAt: Date(), lastError: nil)
+        let dispatch = Task<Void, Error> { try await Task.sleep(for: .seconds(30)) }
+        OutboxInflightDispatches.shared.register(dispatch, for: "ofqm_cmid_live")
+        defer {
+            OutboxInflightDispatches.shared.unregister(dispatch, for: "ofqm_cmid_live")
+            dispatch.cancel()
+        }
+
+        let unsent = await queue.unsentPublications()
+
+        XCTAssertEqual(unsent.map(\.state), [.sending])
+    }
+
     func test_otherKindsAreNotPublications() async throws {
         let now = Date()
         try await pool.write { db in

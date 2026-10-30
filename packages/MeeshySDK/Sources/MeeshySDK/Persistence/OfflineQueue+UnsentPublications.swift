@@ -51,17 +51,25 @@ extension UnsentPublication {
             .fetchAll(db)
             .compactMap { record in
                 RecoveredOfflinePost(record: record).map {
-                    UnsentPublication(draft: $0, state: State(record.status), lastError: record.lastError)
+                    UnsentPublication(
+                        draft: $0,
+                        state: State(record.status, isDispatching: OutboxInflightDispatches.shared.isDispatching(record.id)),
+                        lastError: record.lastError
+                    )
                 }
             }
     }
 }
 
 extension UnsentPublication.State {
-    init(_ status: OutboxStatus) {
+    /// #13824 — `.inflight` ne vaut « en cours » que si un envoi de CE
+    /// processus le porte. Sinon la ligne est orpheline (issue non écrite par
+    /// une base suspendue, application tuée) : elle se dit en échec, et
+    /// « Réessayer » la rend à la file au lieu d'une attente sans fin.
+    init(_ status: OutboxStatus, isDispatching: Bool) {
         switch status {
         case .pending: self = .waiting
-        case .inflight: self = .sending
+        case .inflight: self = isDispatching ? .sending : .failed
         case .failed, .exhausted: self = .failed
         }
     }
