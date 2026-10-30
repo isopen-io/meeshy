@@ -70,7 +70,8 @@ sealed interface ConversationOptionsEdit {
         override fun applyTo(values: ConversationOptionsValues) = values.copy(tags = tags)
     }
 
-    data class Category(val categoryId: String) : ConversationOptionsEdit {
+    /** `null` retire la catégorie (iOS `CategoryPickerField`, `category.remove`). */
+    data class Category(val categoryId: String?) : ConversationOptionsEdit {
         override fun applyTo(values: ConversationOptionsValues) = values.copy(categoryId = categoryId)
     }
 }

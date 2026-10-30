@@ -188,6 +188,7 @@ private fun OptionsSections(
                 color = MeeshyPalette.Info,
                 onSelect = viewModel::selectCategory,
                 onCreate = viewModel::createCategory,
+                onRemove = viewModel::removeCategory,
             )
             SettingsSeparator(MeeshyPalette.Info)
             ConversationTagsField(

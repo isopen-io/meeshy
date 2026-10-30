@@ -97,6 +97,11 @@
     <string name="conversation_appearance_section_solid">لون موحد</string>
     <string name="conversation_appearance_sheet_title">الخلفية واللون المميز</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_info_pinned_see_all">عرض الرسائل المثبّتة (%1$d)</string>
+    <string name="conversation_info_tab_media">الوسائط</string>
+    <string name="conversation_info_tab_members">الأعضاء</string>
+    <string name="conversation_info_tab_options">الخيارات</string>
+    <string name="conversation_info_tab_stats">إحصاءات</string>
     <string name="conversation_options_archive">أرشفة</string>
     <string name="conversation_options_archive_title">أرشفة المحادثة؟</string>
     <string name="conversation_options_block_a11y">حظر %1$s</string>
@@ -107,6 +112,7 @@
     <string name="conversation_options_cancel">إلغاء</string>
     <string name="conversation_options_category">الفئة</string>
     <string name="conversation_options_category_create">إنشاء الفئة %1$s</string>
+    <string name="conversation_options_category_remove">إزالة الفئة %1$s</string>
     <string name="conversation_options_category_select">اختيار الفئة %1$s</string>
     <string name="conversation_options_custom_name">اسم مخصّص</string>
     <string name="conversation_options_custom_name_clear">مسح الاسم المخصّص</string>

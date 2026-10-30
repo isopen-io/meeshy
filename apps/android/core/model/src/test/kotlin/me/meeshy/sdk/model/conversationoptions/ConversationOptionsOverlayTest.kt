@@ -96,6 +96,16 @@ class ConversationOptionsOverlayTest {
     }
 
     @Test
+    fun `removing the category shows the conversation uncategorized until the cache agrees`() {
+        val categorized = stored.copy(categoryId = "cat-1")
+        val overlay = ConversationOptionsOverlay().pending(ConversationOptionsEdit.Category(null))
+
+        assertThat(overlay.displayed(categorized).categoryId).isNull()
+        assertThat(overlay.absorb(categorized).isEmpty).isFalse()
+        assertThat(overlay.absorb(categorized.copy(categoryId = null)).isEmpty).isTrue()
+    }
+
+    @Test
     fun `the archive confirmation names the gesture the tap will make`() {
         assertThat(stored.archiveGesture).isEqualTo(ArchiveGesture.ARCHIVE)
         assertThat(stored.copy(isArchived = true).archiveGesture).isEqualTo(ArchiveGesture.UNARCHIVE)

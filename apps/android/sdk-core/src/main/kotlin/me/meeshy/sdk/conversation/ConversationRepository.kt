@@ -691,10 +691,12 @@ class ConversationRepository @Inject constructor(
      * Optimistic drag-to-category (re)assignment (parity iOS
      * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
      * instantly — the section splitter re-buckets the row into [categoryId]'s
-     * section — and the full-snapshot mutation joins the shared prefs lane. A no-op
-     * (returns false) when the conversation is already in [categoryId].
+     * section — and the full-snapshot mutation joins the shared prefs lane. A `null`
+     * [categoryId] uncategorizes the row (iOS `category.remove`, #13784): its snapshot
+     * carries [ConversationPrefsPayload.clearCategory]. A no-op (returns false) when
+     * the conversation is already in [categoryId].
      */
-    suspend fun setCategoryOptimistic(id: String, categoryId: String): Boolean =
+    suspend fun setCategoryOptimistic(id: String, categoryId: String?): Boolean =
         updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
 
     /**
@@ -795,6 +797,7 @@ class ConversationRepository @Inject constructor(
         transform: (ApiConversationPreferences) -> ApiConversationPreferences,
     ): Boolean {
         var appearanceChanged = false
+        var categoryCleared = false
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
@@ -802,6 +805,7 @@ class ConversationRepository @Inject constructor(
             val next = transform(current)
             if (next == current) return@withTransaction null
             appearanceChanged = next.appearance != current.appearance
+            categoryCleared = current.categoryId != null && next.categoryId == null
             conversationDao.upsertAll(
                 listOf(
                     row.copy(
@@ -827,6 +831,7 @@ class ConversationRepository @Inject constructor(
                         reaction = snapshot.reaction,
                         tags = snapshot.tags,
                         appearance = if (appearanceChanged) snapshot.appearance else null,
+                        clearCategory = categoryCleared,
                     ),
                 ),
             ),

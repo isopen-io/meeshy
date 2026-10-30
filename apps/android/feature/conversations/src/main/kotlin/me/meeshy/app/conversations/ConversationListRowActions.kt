@@ -124,6 +124,11 @@ internal class ConversationListRowActions(
         runPrefMutation { preferences.assignCategory(id, prefsOf(id)?.categoryId, targetCategoryId) }
     }
 
+    /** Sort [id] de sa categorie (iOS `category.remove`) ; une rangee sans categorie est inerte. */
+    fun removeCategory(id: String) {
+        runPrefMutation { preferences.removeCategory(id, prefsOf(id)?.categoryId) }
+    }
+
     /** Cree la categorie [name] puis y range [id] ; un nom vide est inerte. */
     fun createCategoryAndAssign(id: String, name: String) {
         if (name.isBlank()) return
