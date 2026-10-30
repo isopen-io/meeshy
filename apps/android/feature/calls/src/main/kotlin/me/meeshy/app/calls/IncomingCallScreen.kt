@@ -1,6 +1,12 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -50,7 +57,9 @@ import me.meeshy.ui.theme.MeeshySpacing
  * « Appel (vidéo) entrant », la pastille de type, puis Refuser (rouge) et Répondre (vert, comme
  * iOS `MeeshyColors.success`), chacun avec un retour haptique. Le tri des permissions est fait par l'hôte
  * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack. Un appel vidéo
- * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]).
+ * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]). Sur un
+ * écran court ou en grande police, les actions gardent leur place et l'identité se compacte
+ * ([IncomingCallIdentity]).
  */
 @Composable
 internal fun IncomingCallScreen(
@@ -76,71 +85,83 @@ internal fun IncomingCallScreen(
         announce(context.getString(R.string.call_incoming_a11y, typeLabel, title))
     }
 
-    Column(
-        modifier = modifier.fillMaxSize().padding(bottom = MeeshySpacing.xxxl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.weight(1f))
-        IncomingCallRings(name = state.peerName, peer = peer, reduceMotion = reduceMotion)
-        Spacer(Modifier.height(MeeshySpacing.xxxl))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = CallPalette.Ink,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(MeeshySpacing.sm))
-        Text(
-            text = typeLabel,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = CallPalette.InkSecondary,
-        )
-        Spacer(Modifier.height(MeeshySpacing.md))
-        CallTypeBadge(
-            isVideo = state.isVideoCall,
-            label = stringResource(
-                if (state.isVideoCall) R.string.call_incoming_badge_video else R.string.call_incoming_badge_audio,
-            ),
-        )
-        Spacer(Modifier.weight(1f))
-        if (preview.offersSound) {
-            CallPreviewSoundButton(isAudible = preview.isAudible, onToggle = onTogglePreviewSound)
-            Spacer(Modifier.height(MeeshySpacing.xl))
-        }
-        if (onDeclineWithMessage != null) {
-            DeclineWithMessageButton(
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    declineSheetOpen = true
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val spacing = IncomingCallSpacing.forHeight(maxHeight)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(bottom = spacing.bottom),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            IncomingCallIdentity(
+                rings = { IncomingCallRings(name = state.peerName, peer = peer, reduceMotion = reduceMotion) },
+                details = {
+                    Column(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = CallPalette.Ink,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(MeeshySpacing.sm))
+                        Text(
+                            text = typeLabel,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = CallPalette.InkSecondary,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        CallTypeBadge(
+                            isVideo = state.isVideoCall,
+                            label = stringResource(
+                                if (state.isVideoCall) R.string.call_incoming_badge_video else R.string.call_incoming_badge_audio,
+                            ),
+                        )
+                    }
                 },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             )
-            Spacer(Modifier.height(MeeshySpacing.xl))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(60.dp), verticalAlignment = Alignment.Top) {
-            IncomingAction(
-                icon = Icons.Filled.CallEnd,
-                tint = CallPalette.Decline,
-                caption = stringResource(R.string.call_incoming_decline),
-                description = stringResource(R.string.call_action_decline),
-                hint = stringResource(R.string.call_incoming_decline_hint),
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onDecline()
-                },
-            )
-            IncomingAction(
-                icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                tint = CallPalette.Accept,
-                caption = stringResource(R.string.call_incoming_accept),
-                description = stringResource(R.string.call_action_accept),
-                hint = stringResource(R.string.call_incoming_accept_hint),
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onAccept()
-                },
-            )
+            Spacer(Modifier.height(spacing.identityGap))
+            if (preview.offersSound) {
+                CallPreviewSoundButton(isAudible = preview.isAudible, onToggle = onTogglePreviewSound)
+                Spacer(Modifier.height(spacing.actionGap))
+            }
+            if (onDeclineWithMessage != null) {
+                DeclineWithMessageButton(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        declineSheetOpen = true
+                    },
+                )
+                Spacer(Modifier.height(spacing.actionGap))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(60.dp), verticalAlignment = Alignment.Top) {
+                IncomingAction(
+                    icon = Icons.Filled.CallEnd,
+                    tint = CallPalette.Decline,
+                    caption = stringResource(R.string.call_incoming_decline),
+                    description = stringResource(R.string.call_action_decline),
+                    hint = stringResource(R.string.call_incoming_decline_hint),
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onDecline()
+                    },
+                )
+                IncomingAction(
+                    icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+                    tint = CallPalette.Accept,
+                    caption = stringResource(R.string.call_incoming_accept),
+                    description = stringResource(R.string.call_action_accept),
+                    hint = stringResource(R.string.call_incoming_accept_hint),
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAccept()
+                    },
+                )
+            }
         }
     }
 
@@ -153,6 +174,59 @@ internal fun IncomingCallScreen(
             },
             onDismiss = { declineSheetOpen = false },
         )
+    }
+}
+
+/**
+ * Les respirations de l'écran entrant : celles d'iOS dès [ROOMY_HEIGHT] (un S8 les a), resserrées
+ * en dessous pour que l'identité garde de la place au-dessus des actions.
+ */
+private data class IncomingCallSpacing(val actionGap: Dp, val identityGap: Dp, val bottom: Dp) {
+    companion object {
+        private val ROOMY_HEIGHT = 600.dp
+        private val ROOMY = IncomingCallSpacing(MeeshySpacing.xl, MeeshySpacing.lg, MeeshySpacing.xxxl)
+        private val COMPACT = IncomingCallSpacing(MeeshySpacing.md, MeeshySpacing.sm, MeeshySpacing.lg)
+
+        fun forHeight(height: Dp): IncomingCallSpacing = if (height >= ROOMY_HEIGHT) ROOMY else COMPACT
+    }
+}
+
+/**
+ * L'identité de l'appelant au-dessus des actions, qui restent, elles, toujours entières à l'écran :
+ * le nom, l'état et la pastille sont mesurés d'abord, les anneaux prennent la place qui reste (de
+ * [IncomingCallRingsMinFootprint] à [IncomingCallRingsFootprint]) et l'ensemble est centré. Si même
+ * réduits ils ne tiennent pas (très grande police sur un écran court), l'identité défile seule.
+ */
+@Composable
+private fun IncomingCallIdentity(
+    rings: @Composable () -> Unit,
+    details: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        val viewport = if (constraints.hasBoundedHeight) constraints.maxHeight else null
+        Layout(
+            contents = listOf(rings, details),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) { (ringsMeasurables, detailsMeasurables), layoutConstraints ->
+            val width = layoutConstraints.maxWidth
+            val detailsPlaceable = detailsMeasurables.single().measure(Constraints(maxWidth = width))
+            val natural = IncomingCallRingsFootprint.roundToPx()
+            val roomGap = MeeshySpacing.xxxl.roundToPx()
+            val room = viewport?.minus(detailsPlaceable.height) ?: (natural + roomGap)
+            val gap = if (room >= natural + roomGap) roomGap else MeeshySpacing.lg.roundToPx()
+            val diameter = (room - gap)
+                .coerceIn(IncomingCallRingsMinFootprint.roundToPx(), natural)
+                .coerceAtMost(width)
+            val ringsPlaceable = ringsMeasurables.single().measure(Constraints.fixed(diameter, diameter))
+            val content = diameter + gap + detailsPlaceable.height
+            val height = maxOf(content, viewport ?: content)
+            layout(width, height) {
+                val top = (height - content) / 2
+                ringsPlaceable.place((width - diameter) / 2, top)
+                detailsPlaceable.place((width - detailsPlaceable.width) / 2, top + diameter + gap)
+            }
+        }
     }
 }
 
