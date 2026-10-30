@@ -45,6 +45,8 @@ internal class MessageCacheSource(
     private val historyWindow: Flow<Int>,
     /** #13558 — a revalidation lands only while the account that asked for it is still the one signed in. */
     private val fence: AccountFence? = null,
+    /** #13792 — chaque page servie nourrit le registre des régimes. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -54,7 +56,7 @@ internal class MessageCacheSource(
      * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
      * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
      */
-    private val ingestion = MessageIngestPipeline(database)
+    private val ingestion = MessageIngestPipeline(database, regime = regime)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole

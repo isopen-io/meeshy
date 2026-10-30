@@ -37,6 +37,8 @@ internal class MessageSendCoordinator(
     private val messageDao: MessageDao,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
+    /** #13792 — l'accusé d'envoi nourrit le registre des régimes comme tout message servi. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) {
 
     /**
@@ -160,6 +162,7 @@ internal class MessageSendCoordinator(
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
             MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
+        regime?.learnFromServed(listOf(serverMessage))
     }
 
     /**

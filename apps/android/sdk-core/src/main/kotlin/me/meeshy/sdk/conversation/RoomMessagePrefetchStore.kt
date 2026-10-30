@@ -26,6 +26,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     private val messageDao: MessageDao,
     private val clock: CacheClock,
     private val fence: AccountFence? = null,
+    private val regime: EndToEndRegimeKeeper? = null,
 ) : MessagePrefetchStore {
 
     override suspend fun heldWindow(conversationId: String, limit: Int): HeldMessageWindow {
@@ -43,7 +44,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
         val now = clock.nowMillis()
         return fence.commitOrWrite(ticket) {
             database.withTransaction {
-                MessageIngestPipeline(database).mergeInTransaction(page, now, conversationId)
+                MessageIngestPipeline(database, regime = regime).mergeInTransaction(page, now, conversationId)
             }
             true
         } ?: false

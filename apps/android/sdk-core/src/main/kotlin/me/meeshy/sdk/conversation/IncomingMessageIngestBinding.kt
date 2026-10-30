@@ -54,9 +54,10 @@ class IncomingMessageIngestBinding internal constructor(
         signal: ConversationRefreshSignal,
         @IoDispatcher io: CoroutineDispatcher,
         fence: AccountFence,
+        regime: EndToEndRegimeKeeper,
     ) : this(
         socket = socket,
-        pipeline = MessageIngestPipeline(database),
+        pipeline = MessageIngestPipeline(database, regime = regime),
         clock = clock,
         signal = signal,
         scope = CoroutineScope(SupervisorJob() + io),

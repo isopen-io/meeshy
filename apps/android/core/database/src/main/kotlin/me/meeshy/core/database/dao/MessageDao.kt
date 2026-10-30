@@ -24,6 +24,17 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
 
+    /**
+     * #13792 — les lignes du fil qui PEUVENT dire le bout en bout : drapeau chiffré, ou « e2ee » dans la charge (mode du
+     * message, d'une pièce, avis d'activation), lignes non encore rétro-remplies comprises. Un pré-filtre : la loi se lit sur
+     * la charge décodée (`EndToEndRegimeMemory.cachedThreadSeals`).
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
+    )
+    public suspend fun endToEndCandidates(conversationId: String): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 

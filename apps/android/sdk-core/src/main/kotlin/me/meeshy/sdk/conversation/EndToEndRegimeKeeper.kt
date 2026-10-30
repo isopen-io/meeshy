@@ -17,8 +17,10 @@ import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.EndToEndRegimeMemory
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
@@ -54,6 +56,28 @@ class EndToEndRegimeKeeper @Inject constructor(
             conversations.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(kept))))
         }
     }
+
+    /**
+     * #13792 — des messages SERVIS (socket `message:new`, page REST, accusé d'envoi) apprennent le régime à la conversation
+     * où ils sont rangés ([filedUnder], sinon la leur), fil ouvert ou non, par la loi du fil
+     * ([EndToEndRegimeMemory.teachesEndToEnd]). Les envois hors du fil (réponse d'une bannière, partage, humeur, refus
+     * d'appel) lisent ce registre : un mode en cache périmé et une bascule manquée n'y rouvrent plus le clair.
+     */
+    suspend fun learnFromServed(messages: Collection<ApiMessage>, filedUnder: String? = null) {
+        messages.groupBy { filedUnder ?: it.conversationId }.forEach { (conversationId, served) ->
+            if (conversationId.isBlank() || ledger.isSealed(conversationId)) return@forEach
+            // La ligne en cache n'est relue que si seul un tête-à-tête apprendrait de ces messages.
+            val teaches = EndToEndRegimeMemory.teachesEndToEnd(served) { false } ||
+                (EndToEndRegimeMemory.teachesEndToEnd(served) { true } && isCachedDirect(conversationId))
+            if (teaches) learn(conversationId)
+        }
+    }
+
+    /** La forme de la conversation, lue de sa ligne en cache : inconnue, elle n'est pas un tête-à-tête (le fil en cache retient alors l'envoi). */
+    private suspend fun isCachedDirect(conversationId: String): Boolean =
+        database.conversationDao().find(conversationId)?.payload
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it) }.getOrNull() }
+            ?.isDirect == true
 }
 
 /**

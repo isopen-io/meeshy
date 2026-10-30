@@ -82,4 +82,55 @@ class EndToEndRegimeMemoryTest {
         assertThat(EndToEndRegimeMemory.messageHoldsSend(message(isEncrypted = true, mode = "server"))).isFalse()
         assertThat(EndToEndRegimeMemory.messageHoldsSend(message())).isFalse()
     }
+    private val activation get() = message(type = "system").copy(
+        metadata = buildJsonObject { put("kind", JsonPrimitive("encryption-enabled")); put("mode", JsonPrimitive("e2ee")) },
+    )
+
+    @Test
+    fun `#13792 un message e2ee servi apprend son tete-a-tete, l avis d activation apprend partout`() {
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(message(isEncrypted = true, mode = "e2ee"))) { true }).isTrue()
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(message(isEncrypted = true, mode = " E2EE "))) { true }).isTrue()
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(activation)) { false }).isTrue()
+    }
+
+    @Test
+    fun `#13792 un e2ee de groupe, un clair, un chiffre ambigu ou un supprime n apprennent rien`() {
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(listOf(message(isEncrypted = true, mode = "e2ee"))) { false }).isFalse()
+        val quiet = listOf(
+            message(),
+            message(isEncrypted = true, mode = "server"),
+            message(isEncrypted = true),
+            message(isEncrypted = true, mode = "e2ee", deletedAt = "2026-10-25T00:00:00Z"),
+        )
+        assertThat(EndToEndRegimeMemory.teachesEndToEnd(quiet) { true }).isFalse()
+    }
+
+    @Test
+    fun `#13792 la forme de la conversation n est lue que pour un e2ee hors avis`() {
+        var reads = 0
+        EndToEndRegimeMemory.teachesEndToEnd(listOf(message(), message(isEncrypted = true, mode = "server"))) { reads++; true }
+        assertThat(reads).isEqualTo(0)
+    }
+
+    @Test
+    fun `#13792 le fil en cache scelle les envois hors du fil, groupe compris`() {
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(message(isEncrypted = true, mode = "e2ee")))).isTrue()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(message(isEncrypted = true)))).isTrue()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(activation))).isTrue()
+        val blob = message().copy(attachments = listOf(ApiMessageAttachment(id = "a1", encryptionMode = "e2ee")))
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(listOf(blob))).isTrue()
+    }
+
+    @Test
+    fun `#13792 un fil en cache clair, au repos serveur ou supprime ne scelle rien`() {
+        val quiet = listOf(
+            message(),
+            message(isEncrypted = true, mode = "server"),
+            message(isEncrypted = true, mode = "hybrid"),
+            message(isEncrypted = true, mode = "e2ee", deletedAt = "2026-10-25T00:00:00Z"),
+            message(isEncrypted = true, type = "system"),
+        )
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(quiet)).isFalse()
+        assertThat(EndToEndRegimeMemory.cachedThreadSeals(emptyList())).isFalse()
+    }
 }

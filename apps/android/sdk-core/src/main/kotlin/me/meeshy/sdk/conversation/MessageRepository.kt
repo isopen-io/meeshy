@@ -49,9 +49,10 @@ class MessageRepository internal constructor(
         outboxRepository: OutboxRepository,
         clock: CacheClock,
         fence: AccountFence? = null,
+        regime: EndToEndRegimeKeeper? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

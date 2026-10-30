@@ -34,8 +34,24 @@ object EndToEndRegimeMemory {
         }
 
     /** Le fil APPREND le bout en bout : l'avis d'activation partout, un message e2ee dans un tête-à-tête. */
-    fun threadShowsEndToEnd(messages: List<ApiMessage>, isDirect: Boolean): Boolean =
-        messages.any { announcesEndToEnd(it) || (isDirect && carriesEndToEnd(it)) }
+    fun threadShowsEndToEnd(messages: List<ApiMessage>, isDirect: Boolean): Boolean = teachesEndToEnd(messages) { isDirect }
+
+    /**
+     * #13792 — ce que des messages SERVIS (socket, REST, accusé d'envoi) apprennent au registre de leur conversation : la loi
+     * du fil ([threadShowsEndToEnd]), lue à l'ingestion, fil ouvert ou non. [isDirect] n'est lu que si un message porte le
+     * bout en bout hors avis d'activation : un groupe ne se scelle pas à vie sur une trace (iOS, audit #12985 B2).
+     */
+    fun teachesEndToEnd(messages: List<ApiMessage>, isDirect: () -> Boolean): Boolean =
+        messages.any(::announcesEndToEnd) || (messages.any(::carriesEndToEnd) && isDirect())
+
+    /**
+     * #13792 — le fil EN CACHE retient tout envoi qui ne part pas du fil ouvert (réponse d'une bannière, partage, humeur,
+     * refus d'appel), comme le fil ouvert retient son composeur (`ChatUiState.isEndToEnd`) : un avis d'activation, un message
+     * scellé, une pièce chiffrée de bout en bout ou un chiffré ambigu, dans un tête-à-tête comme dans un groupe. Miroir
+     * d'iOS (`EndToEndDestinationGuard` relit le fil en cache).
+     */
+    fun cachedThreadSeals(messages: List<ApiMessage>): Boolean =
+        messages.any { announcesEndToEnd(it) || showsSealed(it) || messageHoldsSend(it) }
 
     /**
      * Le fil RETIENT l'envoi en cours sans rien apprendre : un chiffré sans mode ou d'un mode
@@ -51,6 +67,10 @@ object EndToEndRegimeMemory {
      * plus, par [threadShowsEndToEnd]). Lu message par message par la bulle, que l'écran agrège.
      */
     fun messageHoldsSend(message: ApiMessage): Boolean = ambiguouslyEncrypted(message) || carriesEndToEnd(message)
+
+    /** Le message scellé ou sa pièce chiffrée, tels que la bulle les montre (`BubbleContentBuilder`). */
+    private fun showsSealed(message: ApiMessage): Boolean =
+        message.deletedAt == null && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
 
     private fun isSystem(message: ApiMessage): Boolean =
         message.messageType == "system" || message.messageSource == "system"

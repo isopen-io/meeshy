@@ -12,7 +12,9 @@ import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
@@ -162,11 +164,25 @@ public class EndToEndOutboxAdmission @Inject constructor(
         return OutboxAdmissionVerdict.ADMIT
     }
 
-    private suspend fun clearanceOf(conversationId: String): ConversationClearance =
-        ConversationClearance.of(
+    private suspend fun clearanceOf(conversationId: String): ConversationClearance {
+        val known = ConversationClearance.of(
             sealedInLedger = ledger.isSealed(conversationId),
             cachedMode = cachedMode(conversationId),
             servedClearConfirmed = ledger.isClearConfirmed(conversationId),
+        )
+        if (known == ConversationClearance.END_TO_END) return known
+        return if (cachedThreadSeals(conversationId)) ConversationClearance.END_TO_END else known
+    }
+
+    /**
+     * #13792 — le fil en cache retient le clair comme le fil ouvert retient son composeur : un message scellé reçu (groupe
+     * compris, que le registre n'apprend pas) ou un avis d'activation ferme la conversation, quoi que dise le mode de la liste.
+     */
+    private suspend fun cachedThreadSeals(conversationId: String): Boolean =
+        EndToEndRegimeMemory.cachedThreadSeals(
+            messageDao.endToEndCandidates(conversationId).mapNotNull { row ->
+                runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+            },
         )
 
     private suspend fun cachedMode(conversationId: String): String? =
