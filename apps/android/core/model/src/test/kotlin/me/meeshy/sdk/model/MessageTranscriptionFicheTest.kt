@@ -112,4 +112,65 @@ class MessageTranscriptionFicheTest {
         )
         assertThat(processing.completed).isNull()
     }
+
+    private fun segmented(speakerCount: Int?, vararg segments: TranscriptionSegment) = voice(
+        transcription = englishVoice.copy(speakerCount = speakerCount, segments = segments.toList()),
+        translations = null,
+    )
+
+    private fun readyOf(attachment: ApiMessageAttachment) =
+        MessageTranscriptionFiche.of(listOf(attachment), Prefs(), Request.IDLE) as State.Ready
+
+    @Test
+    fun `the words come in order, blank ones dropped, each speaker keeps the colour of its first appearance`() {
+        val state = readyOf(
+            segmented(
+                2,
+                TranscriptionSegment(" The ", speakerId = "s1"),
+                TranscriptionSegment("meeting", speakerId = "s1"),
+                TranscriptionSegment("   ", speakerId = "s9"),
+                TranscriptionSegment("is", speakerId = "s2"),
+                TranscriptionSegment("moved", speakerId = "s1"),
+            ),
+        )
+        assertThat(state.original.segments).containsExactly(
+            MessageTranscriptionFiche.Segment("The", "08D9D6"),
+            MessageTranscriptionFiche.Segment("meeting", "08D9D6"),
+            MessageTranscriptionFiche.Segment("is", "FF6B6B"),
+            MessageTranscriptionFiche.Segment("moved", "08D9D6"),
+        ).inOrder()
+    }
+
+    @Test
+    fun `segments without a speaker share one colour, and the palette wraps after eight speakers`() {
+        val speakers = (1..9).map { TranscriptionSegment("w$it", speakerId = "s$it") }
+        val state = readyOf(segmented(9, TranscriptionSegment("a"), *speakers.toTypedArray(), TranscriptionSegment("b")))
+        val colours = state.original.segments.map { it.speakerColorHex }
+        assertThat(colours.first()).isEqualTo(colours.last())
+        assertThat(colours.subList(0, 9).toSet()).hasSize(8)
+        assertThat(colours[8]).isEqualTo(colours[0])
+    }
+
+    @Test
+    fun `a single speaker shows the words untinted`() {
+        listOf(null, 1).forEach { count ->
+            val state = readyOf(segmented(count, TranscriptionSegment("Hello", speakerId = "s1"), TranscriptionSegment("world", speakerId = "s2")))
+            assertThat(state.original.segments.map { it.text }).containsExactly("Hello", "world").inOrder()
+            assertThat(state.original.segments.all { it.speakerColorHex == null }).isTrue()
+        }
+    }
+
+    @Test
+    fun `the served transcription brings its words and speakers to the fiche`() {
+        val json = Json { ignoreUnknownKeys = true }
+        val attachment = json.decodeFromString<ApiMessageAttachment>(
+            """{"id":"a1","mimeType":"audio/m4a","transcription":{"text":"Hi there","language":"en","speakerCount":2,
+            "segments":[{"text":"Hi","startMs":0,"endMs":400,"speakerId":"s0","voiceSimilarityScore":null},
+            {"text":"there","startMs":400,"endMs":900,"speakerId":"s1","voiceSimilarityScore":0.8}]}}""",
+        )
+        assertThat(readyOf(attachment).original.segments).containsExactly(
+            MessageTranscriptionFiche.Segment("Hi", "08D9D6"),
+            MessageTranscriptionFiche.Segment("there", "FF6B6B"),
+        ).inOrder()
+    }
 }

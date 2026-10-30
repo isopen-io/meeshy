@@ -24,7 +24,14 @@ object MessageTranscriptionFiche {
         val confidencePercent: Int?,
         val durationSeconds: Int?,
         val speakerCount: Int?,
+        val segments: List<Segment> = emptyList(),
     )
+
+    /**
+     * Un mot (ou segment) de la transcription, iOS `TranscriptionDisplaySegment`. [speakerColorHex] : la teinte de son
+     * locuteur, attribuée dans l'ordre d'apparition sur [SPEAKER_PALETTE] ; `null` quand un seul locuteur parle.
+     */
+    data class Segment(val text: String, val speakerColorHex: String?)
 
     data class Translation(
         val language: String,
@@ -75,7 +82,19 @@ object MessageTranscriptionFiche {
             confidencePercent = transcription?.confidence?.takeIf { it in 0.0..1.0 }?.let { (it * 100).roundToInt() },
             durationSeconds = (transcription?.durationMs ?: attachment.duration)?.let { it / MILLIS_PER_SECOND },
             speakerCount = transcription?.speakerCount?.takeIf { it > 1 },
+            segments = segmentsOf(transcription),
         )
+    }
+
+    private fun segmentsOf(transcription: ApiAttachmentTranscription?): List<Segment> {
+        val spoken = transcription?.segments.orEmpty().mapNotNull { segment ->
+            segment.text.trim().ifBlank { null }?.let { it to (segment.speakerId ?: UNNAMED_SPEAKER) }
+        }
+        val tinted = (transcription?.speakerCount ?: 1) > 1
+        val speakerRank = spoken.map { it.second }.distinct().withIndex().associate { (rank, speaker) -> speaker to rank }
+        return spoken.map { (text, speaker) ->
+            Segment(text, SPEAKER_PALETTE[speakerRank.getValue(speaker) % SPEAKER_PALETTE.size].takeIf { tinted })
+        }
     }
 
     private fun translationsOf(
@@ -107,4 +126,9 @@ object MessageTranscriptionFiche {
     private val ApiMessageAttachment.isVideo: Boolean get() = mimeType?.startsWith("video/") == true
 
     private const val MILLIS_PER_SECOND = 1000
+
+    private const val UNNAMED_SPEAKER = "default"
+
+    /** La palette des locuteurs d'iOS (`TranscriptionDisplaySegment.speakerPalette`), dans son ordre. */
+    val SPEAKER_PALETTE: List<String> = listOf("08D9D6", "FF6B6B", "9B59B6", "F8B500", "2ECC71", "E91E63", "3498DB", "FF7F50")
 }
