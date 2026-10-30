@@ -1889,7 +1889,7 @@ describe('registerCoreRoutes', () => {
       await getDetailHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).not.toHaveBeenCalled();
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns sendNotFound when conversation not found after access check', async () => {
@@ -2923,7 +2923,7 @@ describe('registerCoreRoutes', () => {
 
       await getAnalysisHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('answers a non-member with the same 404 as a missing conversation (#8099)', async () => {
@@ -2934,7 +2934,7 @@ describe('registerCoreRoutes', () => {
       await getAnalysisHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).not.toHaveBeenCalled();
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('happy path: returns analysis with null summary', async () => {

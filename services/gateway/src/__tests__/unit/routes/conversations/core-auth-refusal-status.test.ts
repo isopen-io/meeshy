@@ -195,7 +195,7 @@ describe('une session ABSENTE ou MORTE rend 401 UNAUTHORIZED (#4789)', () => {
 });
 
 describe('un non-membre AUTHENTIFIÉ reçoit le 404 d\'une conversation inexistante (#8099)', () => {
-  it('GET /conversations/:id — 404 Conversation not found, sans code', async () => {
+  it('GET /conversations/:id — 404 Conversation not found, au code d’une conversation inexistante', async () => {
     const { statut, corps } = await appeler(
       `/conversations/${CONV_ID}`,
       JETON_VIVANT,
@@ -204,7 +204,7 @@ describe('un non-membre AUTHENTIFIÉ reçoit le 404 d\'une conversation inexista
 
     expect(statut).toBe(404);
     expect(corps.error).toBe('Conversation not found');
-    expect(corps.code).toBeUndefined();
+    expect(corps.code).toBe('CONVERSATION_NOT_FOUND');
   });
 
   /**

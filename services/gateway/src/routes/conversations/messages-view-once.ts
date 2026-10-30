@@ -16,7 +16,7 @@ import { computeViewOnceStates, type ViewOnceReaderState } from '../../services/
 import { emitViewOnceConsumedPreview } from '../../socketio/emitConversationPreviewUpdate';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -85,7 +85,7 @@ export function registerMessageViewOnceRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);

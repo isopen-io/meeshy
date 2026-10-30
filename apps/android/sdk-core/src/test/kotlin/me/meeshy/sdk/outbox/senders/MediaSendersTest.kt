@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
@@ -17,6 +18,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.MediaUploadPayload
 import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.SendResult
 import org.junit.Test
 
@@ -39,7 +41,12 @@ class MediaSendersTest {
         thumbnailUrl = null,
     )
 
-    private fun handler() = UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger)
+    private val regimes = InMemoryEndToEndRegimeLedger()
+
+    private fun handler() = UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger, regimes)
+
+    private fun chatRow(conversationId: String = "c-1") =
+        row(senderJson.encodeToString(MediaUploadPayload.serializer(), MediaUploadPayload(conversationId = conversationId)))
 
     private fun row(payload: String = "") =
         outboxRow(OutboxKind.UPLOAD_MEDIA, targetId = "cmid-1", payload = payload)
@@ -53,6 +60,71 @@ class MediaSendersTest {
 
         assertThat(result).isEqualTo(SendResult.SuccessWithId("media-9"))
         coVerify(exactly = 1) { mediaBlobStore.remove("cmid-1") }
+    }
+
+    @Test
+    fun `a chat upload declares its conversation to the gateway, which never stores the piece of an end to end one`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns NetworkResult.Success(listOf(uploaded))
+
+        val result = handler().send(chatRow())
+
+        assertThat(result).isEqualTo(SendResult.SuccessWithId("media-9"))
+        coVerify(exactly = 1) { mediaRepository.upload(listOf(item), "c-1") }
+    }
+
+    @Test
+    fun `a chat upload refused in clear by an end to end conversation fails for good and the conversation is learned end to end`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns
+            NetworkResult.Failure(ApiError("refused", code = "E2EE_PLAINTEXT_REFUSED", httpStatus = 400))
+
+        val result = handler().send(chatRow())
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
+        assertThat(regimes.isSealed("c-1")).isTrue()
+        coVerify(exactly = 1) { mediaBlobStore.remove("cmid-1") }
+    }
+
+    @Test
+    fun `a chat upload whose conversation the gateway does not find fails for good instead of being replayed`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns
+            NetworkResult.Failure(ApiError("Conversation not found", code = "CONVERSATION_NOT_FOUND", httpStatus = 404))
+
+        val result = handler().send(chatRow())
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE))
+        assertThat(regimes.isSealed("c-1")).isFalse()
+    }
+
+    @Test
+    fun `a 404 from the proxy while the gateway restarts is retried and the bytes are kept`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns
+            NetworkResult.Failure(ApiError("404 page not found", code = "HTTP_404", httpStatus = 404))
+
+        val result = handler().send(chatRow())
+
+        assertThat(result).isEqualTo(SendResult.TransientFailure)
+        coVerify(exactly = 0) { mediaBlobStore.remove(any()) }
+    }
+
+    @Test
+    fun `a chat upload exhausted while its conversation mode could not be read keeps its bytes for the retry`() = runTest {
+        handler().onExhausted(chatRow().copy(lastError = "Deferred too long: ${OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED}"))
+
+        coVerify(exactly = 0) { mediaBlobStore.remove(any()) }
+    }
+
+    @Test
+    fun `a server error on a chat upload is still retried`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns
+            NetworkResult.Failure(ApiError("down", httpStatus = 500))
+
+        assertThat(handler().send(chatRow())).isEqualTo(SendResult.TransientFailure)
+        assertThat(regimes.isSealed("c-1")).isFalse()
     }
 
     @Test

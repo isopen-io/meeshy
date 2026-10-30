@@ -38,6 +38,8 @@ import me.meeshy.sdk.model.share.ShareFailure
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.network.NetworkMonitor
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.session.SessionRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -87,6 +89,7 @@ class AppShareSheetViewModelTest {
         friends: List<FriendRequestUser> = listOf(FriendRequestUser(id = "u9", username = "marc", displayName = "Marc")),
         resolution: DirectConversationResolution? = null,
         stream: kotlinx.coroutines.flow.Flow<CacheResult<List<ApiConversation>>> = flowOf(CacheResult.Fresh(list, ageMillis = 0)),
+        outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
     ): Harness {
         val conversationRepo = mockk<ConversationRepository>(relaxed = true)
         every { conversationRepo.conversationsStream(any(), any()) } returns stream
@@ -105,7 +108,7 @@ class AppShareSheetViewModelTest {
         val online = MutableStateFlow(true)
         val network = mockk<NetworkMonitor>(relaxed = true)
         every { network.isOnline } returns online
-        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network)
+        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread)
         return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online)
     }
 
@@ -462,6 +465,107 @@ class AppShareSheetViewModelTest {
         coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "new-direct", content = "regarde", originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
         assertThat(existedAtEnqueue).containsExactly(true, true)
         assertThat(copy.exists()).isFalse()
+    }
+
+    // ── #13820 — le mode de la destination est relu avant toute mise en file ──
+
+    @Test
+    fun a_conversation_the_cache_still_calls_server_but_the_server_serves_end_to_end_receives_nothing() = runTest(dispatcher) {
+        val gated = mutableListOf<String>()
+        val h = harness(outOfThread = OutOfThreadSendGate { id -> gated += id; if (id == "c1") OutOfThreadAdmission.END_TO_END else OutOfThreadAdmission.SEND })
+        h.vm.bind(ShareSubject.Text("secret"))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.toggle(h.model().sections.recents[1])
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(gated).containsExactly("c1", "d1").inOrder()
+        coVerify(exactly = 0) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = any(), forwardedFromId = any(), forwardedFromConversationId = any(), effects = any()) }
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "d1", content = "secret", originalLanguage = any(), sender = me, forwardedFromId = null, forwardedFromConversationId = null, effects = any()) }
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION))
+        assertThat(h.model().deliveries["conv:d1"]).isEqualTo(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun the_modes_of_every_recipient_are_read_together_within_the_bound_of_a_single_gesture() = runTest(dispatcher) {
+        val h = harness(outOfThread = OutOfThreadSendGate { delay(2_000); OutOfThreadAdmission.SEND })
+        h.vm.bind(ShareSubject.Text("secret"))
+        advanceUntilIdle()
+        val started = testScheduler.currentTime
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.toggle(h.model().sections.recents[1])
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(testScheduler.currentTime - started).isAtMost(2_000)
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Sent)
+        assertThat(h.model().deliveries["conv:d1"]).isEqualTo(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun files_shared_to_a_conversation_turned_end_to_end_are_never_queued_for_upload() = runTest(dispatcher) {
+        val h = harness(outOfThread = OutOfThreadSendGate { OutOfThreadAdmission.END_TO_END })
+        h.vm.bindIncoming("regarde", listOf(file("a.png", "image/png")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any<MediaUploadItem>(), any(), any()) }
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION))
+    }
+
+    @Test
+    fun a_conversation_the_gateway_no_longer_serves_receives_nothing() = runTest(dispatcher) {
+        val h = harness(outOfThread = OutOfThreadSendGate { OutOfThreadAdmission.UNREACHABLE })
+        h.vm.bindIncoming(null, listOf(file("a.png", "image/png")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any<MediaUploadItem>(), any(), any()) }
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Failed(ShareFailure.UNREACHABLE))
+    }
+
+    @Test
+    fun a_mode_that_cannot_be_read_now_queues_the_share_until_it_is_known_and_says_it_waits() = runTest(dispatcher) {
+        val h = harness(outOfThread = OutOfThreadSendGate { OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN })
+        h.vm.bindIncoming("regarde", listOf(file("a.png", "image/png")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any<MediaUploadItem>(), any(), "c1") }
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = "regarde", originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(), attachments = any()) }
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Queued)
+    }
+
+    @Test
+    fun the_direct_found_for_a_person_is_read_again_before_anything_is_queued() = runTest(dispatcher) {
+        val gated = mutableListOf<String>()
+        val h = harness(
+            resolution = DirectConversationResolution.Found(direct("d-cached", "u9", "Marc"), fromCache = true),
+            outOfThread = OutOfThreadSendGate { id -> gated += id; OutOfThreadAdmission.END_TO_END },
+        )
+        h.vm.bind(ShareSubject.Text("secret"))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.people.single())
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(gated).containsExactly("d-cached")
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(h.model().deliveries["user:u9"]).isEqualTo(ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION))
     }
 
     private fun intakeCopy(): File {

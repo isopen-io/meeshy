@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.mood.MoodSpotlightRules
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -64,6 +65,7 @@ class MoodSpotlightViewModel internal constructor(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
+    private val outOfThread: OutOfThreadSendGate,
     private val now: () -> Long,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -76,10 +78,11 @@ class MoodSpotlightViewModel internal constructor(
         messageRepository: MessageRepository,
         sessionRepository: SessionRepository,
         workManager: WorkManager,
+        outOfThread: OutOfThreadSendGate,
         savedStateHandle: SavedStateHandle,
     ) : this(
         postRepository, userRepository, conversationRepository, messageRepository,
-        sessionRepository, workManager, System::currentTimeMillis, savedStateHandle,
+        sessionRepository, workManager, outOfThread, System::currentTimeMillis, savedStateHandle,
     )
 
     private val statusId: String = savedStateHandle[STATUS_ID_ARG] ?: ""
@@ -145,7 +148,8 @@ class MoodSpotlightViewModel internal constructor(
                     is DirectConversationResolution.Created -> direct.conversation.id
                     else -> null
                 }
-                if (conversationId == null) {
+                // #13820 — la directe n'est connue que par le cache : son mode est relu avant que la bulle ne naisse.
+                if (conversationId == null || !outOfThread.admit(conversationId).mayQueue) {
                     fail(text)
                     return@launch
                 }

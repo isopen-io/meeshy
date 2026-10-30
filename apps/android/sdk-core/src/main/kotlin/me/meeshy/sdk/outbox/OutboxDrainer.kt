@@ -43,12 +43,18 @@ public fun interface MutationSender {
     public suspend fun send(row: OutboxEntity): SendResult
 }
 
-/** Summary of one [OutboxDrainer.drainLane] pass. */
+/**
+ * Summary of one [OutboxDrainer.drainLane] pass.
+ *
+ * @property heldBack an independent lane ([OutboxLanes.isIndependent]) drained PAST rows that must come back later — an
+ *   upload waiting for its conversation's mode, or not yet due again (#13820): the lane did not stop, but a retry is owed.
+ */
 public data class DrainReport(
     val delivered: Int,
     val exhausted: Int,
     val stoppedOnTransientFailure: Boolean,
     val stoppedOnBlockedDependency: Boolean = false,
+    val heldBack: Boolean = false,
 )
 
 /**
@@ -76,6 +82,13 @@ public data class DrainReport(
  * [currentOwner], when set, enforces [OutboxAuthorGuard]: a row never leaves under another
  * account than its author — it is skipped (no attempt charged) until its author is signed in.
  * A [SendResult.Deferred] row costs no attempt either: it is rescheduled and holds its lane.
+ *
+ * A row whose conversation's mode cannot be read ([OutboxAdmissionVerdict.WAIT], #13820) is rescheduled without an
+ * attempt and exhausted once it has waited [DEFERRED_MAX_WAIT_MS] — its bubble and its bytes are kept for « Réessayer »,
+ * and its dependents inherit [OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED]; once admitted, its wait starts over.
+ * A message lane stops on it (FIFO). An INDEPENDENT lane ([OutboxLanes.isIndependent] — the media lane) holds no order
+ * between its rows: the waiting upload waits ALONE, a row not yet due is passed over, and the lane drains on and reports
+ * [DrainReport.heldBack] so a retry comes back for them.
  */
 public class OutboxDrainer(
     private val outbox: OutboxRepository,
@@ -97,6 +110,8 @@ public class OutboxDrainer(
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
         var exhausted = 0
+        var heldBack = false
+        val independent = OutboxLanes.isIndependent(lane)
         val pending = outbox.deliverable(lane).filter { it.stateEnum == OutboxState.PENDING }
 
         for (row in pending) {
@@ -108,13 +123,17 @@ public class OutboxDrainer(
                     AuthorVerdict.WAIT -> continue
                     AuthorVerdict.EXHAUST_NO_AUTHOR -> {
                         outbox.markExhausted(row.cmid, OutboxAuthorGuard.REASON_NO_AUTHOR)
-                        onExhausted(row)
+                        onExhausted(settled(row, OutboxAuthorGuard.REASON_NO_AUTHOR))
                         exhausted++
                         continue
                     }
                 }
             }
-            if ((row.nextAttemptAt ?: 0L) > now()) return blocked(delivered, exhausted)
+            if ((row.nextAttemptAt ?: 0L) > now()) {
+                if (!independent) return blocked(delivered, exhausted)
+                heldBack = true
+                continue
+            }
             val prerequisites = OutboxDependencyKey.decode(row.dependsOn)
             if (prerequisites.isNotEmpty()) {
                 val states = prerequisites.map { outbox.stateOf(it) }
@@ -126,7 +145,7 @@ public class OutboxDrainer(
                         }
                         val reason = cascadeReason(failed)
                         outbox.markExhausted(row.cmid, reason)
-                        onExhausted(row.copy(lastError = reason))
+                        onExhausted(settled(row, reason))
                         exhausted++
                         continue
                     }
@@ -135,25 +154,44 @@ public class OutboxDrainer(
             }
             val sender = senders[kind]
             if (sender == null) {
-                outbox.markExhausted(row.cmid, "No sender registered for ${row.kind}")
-                onExhausted(row)
+                val reason = "No sender registered for ${row.kind}"
+                outbox.markExhausted(row.cmid, reason)
+                onExhausted(settled(row, reason))
                 exhausted++
                 continue
             }
             when (plaintextAdmission.judge(row)) {
-                OutboxAdmissionVerdict.ADMIT -> Unit
+                OutboxAdmissionVerdict.ADMIT ->
+                    if (row.waitingSince != null && OutboxPlaintextAdmission.isModeUnconfirmed(row.lastError)) {
+                        outbox.endWait(row.cmid, OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED)
+                    }
                 OutboxAdmissionVerdict.WITHHOLD -> {
                     outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_END_TO_END)
-                    onExhausted(row)
+                    onExhausted(settled(row, OutboxPlaintextAdmission.REASON_END_TO_END))
                     exhausted++
                     continue
                 }
-                // #13628 — mode inconnu et illisible : la ligne reste PENDING (aucun essai compté), la file s'arrête et reprend au retour du réseau.
-                OutboxAdmissionVerdict.WAIT -> return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
-                // #13628 — la passerelle refuse de servir la conversation (404/403/410) : la ligne ne bloque pas sa file à jamais.
+                // #13628 — mode inconnu et illisible : la ligne reste PENDING (aucun essai compté) et reprend au retour du réseau.
+                // #13820 — l'attente est BORNÉE (DEFERRED_MAX_WAIT_MS) puis la ligne échoue, sa bulle et ses octets gardés pour
+                // « Réessayer » ; une lane de messages s'arrête (FIFO), la lane indépendante (média) passe aux lignes suivantes.
+                OutboxAdmissionVerdict.WAIT -> {
+                    // La lane de messages reste due (le retour du réseau la relance aussitôt) ; seule la pièce attend son tour.
+                    val retryAfter = if (independent) DEFERRED_RETRY_MS else 0L
+                    val waits = outbox.defer(row.cmid, OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED, retryAfter, DEFERRED_MAX_WAIT_MS)
+                    if (!independent) outbox.waitBehind(lane, row.cmid, OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED)
+                    if (!waits) {
+                        onExhausted(settled(row, null))
+                        exhausted++
+                        continue
+                    }
+                    if (!independent) return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
+                    heldBack = true
+                    continue
+                }
+                // #13628 — la passerelle refuse de servir la conversation (403, 410, son 404 CONVERSATION_NOT_FOUND) : la ligne ne bloque pas sa file à jamais.
                 OutboxAdmissionVerdict.UNREACHABLE -> {
                     outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE)
-                    onExhausted(row)
+                    onExhausted(settled(row, OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE))
                     exhausted++
                     continue
                 }
@@ -172,7 +210,7 @@ public class OutboxDrainer(
                 }
                 SendResult.TransientFailure -> {
                     if (outbox.markFailed(row.cmid, "Transient delivery failure") == OutboxState.EXHAUSTED) {
-                        onExhausted(row)
+                        onExhausted(settled(row, "Transient delivery failure"))
                         exhausted++
                     }
                     return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
@@ -181,7 +219,7 @@ public class OutboxDrainer(
                     if (outbox.defer(row.cmid, result.reason, DEFERRED_RETRY_MS, DEFERRED_MAX_WAIT_MS)) {
                         return blocked(delivered, exhausted)
                     }
-                    onExhausted(row)
+                    onExhausted(settled(row, null))
                     exhausted++
                 }
                 is SendResult.PermanentFailure -> {
@@ -190,13 +228,21 @@ public class OutboxDrainer(
                     } else {
                         outbox.markExhausted(row.cmid, result.reason)
                     }
-                    onExhausted(row)
+                    onExhausted(settled(row, result.reason))
                     exhausted++
                 }
             }
         }
-        return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
+        return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false, heldBack = heldBack)
     }
+
+    /**
+     * #13820 — la ligne telle que son échec l'a laissée, relue après [OutboxRepository.markExhausted] : `onExhausted` décide sur
+     * sa raison d'ÉCHEC (garder ou jeter des octets), jamais sur celle d'une attente antérieure. Une ligne déjà retirée garde
+     * [reason] si elle est connue.
+     */
+    private suspend fun settled(row: OutboxEntity, reason: String?): OutboxEntity =
+        outbox.row(row.cmid) ?: row.copy(lastError = reason ?: row.lastError)
 
     /**
      * Ce que dit un dépendant dont un prérequis a échoué : un média refusé pour son lieu (#13550) se transmet tel quel — la
@@ -208,6 +254,7 @@ public class OutboxDrainer(
         return when {
             reasons.any(MediaLocationRefusal::isReason) -> MediaLocationRefusal.REASON
             reasons.any(MediaLoss::isReason) -> MediaLoss.REASON
+            reasons.any(OutboxPlaintextAdmission::isModeUnconfirmed) -> OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED
             else -> "Prerequisite(s) failed: ${failed.joinToString()}"
         }
     }

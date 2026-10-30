@@ -3,6 +3,7 @@ package me.meeshy.sdk.outbox
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -10,12 +11,15 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.ConversationEntity
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageEntityFactory
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.outbox.senders.AddReactionHandler
 import me.meeshy.sdk.reaction.OwnReactionWithdrawals
@@ -305,13 +309,26 @@ class EndToEndOutboxAdmissionTest {
     }
 
     @Test
-    fun `seuls 403, 404 et 410 sont definitifs, tout autre echec de relecture se reessaie`() {
-        listOf(403, 404, 410).forEach {
-            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Inaccessible)
+    fun `seuls 403, 410 et le 404 de la passerelle sont definitifs, tout autre echec de relecture se reessaie`() {
+        listOf(403, 410).forEach {
+            assertThat(ConversationModeReader.refusalOf(it, code = null)).isEqualTo(ConversationModeRead.Inaccessible)
         }
+        assertThat(ConversationModeReader.refusalOf(404, code = ConversationModeReader.GATEWAY_NOT_FOUND_CODE))
+            .isEqualTo(ConversationModeRead.Inaccessible)
         listOf(null, 401, 408, 429, 500, 503).forEach {
-            assertThat(ConversationModeReader.refusalOf(it)).isEqualTo(ConversationModeRead.Unreadable)
+            assertThat(ConversationModeReader.refusalOf(it, code = null)).isEqualTo(ConversationModeRead.Unreadable)
         }
+    }
+
+    @Test
+    fun `un 404 du proxy pendant un redemarrage de la passerelle est illisible, jamais definitif`() = runTest {
+        assertThat(ConversationModeReader.refusalOf(404, code = "HTTP_404")).isEqualTo(ConversationModeRead.Unreadable)
+        assertThat(ConversationModeReader.refusalOf(404, code = null)).isEqualTo(ConversationModeRead.Unreadable)
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.getById("c-proxy") } returns
+            NetworkResult.Failure(ApiError("404 page not found", code = "HTTP_404", httpStatus = 404))
+
+        assertThat(RepositoryConversationModeReader(conversations).read("c-proxy")).isEqualTo(ConversationModeRead.Unreadable)
     }
 
     @Test

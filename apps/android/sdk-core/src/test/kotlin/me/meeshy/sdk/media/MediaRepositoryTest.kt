@@ -145,6 +145,32 @@ class MediaRepositoryTest {
     }
 
     @Test
+    fun upload_toAConversation_declaresItBeforeTheFiles_soTheGatewayNeverStoresTheBytesOfAnEndToEndOne() = runTest {
+        val captured = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(captured)) } returns
+            ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+
+        repository().upload(listOf(item("one.jpg")), conversationId = "c-1")
+
+        assertThat(captured.captured).hasSize(2)
+        assertThat(captured.captured[0].headers?.get("Content-Disposition")).isEqualTo("form-data; name=\"conversationId\"")
+        val value = okio.Buffer().also { captured.captured[0].body.writeTo(it) }.readUtf8()
+        assertThat(value).isEqualTo("c-1")
+        assertThat(captured.captured[1].headers?.get("Content-Disposition").orEmpty()).contains("filename=\"one.jpg\"")
+    }
+
+    @Test
+    fun upload_withoutAConversation_sendsOnlyTheFiles() = runTest {
+        val captured = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(captured)) } returns
+            ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+
+        repository().upload(listOf(item("one.jpg")))
+
+        assertThat(captured.captured).hasSize(1)
+    }
+
+    @Test
     fun upload_failureResponse_isFailure() = runTest {
         coEvery { api.upload(any()) } returns
             ApiResponse(success = false, error = "Payload too large")

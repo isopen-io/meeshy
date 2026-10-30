@@ -31,6 +31,17 @@ interface EndToEndRegimeLedger {
     /** Retient, en un seul lot, les conversations que la passerelle vient de servir sans bout en bout. Ne retient jamais une scellée. */
     fun confirmClear(conversationIds: Collection<String>) = Unit
 
+    /**
+     * #13820 — un envoi hors du fil a été mis en file sans que le mode de cette conversation ait pu être relu (hors ligne) :
+     * son mode en cache ne suffit plus, la garde de l'outbox le relira avant le prochain clair.
+     */
+    fun isModeUnconfirmed(conversationId: String): Boolean = false
+
+    fun markModeUnconfirmed(conversationId: String) = Unit
+
+    /** #13820 — la passerelle vient de servir le mode de cette conversation : le cache suffit de nouveau. */
+    fun confirmMode(conversationId: String) = Unit
+
     companion object {
         /** Aucun registre (témoins, aperçus) : rien n'est appris, rien n'est retenu. */
         val None: EndToEndRegimeLedger = object : EndToEndRegimeLedger {
@@ -46,6 +57,23 @@ class InMemoryEndToEndRegimeLedger(
 ) : EndToEndRegimeLedger {
     private val byAccount = mutableMapOf<String, EndToEndSealedConversations>()
     private val clearByAccount = mutableMapOf<String, Set<String>>()
+    private val unconfirmedByAccount = mutableMapOf<String, Set<String>>()
+
+    @Synchronized
+    override fun isModeUnconfirmed(conversationId: String): Boolean =
+        account.activeAccountId()?.let { conversationId in unconfirmedByAccount[it].orEmpty() } == true
+
+    @Synchronized
+    override fun markModeUnconfirmed(conversationId: String) {
+        val owner = account.activeAccountId() ?: return
+        unconfirmedByAccount[owner] = unconfirmedByAccount[owner].orEmpty() + conversationId
+    }
+
+    @Synchronized
+    override fun confirmMode(conversationId: String) {
+        val owner = account.activeAccountId() ?: return
+        unconfirmedByAccount[owner] = unconfirmedByAccount[owner].orEmpty() - conversationId
+    }
 
     @Synchronized
     override fun isClearConfirmed(conversationId: String): Boolean =
@@ -105,6 +133,33 @@ class SharedPrefsEndToEndRegimeLedger(
         prefs.edit().putStringSet(clearKeyOf(owner), current + added).apply()
     }
 
+    @Synchronized
+    override fun isModeUnconfirmed(conversationId: String): Boolean =
+        account.activeAccountId()?.let { conversationId in unconfirmedOf(it) } == true
+
+    @Synchronized
+    override fun markModeUnconfirmed(conversationId: String) {
+        val owner = account.activeAccountId() ?: return
+        val current = unconfirmedOf(owner)
+        if (conversationId in current) return
+        // #13820 — écrite AVANT que la ligne d'outbox ne soit validée : un processus tué entre les deux ne doit pas laisser
+        // une ligne en file dont la conversation aurait oublié qu'elle est à relire.
+        prefs.edit().putStringSet(unconfirmedKeyOf(owner), current + conversationId).commit()
+    }
+
+    @Synchronized
+    override fun confirmMode(conversationId: String) {
+        val owner = account.activeAccountId() ?: return
+        val current = unconfirmedOf(owner)
+        if (conversationId !in current) return
+        prefs.edit().putStringSet(unconfirmedKeyOf(owner), current - conversationId).apply()
+    }
+
+    private fun unconfirmedOf(owner: String): Set<String> =
+        prefs.getStringSet(unconfirmedKeyOf(owner), emptySet())?.toSet() ?: emptySet()
+
+    private fun unconfirmedKeyOf(owner: String): String = "$UNCONFIRMED_KEY_PREFIX$owner"
+
     private fun clearOf(owner: String): Set<String> = prefs.getStringSet(clearKeyOf(owner), emptySet())?.toSet() ?: emptySet()
 
     private fun clearKeyOf(owner: String): String = "$CLEAR_KEY_PREFIX$owner"
@@ -118,6 +173,7 @@ class SharedPrefsEndToEndRegimeLedger(
         const val FILE_NAME = "meeshy_e2ee_sealed_conversations"
         const val KEY_PREFIX = "sealed."
         const val CLEAR_KEY_PREFIX = "clear."
+        const val UNCONFIRMED_KEY_PREFIX = "reread."
     }
 }
 

@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import androidx.lifecycle.SavedStateHandle
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
@@ -223,6 +225,7 @@ class ChatControllerSeamTest {
             SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1")),
             controllers,
             ownReactionWithdrawals = OwnReactionWithdrawals(),
+            outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
         )
     }
 

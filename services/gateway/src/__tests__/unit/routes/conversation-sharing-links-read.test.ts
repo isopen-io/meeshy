@@ -281,7 +281,7 @@ describe('GET /conversations/:conversationId/links', () => {
     );
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 

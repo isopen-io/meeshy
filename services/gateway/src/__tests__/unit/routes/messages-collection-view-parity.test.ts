@@ -720,7 +720,7 @@ describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
       const { corps } = await lireVue(url);
       expect(corps.success).toBe(false);
       expect(corps.error).toBe('Conversation not found');
-      expect(corps.code).toBeUndefined();
+      expect(corps.code).toBe('CONVERSATION_NOT_FOUND');
       expect(corps.data).toBeUndefined();
     });
 

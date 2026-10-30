@@ -184,7 +184,7 @@ import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limi
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response.js';
 import { MESSAGE_PROTECTION_SELECT } from './messageProtectionProjection';
 import { logger } from './messages-shared';
-import { resolveCallerParticipant } from './utils/access-control';
+import { resolveCallerParticipant, refuserCommeIntrouvable } from './utils/access-control';
 
 /**
  * Ce qu'un COMPTE peut ranger, en caractères d'enveloppe. Un message ordinaire
@@ -711,7 +711,7 @@ export function registerSharedTranslationRoutes(
 
       const conversationId = await resolveConversationId(prisma, request.params.id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -726,7 +726,7 @@ export function registerSharedTranslationRoutes(
         prisma.participant.findUnique({ where: { id: caller.id }, select: SHARER_SELECT }) as Promise<SharerRow | null>,
       ]);
       if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const admission = admitDerivedConversationWrite({ conversation, sender: sharer, now: now() });
@@ -885,7 +885,7 @@ export function registerSharedTranslationRoutes(
 
       const conversationId = await resolveConversationId(prisma, request.params.id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;

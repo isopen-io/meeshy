@@ -4,7 +4,7 @@ import { conversationMessageStatsService } from '../../services/ConversationMess
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 /**
@@ -138,7 +138,7 @@ export function registerStatsRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authContext, conversationId, id);
