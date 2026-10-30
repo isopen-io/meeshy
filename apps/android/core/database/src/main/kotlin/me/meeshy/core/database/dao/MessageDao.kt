@@ -24,6 +24,21 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
 
+    /**
+     * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
+     * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
+     * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
+     * des identifiants, par l'index `(conversationId, createdAt)`. Un pré-filtre : la loi se lit sur la charge décodée
+     * (`EndToEndRegimeMemory.cachedThreadSeals`). Les avis de désactivation n'y sont pas lus : comme iOS et le web, aucun
+     * avis ne rouvre (#12949, #13821), et un serveur compromis ne peut pas rouvrir le clair par un avis.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE id IN (" +
+            "SELECT id FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC LIMIT :window) " +
+            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
+    )
+    public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 

@@ -213,6 +213,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             lookRecipe = SceneLookRecipe.forMedia(this),
             posterUrl = piece?.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) },
             thumbHash = piece?.thumbHash,
+            zIndex = zIndex,
         ).bounded()
     }
 

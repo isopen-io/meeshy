@@ -26,6 +26,7 @@ data class StoryStickerView(
     val duration: Double = 0.0,
     val fadeIn: Double = 0.0,
     val fadeOut: Double = 0.0,
+    val zIndex: Int = 0,
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
@@ -95,6 +96,7 @@ object StorySceneObjectsProjection {
             duration = SceneObjectNumbers.seconds(duration ?: 0.0),
             fadeIn = SceneObjectNumbers.seconds(fadeIn ?: 0.0),
             fadeOut = SceneObjectNumbers.seconds(fadeOut ?: 0.0),
+            zIndex = zIndex,
         )
     }
 

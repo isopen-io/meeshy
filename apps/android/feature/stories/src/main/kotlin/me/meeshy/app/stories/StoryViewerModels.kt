@@ -59,6 +59,7 @@ data class StoryForegroundMediaView(
     val posterUrl: String? = null,
     /** Le ThumbHash de la pièce : l'affiche de repli quand le serveur n'a pas de vignette. */
     val thumbHash: String? = null,
+    val zIndex: Int = 0,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`

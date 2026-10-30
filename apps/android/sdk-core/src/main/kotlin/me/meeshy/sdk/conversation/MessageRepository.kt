@@ -48,10 +48,12 @@ class MessageRepository internal constructor(
         syncMetaDao: SyncMetaDao,
         outboxRepository: OutboxRepository,
         clock: CacheClock,
+        /** #13792 — chaque message servi (REST, accusé d'envoi) nourrit le registre des régimes : jamais absent. */
+        regime: EndToEndRegimeKeeper,
         fence: AccountFence? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

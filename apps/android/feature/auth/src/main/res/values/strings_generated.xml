@@ -240,6 +240,8 @@
         <item quantity="one">+%1$d spark · first story</item>
         <item quantity="other">+%1$d sparks · first story</item>
     </plurals>
+    <string name="onboarding_story_sending">Your story is on its way…</string>
+    <string name="onboarding_story_sending_detail">You can keep going — it\'s posting in the background.</string>
     <string name="onboarding_story_title">Show yourself</string>
     <string name="onboarding_story_verify">Confirm your email to post your story</string>
     <string name="onboarding_story_verify_detail">Tap the link we emailed you: your story can go out right after.</string>

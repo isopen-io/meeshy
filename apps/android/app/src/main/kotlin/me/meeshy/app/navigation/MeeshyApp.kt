@@ -36,6 +36,7 @@ import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.onboarding.BeneathOnboarding
 import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.authNavGraph
@@ -254,19 +255,22 @@ fun MeeshyApp(
             }
         }
 
-        // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
-        // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
-        NotificationBannerHost(
-            activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
-            activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
-            onOpenConversation = { navController.navigate(Routes.chat(it)) },
-            onOpenPost = { navController.navigate(Routes.postDetail(it)) },
-            onOpenGame = { navController.navigate(GameRoutes.route(it)) },
-        )
+        // Les calques posés SOUS le parcours d'accueil ne sont ni lus ni atteignables par TalkBack tant qu'il couvre l'écran.
+        BeneathOnboarding(isCovered = onboardingCovers) {
+            // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
+            // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
+            NotificationBannerHost(
+                activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
+                activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
+                onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+                onOpenGame = { navController.navigate(GameRoutes.route(it)) },
+            )
 
-        AppOverlayStack(extensions.overlays, navController)
+            AppOverlayStack(extensions.overlays, navController)
 
-        EngagementRevealHost(navController)
+            EngagementRevealHost(navController)
+        }
 
         CallLinkHost(
             request = callLink,

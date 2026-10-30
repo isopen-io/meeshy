@@ -25,6 +25,8 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
     private val clock: CacheClock,
+    /** #13792 — chaque page préchargée nourrit le registre des régimes : jamais absent. */
+    private val regime: EndToEndRegimeKeeper,
     private val fence: AccountFence? = null,
 ) : MessagePrefetchStore {
 
@@ -43,7 +45,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
         val now = clock.nowMillis()
         return fence.commitOrWrite(ticket) {
             database.withTransaction {
-                MessageIngestPipeline(database).mergeInTransaction(page, now, conversationId)
+                MessageIngestPipeline(database, regime = regime).mergeInTransaction(page, now, conversationId)
             }
             true
         } ?: false

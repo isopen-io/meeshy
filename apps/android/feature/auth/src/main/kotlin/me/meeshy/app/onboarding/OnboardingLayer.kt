@@ -82,6 +82,7 @@ fun OnboardingLayer(
     LaunchedEffect(isStoryComposerOpen) {
         if (isStoryComposerOpen) {
             composerWasOpen = true
+            viewModel.storyComposerOpened()
             return@LaunchedEffect
         }
         if (!composerWasOpen) return@LaunchedEffect
@@ -91,11 +92,7 @@ fun OnboardingLayer(
 
     val card = state.card
     LaunchedEffect(card) { if (card == OnboardingCard.Step(OnboardingStepId.FRIENDS)) viewModel.friendsCardAppeared() }
-    val onStoryCard = card == OnboardingCard.Step(OnboardingStepId.STORY)
-    val watchesServer = state.isPresented && (
-        card == OnboardingCard.Step(OnboardingStepId.EMAIL) ||
-            (onStoryCard && (state.storyNeedsEmailVerification || state.storyAwaitsPublication))
-        )
+    val watchesServer = state.watchesServer
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(watchesServer, lifecycle) {
         if (!watchesServer) return@LaunchedEffect

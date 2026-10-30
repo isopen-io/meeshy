@@ -245,6 +245,8 @@
         <item quantity="many">+%1$d scintille · prima storia</item>
         <item quantity="other">+%1$d scintille · prima storia</item>
     </plurals>
+    <string name="onboarding_story_sending">La tua storia sta partendo…</string>
+    <string name="onboarding_story_sending_detail">Puoi continuare: intanto si pubblica.</string>
     <string name="onboarding_story_title">Fatti vedere</string>
     <string name="onboarding_story_verify">Conferma la tua e-mail per pubblicare la tua storia</string>
     <string name="onboarding_story_verify_detail">Tocca il link ricevuto per e-mail: subito dopo la tua storia potrà partire.</string>

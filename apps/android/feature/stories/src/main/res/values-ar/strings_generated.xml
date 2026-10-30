@@ -21,6 +21,7 @@
     <string name="composer_audience_sub_public">الجميع، بمن فيهم غير المتابعين</string>
     <string name="composer_audience_title">الجمهور</string>
     <string name="composer_audio_delete_action">حذف الصوت</string>
+    <string name="composer_audio_promote_action">وضعه على المشهد</string>
     <string name="composer_capture_sound_mute">كتم الصوت</string>
     <string name="composer_capture_sound_unmute">إعادة تشغيل الصوت</string>
     <string name="composer_capture_tool_sound">الصوت</string>

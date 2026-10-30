@@ -245,6 +245,8 @@
         <item quantity="many">+%1$d faíscas · primeiro story</item>
         <item quantity="other">+%1$d faíscas · primeiro story</item>
     </plurals>
+    <string name="onboarding_story_sending">Seu story está sendo enviado…</string>
+    <string name="onboarding_story_sending_detail">Pode continuar: ele é publicado enquanto isso.</string>
     <string name="onboarding_story_title">Mostre quem você é</string>
     <string name="onboarding_story_verify">Confirme seu e-mail para publicar seu story</string>
     <string name="onboarding_story_verify_detail">Toque no link recebido por e-mail: seu story poderá sair logo em seguida.</string>

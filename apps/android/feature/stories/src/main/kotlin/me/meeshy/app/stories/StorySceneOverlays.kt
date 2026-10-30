@@ -25,31 +25,27 @@ internal fun StorySceneOverlays(
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
 
-    slide.foregroundMedia.forEach { foreground ->
-        if (foreground.isVisible(playheadSeconds)) {
-            key(foreground.id) {
-                StoryForegroundLayer(
-                    media = foreground,
-                    playheadSeconds = playheadSeconds,
-                    playing = playing,
-                    muted = muted,
-                    rewindWhenInactive = rewindWhenInactive,
-                    onAudioFocusLost = onAudioFocusLost,
-                    players = players,
-                )
+    StorySceneLayerOrder.order(slide).forEach { layer ->
+        key(layer.key) {
+            when (layer) {
+                is StorySceneLayer.Media -> if (layer.view.isVisible(playheadSeconds)) {
+                    StoryForegroundLayer(
+                        media = layer.view,
+                        playheadSeconds = playheadSeconds,
+                        playing = playing,
+                        muted = muted,
+                        rewindWhenInactive = rewindWhenInactive,
+                        onAudioFocusLost = onAudioFocusLost,
+                        players = players,
+                    )
+                }
+                is StorySceneLayer.Text -> if (layer.view.isVisible(playheadSeconds)) {
+                    StoryTextObjectLayer(textObject = layer.view, playheadSeconds = playheadSeconds)
+                }
+                is StorySceneLayer.Sticker -> if (layer.view.isVisible(playheadSeconds)) {
+                    StoryStickerLayer(sticker = layer.view, playheadSeconds = playheadSeconds)
+                }
             }
-        }
-    }
-    slide.textObjects.forEach { textObject ->
-        if (textObject.isVisible(playheadSeconds)) {
-            key(textObject.id) {
-                StoryTextObjectLayer(textObject = textObject, playheadSeconds = playheadSeconds)
-            }
-        }
-    }
-    slide.stickers.forEach { sticker ->
-        if (sticker.isVisible(playheadSeconds)) {
-            key(sticker.id) { StoryStickerLayer(sticker = sticker, playheadSeconds = playheadSeconds) }
         }
     }
     slide.audioChips.forEach { chip ->

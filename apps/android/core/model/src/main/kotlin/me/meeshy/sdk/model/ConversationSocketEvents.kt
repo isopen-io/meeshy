@@ -1,8 +1,13 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import me.meeshy.sdk.model.serialization.TolerantSerializer
+import me.meeshy.sdk.model.translation.SharedTranslation
 
 /**
  * La famille d'événements du FIL d'une conversation, en UN seul type scellé (miroir des sujets
@@ -179,6 +184,39 @@ data class AttachmentReadyEvent(
     val attachment: JsonElement? = null,
 ) : ConversationSocketEvent {
     override fun concerns(conversationId: String): Boolean = this.conversationId == conversationId
+
+    /** La pièce d'un MESSAGE (jamais le média d'un post) : sans conversation ni message, rien à enrichir ici. */
+    val isMessageAttachment: Boolean
+        get() = (target == null || target == "messageAttachment") && !messageId.isNullOrBlank() && !this.conversationId.isNullOrBlank()
+
+    /** La pièce servie, lue avec le décodeur de l'appelant ; une pièce illisible ou absente vaut `null`. */
+    fun servedAttachment(json: Json): ApiMessageAttachment? =
+        attachment?.takeUnless { it is JsonNull }
+            ?.let { runCatching { json.decodeFromJsonElement(ApiMessageAttachment.serializer(), it) }.getOrNull() }
+}
+
+/**
+ * `message:attachment-updated` : un worker a enrichi une pièce (transcription, piste traduite, vignette). La pièce
+ * y est servie en entier ; une pièce malformée vaut `null` et ne coûte pas l'événement. `attachmentId` (#11264)
+ * redit `attachment.id`.
+ */
+@Serializable
+data class MessageAttachmentUpdatedEvent(
+    val messageId: String,
+    override val conversationId: String,
+    val attachmentId: String? = null,
+    @Serializable(with = TolerantServedAttachmentSerializer::class)
+    val attachment: ApiMessageAttachment? = null,
+) : SingleConversationSocketEvent {
+    val servedAttachmentId: String? get() = attachmentId?.takeIf { it.isNotBlank() } ?: attachment?.id
+}
+
+internal object TolerantServedAttachmentSerializer :
+    KSerializer<ApiMessageAttachment?> by TolerantSerializer(ApiMessageAttachment.serializer())
+
+/** `message:translation-shared` : un membre a partagé SA traduction, scellée (la passerelle ne l'ouvre pas). */
+data class SharedTranslationArrived(val translation: SharedTranslation) : SingleConversationSocketEvent {
+    override val conversationId: String get() = translation.conversationId
 }
 
 /** `audio:translations-progressive` (une piste parmi plusieurs) et `audio:translations-completed` (la dernière). */

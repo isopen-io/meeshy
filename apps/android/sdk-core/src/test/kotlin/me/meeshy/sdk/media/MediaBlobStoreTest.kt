@@ -196,33 +196,85 @@ class MediaBlobStoreTest {
     }
 
     /**
-     * Sealing then opening 200 MB churns ~12 % of the throughput in per-segment cipher temporaries; one array of the
-     * media size would alone reach [size]. The retained bound itself is proven under a 48 MB heap ([BoundedHeapTest]).
+     * The property is "the file passes through a bounded buffer", measured on the buffers themselves rather than on the
+     * JVM heap (whose delta depends on the collector's timing): the source is virtual (200 MB of zeros, nothing written
+     * to disk before the seal) and every stream and sink the store touches records the largest chunk it was asked for.
+     * An implementation that read the media whole would ask for [size] at once, wherever it did so. The retained bound
+     * itself is proven under a 48 MB heap ([BoundedHeapTest]).
      */
     @Test
     fun `a 200 MB file is queued and read back sealed without any array of its size`() {
         val size = 200L * 1024 * 1024
-        val source = folder.newFile().also { java.io.RandomAccessFile(it, "rw").use { raf -> raf.setLength(size) } }
         val sameThread = MediaBlobStore(db.mediaBlobDao(), MediaBlobFiles(directory) { seal }, kotlinx.coroutines.Dispatchers.Unconfined)
+        val queued = RecordingSource(VirtualZeros(size))
         val counting = CountingSink()
+        val sent = java.util.concurrent.atomic.AtomicReference<RecordingSource>()
 
-        val allocated = AllocationMeter.allocatedBy {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Unconfined) {
-                sameThread.put("big", MediaUploadItem.onDisk(source, "long.mp4", "video/mp4"))
-                val item = sameThread.get("big")!!
-                counting.buffer().use { item.requestBody(null).writeTo(it) }
-            }
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Unconfined) {
+            sameThread.put("big", MediaUploadItem(queued, "long.mp4", "video/mp4"))
+            val stored = sameThread.get("big")!!
+            val read = RecordingSource(stored.source).also(sent::set)
+            counting.buffer().use { MediaUploadItem(read, stored.fileName, stored.mimeType).requestBody(null).writeTo(it) }
         }
 
         assertThat(counting.total).isEqualTo(size)
-        assertThat(allocated).isLessThan(size / 2)
+        assertThat(queued.consumed).isEqualTo(size)
+        assertThat(sent.get().consumed).isEqualTo(size)
+        assertThat(directory.listFiles()!!.single().length()).isAtLeast(size)
+        assertThat(queued.largestRead).isAtMost(BUFFER_CEILING)
+        assertThat(sent.get().largestRead).isAtMost(BUFFER_CEILING)
+        assertThat(counting.largestWrite).isAtMost(BUFFER_CEILING)
+    }
+
+    private class VirtualZeros(override val size: Long) : MediaUploadSource {
+        override fun open(offset: Long): java.io.InputStream = object : java.io.InputStream() {
+            private var left = size - offset
+
+            override fun read(): Int = if (left-- > 0) 0 else -1
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (left <= 0) return -1
+                val count = minOf(len.toLong(), left).toInt()
+                java.util.Arrays.fill(b, off, off + count, 0)
+                left -= count
+                return count
+            }
+        }
+    }
+
+    private class RecordingSource(private val inner: MediaUploadSource) : MediaUploadSource {
+        override val size: Long get() = inner.size
+        var largestRead = 0
+            private set
+        var consumed = 0L
+            private set
+
+        override fun open(offset: Long): java.io.InputStream {
+            val stream = inner.open(offset)
+            return object : java.io.InputStream() {
+                override fun read(): Int = stream.read().also { if (it >= 0) consumed++ }
+
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    largestRead = maxOf(largestRead, len)
+                    return stream.read(b, off, len).also { if (it > 0) consumed += it }
+                }
+
+                override fun close() = stream.close()
+            }
+        }
     }
 
     private class CountingSink : okio.Sink by okio.blackholeSink() {
         var total = 0L
+        var largestWrite = 0L
         override fun write(source: Buffer, byteCount: Long) {
             total += byteCount
+            largestWrite = maxOf(largestWrite, byteCount)
             source.skip(byteCount)
         }
+    }
+
+    private companion object {
+        const val BUFFER_CEILING = 1024 * 1024
     }
 }

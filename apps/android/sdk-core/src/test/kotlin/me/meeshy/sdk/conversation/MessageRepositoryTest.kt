@@ -339,7 +339,10 @@ class MessageRepositoryTest {
         api: MessageApi,
         translationApi: TranslationApi = FakeTranslationApi(),
         clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock,
-    ) = MessageRepository(api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
+    ) = MessageRepository(
+        api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock,
+        EndToEndRegimeKeeper(me.meeshy.sdk.e2ee.EndToEndRegimeLedger.None, db),
+    )
 
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()

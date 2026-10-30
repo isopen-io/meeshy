@@ -15,21 +15,29 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.conversation.MessageDeltaApplier
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.AttachmentReadyEvent
+import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AudioTranslationStage
 import me.meeshy.sdk.model.ConversationJoinErrorEvent
 import me.meeshy.sdk.model.ConversationSocketEvent
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageArrived
+import me.meeshy.sdk.model.MessageAttachmentUpdatedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
 import me.meeshy.sdk.model.MessagePinChanged
 import me.meeshy.sdk.model.MessageRestoredForMeEvent
 import me.meeshy.sdk.model.PersonalMessageVisibilityRef
+import me.meeshy.sdk.model.SharedTranslationArrived
 import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationFailedEvent
+import me.meeshy.sdk.model.translation.SharedTranslation
+import me.meeshy.sdk.model.translation.SharedTranslationEnvelope
+import me.meeshy.sdk.model.translation.SharedTranslationKdf
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.ConversationSocketEventsManager
 import org.junit.Test
@@ -56,7 +64,8 @@ class ChatRealtimeControllerTest {
             every { currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me"))
         }
         val host = FakeHost(scope.backgroundScope)
-        val controller = ChatRealtimeController(socket, deltas, repo, session).also { it.attach(host) }
+        val ledger = InMemoryEndToEndRegimeLedger()
+        val controller = ChatRealtimeController(socket, deltas, repo, session, ledger).also { it.attach(host) }
     }
 
     private fun ConversationSocketEvent.isDelta(rig: Rig, handled: Boolean) {
@@ -223,5 +232,100 @@ class ChatRealtimeControllerTest {
         assertThat(rig.controller.toggleAttachmentReaction("cid_1", "a1", "❤️", adding = true)).isFalse()
 
         coVerify(exactly = 0) { rig.socket.emitAttachmentReaction(any(), any(), any(), any()) }
+    }
+
+    // ── Pièce et traduction partagée en direct (#13796) ──
+
+    private fun status() = AttachmentStatusUpdatedEvent("a1", "m1", "c1", userId = "u2", action = "listened", updatedAt = "2026-10-29T10:00:00Z")
+    private fun updated() = MessageAttachmentUpdatedEvent("m1", "c1", "a1")
+    private fun ready() = AttachmentReadyEvent("a1", "messageAttachment", "m1", "c1", "ready")
+    private fun shared(conversationId: String = "c1") = SharedTranslationArrived(
+        SharedTranslation(
+            "t1", conversationId, "m1", "fr",
+            SharedTranslationEnvelope(1, "A256GCM", SharedTranslationKdf.MESSAGE_CONTENT, "AAAA"),
+            "u2", "2026-10-29T10:00:00.000Z",
+        ),
+    )
+
+    @Test
+    fun `the three piece events are handed to Room once, as local deltas`() = runTest {
+        val rig = Rig(this)
+        listOf(status(), updated(), ready()).forEach { it.isDelta(rig, handled = true) }
+        runCurrent()
+
+        listOf(status(), updated(), ready()).forEach { rig.events.emit(it) }
+        runCurrent()
+        rig.controller.awaitPendingEvents()
+
+        coVerify(exactly = 1) { rig.deltas.apply(status(), "me") }
+        coVerify(exactly = 1) { rig.deltas.apply(updated(), "me") }
+        coVerify(exactly = 1) { rig.deltas.apply(ready(), "me") }
+        coVerify(exactly = 0) { rig.repo.refresh(any()) }
+    }
+
+    @Test
+    fun `a piece event of another conversation is ignored`() = runTest {
+        val rig = Rig(this)
+        runCurrent()
+
+        rig.events.emit(AttachmentStatusUpdatedEvent("a1", "m1", "other", userId = "u2", action = "listened"))
+        rig.events.emit(MessageAttachmentUpdatedEvent("m1", "other", "a1"))
+        rig.events.emit(AttachmentReadyEvent("a1", "postMedia", null, null, "ready"))
+        runCurrent()
+
+        coVerify(exactly = 0) { rig.deltas.apply(any(), any()) }
+    }
+
+    @Test
+    fun `a shared translation joins the message with the reader's Prisme`() = runTest {
+        val rig = Rig(this)
+        shared().isDelta(rig, handled = false)
+        runCurrent()
+
+        rig.events.emit(shared())
+        runCurrent()
+        rig.controller.awaitPendingEvents()
+
+        coVerify(exactly = 1) { rig.deltas.mergeSharedTranslation(shared().translation, any()) }
+    }
+
+    @Test
+    fun `a shared translation of another conversation is ignored`() = runTest {
+        val rig = Rig(this)
+        runCurrent()
+
+        rig.events.emit(shared(conversationId = "other"))
+        runCurrent()
+
+        coVerify(exactly = 0) { rig.deltas.mergeSharedTranslation(any(), any()) }
+    }
+
+    @Test
+    fun `in a conversation learned as end-to-end encrypted nothing about a piece or a shared translation is written`() = runTest {
+        val rig = Rig(this)
+        rig.ledger.learn("c1")
+        runCurrent()
+
+        listOf(status(), updated(), ready(), shared()).forEach { rig.events.emit(it) }
+        runCurrent()
+        rig.controller.awaitPendingEvents()
+
+        coVerify(exactly = 0) { rig.deltas.apply(any(), any()) }
+        coVerify(exactly = 0) { rig.deltas.mergeSharedTranslation(any(), any()) }
+    }
+
+    @Test
+    fun `the end-to-end guard leaves the other events of the thread alone`() = runTest {
+        val rig = Rig(this)
+        rig.ledger.learn("c1")
+        val pin = MessagePinChanged("m1", "c1", pinned = true)
+        pin.isDelta(rig, handled = true)
+        runCurrent()
+
+        rig.events.emit(pin)
+        runCurrent()
+        rig.controller.awaitPendingEvents()
+
+        coVerify(exactly = 1) { rig.deltas.apply(pin, "me") }
     }
 }

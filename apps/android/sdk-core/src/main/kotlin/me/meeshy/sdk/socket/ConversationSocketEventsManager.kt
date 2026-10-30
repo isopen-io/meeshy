@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.ConversationRoomAck
 import me.meeshy.sdk.model.ConversationSocketEvent
 import me.meeshy.sdk.model.ConversationStatsEvent
 import me.meeshy.sdk.model.MessageArrived
+import me.meeshy.sdk.model.MessageAttachmentUpdatedEvent
 import me.meeshy.sdk.model.MessageCitedPostWithdrawnEvent
 import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
@@ -38,10 +39,12 @@ import me.meeshy.sdk.model.MessageRestoredForMeEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.MessageViewOncePurgedEvent
 import me.meeshy.sdk.model.ParticipantRightsUpdatedEvent
+import me.meeshy.sdk.model.SharedTranslationArrived
 import me.meeshy.sdk.model.PendingMessagesDeliveredEvent
 import me.meeshy.sdk.model.TranscriptionFailedEvent
 import me.meeshy.sdk.model.TranslationFailedEvent
 import me.meeshy.sdk.model.socket.SocketEventNames
+import me.meeshy.sdk.model.translation.SharedTranslation
 import org.json.JSONObject
 import timber.log.Timber
 
@@ -135,6 +138,7 @@ class ConversationSocketEventsManager internal constructor(
         route<MessageCitedPostWithdrawnEvent>(SocketEventNames.MESSAGE_CITED_POST_WITHDRAWN) { it },
         route<PendingMessagesDeliveredEvent>(SocketEventNames.MESSAGE_PENDING_DELIVERED) { it },
         route<TranslationFailedEvent>(SocketEventNames.TRANSLATION_FAILED) { it },
+        route<SharedTranslation>(SocketEventNames.MESSAGE_TRANSLATION_SHARED) { SharedTranslationArrived(it) },
     )
 
     private fun mediaFamily(): List<SocketInboundRoute> = listOf(
@@ -142,6 +146,7 @@ class ConversationSocketEventsManager internal constructor(
         route<AttachmentReactionUpdateEvent>(SocketEventNames.ATTACHMENT_REACTION_REMOVED) { it },
         route<AttachmentStatusUpdatedEvent>(SocketEventNames.ATTACHMENT_STATUS_UPDATED) { it },
         route<AttachmentReadyEvent>(SocketEventNames.ATTACHMENT_READY) { it },
+        route<MessageAttachmentUpdatedEvent>(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED) { it },
         route<AttachmentDeletedEvent>(SocketEventNames.ATTACHMENT_DELETED) { it },
         route<AudioTranslationEvent>(SocketEventNames.AUDIO_TRANSLATIONS_PROGRESSIVE) {
             AudioTranslationStage(it, completed = false)

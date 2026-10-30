@@ -168,4 +168,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    // #13792 — la réponse d'une bannière jugée contre un vrai cache Room (graine FCM, garde de l'outbox).
+    testImplementation(project(":core:database"))
+    testImplementation(libs.room.runtime)
 }

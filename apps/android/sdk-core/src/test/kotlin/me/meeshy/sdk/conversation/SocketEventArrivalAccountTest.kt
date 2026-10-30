@@ -74,7 +74,7 @@ class SocketEventArrivalAccountTest {
         val manager = MessageSocketManager(socket, json, SyncSeqTracker(), router).also { it.attach() }
         val messages = MessageRepository(
             mockk(relaxed = true), mockk(relaxed = true), db, db.messageDao(), db.syncMetaDao(),
-            OutboxRepository(db, db.outboxDao()), clock, fence,
+            OutboxRepository(db, db.outboxDao()), clock, EndToEndRegimeKeeper(me.meeshy.sdk.e2ee.EndToEndRegimeLedger.None, db), fence,
         )
         return MessageEditBinding(manager, messages, StandardTestDispatcher(collectorScheduler)).also {
             it.attach()
