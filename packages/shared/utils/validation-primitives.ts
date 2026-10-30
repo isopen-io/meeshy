@@ -25,9 +25,16 @@
  */
 
 import { z } from 'zod';
-import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
+import {
+  nameMinLength,
+  personNamePatternSource,
+  usernameMaxLength,
+  usernameMinLength,
+  usernamePatternSource,
+} from '../types/api-schemas.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
+import { visibleNameLength, visibleNameText } from './visible-name-length.js';
 
 /**
  * Nom de personne (prénom / nom). Compilé depuis la source unique
@@ -45,6 +52,35 @@ export const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
  * lettres accentuées, que le charset ASCII exclut.
  */
 export const USERNAME_PATTERN = new RegExp(usernamePatternSource);
+
+/**
+ * « Au moins `min` caractères VISIBLES » (#13825) — la moitié de la borne
+ * qu'Ajv ne sait pas dire : son `minLength` compte des unités UTF-16, si bien
+ * que « A » entouré d'espaces, suivi d'un invisible, d'un caractère de
+ * contrôle ou d'une balise vide, ou « É » décomposé, passaient pour deux
+ * caractères avant d'être stockés « A ». La mesure est `visibleNameLength`
+ * (graphèmes du texte nettoyé). Un prédicat plutôt qu'un `.transform` de zod,
+ * qui RÉÉCRIRAIT la valeur : la normalisation reste chez le handler.
+ */
+export const atLeastVisible = (min: number) => (value: string): boolean => visibleNameLength(value) >= min;
+
+/** Une valeur ABSENTE (vide ou blanche une fois nettoyée) passe ; une valeur SAISIE tient la borne. */
+export const blankOrAtLeastVisible = (min: number) => (value: string): boolean =>
+  visibleNameText(value) === '' || atLeastVisible(min)(value);
+
+/**
+ * Le refus d'une borne de longueur, avec son minimum en PARAMÈTRE : la
+ * passerelle le relit (`issue.params.minimum`) pour nommer le champ et le
+ * minimum dans le `message` du 400, au lieu d'un « Invalid data » muet.
+ */
+export const lengthFloorRefusal = (minimum: number) => ({
+  message: `Au moins ${minimum} caractères`,
+  params: { minimum },
+});
+
+export const nameTooShort = lengthFloorRefusal(nameMinLength);
+export const usernameTooShort = `Username trop court (min ${usernameMinLength} caractères)`;
+export const usernameTooLong = `Username trop long (max ${usernameMaxLength} caractères)`;
 
 /**
  * Longueur minimale d'un mot de passe — UNE règle, pour toutes les portes.

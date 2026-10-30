@@ -210,7 +210,7 @@ export const updateUsernameBodySchema = {
       minLength: usernameMinLength,
       maxLength: usernameMaxLength,
       pattern: usernamePatternSource,
-      description: 'New username (2-16 chars: letters, digits, - and _ only — no spaces)'
+      description: `New username (${usernameMinLength}-${usernameMaxLength} chars: letters, digits, - and _ only — no spaces)`
     },
     currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification' }
   }

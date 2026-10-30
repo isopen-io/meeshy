@@ -185,7 +185,7 @@ describe('Le contrat', () => {
     const { prisma } = buildApp({ pseudoPris: false });
     const app = await monter(prisma);
 
-    const res = await appeler(app, 'username=x&email=a%40b.co&phoneNumber=%2B33612345678');
+    const res = await appeler(app, 'username=xavier&email=a%40b.co&phoneNumber=%2B33612345678');
 
     const data = res.json().data;
     expect(data.username.status).toBe('available');
@@ -217,6 +217,24 @@ describe('Le pays fourni dispense de la géolocalisation (audit #9608)', () => {
     await appeler(app, 'phoneNumber=0612345678');
 
     expect(mockGetRequestContext).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+describe('#13825 — un pseudo sous le plancher n’est pas « available »', () => {
+  it('« Al » rend « taken » sans interroger la base sur lui, et ses suggestions tiennent la borne', async () => {
+    const { prisma, findFirst } = buildApp({ pseudoPris: false });
+    const app = await monter(prisma);
+
+    const res = await appeler(app, 'username=Al');
+
+    expect(res.statusCode).toBe(200);
+    const { username } = res.json().data;
+    expect(username.status).toBe('taken');
+    expect((username.suggestions as string[]).length).toBeGreaterThan(0);
+    expect((username.suggestions as string[]).every((s) => s.length >= 3)).toBe(true);
+    expect(findFirst).not.toHaveBeenCalled();
+
     await app.close();
   });
 });

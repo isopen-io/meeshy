@@ -93,7 +93,8 @@ export const errorResponseSchema = {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Field path that failed' },
-          message: { type: 'string', description: 'Violation message' }
+          message: { type: 'string', description: 'Violation message' },
+          minimum: { type: 'number', description: 'Minimum length, for a length refusal (#13825) — clients compose their own localized sentence from it' }
         }
       }
     }
@@ -132,7 +133,8 @@ export const validationErrorResponseSchema = {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Field path that failed validation' },
-          message: { type: 'string', description: 'Validation error message' }
+          message: { type: 'string', description: 'Validation error message' },
+          minimum: { type: 'number', description: 'Minimum length, for a length refusal (#13825) — clients compose their own localized sentence from it' }
         }
       }
     },

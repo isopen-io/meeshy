@@ -11,12 +11,15 @@ import { OBJECT_ID_REGEX } from './object-id.js';
 import { AuthSchemas } from './auth-schemas.js';
 import { notificationTypeEnum } from './notification-type-enum.js';
 import { isProfileImageReference } from './profile-image-reference.js';
+import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/identity-bounds.js';
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_PATTERN,
   customDestinationLanguageCode,
   passwordTooShort,
   supportedLanguageCode,
+  usernameTooLong,
+  usernameTooShort,
   utf16Bounded,
 } from './validation-primitives.js';
 
@@ -136,7 +139,7 @@ export const CommonSchemas = {
   email: z.email('Email invalide'),
   
   // Username
-  username: z.string().min(3, 'Username trop court').max(30, 'Username trop long')
+  username: z.string().min(usernameMinLength, usernameTooShort).max(30, 'Username trop long')
     .regex(USERNAME_PATTERN, 'Username invalide'),
   
   // Conversation identifier (custom identifier for conversations)
@@ -316,6 +319,11 @@ export const httpUrlSchema = z.string().refine(isHttpUrl, 'URL invalide : http(s
  * (`packages/shared/types/api-schemas.ts`) compris.
  */
 export const updateUserProfileSchema = z.object({
+  // Les noms gardent le minimum d'AVANT (#13825, rétrocompatibilité) : l'iOS
+  // publié renvoie prénom, nom et nom affiché INCHANGÉS à chaque
+  // enregistrement, et un compte hérité « A » doit pouvoir changer sa bio. La
+  // borne de 2 s'applique aux seuls noms CHANGÉS, dans le handler
+  // (`services/gateway/src/utils/identity-name-floor.ts`).
   firstName: z.string().min(1).optional().refine(noEmoji, {
     message: 'Le prénom ne peut pas contenir d\'emojis'
   }),
@@ -395,8 +403,8 @@ export const updatePasswordSchema = z.object({
  */
 export const updateUsernameSchema = z.object({
   newUsername: z.string()
-    .min(2, 'Username trop court (min 2 caractères)')
-    .max(16, 'Username trop long (max 16 caractères)')
+    .min(usernameMinLength, usernameTooShort)
+    .max(usernameMaxLength, usernameTooLong)
     .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
   currentPassword: z.string().min(1, 'Mot de passe requis pour confirmer le changement')
 }).strict();
