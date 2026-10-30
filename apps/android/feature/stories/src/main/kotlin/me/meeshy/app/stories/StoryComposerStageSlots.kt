@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
-import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.ui.theme.MeeshyRadius
@@ -56,7 +55,7 @@ internal fun StoryComposerScene(
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
                 sceneMenu = state.sceneContextMenu,
-                inlineEditEnabled = !state.isTimelineOpen,
+                inlineEditEnabled = state.isEditingTextElement,
                 stickers = state.selectedSlideStickers,
                 selectedStickerId = state.selectedStickerId,
                 strokes = state.selectedSlideStrokes,
@@ -65,7 +64,7 @@ internal fun StoryComposerScene(
                 drawWidthDesign = state.drawWidthDesign,
                 onStrokeCaptured = viewModel::onStrokeCaptured,
                 onTransform = viewModel::onCanvasTransform,
-                onElementTap = viewModel::onSelectTextElement,
+                onElementTap = viewModel::onTapTextElement,
                 onElementLongPress = viewModel::onOpenElementMenu,
                 onSceneMenuAction = viewModel::onSceneMenuAction,
                 onSceneMenuDismiss = viewModel::onDismissElementMenu,
@@ -80,12 +79,15 @@ internal fun StoryComposerScene(
                 onStickerTransform = viewModel::onStickerTransform,
                 placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId) },
                 placedMediaGestures = remember(viewModel) {
-                    PlacedMediaGestures(viewModel::onMediaPlacementMoved, viewModel::onMediaPlacementDragEnd, viewModel::onMediaPlacementTransformed)
+                    PlacedMediaGestures(
+                        viewModel::onMediaPlacementMoved,
+                        viewModel::onMediaPlacementDragEnd,
+                        viewModel::onMediaPlacementTransformed,
+                        onTap = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
+                    )
                 },
-                onBackgroundTap = {
-                    viewModel.onDeselectTextElement()
-                    viewModel.onDeselectSticker()
-                },
+                onBackgroundTap = viewModel::onSceneBackgroundTap,
+                selectedMediaId = state.selectedMedia,
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier.fillMaxSize(),
                 fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
@@ -139,17 +141,7 @@ internal fun StoryComposerBottomPanel(
                 onWidthSelected = viewModel::onDrawWidthSelected,
                 onUndo = viewModel::onDrawUndo,
                 onDone = viewModel::onExitDrawingMode,
-                control = state.openDrawingControl,
             )
-            StoryScenePanel.STICKER -> state.selectedSticker?.let { sticker ->
-                InspectorRow(state, viewModel)
-                StickerSectionContent(state, sticker, viewModel)
-            }
-            StoryScenePanel.MEDIA -> state.selectedMedia?.let { media ->
-                MediaSectionContent(state, media, viewModel, comparison)
-                SlideMediaRows(state, viewModel)
-            }
-            StoryScenePanel.SOUND -> state.selectedSound?.let { SoundSectionContent(state, it, viewModel) }
             StoryScenePanel.DURATION -> DurationPanel(state, viewModel, onCloseLocal)
             StoryScenePanel.SCENE_EFFECTS -> SceneEffectsDock(state, viewModel)
             StoryScenePanel.TOOL, StoryScenePanel.TEXT, StoryScenePanel.CAPTION -> Unit
@@ -170,13 +162,6 @@ private fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             content = content,
         )
-    }
-}
-
-@Composable
-private fun ColumnScope.InspectorRow(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
-    state.sceneInspector?.let { inspector ->
-        SceneInspectorRow(inspector = inspector, onOpenTiming = { viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE) })
     }
 }
 

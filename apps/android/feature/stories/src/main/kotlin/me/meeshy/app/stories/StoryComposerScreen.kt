@@ -112,9 +112,9 @@ fun StoryComposerScreen(
             StoryScenePanel.TOOL -> viewModel::onBandDismiss
             StoryScenePanel.DURATION, StoryScenePanel.CAPTION -> ({ morePanel = null })
             StoryScenePanel.TEXT -> viewModel::onDeselectTextElement
-            else -> null
+            else -> if (state.selectedSceneObject != null) viewModel::onSceneBackgroundTap else null
         },
-        onCloseSheet = if (sheet != null) ({ sheet = null }) else null,
+        onCloseSheet = if (sheet?.let(state::serves) == true) ({ sheet = null }) else null,
     )
     StoryComposerSceneFirst(
         state = state,
@@ -130,7 +130,7 @@ fun StoryComposerScreen(
         morePanel = morePanel,
         onMorePanel = { morePanel = it },
         formatChevron = formatChevron,
-        sheet = StorySheetSlot(open = sheet, onDismiss = { sheet = null }) { open ->
+        sheet = StorySheetSlot(open = sheet, onDismiss = { sheet = null }, onOpen = { sheet = it }) { open ->
             StoryComposerSheetContent(open, state, viewModel, onDone = { sheet = null })
         },
     )
@@ -177,6 +177,7 @@ private fun StoryComposerSheetContent(
                 onDismiss = onDone,
             )
         }
+        StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP -> Unit
     }
 }
 

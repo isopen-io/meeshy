@@ -12,13 +12,21 @@ import androidx.compose.ui.semantics.semantics
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Les feuilles que le compositeur fait monter (#13838) : une seule à la fois. */
-internal enum class StoryComposerSheet { STICKERS, SOUND, AUDIENCE }
+/**
+ * Les feuilles que le compositeur fait monter (#13838) : une seule à la fois. Les trois dernières servent l'élément
+ * sélectionné (#13836) — son Modifier (média, son), son Temps, l'échange d'un sticker — et n'existent pas sans lui.
+ */
+internal enum class StoryComposerSheet {
+    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP;
 
-/** La feuille [open] (aucune : `null`), ce qui la referme, et ce qu'elle montre. */
+    val servesSelection: Boolean get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP
+}
+
+/** La feuille [open] (aucune : `null`), ce qui la referme, ce qui en ouvre une, et ce qu'elle montre. */
 internal class StorySheetSlot(
     val open: StoryComposerSheet?,
     val onDismiss: () -> Unit,
+    val onOpen: (StoryComposerSheet) -> Unit = {},
     val content: @Composable (StoryComposerSheet) -> Unit,
 )
 

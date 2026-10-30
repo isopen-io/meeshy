@@ -171,3 +171,13 @@ SURIMPRESSION sinon
 | L5 | #13837 | grand écran : loi de bascule par la place libre, deux rails libellés, Publier sous la scène |
 
 Chaque lot se prouve par ses témoins (JVM ou Robolectric/Compose), `testDebugUnitTest` des modules touchés, `:app:compileDebugKotlin` et une capture S8 de l'état visé. Pour L5, la capture se fait sur le S8 en résolution tablette (`wm size` / `wm density`).
+
+## Addendum porteur du 2026-10-30 : rien n'est aplati avant la publication (#13841, jumelle iOS #13840)
+
+> « Tant qu'on n'a pas envoyé notre scène ou image/vidéo en édition, on peut toujours bouger les textes, filtres, cadres, etc. »
+
+- Filtre, cadre, recadrage, réglages, textes, stickers, dessin, son et découpe d'une image ou d'une vidéo restent des RÉGLAGES et des CALQUES séparés jusqu'à la publication. On les retouche dans n'importe quel ordre, autant de fois qu'on veut, et l'annulation les couvre.
+- Ouvrir l'édition d'un média (depuis le rail des pièces, la sélection ou « Modifier ») ne le cuit jamais. Revenir sur la scène rend tous les calques manipulables : déplacer un texte, poser un son sur une image ou une vidéo.
+- L'aplatissement n'a lieu qu'à l'export ou à la publication, ou pour un enregistrement dans la galerie explicitement demandé.
+- Aucune option existante ne disparaît dans la refonte. Chaque sous-menu, chaque option et chaque éditeur (média, texte, sticker, son, dessin, fond, durée, animation, audience, type de publication) reste accessible depuis l'état où il sert.
+- Un inventaire exhaustif des options iOS et des écarts Android arrive dans un lot de parité dédié, après les cinq lots.

@@ -1,17 +1,14 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -40,10 +37,11 @@ internal class StoryComposerDoors(
 /**
  * Le compositeur de story, la scène d'abord (#13834) — UNE disposition pour l'hôte et pour la route autonome
  * (republication, modification, audience d'onboarding) : la scène plein écran, ✕ et ↶↷ en haut, la rangée des diapos dès
- * deux, les six outils à droite (ou, un objet touché ou le pinceau en main, la colonne de ses réglages), le panneau du
- * geste en cours, puis la pastille d'audience et « Publier la story ▾ ». [formatChevron] est le menu « Publier comme » de
- * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience), ancrée en bas : la
- * scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * deux, les six outils à droite, le panneau du geste en cours, puis la pastille d'audience et « Publier la story ▾ ». Un
+ * objet touché retire les outils et pose sa seule barre d'actions libellées au-dessus de Publier (#13836) ; le pinceau en
+ * main n'a que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
+ * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
+ * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre.
  */
 @Composable
@@ -63,6 +61,9 @@ internal fun StoryComposerSceneFirst(
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
     val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive)
     val tools = ComposerSceneTools.toolsServed(objectFocused = state.selectedObjectControllers != null, drawing = state.isDrawingActive)
+    val selection = state.selectionBar?.takeIf { panel == null && typing == null }
+    val openSheet = sheet.open?.takeIf(state::serves)
+    StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     StorySceneFirstLayout(
         onDismiss = doors.onClose,
         reduced = panel != null && typing == null,
@@ -71,20 +72,14 @@ internal fun StoryComposerSceneFirst(
             SceneTopBar(
                 onClose = doors.onClose,
                 history = SceneHistory(state.canUndo, state.canRedo)
-                    .takeIf { tools.isNotEmpty() && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
+                    .takeIf { chrome && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
                 onUndo = viewModel::onUndo,
                 onRedo = viewModel::onRedo,
                 showsClose = chrome,
             )
         },
         strip = { if (chrome) StorySlideStrip(state, viewModel) },
-        trailing = {
-            if (tools.isNotEmpty()) {
-                StorySceneTools(state, viewModel, sceneExport, doors, tools, onMorePanel)
-            } else {
-                ObjectColumn(state, viewModel)
-            }
-        },
+        trailing = { if (tools.isNotEmpty()) StorySceneTools(state, viewModel, sceneExport, doors, tools, onMorePanel) },
         panel = {
             panel?.let {
                 StoryComposerBottomPanel(
@@ -99,10 +94,21 @@ internal fun StoryComposerSceneFirst(
                 )
             }
         },
-        socle = { if (chrome) StorySocle(state, viewModel, doors, formatChevron) },
-        sheet = sheet.open,
+        socle = {
+            selection?.let { bar ->
+                ComposerSelectionActionBar(
+                    bar = bar,
+                    onAction = { action -> viewModel.onSelectionAction(bar.ref, action, sheet.onOpen) },
+                    onOrder = { choice -> viewModel.onObjectController(bar.ref, choice) },
+                )
+            }
+            if (chrome) StorySocle(state, viewModel, doors, formatChevron)
+        },
+        sheet = openSheet,
         onSheetDismiss = sheet.onDismiss,
-        sheetContent = sheet.content,
+        sheetContent = { open ->
+            if (open.servesSelection) StorySelectionSheet(open, state, viewModel, comparison, onDone = sheet.onDismiss) else sheet.content(open)
+        },
         typing = typing,
     )
 }
@@ -210,21 +216,7 @@ private fun StoryMoreMenu(
     }
 }
 
-/** Un objet touché ou le pinceau en main : la colonne de ses réglages, sur un voile qui la garde lisible sur toute scène. */
-@Composable
-private fun ColumnScope.ObjectColumn(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .background(OBJECT_COLUMN_VEIL, RoundedCornerShape(MeeshyRadius.xxl))
-            .padding(vertical = MeeshySpacing.xxs),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        StoryTrailingColumn(state, viewModel)
-    }
-}
-
-private val OBJECT_COLUMN_VEIL = Color.Black.copy(alpha = 0.38f)
+private val NOTICE_VEIL = Color.Black.copy(alpha = 0.38f)
 
 /** Le bas de la scène : ce que l'éditeur a à dire (seulement s'il a quelque chose à dire), puis l'audience et Publier. */
 @Composable
@@ -242,7 +234,7 @@ private fun StorySocle(
             color = Color.White,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(OBJECT_COLUMN_VEIL, RoundedCornerShape(MeeshyRadius.sm))
+                .background(NOTICE_VEIL, RoundedCornerShape(MeeshyRadius.sm))
                 .padding(horizontal = MeeshySpacing.sm, vertical = 6.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
@@ -271,4 +263,13 @@ private fun StoryPublishBlock.messageRes(): Int = when (this) {
     StoryPublishBlock.TOO_MANY_MEDIA -> R.string.composer_publish_block_media
     StoryPublishBlock.TOO_MANY_SOUNDS -> R.string.composer_publish_block_sounds
     StoryPublishBlock.DURATION_TOO_LONG -> R.string.composer_publish_block_duration
+}
+
+/**
+ * Une feuille de sélection dont l'élément a quitté la sélection (retiré, ou une piste de la frise en a encadré un autre)
+ * est déjà masquée ; elle se referme aussi, sans quoi elle remonterait d'elle-même à la prochaine sélection (#13836).
+ */
+@Composable
+private fun StaleSheetReleased(stale: Boolean, onRelease: () -> Unit) {
+    if (stale) LaunchedEffect(Unit) { onRelease() }
 }

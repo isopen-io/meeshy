@@ -1,6 +1,5 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -8,7 +7,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,7 +16,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,8 +36,8 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
  * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
  * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
  * pinch/rotate-able with one gesture, tappable to select and long-pressable for its menu
- * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Nothing is laid on the
- * scene: removal lives in that menu. Lifting the finger closes the gesture (one undo step). The pointer handlers
+ * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Selected, it carries the dashed
+ * frame of the selection ([sceneSelectionFrame], #13836); its actions ride the selection bar, the menu a shortcut of them. Lifting the finger closes the gesture (one undo step). The pointer handlers
  * read the callbacks through [rememberUpdatedState], so a recomposition never leaves a
  * gesture holding a stale canvas size. The normalised→pixel placement and the pixel→normalised
  * drag delta are the only arithmetic here; the clamp lives in the pure [StoryStickerElement].
@@ -59,6 +56,7 @@ internal fun StickerLayer(
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
+    showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val haptics = rememberMeeshyHaptics()
@@ -110,10 +108,7 @@ internal fun StickerLayer(
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
-            .background(
-                color = if (selected) Color.Black.copy(alpha = 0.25f) else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
+            .sceneSelectionFrame(selected && showsSelection, sticker.scale)
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {

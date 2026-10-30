@@ -189,19 +189,20 @@ internal val StoryComposerUiState.frameOpen: Boolean
 /** Réducteurs de la sélection d'un média ou d'un son, et des panneaux de scène du pied du plateau. */
 internal object StoryComposerSelectionReducer {
 
+    /** Un média choisi — dans la rangée du panneau Média, ou touché sur la scène — prend l'état de sélection (#13836) : le panneau se retire pour sa barre. */
     fun mediaSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (id !in state.deck.selectedSlide.mediaIds) state
-        else state.withoutObjectSelection().copy(selectedMediaId = id)
+        else state.withoutObjectSelection().copy(selectedMediaId = id, band = state.band.closeAnyPanel())
 
     fun soundSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.audio.none { it.id == id }) state
-        else state.withoutObjectSelection().copy(selectedSoundId = id)
+        else state.withoutObjectSelection().copy(selectedSoundId = id, band = state.band.closeAnyPanel())
 
-    /** Le (x) d'une sélection : plus aucun objet n'est touché, les effets de la scène reviennent. */
+    /** Toucher la scène à vide (#13836) : plus aucun objet n'est touché, de quelque famille qu'il soit, et les outils reviennent. */
     fun cleared(state: StoryComposerUiState): StoryComposerUiState = state.withoutObjectSelection()
 
     private fun StoryComposerUiState.withoutObjectSelection(): StoryComposerUiState =
-        copy(selectedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+        copy(selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Toucher l'effet ouvert le referme, en toucher un autre bascule le carrousel ; il prend la place du panneau du bas. */
     fun sceneEffectToggled(state: StoryComposerUiState, effect: ComposerSceneEffect): StoryComposerUiState =

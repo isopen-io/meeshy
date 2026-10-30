@@ -2,7 +2,12 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -15,6 +20,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import me.meeshy.feature.stories.R
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -91,18 +97,20 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
     }
 }
 
-/** Les trois gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner. */
+/** Les gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner, toucher pour le sélectionner (#13836). */
 internal class PlacedMediaGestures(
     val onDrag: (String, Float, Float) -> Unit,
     val onDragEnd: () -> Unit,
     val onTransform: (String, Float, Float) -> Unit,
+    val onTap: (String) -> Unit = {},
 )
 
 /**
  * Un média de premier plan sur la scène : posé à sa position normalisée (centré sur ce point), glissé, pincé et
  * pivoté d'un seul geste, comme un sticker. Son cadre de base est celui que peignent les lecteurs iOS et Android
  * ([ForegroundMediaFrame], projeté sur la largeur du canevas), rempli comme eux. L'image est décodée hors du fil
- * principal par Coil, à la taille de ce cadre — jamais pleine résolution.
+ * principal par Coil, à la taille de ce cadre — jamais pleine résolution. Touché, il est sélectionné et porte le cadre de
+ * la sélection ([selected], #13836).
  */
 @Composable
 internal fun PlacedMediaLayer(
@@ -110,8 +118,11 @@ internal fun PlacedMediaLayer(
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     gestures: PlacedMediaGestures,
+    selected: Boolean = false,
 ) {
     val placed = frame.placed
+    val currentTap by rememberUpdatedState(gestures.onTap)
+    val label = stringResource(R.string.composer_selection_placed_media)
     val currentDrag by rememberUpdatedState(gestures.onDrag)
     val currentDragEnd by rememberUpdatedState(gestures.onDragEnd)
     val currentTransform by rememberUpdatedState(gestures.onTransform)
@@ -138,7 +149,6 @@ internal fun PlacedMediaLayer(
     val corner = with(density) { (min(widthPx, heightPx) * CORNER_FRACTION).toDp() }
     Box(
         modifier = Modifier
-            .testTag("placed-media")
             .offset {
                 IntOffset(
                     x = (placed.x * canvasWidthPx - widthPx / 2f).roundToInt(),
@@ -149,6 +159,13 @@ internal fun PlacedMediaLayer(
                 scaleX = placed.scale
                 scaleY = placed.scale
                 rotationZ = placed.rotationDeg
+            }
+            .testTag("placed-media")
+            .sceneSelectionFrame(selected, placed.scale)
+            .pointerInput(frame.key) { detectTapGestures(onTap = { currentTap(frame.key) }) }
+            .semantics {
+                contentDescription = label
+                onClick { currentTap(frame.key); true }
             }
             .pointerInput(frame.key) {
                 detectTransformGestures { _, pan, zoom, rotation ->

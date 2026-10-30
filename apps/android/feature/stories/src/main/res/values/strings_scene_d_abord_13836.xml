@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_selection_order">Order</string>
+    <string name="composer_selection_remove">Remove</string>
+    <string name="composer_selection_selected">Selected</string>
+    <string name="composer_selection_set_background">Set as background</string>
+    <string name="composer_selection_replace_background">Replace the background</string>
+    <string name="composer_selection_placed_media">Media on the scene</string>
+</resources>

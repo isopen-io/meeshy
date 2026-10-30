@@ -4,18 +4,16 @@ package me.meeshy.app.stories
 internal enum class StoryMorePanel { DURATION, CAPTION }
 
 /** Ce qui monte au bas de la scène : un seul panneau, celui du geste en cours (#13834). */
-internal enum class StoryScenePanel { DRAWING, TEXT, STICKER, MEDIA, SOUND, TOOL, DURATION, CAPTION, SCENE_EFFECTS }
+internal enum class StoryScenePanel { DRAWING, TEXT, TOOL, DURATION, CAPTION, SCENE_EFFECTS }
 
 /**
- * Le panneau du geste en cours, par ordre de préséance : le pinceau, l'objet touché (texte, sticker, média, son), l'outil
- * ouvert, ce que le « ⋯ » a ouvert, puis le cadre ou le carrousel d'effets du fond. Au repos : aucun.
+ * Le panneau du geste en cours, par ordre de préséance : le pinceau, le texte qu'on écrit, l'outil ouvert, ce que le « ⋯ »
+ * a ouvert, puis le cadre ou le carrousel d'effets du fond. Au repos : aucun. Un objet SÉLECTIONNÉ n'en monte aucun : ses
+ * actions sont sur sa barre, et son Modifier ou son Temps font monter une feuille (#13836).
  */
 internal fun StoryComposerUiState.scenePanel(local: StoryMorePanel?): StoryScenePanel? = when {
     isDrawingActive -> StoryScenePanel.DRAWING
     isEditingTextElement -> StoryScenePanel.TEXT
-    selectedSticker != null && !isTimelineOpen -> StoryScenePanel.STICKER
-    selectedMedia != null && band.activeTool == null -> StoryScenePanel.MEDIA
-    selectedSound != null && band.activeTool == null -> StoryScenePanel.SOUND
     band.activeTool != null -> StoryScenePanel.TOOL
     local == StoryMorePanel.DURATION -> StoryScenePanel.DURATION
     local == StoryMorePanel.CAPTION -> StoryScenePanel.CAPTION

@@ -102,7 +102,7 @@ class StoryComposerTypingStateTest {
         listOf("Font", "Color", "Alignment", "Text background", "Finish writing").forEach {
             compose.onNodeWithContentDescription(it).assertExists()
         }
-        listOf("Close", "Text", "Media", "More options", "Publish the story", "Undo").forEach {
+        listOf("Close", "Text", "Media", "More options", "Publish story", "Undo").forEach {
             compose.onNodeWithContentDescription(it).assertDoesNotExist()
         }
     }
@@ -170,7 +170,7 @@ class StoryComposerTypingStateTest {
         show(vm, morePanel = { panel }, onMorePanel = { panel = it })
 
         compose.onNode(hasSetTextAction()).assertIsFocused()
-        compose.onNodeWithContentDescription("Publish the story").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
         compose.onNodeWithText("5000", substring = true).assertDoesNotExist()
 
         compose.onNodeWithContentDescription("Finish writing").performClick()

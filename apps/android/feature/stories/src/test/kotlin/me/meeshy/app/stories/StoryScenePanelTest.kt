@@ -35,10 +35,10 @@ class StoryScenePanelTest {
     }
 
     @Test
-    fun `a selected sticker raises its own sections`() {
+    fun `a selected sticker raises no panel, its actions ride the selection bar (#13836)`() {
         val sticker = StoryComposerStickerReducer.added(rest, "😀", "s1")
         assertThat(sticker.selectedSticker).isNotNull()
-        assertThat(sticker.scenePanel(local = null)).isEqualTo(StoryScenePanel.STICKER)
+        assertThat(sticker.scenePanel(local = null)).isNull()
     }
 
     @Test
