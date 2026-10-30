@@ -115,6 +115,8 @@ data class StoryComposerUiState(
     val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
     /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
     val isFrameOpen: Boolean = false,
+    /** La pastille de lieu touchée sur la scène (#13846). */
+    val selectedPlaceId: String? = null,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -124,7 +126,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
@@ -341,6 +343,7 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         selectedStickerId = if (stickerStillSelected) stickerId else null,
         selectedMediaId = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds },
         selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
+        selectedPlaceId = selectedPlaceId?.takeIf { id -> deck.selectedSlide.places.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
     )
 }

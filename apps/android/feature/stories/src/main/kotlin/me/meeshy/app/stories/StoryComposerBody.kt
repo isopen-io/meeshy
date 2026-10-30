@@ -77,7 +77,7 @@ internal fun StoryComposerSceneFirst(
         viewModel.onSelectionAction(bar.ref, action, sheet.onOpen)
     }
     val dialogs = rememberStoryOverflowDialogs(state, viewModel)
-    val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel)
+    val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen)
     val rails = storySceneRails(state, viewModel, more, selection, onSelectionAction, morePanel, formatChevron)
     StorySceneFirstLayout(
         onDismiss = doors.onClose,
@@ -117,7 +117,7 @@ internal fun StoryComposerSceneFirst(
                     onOrder = { choice -> viewModel.onObjectController(bar.ref, choice) },
                 )
             }
-            if (chrome) StorySocle(state, viewModel, doors, formatChevron)
+            if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen)
         },
         sheet = openSheet,
         onSheetDismiss = sheet.onDismiss,
@@ -157,6 +157,7 @@ private class StoryMoreHost(
     val doors: StoryComposerDoors,
     val dialogs: StoryOverflowDialogs,
     val onMorePanel: (StoryMorePanel?) -> Unit,
+    val onOpenSheet: (StoryComposerSheet) -> Unit,
 )
 
 /** Les six outils posés sur la scène ; le « ⋯ » range le reste, l'appui long sur Média propose ses sources. */
@@ -336,6 +337,9 @@ private fun rememberMoreEntryAction(
             ComposerMoreEntry.PICK_BACKGROUND -> more.doors.onPickBackground()
             ComposerMoreEntry.REMOVE_BACKGROUND -> viewModel.onRemoveSceneBackground()
             ComposerMoreEntry.CLEAR_ALL -> more.dialogs.clearAll()
+            ComposerMoreEntry.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
+            ComposerMoreEntry.HASHTAGS -> more.onOpenSheet(StoryComposerSheet.HASHTAGS)
+            ComposerMoreEntry.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION -> Unit
         }
     }
@@ -350,7 +354,14 @@ private fun StorySocle(
     viewModel: StoryComposerViewModel,
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
+    onOpenSheet: (StoryComposerSheet) -> Unit,
 ) {
+    ComposerSceneReferenceFooter(
+        hashtags = state.hashtags,
+        mentions = state.draft.mentions,
+        onHashtags = { onOpenSheet(StoryComposerSheet.HASHTAGS) },
+        onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
+    )
     StorySocleNotice(state)
     StoryPublish(state, viewModel, doors, formatChevron)
 }

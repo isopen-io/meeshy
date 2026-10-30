@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryLocationObject
+
 /** Un calque de la scène lue : l'un des trois genres d'objets que l'auteur a posés et dont le `zIndex` ordonne la peinture. */
 internal sealed interface StorySceneLayer {
     val id: String
@@ -25,6 +27,13 @@ internal sealed interface StorySceneLayer {
         override val zIndex: Int get() = view.zIndex
         override val key: String get() = "sticker:$id"
     }
+
+    /** Une pastille de lieu (#13846, iOS `StoryLocationLayer`). */
+    data class Place(val view: StoryLocationObject) : StorySceneLayer {
+        override val id: String get() = view.id
+        override val zIndex: Int get() = view.zIndex
+        override val key: String get() = "place:$id"
+    }
 }
 
 /**
@@ -38,6 +47,7 @@ internal object StorySceneLayerOrder {
         (
             slide.textObjects.map(StorySceneLayer::Text) +
                 slide.foregroundMedia.map(StorySceneLayer::Media) +
-                slide.stickers.map(StorySceneLayer::Sticker)
+                slide.stickers.map(StorySceneLayer::Sticker) +
+                slide.places.map(StorySceneLayer::Place)
             ).sortedBy { it.zIndex }
 }

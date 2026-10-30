@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StorySlideDuration
@@ -238,6 +239,8 @@ data class StorySlideView(
     val strokes: List<StoryDrawingStroke> = emptyList(),
     /** Les stickers posés sur la scène (iOS `StoryStickerLayer`), du plus bas au plus haut. */
     val stickers: List<StoryStickerView> = emptyList(),
+    /** Les pastilles de lieu posées sur la scène (#13846, `storyEffects.locationObjects`). */
+    val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */

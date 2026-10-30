@@ -45,6 +45,9 @@ internal fun StorySceneOverlays(
                 is StorySceneLayer.Sticker -> if (layer.view.isVisible(playheadSeconds)) {
                     StoryStickerLayer(sticker = layer.view, playheadSeconds = playheadSeconds)
                 }
+                is StorySceneLayer.Place -> if (layer.view.isVisible(playheadSeconds)) {
+                    StoryPlaceObjectLayer(place = layer.view)
+                }
             }
         }
     }

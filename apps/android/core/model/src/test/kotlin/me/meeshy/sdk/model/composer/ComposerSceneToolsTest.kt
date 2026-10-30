@@ -51,6 +51,7 @@ class ComposerSceneToolsTest {
         assertThat(more()).containsExactly(
             ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
             ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE,
         ).inOrder()
     }
 
@@ -71,6 +72,7 @@ class ComposerSceneToolsTest {
             ComposerMoreEntry.PICK_BACKGROUND, ComposerMoreEntry.REMOVE_BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
             ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING, ComposerMoreEntry.FRAME,
             ComposerMoreEntry.OPENING_EFFECT, ComposerMoreEntry.VISUAL_EFFECT, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE,
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE, ComposerMoreEntry.CLEAR_ALL,
         ).inOrder()
     }

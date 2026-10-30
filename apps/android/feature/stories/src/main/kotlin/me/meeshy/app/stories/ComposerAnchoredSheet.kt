@@ -17,7 +17,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * sélectionné (#13836) — son Modifier (média, son), son Temps, l'échange d'un sticker — et n'existent pas sans lui.
  */
 internal enum class StoryComposerSheet {
-    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP;
+    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE;
 
     val servesSelection: Boolean get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP
 }

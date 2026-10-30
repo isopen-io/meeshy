@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -54,6 +55,8 @@ data class StoryComposerDraft(
     /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     val frame: SceneFrame = SceneFrame(),
+    /** Les pastilles de lieu de la slide (#13846) : elles partent en `storyEffects.locationObjects`. */
+    val places: List<StoryLocationObject> = emptyList(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -97,7 +100,7 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty()) &&
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing || audio.isNotEmpty() || places.isNotEmpty()) &&
             isWithinLimit && isWithinMediaLimit &&
             ComposerAudienceSelection.isPublishable(visibility, visibilityUserIds)
 
@@ -164,7 +167,7 @@ data class StoryComposerDraft(
         val mediaObjects = StoryPublishPlacedMedia.withinCaps(backgroundMedia?.toMediaObject(), placedMedia)
         val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
-            audio.isEmpty() && frame.isNeutral
+            audio.isEmpty() && frame.isNeutral && places.isEmpty()
         if (hasNothing) return null
         return StoryEffects(
             background = background?.serialized(),
@@ -176,6 +179,7 @@ data class StoryComposerDraft(
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,
             audioPlayerObjects = audio.takeIf { it.isNotEmpty() },
+            locationObjects = places,
             backgroundTransform = frame.backgroundTransform(),
             opening = frame.opening,
             closing = frame.closing,

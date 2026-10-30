@@ -82,6 +82,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, apiBaseUrl) }
             },
             audioChips = StorySceneObjectsProjection.audioChips(storyEffects),
+            places = storyEffects?.locationObjects.orEmpty().filter { it.place.name?.isNotBlank() == true || it.place.address?.isNotBlank() == true },
             isViewed = isViewed,
             createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },
         )

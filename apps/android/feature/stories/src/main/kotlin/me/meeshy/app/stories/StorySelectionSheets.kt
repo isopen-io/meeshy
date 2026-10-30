@@ -54,7 +54,8 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE -> Unit
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
     }
 }
 
@@ -63,7 +64,8 @@ internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = w
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedTextElement != null || selectedSticker != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE -> true
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
 /** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */

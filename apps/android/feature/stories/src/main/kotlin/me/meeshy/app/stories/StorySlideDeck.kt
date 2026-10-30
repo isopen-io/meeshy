@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryObjectPlacement
 import me.meeshy.sdk.model.composer.SceneObjectCaps
 import me.meeshy.sdk.model.composer.StoryLimits
@@ -55,6 +56,8 @@ data class StorySlide(
     val placedMedia: List<StoryPlacedMedia> = emptyList(),
     /** Les réglages et effets du média de FOND (iOS `StoryMediaObject.adjustments` de l'objet `isBackground`, #13652) ; `null` : rien de réglé. */
     val backgroundAdjustments: ImageAdjustments? = null,
+    /** Les pastilles de lieu posées sur la scène (#13846), dans l'ordre de leur pose ; elles partent en `locationObjects[]`. */
+    val places: List<StoryLocationObject> = emptyList(),
 )
 
 /**
@@ -114,6 +117,9 @@ data class StorySlideDeck(
     /** At least one slide carries a sound track (a borrowed or captured sound alone publishes). */
     val hasAudio: Boolean get() = slides.any { it.audio.isNotEmpty() }
 
+    /** At least one slide carries a place pastille (#13846). */
+    val hasPlaces: Boolean get() = slides.any { it.places.isNotEmpty() }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
@@ -128,7 +134,8 @@ data class StorySlideDeck(
                 slide.elements.any { it.isPublishable } ||
                 slide.stickers.any { it.isPublishable } ||
                 slide.strokes.isNotEmpty() ||
-                slide.audio.isNotEmpty()
+                slide.audio.isNotEmpty() ||
+                slide.places.isNotEmpty()
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */

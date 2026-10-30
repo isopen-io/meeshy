@@ -76,6 +76,8 @@ data class StoryDraftTextElementSnapshot(
     val y: Float = CANVAS_CENTER,
     val scale: Float = UNIT_SCALE,
     val rotationDeg: Float = 0f,
+    /** La personne que nomme un badge de mention épinglée (#13846) ; un blob d'avant se lit « un texte ». */
+    val referenceUserId: String? = null,
 ) {
     /** True once the element carries publishable content — non-blank [text]. */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -184,6 +186,8 @@ data class StoryDraftSlideSnapshot(
     val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
     /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
     val backgroundAdjustments: ImageAdjustments? = null,
+    /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
+    val places: List<StoryLocationObject> = emptyList(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -199,7 +203,7 @@ data class StoryDraftSlideSnapshot(
      */
     val hasContent: Boolean
         get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty()
+            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty()
 }
 
 /**

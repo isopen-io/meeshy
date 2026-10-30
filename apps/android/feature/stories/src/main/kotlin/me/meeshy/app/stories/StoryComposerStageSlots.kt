@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -95,6 +96,21 @@ internal fun StoryComposerScene(
                 capture = sceneExport.capture,
                 onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
                     ?.let { { backgroundMenuOpen = true } },
+                places = { width, height, capturing ->
+                    state.deck.selectedSlide.places.forEach { place ->
+                        key(place.id) {
+                            ComposerPlaceLayer(
+                                place = place,
+                                selected = !capturing && place.id == state.selectedPlaceId,
+                                canvasWidthPx = width,
+                                canvasHeightPx = height,
+                                onTap = { viewModel.onSelectPlace(place.id) },
+                                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
+                                onDragEnd = viewModel::onStickerDragEnd,
+                            )
+                        }
+                    }
+                },
             )
             ComposerBackgroundMenu(
                 expanded = backgroundMenuOpen,

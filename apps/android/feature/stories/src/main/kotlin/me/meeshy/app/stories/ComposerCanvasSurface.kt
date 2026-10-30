@@ -108,6 +108,7 @@ internal fun StoryCanvasSurface(
     capture: SceneCapture? = null,
     onBackgroundLongPress: (() -> Unit)? = null,
     selectedMediaId: String? = null,
+    places: @Composable (canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
     val capturing = capture != null && capture.pass != SceneCapturePass.NONE
@@ -286,6 +287,7 @@ internal fun StoryCanvasSurface(
                     showsSelection = !capturing,
                 )
             }
+            places(canvasWidthPx, canvasHeightPx, capturing)
             // Topmost: paints every committed stroke, and — only while isDrawingActive —
             // also captures the drag that draws the next one, blocking the pan/zoom/tap
             // gestures underneath so a stroke never fights the background transform.

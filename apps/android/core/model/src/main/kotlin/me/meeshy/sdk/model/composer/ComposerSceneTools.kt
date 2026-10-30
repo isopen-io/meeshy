@@ -10,8 +10,8 @@ enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, MORE }
 enum class ComposerMediaSource { PHOTO_LIBRARY, FILES }
 
 /**
- * Ce que le « ⋯ » de la scène range (#13834) : l'aperçu, les réglages de la scène que la colonne ne porte pas, l'export,
- * puis « Tout effacer » (#13845, iOS `ComposerOverflowPolicy`). [export] relie une entrée d'export à la loi qui la sert
+ * Ce que le « ⋯ » de la scène range (#13834) : l'aperçu, les réglages de la scène que la colonne ne porte pas, ce que la
+ * publication nomme (mentionner, hashtags, lieu — #13846, les portes du rail iOS), l'export, puis « Tout effacer » (#13845, iOS `ComposerOverflowPolicy`). [export] relie une entrée d'export à la loi qui la sert
  * ([me.meeshy.sdk.model.composer.scene.ComposerOverflowEntries]) ; [isDestructive] se peint en alerte et demande confirmation.
  */
 enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDestructive: Boolean = false) {
@@ -27,6 +27,9 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
     OPENING_EFFECT,
     VISUAL_EFFECT,
     CAPTION,
+    MENTION,
+    HASHTAGS,
+    PLACE,
     SAVE_TO_PHOTOS(ComposerOverflowEntry.SAVE_TO_PHOTOS),
     SHARE(ComposerOverflowEntry.SHARE),
     CLEAR_ALL(isDestructive = true),
@@ -72,7 +75,8 @@ object ComposerSceneTools {
             ComposerMoreEntry.VISUAL_EFFECT -> ComposerSceneEffect.VISUAL in input.sceneEffects
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export in input.exports
             ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION -> true
+            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE -> true
             ComposerMoreEntry.PREVIEW -> input.hasContent
             ComposerMoreEntry.PICK_BACKGROUND -> input.canPickBackground
             ComposerMoreEntry.REMOVE_BACKGROUND -> input.hasBackground

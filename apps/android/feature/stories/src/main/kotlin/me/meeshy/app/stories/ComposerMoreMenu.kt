@@ -75,6 +75,9 @@ internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
     ComposerMoreEntry.OPENING_EFFECT -> MeeshyIcons.Sparkles
     ComposerMoreEntry.VISUAL_EFFECT -> MeeshyIcons.PhotoFilter
     ComposerMoreEntry.CAPTION -> MeeshyIcons.Subtitles
+    ComposerMoreEntry.MENTION -> MeeshyIcons.Mention
+    ComposerMoreEntry.HASHTAGS -> MeeshyIcons.Tag
+    ComposerMoreEntry.PLACE -> MeeshyIcons.Location
     ComposerMoreEntry.SAVE_TO_PHOTOS -> MeeshyIcons.Download
     ComposerMoreEntry.SHARE -> MeeshyIcons.Share
 }
@@ -93,6 +96,9 @@ internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
     ComposerMoreEntry.OPENING_EFFECT -> R.string.stories_scene_effect_opening
     ComposerMoreEntry.VISUAL_EFFECT -> R.string.stories_scene_effect_visual
     ComposerMoreEntry.CAPTION -> R.string.stories_composer_text_caption
+    ComposerMoreEntry.MENTION -> R.string.composer_more_mention
+    ComposerMoreEntry.HASHTAGS -> R.string.story_hashtag_title
+    ComposerMoreEntry.PLACE -> R.string.story_place_title
     ComposerMoreEntry.SAVE_TO_PHOTOS -> R.string.stories_scene_overflow_save
     ComposerMoreEntry.SHARE -> R.string.stories_scene_overflow_share
 }

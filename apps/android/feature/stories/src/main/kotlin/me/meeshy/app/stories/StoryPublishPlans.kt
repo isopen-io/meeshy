@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxIds
 
@@ -14,6 +15,12 @@ internal data class PublishPlan(val request: CreateStoryRequest, val dependsOn: 
  * names its still-queued uploads by their `cmid` alone, #13500), so the drainer
  * gates each story on exactly its own prerequisites and grafts the real ids in.
  */
+/** Les pastilles de mention de la slide : chacune y déclare sa personne ÉPINGLÉE (#13846). */
+internal val StorySlide.badges: List<ComposerSceneReferences.Badge>
+    get() = elements.mapNotNull { element ->
+        element.referenceUserId?.let { ComposerSceneReferences.Badge(userId = it, username = element.text.trim().removePrefix("@")) }
+    }
+
 internal fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
     val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
     return current.deck.publishableSlides.map { slide ->
@@ -32,12 +39,13 @@ internal fun publishPlans(current: StoryComposerUiState, language: String): List
             placedMedia = StoryPublishPlacedMedia.resolve(slide, current),
             repostOfId = current.draft.repostOfId,
             visibilityUserIds = current.draft.visibilityUserIds,
-            mentions = current.draft.mentions,
+            mentions = ComposerSceneReferences.declaredFor(current.draft.mentions, slide.badges),
             mediaAlt = current.draft.mediaAlt,
             mediaCaption = current.draft.mediaCaption,
             allowSoundExtraction = current.draft.allowSoundExtraction,
             audio = slide.audio,
             frame = slide.frame,
+            places = slide.places,
         )
         PublishPlan(
             request = draft.toCreateStoryRequest(language),

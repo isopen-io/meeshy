@@ -179,6 +179,8 @@ private fun StoryComposerSheetContent(
                 onDismiss = onDone,
             )
         }
+        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
+            StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP -> Unit
     }
 }

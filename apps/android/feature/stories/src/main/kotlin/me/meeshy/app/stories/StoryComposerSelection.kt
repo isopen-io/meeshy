@@ -202,7 +202,7 @@ internal object StoryComposerSelectionReducer {
     fun cleared(state: StoryComposerUiState): StoryComposerUiState = state.withoutObjectSelection()
 
     private fun StoryComposerUiState.withoutObjectSelection(): StoryComposerUiState =
-        copy(selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+        copy(selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null, selectedPlaceId = null)
 
     /** Toucher l'effet ouvert le referme, en toucher un autre bascule le carrousel ; il prend la place du panneau du bas. */
     fun sceneEffectToggled(state: StoryComposerUiState, effect: ComposerSceneEffect): StoryComposerUiState =

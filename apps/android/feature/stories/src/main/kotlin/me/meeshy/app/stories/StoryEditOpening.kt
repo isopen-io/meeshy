@@ -106,6 +106,7 @@ internal data class StoryEditOpening(
                     closing = effects.closing,
                 ),
                 placedMedia = placed,
+                places = effects.locationObjects,
             )
             val attachments = mediaIds.mapNotNull { id ->
                 val wire = (objects.firstOrNull { it.postMediaId == id })
@@ -185,5 +186,6 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         y = y.toFloat(),
         scale = (scale * fontSize / size.designSize).toFloat(),
         rotationDeg = rotation.toFloat(),
+        referenceUserId = referenceUserId,
     ).normalised()
 }

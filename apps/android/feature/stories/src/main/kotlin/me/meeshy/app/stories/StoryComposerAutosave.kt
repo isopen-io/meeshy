@@ -158,7 +158,7 @@ object StoryComposerAutosave {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
                     it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty() &&
-                    it.frame.isNeutral
+                    it.frame.isNeutral && it.places.isEmpty()
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -194,6 +194,7 @@ fun StorySlideDeck.toDraftSnapshot(
             soundSources = it.soundSources,
             placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
             backgroundAdjustments = it.backgroundAdjustments,
+            places = it.places,
         )
     },
     selectedId = selectedId,
@@ -237,6 +238,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
                 placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 backgroundAdjustments = it.backgroundAdjustments?.takeIf { adjustments -> !adjustments.isNeutral && it.backgroundMediaId != null },
+                places = it.places,
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,
@@ -307,6 +309,7 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        referenceUserId = referenceUserId,
     )
 
 /**
@@ -342,6 +345,7 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        referenceUserId = referenceUserId,
     )
 
 /**
