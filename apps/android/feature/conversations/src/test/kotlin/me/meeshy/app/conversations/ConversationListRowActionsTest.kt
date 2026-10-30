@@ -123,6 +123,30 @@ class ConversationListRowActionsTest {
     }
 
     @Test
+    fun `removing the category from the list menu uncategorizes the row`() = runTest(StandardTestDispatcher()) {
+        val h = harness(
+            ApiConversation(id = "c1", preferences = ApiConversationPreferences(categoryId = "work")),
+        )
+        coEvery { h.repo.setCategoryOptimistic("c1", null) } returns true
+
+        h.actions.removeCategory("c1")
+        runCurrent()
+
+        coVerify { h.repo.setCategoryOptimistic("c1", null) }
+        verify(exactly = 1) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `removing the category of an uncategorized row is inert`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"))
+
+        h.actions.removeCategory("c1")
+        runCurrent()
+
+        coVerify(exactly = 0) { h.repo.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
     fun `mark read on the open conversation clears the cache locally and never reaches the network`() =
         runTest(StandardTestDispatcher()) {
             val h = harness(ApiConversation(id = "c1", unreadCount = 3), active = "c1")

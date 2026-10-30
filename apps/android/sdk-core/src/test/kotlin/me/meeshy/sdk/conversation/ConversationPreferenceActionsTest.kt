@@ -96,6 +96,23 @@ class ConversationPreferenceActionsTest {
     }
 
     @Test
+    fun `removing the category takes the conversation out of it`() = runTest {
+        val h = harness()
+        coEvery { h.repository.setCategoryOptimistic("c1", null) } returns true
+
+        assertThat(h.actions.removeCategory("c1", currentCategoryId = "cat")).isEqualTo(PreferenceWrite.Queued)
+        assertThat(h.flushes()).isEqualTo(1)
+    }
+
+    @Test
+    fun `removing the category of an uncategorized conversation writes nothing`() = runTest {
+        val h = harness()
+
+        assertThat(h.actions.removeCategory("c1", currentCategoryId = null)).isEqualTo(PreferenceWrite.Unchanged)
+        coVerify(exactly = 0) { h.repository.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
     fun `creating a category then assigns the conversation to it`() = runTest {
         val h = harness()
         coEvery { h.categories.create("Amis") } returns NetworkResult.Success(CategoryOption(id = "new", name = "Amis"))

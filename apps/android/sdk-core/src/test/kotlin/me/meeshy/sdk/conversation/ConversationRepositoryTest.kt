@@ -972,6 +972,77 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `removing the category uncategorizes the cached row and queues an explicit clear`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", null)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.categoryId).isNull()
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.categoryId).isNull()
+        assertThat(payload.clearCategory).isTrue()
+    }
+
+    @Test
+    fun `an unrelated pref snapshot of an uncategorized row never clears a category`() = runTest {
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(ApiConversation(id = "c1")))))
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.clearCategory).isFalse()
+    }
+
+    @Test
+    fun `a pending category removal survives a later pin that supersedes its snapshot`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        repo.setCategoryOptimistic("c1", null)
+        repo.setPinnedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.clearCategory).isTrue()
+    }
+
+    @Test
+    fun `filing the row again after a pending removal sends the new category, not the clear`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        repo.setCategoryOptimistic("c1", null)
+        repo.setCategoryOptimistic("c1", "family")
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.categoryId).isEqualTo("family")
+        assertThat(payload.clearCategory).isFalse()
+    }
+
+    @Test
     fun `setCustomNameOptimistic sets the cached custom name and queues a snapshot carrying it`() = runTest {
         val repo = repository(
             FakeConversationApi(

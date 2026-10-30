@@ -215,6 +215,7 @@ internal fun ConversationRowContainer(
             onAssignCategory = actions.onAssignCategory,
             onCreateCategory = actions.onCreateCategory,
             isLocked = model.isLocked,
+            onRemoveCategory = actions.onRemoveCategory,
             onLockToggle = actions.onLockToggle,
             onViewInfo = actions.onViewInfo,
             onViewProfile = actions.onViewProfile,

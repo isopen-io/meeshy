@@ -60,7 +60,7 @@ public object OutboxCoalescer {
             OutboxKind.READ_RECEIPT -> terminalToggle(incoming, sameTarget, OutboxKind.MARK_UNREAD, OutboxKind.READ_RECEIPT)
             OutboxKind.MARK_UNREAD -> terminalToggle(incoming, sameTarget, OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD)
             OutboxKind.UPDATE_CONVERSATION_PREFS -> replaceSameKind(
-                carryAppearance(incoming, sameTarget.filter { it.kindEnum == OutboxKind.UPDATE_CONVERSATION_PREFS }),
+                carryPrefsGrafts(incoming, sameTarget.filter { it.kindEnum == OutboxKind.UPDATE_CONVERSATION_PREFS }),
                 sameTarget,
                 OutboxKind.UPDATE_CONVERSATION_PREFS,
             )
@@ -120,14 +120,19 @@ public object OutboxCoalescer {
     }
 
     /**
-     * A prefs snapshot carries `appearance` only when it changed it ([ConversationPrefsPayload.appearance]); a later
-     * snapshot that supersedes a pending appearance change must not drop it, so the newest pending one is grafted on.
+     * A prefs snapshot carries `appearance` and `clearCategory` only when it made that change
+     * ([ConversationPrefsPayload.appearance], [ConversationPrefsPayload.clearCategory]); a later snapshot that
+     * supersedes a pending one must not drop it, so the newest pending appearance is grafted on, and a pending
+     * category removal survives unless the later snapshot files the row in a category again.
      */
-    private fun carryAppearance(incoming: OutboxEntity, superseded: List<OutboxEntity>): OutboxEntity {
+    private fun carryPrefsGrafts(incoming: OutboxEntity, superseded: List<OutboxEntity>): OutboxEntity {
         val next = decodePrefs(incoming.payload) ?: return incoming
-        if (next.appearance != null) return incoming
-        val carried = superseded.asReversed().firstNotNullOfOrNull { decodePrefs(it.payload)?.appearance } ?: return incoming
-        return incoming.copy(payload = MeeshyApi.json.encodeToString(ConversationPrefsPayload.serializer(), next.copy(appearance = carried)))
+        val pending = superseded.asReversed().mapNotNull { decodePrefs(it.payload) }
+        val appearance = next.appearance ?: pending.firstNotNullOfOrNull { it.appearance }
+        val clearCategory = next.clearCategory || (next.categoryId == null && pending.any { it.clearCategory })
+        val grafted = next.copy(appearance = appearance, clearCategory = clearCategory)
+        if (grafted == next) return incoming
+        return incoming.copy(payload = MeeshyApi.json.encodeToString(ConversationPrefsPayload.serializer(), grafted))
     }
 
     private fun decodePrefs(payload: String): ConversationPrefsPayload? =

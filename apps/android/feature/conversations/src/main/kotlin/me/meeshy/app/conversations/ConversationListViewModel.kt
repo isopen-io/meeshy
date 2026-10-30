@@ -224,6 +224,7 @@ class ConversationListViewModel @Inject constructor(
     }
     fun reassignCategory(id: String, targetCategoryId: String) = actions.reassignCategory(id, targetCategoryId)
     fun createCategoryAndAssign(id: String, name: String) = actions.createCategoryAndAssign(id, name)
+    fun removeCategory(id: String) = actions.removeCategory(id)
     fun leaveConversation(id: String) = actions.leaveConversation(id)
     fun deleteConversationForMe(id: String) = actions.deleteConversationForMe(id)
     fun deleteConversationForAll(id: String) = actions.deleteConversationForAll(id)

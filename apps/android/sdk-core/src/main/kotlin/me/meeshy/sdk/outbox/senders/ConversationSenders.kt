@@ -6,6 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
@@ -50,7 +52,11 @@ public class UpdateConversationPrefsHandler @Inject constructor(
                 isMuted = prefs.isMuted,
                 isArchived = prefs.isArchived,
                 mentionsOnly = prefs.mentionsOnly,
-                categoryId = prefs.categoryId,
+                categoryId = when {
+                    prefs.categoryId != null -> JsonPrimitive(prefs.categoryId)
+                    prefs.clearCategory -> JsonNull
+                    else -> null
+                },
                 customName = prefs.customName,
                 reaction = prefs.reaction,
                 tags = prefs.tags,

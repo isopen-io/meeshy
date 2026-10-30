@@ -62,7 +62,7 @@ class ConversationSendersTest {
             isMuted = false,
             isArchived = false,
             mentionsOnly = true,
-            categoryId = "cat-1",
+            categoryId = kotlinx.serialization.json.JsonPrimitive("cat-1"),
             customName = "Famille",
             reaction = "❤️",
             tags = listOf("a", "b"),
@@ -99,6 +99,38 @@ class ConversationSendersTest {
         )
 
         assertThat(result).isEqualTo(SendResult.TransientFailure)
+    }
+
+    @Test
+    fun `conversation prefs that remove the category send an explicit null on the wire`() = runTest {
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val snapshot = ConversationPrefsPayload(
+            isPinned = false,
+            isMuted = false,
+            isArchived = false,
+            mentionsOnly = false,
+            clearCategory = true,
+        )
+        val sent = io.mockk.slot<ConversationPreferencesUpdate>()
+        coEvery { conversationApi.updatePreferences("c1", capture(sent)) } returns accepted(Unit)
+
+        handler.send(outboxRow(OutboxKind.UPDATE_CONVERSATION_PREFS, targetId = "c1", payload = encodedPayload(snapshot)))
+
+        val wire = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(ConversationPreferencesUpdate.serializer(), sent.captured)
+        assertThat(wire).contains("\"categoryId\":null")
+    }
+
+    @Test
+    fun `conversation prefs that keep the category untouched omit it on the wire`() = runTest {
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val snapshot = ConversationPrefsPayload(isPinned = true, isMuted = false, isArchived = false, mentionsOnly = false)
+        val sent = io.mockk.slot<ConversationPreferencesUpdate>()
+        coEvery { conversationApi.updatePreferences("c1", capture(sent)) } returns accepted(Unit)
+
+        handler.send(outboxRow(OutboxKind.UPDATE_CONVERSATION_PREFS, targetId = "c1", payload = encodedPayload(snapshot)))
+
+        val wire = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(ConversationPreferencesUpdate.serializer(), sent.captured)
+        assertThat(wire).doesNotContain("categoryId")
     }
 
     @Test

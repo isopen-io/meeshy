@@ -275,6 +275,12 @@
           "status": "adopted"
         },
         {
+          "catalog": "ui",
+          "iosKey": "category.remove",
+          "androidName": "conversation_options_category_remove",
+          "status": "adopted"
+        },
+        {
           "androidName": "conversation_options_category_placeholder",
           "status": "android-only"
         }

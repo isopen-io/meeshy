@@ -23,6 +23,7 @@
     <string name="conversations_action_more">مزيد من الإجراءات</string>
     <string name="conversations_action_mute">كتم</string>
     <string name="conversations_action_pin">تثبيت</string>
+    <string name="conversations_action_remove_category">إزالة الفئة %1$s</string>
     <string name="conversations_action_tags">الوسوم</string>
     <string name="conversations_action_unarchive">إلغاء الأرشفة</string>
     <string name="conversations_action_unlock">إلغاء القفل</string>

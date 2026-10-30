@@ -14,6 +14,13 @@ public sealed interface CategoryReassignment {
 
     /** Assign the conversation to [categoryId] (a real user category). */
     public data class AssignTo(val categoryId: String) : CategoryReassignment
+
+    /**
+     * Take the conversation back out of its category (`categoryId = null`, iOS
+     * `CategoryPickerField` → `category.remove`). The write must reach the gateway
+     * as an explicit `"categoryId": null` — an omitted field leaves it untouched.
+     */
+    public data object Clear : CategoryReassignment
 }
 
 /**
@@ -23,28 +30,24 @@ public sealed interface CategoryReassignment {
  * The faithful port of iOS `ConversationOptionsViewModel.setCategory`, whose
  * optimistic mutation + network call only make sense when the id actually changes.
  *
- * Scope note: this covers **assignment** to a real category (the primary
- * drag-to-category gesture and the context-menu "move to category" action).
- * Clearing a conversation back to *uncategorized* (`categoryId = null`) is a
- * separate concern — the shared JSON serializer omits null fields, so an
- * explicit-null `PUT` (needed to persist an uncategorize) is a tracked follow-up
- * — and is deliberately not modelled here to avoid exposing a decision the wiring
- * cannot yet honour.
+ * A `null` target takes the conversation back to *uncategorized* (#13784): the
+ * outbox snapshot then carries `clearCategory`, which the sender turns into an
+ * explicit `"categoryId": null` despite the `explicitNulls = false` encoder.
  */
 public object ConversationCategoryReassignment {
     /**
      * Resolves a reassignment of a conversation currently in [currentCategoryId]
-     * (`null` when uncategorized) to [targetCategoryId] (a real user category).
-     * Returns [CategoryReassignment.Unchanged] when the target already matches,
+     * (`null` when uncategorized) to [targetCategoryId] (a real user category, or
+     * `null` to uncategorize). Returns [CategoryReassignment.Unchanged] when the
+     * target already matches, [CategoryReassignment.Clear] for a `null` target,
      * else [CategoryReassignment.AssignTo].
      */
     public fun resolve(
         currentCategoryId: String?,
-        targetCategoryId: String,
-    ): CategoryReassignment =
-        if (targetCategoryId == currentCategoryId) {
-            CategoryReassignment.Unchanged
-        } else {
-            CategoryReassignment.AssignTo(targetCategoryId)
-        }
+        targetCategoryId: String?,
+    ): CategoryReassignment = when (targetCategoryId) {
+        currentCategoryId -> CategoryReassignment.Unchanged
+        null -> CategoryReassignment.Clear
+        else -> CategoryReassignment.AssignTo(targetCategoryId)
+    }
 }

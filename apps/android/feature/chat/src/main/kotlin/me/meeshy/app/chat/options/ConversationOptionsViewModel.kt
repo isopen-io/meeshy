@@ -136,6 +136,12 @@ class ConversationOptionsViewModel @Inject constructor(
         edit(ConversationOptionsEdit.Category(categoryId)) { id -> preferences.assignCategory(id, current, categoryId) }
     }
 
+    /** Retire la catégorie (iOS `CategoryPickerField`, `category.remove`) : la conversation repart hors catégorie. */
+    fun removeCategory() {
+        val current = displayed().categoryId ?: return
+        edit(ConversationOptionsEdit.Category(null)) { id -> preferences.removeCategory(id, current) }
+    }
+
     fun createCategory(name: String) {
         val id = conversationId ?: return
         val current = displayed().categoryId

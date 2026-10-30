@@ -93,6 +93,11 @@
     <string name="conversation_appearance_section_solid">Solid color</string>
     <string name="conversation_appearance_sheet_title">Background and accent</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_info_pinned_see_all">See all %1$d pinned messages</string>
+    <string name="conversation_info_tab_media">Media</string>
+    <string name="conversation_info_tab_members">Members</string>
+    <string name="conversation_info_tab_options">Options</string>
+    <string name="conversation_info_tab_stats">Stats</string>
     <string name="conversation_options_archive">Archive</string>
     <string name="conversation_options_archive_title">Archive conversation?</string>
     <string name="conversation_options_block_a11y">Block %1$s</string>
@@ -103,6 +108,7 @@
     <string name="conversation_options_cancel">Cancel</string>
     <string name="conversation_options_category">Category</string>
     <string name="conversation_options_category_create">Create category %1$s</string>
+    <string name="conversation_options_category_remove">Remove category %1$s</string>
     <string name="conversation_options_category_select">Select category %1$s</string>
     <string name="conversation_options_custom_name">Custom name</string>
     <string name="conversation_options_custom_name_clear">Clear custom name</string>
