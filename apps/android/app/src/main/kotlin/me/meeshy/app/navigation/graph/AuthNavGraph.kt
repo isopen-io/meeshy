@@ -16,6 +16,7 @@ import me.meeshy.app.auth.MagicLinkValidateViewModel
 import me.meeshy.app.auth.NewPasswordScreen
 import me.meeshy.app.auth.NewPasswordViewModel
 import me.meeshy.app.auth.ShareLinkEntryScreen
+import me.meeshy.app.auth.ShareLinkEntryViewModel
 import me.meeshy.app.auth.SignupScreen
 import me.meeshy.app.auth.WorldGuestEntryScreen
 import me.meeshy.app.navigation.Routes
@@ -112,6 +113,7 @@ internal fun NavGraphBuilder.authNavGraph(
         route = Routes.GUEST_JOIN,
         navController = navController,
         style = SheetStyle.COVER,
+        arguments = listOf(linkArgument(ShareLinkEntryViewModel.ANONYMOUS_ARG)),
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.GUEST_JOIN_DEEP_LINK },
             navDeepLink { uriPattern = Routes.GUEST_JOIN_WEB_DEEP_LINK },

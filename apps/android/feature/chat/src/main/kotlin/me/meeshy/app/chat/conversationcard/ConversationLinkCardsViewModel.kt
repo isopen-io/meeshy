@@ -10,20 +10,26 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.link.LinkCacheRepository
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationcard.ConversationCardActions
+import me.meeshy.sdk.model.conversationcard.ConversationCardJoinAccount
 import me.meeshy.sdk.model.conversationcard.ConversationCardResolution
 import me.meeshy.sdk.model.conversationcard.ConversationLinkCardState
 import me.meeshy.sdk.model.deeplink.ConversationCardTarget
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.sharelink.ShareLinkJoinRepository
 
 /**
@@ -35,6 +41,9 @@ import me.meeshy.sdk.sharelink.ShareLinkJoinRepository
 internal interface ConversationLinkCards {
     /** L'origine web de l'environnement, qui décide si une URL désigne une conversation Meeshy. */
     val webOrigin: String
+
+    /** Le compte que « Rejoindre » engage, tel que le bouton le nomme ; `null` ⇒ « Mon compte » (#13684). */
+    val joinAccount: StateFlow<ConversationCardJoinAccount?>
 
     /** L'état d'une carte, servi du cache d'abord ; l'appel lance la lecture au premier abonné. */
     fun state(target: ConversationCardTarget): StateFlow<ConversationLinkCardState>
@@ -65,8 +74,13 @@ internal class ConversationLinkCardsViewModel @Inject constructor(
     private val linkCache: LinkCacheRepository,
     private val shareLinkJoin: ShareLinkJoinRepository,
     private val conversations: ConversationRepository,
+    session: SessionRepository,
     config: MeeshyConfig,
 ) : ViewModel(), ConversationLinkCards {
+
+    override val joinAccount: StateFlow<ConversationCardJoinAccount?> = session.currentUser
+        .map(::joinAccountOf)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, joinAccountOf(session.currentUser.value))
 
     override val webOrigin: String =
         ServerEnvironmentResolver.webOrigin(ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl))
@@ -140,4 +154,8 @@ internal class ConversationLinkCardsViewModel @Inject constructor(
             .keys
             .forEach { linkCache.forgetCard(it) }
     }
+}
+
+private fun joinAccountOf(user: MeeshyUser?): ConversationCardJoinAccount? = user?.let {
+    ConversationCardJoinAccount.resolve(displayName = it.displayName, username = it.username, isAnonymous = it.isAnonymous == true)
 }

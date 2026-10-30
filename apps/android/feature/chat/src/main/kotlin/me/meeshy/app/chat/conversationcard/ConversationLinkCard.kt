@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.conversationcard.ConversationCardActions
+import me.meeshy.sdk.model.conversationcard.ConversationCardJoinAccount
 import me.meeshy.sdk.model.conversationcard.ConversationLinkCardState.CardError
 import me.meeshy.sdk.model.conversationcard.ConversationLinkCardState.Pending
 import me.meeshy.sdk.model.conversationcard.ConversationLinkCardState.Phase
@@ -73,6 +74,7 @@ internal fun ConversationLinkCard(
 ) {
     key(target) {
         val state by remember(cards, target) { cards.state(target) }.collectAsStateWithLifecycle()
+        val joinAccount by cards.joinAccount.collectAsStateWithLifecycle()
         val haptics = rememberMeeshyHaptics()
         val context = LocalContext.current
         var confirmsLeave by rememberSaveable { mutableStateOf(false) }
@@ -86,6 +88,7 @@ internal fun ConversationLinkCard(
                     ConversationLinkCardBody(card = phase.card, accent = accent)
                     ConversationLinkCardActionsRow(
                         actions = state.actions(target),
+                        joinAccount = joinAccount,
                         isExpired = phase.card.isLinkExpired,
                         pending = state.pending,
                         error = state.error,
@@ -127,13 +130,13 @@ internal fun ConversationLinkCard(
 }
 
 /**
- * Rejoindre SANS compte : le parcours d'entrée par lien de partage de l'app (`meeshy://join/<id>`,
- * ShareLinkEntry), qui sait proposer l'identité invitée — iOS `DeepLinkRouter.requestedGuestJoin`.
- * Épinglé à cette app : jamais une autre ne répond.
+ * Rejoindre SANS compte : le parcours d'entrée par lien de partage de l'app, l'identité déjà choisie
+ * (`meeshy://join/<id>?anonymous=true`) — droit au formulaire invité, sans l'écran « compte ou
+ * anonyme » (#13683, iOS `DeepLinkRouter.requestedGuestJoin`). Épinglé à cette app : jamais une autre ne répond.
  */
 private fun openGuestJoin(context: Context, identifier: String) {
     runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("meeshy://join/${Uri.encode(identifier)}"))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("meeshy://join/${Uri.encode(identifier)}?anonymous=true"))
             .setPackage(context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         context.startActivity(intent)
@@ -159,6 +162,7 @@ private fun ConversationLinkCardFrame(content: @Composable () -> Unit) {
 @Composable
 private fun ConversationLinkCardActionsRow(
     actions: ConversationCardActions,
+    joinAccount: ConversationCardJoinAccount?,
     isExpired: Boolean,
     pending: Pending,
     error: CardError?,
@@ -208,8 +212,9 @@ private fun ConversationLinkCardActionsRow(
                         )
                     }
                     CardButton(
-                        title = stringResource(R.string.conversation_card_join_choice_account),
-                        spoken = stringResource(R.string.conversation_card_a11y_join_with_account),
+                        title = joinAccount?.title ?: stringResource(R.string.conversation_card_join_choice_account),
+                        spoken = joinAccount?.let { stringResource(R.string.conversation_card_a11y_join_with_named_account, it.spokenName) }
+                            ?: stringResource(R.string.conversation_card_a11y_join_with_account),
                         icon = MeeshyIcons.Account,
                         tint = accent,
                         filled = true,

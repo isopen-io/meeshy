@@ -107,7 +107,7 @@ class RoutesContractTest {
 
     @Test
     fun `deep link patterns are frozen`() {
-        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}")
+        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}?anonymous={anonymous}")
         assertThat(Routes.GUEST_JOIN_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/join/{identifier}")
         assertThat(Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/chat/{identifier}")
         assertThat(Routes.CONVERSATIONS_DEEP_LINK).isEqualTo("meeshy://conversations")

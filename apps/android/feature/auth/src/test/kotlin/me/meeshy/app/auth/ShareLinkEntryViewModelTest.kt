@@ -103,13 +103,16 @@ class ShareLinkEntryViewModelTest {
         knownIds: Set<String> = emptySet(),
         stored: AnonymousSessionContext? = null,
         identifier: String = "design-chat",
+        anonymous: String? = null,
     ): Fixture {
         val preview = FakePreview(previewResult)
         val join = FakeJoin(joinResult)
         val known = FakeKnownIds(knownIds)
         val store = InMemoryAnonymousSessionStore(stored)
         val resolver = ShareLinkEntryResolver(preview, store)
-        val handle = SavedStateHandle(mapOf(GuestJoinViewModel.IDENTIFIER_ARG to identifier))
+        val handle = SavedStateHandle(
+            mapOf(GuestJoinViewModel.IDENTIFIER_ARG to identifier, ShareLinkEntryViewModel.ANONYMOUS_ARG to anonymous),
+        )
         val vm = ShareLinkEntryViewModel(
             resolver = resolver,
             join = join,
@@ -212,6 +215,29 @@ class ShareLinkEntryViewModelTest {
                 resumesGuestSession = false,
             ),
         )
+    }
+
+    @Test
+    fun account_anonymityAlreadyChosenOnTheCard_opensTheGuestFormWithoutAsking() = runTest {
+        val f = fixture(isAuthenticated = true, knownIds = emptySet(), anonymous = "true")
+
+        advanceUntilIdle()
+
+        assertThat(f.vm.state.value).isEqualTo(ShareLinkEntryUiState.GuestForm)
+        assertThat(f.join.linkIds).isEmpty()
+    }
+
+    @Test
+    fun account_anonymityAlreadyChosen_resumesTheGuestSessionOfThisLink() = runTest {
+        val f = fixture(
+            isAuthenticated = true,
+            anonymous = "true",
+            stored = storedSession(linkId = "design-chat", conversationId = "conv-stored"),
+        )
+
+        advanceUntilIdle()
+
+        assertThat(f.vm.state.value).isEqualTo(ShareLinkEntryUiState.OpenConversation("conv-stored"))
     }
 
     @Test

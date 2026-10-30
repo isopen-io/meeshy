@@ -4,6 +4,7 @@ import android.net.Uri
 import me.meeshy.app.composer.host.ComposerHostRoute
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ShareLinkEntryViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
@@ -33,7 +34,12 @@ object Routes {
     const val VERIFY_EMAIL_LINK = "auth/verify-email?token={token}&email={email}"
     fun verifyEmailLink(token: String, email: String): String = "auth/verify-email?token=$token&email=$email"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
-    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
+
+    /**
+     * `?anonymous=true` (optionnel) : l'identité est déjà choisie — « Anonyme » d'une carte de
+     * conversation (#13683) mène droit au formulaire invité, sans l'écran de choix.
+     */
+    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN?${ShareLinkEntryViewModel.ANONYMOUS_ARG}={${ShareLinkEntryViewModel.ANONYMOUS_ARG}}"
 
     /**
      * LEGACY receiver — `https://meeshy.me/join/{identifier}`, the shape the
