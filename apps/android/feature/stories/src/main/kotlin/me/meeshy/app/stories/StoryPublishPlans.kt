@@ -46,6 +46,8 @@ internal fun publishPlans(current: StoryComposerUiState, language: String): List
             audio = slide.audio,
             frame = slide.frame,
             places = slide.places,
+            soundTranscriptions = slide.soundTranscriptions,
+            videosDuckUnderSound = slide.videosDuckUnderSound,
         )
         PublishPlan(
             request = draft.toCreateStoryRequest(language),

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sound_sheet_title">Story sound</string>
+    <string name="story_sound_sheet_current">On this slide</string>
+    <string name="story_sound_sheet_role_background">In the background</string>
+    <string name="story_sound_sheet_role_scene">On the scene</string>
+    <string name="story_sound_sheet_volume">Volume</string>
+    <string name="story_sound_sheet_language">Language of the sound</string>
+    <string name="story_sound_sheet_language_more">More</string>
+    <string name="story_sound_sheet_transcription">Transcription</string>
+    <string name="story_sound_sheet_transcription_edit">Edit</string>
+    <string name="story_sound_sheet_transcription_write">Write</string>
+    <string name="story_sound_sheet_transcription_retry">Retry</string>
+    <string name="story_sound_sheet_transcription_running">Transcribing on your device…</string>
+    <string name="story_sound_sheet_transcription_server">Your device can\'t transcribe this language: Meeshy will once the story is published.</string>
+    <string name="story_sound_sheet_transcription_failed">The transcription failed.</string>
+    <string name="story_sound_sheet_transcription_silent">Nothing was heard.</string>
+    <string name="story_sound_sheet_trim">Trim</string>
+    <string name="story_sound_sheet_ducking">Lower videos under the background sound</string>
+    <string name="story_sound_sheet_source_record">Record</string>
+    <string name="story_sound_sheet_source_files">Files</string>
+    <string name="story_sound_sheet_source_library">Library</string>
+    <string name="story_sound_sheet_recording">Recording %1$s</string>
+    <string name="story_sound_sheet_stop">Stop</string>
+    <string name="story_sound_sheet_redo">Redo</string>
+    <string name="story_sound_sheet_add">Add</string>
+    <string name="story_sound_sheet_uploading">Adding…</string>
+    <string name="story_sound_sheet_mic_denied">Allow the microphone to record a sound.</string>
+    <string name="story_sound_sheet_import_failed">This file couldn\'t be read as a sound.</string>
+    <string name="story_sound_sheet_upload_failed">The sound couldn\'t be sent. Check your connection and try again.</string>
+    <string name="story_sound_sheet_back">Back</string>
+    <string name="story_sound_sheet_new_take">New sound</string>
+</resources>

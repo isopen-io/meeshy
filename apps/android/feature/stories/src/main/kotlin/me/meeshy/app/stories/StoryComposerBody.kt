@@ -258,16 +258,14 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val openShelf = rememberGuardedAddition(state.canBorrowSound, state.soundCapRefusal, doors.onOpenSoundShelf)
     val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
-    val hasSound = state.selectedSlideAudio.isNotEmpty()
     return { tool ->
         onMorePanel(null)
         when (tool) {
             ComposerSceneTool.TEXT -> addText()
             ComposerSceneTool.MEDIA -> if (hasMedia) viewModel.onBandToolTap(StoryToolMode.MEDIA) else pickMedia()
             ComposerSceneTool.STICKER -> openStickers()
-            ComposerSceneTool.SOUND -> if (hasSound) viewModel.onBandToolTap(StoryToolMode.AUDIO) else openShelf()
+            ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
             ComposerSceneTool.MORE -> Unit
         }

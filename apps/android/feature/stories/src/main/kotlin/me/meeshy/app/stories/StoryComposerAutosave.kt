@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.sound.SoundTranscriptions
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
@@ -195,6 +196,8 @@ fun StorySlideDeck.toDraftSnapshot(
             placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
             backgroundAdjustments = it.backgroundAdjustments,
             places = it.places,
+            soundTranscriptions = it.soundTranscriptions,
+            videosDuckUnderSound = it.videosDuckUnderSound,
         )
     },
     selectedId = selectedId,
@@ -239,6 +242,8 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 backgroundAdjustments = it.backgroundAdjustments?.takeIf { adjustments -> !adjustments.isNeutral && it.backgroundMediaId != null },
                 places = it.places,
+                soundTranscriptions = SoundTranscriptions.pruned(it.soundTranscriptions, it.audio),
+                videosDuckUnderSound = it.videosDuckUnderSound,
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

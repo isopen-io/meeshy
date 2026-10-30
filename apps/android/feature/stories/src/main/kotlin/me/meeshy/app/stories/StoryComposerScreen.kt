@@ -151,13 +151,7 @@ private fun StoryComposerSheetContent(
             StoryStickerSheetPanel(viewModel = viewModel, onDismiss = onDone)
         }
         StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
-            SoundShelfSheet(
-                onUse = { sound ->
-                    viewModel.onBorrowSound(sound)
-                    onDone()
-                },
-                onDismiss = onDone,
-            )
+            StorySoundSheet(state = state, composer = viewModel, onDone = onDone)
         }
         StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = false) {
             StoryAudiencePanel(

@@ -195,6 +195,10 @@ data class StoryDraftSlideSnapshot(
     val backgroundAdjustments: ImageAdjustments? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */
+    val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos s'atténuent sous le son de fond ; un blob d'avant se lit « oui ». */
+    val videosDuckUnderSound: Boolean = true,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a

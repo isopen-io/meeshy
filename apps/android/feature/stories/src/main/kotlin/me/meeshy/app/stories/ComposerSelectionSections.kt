@@ -160,7 +160,7 @@ internal fun SoundSectionContent(state: StoryComposerUiState, sound: StoryAudioP
  * qu'on garde, l'écarté assombri. Chaque image du geste écrit les bornes (un seul cran d'historique par geste).
  */
 @Composable
-private fun SoundTrimSection(state: StoryComposerUiState, sound: StoryAudioPlayerObject, viewModel: StoryComposerViewModel) {
+internal fun SoundTrimSection(state: StoryComposerUiState, sound: StoryAudioPlayerObject, viewModel: StoryComposerViewModel) {
     val source = state.trimSourceOf(sound) ?: return
     MediaTrimStrip(
         content = MediaTrimContent.AUDIO,

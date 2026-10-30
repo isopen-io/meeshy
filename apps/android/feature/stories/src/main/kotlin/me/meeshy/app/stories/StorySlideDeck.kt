@@ -58,6 +58,10 @@ data class StorySlide(
     val backgroundAdjustments: ImageAdjustments? = null,
     /** Les pastilles de lieu posées sur la scène (#13846), dans l'ordre de leur pose ; elles partent en `locationObjects[]`. */
     val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (identifiant -> charge du fil) : elle suit la piste, rognée ou déplacée (#13848). */
+    val soundTranscriptions: Map<String, me.meeshy.sdk.model.MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos s'atténuent sous le son de fond (iOS `isDuckingDisabled`, réglé ici pour la diapo entière). */
+    val videosDuckUnderSound: Boolean = true,
 )
 
 /**
