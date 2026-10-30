@@ -13,6 +13,10 @@ class ComposerSceneToolsTest {
         animated: Boolean = false,
         sceneEffects: List<ComposerSceneEffect> = emptyList(),
         exports: List<ComposerOverflowEntry> = emptyList(),
+        hasContent: Boolean = false,
+        hasBackground: Boolean = false,
+        canPickBackground: Boolean = false,
+        hasSomethingToErase: Boolean = false,
     ) = ComposerSceneTools.moreEntries(
         ComposerSceneTools.MoreInput(
             editsSlides = editsSlides,
@@ -20,6 +24,10 @@ class ComposerSceneToolsTest {
             animated = animated,
             sceneEffects = sceneEffects,
             exports = exports,
+            hasContent = hasContent,
+            hasBackground = hasBackground,
+            canPickBackground = canPickBackground,
+            hasSomethingToErase = hasSomethingToErase,
         ),
     )
 
@@ -53,13 +61,53 @@ class ComposerSceneToolsTest {
             animated = true,
             sceneEffects = listOf(ComposerSceneEffect.OPENING, ComposerSceneEffect.VISUAL),
             exports = listOf(ComposerOverflowEntry.SAVE_TO_PHOTOS, ComposerOverflowEntry.SHARE),
+            hasContent = true,
+            hasBackground = true,
+            canPickBackground = true,
+            hasSomethingToErase = true,
         )
         assertThat(all).containsExactly(
-            ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
+            ComposerMoreEntry.PREVIEW, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND,
+            ComposerMoreEntry.PICK_BACKGROUND, ComposerMoreEntry.REMOVE_BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
             ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING, ComposerMoreEntry.FRAME,
             ComposerMoreEntry.OPENING_EFFECT, ComposerMoreEntry.VISUAL_EFFECT, ComposerMoreEntry.CAPTION,
-            ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE,
+            ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE, ComposerMoreEntry.CLEAR_ALL,
         ).inOrder()
+    }
+
+    @Test
+    fun `the preview opens the menu, and only over a scene that has something to show`() {
+        assertThat(more(hasContent = false)).doesNotContain(ComposerMoreEntry.PREVIEW)
+        assertThat(more(hasContent = true).first()).isEqualTo(ComposerMoreEntry.PREVIEW)
+    }
+
+    @Test
+    fun `choosing a background media is only offered where the media door no longer reaches the background`() {
+        assertThat(more(canPickBackground = false)).doesNotContain(ComposerMoreEntry.PICK_BACKGROUND)
+        assertThat(more(canPickBackground = true)).contains(ComposerMoreEntry.PICK_BACKGROUND)
+    }
+
+    @Test
+    fun `removing the background is only offered over a background colour or media`() {
+        assertThat(more(hasBackground = false)).doesNotContain(ComposerMoreEntry.REMOVE_BACKGROUND)
+        assertThat(more(hasBackground = true)).contains(ComposerMoreEntry.REMOVE_BACKGROUND)
+    }
+
+    @Test
+    fun `clear all is never offered on a blank composer and always closes the menu, the only destructive entry`() {
+        assertThat(more(hasSomethingToErase = false)).doesNotContain(ComposerMoreEntry.CLEAR_ALL)
+        val served = more(hasSomethingToErase = true, exports = listOf(ComposerOverflowEntry.SHARE))
+        assertThat(served.last()).isEqualTo(ComposerMoreEntry.CLEAR_ALL)
+        assertThat(ComposerMoreEntry.entries.filter { it.isDestructive }).containsExactly(ComposerMoreEntry.CLEAR_ALL)
+    }
+
+    @Test
+    fun `a long press on the media tool offers the photo library or the files, and no other tool has one`() {
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA))
+            .containsExactly(ComposerMediaSource.PHOTO_LIBRARY, ComposerMediaSource.FILES).inOrder()
+        ComposerSceneTools.column.filterNot { it == ComposerSceneTool.MEDIA }.forEach { tool ->
+            assertThat(ComposerSceneTools.longPressSources(tool)).isEmpty()
+        }
     }
 
     @Test

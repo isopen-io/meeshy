@@ -486,20 +486,23 @@ class StoryComposerViewModel @Inject constructor(
     fun onDuplicateSelectedSlide() = applyDeck { if (_state.value.editing) it else it.duplicate(it.selectedId, newSlideId()) }
 
     /** Removes the slide [id] (inert on the last one); its media leave the pools, its pending uploads wait in [buried] (a duplicate's shared media stay). */
-    fun onRemoveSlide(id: String) {
-        val before = _state.value.deck
-        val removed = before.slides.firstOrNull { it.id == id } ?: return
-        val after = before.removeSlide(id)
-        if (after === before) return
-        val droppedMedia = removed.mediaIds.toSet() - after.slides.flatMap(StorySlide::mediaIds).toSet()
-        buried.bury(_state.value.pendingUploads.filter { it.cmid in droppedMedia })
-        _state.update {
-            it.copy(
-                deck = after,
-                attachments = it.attachments.filterNot { media -> media.id in droppedMedia },
-                pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid in droppedMedia },
-            ).mirrorDraftToSelection()
-        }
+    fun onRemoveSlide(id: String) = reduceBurying { StoryComposerEraseReducer.slideRemoved(it, id) }
+
+    /** « ⋯ › Tout effacer » (#13845), confirmé par l'écran : une diapo vierge sur le fond neutre, un cran que ↶ défait. */
+    fun onClearAll() = reduceBurying(StoryComposerEraseReducer::cleared)
+
+    /** « ⋯ › Retirer le fond de la scène » (#13845) : la couleur et le média de fond partent, en un seul cran. */
+    fun onRemoveSceneBackground() {
+        val media = _state.value.deck.selectedSlideBackgroundMediaId
+        _state.update { StoryComposerBackgroundReducer.backgroundChanged(it, null) }
+        media?.let(::onRemoveMedia) ?: record()
+    }
+
+    /** Les envois hors ligne que [next] retire attendent dans [buried] tant qu'une étape de l'historique les montre. */
+    private fun reduceBurying(next: (StoryComposerUiState) -> StoryComposerUiState) {
+        val before = _state.value.pendingUploads
+        _state.update(next)
+        buried.bury(before.filterNot { it in _state.value.pendingUploads })
         record()
     }
 
@@ -619,20 +622,11 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Uploads freshly-picked media and attaches the returned ids to the draft.
-     * Empty picks are inert; a second pick while an upload is in flight is ignored
-     * (re-entrancy guard). On success the new media is **appended** so multiple
-     * picks accumulate; an empty result (every row unusable) surfaces a message.
-     *
-     * When the synchronous upload **fails** (offline, throttled, 5xx — or refused, #13417),
-     * every accepted item is instead queued **durably** ([queueDurably]) and staged
-     * as a [PendingMediaUpload] placeholder, so the user can still publish — the
-     * outbox uploads each and grafts the real ids when the network returns. Several
-     * pending uploads accumulate across picks (and a multi-item offline batch stages
-     * each item), surpassing iOS, which drops the pick on an offline upload. A
-     * refused media is kept the same way: the publication carrying it fails retryable.
+     * Uploads freshly-picked media onto the selected slide (appended; [asBackground]: the first becomes its background, #13845).
+     * A failed or refused upload is queued **durably** ([queueDurably]) behind a [PendingMediaUpload] placeholder the outbox
+     * grafts once online; a second pick while an upload is in flight is ignored, and nothing usable comes back as a said error.
      */
-    fun onMediaPicked(items: List<MediaUploadItem>) {
+    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
         val remaining = _state.value.deck.selectedRemainingMediaSlots
         if (remaining <= 0) {
@@ -647,8 +641,8 @@ class StoryComposerViewModel @Inject constructor(
                     _state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
                 }
                 when (val result = mediaUploader.upload(accepted, onProgress)) {
-                    is NetworkResult.Success -> { applyUploaded(result.data); accepted.forEach(MediaIntake::release) }
-                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) { accepted.forEach(MediaIntake::release); _state.update(StoryComposerUploadReducer::locationRefused) } else queueDurably(accepted)
+                    is NetworkResult.Success -> { applyUploaded(result.data, asBackground); accepted.forEach(MediaIntake::release) }
+                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) { accepted.forEach(MediaIntake::release); _state.update(StoryComposerUploadReducer::locationRefused) } else queueDurably(accepted, asBackground)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -659,16 +653,16 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
-    private fun applyUploaded(uploaded: List<UploadedMedia>) {
-        _state.update { StoryComposerUploadReducer.uploaded(it, uploaded) }
+    private fun applyUploaded(uploaded: List<UploadedMedia>, asBackground: Boolean) {
+        _state.update { StoryComposerUploadReducer.uploaded(it, uploaded, asBackground) }
         if (uploaded.isNotEmpty()) record()
     }
 
     /** Any failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
-    private suspend fun queueDurably(items: List<MediaUploadItem>) {
-        items.forEach { item ->
+    private suspend fun queueDurably(items: List<MediaUploadItem>, asBackground: Boolean) {
+        items.forEachIndexed { index, item ->
             val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update { StoryComposerUploadReducer.queued(it, cmid, item) }
+            _state.update { StoryComposerUploadReducer.queued(it, cmid, item, asBackground && index == 0) }
             record()
         }
         _state.update { StoryComposerUploadReducer.settled(it) }

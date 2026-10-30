@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,9 +21,10 @@ import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.ui.icons.MeeshyIcons
 
 /**
- * Le « ⋯ » posé sur la scène (#13834) : ce que la colonne d'outils ne porte pas — une diapo de plus, le fond, la durée,
- * l'animation et son temps, le cadre et les effets d'un fond média, la légende — puis l'export (miroir de
- * `ComposerOverflowCopy` iOS, #4996). Les entrées sont celles de [me.meeshy.sdk.model.composer.ComposerSceneTools.moreEntries] ;
+ * Le « ⋯ » posé sur la scène (#13834) : l'aperçu, puis ce que la colonne d'outils ne porte pas — une diapo de plus, le
+ * fond (couleurs, un média choisi comme fond, le retirer), la durée, l'animation et son temps, le cadre et les effets d'un
+ * fond média, la légende — puis l'export, et « Tout effacer » en dernier, en couleur d'alerte (miroir de
+ * `ComposerOverflowCopy` iOS, #4996, #13845). Les entrées sont celles de [me.meeshy.sdk.model.composer.ComposerSceneTools.moreEntries] ;
  * l'animation dit si elle est allumée, et l'export se tait pendant un export ou une publication. [anchor] est ce qu'on
  * touche pour l'ouvrir : le bouton rond de la scène, ou « Plus » au pied du rail du grand écran (#13837).
  */
@@ -42,9 +44,10 @@ internal fun ComposerMoreMenu(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             entries.forEach { entry ->
                 val checked = entry == ComposerMoreEntry.ANIMATION && animated
+                val tint = if (entry.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 DropdownMenuItem(
-                    text = { Text(stringResource(entry.labelRes())) },
-                    leadingIcon = { Icon(entry.glyph(), contentDescription = null) },
+                    text = { Text(stringResource(entry.labelRes()), color = tint) },
+                    leadingIcon = { Icon(entry.glyph(), contentDescription = null, tint = tint) },
                     trailingIcon = if (checked) ({ Icon(MeeshyIcons.Check, contentDescription = null) }) else null,
                     enabled = entry.export == null || exportEnabled,
                     modifier = Modifier.semantics { if (entry == ComposerMoreEntry.ANIMATION) selected = checked },
@@ -59,6 +62,10 @@ internal fun ComposerMoreMenu(
 }
 
 internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
+    ComposerMoreEntry.PREVIEW -> MeeshyIcons.Eye
+    ComposerMoreEntry.PICK_BACKGROUND -> MeeshyIcons.Wallpaper
+    ComposerMoreEntry.REMOVE_BACKGROUND -> MeeshyIcons.RemoveCircleFilled
+    ComposerMoreEntry.CLEAR_ALL -> MeeshyIcons.Delete
     ComposerMoreEntry.ADD_SLIDE -> MeeshyIcons.Add
     ComposerMoreEntry.BACKGROUND -> MeeshyIcons.Palette
     ComposerMoreEntry.SLIDE_DURATION -> MeeshyIcons.Timer
@@ -73,6 +80,10 @@ internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
 }
 
 internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
+    ComposerMoreEntry.PREVIEW -> R.string.composer_more_preview
+    ComposerMoreEntry.PICK_BACKGROUND -> R.string.composer_more_pick_background
+    ComposerMoreEntry.REMOVE_BACKGROUND -> R.string.composer_more_remove_background
+    ComposerMoreEntry.CLEAR_ALL -> R.string.composer_more_clear_all
     ComposerMoreEntry.ADD_SLIDE -> R.string.stories_composer_add_slide
     ComposerMoreEntry.BACKGROUND -> R.string.story_tool_texture
     ComposerMoreEntry.SLIDE_DURATION -> R.string.stories_composer_slide_duration

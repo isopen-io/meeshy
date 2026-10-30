@@ -91,7 +91,7 @@ fun StoryComposerScreen(
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
 
-    val pickMedia = rememberStoryMediaPicker(state.mediaPickMode, viewModel)
+    val pickers = rememberStoryMediaPickers(state.mediaPickMode, viewModel)
 
     var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
     StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
@@ -124,8 +124,10 @@ fun StoryComposerScreen(
             onClose = close.request,
             onOpenAudience = { sheet = StoryComposerSheet.AUDIENCE },
             onOpenStickers = { sheet = StoryComposerSheet.STICKERS },
-            onPickMedia = pickMedia,
+            onPickMedia = pickers.library,
             onOpenSoundShelf = { sheet = StoryComposerSheet.SOUND },
+            onPickFiles = pickers.files,
+            onPickBackground = pickers.background,
         ),
         morePanel = morePanel,
         onMorePanel = { morePanel = it },
@@ -215,21 +217,25 @@ private fun StoryComposerBackgroundSound(state: StoryComposerUiState, viewModel:
     }
 }
 
+/** Les sélecteurs du système : la photothèque, les fichiers (appui long sur Média), et un média choisi comme fond (#13845). */
+private class StoryMediaPickers(val library: () -> Unit, val files: () -> Unit, val background: () -> Unit)
+
 /**
- * Le sélecteur photo/vidéo du système : il lit les fichiers choisis hors du fil principal et les remet au ViewModel. Le
- * contrat (un seul ou plusieurs) suit les places libres, pour qu'une seule place ne déclenche jamais `maxItems > 1`.
+ * Le sélecteur photo/vidéo du système, et l'importateur de fichiers filtré sur les images et les vidéos : ils lisent les
+ * fichiers choisis hors du fil principal et les remettent au ViewModel. Le contrat de la photothèque (un seul ou plusieurs)
+ * suit les places libres, pour qu'une seule place ne déclenche jamais `maxItems > 1` ; le fond n'en prend qu'un.
  */
 @Composable
-private fun rememberStoryMediaPicker(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): () -> Unit {
+private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): StoryMediaPickers {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    fun dispatchPicked(uris: List<Uri>) {
+    fun dispatchPicked(uris: List<Uri>, asBackground: Boolean = false) {
         if (uris.isEmpty()) return
         scope.launch {
             val items = withContext(Dispatchers.IO) {
                 uris.mapNotNull { context.readMediaUploadItem(it) }
             }
-            if (items.isNotEmpty()) viewModel.onMediaPicked(items)
+            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground)
         }
     }
     val pickSingle = rememberLauncherForActivityResult(
@@ -238,12 +244,24 @@ private fun rememberStoryMediaPicker(mode: StoryMediaPickMode, viewModel: StoryC
     val pickMultiple = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(StoryComposerDraft.MAX_MEDIA),
     ) { uris: List<Uri> -> dispatchPicked(uris) }
+    val pickFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris: List<Uri> -> dispatchPicked(uris) }
+    val pickBackground = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri), asBackground = true) }
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-    return {
-        when (mode) {
-            StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-            StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-            StoryMediaPickMode.None -> Unit
-        }
-    }
+    return StoryMediaPickers(
+        library = {
+            when (mode) {
+                StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                StoryMediaPickMode.None -> Unit
+            }
+        },
+        files = { if (mode != StoryMediaPickMode.None) pickFiles.launch(MEDIA_FILE_TYPES) },
+        background = { if (mode != StoryMediaPickMode.None) pickBackground.launch(imageAndVideo) },
+    )
 }
+
+private val MEDIA_FILE_TYPES = arrayOf("image/*", "video/*")

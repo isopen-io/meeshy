@@ -24,20 +24,27 @@ internal object StoryComposerUploadReducer {
         )
     }
 
-    /** The uploaded media join the selected slide; nothing usable comes back as a said error, never silence. */
-    fun uploaded(state: StoryComposerUiState, uploaded: List<UploadedMedia>): StoryComposerUiState {
+    /**
+     * The uploaded media join the selected slide; nothing usable comes back as a said error, never silence. [asBackground]
+     * (« ⋯ › Choisir un fond », #13845) : the first becomes the slide's designated background.
+     */
+    fun uploaded(state: StoryComposerUiState, uploaded: List<UploadedMedia>, asBackground: Boolean = false): StoryComposerUiState {
         if (uploaded.isEmpty()) return settled(state).copy(errorMessage = StoryComposerViewModel.MEDIA_UNUSABLE)
         val deck = uploaded.fold(state.deck) { acc, media -> acc.addMediaToSelected(media.id) }
+            .designatingBackground(uploaded.first().id.takeIf { asBackground })
         return settled(state).copy(deck = deck, attachments = state.attachments + uploaded).mirrorDraftToSelection()
     }
 
-    /** A media kept on the device for the outbox to send: a placeholder id rides in the slide until then. */
-    fun queued(state: StoryComposerUiState, cmid: String, item: MediaUploadItem): StoryComposerUiState =
+    /** A media kept on the device for the outbox to send: a placeholder id rides in the slide until then (and may be its background). */
+    fun queued(state: StoryComposerUiState, cmid: String, item: MediaUploadItem, asBackground: Boolean = false): StoryComposerUiState =
         state.copy(
-            deck = state.deck.addMediaToSelected(cmid),
+            deck = state.deck.addMediaToSelected(cmid).designatingBackground(cmid.takeIf { asBackground }),
             pendingUploads = state.pendingUploads + PendingMediaUpload(cmid = cmid, item = item),
             errorMessage = null,
         ).mirrorDraftToSelection()
+
+    private fun StorySlideDeck.designatingBackground(mediaId: String?): StorySlideDeck =
+        if (mediaId == null || isSelectedBackgroundMedia(mediaId)) this else toggleSelectedBackgroundMedia(mediaId)
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
         state.copy(isUploadingMedia = false, uploadingMedia = emptyList())

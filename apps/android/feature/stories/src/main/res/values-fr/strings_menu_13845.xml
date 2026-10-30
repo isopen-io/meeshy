@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Aperçu</string>
+    <string name="composer_more_pick_background">Choisir un fond</string>
+    <string name="composer_more_remove_background">Retirer le fond de la scène</string>
+    <string name="composer_more_clear_all">Tout effacer</string>
+    <string name="composer_clear_all_title">Tout effacer ?</string>
+    <string name="composer_clear_all_message">Toutes les diapos repartent vides, sur le fond neutre. Défaire rétablit les diapos.</string>
+    <string name="composer_clear_all_cancel">Annuler</string>
+    <string name="composer_media_from_library">Photothèque</string>
+    <string name="composer_media_from_files">Depuis les fichiers</string>
+    <string name="composer_media_sources">Choisir une source</string>
+    <string name="composer_preview_close">Fermer l’aperçu</string>
+    <string name="composer_preview_previous">Diapo précédente</string>
+    <string name="composer_preview_next">Diapo suivante</string>
+</resources>
