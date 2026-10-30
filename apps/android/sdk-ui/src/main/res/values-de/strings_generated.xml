@@ -91,6 +91,7 @@
     <string name="media_trim_loading">Vorschau wird geladen</string>
     <string name="media_trim_of_total">von %1$s</string>
     <string name="media_trim_window">Beibehaltener Ausschnitt</string>
+    <string name="media_video_pip_enter">Bild-in-Bild</string>
     <string name="message_long_collapse">Weniger anzeigen</string>
     <string name="message_long_read_more">Weiterlesen</string>
     <string name="notification_date_ago">vor %1$s</string>

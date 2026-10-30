@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.classics",
+          "androidName": "call_frames_classics",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.montage.title",
+          "androidName": "call_mode_montage_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.screen",
+          "androidName": "call_capture_style_screen",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.cover",
+          "androidName": "call_capture_style_cover",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.gold",
+          "androidName": "call_capture_style_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.redcarpet",
+          "androidName": "call_capture_style_redcarpet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.grid",
+          "androidName": "call_capture_style_grid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.strip",
+          "androidName": "call_capture_style_strip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.polaroid",
+          "androidName": "call_capture_style_polaroid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.magazine",
+          "androidName": "call_capture_style_magazine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.film",
+          "androidName": "call_capture_style_film",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.neon",
+          "androidName": "call_capture_style_neon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.noir",
+          "androidName": "call_capture_style_noir",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.comic",
+          "androidName": "call_capture_style_comic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.heart",
+          "androidName": "call_capture_style_heart",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

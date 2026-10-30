@@ -30,9 +30,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import me.meeshy.app.stories.SceneFloor
 import me.meeshy.app.stories.StoryScenePlayer
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.ReelContentTap
+import me.meeshy.sdk.model.playback.PipAspect
+import me.meeshy.sdk.model.playback.VideoPresentation
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenChromeVisibility
@@ -40,6 +43,7 @@ import me.meeshy.ui.component.fullscreen.FullscreenPlayPauseButton
 import me.meeshy.ui.component.fullscreen.rememberFullscreenPlayPauseFade
 import me.meeshy.ui.component.video.ReelPlayerHandle
 import me.meeshy.ui.component.video.ReelVideoSurface
+import me.meeshy.ui.component.video.rememberVideoPictureInPicture
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -101,6 +105,15 @@ internal fun ReelPage(
     }
 
     val isPlaying = isElected && !paused && hasPlayable
+    // Le réel vidéo affiché part en Picture-in-Picture en quittant l'app (#13814) ; fermer la fenêtre le met en pause.
+    rememberVideoPictureInPicture(
+        presentation = VideoPresentation.FULLSCREEN,
+        isProtected = false,
+        player = player,
+        fallback = PipAspect.PORTRAIT,
+        active = isElected && stage.showsVideoSurface,
+        onWindowClosed = { paused = true },
+    )
     val playPauseFade = rememberFullscreenPlayPauseFade(isPlaying)
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
@@ -141,6 +154,7 @@ internal fun ReelPage(
                     // La vidéo de fond de la scène se sonde comme celle d'un réel simple : le bouton muet l'attend.
                     onBackgroundPlayer = { handle -> player = handle },
                     modifier = Modifier.fillMaxSize(),
+                    floor = SceneFloor.BLACK,
                 )
             } else ReelMedia(
                 reel = reel,

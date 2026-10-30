@@ -30,7 +30,9 @@ import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.InMemoryUnsentCommentStore
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -66,6 +68,7 @@ class PostCommentsViewModelTest {
         postId: String? = "p1",
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me"),
         mentionSearch: MentionSearch = FakeMentionSearch(),
+        unsent: UnsentCommentStore? = null,
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
@@ -75,7 +78,7 @@ class PostCommentsViewModelTest {
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
         every { socialSocket.commentTranslationUpdated } returns commentTranslationUpdated
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle, mediaUploader = uploader)
+        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle, mediaUploader = uploader, unsentComments = unsent)
     }
 
     private val uploader: CommentMediaUploader = mockk(relaxed = true)
@@ -1677,5 +1680,19 @@ class PostCommentsViewModelTest {
 
         assertThat(afterDelete).isEqualTo(CommentNotice.DELETED)
         assertThat(vm.state.value.notice).isEqualTo(CommentNotice.DELETE_FAILED)
+    }
+
+    @Test
+    fun `un commentaire de banniere refuse revient dans le champ de son post a l ouverture`() = runTest {
+        val kept = InMemoryUnsentCommentStore().apply {
+            keep("p1", "Bravo pour ce post")
+            keep("p2", "Autre post")
+        }
+
+        val vm = viewModel(unsent = kept)
+
+        assertThat(vm.state.value.draft).isEqualTo("Bravo pour ce post")
+        assertThat(kept.peek("p1")).isNull()
+        assertThat(kept.peek("p2")).isEqualTo("Autre post")
     }
 }

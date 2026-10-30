@@ -32,6 +32,13 @@ internal class CallNegotiator(
     /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
     private var isCaller: Boolean = false
 
+    /**
+     * The group-call mesh's claim on a signal (#13740): `true` when the signal belongs to another member of a
+     * group call and this negotiator — the PRIMARY peer's — must not touch it. `null` (a duo, the default):
+     * every signal of the call is this negotiator's, exactly as before.
+     */
+    var router: ((CallSignalEnvelope) -> Boolean)? = null
+
     /** Signals kept for a call whose connection is not open yet (see [hold]). */
     private var held: HeldSignals? = null
 
@@ -102,6 +109,19 @@ internal class CallNegotiator(
                 )
             }
             .launchIn(scope)
+
+        engine.renegotiationRequests
+            .onEach { renegotiate() }
+            .launchIn(scope)
+    }
+
+    /**
+     * The engine changed a sender's direction (screen share on an audio call, #13332): either side
+     * re-offers with the next generation, like iOS `screenShareNeedsRenegotiation` → `emitCallOffer`.
+     */
+    private suspend fun renegotiate() {
+        negotiationId += 1
+        sendOffer()
     }
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */
@@ -139,6 +159,7 @@ internal class CallNegotiator(
     }
 
     private suspend fun onRemoteSignal(envelope: CallSignalEnvelope) {
+        if (router?.invoke(envelope) == true) return
         try {
             applyRemoteSignal(envelope)
         } catch (_: WebRtcError) {

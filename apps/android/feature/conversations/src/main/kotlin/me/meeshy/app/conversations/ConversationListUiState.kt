@@ -8,10 +8,8 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
-import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
@@ -70,14 +68,6 @@ data class ConversationListUiState(
      * flight); present-but-empty = loaded, genuinely no cached messages.
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
-    /**
-     * Mirror of the session's single presence map (`PresenceStore.entries`: `user:status`,
-     * `presence:snapshot` and typing activity), keyed by userId. A userId absent here has no
-     * live presence data yet (a genuinely cold cache, not an error): `ApiConversation
-     * .participants` carries no `isOnline`/`lastActiveAt` fields at all, so there is
-     * no REST-fetched fallback to fall back to, unlike the Contacts roster.
-     */
-    val presenceByUserId: Map<String, UserPresence> = emptyMap(),
     /**
      * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
@@ -184,17 +174,6 @@ data class ConversationListUiState(
      */
     fun previewFor(conversationId: String): List<LocalMessage>? =
         if (isLocked(conversationId)) null else previewMessages[conversationId]
-
-    /**
-     * The live presence state for [conversation]'s other participant, or `null` for a
-     * group/community/channel/bot conversation, or when nothing has arrived for them yet.
-     * A peer typing is dated active by the presence store (`typing:start` = proof of activity),
-     * so the dot reads green for 60 s then decays like any other — no hard-coded override.
-     */
-    fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
-        val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
-        return presenceByUserId[otherId]?.state(nowEpochMillis)
-    }
 
     /**
      * The peer's story-ring state on [conversation]'s row avatar (parity iOS

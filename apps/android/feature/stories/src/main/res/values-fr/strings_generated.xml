@@ -21,6 +21,7 @@
     <string name="composer_audience_sub_public">Tout le monde, y compris hors abonnés</string>
     <string name="composer_audience_title">Audience</string>
     <string name="composer_audio_delete_action">Supprimer le son</string>
+    <string name="composer_audio_promote_action">Mettre sur la scène</string>
     <string name="composer_capture_sound_mute">Couper le son</string>
     <string name="composer_capture_sound_unmute">Réactiver le son</string>
     <string name="composer_capture_tool_sound">Son</string>
@@ -55,8 +56,13 @@
     <string name="composer_frise_sound">Son</string>
     <string name="composer_object_editor_adjust_blur">Flou</string>
     <string name="composer_object_editor_adjust_brightness">Luminosité</string>
+    <string name="composer_object_editor_adjust_compare">Comparer</string>
+    <string name="composer_object_editor_adjust_compare_hint">Affiche l’image d’origine tant que vous maintenez</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">Affiche la vidéo d’origine tant que vous maintenez</string>
     <string name="composer_object_editor_adjust_contrast">Contraste</string>
     <string name="composer_object_editor_adjust_exposure">Exposition</string>
+    <string name="composer_object_editor_adjust_original">Image d’origine</string>
+    <string name="composer_object_editor_adjust_original_video">Vidéo d’origine</string>
     <string name="composer_object_editor_adjust_reset">Réinitialiser</string>
     <string name="composer_object_editor_adjust_saturation">Saturation</string>
     <string name="composer_object_editor_adjust_sharpness">Netteté</string>
@@ -97,6 +103,7 @@
     <string name="my_stories_delete_selected_title">Supprimer les stories sélectionnées ?</string>
     <string name="my_stories_delete_success">Story supprimée</string>
     <string name="my_stories_delete_title">Supprimer la story ?</string>
+    <string name="my_stories_edit">Modifier</string>
     <string name="my_stories_empty_subtitle">Vos stories publiées apparaîtront ici tant qu\'elles sont actives.</string>
     <string name="my_stories_empty_title">Aucune story envoyée</string>
     <string name="my_stories_glyph_comments">Voir les commentaires</string>
@@ -263,6 +270,9 @@
     <string name="story_composer_redo">Rétablir</string>
     <string name="story_composer_soundLibrary">Bibliothèque</string>
     <string name="story_composer_undo">Annuler</string>
+    <string name="story_edit_error">Échec de la mise à jour de la story</string>
+    <string name="story_edit_offline">Connexion requise pour modifier la story</string>
+    <string name="story_edit_save">Enregistrer</string>
     <string name="story_language_close">Fermer</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Chaque texte dans sa langue</string>

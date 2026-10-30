@@ -1003,9 +1003,6 @@ missing-key :feature:calls ar call_quality_fair
 missing-key :feature:calls ar call_quality_good
 missing-key :feature:calls ar call_quality_poor
 missing-key :feature:calls ar call_reaction_from
-missing-key :feature:calls ar call_screen_share_channel
-missing-key :feature:calls ar call_screen_share_notification_text
-missing-key :feature:calls ar call_screen_share_notification_title
 missing-key :feature:calls ar call_service_channel_name
 missing-key :feature:calls ar call_service_on_hold
 missing-key :feature:calls ar call_service_reconnecting
@@ -1167,9 +1164,6 @@ missing-key :feature:calls de call_quality_fair
 missing-key :feature:calls de call_quality_good
 missing-key :feature:calls de call_quality_poor
 missing-key :feature:calls de call_reaction_from
-missing-key :feature:calls de call_screen_share_channel
-missing-key :feature:calls de call_screen_share_notification_text
-missing-key :feature:calls de call_screen_share_notification_title
 missing-key :feature:calls de call_service_channel_name
 missing-key :feature:calls de call_service_on_hold
 missing-key :feature:calls de call_service_reconnecting
@@ -1331,9 +1325,6 @@ missing-key :feature:calls it call_quality_fair
 missing-key :feature:calls it call_quality_good
 missing-key :feature:calls it call_quality_poor
 missing-key :feature:calls it call_reaction_from
-missing-key :feature:calls it call_screen_share_channel
-missing-key :feature:calls it call_screen_share_notification_text
-missing-key :feature:calls it call_screen_share_notification_title
 missing-key :feature:calls it call_service_channel_name
 missing-key :feature:calls it call_service_on_hold
 missing-key :feature:calls it call_service_reconnecting

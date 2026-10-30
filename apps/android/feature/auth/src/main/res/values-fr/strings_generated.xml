@@ -245,6 +245,8 @@
         <item quantity="many">+%1$d étincelles · première story</item>
         <item quantity="other">+%1$d étincelles · première story</item>
     </plurals>
+    <string name="onboarding_story_sending">Ta story part…</string>
+    <string name="onboarding_story_sending_detail">Tu peux continuer : elle se publie pendant ce temps.</string>
     <string name="onboarding_story_title">Montre-toi</string>
     <string name="onboarding_story_verify">Vérifie ton courriel pour publier ta story</string>
     <string name="onboarding_story_verify_detail">Touche le lien reçu par e-mail : ta story pourra partir tout de suite après.</string>
@@ -270,6 +272,7 @@
     <string name="signup_legal">En continuant, vous acceptez les conditions d\'utilisation et la politique de confidentialité.</string>
     <string name="signup_legal_privacy">Politique de confidentialité</string>
     <string name="signup_legal_terms">Conditions d\'utilisation</string>
+    <string name="signup_min_characters">%1$d caractères au moins.</string>
     <string name="signup_password_hide">Masquer le mot de passe</string>
     <string name="signup_password_label">Mot de passe</string>
     <string name="signup_password_show">Afficher le mot de passe</string>

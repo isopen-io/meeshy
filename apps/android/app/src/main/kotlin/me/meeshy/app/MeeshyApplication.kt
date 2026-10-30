@@ -13,6 +13,7 @@ import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.app.startup.AppInitializerRunner
+import me.meeshy.sdk.call.frames.CallFrameSceneImages
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.PresenceStore
@@ -69,6 +70,8 @@ class MeeshyApplication : Application(), Configuration.Provider {
         // La carte de présence s'abonne AVANT toute connexion : les flux socket sont chauds sans rejeu.
         presenceStore.start()
         installAppStatePresence()
+        // Les illustrations des cadres d'appel se lisent dans les actifs de l'app (le `Bundle.main` d'iOS).
+        CallFrameSceneImages.install(this)
         appInitializerRunner.runAll()
     }
 

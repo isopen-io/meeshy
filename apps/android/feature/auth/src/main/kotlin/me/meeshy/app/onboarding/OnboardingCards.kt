@@ -358,21 +358,22 @@ private fun GreetingEditor(draft: String, onEdit: (String) -> Unit) {
 
 @Composable
 private fun StoryCard(state: OnboardingUiState, actions: OnboardingCardActions, reduceMotion: Boolean) {
-    val awaitsVerification = state.storyNeedsEmailVerification && state.storyState == OnboardingStoryState.IDLE
     val published = state.storyState == OnboardingStoryState.PUBLISHED
+    val sending = state.storyAwaitsPublication && !published
+    val awaitsVerification = state.storyNeedsEmailVerification && state.storyState == OnboardingStoryState.IDLE && !sending
     OnboardingCardLayout(
         title = stringResource(R.string.onboarding_story_title),
         message = stringResource(R.string.onboarding_story_body),
         primary = when {
             awaitsVerification -> resendLink(state, actions)
-            published -> continueAction(actions.advance)
+            published || sending -> continueAction(actions.advance)
             else -> OnboardingAction(
                 title = stringResource(R.string.onboarding_story_create),
                 tag = "onboarding.story.create",
                 perform = actions.openStory,
             )
         },
-        secondary = if (published) null else laterAction(actions),
+        secondary = if (published || sending) null else laterAction(actions),
         illustration = { OnboardingStoryRingIllustration(name = state.userDisplayName, reduceMotion = reduceMotion) },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
@@ -387,6 +388,10 @@ private fun StoryCard(state: OnboardingUiState, actions: OnboardingCardActions, 
                 published -> OutcomeBanner(
                     text = stringResource(R.string.onboarding_story_published),
                     reward = state.storyReward?.let { pluralStringResource(R.plurals.onboarding_story_reward, it, it) },
+                )
+                sending -> StatusBanner(
+                    text = stringResource(R.string.onboarding_story_sending),
+                    detail = stringResource(R.string.onboarding_story_sending_detail),
                 )
                 else -> {
                     val friendsOnly = state.storyVisibility == me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.FRIENDS

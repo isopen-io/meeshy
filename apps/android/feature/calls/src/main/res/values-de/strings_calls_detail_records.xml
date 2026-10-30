@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_network_title">Qualität und Netzwerk</string>
+    <string name="call_network_timeline">Verlauf</string>
+    <string name="call_network_packet_loss">Paketverlust</string>
+    <string name="call_network_latency">Latenz</string>
+    <string name="call_network_jitter">Jitter</string>
+    <string name="call_network_reconnections">Neuverbindungen</string>
+    <string name="call_network_route">Netzwerkpfad</string>
+    <string name="call_network_route_relayed">Relais</string>
+    <string name="call_network_route_direct">Direkt</string>
+    <string name="call_network_profiles">Datenprofil</string>
+    <string name="call_network_faults">Medienstörungen</string>
+    <string name="call_network_peak">%1$s (Spitze %2$s)</string>
+    <string name="call_network_ms">%1$s ms</string>
+    <string name="call_network_event_link_connecting">Verbindung wird aufgebaut</string>
+    <string name="call_network_event_link_connected">Verbindung hergestellt</string>
+    <string name="call_network_event_link_disconnected">Verbindung unterbrochen</string>
+    <string name="call_network_event_link_failed">Verbindung verloren</string>
+    <string name="call_network_event_reconnecting">Neuverbindung, Versuch %1$d</string>
+    <string name="call_network_event_reconnected">Wieder verbunden</string>
+    <string name="call_network_event_route">Pfad: %1$s</string>
+    <string name="call_network_event_tier">Qualität: %1$s</string>
+    <string name="call_network_event_profile">Profil: %1$s</string>
+    <string name="call_network_event_fault">Medienstörung</string>
+    <string name="call_network_event_ended">Anruf beendet</string>
+    <string name="call_network_tier_excellent">Ausgezeichnet</string>
+    <string name="call_network_tier_good">Gut</string>
+    <string name="call_network_tier_fair">Mittel</string>
+    <string name="call_network_tier_poor">Schwach</string>
+    <string name="call_transcript_disclaimer">Verschlüsselte Kopie auf diesem Gerät. Das Protokoll des Anrufs wird auch auf dem Meeshy-Server gespeichert und ist nur für seine Teilnehmer lesbar. Es enthält die Worte deines Gesprächspartners, wie sie während des Anrufs empfangen wurden.</string>
+    <string name="call_transcript_delete">Dieses Transkript löschen</string>
+    <string name="call_transcript_delete_confirm_title">Dieses Transkript löschen?</string>
+    <string name="call_transcript_delete_confirm_message">Es wird endgültig von diesem Gerät entfernt. Das auf dem Server gespeicherte Protokoll wird nicht gelöscht.</string>
+</resources>

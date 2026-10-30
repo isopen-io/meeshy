@@ -61,4 +61,39 @@ class PushNotificationActionsTest {
         assertThat(PushNotificationActions.timestampMillis(PushPayload(createdAt = "pas une date"), nowMillis = 5L)).isEqualTo(5L)
         assertThat(PushNotificationActions.timestampMillis(PushPayload(), nowMillis = 7L)).isEqualTo(7L)
     }
+
+    private val postId = "6501a1b2c3d4e5f607182931"
+
+    @Test
+    fun `une conversation verrouillee par code n offre aucune action rapide`() {
+        assertThat(PushNotificationActions.offer(message(), conversationLocked = true)).isEqualTo(PushActionOffer.NONE)
+        assertThat(PushNotificationActions.offer(message(), conversationLocked = false).any).isTrue()
+    }
+
+    @Test
+    fun `les six types commentables offrent commenter quand la charge porte un post`() {
+        listOf("post_comment", "comment_reply", "story_new_comment", "story_thread_reply", "friend_story_comment", "friend_new_post").forEach { type ->
+            assertThat(PushNotificationActions.offer(PushPayload(type = type, postId = postId)))
+                .isEqualTo(PushActionOffer(reply = false, markRead = false, comment = true))
+        }
+    }
+
+    @Test
+    fun `une reaction un j aime ou une humeur n offrent pas commenter, ni un commentaire sans post`() {
+        listOf("post_like", "story_reaction", "status_reaction", "new_story").forEach {
+            assertThat(PushNotificationActions.offer(PushPayload(type = it, postId = postId))).isEqualTo(PushActionOffer.NONE)
+        }
+        assertThat(PushNotificationActions.offer(PushPayload(type = "post_comment"))).isEqualTo(PushActionOffer.NONE)
+        assertThat(PushNotificationActions.offer(PushPayload(type = "post_comment", postId = "../x"))).isEqualTo(PushActionOffer.NONE)
+    }
+
+    @Test
+    fun `un commentaire de fil repond a celui de la notification, une publication d ami commente a la racine`() {
+        listOf("post_comment", "comment_reply", "story_new_comment", "story_thread_reply", "friend_story_comment").forEach {
+            assertThat(PushNotificationActions.threadedParentCommentId(it, "c1")).isEqualTo("c1")
+        }
+        assertThat(PushNotificationActions.threadedParentCommentId("friend_new_post", "c1")).isNull()
+        assertThat(PushNotificationActions.threadedParentCommentId("post_comment", null)).isNull()
+        assertThat(PushNotificationActions.threadedParentCommentId("post_comment", " ")).isNull()
+    }
 }

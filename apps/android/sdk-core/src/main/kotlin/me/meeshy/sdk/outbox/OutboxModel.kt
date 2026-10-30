@@ -31,6 +31,7 @@ public enum class OutboxKind {
     REPORT_ATTACHMENT_STATUS,
     UPDATE_AUDIO_SETTINGS,
     CREATE_POST,
+    CREATE_COMMENT,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -74,6 +75,13 @@ public object OutboxLanes {
     public const val PIN: String = "pin"
     public const val MEDIA_STATUS: String = "mediaStatus"
     public const val POST: String = "post"
+    public const val COMMENT: String = "comment"
+
+    /**
+     * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
+     * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
+     */
+    public fun isIndependent(lane: String): Boolean = lane == MEDIA
 }
 
 /**
@@ -143,6 +151,7 @@ public object OutboxLaneMap {
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
         OutboxKind.CREATE_POST -> OutboxLaneAssignment.Shared(OutboxLanes.POST)
+        OutboxKind.CREATE_COMMENT -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
     }
 
     /**
@@ -214,9 +223,12 @@ public object OutboxDependencies {
     }
 }
 
-/** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
+/**
+ * Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. [conversationId] (#13790) lets the plaintext guard judge the
+ * row even once its message left Room; a row queued by an older build carries none and is judged by its cached message.
+ */
 @kotlinx.serialization.Serializable
-public data class ReactionPayload(val emoji: String)
+public data class ReactionPayload(val emoji: String, val conversationId: String? = null)
 
 /**
  * Payload of an `UPLOAD_MEDIA` outbox row. [uploadContext] is the TUS
@@ -238,6 +250,18 @@ public data class ReactionPayload(val emoji: String)
  */
 @kotlinx.serialization.Serializable
 public data class MediaUploadPayload(val uploadContext: String? = null, val conversationId: String? = null)
+
+/**
+ * Payload of a `CREATE_COMMENT` outbox row. The row's `targetId` is the post commented (a server id: the route
+ * `POST /posts/:id/comments`), its `cmid` the idempotency key sent as `X-Client-Mutation-Id`. [parentId] is the comment
+ * answered (`null` = root comment); [originalLanguage] is `null` when the author declared none (the gateway detects it).
+ */
+@kotlinx.serialization.Serializable
+public data class CommentPayload(
+    val content: String,
+    val parentId: String? = null,
+    val originalLanguage: String? = null,
+)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`

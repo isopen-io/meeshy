@@ -4,6 +4,12 @@ import androidx.compose.runtime.remember
 import me.meeshy.sdk.media.previewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +49,7 @@ import me.meeshy.sdk.model.UploadedMedia
 internal fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
     pending: List<PendingMediaUpload>,
+    mediaBaseUrl: String?,
     backgroundMediaId: String?,
     backgroundIsVideo: Boolean,
     backgroundLoop: Boolean,
@@ -61,7 +68,7 @@ internal fun MediaPreviewRow(
         items(attachments, key = { it.id }) { media ->
             val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
-                model = media.thumbnailUrl ?: media.url,
+                model = ComposerMediaAddress.preview(media, mediaBaseUrl),
                 isPending = false,
                 isBackground = isBackground,
                 selected = media.id == selectedMediaId,
@@ -86,6 +93,11 @@ internal fun MediaPreviewRow(
     }
 }
 
+/** La vignette d'un média : assez grande pour que ses quatre coins portent chacun une cible de 48 dp sans empiéter sur sa voisine. */
+private val TILE_SIZE = 96.dp
+private val TILE_ACTION_TARGET = 48.dp
+private val TILE_ACTION_DISC = 24.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MediaThumbnail(
@@ -108,7 +120,7 @@ internal fun MediaThumbnail(
             contentDescription = if (onSelect != null) selectLabel else null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(72.dp)
+                .size(TILE_SIZE)
                 .clip(RoundedCornerShape(8.dp))
                 .then(
                     if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier,
@@ -119,80 +131,37 @@ internal fun MediaThumbnail(
                 ),
         )
         if (onToggleBackground != null) {
-            Surface(
+            TileAction(
+                icon = Icons.Filled.Wallpaper,
+                label = stringResource(
+                    if (isBackground) R.string.stories_composer_background_media_clear else R.string.stories_composer_background_media_set,
+                ),
+                active = isBackground,
                 onClick = onToggleBackground,
-                shape = RoundedCornerShape(50),
-                color = if (isBackground) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Black.copy(alpha = 0.55f)
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(2.dp)
-                    .size(22.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Wallpaper,
-                    contentDescription = stringResource(
-                        if (isBackground) {
-                            R.string.stories_composer_background_media_clear
-                        } else {
-                            R.string.stories_composer_background_media_set
-                        },
-                    ),
-                    tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    modifier = Modifier.padding(3.dp),
-                )
-            }
+                modifier = Modifier.align(Alignment.BottomStart),
+            )
         }
         if (onTogglePlaced != null) {
-            Surface(
+            TileAction(
+                icon = Icons.Filled.Layers,
+                label = stringResource(R.string.composer_audio_promote_action),
+                active = isPlaced,
                 onClick = onTogglePlaced,
-                shape = RoundedCornerShape(50),
-                color = if (isPlaced) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(2.dp)
-                    .size(22.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Layers,
-                    contentDescription = stringResource(
-                        if (isPlaced) R.string.composer_media_unplace_from_scene else R.string.composer_media_place_on_scene,
-                    ),
-                    tint = if (isPlaced) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    modifier = Modifier.padding(3.dp),
-                )
-            }
+                modifier = Modifier.align(Alignment.TopStart),
+                role = Role.Switch,
+                onClickLabel = if (isPlaced) stringResource(R.string.story_canvas_action_leaveScene) else null,
+            )
         }
         if (backgroundLoop != null && onToggleBackgroundLoop != null) {
-            Surface(
+            TileAction(
+                icon = Icons.Filled.Loop,
+                label = stringResource(
+                    if (backgroundLoop) R.string.stories_composer_background_loop_on else R.string.stories_composer_background_loop_off,
+                ),
+                active = backgroundLoop,
                 onClick = onToggleBackgroundLoop,
-                shape = RoundedCornerShape(50),
-                color = if (backgroundLoop) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Black.copy(alpha = 0.55f)
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(2.dp)
-                    .size(22.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Loop,
-                    contentDescription = stringResource(
-                        if (backgroundLoop) {
-                            R.string.stories_composer_background_loop_on
-                        } else {
-                            R.string.stories_composer_background_loop_off
-                        },
-                    ),
-                    tint = if (backgroundLoop) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    modifier = Modifier.padding(3.dp),
-                )
-            }
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
         if (isPending) {
             Surface(
@@ -211,20 +180,50 @@ internal fun MediaThumbnail(
                 )
             }
         }
-        Surface(
+        TileAction(
+            icon = Icons.Filled.Close,
+            label = stringResource(R.string.stories_composer_remove_media),
+            active = false,
             onClick = onRemove,
-            shape = RoundedCornerShape(50),
-            color = Color.Black.copy(alpha = 0.55f),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(2.dp)
-                .size(22.dp),
+            modifier = Modifier.align(Alignment.TopEnd),
+        )
+    }
+}
+
+/**
+ * Une action d'un coin de la vignette : une pastille de 24 dp dans une cible de 48 dp. [role] [Role.Switch] en fait un
+ * interrupteur dont TalkBack annonce l'état ([active]) ; [onClickLabel] dit alors ce que le double toucher fera.
+ */
+@Composable
+private fun TileAction(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    role: Role = Role.Button,
+    onClickLabel: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .size(TILE_ACTION_TARGET)
+            .clickable(onClickLabel = onClickLabel, role = role, onClick = onClick)
+            .semantics {
+                contentDescription = label
+                if (role == Role.Switch) toggleableState = ToggleableState(active)
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = if (active) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.55f),
+            modifier = Modifier.size(TILE_ACTION_DISC),
         ) {
             Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(R.string.stories_composer_remove_media),
-                tint = Color.White,
-                modifier = Modifier.padding(3.dp),
+                icon,
+                contentDescription = null,
+                tint = if (active) MaterialTheme.colorScheme.onPrimary else Color.White,
+                modifier = Modifier.padding(4.dp),
             )
         }
     }

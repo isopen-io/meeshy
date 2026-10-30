@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.ObjectIdGuard
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -17,6 +19,10 @@ internal fun BubbleContent.actionContext(
     canDeleteForEveryone: Boolean = false,
     pinAction: PinAction = PinAction.Unavailable,
     hostedEntries: Set<MessageAction> = emptySet(),
+    hasThread: Boolean = false,
+    conversationIsEndToEnd: Boolean = false,
+    nowMillis: Long = System.currentTimeMillis(),
+    signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
 ): MessageActionContext = MessageActionContext(
     isDeleted = isDeleted,
     isPending = isPending,
@@ -39,6 +45,8 @@ internal fun BubbleContent.actionContext(
     isUnconfirmed = ObjectIdGuard.isLocalId(messageId),
     canWrite = canWrite,
     isEndToEndSealed = isEndToEndSealed,
+    entries = MessageMenuEntries.offers(menuEntryFacts(hasThread, conversationIsEndToEnd, nowMillis)),
+    signalClearance = signalClearance,
 )
 
 /** A gesture a message row offers outside the long-press menu. */

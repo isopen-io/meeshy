@@ -10,14 +10,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.conversation.ReadStatusRepository
 import me.meeshy.sdk.conversation.ReadStatusState
 import me.meeshy.sdk.model.MessageViewsFilter
+import me.meeshy.sdk.model.PaginatedParticipant
 
 /** La fiche « Vu par » : le statut servi (cache d'abord) et l'onglet choisi. */
 data class MessageViewsUiState(
     val status: ReadStatusState = ReadStatusState(),
     val chosen: MessageViewsFilter? = null,
+    /** Les membres de la conversation lus dans le roster EN CACHE, par participant : d'où chaque ligne tient son compte et sa présence. */
+    val membersByParticipant: Map<String, PaginatedParticipant> = emptyMap(),
 ) {
     /** Tant que rien n'est touché, l'onglet d'ouverture est celui que le décompte servi juge pertinent. */
     val filter: MessageViewsFilter
@@ -31,6 +35,7 @@ data class MessageViewsUiState(
 @HiltViewModel
 class MessageViewsViewModel @Inject constructor(
     private val repository: ReadStatusRepository,
+    private val participantCache: ParticipantCacheRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MessageViewsUiState())
@@ -38,6 +43,7 @@ class MessageViewsViewModel @Inject constructor(
 
     private var boundMessageId: String? = null
     private var job: Job? = null
+    private var membersJob: Job? = null
 
     /** Idempotent pour un message déjà écouté ; changer de message repart d'un état neuf. */
     fun bind(messageId: String, conversationId: String) {
@@ -45,10 +51,17 @@ class MessageViewsViewModel @Inject constructor(
         if (sameMessage && job?.isActive == true) return
         boundMessageId = messageId
         job?.cancel()
+        membersJob?.cancel()
         if (!sameMessage) _state.value = MessageViewsUiState()
         job = viewModelScope.launch {
             repository.observe(messageId, conversationId).collect { status ->
                 _state.update { it.copy(status = status) }
+            }
+        }
+        membersJob = viewModelScope.launch {
+            participantCache.observe(conversationId).collect { roster ->
+                if (roster == null) return@collect
+                _state.update { it.copy(membersByParticipant = roster.members.associateBy { member -> member.id }) }
             }
         }
     }
@@ -60,6 +73,8 @@ class MessageViewsViewModel @Inject constructor(
     fun unbind() {
         job?.cancel()
         job = null
+        membersJob?.cancel()
+        membersJob = null
     }
 
     fun select(filter: MessageViewsFilter) = _state.update { it.copy(chosen = filter) }

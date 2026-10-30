@@ -43,6 +43,7 @@ data class WorldGuestEntryUiState(
 ) {
     val trimmedName: String get() = WorldGuestEntryRules.trimmedName(name)
     val canContinue: Boolean get() = WorldGuestEntryRules.canContinue(name)
+    val nameTooShort: Boolean get() = WorldGuestEntryRules.isNameTooShort(name)
     val canEnter: Boolean get() = availability is WorldAvailability.Open && canContinue && !isEntering && destination == null
     val worldTitle: String get() = (availability as? WorldAvailability.Open)?.entry?.title.orEmpty()
 }

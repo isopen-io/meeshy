@@ -72,6 +72,53 @@ final class ProfileViewSaveProfileTests: XCTestCase {
         XCTAssertEqual(ProfileView.changedOrNil("es", original: "en"), "es")
     }
 
+    // MARK: - Bornes d'identité (#13825)
+
+    func test_identityValueToSend_isTrimmed() {
+        XCTAssertEqual(ProfileView.identityValueToSend("  Al ", original: nil), "Al")
+        XCTAssertEqual(ProfileView.identityValueToSend("Alice", original: "Alicia"), "Alice")
+    }
+
+    func test_identityValueToSend_emptyOrUnchanged_isOmitted() {
+        XCTAssertNil(ProfileView.identityValueToSend("   ", original: nil))
+        XCTAssertNil(ProfileView.identityValueToSend("", original: "Alice"))
+        XCTAssertNil(ProfileView.identityValueToSend("Alice", original: "Alice"))
+        XCTAssertNil(ProfileView.identityValueToSend(" Alice ", original: "Alice"))
+    }
+
+    /// Un prénom hérité d'un caractère, que l'utilisateur ne touche pas, ne
+    /// doit pas empêcher d'enregistrer une autre modification.
+    func test_identityValueToSend_aLegacyOneCharacterValueLeftAlone_isOmitted() {
+        XCTAssertNil(ProfileView.identityValueToSend("A", original: "A"))
+        XCTAssertEqual(ProfileView.identityValueToSend("B", original: "A"), "B")
+    }
+
+    func test_identityRefusalMessage_aOneCharacterName_namesTheFieldAndTheMinimum() {
+        let message = ProfileView.identityRefusalMessage(firstName: "A", lastName: nil, displayName: nil)
+
+        XCTAssertEqual(
+            message,
+            "\(String(localized: "profile.first_name", bundle: .main)) : \(SignupViewModel.minimumLengthMessage(for: .firstName))"
+        )
+        XCTAssertTrue(message?.contains("2") ?? false)
+    }
+
+    func test_identityRefusalMessage_pointsAtEachFieldInTurn() {
+        XCTAssertTrue(
+            ProfileView.identityRefusalMessage(firstName: nil, lastName: "B", displayName: nil)?
+                .hasPrefix(String(localized: "profile.last_name", bundle: .main)) ?? false
+        )
+        XCTAssertTrue(
+            ProfileView.identityRefusalMessage(firstName: nil, lastName: nil, displayName: "C")?
+                .hasPrefix(String(localized: "profile.display_name", bundle: .main)) ?? false
+        )
+    }
+
+    func test_identityRefusalMessage_twoCharactersOrNothing_isNil() {
+        XCTAssertNil(ProfileView.identityRefusalMessage(firstName: "Al", lastName: "Li", displayName: "Sy"))
+        XCTAssertNil(ProfileView.identityRefusalMessage(firstName: nil, lastName: nil, displayName: nil))
+    }
+
     // MARK: - applyingProfileEdits (apply optimiste)
 
     /// Miroir de `MeeshyUserProfileMutationTests.test_withProfileChanges_allNil_returnsEquivalentUser`

@@ -83,9 +83,11 @@ import { logError, logWarn } from '../../utils/logger.js';
  */
 function rejectInvalidBody(reply: FastifyReply, issues: ReadonlyArray<object>): void {
   const limit = storyLimitFromIssues(issues);
+  const served = issuesServies(issues.slice(0, 5));
+  logWarn(reply.log, `[${reply.request.method} ${reply.request.routeOptions.url}] body refused: ${JSON.stringify(served)}`);
   sendBadRequest(reply, 'Invalid request', {
     code: 'VALIDATION_ERROR',
-    ...(limit ? { details: { storyLimit: limit.code, limit: limit.max } } : {}),
+    details: { issues: served, ...(limit ? { storyLimit: limit.code, limit: limit.max } : {}) },
   });
 }
 

@@ -245,6 +245,8 @@
         <item quantity="many">+%1$d chispas · primera story</item>
         <item quantity="other">+%1$d chispas · primera story</item>
     </plurals>
+    <string name="onboarding_story_sending">Tu story se está enviando…</string>
+    <string name="onboarding_story_sending_detail">Puedes seguir: se publica mientras tanto.</string>
     <string name="onboarding_story_title">Muéstrate</string>
     <string name="onboarding_story_verify">Confirma tu correo para publicar tu historia</string>
     <string name="onboarding_story_verify_detail">Toca el enlace del correo: tu historia podrá salir justo después.</string>
@@ -270,6 +272,7 @@
     <string name="signup_legal">Al continuar, aceptas las condiciones de uso y la política de privacidad.</string>
     <string name="signup_legal_privacy">Política de privacidad</string>
     <string name="signup_legal_terms">Términos de servicio</string>
+    <string name="signup_min_characters">Al menos %1$d caracteres.</string>
     <string name="signup_password_hide">Ocultar contraseña</string>
     <string name="signup_password_label">Contraseña</string>
     <string name="signup_password_show">Mostrar contraseña</string>

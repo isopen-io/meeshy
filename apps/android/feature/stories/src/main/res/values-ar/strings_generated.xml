@@ -21,6 +21,7 @@
     <string name="composer_audience_sub_public">الجميع، بمن فيهم غير المتابعين</string>
     <string name="composer_audience_title">الجمهور</string>
     <string name="composer_audio_delete_action">حذف الصوت</string>
+    <string name="composer_audio_promote_action">وضعه على المشهد</string>
     <string name="composer_capture_sound_mute">كتم الصوت</string>
     <string name="composer_capture_sound_unmute">إعادة تشغيل الصوت</string>
     <string name="composer_capture_tool_sound">الصوت</string>
@@ -55,8 +56,13 @@
     <string name="composer_frise_sound">صوت</string>
     <string name="composer_object_editor_adjust_blur">التمويه</string>
     <string name="composer_object_editor_adjust_brightness">السطوع</string>
+    <string name="composer_object_editor_adjust_compare">مقارنة</string>
+    <string name="composer_object_editor_adjust_compare_hint">يعرض الصورة الأصلية طوال مدة الضغط</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">يعرض الفيديو الأصلي طوال مدة الضغط</string>
     <string name="composer_object_editor_adjust_contrast">التباين</string>
     <string name="composer_object_editor_adjust_exposure">التعريض</string>
+    <string name="composer_object_editor_adjust_original">الصورة الأصلية</string>
+    <string name="composer_object_editor_adjust_original_video">الفيديو الأصلي</string>
     <string name="composer_object_editor_adjust_reset">إعادة تعيين</string>
     <string name="composer_object_editor_adjust_saturation">التشبع</string>
     <string name="composer_object_editor_adjust_sharpness">الحدة</string>
@@ -97,6 +103,7 @@
     <string name="my_stories_delete_selected_title">حذف القصص المحدَّدة؟</string>
     <string name="my_stories_delete_success">تم حذف القصة</string>
     <string name="my_stories_delete_title">حذف القصة؟</string>
+    <string name="my_stories_edit">تعديل</string>
     <string name="my_stories_empty_subtitle">ستظهر قصصك المنشورة هنا ما دامت نشطة.</string>
     <string name="my_stories_empty_title">لم تُرسَل أي قصة</string>
     <string name="my_stories_glyph_comments">عرض التعليقات</string>
@@ -269,6 +276,9 @@
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
+    <string name="story_edit_error">فشل تحديث القصة</string>
+    <string name="story_edit_offline">الاتصال بالإنترنت مطلوب لتعديل القصة</string>
+    <string name="story_edit_save">حفظ</string>
     <string name="story_language_close">إغلاق</string>
     <string name="story_language_original">الأصل</string>
     <string name="story_language_original_hint">كل نص بلغته</string>

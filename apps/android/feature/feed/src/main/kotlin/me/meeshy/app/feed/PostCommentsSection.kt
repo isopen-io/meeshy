@@ -200,7 +200,7 @@ private fun CommentRow(
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f),
     ) {
-        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId.takeUnless { comment.isOwn }))
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId))
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {

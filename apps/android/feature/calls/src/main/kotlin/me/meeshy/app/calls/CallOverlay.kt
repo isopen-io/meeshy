@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallScreenMode
 
 /**
  * Where on the call screen an overlay is drawn. The slot decides the geometry
@@ -41,6 +43,12 @@ data class CallOverlayContext(
     val state: CallUiState,
     /** The conversation accent of the call (convention: passed down, never recomputed). */
     val accent: Color,
+    /** The mode that covers the call screen (Montage, Effects), if any: what it hides needs not be composed. */
+    val activeMode: CallScreenMode? = null,
+    /** What the call chrome shows now: an overlay that belongs to the chrome fades with it. */
+    val chrome: CallChromeVisibility = CallChromeVisibility(),
+    /** A touch on a fading chrome overlay relights the chrome. */
+    val onChromeRevive: () -> Unit = {},
 )
 
 /**

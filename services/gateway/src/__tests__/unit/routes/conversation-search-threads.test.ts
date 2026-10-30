@@ -1122,7 +1122,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(mockCanAccessConversation).not.toHaveBeenCalled();
   });
 
@@ -1134,7 +1134,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 

@@ -601,6 +601,63 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `acknowledgeRead queues a READ_RECEIPT even when the cached count was already zeroed by a list sync`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 0)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val queued = repo.acknowledgeRead("c1")
+
+        assertThat(queued).isTrue()
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.READ_RECEIPT)
+    }
+
+    @Test
+    fun `acknowledgeRead zeroes a badge that is still set and queues the receipt`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.acknowledgeRead("c1")).isTrue()
+
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(0)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).hasSize(1)
+    }
+
+    @Test
+    fun `a repeated acknowledgeRead keeps a single pending READ_RECEIPT`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 2)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        repo.acknowledgeRead("c1")
+        repo.acknowledgeRead("c1")
+        repo.markReadOptimistic("c1")
+
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).hasSize(1)
+    }
+
+    @Test
     fun `markUnreadOptimistic hints an unread count of 1 and queues a MARK_UNREAD`() = runTest {
         val repo = repository(
             FakeConversationApi(

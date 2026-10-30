@@ -31,9 +31,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +47,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -120,7 +118,7 @@ fun ReelCommentsSheet(
                 )
             }
 
-            ReelCommentInput(onSend = viewModel::post)
+            ReelCommentInput(draft = state.draft, onDraftChange = viewModel::setDraft, onSend = viewModel::post)
         }
     }
 }
@@ -165,7 +163,7 @@ private fun ReelCommentList(
 }
 
 @Composable
-private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -> Unit) {
+internal fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -> Unit) {
     val isPending = comment.status == ReelCommentStatus.Pending
     Row(
         modifier = Modifier
@@ -179,6 +177,7 @@ private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -
             size = 36.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(comment.authorName)),
             imageUrl = comment.avatarUrl,
+            presence = rememberPresence(comment.authorId),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -201,13 +200,11 @@ private fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) -
 }
 
 @Composable
-private fun ReelCommentInput(onSend: (String) -> Unit) {
-    var draft by rememberSaveable { mutableStateOf("") }
+private fun ReelCommentInput(draft: String, onDraftChange: (String) -> Unit, onSend: (String) -> Unit) {
     val canSend = draft.isNotBlank()
     fun submit() {
         if (!canSend) return
         onSend(draft)
-        draft = ""
     }
     Row(
         modifier = Modifier
@@ -218,7 +215,7 @@ private fun ReelCommentInput(onSend: (String) -> Unit) {
     ) {
         OutlinedTextField(
             value = draft,
-            onValueChange = { draft = it },
+            onValueChange = onDraftChange,
             modifier = Modifier.weight(1f),
             placeholder = { Text(stringResource(R.string.reels_comments_input_hint)) },
             singleLine = true,

@@ -48,6 +48,7 @@ class ConversationViewingBinding @Inject constructor(
     private val socketManager: SocketManager,
     private val reporter: ConversationViewingReporter,
     private val appState: AppStatePresenceReporter,
+    private val presence: PresenceStore,
     private val json: Json,
     @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
 ) : RealtimeBinding {
@@ -132,9 +133,23 @@ class ConversationViewingBinding @Inject constructor(
                     else -> Unit
                 }
             }
+            dateActivity(event)
             _viewers.update { it.applying(event) }
         } catch (failure: Exception) {
             Timber.e(failure, "viewing event en echec")
+        }
+    }
+
+    /**
+     * Un pair annoncé présent (arrivée ou snapshot) ou actif compte comme activité : le serveur
+     * n'annonce que les utilisateurs qui montrent leur statut en ligne (miroir de `applyViewing` iOS).
+     */
+    private fun dateActivity(event: ViewingEvent) {
+        when (event) {
+            is ViewingEvent.Arrived -> presence.noteActivity(event.change.userId)
+            is ViewingEvent.Active -> presence.noteActivity(event.change.userId)
+            is ViewingEvent.Snapshot -> event.snapshot.userIds.forEach(presence::noteActivity)
+            is ViewingEvent.Left, ViewingEvent.SessionStarted -> Unit
         }
     }
 

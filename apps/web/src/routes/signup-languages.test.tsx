@@ -2,6 +2,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+
 import SignupScreen from '@/routes/signup';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -121,7 +123,7 @@ describe('l’inscription dépliée ne rend aucun libellé français hors du fra
     expect(el.querySelector('h1')?.textContent).toBe('Erstelle dein Konto');
     expect(el.querySelector('label[for="signup-phone"]')?.textContent).toBe('Telefon');
     expect(el.querySelector('label[for="signup-username"]')?.textContent).toBe('Benutzername');
-    expect(el.querySelector('#signup-username-error')?.textContent).toBe('Mindestens 2 Zeichen.');
+    expect(el.querySelector('#signup-username-error')?.textContent).toBe(`Mindestens ${usernameMinLength} Zeichen.`);
     expect(el.textContent).toContain('Schon ein Konto?');
   });
 

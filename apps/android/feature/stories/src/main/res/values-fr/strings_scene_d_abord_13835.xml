@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_typing_font">Police</string>
+    <string name="composer_typing_color">Couleur</string>
+    <string name="composer_typing_align">Alignement</string>
+    <string name="composer_typing_backing">Fond du texte</string>
+    <string name="composer_typing_language">Langue du texte</string>
+    <string name="composer_typing_done">Terminer l\'écriture</string>
+</resources>

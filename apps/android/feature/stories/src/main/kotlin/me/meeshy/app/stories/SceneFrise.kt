@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
 import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
@@ -138,10 +141,15 @@ private fun FriseTransport(
     onExit: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // L'horloge ne dit rien tant que la tête n'a pas quitté le début (#13838) ; sa place reste réservée, la frise ne saute pas.
+        val clock = ComposerLimitNotice.showsPlanClock(playheadSeconds)
         Text(
             text = "${ComposerObjectChips.timecode(playheadSeconds.toDouble())} / ${ComposerObjectChips.timecode(duration.toDouble())}",
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .graphicsLayer { alpha = if (clock) 1f else 0f }
+                .then(if (clock) Modifier else Modifier.clearAndSetSemantics {}),
         )
         if (selected != null) {
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)

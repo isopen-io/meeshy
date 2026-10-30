@@ -44,14 +44,14 @@ import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
-import me.meeshy.sdk.model.friend.presenceState
+import me.meeshy.sdk.model.friend.servedPresence
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.model.friend.ConnectionActionRender
 import me.meeshy.ui.component.ConnectionActionChip
 import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -149,7 +149,7 @@ private fun FriendList(
 
 /** A contact row — iOS `ContactRow`: the whole row opens the profile, presence sits ON the avatar. */
 @Composable
-private fun FriendRow(
+internal fun FriendRow(
     friend: FriendRequestUser,
     moodEmoji: String?,
     onClick: () -> Unit,
@@ -167,7 +167,7 @@ private fun FriendRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(friend.id.ifBlank { name })),
-            presence = friend.presenceState(System.currentTimeMillis()),
+            presence = rememberPresence(friend.id, friend.servedPresence()),
             moodEmoji = moodEmoji,
             imageUrl = friend.avatar,
         )

@@ -44,6 +44,7 @@ import me.meeshy.sdk.model.ReelCaption
 import me.meeshy.sdk.model.format.CompactCountFormat
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.fullscreen.LocalFullscreenChromeInteractive
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -100,7 +101,7 @@ internal fun ReelInfo(
 }
 
 @Composable
-private fun ReelAuthorRow(
+internal fun ReelAuthorRow(
     reel: ReelPresentation,
     isOwn: Boolean,
     onOpenAuthor: (() -> Unit)?,
@@ -118,7 +119,12 @@ private fun ReelAuthorRow(
             .heightIn(min = 44.dp)
             .padding(end = MeeshySpacing.sm),
     ) {
-        MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp, imageUrl = reel.authorAvatarUrl)
+        MeeshyAvatar(
+            name = reel.authorName ?: "?",
+            size = 36.dp,
+            imageUrl = reel.authorAvatarUrl,
+            presence = rememberPresence(reel.authorId.takeUnless { isOwn }),
+        )
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column {
             Text(

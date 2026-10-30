@@ -74,6 +74,12 @@
    "reason": "Icons.Filled.SouthEast"
   },
   {
+   "symbol": "arrow.down.right.and.arrow.up.left",
+   "status": "mapped",
+   "role": "CloseFullscreen",
+   "reason": "Icons.Filled.CloseFullscreen"
+  },
+  {
    "symbol": "arrow.down.right.circle",
    "status": "mapped",
    "role": "ArrowDownRight",
@@ -2165,6 +2171,10 @@
    "directional": false
   },
   "CloseCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "CloseFullscreen": {
    "origin": "material",
    "directional": false
   },

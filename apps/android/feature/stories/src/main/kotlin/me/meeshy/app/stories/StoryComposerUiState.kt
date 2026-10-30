@@ -78,6 +78,8 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    /** Le texte touché sur la scène, SÉLECTIONNÉ sans être écrit (#13836) : son cadre et sa barre d'actions, pas de clavier. */
+    val framedTextElementId: String? = null,
     val elementMenuId: String? = null,
     val stickerMenuId: String? = null,
     val playheadSeconds: Float = 0f,
@@ -92,6 +94,8 @@ data class StoryComposerUiState(
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     val isPublishing: Boolean = false,
+    /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
+    val editing: Boolean = false,
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
     val canvasHeightPx: Float = 0f,
@@ -136,7 +140,10 @@ data class StoryComposerUiState(
 
     /** Ce que le bouton de publication nomme : la story, ou le nombre de stories (une par slide). */
     val publishTitle: StoryPublishTitle
-        get() = StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+        get() = if (editing) StoryPublishTitle.Save else StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+
+    /** Une story publiée tient UNE slide : en édition l'ajout est fermé d'avance, plutôt que refusé à l'enregistrement. */
+    val canAddSlide: Boolean get() = !editing && deck.canAddSlide
 
     /** Les médias de la slide sélectionnée sans texte alternatif — rappelés à l'auteur, jamais bloquants. */
     val undescribedMediaIds: List<String>
@@ -163,18 +170,17 @@ data class StoryComposerUiState(
      * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
      * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
      */
-    val selectedSlideBackdropModel: Any?
-        get() {
-            val designated = deck.selectedSlideBackgroundMediaId
-            val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
-            val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
-            return when {
-                uploaded != null -> uploaded.thumbnailUrl ?: uploaded.url
-                pending != null -> pending.item.previewModel
-                else -> selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: selectedSlidePending.firstOrNull()?.item?.previewModel
-            }
+    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
+        val designated = deck.selectedSlideBackgroundMediaId
+        val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
+        val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
+        return when {
+            uploaded != null -> ComposerMediaAddress.preview(uploaded, mediaBaseUrl)
+            pending != null -> pending.item.previewModel
+            else -> selectedSlideAttachments.firstOrNull()?.let { ComposerMediaAddress.preview(it, mediaBaseUrl) }
+                ?: selectedSlidePending.firstOrNull()?.item?.previewModel
         }
+    }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform
@@ -251,8 +257,9 @@ data class StoryComposerUiState(
     val selectedTextElement: StoryTextElement?
         get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
 
-    /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null && !isTimelineOpen
+    /** True while the text field edits an on-canvas element rather than the slide caption — a text only touched is framed, not written. */
+    val isEditingTextElement: Boolean
+        get() = selectedTextElement != null && !isTimelineOpen && selectedTextElementId != framedTextElementId
 
     /** La frise est le panneau ouvert : sélectionner un texte y règle sa fenêtre, sans clavier. */
     val isTimelineOpen: Boolean get() = band.activeTool == StoryToolMode.TIMELINE

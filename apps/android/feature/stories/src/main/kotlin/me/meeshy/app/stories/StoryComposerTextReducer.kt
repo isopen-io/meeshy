@@ -61,16 +61,27 @@ internal object StoryComposerTextReducer {
     /** Begins editing [id] (inert when it is not on the selected slide). */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+        else state.copy(selectedTextElementId = id, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+
+    /**
+     * A text touched on the scene (#13836): framed — selected, its action bar served, no keyboard. Touching it again once
+     * framed writes it, as its Edit does; a text already being written keeps its writing.
+     */
+    fun tapped(state: StoryComposerUiState, id: String): StoryComposerUiState = when {
+        state.deck.selectedSlide.elements.none { it.id == id } -> state
+        state.selectedTextElementId != id -> selected(state, id).copy(framedTextElementId = id)
+        state.framedTextElementId == id -> selected(state, id)
+        else -> state
+    }
 
     /** Stops editing the active element — the field returns to the slide caption. */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =
-        if (state.selectedTextElementId == null) state else state.copy(selectedTextElementId = null)
+        if (state.selectedTextElementId == null) state else state.copy(selectedTextElementId = null, framedTextElementId = null)
 
     /** Opens the long-press menu on [id], selecting it (inert when it is not on the selected slide). */
     fun menuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, framedTextElementId = id, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
 
     /** Dismisses the element context menu without touching the deck or the selection. */
     fun menuDismissed(state: StoryComposerUiState): StoryComposerUiState =
@@ -183,6 +194,7 @@ internal object StoryComposerTextReducer {
         return state.copy(
             deck = state.deck.duplicateTextElement(id, newId, DUPLICATE_ELEMENT_OFFSET, DUPLICATE_ELEMENT_OFFSET),
             selectedTextElementId = newId,
+            framedTextElementId = if (state.framedTextElementId == id) newId else state.framedTextElementId,
             errorMessage = null,
         )
     }

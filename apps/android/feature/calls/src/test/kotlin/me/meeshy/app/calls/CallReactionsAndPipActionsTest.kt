@@ -23,7 +23,7 @@ class CallReactionsAndPipActionsTest {
     fun `l'action PiP suit le coordinateur et lui demande d'entrer`() {
         var entered = false
         val pip = CallPictureInPictureCoordinator().apply {
-            attachActivity(supportsPip = true) { entered = true; true }
+            attachActivity(Any(), supportsPip = true) { entered = true; true }
             onTransition(
                 CallState.Idle, CallState.Connected,
                 CallSessionInfo("c", CallConfig(peerId = "u", peerName = "A", isVideo = true, isOutgoing = true)),

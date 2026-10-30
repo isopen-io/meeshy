@@ -43,6 +43,21 @@ class StoryPlaybackTest {
     }
 
     @Test
+    fun `forAuthor with a story id starts on that exact story, seen or not`() {
+        val groups = listOf(group("a", "a1"), group("b", "b1", "b2", "b3"))
+        val pb = StoryPlayback.forAuthor(groups, "b", storyId = "b3")
+        assertThat(pb?.groupIndex).isEqualTo(1)
+        assertThat(pb?.currentSlide?.id).isEqualTo("b3")
+    }
+
+    @Test
+    fun `forAuthor with a story the author does not carry opens nothing, never another story`() {
+        val groups = listOf(group("a", "a1"), group("b", "b1", "b2"))
+        assertThat(StoryPlayback.forAuthor(groups, "b", storyId = "gone")).isNull()
+        assertThat(StoryPlayback.forAuthor(groups, "a", storyId = "b1")).isNull()
+    }
+
+    @Test
     fun `forAuthor drops groups that have no slides and reindexes the rest`() {
         val pb = playback(group("empty"), group("b", "b1"), startUserId = "b")
         assertThat(pb.groups.map { it.userId }).containsExactly("b")

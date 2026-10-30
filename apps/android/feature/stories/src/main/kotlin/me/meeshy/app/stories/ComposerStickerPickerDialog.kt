@@ -17,7 +17,7 @@ import me.meeshy.sdk.sticker.StickerUsageStore
 import me.meeshy.ui.sticker.StickerCapabilities
 import me.meeshy.ui.sticker.StickerEmojiCategory
 import me.meeshy.ui.sticker.StickerPlacementDestination
-import me.meeshy.ui.sticker.StickerSheetHost
+import me.meeshy.ui.sticker.StickerSheet
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -28,11 +28,12 @@ interface StickerSheetEntryPoint {
 
 /**
  * The composer's sticker sheet: the single tabbed sheet of `:sdk-ui` (Search, Favorites, Recents, Smileys)
- * hosted for the story scene. The composer's *destination* turns an emoji choice into a canvas sticker;
+ * hosted for the story scene — its content only, laid in the composer's anchored sheet ([ComposerAnchoredSheet],
+ * #13838) with no veil, the scene shrinking above it; the modal host of `:sdk-ui` stays with its other consumers. The composer's *destination* turns an emoji choice into a canvas sticker;
  * the emoji catalogue and its keyword search ([StickerCatalog]) are injected as capabilities. Pure glue.
  */
 @Composable
-internal fun StickerPickerDialog(
+internal fun StickerPickerPanel(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -52,7 +53,7 @@ internal fun StickerPickerDialog(
     val destination = remember(onPick) {
         StickerPlacementDestination { choice -> if (choice is StickerSheetChoice.Emoji) onPick(choice.glyph) }
     }
-    StickerSheetHost(
+    StickerSheet(
         capabilities = capabilities,
         usage = entryPoint.stickerUsageStore(),
         destination = destination,

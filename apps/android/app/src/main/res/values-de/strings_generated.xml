@@ -23,4 +23,6 @@
     <string name="composer_mosaic_wave">In Wellen</string>
     <string name="composer_publish_menu_a11y_hint">Öffnet die Auswahl von Format und Anordnung</string>
     <string name="composer_publish_menu_title">Veröffentlichen als</string>
+    <string name="push_action_comment">Kommentieren</string>
+    <string name="push_action_comment_hint">Kommentieren…</string>
 </resources>

@@ -16,6 +16,12 @@ import me.meeshy.sdk.model.profile.repainted
  * Le cache disque des fiches (`profile_card:*`), clé par identifiant ET par pseudo : ouvrir
  * `@pseudo` puis l'id (ou l'inverse) retombe sur la même fiche. Une charge illisible est un manque
  * de cache, jamais un plantage ; toute écriture est idempotente (même clé, même ligne).
+ *
+ * #13781 — le cache ne garde ni ne restitue la présence (`isOnline`, `lastActiveAt`) : le serveur peut
+ * la retirer (ami retiré, activité masquée) sans qu'aucune page ne le dise, et une date rangée hors
+ * ligne se lirait « il y a 3 h » indéfiniment. Elle ne vient que de la réponse fraîche de la fiche.
+ * Retirée à l'ÉCRITURE (aucune seconde mémoire sans borne) ET à la LECTURE (une ligne écrite avant ce
+ * correctif la porte encore).
  */
 @Singleton
 class ProfileCacheRepository(private val cache: KeyedJsonCache) {
@@ -28,11 +34,12 @@ class ProfileCacheRepository(private val cache: KeyedJsonCache) {
 
     /** La fiche gardée sous [key] (id ou pseudo), `null` à froid ou si la charge ne se lit plus. */
     suspend fun cachedProfile(key: String): MeeshyUser? =
-        cache.get(NAMESPACE, normalize(key), MeeshyUser.serializer())?.value
+        cache.get(NAMESPACE, normalize(key), MeeshyUser.serializer())?.value?.withoutServedPresence()
 
     /** Range [user] sous son id, son pseudo et la clé [lookupKey] avec laquelle on l'a demandé. */
     suspend fun store(user: MeeshyUser, lookupKey: String, ticket: AccountTicket?) {
-        keysOf(user, lookupKey).forEach { cache.put(NAMESPACE, it, user, MeeshyUser.serializer(), ticket) }
+        val kept = user.withoutServedPresence()
+        keysOf(user, lookupKey).forEach { cache.put(NAMESPACE, it, kept, MeeshyUser.serializer(), ticket) }
     }
 
     /** Une fiche qui n'est plus servie (bloqué par la cible) ne laisse aucune ligne, sous aucune clé. */
@@ -61,6 +68,9 @@ class ProfileCacheRepository(private val cache: KeyedJsonCache) {
 
     private fun keysOf(user: MeeshyUser, lookupKey: String): List<String> =
         listOf(user.id, user.username, lookupKey).filter { it.isNotBlank() }.map(::normalize).distinct()
+
+    private fun MeeshyUser.withoutServedPresence(): MeeshyUser =
+        if (isOnline == null && lastActiveAt == null) this else copy(isOnline = null, lastActiveAt = null)
 
     private fun normalize(key: String): String =
         if (ProfileSheetUser.from(key).userId != null) key else key.removePrefix("@").lowercase()

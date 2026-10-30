@@ -36,6 +36,7 @@ class OutboxKindDiskValuesLockTest {
         "REPORT_ATTACHMENT_STATUS",
         "UPDATE_AUDIO_SETTINGS",
         "CREATE_POST",
+        "CREATE_COMMENT",
     )
 
     @Test

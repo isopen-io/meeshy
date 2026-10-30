@@ -46,11 +46,13 @@ class WebRtcCallCoordinatorTest {
     private val iceState = MutableStateFlow(IceConnectionState.NEW)
     private val localCandidates = MutableSharedFlow<IceCandidate>(extraBufferCapacity = 8)
     private val incomingSignals = MutableSharedFlow<CallSignalEnvelope>(extraBufferCapacity = 8)
+    private val renegotiations = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     private val engine: WebRtcEngine = mockk(relaxed = true) {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
         every { dataChannelMessages } returns MutableSharedFlow()
+        every { renegotiationRequests } returns renegotiations
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
         coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit
@@ -72,7 +74,7 @@ class WebRtcCallCoordinatorTest {
 
     @Before
     fun setUp() {
-        coordinator = WebRtcCallCoordinator(engine, signals, context)
+        coordinator = WebRtcCallCoordinator(engine, signals, context, GroupCallNameSource.NONE)
     }
 
     private fun CoroutineScope.startAsCaller(isVideo: Boolean = false) = coordinator.startOutgoing(
@@ -317,6 +319,33 @@ class WebRtcCallCoordinatorTest {
             coordinator.end()
         }
 
+    // MARK: - Screen share renegotiation (#13332, mirrors iOS screenShareNeedsRenegotiation)
+
+    @Test
+    fun `an engine renegotiation request sends a fresh offer of the next generation, from the callee too`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCallee()
+            incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-offer"))
+
+            renegotiations.emit(Unit)
+
+            coVerify(exactly = 1) { engine.setLocalDescription(match { it.type == SessionDescription.Type.OFFER }) }
+            verify(exactly = 1) {
+                signals.emitOffer("call-9", "v=0-restart", to = "peer", from = "me", negotiationId = 3)
+            }
+            coordinator.end()
+        }
+
+    @Test
+    fun `a renegotiation request after the call ended sends nothing`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.end()
+
+        renegotiations.emit(Unit)
+
+        verify(exactly = 0) { signals.emitOffer(any(), any(), any(), any(), any()) }
+    }
+
     // MARK: - Speaker routing (#4798)
     //
     // The unit-test JVM's `android.jar` stub reports `Build.VERSION.SDK_INT == 0`
@@ -477,6 +506,46 @@ class WebRtcCallCoordinatorTest {
         startAsCallee()
 
         coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
+        coordinator.end()
+    }
+
+    // --- #13740 : le maillage d'un appel de groupe se pose AU-DESSUS du duo ---
+
+    @Test
+    fun `a third member's offer never reaches the primary's connection`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-bob").let { it.copy(signal = it.signal.copy(from = "bob")) })
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(any()) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a duo's re-joining peer is offered by the call's own connection, never by a mesh link`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.onParticipantJoined("peer")
+        coordinator.onParticipantJoined("peer")
+
+        verify(exactly = 0) { engine.openMeshPeer(any(), any()) }
+        coVerify(exactly = 2) { engine.createOffer() }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a group caller offers the second joiner through the mesh, addressed to it`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.startOutgoing(
+            this, "call-9", emptyList(), peerId = "", selfId = "me", isVideo = false,
+            onMediaConnected = {}, onMediaStalled = {},
+        )
+        coordinator.onParticipantJoined("alice")
+        coordinator.onParticipantJoined("bob")
+
+        coVerify(exactly = 1) { engine.createOffer() }
+        verify(exactly = 1) { signals.emitOffer("call-9", any(), to = "alice", from = "me", negotiationId = 0) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        assertThat(coordinator.groupMesh.value.roster.members.map { it.userId }).containsExactly("alice", "bob").inOrder()
         coordinator.end()
     }
 }

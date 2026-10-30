@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_scene_close">Cerrar</string>
+    <string name="composer_scene_more_animation">Animación</string>
+    <string name="composer_scene_more_timing">Tiempo</string>
+    <string name="composer_scene_done">OK</string>
+</resources>

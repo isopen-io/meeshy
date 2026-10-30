@@ -50,19 +50,15 @@ import androidx.glance.ImageProvider
  * better UX (opens the chat directly) and avoids inventing a second, redundant
  * route for the same underlying id.
  *
- * **Deliberately minimal**, same posture as the two sibling widgets: static/
- * OS-triggered refresh only, Room-only read (no network), no presence/online
- * status badge (Android's `ApiConversation.participants` carries no presence
- * fields the way `MeeshyConversation.lastSeenAt` does on iOS — a real,
- * documented gap, not an oversight; see `PROGRESS.md`).
+ * **Deliberately minimal**, same posture as the two sibling widgets: Room-only read
+ * (no network), repainted when the cache or the presence tier of a shown contact
+ * changes ([WidgetRepaintInitializer]).
  *
- * That gap is narrower than it reads. Until 2026-08-13, iOS shipped a presence
- * dot here that could never light: the app published a human label
- * (`lastSeenText`, hardcoded French) across the App Group while the widget
- * gated the dot on `status == "Online"`. iOS now publishes a stable
- * `PresenceState` token instead — so when Android closes this gap, the thing to
- * mirror is that TOKEN and the 1/3/5 colour rule (`Presence.kt`), never a
- * display string. What crosses a process boundary is data, not a label.
+ * The presence dot mirrors iOS `WidgetFavoriteContact.presence` (#13747): the stable
+ * state token (online / away / idle / offline, 1/3/5 rule), never a display string.
+ * It is derived from the live `PresenceStore` at paint time — what the server served
+ * for that peer, nothing fabricated — and `WidgetAvatarBitmap` draws it with the
+ * central `meeshyPresenceDotColor` table (offline or unserved: no dot).
  */
 internal class FavoriteContactsWidget : GlanceAppWidget() {
 
@@ -70,7 +66,11 @@ internal class FavoriteContactsWidget : GlanceAppWidget() {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
-        val presentation = FavoriteContactsWidgetPresentation.from(conversations, currentUserId)
+        val presentation = FavoriteContactsWidgetPresentation.from(
+            conversations = conversations,
+            currentUserId = currentUserId,
+            presence = WidgetPresenceTiers.forDisplay(entryPoint.presenceStore(), conversations, currentUserId),
+        )
 
         provideContent {
             FavoriteContactsWidgetContent(presentation)
@@ -125,7 +125,7 @@ private fun FavoriteContactRowContent(row: FavoriteContactRow) {
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.name, row.accentHex, AVATAR_DP, presence = null)),
+            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.name, row.accentHex, AVATAR_DP, presence = row.presence)),
             contentDescription = null,
             modifier = GlanceModifier.size(AVATAR_DP.dp),
         )

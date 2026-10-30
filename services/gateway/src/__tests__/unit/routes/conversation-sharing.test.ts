@@ -702,7 +702,7 @@ describe('POST /conversations/:id/invite', () => {
     fastify.prisma.conversation.findUnique.mockResolvedValue(null);
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, expect.any(String), { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns 403 when inviter is not a member', async () => {

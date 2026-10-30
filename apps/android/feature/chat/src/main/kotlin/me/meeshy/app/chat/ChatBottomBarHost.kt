@@ -58,7 +58,8 @@ private fun ChatSelectionBar(host: ChatHostContext) {
     val ids = host.selection.ids
     val selected = remember(state.messages, ids) { state.messages.filter { it.messageId in ids } }
     val now = System.currentTimeMillis()
-    val offer = remember(selected, canWrite) { SelectionOffer.of(selected, canWrite, now) }
+    val signalClearance = LocalChatSignalClearance.current
+    val offer = remember(selected, canWrite, signalClearance) { SelectionOffer.of(selected, canWrite, now, signalClearance) }
     var confirmingDelete by remember { mutableStateOf(false) }
     SelectionBar(
         count = selected.size,
@@ -94,7 +95,7 @@ private fun ChatSelectionBar(host: ChatHostContext) {
                 stringResource(R.string.chat_delete_confirm_title)
             },
             onDeleteForEveryone = {
-                actions.deleteSelectionForEveryone(SelectionOffer.idsOffering(MessageAction.DeleteForEveryone, selected, canWrite, now))
+                actions.deleteSelectionForEveryone(SelectionOffer.idsOffering(MessageAction.DeleteForEveryone, selected, canWrite, now, signalClearance))
                 haptics.success()
                 actions.endSelection()
             },

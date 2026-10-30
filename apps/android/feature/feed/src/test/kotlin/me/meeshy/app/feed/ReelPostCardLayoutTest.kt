@@ -2,8 +2,13 @@ package me.meeshy.app.feed
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import me.meeshy.sdk.model.StoryItem
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -79,7 +84,7 @@ class ReelPostCardLayoutTest {
     fun `un appui sur la couverture ouvre ce reel`() {
         val opened = mutableListOf<String>()
         showFeedCard(reel, opened)
-        compose.onNodeWithContentDescription("Reel").performClick()
+        compose.onNodeWithContentDescription("Reel by Amina").performClick()
         assertThat(opened).containsExactly("reel1")
     }
 
@@ -94,7 +99,31 @@ class ReelPostCardLayoutTest {
         showFeedCard(reel.copy(id = "outer", repostEmbed = quoted), opened)
         compose.onNodeWithText("Origen").assertIsDisplayed()
         compose.onNodeWithText("Reposted by Amina").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Reel").performClick()
+        compose.onNodeWithContentDescription("Reel by Origen").performClick()
         assertThat(opened).containsExactly("orig")
+    }
+
+    @Test
+    fun `la scene d un reel compose remplit toute la carte comme iOS, au rapport 4 5`() {
+        val composed = reel.copy(reelCover = ReelCover.Scene(StoryItem(id = "reel1")))
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
+                    Box(Modifier.width(240.dp)) {
+                        PostCard(
+                            post = composed, onLike = {}, onBookmark = {}, onFlagTap = {}, onClick = {}, onOpenPost = {},
+                            onOpenReel = {}, onImageTap = {},
+                        )
+                    }
+                }
+            }
+        }
+        val card = compose.onNodeWithTag(REEL_CARD_TAG).getBoundsInRoot()
+        val scene = compose.onNodeWithTag("scene", useUnmergedTree = true).getBoundsInRoot()
+        assertThat(card.height.value / card.width.value).isWithin(0.001f).of(1.25f)
+        assertThat(scene.left).isEqualTo(card.left)
+        assertThat(scene.top).isEqualTo(card.top)
+        assertThat(scene.width).isEqualTo(card.width)
+        assertThat(scene.height).isEqualTo(card.height)
     }
 }

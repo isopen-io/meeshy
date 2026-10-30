@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +49,7 @@ import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -61,7 +63,7 @@ import java.util.Locale
  * read-only, and its tap opens the ORIGINAL reposted post ([RepostEmbedPresentation.id]),
  * never the outer card — mirrors iOS `FeedPostCard.repostTapTargetId`.
  *
- * A reposted STORY plays through the shared scene renderer; a reposted REEL shows
+ * A reposted STORY plays through the shared scene renderer (only when the feed elects it, [sceneId]; a tap opens THAT story full screen while it is alive and its author known, else the post); a reposted REEL shows
  * its cover above the quote (poster, resting scene or accent backdrop — never a
  * player per card) and opens the reels player on that reel (iOS `ReelRepostEmbedCell`).
  */
@@ -70,6 +72,7 @@ fun RepostEmbedCell(
     embed: RepostEmbedPresentation,
     onOpen: (String) -> Unit,
     onOpenReel: ((String) -> Unit)? = null,
+    sceneId: String? = null,
 ) {
     if (embed.isUnavailable) {
         UnavailableRepostCell(embed)
@@ -78,7 +81,14 @@ fun RepostEmbedCell(
     val sceneRenderer = LocalRepostSceneRenderer.current
     val scene = embed.storyItem
     if (scene != null && sceneRenderer != null) {
-        sceneRenderer(scene, embed.authorName, { onOpen(embed.id) }, Modifier.fillMaxWidth())
+        val live by rememberSceneLive(sceneId)
+        val openStory = LocalStoryOpener.current
+        val authorId = embed.authorId
+        // Le lecteur de stories ne joue que ce qu'il sait trouver : une story expirée, ou sans auteur connu, ouvre la fiche du post.
+        val open: () -> Unit = {
+            if (openStory != null && authorId != null && !scene.isExpired()) openStory(authorId, embed.id) else onOpen(embed.id)
+        }
+        sceneRenderer(scene, embed.authorName, live, open, Modifier.fillMaxWidth().sceneFrame(sceneId))
         return
     }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)

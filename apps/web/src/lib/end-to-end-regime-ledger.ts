@@ -232,8 +232,8 @@ export const E2EE_PLAINTEXT_WITHHELD = 'E2EE_PLAINTEXT_WITHHELD';
  * connexion, le transfert, la feuille d'envoi et le partage entrant), la phase
  * d'envoi du composeur (`perform-send.ts`), l'envoi de fichiers de la feuille
  * (`send-sheet-run.ts`) et la modification d'un message (`edit-message.ts`).
- * Les appels (sous-titres, enregistrement) et les réactions n'y passent pas
- * encore : #12963.
+ * Les sous-titres d'un appel ont leur porte, fail-closed (`serverMayHearCaptions`,
+ * #13720) ; l'enregistrement et les réactions n'y passent pas encore : #12963.
  */
 export function canSendPlaintext(
   input: SealedInput,

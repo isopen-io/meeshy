@@ -2,12 +2,26 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import me.meeshy.feature.stories.R
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -27,6 +41,7 @@ import coil.size.Size
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
@@ -37,7 +52,13 @@ import me.meeshy.ui.component.imageedit.sceneLook
  * et son ratio mesuré — `null` tant que le média n'est pas téléversé, peint alors en carré comme chez les lecteurs.
  */
 @Immutable
-internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: Any?, val aspectRatio: Double? = null, val isVideo: Boolean = false) {
+internal data class PlacedMediaFrame(
+    val placed: StoryPlacedMedia,
+    val model: Any?,
+    val aspectRatio: Double? = null,
+    val isVideo: Boolean = false,
+    val pendingItem: MediaUploadItem? = null,
+) {
     val key: String get() = placed.mediaId
 
     /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
@@ -45,36 +66,51 @@ internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: An
 }
 
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
-internal fun StoryComposerUiState.placedMediaFrames(): List<PlacedMediaFrame> {
+internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, comparing: String? = null): List<PlacedMediaFrame> {
     val background = deck.selectedSlide.backgroundMediaId
-    return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.mapNotNull { placed ->
+    return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
+        if (placed.mediaId == comparing) placed.copy(filter = null, adjustments = null) else placed
+    }.mapNotNull { placed ->
         val uploaded = selectedSlideAttachments.firstOrNull { it.id == placed.mediaId }
         val pending = selectedSlidePending.firstOrNull { it.cmid == placed.mediaId }
         when {
-            uploaded != null -> PlacedMediaFrame(
-                placed = placed,
-                model = uploaded.thumbnailUrl ?: uploaded.url,
-                aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
-                isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true),
-            )
-            pending != null -> PlacedMediaFrame(placed, pending.item.previewModel, isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true))
+            uploaded != null -> {
+                val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
+                PlacedMediaFrame(
+                    placed = placed,
+                    model = if (isVideo) uploaded.thumbnailUrl?.let { ComposerMediaAddress.of(it, mediaBaseUrl) } else ComposerMediaAddress.preview(uploaded, mediaBaseUrl),
+                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
+                    isVideo = isVideo,
+                )
+            }
+            pending != null -> {
+                val isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true)
+                PlacedMediaFrame(
+                    placed = placed,
+                    model = if (isVideo) null else pending.item.previewModel,
+                    isVideo = isVideo,
+                    pendingItem = pending.item.takeUnless { isVideo },
+                )
+            }
             else -> null
         }
     }
 }
 
-/** Les trois gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner. */
+/** Les gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner, toucher pour le sélectionner (#13836). */
 internal class PlacedMediaGestures(
     val onDrag: (String, Float, Float) -> Unit,
     val onDragEnd: () -> Unit,
     val onTransform: (String, Float, Float) -> Unit,
+    val onTap: (String) -> Unit = {},
 )
 
 /**
  * Un média de premier plan sur la scène : posé à sa position normalisée (centré sur ce point), glissé, pincé et
  * pivoté d'un seul geste, comme un sticker. Son cadre de base est celui que peignent les lecteurs iOS et Android
  * ([ForegroundMediaFrame], projeté sur la largeur du canevas), rempli comme eux. L'image est décodée hors du fil
- * principal par Coil, à la taille de ce cadre — jamais pleine résolution.
+ * principal par Coil, à la taille de ce cadre — jamais pleine résolution. Touché, il est sélectionné et porte le cadre de
+ * la sélection ([selected], #13836).
  */
 @Composable
 internal fun PlacedMediaLayer(
@@ -82,15 +118,24 @@ internal fun PlacedMediaLayer(
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     gestures: PlacedMediaGestures,
+    selected: Boolean = false,
 ) {
     val placed = frame.placed
+    val currentTap by rememberUpdatedState(gestures.onTap)
+    val label = stringResource(R.string.composer_selection_placed_media)
     val currentDrag by rememberUpdatedState(gestures.onDrag)
     val currentDragEnd by rememberUpdatedState(gestures.onDragEnd)
     val currentTransform by rememberUpdatedState(gestures.onTransform)
+    val currentScale by rememberUpdatedState(placed.scale)
+    val currentRotation by rememberUpdatedState(placed.rotationDeg)
     val context = LocalContext.current
     val density = LocalDensity.current
-    val base = remember(frame.aspectRatio, canvasWidthPx) {
-        ForegroundMediaFrame.renderedSize(frame.aspectRatio, scale = 1.0, canvasWidth = canvasWidthPx.toDouble())
+    val measuredRatio by produceState<Double?>(initialValue = null, frame.pendingItem) {
+        value = frame.pendingItem?.let { PendingPlacedMediaRatio.of(it) }
+    }
+    val ratio = frame.aspectRatio ?: measuredRatio
+    val base = remember(ratio, canvasWidthPx) {
+        ForegroundMediaFrame.renderedSize(ratio, scale = 1.0, canvasWidth = canvasWidthPx.toDouble())
     }
     val widthPx = base.width.toFloat()
     val heightPx = base.height.toFloat()
@@ -115,10 +160,18 @@ internal fun PlacedMediaLayer(
                 scaleY = placed.scale
                 rotationZ = placed.rotationDeg
             }
+            .testTag("placed-media")
+            .sceneSelectionFrame(selected, placed.scale)
+            .pointerInput(frame.key) { detectTapGestures(onTap = { currentTap(frame.key) }) }
+            .semantics {
+                contentDescription = label
+                onClick { currentTap(frame.key); true }
+            }
             .pointerInput(frame.key) {
                 detectTransformGestures { _, pan, zoom, rotation ->
                     if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                        currentDrag(frame.key, pan.x / canvasWidthPx, pan.y / canvasHeightPx)
+                        val onCanvas = PlacedMediaPan.toCanvas(pan, currentScale, currentRotation)
+                        currentDrag(frame.key, onCanvas.x / canvasWidthPx, onCanvas.y / canvasHeightPx)
                     }
                     currentTransform(frame.key, zoom, rotation)
                 }
@@ -133,17 +186,41 @@ internal fun PlacedMediaLayer(
                 }
             },
     ) {
-        AsyncImage(
-            model = request,
+        val frameModifier = Modifier
+            .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
+            .clip(RoundedCornerShape(corner))
+        if (frame.model == null && frame.isVideo) {
+            VideoFramePlaceholder(frameModifier)
+        } else {
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = frameModifier.sceneLook(frame.look),
+            )
+        }
+    }
+}
+
+/** Une vidéo dont on n'a aucune image à décoder : un cadre à la forme de la vidéo, jamais un calque vide qu'on ne saisit pas. */
+@Composable
+private fun VideoFramePlaceholder(modifier: Modifier) {
+    Box(
+        modifier = modifier
+            .testTag("placed-media-placeholder")
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Video,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
-                .clip(RoundedCornerShape(corner))
-                .sceneLook(frame.look),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(PLACEHOLDER_ICON),
         )
     }
 }
+
+private val PLACEHOLDER_ICON = 32.dp
 
 /** L'arrondi d'un média posé, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
 private const val CORNER_FRACTION = 0.06f

@@ -54,7 +54,8 @@ const channel = (): FakeChannel => {
   return self;
 };
 
-function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'denied' } = {}) {
+function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'denied'; readonly regime?: () => 'clear' | 'sealed' } = {}) {
+  const regime = options.regime ?? (() => 'clear');
   const store = createCallStore();
   store.setState({ call: activeCall() });
   const emitted: Array<readonly [string, unknown]> = [];
@@ -95,7 +96,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
       shown: () => void (shown += 1),
       bye: (userId) => void byes.push(userId),
     },
-    { speech, language: () => 'fr', viewerName: () => 'Moi Même', newId: () => `w-${++ids}` },
+    { speech, language: () => 'fr', viewerName: () => 'Moi Même', newId: () => `w-${++ids}`, serverMayHearCaptions: (conversationId) => conversationId === 'c-1' && regime() === 'clear' },
   );
   return {
     port,
@@ -297,5 +298,45 @@ describe('le web transcrit son micro (G3, G5)', () => {
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([]);
     expect(h.call()?.captions).toEqual([]);
+  });
+});
+
+describe('une conversation chiffrée de bout en bout n’envoie aucune parole à la passerelle (#13720)', () => {
+  test('ouvrir les sous-titres n’annonce rien, ne capture rien, et le panneau dit pourquoi', () => {
+    const h = harness({ regime: () => 'sealed' });
+    h.port.toggle();
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE)).toEqual([]);
+    expect(h.captures).toEqual([]);
+    expect(h.call()?.transcription).toBe('sealed');
+  });
+
+  test('un pair qui lit ne fait pas capturer mon micro', () => {
+    const h = harness({ regime: () => 'sealed' });
+    h.port.receive(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: 'call-1', speakerId: PEER, active: true });
+    expect(h.captures).toEqual([]);
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([]);
+  });
+
+  test('une conversation qui devient chiffrée pendant la capture : la phrase suivante ne part pas, la capture s’arrête', () => {
+    let sealed = false;
+    const h = harness({ regime: () => (sealed ? 'sealed' : 'clear') });
+    const link = channel();
+    h.port.attach(PEER, link as unknown as RTCDataChannel);
+    h.port.toggle();
+    expect(h.captures).toHaveLength(1);
+    sealed = true;
+    h.say('le code est 4512', true);
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([]);
+    expect(link.sent.some((raw) => raw.includes('4512'))).toBe(false);
+    expect(h.captures[0]?.stopped).toBe(true);
+    expect(h.call()?.transcription).toBe('sealed');
+  });
+
+  test('une conversation en clair garde ses sous-titres', () => {
+    const h = harness();
+    h.port.toggle();
+    h.say('bonjour', true);
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE)).toHaveLength(1);
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toHaveLength(1);
   });
 });

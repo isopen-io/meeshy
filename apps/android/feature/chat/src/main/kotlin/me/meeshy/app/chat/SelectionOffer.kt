@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -26,9 +27,14 @@ internal data class SelectionOffer(
         val None = SelectionOffer(false, false, false, false, false)
 
         /** [bubbles] : la sélection, dans l'ordre du fil. Une sélection vide n'offre rien. */
-        fun of(bubbles: List<BubbleContent>, canWrite: Boolean, nowMillis: Long): SelectionOffer {
+        fun of(
+            bubbles: List<BubbleContent>,
+            canWrite: Boolean,
+            nowMillis: Long,
+            signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
+        ): SelectionOffer {
             if (bubbles.isEmpty()) return None
-            val offered = bubbles.map { bubble -> bubble to MessageActionMenu.actions(bubble.selectionContext(canWrite, nowMillis)) }
+            val offered = bubbles.map { bubble -> bubble to MessageActionMenu.actions(bubble.selectionContext(canWrite, nowMillis, signalClearance)) }
             return SelectionOffer(
                 forward = offered.any { MessageAction.Forward in it.second },
                 copy = offered.any { MessageAction.Copy in it.second && it.first.text.isNotBlank() },
@@ -39,8 +45,14 @@ internal data class SelectionOffer(
         }
 
         /** Les messages de [bubbles] auxquels la loi offre [action], dans l'ordre reçu. */
-        fun idsOffering(action: MessageAction, bubbles: List<BubbleContent>, canWrite: Boolean, nowMillis: Long): List<String> =
-            bubbles.filter { action in MessageActionMenu.actions(it.selectionContext(canWrite, nowMillis)) }.map { it.messageId }
+        fun idsOffering(
+            action: MessageAction,
+            bubbles: List<BubbleContent>,
+            canWrite: Boolean,
+            nowMillis: Long,
+            signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
+        ): List<String> =
+            bubbles.filter { action in MessageActionMenu.actions(it.selectionContext(canWrite, nowMillis, signalClearance)) }.map { it.messageId }
 
         /** Les messages de [bubbles] que la loi laisse copier, leur texte en lignes — l'ordre du fil. */
         fun copyText(bubbles: List<BubbleContent>, canWrite: Boolean, nowMillis: Long): String =
@@ -59,7 +71,12 @@ internal data class SelectionOffer(
             return if (starrable.all { it.isStarred }) starrable else starrable.filterNot { it.isStarred }
         }
 
-        private fun BubbleContent.selectionContext(canWrite: Boolean, nowMillis: Long): MessageActionContext =
+        /** [signalClearance] (#13790) : « pour tous » n'existe que vers une conversation connue claire ; copier, étoiler, « pour moi » n'en dépendent pas. */
+        private fun BubbleContent.selectionContext(
+            canWrite: Boolean,
+            nowMillis: Long,
+            signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
+        ): MessageActionContext =
             actionContext(
                 canWrite = canWrite,
                 canDeleteForEveryone = MessageDeletability.canDeleteForEveryone(
@@ -67,6 +84,7 @@ internal data class SelectionOffer(
                     createdAtMillis = isoToEpochMillisOrNull(createdAtIso),
                     nowMillis = nowMillis,
                 ),
+                signalClearance = signalClearance,
             )
     }
 }

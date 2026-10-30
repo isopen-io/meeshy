@@ -9,6 +9,8 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionContext
 import me.meeshy.sdk.model.call.CallActionSet
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
+import me.meeshy.sdk.model.call.CallCameraRail
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallPillRowContent
 import me.meeshy.ui.icons.MeeshyIcons
@@ -32,11 +34,15 @@ internal data class CallPillItem(
 internal object CallPillModel {
 
     /** The context of the action law, read from the call snapshot. */
-    fun actionContext(state: CallUiState, isRegistered: (CallAction) -> Boolean): CallActionContext =
+    fun actionContext(
+        state: CallUiState,
+        isRegistered: (CallAction) -> Boolean,
+        hasSelectableCameras: Boolean = false,
+    ): CallActionContext =
         CallActionContext(
             isDesktop = false,
             isVideoEnabled = state.isVideoCall && state.isCameraOn,
-            hasSelectableCameras = false,
+            hasSelectableCameras = hasSelectableCameras,
             isConnected = state.status == CallStatus.CONNECTED,
             mayRecord = isRegistered(CallAction.Recording),
             canPictureInPicture = isRegistered(CallAction.PictureInPicture),
@@ -83,6 +89,8 @@ internal object CallPillModel {
                 icon = entry.presentation.icon,
                 labelRes = entry.presentation.labelRes,
                 kind = if (entry.presentation.isActive) CallPillKind.Active else CallPillKind.Normal,
+                captionRes = entry.presentation.captionRes,
+                hintRes = entry.presentation.hintRes,
                 isToggle = entry.presentation.isActive,
             )
         }
@@ -97,14 +105,26 @@ internal object CallPillModel {
         items: Map<CallAction, CallPillItem>,
         isRegistered: (CallAction) -> Boolean,
     ): CallActionSet {
-        val set = CallActionSet.resolve(actionContext(state, isRegistered))
+        // « Choisir la caméra » n'est présenté que lorsqu'une caméra est branchée : il remplace alors la bascule.
+        val set = CallActionSet.resolve(actionContext(state, isRegistered, hasSelectableCameras = CallAction.CameraPicker in items))
         return CallActionSet(
             myImage = set.myImage.filter { it in items },
             theCall = set.theCall.filter { it in items },
         )
     }
 
-    /** The rows to draw: one per family (titled), or ONE untitled line in compact height. */
-    fun rows(available: CallActionSet, isCompactHeight: Boolean): List<CallPillRowContent> =
-        CallGroupStageSizing.rows(available.familyRows, isCompactHeight)
+    /**
+     * The rows to draw: one per family (titled), or ONE untitled line in compact height. When my tile or the top
+     * rail carries the controls of my image ([placement]), the « (…) » drops them (iOS `CallCameraRail.menuRows`).
+     */
+    fun rows(
+        available: CallActionSet,
+        isCompactHeight: Boolean,
+        placement: CallCameraControlsPlacement,
+    ): List<CallPillRowContent> =
+        CallGroupStageSizing.rows(CallCameraRail.menuRows(available, placement), isCompactHeight)
+
+    /** « Effets · Écran », the row above my tile (iOS `CallCameraRail.selfTileRows`): only what the call offers now. */
+    fun selfEffects(available: CallActionSet, items: Map<CallAction, CallPillItem>): List<CallPillItem> =
+        CallCameraRail.selfTileRows(CallCameraRail.actions(available)).effects.mapNotNull(items::get)
 }

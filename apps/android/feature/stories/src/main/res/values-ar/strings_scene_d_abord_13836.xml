@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_selection_order">الترتيب</string>
+    <string name="composer_selection_remove">إزالة</string>
+    <string name="composer_selection_selected">محدَّد</string>
+    <string name="composer_selection_set_background">تعيين كخلفية</string>
+    <string name="composer_selection_replace_background">استبدال الخلفية</string>
+    <string name="composer_selection_placed_media">وسائط على المشهد</string>
+</resources>

@@ -81,6 +81,19 @@ interface MessageApi {
     ): MessagesApiResponse
 
     /**
+     * Lecture CIBLÉE d'un message par son id (#13797) : `around=<id>` avec `limit=1` donne une moitié de
+     * fenêtre nulle de chaque côté, donc la liste ne rend QUE ce message, mais passée par tout
+     * l'enrichissement de la liste (`enrichForwardedMessagesForList` : l'aperçu `forwardedFrom` d'un
+     * transfert), que `GET /messages/{id}` ne sert pas (son `select` n'a que `forwardedFromId`).
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int = 1,
+    ): ApiResponse<List<ApiMessage>>
+
+    /**
      * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
      * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
      * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.

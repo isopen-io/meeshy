@@ -1,8 +1,11 @@
 package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -12,6 +15,7 @@ import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -19,7 +23,7 @@ import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -110,13 +114,18 @@ class CallSignalManager internal constructor(
     val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
 
     /**
-     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
-     * The caller gets its ICE servers in the initiate ACK; the callee — whose
-     * `call:initiated` frame carries none — requests them on accept and configures
-     * the WebRTC engine once they land here. Hot, no replay.
+     * `true` while the signalling socket is connected, one value per edge. The gateway takes a dropped socket
+     * out of the call room and forgets its media: a call rejoins on each return (#13765, iOS `didReconnect`).
      */
-    private val _iceServersRefreshed = SocketInboundRoute.subject<List<SocketIceServer>>()
-    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.exposed()
+    val socketConnected: Flow<Boolean> =
+        socketManager.connectionState.map { it == SocketConnectionState.CONNECTED }.distinctUntilChanged()
+
+    /**
+     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers]: the call they answer,
+     * the set, and its lifetime (`ttl`), which re-arms the next refresh of a long call (#13773). Hot, no replay.
+     */
+    private val _iceServersRefreshed = SocketInboundRoute.subject<IceServersRefreshedPayload>()
+    val iceServersRefreshed: SharedFlow<IceServersRefreshedPayload> = _iceServersRefreshed.exposed()
 
     /**
      * A participant left the room WITHOUT ending the call (`call:participant-left`
@@ -124,6 +133,13 @@ class CallSignalManager internal constructor(
      * FSM-facing [events]; the consumer prunes the leaver's media by identity.
      * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
      */
+    /**
+     * Who joined the room, named (`call:participant-joined`, participant nested) — a group call admits the
+     * arrival to its roster. [events] keeps only the joiner's id for the FSM. Hot, no replay.
+     */
+    private val _participantArrivals = SocketInboundRoute.subject<CallParticipantArrival>()
+    val participantArrivals: SharedFlow<CallParticipantArrival> = _participantArrivals.exposed()
+
     private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
     val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
@@ -437,6 +453,9 @@ class CallSignalManager internal constructor(
         if (event == ICE_SERVERS_REFRESHED_EVENT) {
             CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
         }
+        if (event == PARTICIPANT_JOINED_EVENT) {
+            CallSignalMapper.participantArrival(raw)?.let(_participantArrivals::emitArrived)
+        }
         if (event == PARTICIPANT_LEFT_EVENT) {
             CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)
         }
@@ -486,6 +505,8 @@ class CallSignalManager internal constructor(
 
         /** A participant left the room without ending the call (group calls). */
         const val PARTICIPANT_LEFT_EVENT = SocketEventNames.CALL_PARTICIPANT_LEFT
+
+        const val PARTICIPANT_JOINED_EVENT = SocketEventNames.CALL_PARTICIPANT_JOINED
 
         /** The gateway flagging the REMOTE peer's sustained bad network. */
         const val QUALITY_ALERT_EVENT = SocketEventNames.CALL_QUALITY_ALERT

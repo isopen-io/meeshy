@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +68,7 @@ fun StoryTray(
     modifier: Modifier = Modifier,
     onAddStory: () -> Unit = {},
     onManageStories: () -> Unit = {},
+    onEditStory: ((String) -> Unit)? = null,
     onShowProfile: ((String) -> Unit)? = null,
     moodEmojiOf: (String) -> String? = { null },
     myMoodEmoji: String? = null,
@@ -102,6 +102,7 @@ fun StoryTray(
             onOpenStory = onOpenStory,
             onAddStory = onAddStory,
             onManageStories = onManageStories,
+            onEditStory = onEditStory,
             onShowProfile = onShowProfile,
             onAppeared = impressions::onRingAppeared,
             onAddStatus = onAddStatus,
@@ -124,6 +125,7 @@ internal fun StoryTrayRail(
     onOpenStory: (String) -> Unit,
     onAddStory: () -> Unit,
     onManageStories: () -> Unit,
+    onEditStory: ((String) -> Unit)? = null,
     onShowProfile: ((String) -> Unit)?,
     onAppeared: (String?) -> Unit,
     myMoodEmoji: String? = null,
@@ -133,11 +135,12 @@ internal fun StoryTrayRail(
     onMoodShown: ((String) -> Unit)? = null,
 ) {
     LazyRow(
-        modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
+        modifier = Modifier.height(StoryEntryMetrics.height),
         horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
         contentPadding = PaddingValues(
-            horizontal = StoryEntryMetrics.paddingHorizontal,
-            vertical = StoryEntryMetrics.paddingVertical,
+            start = StoryEntryMetrics.paddingHorizontal,
+            end = StoryEntryMetrics.paddingHorizontal,
+            top = StoryEntryMetrics.paddingVertical,
         ),
     ) {
         val selfRing = tray.self
@@ -153,6 +156,7 @@ internal fun StoryTrayRail(
                     onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                     onAdd = onAddStory,
                     onManage = onManageStories,
+                    onEdit = onEditStory,
                     onAppeared = onAppeared,
                     onAddStatus = onAddStatus,
                     onMoodTap = onAddStatus,
@@ -293,7 +297,7 @@ private fun StoryFailedRow(
 @Composable
 private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
     LazyRow(
-        modifier = modifier.semantics { contentDescription = "" },
+        modifier = modifier.height(StoryEntryMetrics.height).semantics { contentDescription = "" },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         userScrollEnabled = false,
@@ -340,12 +344,15 @@ private fun AddStoryItem(
             onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
         )
         Box(
-            modifier = Modifier
-                .size(StoryEntryMetrics.ring)
-                .clip(CircleShape)
-                .background(MeeshyTheme.tokens.backgroundTertiary),
+            modifier = Modifier.size(StoryEntryMetrics.ring),
             contentAlignment = Alignment.Center,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(StoryEntryMetrics.ring)
+                    .clip(CircleShape)
+                    .background(MeeshyTheme.tokens.backgroundTertiary),
+            )
             Icon(
                 Icons.Filled.Add,
                 contentDescription = null,
@@ -354,6 +361,6 @@ private fun AddStoryItem(
             )
             if (onAddStatus != null) StatusBadge(moodEmoji = moodEmoji, onClick = onAddStatus)
         }
-        StoryLabel(addLabel, unread = false)
+        StoryLabel(addLabel, unread = false, modifier = Modifier.padding(top = StoryEntryMetrics.labelSpacing))
     }
 }

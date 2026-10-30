@@ -240,6 +240,8 @@
         <item quantity="one">+%1$d Funke · erste Story</item>
         <item quantity="other">+%1$d Funken · erste Story</item>
     </plurals>
+    <string name="onboarding_story_sending">Deine Story ist unterwegs …</string>
+    <string name="onboarding_story_sending_detail">Du kannst weitermachen – sie wird im Hintergrund veröffentlicht.</string>
     <string name="onboarding_story_title">Zeig dich</string>
     <string name="onboarding_story_verify">Bestätige deine E-Mail, um deine Story zu posten</string>
     <string name="onboarding_story_verify_detail">Tippe auf den Link in der E-Mail: Danach kann deine Story sofort raus.</string>
@@ -265,6 +267,7 @@
     <string name="signup_legal">Wenn du fortfährst, stimmst du den Nutzungsbedingungen und der Datenschutzerklärung zu.</string>
     <string name="signup_legal_privacy">Datenschutzerklärung</string>
     <string name="signup_legal_terms">Nutzungsbedingungen</string>
+    <string name="signup_min_characters">Mindestens %1$d Zeichen.</string>
     <string name="signup_password_hide">Passwort ausblenden</string>
     <string name="signup_password_label">Passwort</string>
     <string name="signup_password_show">Passwort anzeigen</string>

@@ -16,6 +16,9 @@ public object CallFrameCatalogue {
     /** Tous les cadres, ordonnés par ambiance puis dans l'ordre des fichiers. */
     public val all: List<CallFrameDesign> by lazy { parse(CallFrameCatalogueGenerated.moodFiles.map { it.second }) }
 
+    /** La mise en avant du carrousel d'appel (#12683), lue du même dossier partagé. */
+    public val spotlight: List<CallFrameSpotlight> by lazy { CallFrameSpotlightRule.parse(CallFrameCatalogueGenerated.spotlightFile) }
+
     public fun bucket(people: Int): CallFrameBucket? = CallFrameBucket.entries.firstOrNull { people in it.people }
 
     public fun frames(
@@ -43,7 +46,8 @@ public object CallFrameCatalogue {
         return among.firstOrNull { it.mood.raw == mood && it.serves(people) }
     }
 
-    public fun frame(id: String, among: List<CallFrameDesign> = all): CallFrameDesign? = among.firstOrNull { it.id == id }
+    /** Un cadre par son identifiant, de base ou décliné (#12685). */
+    public fun frame(id: String, among: List<CallFrameDesign> = all): CallFrameDesign? = CallFrameStyleRule.resolve(id, among)
 
     /** Les cadres que déplient des fichiers d'ambiance bruts ; un fichier ou un motif illisible est ignoré. */
     public fun parse(moodFiles: List<String>): List<CallFrameDesign> =
@@ -72,7 +76,8 @@ public object CallFrameCatalogue {
         val cost = CallFrameLookDecoder.cost(motif)
         return CallFrameBucket.entries.mapNotNull { bucket ->
             val variant = variants[bucket.raw] as? JsonObject ?: return@mapNotNull null
-            val look = runCatching { CallFrameLookDecoder.look(JsonObject(base + variant)) }.getOrNull() ?: return@mapNotNull null
+            val merged = JsonObject(base + variant)
+            val look = runCatching { CallFrameLookDecoder.look(merged) }.getOrNull() ?: return@mapNotNull null
             CallFrameDesign(
                 id = "$id.${bucket.raw}",
                 motif = id,
@@ -83,7 +88,19 @@ public object CallFrameCatalogue {
                 credits = credits,
                 surfaces = surfaces,
                 cost = cost,
+                styles = styles(motif, merged),
             )
         }
     }
+
+    /** Les déclinaisons d'un motif, chacune sur l'apparence de SA tranche : seules ses clés remplacent celles du cadre. */
+    private fun styles(motif: JsonObject, merged: JsonObject): List<CallFrameStyle> =
+        (motif["styles"] as? JsonArray).orEmpty().mapNotNull { entry ->
+            val style = entry as? JsonObject ?: return@mapNotNull null
+            val id = (style["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+            val name = (style["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: id
+            val override = style["look"] as? JsonObject ?: return@mapNotNull null
+            if (!CallFrameStyleRule.isStyleId(id)) return@mapNotNull null
+            runCatching { CallFrameLookDecoder.look(JsonObject(merged + override)) }.getOrNull()?.let { CallFrameStyle(id, name, it) }
+        }
 }

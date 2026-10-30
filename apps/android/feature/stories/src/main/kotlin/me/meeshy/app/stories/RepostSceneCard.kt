@@ -23,13 +23,15 @@ import me.meeshy.ui.theme.MeeshyRadius
 
 /**
  * La scène d'une story reposté, incrustée dans une carte du fil — iOS `StoryRepostEmbedCell` : la scène seule
- * (9:16, muette, au repos), au même rendu que le lecteur de stories : même projection ([StorySlideProjector]),
- * même lecteur ([StoryScenePlayer], `playing = false`). Un appui ouvre l'original.
+ * (9:16, muette), au même rendu que le lecteur de stories : même projection ([StorySlideProjector]),
+ * même lecteur ([StoryScenePlayer]). Elle joue seulement quand le fil l'élit ([live]) ; sinon c'est une image fixe, sans
+ * aucun lecteur (#13663) ; un appui appelle [onOpen] — l'appelant choisit entre la story en plein écran et la fiche du post.
  */
 @Composable
 fun RepostSceneCard(
     item: StoryItem,
     authorName: String?,
+    live: Boolean,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RepostSceneViewModel = hiltViewModel(),
@@ -48,10 +50,11 @@ fun RepostSceneCard(
     ) {
         StoryScenePlayer(
             slide = slide,
-            playing = false,
+            playing = live,
             muted = true,
             loads = true,
             rewindWhenIdle = false,
+            resting = !live,
             modifier = Modifier.fillMaxSize(),
         )
     }

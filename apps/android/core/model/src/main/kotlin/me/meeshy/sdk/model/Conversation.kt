@@ -168,6 +168,13 @@ data class ApiParticipant(
     val avatar: String? = null,
     val role: String? = null,
     val joinedAt: String? = null,
+    /**
+     * La présence que la passerelle sert sur la ligne de liste (amis acceptés / soi / ADMIN, sinon
+     * masquée : `false` et `null`). Elle ne sert qu'à SEMER la carte de présence au démarrage à froid
+     * ([servedPresence]) : le cache Room n'en garde rien ([withoutServedPresence]).
+     */
+    val isOnline: Boolean? = null,
+    val lastActiveAt: String? = null,
 )
 
 /**

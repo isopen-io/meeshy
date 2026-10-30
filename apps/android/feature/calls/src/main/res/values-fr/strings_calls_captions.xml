@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">Sous-titres</string>
+    <string name="call_captions_state_off">Désactivés</string>
+    <string name="call_captions_state_translated">Traduction</string>
+    <string name="call_captions_state_original">Texte original</string>
+    <string name="call_captions_peer_active">Votre interlocuteur a activé la transcription</string>
+    <string name="call_captions_journal">Journal</string>
+    <string name="call_captions_journal_title">Journal de l’appel</string>
+    <string name="call_captions_journal_hint">Ouvre toutes les phrases de l’appel</string>
+    <string name="call_captions_waiting">Les sous-titres s’afficheront ici dès que quelqu’un parlera.</string>
+    <string name="call_captions_translated">Traduit</string>
+    <string name="call_captions_original">Original</string>
+    <string name="call_captions_back_to_live">Revenir au direct</string>
+    <string name="call_captions_new_lines">Nouvelles phrases</string>
+    <string name="call_captions_end_to_end">Les sous-titres ne sont pas disponibles dans une conversation chiffrée de bout en bout.</string>
+    <string name="call_captions_unavailable">Les sous-titres ne sont pas encore disponibles pour cet appel.</string>
+    <string name="call_captions_local_unsupported">Votre parole n’est pas sous-titrée sur cet appareil : il faut Android 13 et la reconnaissance vocale sur l’appareil. Vous lisez toujours les sous-titres de votre interlocuteur.</string>
+    <string name="call_captions_local_language_missing">Votre parole n’est pas sous-titrée : cet appareil n’a pas le modèle vocal de votre langue. Vous lisez toujours les sous-titres de votre interlocuteur.</string>
+</resources>

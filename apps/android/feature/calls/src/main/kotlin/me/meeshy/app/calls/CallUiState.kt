@@ -148,12 +148,19 @@ data class CallUiState(
      * audio) — iOS `isRemoteAudioEnabled` parity. Only on the media phases.
      */
     val isPeerMuted: Boolean = false,
+    /** #13333 — what the « Sous-titres » button shows: mode, invitation, and whether this call may carry captions. */
+    val captions: CallCaptionsChip = CallCaptionsChip(),
     /**
      * `true` while the remote peer's camera is off DURING A VIDEO CALL
      * (`call:media-toggled` video) — iOS `isRemoteVideoEnabled` parity, driving
      * the "camera off" placeholder. Never raised on an audio-only call.
      */
     val isPeerCameraOff: Boolean = false,
+    /**
+     * `true` while the remote peer shares their screen (`call:media-toggled` screen) — iOS
+     * `isRemoteSharing`: their stream shows even with their camera off, and the banner says so (#13332).
+     */
+    val isPeerScreenSharing: Boolean = false,
     /**
      * `true` while the app itself froze the outgoing video to keep a poor link
      * alive ([CallVideoHealth]) — the user did NOT turn the camera off, so the
@@ -182,6 +189,9 @@ data class CallUiState(
      */
     fun withFrozenClock(): CallUiState =
         if (hasLiveClock && durationLabel != null) copy(durationLabel = FROZEN_CLOCK, durationSeconds = 0) else this
+
+    /** The captions as the screen reads them, folded in without a copy when nothing changed. */
+    fun withCaptions(chip: CallCaptionsChip): CallUiState = if (chip == captions) this else copy(captions = chip)
 
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -246,6 +256,7 @@ object CallPresenter {
         peerVideoEnabled: Boolean = true,
         videoAutoPaused: Boolean = false,
         mediaEstablished: Boolean = false,
+        peerScreenSharing: Boolean = false,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -270,7 +281,9 @@ object CallPresenter {
             isPeerMuted = onMediaPhase && !peerAudioEnabled,
             // Only a VIDEO call renders a camera indicator — an audio call's
             // peer "camera off" is its permanent, unremarkable state.
-            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
+            // A shared screen travels on the video sender: it shows even with the camera off (iOS `isRemoteVideoVisible`).
+            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled && !peerScreenSharing,
+            isPeerScreenSharing = onMediaPhase && peerScreenSharing,
             isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
             showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),
             durationSeconds = elapsedSeconds.coerceAtLeast(0),

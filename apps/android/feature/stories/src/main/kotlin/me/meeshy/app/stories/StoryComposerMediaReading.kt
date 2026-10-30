@@ -21,5 +21,6 @@ internal fun ContentResolver.displayName(uri: Uri): String? =
 internal fun publishLabel(title: me.meeshy.sdk.model.composer.StoryPublishTitle): String = when (title) {
     me.meeshy.sdk.model.composer.StoryPublishTitle.Single -> stringResource(R.string.composer_publish_as_story)
     is me.meeshy.sdk.model.composer.StoryPublishTitle.Many -> stringResource(R.string.stories_composer_publish_many, title.count)
+    me.meeshy.sdk.model.composer.StoryPublishTitle.Save -> stringResource(R.string.story_edit_save)
     me.meeshy.sdk.model.composer.StoryPublishTitle.StoryAndReel -> stringResource(R.string.composer_publish_as_storyAndReel)
 }

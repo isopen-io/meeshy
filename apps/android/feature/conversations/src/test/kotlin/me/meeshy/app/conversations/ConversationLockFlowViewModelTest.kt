@@ -31,7 +31,6 @@ import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.PresenceStore
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -67,13 +66,12 @@ class ConversationLockFlowViewModelTest {
             every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
+            every { participantJoined } returns MutableSharedFlow()
+            every { participantUnbanned } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()
             every { presenceSnapshot } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
             every { typingStopped } returns MutableSharedFlow()
-        },
-        presenceStore = mockk<PresenceStore> {
-            every { entries } returns MutableStateFlow(emptyMap())
         },
         workManager = workManager,
         draftStore = InMemoryConversationDraftStore(),

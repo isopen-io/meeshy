@@ -25,14 +25,18 @@ import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
+import me.meeshy.app.chat.options.ConversationOptionsExit
+import me.meeshy.app.chat.options.rememberConversationOptionsSlots
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.viewer.GalleryImageSaver
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
 import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
@@ -85,6 +89,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onDismiss = actions.dismissImageViewer,
             captions = gallery.captions,
             authors = gallery.senderNames,
+            authorIdentities = gallery.authorIdentities,
             timestamps = galleryTimestamps,
             thumbnailUrls = gallery.thumbnailUrls,
             altTexts = gallery.altTexts,
@@ -97,9 +102,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
+    val signalClearance = LocalChatSignalClearance.current
     val actionTarget = state.actionMessageId?.let { id ->
         state.messages.firstOrNull { it.messageId == id }
     }
+    val saveMessageMedia = rememberSaveMessageMedia()
     if (actionTarget != null) {
         val nowMillis = System.currentTimeMillis()
         val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
@@ -166,6 +173,15 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 actions.beginSelection(actionTarget.messageId)
             },
             canWrite = state.viewerMayWrite,
+            hasThread = ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
+                .threadFor(actionTarget.messageId) != null,
+            conversationIsEndToEnd = state.isEndToEnd,
+            onThread = { actions.openReplyThread(actionTarget.messageId) },
+            onSaveMedia = { saveMessageMedia(actionTarget) },
+            onSharePiece = { pieceId -> actions.onFileAttachmentShare(actionTarget.messageId, pieceId) },
+            onTranscription = { localRoute.open(MessageDetailRoute.Transcription(actionTarget.messageId)) },
+            onReactions = { actions.openReactionDetails(actionTarget.messageId) },
+            signalClearance = signalClearance,
         )
     }
 
@@ -222,19 +238,29 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
             add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
-            add(ConversationInfoEntry(MeeshyIcons.Palette, stringResource(R.string.conversation_appearance_entry_title), openFrom { sheets.appearance = true }))
             add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
-            // Moderator+ viewers of a group get the admin surfaces: the share-link creator
-            // and the conversation-settings sheet (write-role / announcement / slow-mode).
-            if (host.navigation.mayInviteFriends) {
-                add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
-            }
+            // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
+            // announcement / slow-mode); the share link is the « Partager » button of the Options.
             if (state.slowModeExempt) {
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }
+        val infoTitle = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title)
+        // L'onglet Options d'iOS (#13777) : une conversation quittée ou supprimée referme aussi le fil.
+        val options = rememberConversationOptionsSlots(
+            conversationId = state.conversationId,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            title = infoTitle,
+            accentColor = accentColor,
+            onOpenAppearance = openFrom { sheets.appearance = true },
+            onShare = openFrom(host.navigation.onCreateShareLink),
+            onExit = { exit ->
+                sheets.info = false
+                if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
+            },
+        )
         ConversationInfoSheet(
-            title = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
                 stringResource(R.string.chat_header_members, state.memberCount)
             } else {
@@ -243,8 +269,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             avatarUrl = host.header.avatarUrl,
             accentColor = accentColor,
             peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            conversationId = state.conversationId,
             entries = entries,
             onDismiss = { sheets.info = false },
+            headerActions = options.header,
+            options = options.body,
         )
     }
 
@@ -351,6 +380,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
+                    is MessageDetailRoute.Transcription ->
+                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
                     else -> Unit
                 }
             }
@@ -361,8 +392,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     details = details,
                     accentColor = accentColor,
                     onSelectTab = actions.selectReactionTab,
-                    onReact = { emoji -> actions.addReactionFromDetails(details.messageId, emoji) },
-                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) },
+                    // #13790 — la fiche « qui a réagi » se lit partout ; elle ne fait réagir que vers une conversation connue claire.
+                    onReact = { emoji: String -> actions.addReactionFromDetails(details.messageId, emoji) }
+                        .takeIf { PlainSignalAdmission.offers(signalClearance) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) }.takeIf { PlainSignalAdmission.offers(signalClearance) },
                     modifier = Modifier.navigationBarsPadding(),
                 )
             }
@@ -491,12 +524,18 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
     setOf(
         MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select,
-        MessageAction.ExportCard,
+        MessageAction.ExportCard, MessageAction.OpenLink, MessageAction.CopyLink, MessageAction.Thread, MessageAction.Translate,
+        MessageAction.Share, MessageAction.Transcription, MessageAction.Reactions,
     )
 
 /**
  * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
  * ne voit pas qui a lu — l'entrée « Vu par » disparaît du menu.
  */
-internal fun hostedDetailEntries(showReadReceipts: Boolean): Set<MessageAction> =
-    if (showReadReceipts) HOSTED_DETAIL_ENTRIES else HOSTED_DETAIL_ENTRIES - MessageAction.Views
+internal fun hostedDetailEntries(
+    showReadReceipts: Boolean,
+    gallerySaveSupported: Boolean = GalleryImageSaver.isSupported,
+): Set<MessageAction> {
+    val served = if (gallerySaveSupported) HOSTED_DETAIL_ENTRIES + MessageAction.SaveMedia else HOSTED_DETAIL_ENTRIES
+    return if (showReadReceipts) served else served - MessageAction.Views
+}

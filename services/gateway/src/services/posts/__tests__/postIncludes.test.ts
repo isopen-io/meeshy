@@ -250,6 +250,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
           // #10315 — lus pour décider si l'original se sert encore, retirés par la projection.
           'visibility',
           'moderationHiddenAt',
+          'deletedAt',
         ].sort(),
       );
     });

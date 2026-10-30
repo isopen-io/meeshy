@@ -5,8 +5,16 @@ import me.meeshy.sdk.call.camera.CallCameraZoom
 import me.meeshy.sdk.call.camera.CameraLensDiscovery
 import me.meeshy.sdk.call.camera.CameraZoomActuator
 import me.meeshy.sdk.call.camera.ZoomCropObserver
+import me.meeshy.sdk.call.effects.CallDeviceConstraint
+import me.meeshy.sdk.call.effects.CallMotionPreference
+import me.meeshy.sdk.call.effects.CallVideoEffectsProcessor
+import me.meeshy.sdk.call.effects.MlKitFaceDetector
+import me.meeshy.sdk.call.effects.MlKitPersonSegmenter
+import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.camera.CameraLensClassifier
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.model.call.camera.CameraLensProbe
+import me.meeshy.sdk.model.call.camera.CameraPickerLaw
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Enumerator
@@ -36,6 +44,8 @@ internal class CallMediaSources(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var zoomObserver: ZoomCropObserver? = null
     private var openCameraName: String? = null
+    private var effects: CallVideoEffectsProcessor? = null
+    @Volatile private var effectsConfig: VideoFilterConfig = VideoFilterConfig.DEFAULT
     private var lensProbes: List<CameraLensProbe> = emptyList()
     private val enumerator: CameraEnumerator by lazy { Camera2Enumerator(appContext) }
 
@@ -47,6 +57,15 @@ internal class CallMediaSources(
 
         override fun openLens(lensId: String) {
             reopen(lensId)
+        }
+
+        override fun openCamera(cameraId: String): Boolean {
+            var opened = false
+            reopen(cameraId) { done ->
+                if (done) attachZoom(cameraId)
+                opened = done
+            }
+            return opened
         }
     })
 
@@ -83,6 +102,18 @@ internal class CallMediaSources(
         val helper = SurfaceTextureHelper.create("MeeshyCapture", current.eglBase.eglBaseContext)
         val source = current.factory.createVideoSource(false)
         val observer = ZoomCropObserver(source.capturerObserver)
+        val constraint = CallDeviceConstraint(appContext)
+        val motion = CallMotionPreference(appContext)
+        effects = CallVideoEffectsProcessor(
+            helper.handler,
+            MlKitPersonSegmenter(),
+            constraint::isConstrained,
+            faces = MlKitFaceDetector(),
+            isReduceMotion = motion::isReduceMotion,
+        ).also {
+            it.setConfig(effectsConfig)
+            source.setVideoProcessor(it)
+        }
         capturer.initialize(helper, appContext, observer)
         capturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
         videoCapturer = capturer
@@ -94,9 +125,26 @@ internal class CallMediaSources(
         attachZoom(name)
     }
 
+    /**
+     * Rattache le zoom à la caméra [name] qui vient de s'ouvrir : ses objectifs (aucun pour une caméra branchée,
+     * que seul le recadrage ne sert pas), le choix de caméra et sa face, d'où le miroir de l'aperçu.
+     */
     private fun attachZoom(name: String) {
-        val isFront = enumerator.isFrontFacing(name)
-        zoom.attach(CameraLensClassifier.profile(lensProbes, isFront), activeLensId = name)
+        val isExternal = lensProbes.firstOrNull { it.id == name }?.isExternal == true
+        val isFront = !isExternal && enumerator.isFrontFacing(name)
+        val facing = when {
+            isExternal -> CameraFacing.External
+            isFront -> CameraFacing.Front
+            else -> CameraFacing.Back
+        }
+        val cameras = CameraPickerLaw.options(lensProbes)
+        zoom.attach(
+            profile = if (isExternal) null else CameraLensClassifier.profile(lensProbes, isFront),
+            activeLensId = name,
+            cameras = cameras,
+            selectedCameraId = CameraPickerLaw.selectedId(cameras, lensProbes, name),
+            facing = facing,
+        )
     }
 
     /** Rouvre la capture sur la caméra [name], sur la même source : la piste, l'encodeur et le recadrage restent. */
@@ -202,10 +250,23 @@ internal class CallMediaSources(
         return main?.takeIf { it in names } ?: names.firstOrNull()
     }
 
+    /**
+     * Les effets de MA caméra (#13331), appliqués à l'image ENVOYÉE : l'autre les voit, mon aperçu aussi.
+     * Gardés pour une caméra qui n'a pas encore démarré ; remis à zéro avec la vidéo, en fin d'appel.
+     */
+    fun setVideoEffects(config: VideoFilterConfig) {
+        effectsConfig = config
+        effects?.setConfig(config)
+    }
+
     /** Arrête la capture et dispose les sources ; à appeler AVANT de disposer le `PeerConnection`. */
     fun releaseVideo() {
         runCatching { videoCapturer?.stopCapture() }
         videoCapturer?.dispose()
+        videoSource?.setVideoProcessor(null)
+        effects?.release()
+        effects = null
+        effectsConfig = VideoFilterConfig.DEFAULT
         surfaceTextureHelper?.dispose()
         localVideoTrack?.dispose()
         videoSource?.dispose()

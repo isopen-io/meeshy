@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import org.junit.Test
 
 /** #13665 — un réel du fil montre sa couverture (vignette, scène au repos ou aplat), comme iOS ; jamais une boîte vide. */
@@ -33,6 +34,8 @@ class ReelCoverTest {
     private fun post(media: List<ApiPostMedia>, effects: StoryEffects? = null) =
         ApiPost(id = "r1", type = "REEL", media = media, storyEffects = effects, author = ApiAuthor(id = "u1", username = "amina"))
 
+    private val authorAccent = DynamicColorGenerator.colorForPost("u1", "REEL", null)
+
     private fun cover(post: ApiPost) = FeedPostBuilder.build(post, Prefs, mediaBaseUrl = "https://cdn.test").reelCover
 
     @Test
@@ -46,13 +49,13 @@ class ReelCoverTest {
     @Test
     fun `une video sans vignette n affiche pas le fichier video comme une image`() {
         val cover = cover(post(listOf(video.copy(thumbnailUrl = null))))
-        assertThat(cover).isEqualTo(ReelCover.Backdrop(isVideo = true))
+        assertThat(cover).isEqualTo(ReelCover.Backdrop(isVideo = true, accentHex = authorAccent))
     }
 
     @Test
     fun `un reel audio a couverture montre l image, un reel audio seul montre l aplat`() {
         assertThat((cover(post(listOf(audio, image))) as ReelCover.Poster).url).isEqualTo("https://cdn.test/u/i.jpg")
-        assertThat(cover(post(listOf(audio)))).isEqualTo(ReelCover.Backdrop(isVideo = false))
+        assertThat(cover(post(listOf(audio)))).isEqualTo(ReelCover.Backdrop(isVideo = false, accentHex = authorAccent))
     }
 
     @Test
@@ -60,11 +63,12 @@ class ReelCoverTest {
         val cover = cover(post(listOf(audio), scene))
         assertThat(cover).isInstanceOf(ReelCover.Scene::class.java)
         assertThat((cover as ReelCover.Scene).item.id).isEqualTo("r1")
+        assertThat(cover.accentHex).isEqualTo(authorAccent)
     }
 
     @Test
     fun `un fond seul n est pas une scene`() {
-        assertThat(cover(post(listOf(audio), StoryEffects(background = "FF0000")))).isEqualTo(ReelCover.Backdrop(isVideo = false))
+        assertThat(cover(post(listOf(audio), StoryEffects(background = "FF0000")))).isEqualTo(ReelCover.Backdrop(isVideo = false, accentHex = authorAccent))
     }
 
     @Test
@@ -82,17 +86,21 @@ class ReelCoverTest {
     }
 
     @Test
-    fun `le reel cite d un repost montre sa vignette, ou la scene que la republication sert`() {
+    fun `le reel cite d un repost montre sa vignette, ou l aplat de la couleur de son auteur`() {
         val source = ApiRepostOf(id = "orig", type = "REEL", media = listOf(video), author = ApiAuthor(id = "u9", username = "orig"))
         val withPoster = RepostEmbedBuilder.forPost(ApiPost(id = "outer", type = "POST", repostOf = source), Prefs, "https://cdn.test")
         assertThat((withPoster!!.reelCover as ReelCover.Poster).url).isEqualTo("https://cdn.test/u/v.jpg")
 
-        val audioOnly = source.copy(media = listOf(audio), storyEffects = scene)
-        val withScene = RepostEmbedBuilder.forPost(ApiPost(id = "outer", type = "POST", repostOf = audioOnly), Prefs, null)
-        assertThat(withScene!!.reelCover).isInstanceOf(ReelCover.Scene::class.java)
-
         val bare = RepostEmbedBuilder.forPost(ApiPost(id = "outer", type = "POST", repostOf = source.copy(media = listOf(audio))), Prefs, null)
-        assertThat(bare!!.reelCover).isEqualTo(ReelCover.Backdrop(isVideo = false))
+        assertThat(bare!!.reelCover).isEqualTo(ReelCover.Backdrop(isVideo = false, accentHex = DynamicColorGenerator.colorForName("u9")))
+    }
+
+    /** iOS `ReelRepostEmbedCell` n'a aucune scène : un réel composé cité est une bande de 116 pt, l'aplat de son auteur et la note de musique. */
+    @Test
+    fun `le reel compose cite d un repost reste une bande d aplat, jamais une scene 9 16`() {
+        val source = ApiRepostOf(id = "orig", type = "REEL", media = listOf(audio), storyEffects = scene, author = ApiAuthor(id = "u9", username = "orig"))
+        val embed = RepostEmbedBuilder.forPost(ApiPost(id = "outer", type = "POST", repostOf = source, storyEffects = scene), Prefs, null)
+        assertThat(embed!!.reelCover).isEqualTo(ReelCover.Backdrop(isVideo = false, accentHex = DynamicColorGenerator.colorForName("u9")))
     }
 
     @Test

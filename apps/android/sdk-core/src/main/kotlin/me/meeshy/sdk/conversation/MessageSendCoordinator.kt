@@ -37,6 +37,8 @@ internal class MessageSendCoordinator(
     private val messageDao: MessageDao,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
+    /** #13792 — l'accusé d'envoi nourrit le registre des régimes comme tout message servi. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) {
 
     /**
@@ -160,6 +162,7 @@ internal class MessageSendCoordinator(
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
             MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
+        regime?.learnFromServed(listOf(serverMessage))
     }
 
     /**
@@ -180,7 +183,8 @@ internal class MessageSendCoordinator(
      * User-initiated retry of a failed bubble: flips it back to `SENDING` and
      * revives its outbox row (or re-enqueues from the cached payload when the
      * row is gone). A bubble refused for its location, or whose media was lost (#13554), is never retried — the same bytes would be refused
-     * again: the tap REMOVES it (bubble and outbox row), so the author can pick another file (#13550).
+     * again: the tap REMOVES it (bubble and outbox row), so the author can pick another file (#13550). Its exhausted uploads are
+     * revived with it (#13820): a bubble that gave up waiting for its conversation's mode resends its kept bytes.
      */
     suspend fun retrySend(cmid: String) {
         val row = messageDao.find(cmid) ?: return
@@ -190,7 +194,7 @@ internal class MessageSendCoordinator(
             return
         }
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
-        if (outboxRepository.retry(cmid)) return
+        if (outboxRepository.retryWithPrerequisites(cmid)) return
         val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
         outboxRepository.enqueue(
             OutboxMutation(

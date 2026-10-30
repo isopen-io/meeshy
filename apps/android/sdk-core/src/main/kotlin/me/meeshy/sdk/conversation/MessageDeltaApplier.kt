@@ -8,9 +8,14 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.AttachmentLiveDeltas
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
+import me.meeshy.sdk.model.AttachmentReadyEvent
+import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
 import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.model.ConversationSocketEvent
+import me.meeshy.sdk.model.MessageAttachmentUpdatedEvent
 import me.meeshy.sdk.model.MessageCitedPostWithdrawnEvent
 import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
@@ -18,12 +23,17 @@ import me.meeshy.sdk.model.MessageHiddenForMeEvent
 import me.meeshy.sdk.model.MessagePinChanged
 import me.meeshy.sdk.model.MessageRemoved
 import me.meeshy.sdk.model.MessageViewOncePurgedEvent
+import me.meeshy.sdk.model.SharedTranslationDeltas
+import me.meeshy.sdk.model.translation.SharedTranslation
+import me.meeshy.sdk.net.MeeshyApi
 
 /**
  * Applique à Room, SANS appel réseau, les événements du fil qui modifient un message déjà en cache
  * (miroir des écritures `MessagePersistenceActor` déclenchées par `ConversationSocketHandler`, iOS) :
  * suppression, expiration, épingle, échéance servie, masquage personnel, consommation et purge d'une
- * vue unique, réactions d'une pièce, retrait du post cité.
+ * vue unique, réactions d'une pièce, retrait du post cité, accusé de consommation d'une pièce
+ * (`attachment-status:updated`), pièce modifiée ou prête (`message:attachment-updated`, `attachment:ready`) et
+ * traduction partagée par un membre.
  *
  * La ligne est modifiée SUR PLACE (même clé, même rang) : la bulle ne saute pas. Une transformation
  * inerte ([ConversationEventDeltas] rend l'instance reçue) n'écrit rien, donc le fil ne recompose pas.
@@ -63,6 +73,9 @@ class MessageDeltaApplier internal constructor(
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
                 ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
             }
+            is AttachmentStatusUpdatedEvent -> transform(event.messageId) { AttachmentLiveDeltas.status(it, event, viewerId) }
+            is MessageAttachmentUpdatedEvent -> enrich(event.messageId, event.conversationId, event.servedAttachmentId, event.attachment)
+            is AttachmentReadyEvent -> readyPiece(event)
             else -> return false
         }
         return true
@@ -76,6 +89,26 @@ class MessageDeltaApplier internal constructor(
         updater.update(messageId, requireSynced = true) { message ->
             ConversationEventDeltas.attachmentReactionToggled(message, attachmentId, emoji, adding)
         } != null
+
+    /**
+     * La traduction qu'un membre a PARTAGÉE (`message:translation-shared`) rejoint les traductions du message en cache :
+     * l'enveloppe s'ouvre avec le texte de la ligne ([SharedTranslationDeltas]). [readerLanguages] est le prisme du lecteur
+     * (rangs 1 à 4) ; sans message en cache, rien n'est écrit — la prochaine ouverture du fil la lira.
+     */
+    suspend fun mergeSharedTranslation(shared: SharedTranslation, readerLanguages: List<String>) {
+        transform(shared.messageId) { SharedTranslationDeltas.merge(it, shared, readerLanguages) }
+    }
+
+    /** Le média prêt d'un MESSAGE (jamais celui d'un post) : même enrichissement que `message:attachment-updated`. */
+    private suspend fun readyPiece(event: AttachmentReadyEvent) {
+        if (!event.isMessageAttachment) return
+        enrich(event.messageId.orEmpty(), event.conversationId.orEmpty(), event.attachmentId, event.servedAttachment(MeeshyApi.json))
+    }
+
+    private suspend fun enrich(messageId: String, conversationId: String, attachmentId: String?, piece: ApiMessageAttachment?) {
+        if (attachmentId.isNullOrBlank() || piece == null) return
+        transform(messageId) { AttachmentLiveDeltas.enriched(it, conversationId, attachmentId, piece) }
+    }
 
     /** Chaque message du fil qui cite le post retiré devient « Story indisponible » (#7969, #13296). */
     private suspend fun withdrawCitedPost(event: MessageCitedPostWithdrawnEvent) {

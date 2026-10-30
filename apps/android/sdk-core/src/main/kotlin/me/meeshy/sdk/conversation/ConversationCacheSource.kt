@@ -25,6 +25,10 @@ import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.keepingParticipantsOf
 import me.meeshy.sdk.model.namesTwoPeople
+import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.model.presence.servedPresence
+import me.meeshy.sdk.model.presence.withoutServedPresence
+import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -71,6 +75,8 @@ internal class ConversationCacheSource(
     private val fence: AccountFence? = null,
     /** #13647 — the cached payloads are decoded here, never on the thread of the screen that collects them. */
     private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
+    /** #13746 — the presence the gateway serves on the page seeds the session's presence map at cold start. */
+    private val presenceSink: ServedPresenceSink = ServedPresenceSink.None,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -100,13 +106,27 @@ internal class ConversationCacheSource(
      * its default/empty); [capturedEtag] is the page-1 response's `ETag`
      * header, captured ONLY when page 1 ALONE proved the sweep complete (see
      * [sweepPages] for why a page-1 ETag is unsafe to store otherwise).
+     * [presence] is #13798: what each page said of presence, under the marks
+     * taken when THAT page was asked for and when ITS response came back.
      */
     private class SweepOutcome(
         val conversations: List<ApiConversation> = emptyList(),
         val isComplete: Boolean = false,
         val notModified: Boolean = false,
         val capturedEtag: String? = null,
+        val presence: List<ServedPresencePage> = emptyList(),
     )
+
+    /** One page as it came back, with what it said of presence ([heardPage]). */
+    private class Fetched(val result: PagedResult<List<ApiConversation>>, val presence: ServedPresencePage)
+
+    /**
+     * #13798 — what [rows] said of presence, marked by the presence map when the page was [requested]
+     * and NOW, as its response is in hand: a status the socket delivers between two pages answers to
+     * the page that came before it, never to the sweep's last page.
+     */
+    private fun heardPage(rows: List<ApiConversation>, requested: Long?): ServedPresencePage =
+        rows.servedPresence().copy(requested = requested, receipt = presenceSink.receipt())
 
     /**
      * Pages through `GET /conversations` up to [PageFetchPlan.MAX_PAGES] (`× [PageFetchPlan.
@@ -157,6 +177,7 @@ internal class ConversationCacheSource(
      * success" (no body was ever decoded).
      */
     private suspend fun sweepPages(updatedSince: String?, ifNoneMatch: String?): SweepOutcome {
+        val requested = presenceSink.receipt()
         val first = when (
             val result = conversationApi.listConditionalResult(
                 offset = 0,
@@ -176,24 +197,33 @@ internal class ConversationCacheSource(
             is ConditionalResult.Fresh -> result
             is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
         }
+        val firstPresence = heardPage(first.data, requested)
         // Unknown completeness — never infer "done" from a missing block.
-        val pagination = first.pagination ?: return SweepOutcome(first.data)
-        if (!pagination.hasMore) return SweepOutcome(first.data, isComplete = true, capturedEtag = first.etag)
+        val pagination = first.pagination ?: return SweepOutcome(first.data, presence = listOf(firstPresence))
+        if (!pagination.hasMore) {
+            return SweepOutcome(first.data, isComplete = true, capturedEtag = first.etag, presence = listOf(firstPresence))
+        }
         val rest = loadRemainingPages(first.data, pagination.total, updatedSince)
-        return SweepOutcome(first.data + rest.rows, rest.isComplete)
+        return SweepOutcome(first.data + rest.rows, rest.isComplete, presence = listOf(firstPresence) + rest.presence)
     }
 
-    private class RemainingPages(val rows: List<ApiConversation>, val isComplete: Boolean)
+    private class RemainingPages(
+        val rows: List<ApiConversation>,
+        val isComplete: Boolean,
+        val presence: List<ServedPresencePage> = emptyList(),
+    )
 
-    private suspend fun fetchPage(offset: Int, updatedSince: String?): PagedResult<List<ApiConversation>> =
-        when (
+    private suspend fun fetchPage(offset: Int, updatedSince: String?): Fetched {
+        val requested = presenceSink.receipt()
+        return when (
             val result = pagedApiCall {
                 conversationApi.list(offset = offset, limit = PageFetchPlan.PAGE_SIZE, updatedSince = updatedSince)
             }
         ) {
-            is NetworkResult.Success -> result.data
+            is NetworkResult.Success -> Fetched(result.data, heardPage(result.data.data, requested))
             is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
         }
+    }
 
     /**
      * Pages 2+ : en parallèle (4 au plus, réessai par page, pages perdues récupérées) quand le
@@ -221,18 +251,20 @@ internal class ConversationCacheSource(
 
     private suspend fun loadInParallel(firstCount: Int, planned: List<Int>, updatedSince: String?): RemainingPages {
         val stride = PageFetchPlan.stride(firstCount)
-        val fetch: suspend (Int) -> PagedResult<List<ApiConversation>> =
+        val fetch: suspend (Int) -> Fetched =
             { index -> fetchPage(PageFetchPlan.offsetOf(index, stride), updatedSince) }
         val pages = fetchPagesInParallel(planned, fetch = fetch).toMutableMap()
         for (lost in PageFetchPlan.droppedPages(planned, pages.keys)) {
             pages[lost] = fetchPageWithRetry { fetch(lost) }.getOrNull() ?: break
         }
-        val rows = planned.mapNotNull { pages[it] }.flatMap { it.data }
-        if (pages.keys.size < planned.size) return RemainingPages(rows, isComplete = false)
-        val last = pages.getValue(planned.last()).pagination ?: return RemainingPages(rows, isComplete = false)
-        if (!last.hasMore) return RemainingPages(rows, isComplete = true)
+        val fetched = planned.mapNotNull { pages[it] }
+        val rows = fetched.flatMap { it.result.data }
+        val presence = fetched.map { it.presence }
+        if (pages.keys.size < planned.size) return RemainingPages(rows, isComplete = false, presence)
+        val last = pages.getValue(planned.last()).result.pagination ?: return RemainingPages(rows, isComplete = false, presence)
+        if (!last.hasMore) return RemainingPages(rows, isComplete = true, presence)
         val more = loadSequentially(emptyList(), updatedSince, startOffset = firstCount + rows.size)
-        return RemainingPages(rows + more.rows, more.isComplete)
+        return RemainingPages(rows + more.rows, more.isComplete, presence + more.presence)
     }
 
     private suspend fun loadSequentially(
@@ -242,16 +274,19 @@ internal class ConversationCacheSource(
     ): RemainingPages {
         val seen = firstPage.mapTo(HashSet()) { it.id }
         val rows = mutableListOf<ApiConversation>()
+        val presence = mutableListOf<ServedPresencePage>()
         var tail = PageFetchPlan.Tail(offset = startOffset, hasMore = true)
         while (tail.canContinue) {
-            val page = fetchPage(tail.offset, updatedSince)
-            val pagination = page.pagination ?: return RemainingPages(rows, isComplete = false)
+            val fetched = fetchPage(tail.offset, updatedSince)
+            val page = fetched.result
+            presence += fetched.presence
+            val pagination = page.pagination ?: return RemainingPages(rows, isComplete = false, presence)
             val fresh = page.data.count { seen.add(it.id) }
             rows += page.data
-            if (!pagination.hasMore) return RemainingPages(rows, isComplete = true)
+            if (!pagination.hasMore) return RemainingPages(rows, isComplete = true, presence)
             tail = PageFetchPlan.advance(tail, returned = page.data.size, newItems = fresh, backendHasMore = true)
         }
-        return RemainingPages(rows, isComplete = false)
+        return RemainingPages(rows, isComplete = false, presence)
     }
 
     /**
@@ -335,6 +370,7 @@ internal class ConversationCacheSource(
         if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
         fence.commitOrWrite(ticket) {
+            presenceSink.seedSweep(outcome.presence)
             persist(
                 conversations = outcome.conversations,
                 prune = !useDelta && outcome.isComplete,
@@ -487,7 +523,7 @@ internal class ConversationCacheSource(
 
     private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
         id = conversation.id,
-        payload = MeeshyApi.json.encodeToString(conversation),
+        payload = MeeshyApi.json.encodeToString(conversation.withoutServedPresence()),
         updatedAt = isoToEpochMillis(
             conversation.updatedAt
                 ?: conversation.lastMessage?.createdAt

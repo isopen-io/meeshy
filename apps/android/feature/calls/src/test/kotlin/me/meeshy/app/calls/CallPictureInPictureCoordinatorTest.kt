@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
 import org.junit.Test
 
@@ -9,9 +10,10 @@ class CallPictureInPictureCoordinatorTest {
     private val audio = CallSessionInfo("call-1", CallConfig(peerId = "u", peerName = "Alice", isVideo = false, isOutgoing = true))
     private var entered = 0
     private var dismissed = 0
+    private val activity = Any()
 
     private fun coordinator(supports: Boolean = true) = CallPictureInPictureCoordinator().apply {
-        attachActivity(supportsPip = supports, enter = { entered++; true }, dismiss = { dismissed++ })
+        attachActivity(activity, supportsPip = supports, enter = { entered++; true }, dismiss = { dismissed++ })
     }
 
     private fun CallPictureInPictureCoordinator.connected(info: CallSessionInfo = video) {
@@ -53,8 +55,22 @@ class CallPictureInPictureCoordinatorTest {
         val unsupported = coordinator(supports = false).apply { connected(); setCallScreenShown(true) }
         assertThat(unsupported.requestEnter()).isFalse()
 
-        val detached = coordinator().apply { connected(); setCallScreenShown(true); detachActivity() }
+        val detached = coordinator().apply { connected(); setCallScreenShown(true); detachActivity(activity) }
         assertThat(detached.requestEnter()).isFalse()
+    }
+
+    @Test
+    fun `l'activite remplacee qui meurt apres sa remplacante ne lui retire pas la fenetre`() {
+        val pip = coordinator().apply { connected(); setCallScreenShown(true) }
+        var enteredByReplacement = 0
+        val replacement = Any()
+        pip.attachActivity(replacement, supportsPip = true, enter = { enteredByReplacement++; true })
+
+        pip.detachActivity(activity)
+
+        assertThat(pip.onUserLeaveHint()).isTrue()
+        assertThat(enteredByReplacement).isEqualTo(1)
+        assertThat(entered).isEqualTo(0)
     }
 
     @Test
@@ -98,5 +114,25 @@ class CallPictureInPictureCoordinatorTest {
         val outside = coordinator().apply { connected() }
         outside.onTransition(CallState.Connected, CallState.Idle, video)
         assertThat(dismissed).isEqualTo(1)
+    }
+    @Test
+    fun `un appel video en cours garde la priorite sur la fenetre d'une video, des qu'il sonne et jusqu'a sa fin`() {
+        val pip = coordinator()
+        assertThat(pip.videoCallInProgress).isFalse()
+
+        pip.onTransition(CallState.Idle, CallState.Ringing(true), video)
+        assertThat(pip.videoCallInProgress).isTrue()
+
+        pip.connected()
+        assertThat(pip.videoCallInProgress).isTrue()
+
+        pip.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), video)
+        assertThat(pip.videoCallInProgress).isFalse()
+
+        val audioCall = coordinator().apply { connected(audio) }
+        assertThat(audioCall.videoCallInProgress).isFalse()
+
+        val cleared = coordinator().apply { connected(); onCleared() }
+        assertThat(cleared.videoCallInProgress).isFalse()
     }
 }

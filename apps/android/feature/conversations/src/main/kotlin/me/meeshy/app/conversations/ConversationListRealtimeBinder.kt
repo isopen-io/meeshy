@@ -81,6 +81,23 @@ internal class ConversationListRealtimeBinder(
                     ConversationPurge.onParticipantLeft(event, currentUserId())?.let(::purge)
                 }
             }
+            // L'effectif suit une adhésion (#13795, iOS `participantJoined`) : l'absolu servi se pose, le +1 n'est qu'un
+            // repli. Mon PROPRE arrivage s'écarte, `conversation:new` le compte déjà. Chaque écriture se juge sous le
+            // compte auquel l'événement est arrivé.
+            launch {
+                messageSocketManager.participantJoined.collectArrived { event ->
+                    if (event.userId != null && event.userId == currentUserId()) return@collectArrived
+                    repository.applyMembership(event.conversationId, event.memberCount, event.memberCountCapped, delta = +1)
+                }
+            }
+            // Symétrique : l'appartenance n'est rendue que si le bannissement l'avait prise (absent = rendue). Un effectif
+            // servi tranche de lui-même, comme à iOS (`memberCount != nil || didRestoreMembership`).
+            launch {
+                messageSocketManager.participantUnbanned.collectArrived { event ->
+                    if (event.memberCount == null && event.membershipRestored == false) return@collectArrived
+                    repository.applyMembership(event.conversationId, event.memberCount, event.memberCountCapped, delta = +1)
+                }
+            }
         }
     }
 

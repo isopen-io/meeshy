@@ -13,19 +13,28 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.conversation.MessageDeltaApplier
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
+import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.AttachmentReadyEvent
+import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
 import me.meeshy.sdk.model.AudioTranslationFailedEvent
 import me.meeshy.sdk.model.AudioTranslationStage
 import me.meeshy.sdk.model.ConversationJoinErrorEvent
 import me.meeshy.sdk.model.ConversationSocketEvent
 import me.meeshy.sdk.model.MessageArrived
+import me.meeshy.sdk.model.MessageAttachmentUpdatedEvent
 import me.meeshy.sdk.model.MessageRestoredForMeEvent
 import me.meeshy.sdk.model.PendingMessagesDeliveredEvent
+import me.meeshy.sdk.model.SharedTranslationArrived
 import me.meeshy.sdk.model.TranscriptionFailedEvent
 import me.meeshy.sdk.model.TranslationFailedEvent
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.withAccountTicket
 import me.meeshy.sdk.socket.ConversationSocketEventsManager
 import me.meeshy.sdk.socket.OrderedEventLane
+import me.meeshy.sdk.socket.arrivals
 import timber.log.Timber
+import java.util.Locale
 
 /**
  * Ce que le temps réel du fil sait et que la liste des bulles ne porte pas : l'accès retiré par la
@@ -53,6 +62,11 @@ data class ChatRealtimeState(
  *  - suppression, expiration, épingle, échéance d'un éphémère, masquage personnel, consommation et
  *    purge d'une vue unique, réactions d'une pièce modifient Room sur place ([MessageDeltaApplier]),
  *    sans appel réseau : la bulle ne saute pas ;
+ *  - l'accusé d'une pièce (vu, écouté jusqu'où), la pièce modifiée ou prête et la traduction partagée par un
+ *    membre s'écrivent de même dans Room : la liste et le fil ne lisent qu'une source. Rien de tout cela ne
+ *    s'écrit dans une conversation apprise chiffrée de bout en bout ([EndToEndRegimeLedger]) ;
+ *  - chaque événement s'applique SOUS le compte auquel il est arrivé : celui d'un compte quitté n'écrit rien
+ *    chez le suivant ;
  *  - un retour en vue personnel et une file hors ligne rejouée n'ont pas de charge : seul un
  *    rechargement est honnête.
  *
@@ -63,6 +77,7 @@ class ChatRealtimeController @Inject constructor(
     private val deltas: MessageDeltaApplier,
     private val messages: MessageRepository,
     private val session: SessionRepository,
+    private val regimeLedger: EndToEndRegimeLedger,
 ) : ChatController {
 
     private val _state = MutableStateFlow(ChatRealtimeState())
@@ -78,9 +93,13 @@ class ChatRealtimeController @Inject constructor(
         val screenLane = OrderedEventLane(host.scope)
         lane = screenLane
         host.scope.launch {
-            socketEvents.events
-                .filter { it.concerns(host.conversationId) }
-                .collect { event -> screenLane.submit(host.conversationId) { guarded { handle(host, event) } } }
+            socketEvents.events.arrivals()
+                .filter { it.value.concerns(host.conversationId) }
+                .collect { arrived ->
+                    screenLane.submit(host.conversationId) {
+                        withAccountTicket(arrived.ticket) { guarded { handle(host, arrived.value) } }
+                    }
+                }
         }
     }
 
@@ -108,8 +127,10 @@ class ChatRealtimeController @Inject constructor(
     }
 
     private suspend fun handle(host: ChatControllerHost, event: ConversationSocketEvent) {
+        if (event.writesPieceOrTranslation && regimeLedger.isSealed(host.conversationId)) return
         if (deltas.apply(event, session.currentUser.value?.id)) return
         when (event) {
+            is SharedTranslationArrived -> deltas.mergeSharedTranslation(event.translation, readerLanguages())
             is MessageArrived -> awaitRow(host, event)
             is MessageRestoredForMeEvent, is PendingMessagesDeliveredEvent -> messages.refresh(host.conversationId)
             is AudioTranslationStage -> applyAudioTranslation(event)
@@ -128,6 +149,16 @@ class ChatRealtimeController @Inject constructor(
             else -> Unit
         }
     }
+
+    /** Le prisme du lecteur (rangs 1 à 4), la locale de l'appareil seule sans session. */
+    private fun readerLanguages(): List<String> =
+        session.currentUser.value?.let { ReaderPrism.resolve(it, Locale.getDefault()) }
+            ?: listOfNotNull(Locale.getDefault().language.takeIf { it.isNotBlank() })
+
+    /** Ce qui pose sur la bulle des données DU SERVEUR en clair : jamais dans une conversation chiffrée de bout en bout. */
+    private val ConversationSocketEvent.writesPieceOrTranslation: Boolean
+        get() = this is AttachmentStatusUpdatedEvent || this is MessageAttachmentUpdatedEvent ||
+            this is AttachmentReadyEvent || this is SharedTranslationArrived
 
     /** Le message est en Room quand la fenêtre le montre ; au-delà d'un délai, la file repart. */
     private suspend fun awaitRow(host: ChatControllerHost, event: MessageArrived) {

@@ -51,7 +51,7 @@ class NavGraphRouteSetTest {
             "Routes.CHAT_DEEP_LINK", "Routes.CONVERSATION_DEEP_LINK", "Routes.CONVERSATION_SINGULAR_DEEP_LINK",
             "Routes.CONVERSATION_SHORT_DEEP_LINK", "Routes.CONVERSATION_DRAFT_DEEP_LINK",
             "Routes.PROFILE_DEEP_LINK", "Routes.PROFILE_SHARE_APP_DEEP_LINK", "Routes.PROFILE_SHARE_WEB_DEEP_LINK",
-            "Routes.STORY_DEEP_LINK",
+            "Routes.STORY_DEEP_LINK", "Routes.PACK_SHOP_DEEP_LINK",
         )
     }
 

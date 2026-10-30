@@ -17,6 +17,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,10 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
+    // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
+    val sceneCoordinator = remember { FeedSceneCoordinator() }
+    val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }
+    FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
     var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
 
     val context = LocalContext.current
@@ -88,6 +93,7 @@ fun FeedScreen(
     }
 
     MeeshyBackground {
+    CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator) {
     Scaffold(
         topBar = {
             FeedHeader(
@@ -157,6 +163,7 @@ fun FeedScreen(
                 state.posts.isEmpty() -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
                 else -> LazyColumn(
                     state = listState,
+                    modifier = Modifier.sceneViewport(),
                     // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des
                     // conversations ; chaque carte porte sa propre marge.
                     contentPadding = PaddingValues(bottom = MeeshySpacing.lg),
@@ -167,7 +174,7 @@ fun FeedScreen(
                     // `FeedListLayout.HEAD_ITEMS` lignes.
                     item(key = FEED_STORY_RAIL_KEY, contentType = FEED_STORY_RAIL_KEY) { storyRail() }
                     item(key = FEED_COMPOSER_HEAD_KEY, contentType = FEED_COMPOSER_HEAD_KEY) { composerHead() }
-                    items(state.posts, key = { it.id }, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
+                    items(state.posts, key = FeedPostPresentation::listKey, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
                         }
@@ -237,6 +244,7 @@ fun FeedScreen(
             )
             }
         }
+    }
     }
     }
     state.imageViewer?.let { gallery ->

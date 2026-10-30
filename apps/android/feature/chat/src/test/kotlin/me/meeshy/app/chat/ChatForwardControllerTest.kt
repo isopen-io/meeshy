@@ -9,6 +9,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -25,6 +26,9 @@ import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.share.ShareDelivery
+import me.meeshy.sdk.model.share.ShareFailure
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 
@@ -61,6 +65,7 @@ class ChatForwardControllerTest {
         loaded: List<LocalMessage> = listOf(source()),
         blocked: Set<String> = emptySet(),
         messages: MutableStateFlow<List<LocalMessage>> = MutableStateFlow(loaded),
+        outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
     ): Rig {
         val flow = MutableStateFlow(ChatUiState(conversationId = "c1", actionMessageId = "m1"))
         val repo = mockk<MessageRepository>(relaxed = true)
@@ -76,6 +81,7 @@ class ChatForwardControllerTest {
             messageRepository = repo,
             sessionRepository = session,
             workManager = workManager,
+            outOfThread = outOfThread,
             blockedUserIds = { blocked },
         )
         controller.onConversationsLoaded(conversations)
@@ -363,6 +369,55 @@ class ChatForwardControllerTest {
         advanceUntilIdle()
         assertThat(r.forward?.deliveries?.get("c3")).isEqualTo(ShareDelivery.Sent)
         coVerify(exactly = 1) { r.repo.sendOptimistic("c2", any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a recipient the list still calls server but the server serves end to end receives nothing, the others still do`() = runTest {
+        val gated = mutableListOf<String>()
+        val r = rig(outOfThread = OutOfThreadSendGate { id -> gated += id; if (id == "c2") OutOfThreadAdmission.END_TO_END else OutOfThreadAdmission.SEND })
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.toggleRecipient("c3")
+
+        r.controller.sendSelection()
+        advanceUntilIdle()
+
+        assertThat(gated).containsExactly("c2", "c3").inOrder()
+        coVerify(exactly = 0) { r.repo.sendOptimistic("c2", any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c3", "salut", "fr", me, null, null, "m1", "c1") }
+        assertThat(r.forward?.deliveries?.get("c2")).isEqualTo(ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION))
+        assertThat(r.forward?.deliveries?.get("c3")).isEqualTo(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun `the modes of every recipient are read together, within the bound of a single gesture`() = runTest {
+        val r = rig(outOfThread = OutOfThreadSendGate { delay(2_000); OutOfThreadAdmission.SEND })
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.toggleRecipient("c3")
+
+        r.controller.sendSelection()
+        advanceUntilIdle()
+
+        assertThat(testScheduler.currentTime).isAtMost(2_000)
+        assertThat(r.forward?.deliveries?.get("c2")).isEqualTo(ShareDelivery.Sent)
+        assertThat(r.forward?.deliveries?.get("c3")).isEqualTo(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun `a recipient whose mode cannot be read now is queued until it is known, one the gateway no longer serves gets nothing`() = runTest {
+        val r = rig(outOfThread = OutOfThreadSendGate { id -> if (id == "c2") OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN else OutOfThreadAdmission.UNREACHABLE })
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.toggleRecipient("c3")
+
+        r.controller.sendSelection()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "salut", "fr", me, null, null, "m1", "c1") }
+        coVerify(exactly = 0) { r.repo.sendOptimistic("c3", any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(r.forward?.deliveries?.get("c2")).isEqualTo(ShareDelivery.Queued)
+        assertThat(r.forward?.deliveries?.get("c3")).isEqualTo(ShareDelivery.Failed(ShareFailure.UNREACHABLE))
     }
 
     @Test

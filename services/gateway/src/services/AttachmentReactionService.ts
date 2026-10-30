@@ -3,6 +3,7 @@ import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { CLOSED_CONVERSATION_REACTION_ERROR } from './ReactionService.js';
+import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -67,10 +68,17 @@ export class AttachmentReactionService {
     // et le § 3 du témoin.
     const host = await this.prisma.message.findUnique({
       where: { id: o.messageId },
-      select: { conversation: { select: { isActive: true, closedAt: true } } },
+      select: { conversation: { select: { isActive: true, closedAt: true, encryptionMode: true } } },
     });
     if (isConversationClosed(host?.conversation)) {
       throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
+    }
+    // #13802 — la jumelle refuse l'emoji en clair d'une conversation e2ee
+    // (#13142) ; cette porte-ci ne converge pas vers elle, donc elle refuse
+    // aussi, sur la MÊME lecture que l'état terminal. Le gestionnaire a déjà
+    // résolu le membre : un étranger n'apprend pas le régime.
+    if (conversationRefusesPlainSignal(host?.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
     }
 
     // Idempotency: the participant already holding exactly this emoji on this
@@ -142,6 +150,9 @@ export class AttachmentReactionService {
     const emoji = sanitizeEmoji(o.emoji);
     if (!emoji) throw new Error('Invalid emoji format');
 
+    // #13802 — le retrait ne juge PAS le régime : il efface une ligne dont
+    // l'emoji est déjà connu du serveur, et le passé en clair doit rester
+    // supprimable (`e2ee-signal-channel.ts`, comme `ReactionService.removeReaction`).
     const result = await this.prisma.attachmentReaction.deleteMany({
       where: {
         attachmentId: o.attachmentId,

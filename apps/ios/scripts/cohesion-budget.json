@@ -174,7 +174,6 @@
     "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift::ProfileUserPostsViewModel.subscribeToSocketUpdates": 99,
     "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift::ProfileView.bannerAndAvatarSection": 94,
     "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift::ProfileView.body": 98,
-    "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift::ProfileView.saveProfile": 82,
     "apps/ios/Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift::ProgressionMeeshDetail.body": 114,
     "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift::PublicationViewersSheet.body": 81,
     "apps/ios/Meeshy/Features/Main/Views/ReelPageView+Info.swift::ReelPageView.infoOverlay": 131,

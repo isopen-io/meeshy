@@ -23,8 +23,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,14 +67,12 @@ internal fun ReelPostCard(
     val authorName = source?.authorName ?: post.authorName ?: unknownAuthor
     val authorAvatar = if (source != null) source.authorAvatarUrl else post.authorAvatarUrl
     val authorId = if (source != null) source.authorId else post.authorId
-    val cardLabel = stringResource(R.string.feed_reel_card_a11y, authorName)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(post.reelAspect)
             .clip(RoundedCornerShape(MeeshyRadius.xl))
-            .testTag(REEL_CARD_TAG)
-            .semantics { contentDescription = cardLabel },
+            .testTag(REEL_CARD_TAG),
     ) {
         Box(Modifier.fillMaxSize().testTag(REEL_CARD_COVER_TAG), contentAlignment = Alignment.Center) {
             ReelCoverView(
@@ -84,6 +80,7 @@ internal fun ReelPostCard(
                 authorName = authorName,
                 onOpen = { onOpenReel(post.reelOpenId) },
                 modifier = Modifier.fillMaxSize(),
+                sceneId = post.id,
             )
         }
         Column(

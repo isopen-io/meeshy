@@ -7,9 +7,14 @@
         { "androidName": "push_action_reply", "status": "android-only" },
         { "androidName": "push_action_mark_read", "status": "android-only" },
         { "androidName": "push_action_reply_hint", "status": "android-only" },
+        { "catalog": "app", "iosKey": "notifications.action.comment", "androidName": "push_action_comment", "status": "adopted" },
+        { "catalog": "app", "iosKey": "notifications.action.commentPlaceholder", "androidName": "push_action_comment_hint", "status": "adopted" },
         { "androidName": "push_message_you", "status": "android-only" },
         { "androidName": "push_channel_messages_name", "status": "android-only" },
-        { "androidName": "push_channel_messages_description", "status": "android-only" }
+        { "androidName": "push_channel_messages_description", "status": "android-only" },
+        { "androidName": "push_comment_unsent_title", "status": "android-only" },
+        { "androidName": "push_comment_unsent_hint", "status": "android-only" },
+        { "androidName": "push_reply_kept_as_draft", "status": "android-only" }
       ]
     }
   }

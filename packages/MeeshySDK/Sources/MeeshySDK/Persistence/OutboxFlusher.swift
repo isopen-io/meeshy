@@ -149,6 +149,15 @@ public actor OutboxFlusher {
     /// d'attente et non la session entière.
     public static let offlineRetrySeconds: TimeInterval = 60
 
+    /// #13824 — ce qu'un échec réécrit sur sa ligne : l'état de la tentative,
+    /// jamais la charge ni la marque d'annulation. L'envoi a pu graver la
+    /// charge pendant qu'il tournait (`recordUploadedPostMedia`) : la
+    /// réécrire depuis l'instantané d'avant l'envoi faisait re-téléverser
+    /// chaque média à chaque tentative.
+    static let attemptStateColumns = [
+        "status", "attempts", "lastError", "updatedAt", "nextAttemptAt", "waitingForFanoutOriginSince",
+    ]
+
     @discardableResult
     public func flush() async -> Date? {
         // BW1 — gate de bande passante : en mode avion / 1G saturé, dispatcher
@@ -527,7 +536,7 @@ public actor OutboxFlusher {
                 let deferredSnapshot = current
                 do {
                     try await pool.write { db in
-                        try deferredSnapshot.update(db)
+                        try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                     }
                 } catch {
                     // La ligne reste `.inflight` : elle ne sera rejouée qu'au
@@ -560,7 +569,7 @@ public actor OutboxFlusher {
                     let deferredSnapshot = current
                     do {
                         try await pool.write { db in
-                            try deferredSnapshot.update(db)
+                            try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                         }
                     } catch {
                         // La ligne reste `.inflight` : elle ne sera rejouée
@@ -590,7 +599,7 @@ public actor OutboxFlusher {
             let failedSnapshot = current
             do {
                 try await pool.write { db in
-                    try failedSnapshot.update(db)
+                    try failedSnapshot.update(db, columns: Self.attemptStateColumns)
                 }
             } catch {
                 // `attempts` n'est pas incrémenté : sans trace, la ligne peut

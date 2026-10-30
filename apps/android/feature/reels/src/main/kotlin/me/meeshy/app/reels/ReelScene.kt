@@ -8,7 +8,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.story.toStoryItem
-import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.theme.authorAccentHex
 
 /**
  * Un réel COMPOSÉ se rejoue comme sa scène (iOS `ReelSceneRouting.sceneDocument`) : sa vidéo n'en est que le fond,
@@ -27,7 +27,6 @@ internal object ReelScene {
     ): StorySlideView? {
         val item = post.toStoryItem()
         if (!isScene(item.storyEffects)) return null
-        val accent = DynamicColorGenerator.colorForName(post.author?.displayName ?: post.author?.username ?: post.id)
-        return StorySlideProjector(mediaBaseUrl).project(item, accent, preferences ?: NoContentPreferences)
+        return StorySlideProjector(mediaBaseUrl).project(item, post.authorAccentHex(), preferences ?: NoContentPreferences)
     }
 }

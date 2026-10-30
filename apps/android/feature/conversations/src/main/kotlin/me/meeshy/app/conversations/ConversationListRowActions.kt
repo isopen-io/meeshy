@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.conversation.CategoryCreation
+import me.meeshy.sdk.conversation.ConversationPreferenceActions
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.conversation.PreferenceWrite
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -31,44 +34,49 @@ internal class ConversationListRowActions(
     private val activeConversationId: () -> String? = { null },
 ) {
 
+    /** L'écrivain partagé des préférences (le même que les Options de la fiche Conversation, #13777). */
+    private val preferences = ConversationPreferenceActions(repository, categoryRepository) {
+        workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
     /** Ids dont [loadPreviewMessages] est en vol : garde contre un double chargement. */
     private val previewLoadingIds = mutableSetOf<String>()
 
     fun togglePin(id: String) {
         val pinned = prefsOf(id)?.isPinned ?: false
-        runPrefMutation { repository.setPinnedOptimistic(id, !pinned) }
+        runPrefMutation { preferences.setPinned(id, !pinned) }
     }
 
     fun toggleMute(id: String) {
         val muted = prefsOf(id)?.isMuted ?: false
-        runPrefMutation { repository.setMutedOptimistic(id, !muted) }
+        runPrefMutation { preferences.setMuted(id, !muted) }
     }
 
     fun toggleArchive(id: String) {
         val archived = prefsOf(id)?.isArchived ?: false
-        runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
+        runPrefMutation { preferences.setArchived(id, !archived) }
     }
 
     /** Archive [id] sans bascule (le blocage d'un pair archive sa conversation). */
     fun archive(id: String) {
-        runPrefMutation { repository.setArchivedOptimistic(id, true) }
+        runPrefMutation { preferences.setArchived(id, true) }
     }
 
     fun toggleMentionsOnly(id: String) {
         val mentionsOnly = prefsOf(id)?.mentionsOnly ?: false
-        runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
+        runPrefMutation { preferences.setMentionsOnly(id, !mentionsOnly) }
     }
 
     fun setCustomName(id: String, name: String) {
-        runPrefMutation { repository.setCustomNameOptimistic(id, name) }
+        runPrefMutation { preferences.setCustomName(id, name) }
     }
 
     fun setReaction(id: String, emoji: String?) {
-        runPrefMutation { repository.setReactionOptimistic(id, emoji) }
+        runPrefMutation { preferences.setReaction(id, emoji) }
     }
 
     fun setTags(id: String, tags: List<String>) {
-        runPrefMutation { repository.setTagsOptimistic(id, tags) }
+        runPrefMutation { preferences.setTags(id, tags) }
     }
 
     /**
@@ -90,7 +98,7 @@ internal class ConversationListRowActions(
             }
             return
         }
-        runPrefMutation { repository.markReadOptimistic(id) }
+        runOutboxMutation { repository.markReadOptimistic(id) }
     }
 
     /**
@@ -108,29 +116,22 @@ internal class ConversationListRowActions(
     }
 
     fun markUnread(id: String) {
-        runPrefMutation { repository.markUnreadOptimistic(id) }
+        runOutboxMutation { repository.markUnreadOptimistic(id) }
     }
 
-    /**
-     * Reaffecte [id] a [targetCategoryId] ; [ConversationCategoryReassignment] rend
-     * inerte un depot sur la categorie deja occupee (ni ecriture, ni outbox, ni flush).
-     */
+    /** Reaffecte [id] a [targetCategoryId] ; la categorie deja occupee est inerte (ni ecriture, ni flush). */
     fun reassignCategory(id: String, targetCategoryId: String) {
-        when (val outcome =
-            ConversationCategoryReassignment.resolve(prefsOf(id)?.categoryId, targetCategoryId)) {
-            CategoryReassignment.Unchanged -> Unit
-            is CategoryReassignment.AssignTo ->
-                runPrefMutation { repository.setCategoryOptimistic(id, outcome.categoryId) }
-        }
+        runPrefMutation { preferences.assignCategory(id, prefsOf(id)?.categoryId, targetCategoryId) }
     }
 
     /** Cree la categorie [name] puis y range [id] ; un nom vide est inerte. */
     fun createCategoryAndAssign(id: String, name: String) {
         if (name.isBlank()) return
         scope.launch {
-            when (val result = categoryRepository.create(name)) {
-                is NetworkResult.Success -> reassignCategory(id, result.data.id)
-                is NetworkResult.Failure -> reportError(result.error.message)
+            when (val outcome = preferences.createCategoryAndAssign(id, prefsOf(id)?.categoryId, name)) {
+                is CategoryCreation.Assigned -> (outcome.write as? PreferenceWrite.Failed)?.let { reportError(it.message) }
+                is CategoryCreation.Failed -> reportError(outcome.message)
+                CategoryCreation.Ignored -> Unit
             }
         }
     }
@@ -214,8 +215,15 @@ internal class ConversationListRowActions(
         }
     }
 
-    /** Lance une mutation optimiste ; ne reveille WorkManager que si quelque chose est en file. */
-    private fun runPrefMutation(mutate: suspend () -> Boolean) {
+    /** Lance une ecriture de preference ; l'ecrivain partage reveille l'outbox, l'echec s'affiche. */
+    private fun runPrefMutation(write: suspend () -> PreferenceWrite) {
+        scope.launch {
+            (write() as? PreferenceWrite.Failed)?.let { reportError(it.message) }
+        }
+    }
+
+    /** Lance une mutation optimiste hors preferences ; ne reveille WorkManager que si quelque chose est en file. */
+    private fun runOutboxMutation(mutate: suspend () -> Boolean) {
         scope.launch {
             try {
                 if (mutate()) {

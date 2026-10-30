@@ -136,6 +136,8 @@ object Routes {
     const val MEDIA_CACHE = "settings/media-cache"
     /** Réglages › Packs et téléchargements : la Boutique, ouvrable sur un domaine (`?domain=`) et un pack (`?pack=`). */
     const val PACK_SHOP = "settings/packs"
+    /** Lien profond de la Boutique (iOS `meeshy://settings/packs?domaine=…&pack=…`) ; `domaine` alimente l'argument `domain`. */
+    const val PACK_SHOP_DEEP_LINK = "meeshy://$PACK_SHOP?domaine={domain}&pack={pack}"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
     const val ENCRYPTED_DEVICES = "settings/encrypted-devices"
@@ -170,12 +172,15 @@ object Routes {
     const val MY_STORIES = "stories/mine"
     const val MOOD_SPOTLIGHT = "mood/{statusId}"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
-    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
-    const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
+    /** `storyId` (facultatif) : une story précise de l'auteur — celle d'une story republiée —, au lieu de sa première non vue. */
+    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}?${StoryViewerViewModel.STORY_ID_ARG}={${StoryViewerViewModel.STORY_ID_ARG}}"
+    const val STORY_DEEP_LINK = "meeshy://story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
     const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}"
+    /** La story PUBLIÉE que le composeur rouvre pour la modifier (#13632) — absente, c'est une story neuve. */
+    const val STORY_COMPOSER_EDIT_ARG = "editStoryId"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}&$STORY_COMPOSER_EDIT_ARG={$STORY_COMPOSER_EDIT_ARG}"
     /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
@@ -190,6 +195,10 @@ object Routes {
     fun storyComposerRepost(storyId: String): String =
         "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
 
+    /** Rouvre la story publiée [storyId] dans le composeur : l'enregistrement la met à jour. */
+    fun storyComposerEdit(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_EDIT_ARG=${Uri.encode(storyId)}"
+
     /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
     fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =
         if (audience == OnboardingStoryVisibility.FRIENDS) "story_composer?$STORY_COMPOSER_AUDIENCE_ARG=FRIENDS" else STORY_COMPOSER
@@ -203,7 +212,8 @@ object Routes {
     fun hashtag(tag: String): String = "hashtag/${Uri.encode(tag.removePrefix("#"))}"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
-    fun story(userId: String): String = "story/$userId"
+    fun story(userId: String, storyId: String? = null): String =
+        if (storyId.isNullOrBlank()) "story/$userId" else "story/$userId?${StoryViewerViewModel.STORY_ID_ARG}=${java.net.URLEncoder.encode(storyId, "UTF-8").replace("+", "%20")}"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
     fun packShop(domain: String? = null, pack: String? = null): String =
         listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })

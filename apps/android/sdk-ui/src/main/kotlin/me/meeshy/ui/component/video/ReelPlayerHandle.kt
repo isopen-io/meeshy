@@ -20,6 +20,12 @@ public class ReelPlayerHandle internal constructor(private val player: Player) {
     /** `0` tant que la durée est inconnue (flux en cours de préparation). */
     public fun durationMs(): Long = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
 
+    /** Largeur AFFICHÉE de l'image (pixels non carrés corrigés) ; `0` tant que la vidéo n'est pas lue. */
+    public fun displayWidth(): Int = (player.videoSize.width * player.videoSize.pixelWidthHeightRatio).toInt()
+
+    /** Hauteur de l'image ; `0` tant que la vidéo n'est pas lue. */
+    public fun displayHeight(): Int = player.videoSize.height
+
     public fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
     }

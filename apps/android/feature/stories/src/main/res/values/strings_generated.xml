@@ -21,6 +21,7 @@
     <string name="composer_audience_sub_public">Everyone, including non-followers</string>
     <string name="composer_audience_title">Audience</string>
     <string name="composer_audio_delete_action">Delete sound</string>
+    <string name="composer_audio_promote_action">Place on the scene</string>
     <string name="composer_capture_sound_mute">Mute the sound</string>
     <string name="composer_capture_sound_unmute">Turn the sound back on</string>
     <string name="composer_capture_tool_sound">Sound</string>
@@ -55,8 +56,13 @@
     <string name="composer_frise_sound">Sound</string>
     <string name="composer_object_editor_adjust_blur">Blur</string>
     <string name="composer_object_editor_adjust_brightness">Brightness</string>
+    <string name="composer_object_editor_adjust_compare">Compare</string>
+    <string name="composer_object_editor_adjust_compare_hint">Shows the original image while you hold</string>
+    <string name="composer_object_editor_adjust_compare_hint_video">Shows the original video while you hold</string>
     <string name="composer_object_editor_adjust_contrast">Contrast</string>
     <string name="composer_object_editor_adjust_exposure">Exposure</string>
+    <string name="composer_object_editor_adjust_original">Original image</string>
+    <string name="composer_object_editor_adjust_original_video">Original video</string>
     <string name="composer_object_editor_adjust_reset">Reset</string>
     <string name="composer_object_editor_adjust_saturation">Saturation</string>
     <string name="composer_object_editor_adjust_sharpness">Sharpness</string>
@@ -97,6 +103,7 @@
     <string name="my_stories_delete_selected_title">Delete the selected stories?</string>
     <string name="my_stories_delete_success">Story deleted</string>
     <string name="my_stories_delete_title">Delete this story?</string>
+    <string name="my_stories_edit">Edit</string>
     <string name="my_stories_empty_subtitle">Your published stories will appear here while they\'re active.</string>
     <string name="my_stories_empty_title">No stories sent yet</string>
     <string name="my_stories_glyph_comments">See comments</string>
@@ -261,6 +268,9 @@
     <string name="story_composer_redo">Redo</string>
     <string name="story_composer_soundLibrary">Library</string>
     <string name="story_composer_undo">Undo</string>
+    <string name="story_edit_error">Failed to update the story</string>
+    <string name="story_edit_offline">You need to be online to edit the story</string>
+    <string name="story_edit_save">Save</string>
     <string name="story_language_close">Close</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Each text in its own language</string>

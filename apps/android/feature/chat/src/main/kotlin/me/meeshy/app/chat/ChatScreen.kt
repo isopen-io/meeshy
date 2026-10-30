@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
@@ -139,9 +140,16 @@ fun ChatScreen(
     val contactCards = remember(cardsViewModel, viewModel, isEndToEnd, clearance) {
         ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, clearance, viewModel::downloadedFileUri)
     }
+    // #13790 — relu à chaque recomposition, jamais retenu : une conversation confirmée claire en cours d'écran ouvre aussitôt
+    // ses gestes, et un fil qui montre du bout en bout les ferme.
+    val signalClearance = PlainSignalAdmission.clearanceOf(
+        cardsViewModel.clearance(state.conversationId, state.encryptionMode),
+        threadShowsEndToEnd = isEndToEnd,
+    )
     CompositionLocalProvider(
         LocalBubbleContactCardAccounts provides contactCards,
         LocalChatContactCardScope provides contactCards::underConversation,
+        LocalChatSignalClearance provides signalClearance,
     ) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :

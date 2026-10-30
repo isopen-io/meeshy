@@ -1,6 +1,11 @@
 package me.meeshy.sdk.media
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.DEFAULT_MEDIA_MIME_TYPE
+import me.meeshy.sdk.model.MessageTranscriptionFiche
+import me.meeshy.sdk.model.TranscribeRequest
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.toUploadedMedia
 import me.meeshy.sdk.net.NetworkResult
@@ -28,6 +33,16 @@ object MediaUpload {
     /** The content type, falling back to the octet-stream default when blank. */
     fun mimeType(raw: String): String = raw.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_MIME_TYPE
 
+    /**
+     * #13820 — le champ par lequel la pièce d'un message déclare sa conversation, posé AVANT les fichiers : la passerelle
+     * ne STOCKE jamais la pièce d'une conversation chiffrée de bout en bout (400 `E2EE_PLAINTEXT_REFUSED`). Elle ne peut pas
+     * en refuser la RÉCEPTION : les octets déjà partis sur le fil arrivent, et sont jetés sans être gardés.
+     */
+    const val DESTINATION_FIELD_NAME: String = "conversationId"
+
+    fun destinationPart(conversationId: String): MultipartBody.Part =
+        MultipartBody.Part.createFormData(DESTINATION_FIELD_NAME, conversationId)
+
     /** Builds the multipart `files` part for [item] with resolved name + content type, streamed from its source (#13551). */
     fun formPart(item: MediaUploadItem): MultipartBody.Part {
         val body = item.requestBody(mimeType(item.mimeType).toMediaTypeOrNull())
@@ -49,7 +64,7 @@ class MediaRepository @Inject constructor(
     private val mediaApi: MediaApi,
     private val sanitizer: OutgoingMediaSanitizer,
 ) {
-    suspend fun upload(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> {
+    suspend fun upload(items: List<MediaUploadItem>, conversationId: String? = null): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
         val clean = mutableListOf<Pair<MediaUploadItem, MediaUploadItem>>()
         try {
@@ -59,11 +74,28 @@ class MediaRepository @Inject constructor(
                     is NetworkResult.Success -> clean += result.data to item
                 }
             }
-            val parts = clean.map { (sent, _) -> MediaUpload.formPart(sent) }
+            val destination = conversationId?.takeIf { it.isNotBlank() }?.let(MediaUpload::destinationPart)
+            val parts = listOfNotNull(destination) + clean.map { (sent, _) -> MediaUpload.formPart(sent) }
             return apiCall { mediaApi.upload(parts) }
                 .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
         } finally {
             clean.forEach { (sent, original) -> sanitizer.release(sent, original) }
         }
+    }
+
+    /**
+     * Demande la transcription d'une pièce son (`POST /attachments/:id/transcribe`, iOS `requestTranscription`). Le
+     * résultat d'une transcription lancée arrive par la socket ; celle qui existait déjà revient ici, `null` sinon.
+     */
+    suspend fun requestTranscription(attachmentId: String): NetworkResult<ApiAttachmentTranscription?> =
+        apiCall { mediaApi.transcribe(attachmentId, TranscribeRequest(force = false)) }
+            .map { data -> completedTranscription(data) }
+
+    private fun completedTranscription(data: JsonElement): ApiAttachmentTranscription? =
+        runCatching { outcomeJson.decodeFromJsonElement(MessageTranscriptionFiche.TranscribeOutcome.serializer(), data) }
+            .getOrNull()?.completed
+
+    private companion object {
+        val outcomeJson = Json { ignoreUnknownKeys = true }
     }
 }

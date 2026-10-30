@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
@@ -31,6 +32,8 @@ data class StoryBackgroundMedia(
     val durationSeconds: Double?,
     val loop: Boolean = true,
     val framing: StoryBackgroundFraming = StoryBackgroundFraming.IDENTITY,
+    /** Les réglages et effets du fond (#13652) ; ce que le média PEINT part au fil, jamais un réglage qu'aucun rendu ne sert. */
+    val adjustments: ImageAdjustments? = null,
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
@@ -68,6 +71,7 @@ data class StoryBackgroundMedia(
             y = framing.y,
             scale = framing.scale,
             isBackground = true,
+            adjustments = adjustments?.served(isVideo)?.takeUnless { it.isNeutral },
             loop = if (isVideo) loop else true,
             intrinsicDuration = publishableDuration?.takeIf { isVideo },
             duration = publishableDuration?.takeIf { isVideo },

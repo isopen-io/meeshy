@@ -157,4 +157,140 @@ class PackShopTest {
 
         assertThat(again).isEqualTo(shop)
     }
+
+    private fun installShop(vararg packs: ShopPack) =
+        PackShopResponse(domains = listOf(PackShopSection("wallpaper", packs.toList())), balance = 340)
+
+    @Test
+    fun `an owned or free pack can be toggled, a pack to buy or still locked cannot`() {
+        assertThat(pack(price = 90, owned = true).canToggleInstall).isTrue()
+        assertThat(pack().canToggleInstall).isTrue()
+        assertThat(pack(price = 90, owned = false).canToggleInstall).isFalse()
+        assertThat(pack(requirementPreview = """{"met":false}""").canToggleInstall).isFalse()
+    }
+
+    @Test
+    fun `a pack to earn whose goal is met but not yet granted cannot be installed, the server would refuse it`() {
+        val metNotGranted = pack(owned = false, requirementPreview = """{"met":true}""")
+
+        assertThat(metNotGranted.isLocked).isFalse()
+        assertThat(metNotGranted.needsPurchase).isFalse()
+        assertThat(metNotGranted.canToggleInstall).isFalse()
+        assertThat(pack(owned = false).canToggleInstall).isFalse()
+        assertThat(pack(owned = false).copy(installed = true).canToggleInstall).isTrue()
+    }
+
+    @Test
+    fun `showing installs paints a gesture in flight over the served pack and leaves a pack the server already shows that way`() {
+        val shop = installShop(
+            ShopPack(slug = "animes", owned = true, installed = false, installCount = 4),
+            ShopPack(slug = "autre", owned = true, installed = true, installCount = 2),
+        )
+
+        val shown = shop.showingInstalls(mapOf("wallpaper.animes" to true, "wallpaper.autre" to true, "banner.animes" to false))
+
+        val packs = shown.packs(AppearancePackDomain.WALLPAPER)
+        assertThat(packs.first { it.slug == "animes" }.installed).isTrue()
+        assertThat(packs.first { it.slug == "animes" }.installCount).isEqualTo(5)
+        assertThat(packs.first { it.slug == "autre" }).isEqualTo(shop.packs(AppearancePackDomain.WALLPAPER).last())
+        assertThat(shop.showingInstalls(emptyMap())).isEqualTo(shop)
+        assertThat(shown.balance).isEqualTo(340)
+    }
+
+    @Test
+    fun `a locked pack that is already installed can still be removed`() {
+        val installedLocked = pack(requirementPreview = """{"met":false}""").copy(installed = true)
+
+        assertThat(installedLocked.canToggleInstall).isTrue()
+    }
+
+    @Test
+    fun `toggling an install flips only the installed flag and its count, never ownership or balance`() {
+        val shop = installShop(ShopPack(slug = "animes", price = 90, owned = true, installed = false, installCount = 4))
+
+        val next = shop.togglingInstall(AppearancePackDomain.WALLPAPER, "animes")!!
+
+        val after = next.packs(AppearancePackDomain.WALLPAPER).single()
+        assertThat(after.installed).isTrue()
+        assertThat(after.installCount).isEqualTo(5)
+        assertThat(after.owned).isTrue()
+        assertThat(next.balance).isEqualTo(340)
+    }
+
+    @Test
+    fun `removing never takes the count below zero`() {
+        val shop = installShop(ShopPack(slug = "animes", owned = true, installed = true, installCount = 0))
+
+        val after = shop.togglingInstall(AppearancePackDomain.WALLPAPER, "animes")!!.packs(AppearancePackDomain.WALLPAPER).single()
+
+        assertThat(after.installed).isFalse()
+        assertThat(after.installCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a pack to buy, locked, or unknown is never toggled`() {
+        val shop = installShop(ShopPack(slug = "animes", price = 90, owned = false))
+
+        assertThat(shop.togglingInstall(AppearancePackDomain.WALLPAPER, "animes")).isNull()
+        assertThat(shop.togglingInstall(AppearancePackDomain.WALLPAPER, "absent")).isNull()
+        assertThat(shop.togglingInstall(AppearancePackDomain.BANNER, "animes")).isNull()
+    }
+
+    @Test
+    fun `a confirmed install takes the served installed state and count of that pack alone`() {
+        val shop = installShop(
+            ShopPack(slug = "animes", owned = true, installed = true, installCount = 5),
+            ShopPack(slug = "autre", owned = true, installed = false, installCount = 1),
+        )
+
+        val next = shop.installSettled(AppearancePackDomain.WALLPAPER, ShopPack(slug = "animes", installed = false, installCount = 7))
+
+        val packs = next.packs(AppearancePackDomain.WALLPAPER)
+        assertThat(packs.first { it.slug == "animes" }.installed).isFalse()
+        assertThat(packs.first { it.slug == "animes" }.installCount).isEqualTo(7)
+        assertThat(packs.first { it.slug == "animes" }.owned).isTrue()
+        assertThat(packs.first { it.slug == "autre" }).isEqualTo(shop.packs(AppearancePackDomain.WALLPAPER).last())
+    }
+
+    @Test
+    fun `a refused install puts the previous pack back and leaves the rest as the server last said`() {
+        val before = ShopPack(slug = "animes", owned = true, installed = false, installCount = 4)
+        val optimistic = installShop(before).togglingInstall(AppearancePackDomain.WALLPAPER, "animes")!!.withBalance(120)
+
+        val back = optimistic.restoring(AppearancePackDomain.WALLPAPER, before)
+
+        assertThat(back.packs(AppearancePackDomain.WALLPAPER).single()).isEqualTo(before)
+        assertThat(back.balance).isEqualTo(120)
+    }
+
+    @Test
+    fun `a served cover is the path to load, blank or absent is none`() {
+        assertThat(ShopPack(slug = "a", coverUrl = " /api/v1/pack-assets/aaaaaaaaaaaaaaaa.webp ").coverPath)
+            .isEqualTo("/api/v1/pack-assets/aaaaaaaaaaaaaaaa.webp")
+        assertThat(ShopPack(slug = "a", coverUrl = "  ").coverPath).isNull()
+        assertThat(ShopPack(slug = "a").coverPath).isNull()
+    }
+
+    @Test
+    fun `a cover thumb hash is read when the server serves one and ignored otherwise`() {
+        val with = json.decodeFromString(ShopPack.serializer(), """{"slug":"a","coverUrl":"/x.webp","coverThumbHash":"3OcRJYB4d3h/iIeHeEh3eIhw+j3A"}""")
+
+        assertThat(with.coverThumbHash).isEqualTo("3OcRJYB4d3h/iIeHeEh3eIhw+j3A")
+        assertThat(pack().coverThumbHash).isNull()
+    }
+
+    @Test
+    fun `a legacy per domain catalogue is composed into a shop with no balance`() {
+        val composed = PackShopResponse.composed(
+            listOf(
+                AppearancePackDomain.WALLPAPER to listOf(ShopPack(slug = "animes")),
+                AppearancePackDomain.BANNER to emptyList(),
+            ),
+        )
+
+        assertThat(composed.balance).isNull()
+        assertThat(composed.packs(AppearancePackDomain.WALLPAPER).map { it.slug }).containsExactly("animes")
+        assertThat(composed.packs(AppearancePackDomain.BANNER)).isEmpty()
+        assertThat(composed.domains.map { it.domain }).containsExactly("wallpaper", "banner").inOrder()
+    }
 }

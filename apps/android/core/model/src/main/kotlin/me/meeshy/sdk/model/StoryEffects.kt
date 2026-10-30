@@ -5,6 +5,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Story canvas models — port of StoryModels.swift.
@@ -132,4 +133,10 @@ data class StoryEffects(
      */
     @Transient
     val canvas: CanvasV3? = null,
+    /**
+     * Le blob d'une story MODIFIÉE (#13632), déjà composé à partir de celui que la passerelle tient (`StoryEditDocument`) :
+     * écrit tel quel par [StoryEditEffectsWireSerializer], seul à le lire. Jamais posé par une lecture.
+     */
+    @Transient
+    val document: JsonObject? = null,
 )

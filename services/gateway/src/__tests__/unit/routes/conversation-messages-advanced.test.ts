@@ -391,7 +391,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns 404 when message not found', async () => {
@@ -2035,7 +2035,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
@@ -2045,7 +2045,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2233,7 +2233,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
@@ -2243,7 +2243,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty statuses when no messages', async () => {

@@ -23,4 +23,6 @@
     <string name="composer_mosaic_wave">En vague</string>
     <string name="composer_publish_menu_a11y_hint">Ouvre le choix du format et de la disposition</string>
     <string name="composer_publish_menu_title">Publier comme</string>
+    <string name="push_action_comment">Commenter</string>
+    <string name="push_action_comment_hint">Commenter…</string>
 </resources>

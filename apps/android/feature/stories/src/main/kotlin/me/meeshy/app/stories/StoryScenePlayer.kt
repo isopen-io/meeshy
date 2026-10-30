@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -50,9 +51,11 @@ internal fun StorySceneBackground(
     onAudioFocusLost: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
+    stillFrame: Boolean = false,
+    floor: SceneFloor = SceneFloor.AUTHOR_GRADIENT,
 ) {
     when {
-        slide.backgroundVideoUrl != null -> {
+        slide.backgroundVideoUrl != null && !stillFrame -> {
             val bg = slide.backgroundTransform
             ReelVideoSurface(
                 mediaUrl = slide.backgroundVideoUrl,
@@ -68,6 +71,19 @@ internal fun StorySceneBackground(
                 onPlayer = onBackgroundPlayer,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
             )
+        }
+        // Au repos le fond vidéo n'a pas de lecteur : son affiche (vignette, sinon ThumbHash) garde le cadre, l'aplat dessous.
+        slide.backgroundVideoUrl != null && restingPosterKind(slide.backgroundPosterUrl, slide.backgroundThumbHash) != RestingPosterKind.NONE -> {
+            val bg = slide.backgroundTransform
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().background(StorySceneFill.resolve(slide.background, slide.accentHex, floor).brush()))
+                StoryRestingPoster(
+                    posterUrl = slide.backgroundPosterUrl,
+                    thumbHash = slide.backgroundThumbHash,
+                    lookRecipe = slide.lookRecipe,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
+                )
+            }
         }
         slide.imageUrl != null -> {
             val imageUrl = slide.imageUrl
@@ -87,7 +103,7 @@ internal fun StorySceneBackground(
         else -> Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
+                .background(StorySceneFill.resolve(slide.background, slide.accentHex, floor).brush()),
         )
     }
 }
@@ -142,6 +158,14 @@ internal fun StorySceneAudio(
  * médias jouent. Une scène qui n'est plus [playing] sans être [rewindWhenIdle] garde sa position ; avec, l'horloge
  * ET les médias repartent de zéro, ensemble. [onBackgroundPlayer] tend le lecteur de la vidéo de fond (sonde de sa
  * piste audio).
+ *
+ * [resting] : la scène est une image fixe (#13663) et n'a AUCUN lecteur (ni la vidéo de fond, ni les vidéos posées, ni les
+ * pistes). Le fond vidéo et chaque vidéo posée gardent leur cadre avec leur affiche (la vignette, sinon le ThumbHash ; l'aplat
+ * d'accent quand la vidéo n'a ni l'un ni l'autre) ; images, textes et stickers se dessinent à la position de l'horloge — zéro
+ * pour une scène neuve, la dernière reprise quand [rewindWhenIdle] est faux. Seule la scène que le fil élit joue.
+ *
+ * [floor] : ce qui se lit sous une scène sans fond. Un réel pose la sienne sur du NOIR (iOS `ReelCardSceneBackdrop` et lecteur de
+ * réels) ; une story garde le dégradé d'auteur.
  */
 @Composable
 fun StoryScenePlayer(
@@ -153,6 +177,8 @@ fun StoryScenePlayer(
     modifier: Modifier = Modifier,
     onAudioFocusLost: () -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
+    resting: Boolean = false,
+    floor: SceneFloor = SceneFloor.AUTHOR_GRADIENT,
 ) {
     val progress = remember(slide.id) { Animatable(0f) }
     var lap by remember(slide.id) { mutableIntStateOf(0) }
@@ -169,7 +195,7 @@ fun StoryScenePlayer(
     LaunchedEffect(rewindWhenIdle) {
         if (rewindWhenIdle) progress.snapTo(0f)
     }
-    Box(modifier.fillMaxSize().background(hexColor(slide.accentHex))) {
+    Box(modifier.fillMaxSize().background(if (floor == SceneFloor.BLACK) Color.Black else hexColor(slide.accentHex))) {
         StorySceneBackground(
             slide = slide,
             playing = playing,
@@ -178,6 +204,8 @@ fun StoryScenePlayer(
             rewindWhenInactive = rewindWhenIdle,
             onAudioFocusLost = onAudioFocusLost,
             onBackgroundPlayer = onBackgroundPlayer,
+            stillFrame = resting,
+            floor = floor,
         )
         if (loads) {
             StorySceneOverlays(
@@ -188,8 +216,9 @@ fun StoryScenePlayer(
                 muted = muted,
                 rewindWhenInactive = rewindWhenIdle,
                 onAudioFocusLost = onAudioFocusLost,
+                players = !resting,
             )
-            StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
         }
     }
 }

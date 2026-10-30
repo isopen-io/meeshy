@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -55,7 +57,9 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
@@ -108,6 +112,8 @@ class ChatViewModel @Inject constructor(
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val blockCache: BlockCache = BlockCache(),
+    ownReactionWithdrawals: OwnReactionWithdrawals,
+    outOfThreadSendGate: OutOfThreadSendGate,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -165,6 +171,9 @@ class ChatViewModel @Inject constructor(
      * (a translation landing → new content).
      */
     private val latestMessages = MutableStateFlow<List<LocalMessage>>(emptyList())
+
+    /** Latches once the first load of the window answered (cache, revalidation, or its failure) — #13793. */
+    private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
     /**
@@ -206,6 +215,7 @@ class ChatViewModel @Inject constructor(
         emojiUsageStore = emojiUsageStore,
         messageSocketManager = messageSocketManager,
         workManager = workManager,
+        ownReactionWithdrawals = ownReactionWithdrawals,
     )
 
     private val translation = ChatTranslationController(
@@ -228,6 +238,7 @@ class ChatViewModel @Inject constructor(
         messageRepository = messageRepository,
         sessionRepository = sessionRepository,
         workManager = workManager,
+        outOfThread = outOfThreadSendGate,
         blockedUserIds = { blockCache.currentBlockedIds },
     )
 
@@ -247,9 +258,12 @@ class ChatViewModel @Inject constructor(
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            initialUnreadCount.value =
-                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
-            markConversationRead()
+            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            initialUnreadCount.value = unread
+            if (unread > 0) {
+                withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
+            }
+            markConversationReadOnOpening(unreadAtOpening = unread)
         }
 
         // Latch the "new messages" boundary once, when both the initial unread
@@ -334,6 +348,7 @@ class ChatViewModel @Inject constructor(
                 messageRepository.messagesStream(
                     conversationId,
                     onSyncError = { error ->
+                        windowAnswered.value = true
                         _state.update {
                             it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
                         }
@@ -367,6 +382,7 @@ class ChatViewModel @Inject constructor(
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages.value = result.windowOrNull() ?: latestMessages.value
+                    if (ReadAcknowledgement.windowAnswered(result)) windowAnswered.value = true
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.apiBaseUrl, recipients, hidden, starredIds,
@@ -387,8 +403,8 @@ class ChatViewModel @Inject constructor(
             launch {
                 messageSocketManager.messageReceived.collectArrived { event ->
                     if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                        markConversationRead()
+                        if (IncomingMessageCompletion.needsRest(event)) completeIncoming(event)
+                        markConversationRead(arrived = event)
                     }
                 }
             }
@@ -504,13 +520,48 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Mark-as-read never surfaces an error: the badge is non-critical and the
-     * queued receipt retries with the outbox on reconnect.
+     * queued receipt retries with the outbox on reconnect. An unreadable sealed message is never
+     * acknowledged « read » ([ReadAcknowledgement], #13793) : the conversation is simply left unread.
      */
-    private suspend fun markConversationRead() {
+    private suspend fun markConversationRead(arrived: ApiMessage? = null) = quietly {
+        val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+        if (!mayAcknowledge(unread, arrived)) return@quietly
+        if (conversationRepository.markReadOptimistic(conversationId)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
+    /**
+     * The opening decides on what it CAPTURED, not on what the cache says by the time the window has
+     * loaded : a list sync zeroes the badge of the open conversation without any receipt (#13793), so a
+     * later read of the counter would find 0 and queue nothing while the server keeps counting. An
+     * unread opening therefore sends its receipt whatever the badge reads now ; a conversation that was
+     * already read keeps the plain optimistic path (a no-op on a zero badge).
+     */
+    private suspend fun markConversationReadOnOpening(unreadAtOpening: Int) = quietly {
+        if (!mayAcknowledge(unreadAtOpening, arrived = null)) return@quietly
+        val queued = if (unreadAtOpening > 0) {
+            conversationRepository.acknowledgeRead(conversationId)
+        } else {
+            conversationRepository.markReadOptimistic(conversationId)
+        }
+        if (queued) workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
+    private fun mayAcknowledge(unread: Int, arrived: ApiMessage?): Boolean =
+        ReadAcknowledgement.mayAcknowledge(
+            latestMessages.value.map { it.message },
+            sessionRepository.currentUser.value?.id,
+            unread,
+            arrived,
+        )
+
+    /** The one thing a received forward lacks (#13797) : its provenance. Best effort, one message. */
+    private suspend fun completeIncoming(message: ApiMessage) = quietly {
+        messageRepository.refreshMessage(conversationId, message.id)
+    }
+
+    private suspend inline fun quietly(block: () -> Unit) {
         try {
-            if (conversationRepository.markReadOptimistic(conversationId)) {
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            }
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -723,6 +774,10 @@ class ChatViewModel @Inject constructor(
     /** « Réessayer » le transfert en échec, dans le mode demandé (ouvrir, partager, enregistrer). */
     fun retryFileDownload() = fileDownload.retry()
 
+    /** Les pièces d'un message chargé ; vide s'il a quitté la fenêtre du fil. */
+    internal fun attachmentsOf(messageId: String): List<ApiMessageAttachment> =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.attachments.orEmpty()
+
     /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
     internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
         latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
@@ -864,9 +919,15 @@ class ChatViewModel @Inject constructor(
      * "Delete for everyone" — a server round-trip that tombstones the message
      * for all participants. Only offered for an own message within the
      * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
+     *
+     * #13790 — reacting, pinning and deleting for everyone travel as encrypted signals in an
+     * end-to-end conversation, which this device cannot seal: there they have no effect at all
+     * (no optimistic change, no outbox row), whichever path called. An unknown mode is queued —
+     * the outbox reads the mode before anything leaves (`EndToEndOutboxAdmission`).
      */
     fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
+        if (_state.value.isEndToEnd) return
         viewModelScope.launch {
             try {
                 if (messageRepository.deleteOptimistic(messageId)) {
@@ -906,6 +967,10 @@ class ChatViewModel @Inject constructor(
      * A deleted (or otherwise unresolvable) bubble is inert — see [MessagePinToggle].
      */
     fun togglePin(messageId: String) {
+        if (_state.value.isEndToEnd) {
+            _state.update { it.copy(actionMessageId = null) }
+            return
+        }
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         val pin = when (MessagePinToggle.resolve(bubble?.isDeleted ?: true, bubble?.pinnedAtIso)) {
             PinAction.Pin -> true

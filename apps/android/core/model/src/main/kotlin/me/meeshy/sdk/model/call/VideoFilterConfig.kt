@@ -19,6 +19,9 @@ package me.meeshy.sdk.model.call
  * @property backgroundBlurRadius blur radius when [backgroundBlurEnabled].
  * @property skinSmoothingEnabled apply the face-detected skin-smoothing pass.
  * @property skinSmoothingIntensity smoothing strength (0..1) when enabled.
+ * @property naturalComplexionEnabled « Teint naturel » (#9196): on by default, imperceptible, cut as soon as the
+ *   device protects itself. Not a filter one CHOSE — the base quality of the image — so it counts neither in
+ *   [hasAdvancedFilters] nor in [hasChosenFilters].
  */
 data class VideoFilterConfig(
     val temperature: Float = 6500f,
@@ -32,14 +35,24 @@ data class VideoFilterConfig(
     val backgroundBlurRadius: Double = 10.0,
     val skinSmoothingEnabled: Boolean = false,
     val skinSmoothingIntensity: Float = 0.4f,
+    val faceEffect: CallFaceEffect = CallFaceEffect.None,
+    val naturalComplexionEnabled: Boolean = true,
 ) {
     /**
-     * `true` when either GPU-heavy advanced pass is requested. The auto-degrade
-     * policy watches these — a config with only colorimetry is cheap and never
-     * degrades. Mirrors iOS `hasAdvancedFilters`.
+     * `true` when a GPU-heavy advanced pass is requested (blur, smoothing, a stylized
+     * face effect). The auto-degrade policy watches these — a config with only
+     * colorimetry is cheap and never degrades. Mirrors iOS `hasAdvancedFilters`.
      */
     val hasAdvancedFilters: Boolean
-        get() = backgroundBlurEnabled || skinSmoothingEnabled
+        get() = backgroundBlurEnabled || skinSmoothingEnabled || faceEffect.isStylized
+
+    /**
+     * A filter the user CHOSE: a look ([isEnabled]) or an advanced pass — blur and
+     * smoothing never set [isEnabled]. The call pipeline opens on it (iOS
+     * `hasChosenFilters`, #11298).
+     */
+    val hasChosenFilters: Boolean
+        get() = isEnabled || hasAdvancedFilters
 
     companion object {
         /** The neutral, disabled pass-through config. iOS `VideoFilterConfig.default`. */
@@ -100,5 +113,17 @@ enum class VideoFilterPreset(val id: String) {
     companion object {
         /** Resolve a persisted [id] back to its preset, or `null` if unknown. */
         fun fromId(id: String): VideoFilterPreset? = entries.firstOrNull { it.id == id }
+
+        /**
+         * Which preset produced [config]'s colorimetry, comparing temperature, tint,
+         * contrast, saturation and exposure only — never `brightness` (the user's own
+         * offset on top of a look), `isEnabled` or the advanced passes. iOS
+         * `VideoFilterPreset.matching`.
+         */
+        fun matching(config: VideoFilterConfig): VideoFilterPreset? = entries.firstOrNull { preset ->
+            val c = preset.config
+            c.temperature == config.temperature && c.tint == config.tint && c.contrast == config.contrast &&
+                c.saturation == config.saturation && c.exposure == config.exposure
+        }
     }
 }

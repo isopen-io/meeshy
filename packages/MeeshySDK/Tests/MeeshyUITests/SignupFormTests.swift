@@ -94,6 +94,26 @@ final class SignupFormTests: XCTestCase {
         )
     }
 
+    func test_isDisplayNameValid_oneCharacterIsRefused_twoAreAccepted() {
+        XCTAssertFalse(SignupForm.isDisplayNameValid("A"))
+        XCTAssertTrue(SignupForm.isDisplayNameValid("Al"))
+        XCTAssertTrue(SignupForm.isDisplayNameValid("Sy"))
+    }
+
+    func test_isDisplayNameValid_isJudgedTrimmed() {
+        XCTAssertFalse(SignupForm.isDisplayNameValid("  A  "))
+        XCTAssertTrue(SignupForm.isDisplayNameValid("  Al "))
+    }
+
+    func test_isDisplayNameTooShort_onlyForATypedValueBelowTheBound() {
+        XCTAssertTrue(SignupForm.isDisplayNameTooShort("A"))
+        XCTAssertTrue(SignupForm.isDisplayNameTooShort(" B "))
+        XCTAssertFalse(SignupForm.isDisplayNameTooShort("Al"))
+        XCTAssertFalse(SignupForm.isDisplayNameTooShort(""))
+        XCTAssertFalse(SignupForm.isDisplayNameTooShort("   "))
+        XCTAssertFalse(SignupForm.isDisplayNameTooShort("Alice3"), "un autre motif de refus n'est pas « trop court »")
+    }
+
     /// **Le miroir ne doit pas être plus STRICT que le serveur.** `displayName`
     /// y vaut 100 caractères ; les 50 de `firstName`/`lastName` ne le
     /// gouvernent plus depuis que la passerelle les dérive. Un client plus
@@ -133,6 +153,12 @@ final class SignupFormTests: XCTestCase {
 
     func test_canSubmit_withTheRequiredFields_isTrue() {
         XCTAssertTrue(makeForm().canSubmit)
+    }
+
+    func test_canSubmit_withAOneCharacterDisplayName_isFalse_twoIsTrue() {
+        XCTAssertFalse(makeForm(displayName: "A").canSubmit)
+        XCTAssertFalse(makeForm(displayName: " B ").canSubmit)
+        XCTAssertTrue(makeForm(displayName: "Al").canSubmit)
     }
 
     /// **Le numéro est REQUIS par l'écran** (#9343, directive porteur

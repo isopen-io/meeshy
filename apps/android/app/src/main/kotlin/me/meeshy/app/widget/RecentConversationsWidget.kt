@@ -54,7 +54,8 @@ import androidx.glance.appwidget.action.actionStartActivity as actionStartActivi
  * **Deliberately minimal**, same posture as `UnreadCountWidget`: repeint par
  * [WidgetRepaintInitializer] à chaque changement du cache local, Room-only read (no network — a
  * disconnected device still renders whatever is cached, never blocks), no mark-read
- * quick action yet (iOS's own `MarkConversationReadIntent` is the natural next
+ * quick action yet, and the presence dot of a direct peer comes from the live
+ * `PresenceStore` at paint time (#13747; repaint on tier change only) (iOS's own `MarkConversationReadIntent` is the natural next
  * sub-tranche once a Glance `ActionCallback` wiring precedent exists in this app).
  */
 internal class RecentConversationsWidget : GlanceAppWidget() {
@@ -70,6 +71,7 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
             previewLabels = labels,
             preferredLanguages = WidgetReaderPrismStore(context).load(),
             ephemeralLabel = widgetEphemeralLabel(context),
+            presence = WidgetPresenceTiers.forDisplay(entryPoint.presenceStore(), conversations, currentUserId),
         )
 
         provideContent {
@@ -125,7 +127,7 @@ private fun RecentConversationRowContent(row: RecentConversationRow) {
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.title, row.accentHex, AVATAR_DP, presence = null)),
+            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.title, row.accentHex, AVATAR_DP, presence = row.presence)),
             contentDescription = null,
             modifier = GlanceModifier.size(AVATAR_DP.dp),
         )

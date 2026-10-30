@@ -39,6 +39,12 @@ interface OnboardingGateway {
 
     /** La fenêtre système des notifications n'a jamais servi (et ce niveau d'API en a une). */
     suspend fun notificationsUndetermined(): Boolean
+    /**
+     * Les publications de story que l'appareil envoie ENCORE (le serveur ne les a pas confirmées) ; `null` quand on ne sait
+     * pas les observer.
+     */
+    suspend fun sendingStoryPublications(): Set<String>? = null
+
     fun isSettled(userId: String): Boolean
     fun markSettled(userId: String)
 }

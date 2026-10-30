@@ -299,7 +299,10 @@ final class SignupViewModel: ObservableObject {
                   SignupPhases.phoneRefusalShown(refused: true, checked: isPhoneChecked, progress: progress)
             else { return nil }
             return Self.phoneRefusalMessage(refusal)
-        case .displayName, .email, .password:
+        case .displayName:
+            guard SignupForm.isDisplayNameTooShort(form.displayName ?? "") else { return nil }
+            return Self.minimumLengthMessage(for: .displayName)
+        case .email, .password:
             return nil
         }
     }
@@ -638,10 +641,7 @@ final class SignupViewModel: ObservableObject {
                 SignupForm.usernameMaxLength
             )
         case .tooShort:
-            return String(
-                format: String(localized: "auth.signup.username.tooShort", defaultValue: "%lld caractères au moins.", bundle: .main),
-                SignupForm.usernameMinLength
-            )
+            return minimumLengthMessage(for: .pseudo)
         case .invalidCharacters:
             return String(
                 localized: "auth.signup.username.invalidCharacters",
@@ -649,6 +649,17 @@ final class SignupViewModel: ObservableObject {
                 bundle: .main
             )
         }
+    }
+
+    /// Le minimum d'un pseudo, d'un prénom, d'un nom ou d'un nom affiché, dit
+    /// avec la copie existante « N caractères au moins. » — le nombre vient de
+    /// `IdentityRules`, jamais d'un littéral. Le profil et le parcours invité
+    /// la reprennent : un minimum, une phrase.
+    static func minimumLengthMessage(for field: IdentityRules.Field) -> String {
+        String(
+            format: String(localized: "auth.signup.username.tooShort", defaultValue: "%lld caractères au moins.", bundle: .main),
+            IdentityRules.minimum(for: field)
+        )
     }
 
     /// La règle ENTIÈRE, quand la passerelle refuse le pseudo sans motif

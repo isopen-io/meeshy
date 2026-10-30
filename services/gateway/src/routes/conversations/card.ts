@@ -22,7 +22,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { composeDirectCard, composeShareLinkCard, loadShareLinkCardSource } from '../../services/conversationCard';
-import { verdictAccesConversation, type MessagesDeRefusDAcces } from './utils/access-control';
+import { verdictAccesConversation, type MessagesDeRefusDAcces, refuserCommeIntrouvable } from './utils/access-control';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 
 const logger = enhancedLogger.child({ module: 'ConversationCardRoutes' });
@@ -124,7 +124,7 @@ export function registerDirectConversationCardRoute(
       const viewerUserId = authContext.isAnonymous ? undefined : authContext.userId;
       const card = await composeDirectCard({ prisma, conversationId, viewerUserId });
       if (!card) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
       return sendSuccess(reply, card);
     } catch (error) {

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { guestNicknameSchema } from '@meeshy/shared/types/link-join';
+import { sendLengthFloorRefusal, sendZodRefusal, servedGuestNicknameViolation } from '../../utils/identity-name-floor';
 import { automaticNicknameBase, numberedAnonymousUsername } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -601,7 +603,7 @@ export function participantConversationPayload(participant: ParticipantRow, shar
 // ─── Corps de requête — `POST /links/:key/members` ────────────────────────────
 
 const linkMembersBodySchema = z.object({
-  nickname: z.string().optional(),
+  nickname: guestNicknameSchema,
   email: z.email().optional().or(z.literal('')),
   birthday: z.iso.datetime().optional().or(z.literal('')),
   language: z.string().transform((v) => normalizeLanguageForDedup(v)).default('fr'),
@@ -780,6 +782,12 @@ export function registerLinkAdmissionRoutes(
       try {
         const { key } = request.params as { key: string };
         const body = linkMembersBodySchema.parse(request.body ?? {});
+        // Le pseudo saisi se mesure sur la base qui le SERT (#13825).
+        const pseudoTropCourt = servedGuestNicknameViolation('nickname', body.nickname);
+        if (pseudoTropCourt) {
+          sendLengthFloorRefusal(reply, 'Données invalides', [pseudoTropCourt]);
+          return;
+        }
         const authContext = (request as UnifiedAuthRequest).authContext;
 
         // #6741 — un Bearer PRÉSENTÉ dont `optionalAuth` n'a pas pu établir
@@ -812,7 +820,7 @@ export function registerLinkAdmissionRoutes(
         respondToJoinOutcome(reply, result);
       } catch (error) {
         if (error instanceof z.ZodError) {
-          sendBadRequest(reply, 'Données invalides');
+          sendZodRefusal(reply, 'Données invalides', error);
           return;
         }
         logError(fastify.log, 'Link members join error:', error);

@@ -29,7 +29,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 const INK_2 = 'var(--color-on-media-3)';
 
-const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied' } as const;
+const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied', sealed: 'callCaptions.sealed' } as const;
 
 export type CaptionsSurface = 'glass' | 'inset';
 

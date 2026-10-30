@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_close_draft_title">¿Cerrar el borrador?</string>
+    <string name="composer_close_draft_keep">Conservar el borrador</string>
+    <string name="composer_close_draft_discard">Descartar</string>
+    <string name="composer_sheet_dismiss">Cerrar el panel</string>
+    <string name="composer_caption_limit_reached">Se alcanzó el límite de la leyenda</string>
+    <string name="composer_caption_too_long">Leyenda demasiado larga</string>
+</resources>

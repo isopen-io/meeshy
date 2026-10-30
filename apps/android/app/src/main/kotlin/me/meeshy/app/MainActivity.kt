@@ -6,15 +6,18 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,14 +50,19 @@ import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
+import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
-import me.meeshy.sdk.model.resolveDarkMode
+import me.meeshy.sdk.model.playback.PipAspect
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.ConversationViewingBinding
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
+import me.meeshy.ui.component.LocalConversationViewers
 import me.meeshy.ui.component.LocalPresenceStore
+import me.meeshy.ui.component.video.LocalVideoPictureInPicture
+import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
@@ -91,9 +99,19 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var presenceStore: PresenceStore
 
+    /** Qui a l'écran de quelle conversation ouvert : [LocalConversationViewers] le fournit aux avatars. */
+    @Inject
+    lateinit var conversationViewing: ConversationViewingBinding
+
     /** Le Picture-in-Picture de l'appel vidéo : l'activité fournit le geste, le coordinateur la règle. */
     @Inject
     lateinit var callPictureInPicture: CallPictureInPictureCoordinator
+
+    /**
+     * Le Picture-in-Picture d'une vidéo plein écran (réel, vidéo de conversation, #13814) : une instance par activité,
+     * celle qu'une relance remplace emporte la sienne. L'appel passe toujours avant elle.
+     */
+    private lateinit var videoPictureInPicture: VideoPictureInPictureCoordinator
 
     /** La preuve que les extras d'appel d'un intent viennent d'une notification de Meeshy (#13504). */
     @Inject
@@ -139,20 +157,34 @@ class MainActivity : ComponentActivity() {
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
+            owner = this,
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
             dismiss = { moveTaskToBack(false) },
         )
+        videoPictureInPicture = VideoPictureInPictureCoordinator(
+            deviceSupportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+            videoCallInProgress = { callPictureInPicture.videoCallInProgress },
+            enter = ::enterVideoPictureInPicture,
+        )
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
+            val systemBars = SystemBarsAppearance.of(themeMode, isSystemInDarkTheme())
+            // Les icônes de la barre d'état suivent le thème CHOISI dans l'app, pas seulement celui du système (#13666).
+            DisposableEffect(systemBars) {
+                applySystemBars(systemBars)
+                onDispose {}
+            }
             LocalizedContent(languageCode = languageCode) {
-                MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
+                MeeshyTheme(darkTheme = systemBars.darkTheme) {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
+                        LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
+                        LocalVideoPictureInPicture provides videoPictureInPicture,
                     ) {
                         ProvideRootSplash {
                             MeeshyApp(
@@ -174,6 +206,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun applySystemBars(appearance: SystemBarsAppearance) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { appearance.darkTheme },
+            navigationBarStyle = SystemBarStyle.auto(NAVIGATION_SCRIM_LIGHT, NAVIGATION_SCRIM_DARK) { appearance.darkTheme },
+        )
     }
 
     /**
@@ -198,30 +237,44 @@ class MainActivity : ComponentActivity() {
         return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
     }
 
+    private fun enterVideoPictureInPicture(aspect: PipAspect): Boolean {
+        val params = PictureInPictureParams.Builder().setAspectRatio(Rational(aspect.width, aspect.height)).build()
+        return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
+    }
+
     @Deprecated("ComponentActivity deprecates it; every activity launch still funnels through it")
     @Suppress("DEPRECATION")
     override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
         callPictureInPicture.holdForInAppLaunch()
+        videoPictureInPicture.holdForInAppLaunch()
         try {
             super.startActivityForResult(intent, requestCode, options)
         } catch (failure: RuntimeException) {
             callPictureInPicture.releaseInAppLaunch()
+            videoPictureInPicture.onActivityResumed()
             throw failure
         }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        callPictureInPicture.onUserLeaveHint()
+        // Un seul départ, une seule fenêtre : l'appel d'abord, la vidéo plein écran ensuite.
+        callPictureInPicture.onUserLeaveHint() || videoPictureInPicture.onUserLeaveHint()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        callPictureInPicture.setInPip(isInPictureInPictureMode)
+        val videoOwnsWindow = videoPictureInPicture.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        callPictureInPicture.setInPip(isInPictureInPictureMode && !videoOwnsWindow)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        videoPictureInPicture.onActivityStopped()
     }
 
     override fun onDestroy() {
-        callPictureInPicture.detachActivity()
+        callPictureInPicture.detachActivity(this)
         super.onDestroy()
     }
 
@@ -259,6 +312,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         callPictureInPicture.releaseInAppLaunch()
+        videoPictureInPicture.onActivityResumed()
         lifecycleScope.launch {
             DynamicShortcutsPublisher.publish(
                 context = this@MainActivity,
@@ -326,3 +380,7 @@ internal fun Intent.launchExtras(): LaunchExtras {
         composerSeed = getStringExtra(ComposerSeedLaunch.EXTRA_SEED),
     )
 }
+
+/** Les voiles de la barre de navigation à trois boutons, ceux d'`enableEdgeToEdge` : clair sur un thème clair, sombre sur un sombre. */
+private val NAVIGATION_SCRIM_LIGHT = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+private val NAVIGATION_SCRIM_DARK = Color.argb(0x80, 0x1B, 0x1B, 0x1B)

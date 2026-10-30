@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.packs.PackPurchaseRefusal
 import me.meeshy.sdk.model.packs.PackShopFailure
 import me.meeshy.sdk.model.packs.PackShopResponse
 import me.meeshy.sdk.model.packs.ShopPack
+import me.meeshy.sdk.packs.PackInstallOutcome
 import me.meeshy.sdk.packs.PackPurchaseOutcome
 import me.meeshy.sdk.packs.PackShopRepository
 
@@ -50,7 +51,8 @@ data class PackShopUiState(
 }
 
 /**
- * La Boutique des packs (iOS `UnifiedShopView` / `PackShopStore`). **Un achat n'est jamais optimiste** : le geste marque
+ * La Boutique des packs (iOS `UnifiedShopView` / `PackShopStore`). **Un achat n'est jamais optimiste** (installer ou retirer
+ * un pack déjà à moi l'est, voir [toggleInstall]) : le geste marque
  * le pack « en cours » et n'écrit ni possession ni solde ; le serveur répond, et SA réponse — pack, solde — est ce que
  * l'écran montre. Un refus ou une coupure ne changent rien d'affiché ; la vitrine est relue, c'est le serveur qui dit
  * le solde.
@@ -65,13 +67,16 @@ class PackShopViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val shop = MutableStateFlow<PackShopResponse?>(null)
+
+    /** Les installations en vol (`<domaine>.<slug>` → état voulu), peintes par-dessus [shop] sans jamais le réécrire. */
+    private val installing = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     private val loadFailed = MutableStateFlow(false)
     private val selected = MutableStateFlow(PackShopResponse.domainOf(savedState.get<String>(ARG_DOMAIN)))
     private val ledger = MutableStateFlow(PackPurchaseLedger())
     private val focusedSlug = savedState.get<String>(ARG_PACK)?.takeIf { it.isNotBlank() }
 
-    val state: StateFlow<PackShopUiState> = combine(shop, loadFailed, selected, ledger) { served, failed, domain, gestures ->
-        PackShopUiState(served, failed && served == null, domain, gestures, focusedSlug)
+    val state: StateFlow<PackShopUiState> = combine(shop, installing, loadFailed, selected, ledger) { served, wanted, failed, domain, gestures ->
+        PackShopUiState(served?.showingInstalls(wanted), failed && served == null, domain, gestures, focusedSlug)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PackShopUiState(selected = selected.value, focusedSlug = focusedSlug))
 
     init {
@@ -121,6 +126,45 @@ class PackShopViewModel @Inject constructor(
                 is PackPurchaseOutcome.Refused -> {
                     ledger.update { it.refused(domain, slug, outcome.refusal) }
                     reread()
+                }
+            }
+        }
+    }
+
+    /**
+     * Installer ou retirer un pack À MOI (iOS `togglingInstall`) : **optimiste** — seuls `installed` et son compteur
+     * bougent à l'instant, jamais la possession ni le solde — puis le serveur tranche. Le geste est PEINT par-dessus la
+     * vitrine servie, jamais écrit dedans : une vitrine relue ou un `pack:installation-updated` arrivé pendant le vol la
+     * remplacent sans effacer le geste, et un refus retire seulement le geste — l'écran montre alors ce que le serveur a
+     * dit EN DERNIER (une réponse perdue après l'écriture montre donc le pack installé), jamais l'état d'avant le toucher.
+     * Un refus final (`403 PACK_NOT_OWNED`…) relit la vitrine, une coupure laisse le geste rejouable.
+     */
+    fun toggleInstall(slug: String) {
+        val domain = selected.value
+        val before = shop.value?.packs(domain)?.firstOrNull { it.slug == slug } ?: return
+        val begun = ledger.value.beginInstall(domain, before) ?: return
+        val key = PackPurchaseLedger.key(domain, slug)
+        val wanted = !before.installed
+        ledger.value = begun
+        installing.update { it + (key to wanted) }
+        viewModelScope.launch {
+            val outcome = withContext(NonCancellable) {
+                try {
+                    repository.setInstalled(domain, slug, installed = wanted)
+                } catch (_: Exception) {
+                    PackInstallOutcome.Refused(PackPurchaseRefusal.UNREAD)
+                }
+            }
+            when (outcome) {
+                is PackInstallOutcome.Done -> {
+                    shop.update { it?.installSettled(domain, outcome.pack) }
+                    installing.update { it - key }
+                    ledger.update { it.settled(domain, slug) }
+                }
+                is PackInstallOutcome.Refused -> {
+                    installing.update { it - key }
+                    ledger.update { it.refused(domain, slug, outcome.refusal) }
+                    if (outcome.refusal.definitive) reread()
                 }
             }
         }

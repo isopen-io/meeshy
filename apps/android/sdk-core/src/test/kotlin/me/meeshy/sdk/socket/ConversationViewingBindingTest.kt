@@ -8,6 +8,7 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -15,7 +16,9 @@ import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.presence.ConversationHere
 import me.meeshy.sdk.model.presence.ConversationViewers
 import org.json.JSONObject
+import me.meeshy.sdk.model.UserPresence
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -32,6 +35,20 @@ class ConversationViewingBindingTest {
         val announced = MutableStateFlow<String?>(null)
         val socket: SocketManager = mockk(relaxed = true)
         val appState: AppStatePresenceReporter = mockk(relaxed = true)
+        val epoch = 1_700_000_000_000L
+        val presence = PresenceStore(
+            PresenceSources(
+                userStatus = emptyFlow(),
+                presenceSnapshot = emptyFlow(),
+                typingStarted = emptyFlow(),
+                connectionState = emptyFlow(),
+            ),
+            object : me.meeshy.sdk.cache.CacheClock {
+                override fun nowMillis(): Long = epoch
+            },
+            { "me" },
+            StandardTestDispatcher(scheduler),
+        )
         val binding: ConversationViewingBinding
 
         init {
@@ -41,7 +58,7 @@ class ConversationViewingBindingTest {
             every { appState.foreground } returns foreground
             every { socket.on(any(), any()) } answers { callbacks[firstArg()] = secondArg() }
             binding = ConversationViewingBinding(
-                socket, reporter, appState, Json { ignoreUnknownKeys = true }, StandardTestDispatcher(scheduler),
+                socket, reporter, appState, presence, Json { ignoreUnknownKeys = true }, StandardTestDispatcher(scheduler),
             )
         }
 
@@ -59,6 +76,45 @@ class ConversationViewingBindingTest {
         assertEquals(setOf("u2", "u3"), viewers.usersIn("c2"))
         h.receive("viewing:stop", """{"userId":"u1","conversationId":"c1"}""")
         assertEquals(ConversationHere.ABSENT, h.binding.viewers.value.here("u1", "c1"))
+    }
+
+    private fun Harness.datedAt(userId: String): UserPresence? = presence.entriesNow()[userId]
+
+    private fun Harness.stamp() = java.time.Instant.ofEpochMilli(epoch).toString()
+
+    @Test
+    fun `a peer who arrives is dated active now so his dot turns green`() = runTest {
+        val h = Harness(testScheduler)
+        h.binding.attach()
+        h.receive("viewing:start", """{"userId":"u1","conversationId":"c1"}""")
+        assertEquals(UserPresence(isOnline = false, lastActiveAt = h.stamp()), h.datedAt("u1"))
+    }
+
+    @Test
+    fun `every peer of a snapshot is dated active now`() = runTest {
+        val h = Harness(testScheduler)
+        h.binding.attach()
+        h.receive("viewing:snapshot", """{"conversationId":"c2","userIds":["u2","u3"]}""")
+        assertEquals(UserPresence(isOnline = false, lastActiveAt = h.stamp()), h.datedAt("u2"))
+        assertEquals(UserPresence(isOnline = false, lastActiveAt = h.stamp()), h.datedAt("u3"))
+    }
+
+    @Test
+    fun `a peer who acts is dated active now`() = runTest {
+        val h = Harness(testScheduler)
+        h.binding.attach()
+        h.receive("viewing:activity", """{"userId":"u1","conversationId":"c1"}""")
+        assertEquals(UserPresence(isOnline = false, lastActiveAt = h.stamp()), h.datedAt("u1"))
+    }
+
+    @Test
+    fun `a peer who leaves is not dated and the current account is never written`() = runTest {
+        val h = Harness(testScheduler)
+        h.binding.attach()
+        h.receive("viewing:stop", """{"userId":"u1","conversationId":"c1"}""")
+        h.receive("viewing:start", """{"userId":"me","conversationId":"c1"}""")
+        assertNull(h.datedAt("u1"))
+        assertNull(h.datedAt("me"))
     }
 
     @Test

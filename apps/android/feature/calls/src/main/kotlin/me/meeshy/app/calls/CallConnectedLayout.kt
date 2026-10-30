@@ -35,13 +35,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallHeaderLaw
-import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -132,11 +131,14 @@ internal fun CallConnectedColumn(
     chrome: CallChromeController,
     videoStage: Boolean,
     peer: CallPeerVisual,
+    pill: CallPillActions,
+    cameraPlacement: CallCameraControlsPlacement,
     modifier: Modifier = Modifier,
     inPip: Boolean = false,
+    /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
+    groupStage: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val extensions = viewModel.extensions
-    val dispatcher = extensions.actions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
     val visibility = chrome.visibility(callIsVideoStage(state), explore)
@@ -145,10 +147,7 @@ internal fun CallConnectedColumn(
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
     val reactionsViewModel: CallReactionsViewModel = hiltViewModel()
-    val recording by recordingViewModel.state.collectAsStateWithLifecycle()
-    val offered = remember(state, recording) { dispatcher.offered(state) }
-    val items = remember(state, offered) { CallPillModel.items(state, offered) }
-    val available = remember(state, items) { CallPillModel.available(state, items, dispatcher::isRegistered) }
+    val available = pill.available
     LaunchedEffect(available) { chrome.reconcile(available) }
 
     val routeViewModel: CallAudioRouteViewModel = hiltViewModel()
@@ -156,19 +155,10 @@ internal fun CallConnectedColumn(
     var routeSheetOpen by remember { mutableStateOf(false) }
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
-    val onAction: (CallAction) -> Unit = { action ->
-        val stopsRecording = action == CallAction.Recording && recording.phase.isActive
-        CallScreenPanel.entries.firstOrNull { it.action == action && !stopsRecording }?.let(chrome::open)
-        CallScreenMode.entries.firstOrNull { it.action == action }?.let(chrome::enter)
-        when (action) {
-            CallAction.Camera -> viewModel.toggleCamera()
-            CallAction.FlipCamera -> viewModel.flipCamera()
-            else -> dispatcher.dispatch(action)
-        }
-    }
-
     BoxWithConstraints(modifier) {
-        val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value))
+        // iOS `CallCameraRail.menuRows` : ma vignette ou le rail du haut portent les commandes de mon image, le (…)
+        // ne les répète pas.
+        val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value), cameraPlacement)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -176,7 +166,9 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
+            if (groupStage != null) {
+                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
+            } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
                 CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
@@ -188,7 +180,8 @@ internal fun CallConnectedColumn(
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
-            CallChromeFade(
+            // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
+            if (!chromeState.isStageFullScreen) CallChromeFade(
                 isVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 modifier = Modifier.padding(bottom = MeeshySpacing.xl),
@@ -200,13 +193,13 @@ internal fun CallConnectedColumn(
                         state = state,
                         layer = chromeState.layer,
                         rows = rows,
-                        items = items,
+                        items = pill.items,
                         outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
                         onToggleMenu = chrome::toggleMenu,
                         onToggleMute = viewModel::toggleMute,
                         onOutput = { routeSheetOpen = true },
                         onHangUp = viewModel::hangUp,
-                        onAction = onAction,
+                        onAction = pill.onAction,
                         onBackToMenu = chrome::backToMenu,
                         onClosePanel = chrome::close,
                         panelContent = { panel ->
@@ -225,6 +218,19 @@ internal fun CallConnectedColumn(
                 }
             }
         }
+    }
+
+    val pickerBridge: CallCameraPickerViewModel = hiltViewModel()
+    val pickerOpen by pickerBridge.controller.isOpen.collectAsStateWithLifecycle()
+    if (pickerOpen) {
+        val camera by viewModel.cameraZoom.state.collectAsStateWithLifecycle()
+        CallCameraPickerSheet(
+            cameras = camera.cameras,
+            selectedId = camera.selectedCameraId,
+            accent = accent,
+            onSelect = viewModel::selectCamera,
+            onDismiss = pickerBridge.controller::close,
+        )
     }
 
     if (routeSheetOpen) {

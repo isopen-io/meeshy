@@ -27,7 +27,7 @@ class StoryPlacedMediaFidelityTest {
             pending = listOf(PendingMediaUpload("q", MediaUploadItem(ByteArray(1), "q.jpg", "image/jpeg"))),
         )
 
-        val frames = state.placedMediaFrames()
+        val frames = state.placedMediaFrames(mediaBaseUrl = null)
 
         assertThat(frames.first { it.key == "p" }.aspectRatio).isWithin(1e-9).of(0.5625)
         assertThat(frames.first { it.key == "q" }.aspectRatio).isNull()

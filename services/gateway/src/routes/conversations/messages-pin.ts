@@ -33,7 +33,7 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
@@ -174,7 +174,7 @@ export function registerMessagePinRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
@@ -311,7 +311,7 @@ export function registerMessagePinRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);

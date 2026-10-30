@@ -46,6 +46,8 @@ import me.meeshy.sdk.model.share.ShareRecipientListing
 import me.meeshy.sdk.model.share.ShareSheetState
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.network.NetworkMonitor
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.asCoroutineContext
@@ -83,7 +85,9 @@ internal data class AppShareState(
  *   peut pas être jointe.
  * - **E2EE, échec fermé** : Android ne chiffre pas encore (#13015). Une conversation chiffrée n'est jamais
  *   proposée, et une directe qui naît (ou se trouve) chiffrée est refusée AVANT tout envoi : jamais de
- *   clair vers un fil chiffré.
+ *   clair vers un fil chiffré. Le cache ne suffit pas (#13820) : le mode de chaque destination est RELU au serveur
+ *   ([OutOfThreadSendGate]) avant qu'une bulle ou un fichier n'entre en file ; illisible maintenant (hors ligne), la copie
+ *   entre en file « en attente » et la file relit le mode avant tout clair, pièce comprise.
  */
 @HiltViewModel
 internal class AppShareSheetViewModel @Inject constructor(
@@ -96,6 +100,7 @@ internal class AppShareSheetViewModel @Inject constructor(
     private val blockedListRepository: BlockedListRepository,
     private val blockCache: BlockCache,
     private val networkMonitor: NetworkMonitor,
+    private val outOfThread: OutOfThreadSendGate,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppShareState())
@@ -229,8 +234,10 @@ internal class AppShareSheetViewModel @Inject constructor(
     }
 
     private suspend fun deliverAll(pending: List<ShareRecipient>, subject: ShareSubject, posts: List<OutgoingShare>, caption: String, user: MeeshyUser) {
+        val destinations = pending.associateWith { destinationOf(it, user) }
+        val admissions = admissionsOf(destinations.values.filterIsInstance<Destination.Ready>().map { it.conversationId })
         pending.forEach { recipient ->
-            val outcome = deliver(recipient, subject, posts, caption, user)
+            val outcome = deliver(destinations.getValue(recipient), admissions, subject, posts, caption, user)
             inFlight -= recipient.id
             when (outcome) {
                 is Outcome.Served -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, outcome.queued)) }
@@ -245,19 +252,42 @@ internal class AppShareSheetViewModel @Inject constructor(
         data class Refused(val failure: ShareFailure) : Outcome
     }
 
+    private suspend fun destinationOf(recipient: ShareRecipient, user: MeeshyUser): Destination = try {
+        destination(recipient, user)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (e: Exception) {
+        Destination.Refused(ShareFailure.GENERIC)
+    }
+
+    /** #13820 — the modes of every ready destination are read together, within the bound of a single gesture. */
+    private suspend fun admissionsOf(conversationIds: List<String>): Map<String, OutOfThreadAdmission> = try {
+        outOfThread.admitAll(conversationIds)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
     private suspend fun deliver(
-        recipient: ShareRecipient,
+        target: Destination,
+        admissions: Map<String, OutOfThreadAdmission>,
         subject: ShareSubject,
         posts: List<OutgoingShare>,
         caption: String,
         user: MeeshyUser,
     ): Outcome = try {
-        val target = destination(recipient, user)
         when (target) {
             is Destination.Refused -> Outcome.Refused(target.failure)
-            is Destination.Ready -> {
-                post(target.conversationId, subject, posts, caption, user)
-                Outcome.Served(target.conversationId, queued = _state.value.isOffline)
+            is Destination.Ready -> when (val admission = admissions[target.conversationId]) {
+                null -> Outcome.Refused(ShareFailure.GENERIC)
+                OutOfThreadAdmission.END_TO_END -> Outcome.Refused(ShareFailure.SEALED_DESTINATION)
+                OutOfThreadAdmission.UNREACHABLE -> Outcome.Refused(ShareFailure.UNREACHABLE)
+                OutOfThreadAdmission.SEND, OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN -> {
+                    post(target.conversationId, subject, posts, caption, user)
+                    val waits = admission == OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN
+                    Outcome.Served(target.conversationId, queued = _state.value.isOffline || waits)
+                }
             }
         }
     } catch (cancelled: CancellationException) {

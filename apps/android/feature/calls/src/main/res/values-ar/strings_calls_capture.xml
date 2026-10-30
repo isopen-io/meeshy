@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_saved">تم حفظ اللقطة</string>
+    <string name="call_capture_video_saved">تم حفظ الفيديو</string>
+    <string name="call_capture_denied">اسمح لـ Meeshy بالحفظ في المعرض من الإعدادات للاحتفاظ بلقطاتك.</string>
+    <string name="call_capture_no_video">لا توجد صورة لالتقاطها حاليًا</string>
+    <string name="call_capture_failed">تعذّر حفظ اللقطة</string>
+    <string name="call_capture_preview">معاينة المونتاج</string>
+    <string name="call_capture_working">جارٍ الحفظ…</string>
+    <string name="call_mode_gesture_hint">نقرتان: صورة · ضغطة مطوّلة: فيديو</string>
+    <string name="call_mode_photo">التقاط صورة</string>
+    <string name="call_mode_record">تصوير</string>
+    <string name="call_mode_record_stop">إيقاف التسجيل</string>
+    <string name="call_mode_record_stop_hint">يحفظ الفيديو في معرضك</string>
+</resources>

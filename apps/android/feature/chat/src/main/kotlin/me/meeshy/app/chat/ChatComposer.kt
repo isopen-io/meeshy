@@ -151,9 +151,17 @@ internal fun ChatComposer(
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
-    val ladderTiles = remember(affordances, onLocationRequest != null) {
-        ComposerAttachmentLadder.tiles(affordances, hasRecentMediaStrip = true, showCamera = true, showLocation = onLocationRequest != null, showEmoji = true)
+    val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance) {
+        ComposerAttachmentLadder.tiles(
+            affordances,
+            hasRecentMediaStrip = true,
+            showCamera = true,
+            showContact = guestAllowance.offersContactsAndPlaces,
+            showLocation = onLocationRequest != null,
+            showEmoji = true,
+        )
     }
+    val pickContactCard = rememberContactCardPicker(onCard = onPickFile)
     // Cursor-aware mirror of `draft` so the Emoji tile inserts at the caret; `draft` stays the source of truth.
     var fieldValue by remember { mutableStateOf(TextFieldValue(draft, selection = TextRange(draft.length))) }
     LaunchedEffect(draftRevision) { fieldValue = TextFieldValue(draft, selection = TextRange(draft.length)) }
@@ -496,6 +504,7 @@ internal fun ChatComposer(
                                 AttachmentTileKind.Camera -> cameraChooserOpen = true
                                 AttachmentTileKind.Emoji -> emojiPickerOpen = true
                                 AttachmentTileKind.Location -> onLocationRequest?.invoke()
+                                AttachmentTileKind.Contact -> pickContactCard()
                             }
                         },
                     )

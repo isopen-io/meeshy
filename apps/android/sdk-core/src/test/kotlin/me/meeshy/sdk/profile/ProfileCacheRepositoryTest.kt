@@ -67,6 +67,35 @@ class ProfileCacheRepositoryTest {
         assertThat(repository.cachedProfile("eve")).isEqualTo(other)
     }
 
+    private val threeHoursAgo = "2026-10-29T09:00:00.000Z"
+    private val bobSeen = bob.copy(isOnline = true, lastActiveAt = threeHoursAgo)
+
+    @Test
+    fun `la fiche rangee ne garde pas la presence servie`() = runTest {
+        repository.store(bobSeen, id, ticket = null)
+        val rows = db.keyedJsonCacheDao().findAll(ProfileCacheRepository.NAMESPACE)
+        assertThat(rows).isNotEmpty()
+        rows.forEach { row ->
+            assertThat(row.payload).doesNotContain(threeHoursAgo)
+            assertThat(row.payload).contains("\"isOnline\":null")
+            assertThat(row.payload).contains("\"lastActiveAt\":null")
+        }
+        assertThat(repository.cachedProfile(id)).isEqualTo(bob)
+    }
+
+    @Test
+    fun `une fiche deja en cache avec sa presence est lue sans elle`() = runTest {
+        val legacy = kotlinx.serialization.json.Json.encodeToString(MeeshyUser.serializer(), bobSeen)
+        assertThat(legacy).contains(threeHoursAgo)
+        listOf(id, "bob").forEach { db.keyedJsonCacheDao().upsert(KeyedJsonCacheEntity(ProfileCacheRepository.NAMESPACE, it, legacy, 1L)) }
+        listOf(id, "bob", "@Bob").forEach { key ->
+            val read = repository.cachedProfile(key)
+            assertThat(read?.isOnline).isNull()
+            assertThat(read?.lastActiveAt).isNull()
+            assertThat(read?.displayName).isEqualTo("Bob")
+        }
+    }
+
     @Test
     fun `la deconnexion vide profile_card`() = runTest {
         repository.store(bob, "bob", ticket = null)

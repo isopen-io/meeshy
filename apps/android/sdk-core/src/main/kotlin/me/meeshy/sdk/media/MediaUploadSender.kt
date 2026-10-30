@@ -27,6 +27,8 @@ import me.meeshy.sdk.outbox.SendResult
  *   or sealed under a key lost with the process) → [SendResult.PermanentFailure] with the same reason as a gone blob
  *   ([MediaLoss], #13554): a retry would read the same unreadable file. The same code with bytes that still read whole
  *   (the cleaned copy could not be written: disk full) is a [SendResult.TransientFailure].
+ * - the gateway **refuses the destination** of the piece ([refusal], #13820: an end-to-end conversation, a conversation
+ *   it does not find) → whatever [refusal] answers, a [SendResult.PermanentFailure]: the same refusal on every retry.
  * - the upload **fails transiently** (offline, 5xx) → [SendResult.TransientFailure]:
  *   the lane stops and WorkManager retries with the bytes still durably held.
  * - the upload **succeeds but yields no usable media** → [SendResult.PermanentFailure]:
@@ -40,15 +42,16 @@ object MediaUploadSender {
      * Delivers one media upload. [item] is the durably-stored bytes (or `null`
      * when the blob is gone); [upload] performs the network upload of a single
      * item, returning the produced [UploadedMedia] rows. [upload] is **not**
-     * called when [item] is `null`.
+     * called when [item] is `null`. [refusal] reads a failed upload first: a non-null answer is the outcome.
      */
     suspend fun send(
         item: MediaUploadItem?,
+        refusal: suspend (NetworkResult.Failure) -> SendResult? = { null },
         upload: suspend (MediaUploadItem) -> NetworkResult<List<UploadedMedia>>,
     ): SendResult {
         if (item == null) return SendResult.PermanentFailure(REASON_BLOB_GONE)
         return when (val result = upload(item)) {
-            is NetworkResult.Failure -> when (result.error.code) {
+            is NetworkResult.Failure -> refusal(result) ?: when (result.error.code) {
                 in LOCATION_REFUSALS -> SendResult.PermanentFailure(REASON_LOCATION_NOT_REMOVABLE)
                 OutgoingMediaSanitizer.UNREADABLE_CODE ->
                     if (readsWhole(item)) SendResult.TransientFailure else SendResult.PermanentFailure(REASON_BLOB_GONE)

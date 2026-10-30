@@ -23,4 +23,6 @@
     <string name="composer_mosaic_wave">Wave</string>
     <string name="composer_publish_menu_a11y_hint">Opens the choice of format and layout</string>
     <string name="composer_publish_menu_title">Publish as</string>
+    <string name="push_action_comment">Comment</string>
+    <string name="push_action_comment_hint">Comment…</string>
 </resources>

@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallState
@@ -174,6 +175,7 @@ class CallStageSemanticsTest {
                         peerAvatarUrl = null,
                         connected = true,
                         reduceMotion = true,
+                        layout = CallDuoStageLayout(isMyImageFullScreen = false, showsSelfTile = true),
                         selfTileMemory = CallSelfTileMemory(),
                         onSceneTap = taps,
                     )

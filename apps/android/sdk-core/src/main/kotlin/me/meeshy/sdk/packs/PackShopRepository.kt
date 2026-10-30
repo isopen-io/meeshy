@@ -27,10 +27,13 @@ import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.packs.PackPurchaseRefusal
 import me.meeshy.sdk.model.packs.PackPurchaseResponse
 import me.meeshy.sdk.model.packs.PackShopResponse
+import me.meeshy.sdk.model.packs.ShopPack
 import me.meeshy.sdk.model.packs.applying
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PackApi
+import me.meeshy.sdk.net.api.catalogue
 import me.meeshy.sdk.net.api.purchase
+import me.meeshy.sdk.net.api.setInstalled
 import me.meeshy.sdk.net.api.shop
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.AccountFence
@@ -41,6 +44,12 @@ import me.meeshy.sdk.session.PerAccountCache
 sealed interface PackPurchaseOutcome {
     data class Done(val purchase: PackPurchaseResponse) : PackPurchaseOutcome
     data class Refused(val refusal: PackPurchaseRefusal) : PackPurchaseOutcome
+}
+
+/** Le sort d'une installation ou d'un retrait : confirmé par le serveur (son résumé du pack), ou refusé. */
+sealed interface PackInstallOutcome {
+    data class Done(val pack: ShopPack) : PackInstallOutcome
+    data class Refused(val refusal: PackPurchaseRefusal) : PackInstallOutcome
 }
 
 /**
@@ -113,6 +122,37 @@ class PackShopRepository(
     }
 
     /**
+     * Installer ([installed] vrai) ou retirer un pack À MOI. Le serveur est seul juge de la possession : un pack qui n'est
+     * pas à moi répond `403 PACK_NOT_OWNED`, lu comme un refus définitif. Le cache ne reçoit que SA réponse (l'état servi,
+     * jamais le geste), puis le profil et la liste des packs installés l'apprennent par [installations] — le même chemin
+     * qu'un événement d'un autre appareil. Un compte clos entre-temps n'écrit ni n'annonce rien.
+     *
+     * La possession annoncée est celle que le serveur a VÉRIFIÉE : une installation confirmée prouve le pack à moi (sinon
+     * `403`), un retrait ne vérifie rien — le résumé qu'il rend dit `owned: true` d'office — donc il n'annonce aucune
+     * possession, comme `pack:installation-updated` de la passerelle, et celle déjà connue est gardée.
+     */
+    suspend fun setInstalled(domain: AppearancePackDomain, slug: String, installed: Boolean): PackInstallOutcome {
+        val ticket = cache.ticket()
+        return when (val result = apiCall { api.setInstalled(domain, slug, installed) }) {
+            is NetworkResult.Success -> {
+                val confirmed = result.data
+                writes.withLock {
+                    localWrites += 1
+                    cache.update(NAMESPACE, KEY, PackShopResponse.serializer(), ticket) { it.installSettled(domain, confirmed) }
+                }
+                if (fence == null || ticket == null || fence.isCurrent(ticket)) {
+                    _installations.emit(
+                        PackInstallationUpdatedEvent(domain.wire, slug, installed = confirmed.installed, owned = confirmed.owned.takeIf { installed }),
+                    )
+                }
+                PackInstallOutcome.Done(confirmed)
+            }
+            is NetworkResult.Failure ->
+                PackInstallOutcome.Refused(PackPurchaseRefusal.of(result.error.httpStatus, result.error.code))
+        }
+    }
+
+    /**
      * `pack:installation-updated` reçu sous [ticket] (pris AU REÇU) : la charge suffit, la vitrine en cache la reprend
      * sans relire le réseau, puis les écrans la reçoivent. Un compte clos depuis ne reçoit rien et n'écrit rien. Une
      * lecture de la vitrine partie AVANT l'événement ne l'efface pas en revenant, comme pour un achat confirmé.
@@ -154,16 +194,35 @@ class PackShopRepository(
         cache.clearNamespace(NAMESPACE)
     }
 
+    /**
+     * La vitrine unique ; un ancien serveur qui la répond 404 est relu domaine par domaine (iOS `PackShopService`). Toute
+     * autre panne remonte telle quelle : le cache garde ce qu'il a, jamais une vitrine vide fabriquée.
+     */
     private suspend fun fetchShop(): PackShopResponse =
         when (val result = apiCall { api.shop(PackShopResponse.OFFERED) }) {
             is NetworkResult.Success -> result.data
-            is NetworkResult.Failure -> throw PackShopUnavailableException(result.error.httpStatus)
+            is NetworkResult.Failure ->
+                if (result.error.httpStatus == NOT_FOUND) composedFromDomains()
+                else throw PackShopUnavailableException(result.error.httpStatus)
         }
+
+    /** Un domaine que ce serveur ne sert pas est vide, jamais une erreur ; toute autre panne annule la recomposition. */
+    private suspend fun composedFromDomains(): PackShopResponse = PackShopResponse.composed(
+        PackShopResponse.OFFERED.map { domain ->
+            domain to when (val result = apiCall { api.catalogue(domain) }) {
+                is NetworkResult.Success -> result.data.packs
+                is NetworkResult.Failure ->
+                    if (result.error.httpStatus == NOT_FOUND) emptyList()
+                    else throw PackShopUnavailableException(result.error.httpStatus)
+            }
+        },
+    )
 
     /** La passerelle n'a pas servi la vitrine : ce que le cache garde reste peint. */
     class PackShopUnavailableException(val httpStatus: Int?) : RuntimeException("pack shop unavailable ($httpStatus)")
 
     private companion object {
+        const val NOT_FOUND = 404
         const val NAMESPACE = "pack-shop"
         const val KEY = "offered"
         const val HOUR_MILLIS = 60 * 60_000L

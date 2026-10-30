@@ -1,6 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UnifiedAuthContext } from '../../../middleware/auth';
+import { ErrorCode } from '@meeshy/shared/types/errors';
 import { sendNotFound, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
 
@@ -335,12 +336,18 @@ export type MessagesDeRefusDAcces = {
  * pas même que la conversation existe. Les identifiants sont LISIBLES
  * (`mee_meeshy`) : un 403 « pas pour toi » à côté d'un 404 « introuvable »
  * était un oracle d'existence énumérable. Les deux refus partent donc
- * identiques — même statut, même prose, aucun code.
+ * identiques — même statut, même prose, même code.
  */
 export const CONVERSATION_INTROUVABLE = 'Conversation not found';
 
+/**
+ * #13820 — le code STABLE de ce refus, identique pour une conversation absente et
+ * pour un non-membre (#8099) : il dit seulement que c'est la PASSERELLE qui ne sert
+ * pas la conversation. Un client y distingue un refus définitif du 404 brut d'un
+ * proxy (Traefik pendant un redémarrage), qu'il doit réessayer.
+ */
 export function refuserCommeIntrouvable(reply: FastifyReply): void {
-  return sendNotFound(reply, CONVERSATION_INTROUVABLE);
+  return sendNotFound(reply, CONVERSATION_INTROUVABLE, { code: ErrorCode.CONVERSATION_NOT_FOUND });
 }
 
 /**

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -49,10 +50,11 @@ internal class ConversationInfoEntry(
 )
 
 /**
- * La fiche Conversation (pendant minimal de `ConversationInfoSheet` iOS) : ouverte par le
- * toucher de l'avatar d'un groupe ou l'entrée « Conversation » du menu de l'avatar. Elle
- * accueille ce que l'en-tête iOS ne montre pas : membres, statistiques, analyse, lien de
- * partage et réglages, chacun ouvrant sa feuille.
+ * La fiche Conversation (pendant de `ConversationInfoSheet` iOS) : ouverte par le toucher de
+ * l'avatar d'un groupe ou l'entrée « Conversation » du menu de l'avatar. Sous l'en-tête,
+ * [headerActions] (Bloquer, Partager, Quitter) ; puis les entrées qui ouvrent chacune leur feuille
+ * (membres, chiffrement, statistiques, analyse, médias, réglages) ; enfin [options], l'onglet
+ * Options d'iOS (#13777).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,8 +64,11 @@ internal fun ConversationInfoSheet(
     avatarUrl: String?,
     accentColor: Color,
     peerUserId: String?,
+    conversationId: String?,
     entries: List<ConversationInfoEntry>,
     onDismiss: () -> Unit,
+    headerActions: @Composable () -> Unit = {},
+    options: @Composable () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -81,12 +86,12 @@ internal fun ConversationInfoSheet(
                 .padding(bottom = MeeshySpacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            MeeshyAvatar(
-                name = title,
-                size = 80.dp,
-                containerColor = accentColor,
-                imageUrl = avatarUrl,
-                presence = rememberPresence(peerUserId),
+            ConversationInfoAvatar(
+                title = title,
+                accentColor = accentColor,
+                avatarUrl = avatarUrl,
+                peerUserId = peerUserId,
+                conversationId = conversationId,
             )
             Spacer(Modifier.size(MeeshySpacing.md))
             Text(
@@ -107,6 +112,8 @@ internal fun ConversationInfoSheet(
                 )
             }
             Spacer(Modifier.size(MeeshySpacing.lg))
+            headerActions()
+            Spacer(Modifier.size(MeeshySpacing.md))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -144,6 +151,27 @@ internal fun ConversationInfoSheet(
                     }
                 }
             }
+            Spacer(Modifier.size(MeeshySpacing.lg))
+            options()
         }
     }
+}
+
+/** Le grand avatar de la feuille : le point du pair d'une directe, « ici » s'il regarde CETTE conversation. */
+@Composable
+internal fun ConversationInfoAvatar(
+    title: String,
+    accentColor: Color,
+    avatarUrl: String?,
+    peerUserId: String?,
+    conversationId: String?,
+) {
+    MeeshyAvatar(
+        name = title,
+        size = 80.dp,
+        containerColor = accentColor,
+        imageUrl = avatarUrl,
+        presence = rememberPresence(peerUserId),
+        here = rememberConversationHere(peerUserId, conversationId),
+    )
 }

@@ -54,12 +54,16 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.conversation.ReadStatusLoadFailure
 import me.meeshy.sdk.model.MessageViewsFilter
 import me.meeshy.sdk.model.MessageViewsListing
+import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.ReadStatusData
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.RelativeTimeStrings
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -69,7 +73,16 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /** Une personne de l'une des listes de la fiche : son nom, son avatar et l'instant qui la concerne (ou aucun). */
-private data class ViewerRow(val participantId: String, val name: String, val avatarUrl: String?, val epochMillis: Long?)
+internal data class ViewerRow(
+    val participantId: String,
+    val name: String,
+    val avatarUrl: String?,
+    val epochMillis: Long?,
+    /** Le compte du membre listé, relu dans le roster en cache ; `null` pour un membre inconnu. */
+    val userId: String? = null,
+    /** La présence que le roster a servie pour ce membre ; `null` = rien servi, aucun point. */
+    val served: UserPresence? = null,
+)
 
 private fun MessageViewsFilter.labelRes(): Int = when (this) {
     MessageViewsFilter.Sent -> R.string.message_detail_views_sent
@@ -150,7 +163,7 @@ internal fun MessageViewsSheet(
                 current == MessageViewsFilter.Sent -> SentTab(bubble, accentColor)
                 state.status.showsSpinner -> Loading(accentColor)
                 data == null -> LoadError(state.status.failure, accentColor, viewModel::retry)
-                else -> ViewerList(current, data, accentColor)
+                else -> ViewerList(current, data, state.membersByParticipant, accentColor)
             }
         }
     }
@@ -182,7 +195,7 @@ private fun ViewsTab(tab: MessageViewsFilter, count: Int?, selected: Boolean, ac
 }
 
 @Composable
-private fun SentTab(bubble: BubbleContent, accentColor: Color) {
+internal fun SentTab(bubble: BubbleContent, accentColor: Color) {
     val strings = rememberRelativeTimeStrings()
     val sentAt = remember(bubble.createdAtIso) { bubble.createdAtIso?.let { isoToEpochMillisOrNull(it) } }
     val whenText = remember(sentAt, strings) {
@@ -204,7 +217,12 @@ private fun SentTab(bubble: BubbleContent, accentColor: Color) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MeeshyAvatar(name = bubble.senderName.orEmpty().ifBlank { "?" }, size = 40.dp, imageUrl = bubble.senderAvatarUrl)
+        MeeshyAvatar(
+            name = bubble.senderName.orEmpty().ifBlank { "?" },
+            size = 40.dp,
+            imageUrl = bubble.senderAvatarUrl,
+            presence = rememberPresence(bubble.senderProfile?.userId?.takeUnless { bubble.isOutgoing }),
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 bubble.senderName ?: stringResource(R.string.common_unknown),
@@ -221,8 +239,13 @@ private fun SentTab(bubble: BubbleContent, accentColor: Color) {
 }
 
 @Composable
-private fun ViewerList(filter: MessageViewsFilter, data: ReadStatusData, accentColor: Color) {
-    val rows = remember(filter, data) { viewerRows(filter, data) }
+private fun ViewerList(
+    filter: MessageViewsFilter,
+    data: ReadStatusData,
+    members: Map<String, PaginatedParticipant>,
+    accentColor: Color,
+) {
+    val rows = remember(filter, data, members) { viewerRows(filter, data, members) }
     val total = data.totalMembers
     val (icon, empty) = when (filter) {
         MessageViewsFilter.Delivered -> MeeshyIcons.CheckCircleFilled to R.string.message_detail_views_delivered_empty
@@ -255,43 +278,86 @@ private fun ViewerList(filter: MessageViewsFilter, data: ReadStatusData, accentC
         val now = remember(rows) { System.currentTimeMillis() }
         LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
             itemsIndexed(rows, key = { _, row -> row.participantId }) { index, row ->
-                Row(
-                    modifier = Modifier
-                        .animateItem()
-                        .staggeredAppear(index)
-                        .fillMaxWidth()
-                        .padding(vertical = MeeshySpacing.xs),
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MeeshyAvatar(name = row.name.ifBlank { "?" }, size = 36.dp, containerColor = accentColor, imageUrl = row.avatarUrl)
-                    Text(
-                        row.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MeeshyTheme.tokens.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (row.epochMillis != null) {
-                        Text(
-                            RelativeTimeFormat.short(row.epochMillis, now, ZoneId.systemDefault(), Locale.getDefault(), strings),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MeeshyTheme.tokens.textMuted,
-                        )
-                    } else {
-                        Icon(MeeshyIcons.Schedule, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(14.dp))
-                    }
-                }
+                ViewerRowItem(
+                    row = row,
+                    accentColor = accentColor,
+                    now = now,
+                    strings = strings,
+                    modifier = Modifier.animateItem().staggeredAppear(index),
+                )
             }
         }
     }
 }
 
-private fun viewerRows(filter: MessageViewsFilter, data: ReadStatusData): List<ViewerRow> = when (filter) {
-    MessageViewsFilter.Delivered -> data.receivedBy.map { ViewerRow(it.participantId, it.displayName, it.avatarURL, it.receivedAt?.let(::isoToEpochMillisOrNull)) }
-    MessageViewsFilter.Read -> data.readBy.map { ViewerRow(it.participantId, it.displayName, it.avatarURL, it.readAt?.let(::isoToEpochMillisOrNull)) }
-    else -> data.notSeenBy.orEmpty().map { ViewerRow(it.participantId, it.displayName, it.avatarURL, null) }
+/** Une personne d'une liste de la fiche : son avatar vivant (point servi par le roster), son nom, l'instant qui la concerne. */
+@Composable
+internal fun ViewerRowItem(
+    row: ViewerRow,
+    accentColor: Color,
+    now: Long,
+    strings: RelativeTimeStrings,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MeeshyAvatar(
+            name = row.name.ifBlank { "?" },
+            size = 36.dp,
+            containerColor = accentColor,
+            imageUrl = row.avatarUrl,
+            presence = rememberPresence(row.userId, row.served),
+        )
+        Text(
+            row.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (row.epochMillis != null) {
+            Text(
+                RelativeTimeFormat.short(row.epochMillis, now, ZoneId.systemDefault(), Locale.getDefault(), strings),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        } else {
+            Icon(MeeshyIcons.Schedule, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+/**
+ * Les lignes d'une liste, chacune avec le compte et la présence que le roster en cache sert pour son membre
+ * (iOS `MessageViewsMemberPresence`) ; un membre que le roster ne connaît pas n'a aucun point.
+ */
+internal fun viewerRows(
+    filter: MessageViewsFilter,
+    data: ReadStatusData,
+    members: Map<String, PaginatedParticipant>,
+): List<ViewerRow> {
+    fun row(participantId: String, name: String, avatarUrl: String?, at: String?): ViewerRow {
+        val member = members[participantId]
+        return ViewerRow(
+            participantId = participantId,
+            name = name,
+            avatarUrl = avatarUrl,
+            epochMillis = at?.let(::isoToEpochMillisOrNull),
+            userId = member?.userId,
+            served = member?.let { UserPresence.served(it.isOnline, it.lastActiveAt) },
+        )
+    }
+    return when (filter) {
+        MessageViewsFilter.Delivered -> data.receivedBy.map { row(it.participantId, it.displayName, it.avatarURL, it.receivedAt) }
+        MessageViewsFilter.Read -> data.readBy.map { row(it.participantId, it.displayName, it.avatarURL, it.readAt) }
+        else -> data.notSeenBy.orEmpty().map { row(it.participantId, it.displayName, it.avatarURL, null) }
+    }
 }
 
 @Composable

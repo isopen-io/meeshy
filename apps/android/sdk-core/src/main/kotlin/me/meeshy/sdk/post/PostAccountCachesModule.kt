@@ -25,4 +25,8 @@ internal abstract class PostAccountCachesModule {
     @Binds
     @IntoSet
     abstract fun bindStatusComposerDraft(store: StatusComposerDraftStore): PerAccountCache
+
+    @Binds
+    @IntoSet
+    abstract fun bindUnsentComments(store: UnsentCommentStore): PerAccountCache
 }

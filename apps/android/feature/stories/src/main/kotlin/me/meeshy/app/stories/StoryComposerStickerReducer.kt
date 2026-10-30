@@ -26,6 +26,11 @@ internal object StoryComposerStickerReducer {
         )
     }
 
+    /** The Edit of a sticker (#13836): its emoji swapped in place — position, size, rotation, window and selection kept. */
+    fun swapped(state: StoryComposerUiState, id: String, emoji: String): StoryComposerUiState =
+        if (emoji.isBlank() || state.deck.selectedSlide.stickers.none { it.id == id }) state
+        else state.copy(deck = state.deck.updateSticker(id) { it.copy(emoji = emoji) })
+
     /** Selects [id] (inert when it is not on the selected slide); clears text editing. */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.stickers.none { it.id == id }) state

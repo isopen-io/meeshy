@@ -7,7 +7,6 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.ConversationHere
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
@@ -95,7 +94,12 @@ internal data class ConversationRowModel(
     val conversation: ApiConversation,
     val currentUserId: String?,
     val currentUserPrefs: MeeshyUser?,
-    val presence: PresenceState?,
+    /**
+     * Le pair d'une conversation directe (`null` : groupe, ou pas de pair). La présence n'est PAS ici : la
+     * cellule d'avatar la lit elle-même (`rememberPresence`), donc un `user:status` ne change pas ce
+     * snapshot et ne recompose pas la liste.
+     */
+    val peerUserId: String?,
     val storyRing: StoryRingState,
     val moodEmoji: String?,
     val draft: ConversationDraft?,

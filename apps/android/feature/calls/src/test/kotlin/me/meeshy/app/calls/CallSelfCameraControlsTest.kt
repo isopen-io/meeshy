@@ -2,12 +2,9 @@ package me.meeshy.app.calls
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.call.camera.CallCameraZoom
 import me.meeshy.sdk.call.camera.CameraZoomActuator
@@ -39,62 +36,91 @@ class CallSelfCameraControlsTest {
         var toggles = 0
     }
 
-    private fun show(zoom: CallCameraZoom, cameraOn: Boolean, taps: Taps) {
+    private fun show(zoom: CallCameraZoom, cameraOn: Boolean, taps: Taps, onPick: (() -> Unit)? = null) {
         rule.setContent {
             MeeshyTheme {
                 CallSelfTileControlsRow(
                     CallSelfCameraActions(zoom, onFlip = { taps.flips++ }, onToggleCamera = { taps.toggles++ }),
                     isCameraOn = cameraOn,
+                    onPickCamera = onPick,
                 )
             }
         }
     }
 
     @Test
-    fun `n'affiche que les objectifs que l'appareil possede, puis la bascule a leur cote`() {
-        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = true, taps = Taps())
-        rule.onNodeWithContentDescription("Zoom 1×").assertExists()
-        rule.onNodeWithContentDescription("Zoom 2×").assertExists()
-        rule.onNodeWithContentDescription("Zoom 3×").assertDoesNotExist()
+    fun `la rangee de ma camera porte la bascule puis l'allumage, jamais le zoom`() {
+        val taps = Taps()
+        show(zoom(listOf(CameraLens("w", 0.5f), CameraLens("m", 1f))), cameraOn = true, taps = taps)
         rule.onNodeWithContentDescription("Zoom 0.5×").assertDoesNotExist()
-        rule.onNode(hasContentDescription("Switch front/back camera", substring = true)).assertExists()
-    }
-
-    @Test
-    fun `un triple objectif montre 0,5 1 2 3`() {
-        show(zoom(listOf(CameraLens("w", 0.5f), CameraLens("m", 1f), CameraLens("t", 3f))), cameraOn = true, taps = Taps())
-        listOf("0.5×", "1×", "2×", "3×").forEach { rule.onNodeWithContentDescription("Zoom $it").assertExists() }
-    }
-
-    @Test
-    fun `toucher une pastille zoome, la bascule bascule`() {
-        val z = zoom(listOf(CameraLens("m", 1f)))
-        val taps = Taps()
-        show(z, cameraOn = true, taps = taps)
-        rule.onNodeWithContentDescription("Zoom 2×").performClick()
-        assertThat(z.state.value.displayFactor).isEqualTo(2f)
-        rule.onNode(hasContentDescription("Switch front/back camera", substring = true)).performClick()
+        rule.onNodeWithContentDescription("Switch front/back camera").performClick()
+        rule.onNodeWithContentDescription("Turn camera off").performClick()
         assertThat(taps.flips).isEqualTo(1)
-        assertThat(taps.toggles).isEqualTo(0)
+        assertThat(taps.toggles).isEqualTo(1)
     }
 
     @Test
-    fun `un appui long sur la bascule coupe la camera sans basculer`() {
+    fun `l'allumage dit l'etat de la camera`() {
+        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = true, taps = Taps())
+        val node = rule.onNodeWithContentDescription("Turn camera off").fetchSemanticsNode()
+        assertThat(node.config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("Camera on")
+    }
+
+    @Test
+    fun `camera coupee, seul l'allumage reste`() {
         val taps = Taps()
-        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = true, taps = taps)
-        rule.onNode(hasContentDescription("Switch front/back camera", substring = true)).performTouchInput { longClick() }
+        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = false, taps = taps)
+        rule.onNodeWithContentDescription("Switch front/back camera").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Turn camera on").performClick()
         assertThat(taps.toggles).isEqualTo(1)
+    }
+
+    @Test
+    fun `une camera branchee remplace la bascule par le choix de camera`() {
+        val taps = Taps()
+        var picks = 0
+        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = true, taps = taps, onPick = { picks++ })
+        rule.onNodeWithContentDescription("Switch front/back camera").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Choose camera").performClick()
+        assertThat(picks).isEqualTo(1)
         assertThat(taps.flips).isEqualTo(0)
     }
 
     @Test
-    fun `caméra coupée, seule la bascule reste, annonce l'etat et se rallume d'un appui long`() {
-        val taps = Taps()
-        show(zoom(listOf(CameraLens("m", 1f))), cameraOn = false, taps = taps)
-        rule.onNodeWithContentDescription("Zoom 2×").assertDoesNotExist()
-        val node = rule.onNode(hasContentDescription("Switch front/back camera", substring = true))
-        assertThat(node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("Camera off")
-        node.performTouchInput { longClick() }
-        assertThat(taps.toggles).isEqualTo(1)
+    fun `dans ma vignette un seul bouton passe au palier suivant puis revient au plus large`() {
+        val z = zoom(listOf(CameraLens("w", 0.5f), CameraLens("m", 1f), CameraLens("t", 3f)))
+        rule.setContent { MeeshyTheme { CallZoomCycleButton(z) } }
+        val button = rule.onNodeWithContentDescription("My camera zoom")
+        assertThat(button.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("1×")
+        button.performClick()
+        assertThat(z.state.value.displayFactor).isEqualTo(2f)
+        button.performClick()
+        button.performClick()
+        assertThat(z.state.value.displayFactor).isEqualTo(0.5f)
+    }
+
+    @Test
+    fun `mon image en plein ecran porte les pastilles de chaque palier sous la rangee`() {
+        val z = zoom(listOf(CameraLens("w", 0.5f), CameraLens("m", 1f), CameraLens("t", 3f)))
+        rule.setContent {
+            MeeshyTheme {
+                CallMyImageTopRail(CallSelfCameraActions(z, onFlip = {}, onToggleCamera = {}), isCameraOn = true)
+            }
+        }
+        listOf("0.5×", "1×", "2×", "3×").forEach { rule.onNodeWithContentDescription("Zoom $it").assertExists() }
+        rule.onNodeWithContentDescription("Switch front/back camera").assertExists()
+        rule.onNodeWithContentDescription("Zoom 3×").performClick()
+        assertThat(z.state.value.displayFactor).isEqualTo(3f)
+    }
+
+    @Test
+    fun `un seul objectif ne montre que les paliers que le capteur atteint`() {
+        val z = zoom(listOf(CameraLens("m", 1f)))
+        rule.setContent {
+            MeeshyTheme { CallMyImageTopRail(CallSelfCameraActions(z, onFlip = {}, onToggleCamera = {}), isCameraOn = true) }
+        }
+        rule.onNodeWithContentDescription("Zoom 1×").assertExists()
+        rule.onNodeWithContentDescription("Zoom 2×").assertExists()
+        rule.onNodeWithContentDescription("Zoom 0.5×").assertDoesNotExist()
     }
 }

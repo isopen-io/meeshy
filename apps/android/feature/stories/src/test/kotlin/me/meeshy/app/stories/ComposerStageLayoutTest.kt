@@ -24,9 +24,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * La scène du composer garde sa taille quand un outil s'ouvre, et ses réglages de texte
- * vivent hors d'elle (#12298) — iOS `ComposerRailGeometry.sceneWidth` ne dépend que de la
- * largeur utile, jamais de la bande basse, et aucun contrôle ne se pose sur la scène.
+ * Les réglages d'un texte tiennent dans une seule rangée défilante (#12298). La géographie de la scène elle-même — plein
+ * écran, contrôles posés dessus, réduite entière au-dessus d'un panneau — est gardée par [StorySceneFirstLayoutTest] (#13834).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -34,46 +33,6 @@ class ComposerStageLayoutTest {
 
     @get:Rule
     val compose = createComposeRule()
-
-    private fun setStage(panelOpen: () -> Boolean) {
-        compose.setContent {
-            MeeshyTheme {
-                Box(Modifier.size(width = 400.dp, height = 800.dp)) {
-                    ComposerStage(
-                        scene = { modifier -> Box(modifier.testTag(SCENE)) },
-                        footer = { Box(Modifier.fillMaxWidth().height(56.dp).testTag(FOOTER)) },
-                        panel = {
-                            if (panelOpen()) Box(Modifier.fillMaxWidth().height(320.dp).testTag(PANEL))
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            }
-        }
-    }
-
-    @Test
-    fun `opening a tool panel leaves the scene at its size`() {
-        var open by mutableStateOf(false)
-        setStage { open }
-        val closed = compose.onNodeWithTag(SCENE).getUnclippedBoundsInRoot()
-
-        open = true
-        compose.waitForIdle()
-
-        compose.onNodeWithTag(PANEL).assertExists()
-        assertThat(compose.onNodeWithTag(SCENE).getUnclippedBoundsInRoot()).isEqualTo(closed)
-    }
-
-    @Test
-    fun `what accompanies the scene sits below it, never on it`() {
-        setStage { false }
-
-        val scene = compose.onNodeWithTag(SCENE).getUnclippedBoundsInRoot()
-        val footer = compose.onNodeWithTag(FOOTER).getUnclippedBoundsInRoot()
-
-        assertThat(footer.top).isAtLeast(scene.bottom)
-    }
 
     @Test
     fun `the text settings hold in a single scrolling row`() {
@@ -97,9 +56,6 @@ class ComposerStageLayoutTest {
     }
 
     private companion object {
-        const val SCENE = "scene"
-        const val FOOTER = "footer"
-        const val PANEL = "panel"
         const val TOOLBAR = "toolbar"
     }
 }

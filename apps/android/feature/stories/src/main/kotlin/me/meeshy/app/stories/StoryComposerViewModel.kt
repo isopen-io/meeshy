@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -95,6 +96,8 @@ class StoryComposerViewModel @Inject constructor(
     private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
+    val mediaBaseUrl: String? get() = config.apiBaseUrl
+
     /** The author colour the reader paints a background-less slide with (#12314). */
     val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 
@@ -106,6 +109,18 @@ class StoryComposerViewModel @Inject constructor(
     private var seededByDoor = false
     private var ownsStoredDraft = false
     private var restoring: Job? = null
+
+    /** Une story PUBLIÉE rouverte (#13632) : son enregistrement la met à jour, il ne publie jamais une story neuve. */
+    private var editMode: StoryEditMode? = null
+
+    /** `false` : l'édition est déjà ouverte (l'écran se recompose ou tourne) — rien ne se rouvre par-dessus ce que l'auteur a changé. */
+    fun onEditRequested(): Boolean = (editMode !is StoryEditMode.Active).also { if (it) { editMode = StoryEditMode.Loading; seededByDoor = true } }
+
+    internal fun onEditing(opening: StoryEditOpening, editor: StoryEditor) {
+        editMode = StoryEditMode.Active(opening, editor)
+        _state.update(opening::applied)
+        resetHistory()
+    }
 
     /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
     fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
@@ -175,9 +190,17 @@ class StoryComposerViewModel @Inject constructor(
     private suspend fun isRestoredMediaAvailable(id: String, swept: Boolean): Boolean =
         if (OutboxIds.isCmid(id)) mediaBlobStore.has(id) else !swept
 
-    /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
+    /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
+    fun onDiscardDraft() {
+        if (editMode != null) return
+        _state.value.also { _state.value = StoryComposerUiState() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        resetHistory()
+    }
+
+    /** Persists or purges the draft on leave ([StoryComposerAutosave]); the write outlives the cleared ViewModel (#13838). */
     fun persistDraft() {
-        viewModelScope.launch {
+        if (editMode != null) return
+        viewModelScope.launch(NonCancellable) {
             val orphans = underOpeningAccount {
                 val current = _state.value
                 val previous = draftStore.load()
@@ -457,10 +480,10 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
-    fun onAddSlide() = applyDeck { it.addSlide(newSlideId()) }
+    fun onAddSlide() = applyDeck { if (_state.value.editing) it else it.addSlide(newSlideId()) }
 
     /** Inserts a clone of the selected slide right after it and selects the clone. */
-    fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
+    fun onDuplicateSelectedSlide() = applyDeck { if (_state.value.editing) it else it.duplicate(it.selectedId, newSlideId()) }
 
     /** Removes the slide [id] (inert on the last one); its media leave the pools, its pending uploads wait in [buried] (a duplicate's shared media stay). */
     fun onRemoveSlide(id: String) {
@@ -672,18 +695,12 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private fun cancelDurableUpload(cmid: String) {
-        viewModelScope.launch {
-            try {
-                mediaUploadQueue.cancel(cmid)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own.
-            }
-        }
+        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(cmid) }.exceptionOrNull()?.let { if (it is CancellationException) throw it } }
     }
 
     fun publish() {
+        (editMode as? StoryEditMode.Active)?.let { return it.save(viewModelScope, _state, _published, resolvePublishLanguage()) }
+        if (editMode != null) return
         val current = _state.updateAndGet { it.withAudiencePurged() }
         if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }

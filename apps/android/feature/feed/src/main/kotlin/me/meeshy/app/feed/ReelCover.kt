@@ -13,7 +13,7 @@ import me.meeshy.sdk.model.composesScene
 sealed interface ReelCover {
 
     /** Le réel est composé et n'a ni vidéo ni image à montrer : sa scène se rejoue, muette (iOS `soundSceneDocument`). */
-    data class Scene(val item: StoryItem) : ReelCover
+    data class Scene(val item: StoryItem, val accentHex: String? = null) : ReelCover
 
     /** Une image fixe : la vignette de la vidéo, ou l'image du réel, derrière son thumbHash. */
     data class Poster(
@@ -24,7 +24,7 @@ sealed interface ReelCover {
     ) : ReelCover
 
     /** Aucun visuel (réel audio seul, vidéo sans vignette) : l'aplat d'accent et son glyphe (iOS `ReelAudioBackdrop`). */
-    data class Backdrop(val isVideo: Boolean) : ReelCover
+    data class Backdrop(val isVideo: Boolean, val accentHex: String? = null) : ReelCover
 }
 
 object ReelCoverResolver {
@@ -32,14 +32,15 @@ object ReelCoverResolver {
     /**
      * La couverture d'un réel. Le visuel est la vidéo, sinon la première image (iOS `reelBackgroundMedia`) — le
      * média JOUÉ, qui préfère l'audio à l'image, n'est pas le visuel. Sans visuel, une scène composée se rejoue ;
-     * sinon l'aplat. [scene] n'est évalué que si la scène est la réponse.
+     * sinon l'aplat. [scene] n'est évalué que si la scène est la réponse. [accentHex] est la couleur de l'auteur : celle de
+     * l'aplat et du fond de la scène (iOS `FeedPost.authorColor`).
      */
-    fun resolve(media: List<FeedMediaItem>, scene: () -> StoryItem?): ReelCover {
+    fun resolve(media: List<FeedMediaItem>, accentHex: String? = null, scene: () -> StoryItem?): ReelCover {
         val background = media.reelVisual()
         val poster = background?.let(::poster)
         if (poster != null) return poster
         val item = if (background == null) scene()?.takeIf { it.storyEffects.composesScene() } else null
-        return if (item != null) ReelCover.Scene(item) else ReelCover.Backdrop(isVideo = background != null)
+        return if (item != null) ReelCover.Scene(item, accentHex) else ReelCover.Backdrop(isVideo = background != null, accentHex = accentHex)
     }
 
     private fun poster(media: FeedMediaItem): ReelCover.Poster? {

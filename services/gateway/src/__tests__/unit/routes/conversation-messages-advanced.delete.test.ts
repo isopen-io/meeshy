@@ -371,7 +371,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getDeleteMsgHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns 404 when message not found', async () => {

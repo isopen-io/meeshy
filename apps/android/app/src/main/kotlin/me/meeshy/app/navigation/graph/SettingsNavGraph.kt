@@ -15,6 +15,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import me.meeshy.app.navigation.sheetComposable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
@@ -116,6 +117,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
             navArgument("domain") { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument("pack") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
+        deepLinks = listOf(navDeepLink { uriPattern = Routes.PACK_SHOP_DEEP_LINK }),
     ) { _, dismiss ->
         PackShopScreen(onBack = dismiss)
     }

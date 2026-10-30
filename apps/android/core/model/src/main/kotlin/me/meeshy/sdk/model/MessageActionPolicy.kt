@@ -293,16 +293,28 @@ object MessageActionPolicy {
 
     // ── Groupes ──
 
-    private fun kindActions(context: MessageActionContext): List<Action> {
-        if (!context.readable) return emptyList()
-        val offered: List<Pair<Action, Boolean>> = when (context.content.kind) {
+    /**
+     * Les actions du TYPE d'un message (ouvrir ou copier son lien, ouvrir son lieu, enregistrer son contact) : elles ne
+     * dépendent que du message, jamais du lecteur — le menu les lit sans construire d'autorité. Même table que [groupsOf].
+     */
+    fun kindActionsOf(subject: MessageContentKind.Subject, nowMillis: Long): List<Action> {
+        val reading = MessageActionContext.Reading.of(subject, nowMillis)
+        return kindActions(reading.content.kind, reading.readable, reading.exportable)
+    }
+
+    private fun kindActions(context: MessageActionContext): List<Action> =
+        kindActions(context.content.kind, context.readable, context.exportable)
+
+    private fun kindActions(kind: MessageContentKind, readable: Boolean, exportable: Boolean): List<Action> {
+        if (!readable) return emptyList()
+        val offered: List<Pair<Action, Boolean>> = when (kind) {
             MessageContentKind.LINK -> listOf(Action.OPEN_LINK to false, Action.COPY_LINK to true)
             MessageContentKind.LOCATION -> listOf(Action.OPEN_IN_MAPS to false, Action.COPY_ADDRESS to true)
             MessageContentKind.CONTACT -> listOf(Action.SAVE_CONTACT to true)
             MessageContentKind.POLL -> listOf(Action.VIEW_RESULTS to false)
             else -> emptyList()
         }
-        return offered.filter { (_, exports) -> !exports || context.exportable }.map { it.first }
+        return offered.filter { (_, exports) -> !exports || exportable }.map { it.first }
     }
 
     private fun MutableList<Action>.addWhen(condition: Boolean, action: Action) {
@@ -372,12 +384,12 @@ internal class MessageActionContext(
 
         fun of(input: MessageActionPolicy.Input): MessageActionContext {
             val subject = input.message.subject
-            val content = MessageContentKind.shapeOf(subject)
+            val reading = Reading.of(subject, input.nowMillis)
+            val content = reading.content
             val flags = content.flags
             val viewer = input.viewer
             val registered = viewer.isRegistered
-            val expiresAt = subject.expiresAtMillis
-            val gone = content.kind == MessageContentKind.DELETED || (expiresAt != null && expiresAt <= input.nowMillis)
+            val gone = reading.gone
             val authorUserId = input.message.authorUserId
             val isAuthor = registered && authorUserId != null && authorUserId == viewer.id
             val participantId = viewer.participantId ?: if (registered) null else viewer.id
@@ -392,14 +404,14 @@ internal class MessageActionContext(
                 registered = registered,
                 notice = notice,
                 forwardable = exit.forward.isAllowed,
-                exportable = exit.exportable && !blurredForExport(subject),
+                exportable = reading.exportable,
                 e2ee = flags.encrypted || input.conversation.isEndToEnd,
                 gone = gone,
                 live = !gone && !flags.optimistic && !flags.failed,
                 isAuthor = isAuthor,
                 isMine = isAuthor || (participantId != null && input.message.senderId == participantId),
                 hasText = !notice && !subject.content.isNullOrBlank(),
-                readable = !gone && !flags.viewOnce && !flags.blurred,
+                readable = reading.readable,
                 piecesNotServerCopyable = subject.pieces.isNotEmpty() &&
                     (hasRegime(input.conversation.encryptionMode) || hasRegime(subject.encryptionMode) ||
                         subject.isEncrypted == true),
@@ -407,18 +419,41 @@ internal class MessageActionContext(
         }
 
         private fun hasRegime(mode: String?): Boolean = !mode.isNullOrBlank()
+    }
 
-        /**
-         * D8 (#10949) : un message flouté, ou dont TOUTES les pièces le sont, se transfère mais ne
-         * s'exporte pas. `contentExitLaw` le porte côté TypeScript (`BLURRED_ORDINARY`) ;
-         * [ContentExitLaw.of] laisse le flou à l'appelant, qui le COMPOSE ici.
-         */
-        private fun blurredForExport(subject: MessageContentKind.Subject): Boolean {
-            fun blurred(column: Boolean?, bits: Long?): Boolean =
-                column == true || ((bits ?: 0L) and MessageEffectFlags.BLURRED) != 0L
-            val pieces = subject.pieces
-            return blurred(subject.isBlurred, subject.effectFlags) ||
-                (pieces.isNotEmpty() && pieces.all { blurred(it.isBlurred, it.effectFlags) })
+    /** Ce que le message seul dit de lui, sans lecteur : sa forme, s'il est parti, s'il se lit, s'il s'exporte. */
+    class Reading private constructor(
+        val content: MessageContentKind.Shape,
+        val gone: Boolean,
+        val readable: Boolean,
+        val exportable: Boolean,
+    ) {
+        companion object {
+            fun of(subject: MessageContentKind.Subject, nowMillis: Long): Reading {
+                val content = MessageContentKind.shapeOf(subject)
+                val expiresAt = subject.expiresAtMillis
+                val gone = content.kind == MessageContentKind.DELETED || (expiresAt != null && expiresAt <= nowMillis)
+                val exit = ContentExitLaw.of(subject.contentExitSubject)
+                return Reading(
+                    content = content,
+                    gone = gone,
+                    readable = !gone && !content.flags.viewOnce && !content.flags.blurred,
+                    exportable = exit.exportable && !blurredForExport(subject),
+                )
+            }
+
+            /**
+             * D8 (#10949) : un message flouté, ou dont TOUTES les pièces le sont, se transfère mais ne
+             * s'exporte pas. `contentExitLaw` le porte côté TypeScript (`BLURRED_ORDINARY`) ;
+             * [ContentExitLaw.of] laisse le flou à l'appelant, qui le COMPOSE ici.
+             */
+            private fun blurredForExport(subject: MessageContentKind.Subject): Boolean {
+                fun blurred(column: Boolean?, bits: Long?): Boolean =
+                    column == true || ((bits ?: 0L) and MessageEffectFlags.BLURRED) != 0L
+                val pieces = subject.pieces
+                return blurred(subject.isBlurred, subject.effectFlags) ||
+                    (pieces.isNotEmpty() && pieces.all { blurred(it.isBlurred, it.effectFlags) })
+            }
         }
     }
 }

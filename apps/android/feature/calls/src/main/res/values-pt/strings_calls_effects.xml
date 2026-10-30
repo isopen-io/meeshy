@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Efeitos</string>
+    <string name="call_effects_title">Efeitos da minha câmera</string>
+    <string name="call_effects_category_face">Rosto</string>
+    <string name="call_effects_category_color">Cor</string>
+    <string name="call_effects_face_none">Nenhum</string>
+    <string name="call_effects_face_smoothing">Suavização da pele</string>
+    <string name="call_effects_face_toad">Sapo</string>
+    <string name="call_effects_face_angel">Anjo</string>
+    <string name="call_effects_face_demon">Demônio</string>
+    <string name="call_effects_face_volcano">Erupção</string>
+    <string name="call_effects_preset_natural">Natural</string>
+    <string name="call_effects_preset_warm">Quente</string>
+    <string name="call_effects_preset_cool">Frio</string>
+    <string name="call_effects_preset_vivid">Vivo</string>
+    <string name="call_effects_preset_muted">Suave</string>
+    <string name="call_effects_settings">Ajustes</string>
+    <string name="call_effects_settings_hint">Mostra o brilho e o desfoque do fundo no lugar dos efeitos</string>
+    <string name="call_effects_validate">Aplicar</string>
+    <string name="call_effects_validate_hint">Mantém este efeito e volta à chamada</string>
+    <string name="call_effects_quit">Sair</string>
+    <string name="call_effects_quit_hint">Restaura sua imagem como estava e volta à chamada</string>
+    <string name="call_effects_blur">Fundo desfocado</string>
+    <string name="call_effects_smoothing_strength">Intensidade da suavização</string>
+    <string name="call_effects_brightness">Brilho</string>
+    <string name="call_effects_percent">%1$d%%</string>
+    <string name="call_effects_next">Próximo efeito</string>
+    <string name="call_effects_previous">Efeito anterior</string>
+</resources>

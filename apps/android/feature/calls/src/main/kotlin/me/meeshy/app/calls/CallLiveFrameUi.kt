@@ -1,12 +1,9 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,9 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,68 +19,51 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import java.text.DateFormat
-import java.util.Date
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.call.frames.CallFramePortrait
-import me.meeshy.sdk.call.frames.CallFrameRenderer
-import me.meeshy.sdk.call.frames.CallFrameStage
+import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallLiveFrameReply
-import me.meeshy.sdk.model.call.frames.CallFrameChromeReserve
-import me.meeshy.sdk.model.call.frames.CallFrameDesign
-import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
-import me.meeshy.sdk.model.call.frames.CallFrameTexts
+import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
+import me.meeshy.sdk.model.call.frames.CallLiveFrameSuspension
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import org.webrtc.VideoTrack
 
-private const val PAINT_LONGEST_SIDE = 1280
 private const val ANSWER_LINGER_MILLIS = 4_000L
-private val HEADER_RESERVE = 72.dp
-private val PILL_RESERVE = 200.dp
 private val STATUS_TOP = 68.dp
-private val THUMB_WIDTH = 72.dp
-private val THUMB_HEIGHT = 128.dp
 
 /**
  * Le cadre en direct autour des deux vidéos ET ce qui se dit à son sujet : la proposition de l'autre
  * à trancher, sa réponse à la mienne, l'échec d'une proposition. Deux couches, un seul contrôleur.
+ * Sous un mode (Montage, Effets), la surface quitte la composition : ses rendus lâchent les pistes au lieu de
+ * composer des images que la scène du mode recouvre (#13738) ; le cadre reste gardé et revient à la sortie.
  */
 @Singleton
 class CallLiveFrameOverlay @Inject constructor(
     private val frame: CallLiveFrameController,
+    private val engine: WebRtcEngine,
+    private val textsResolver: CallFrameTextsResolver,
 ) : CallOverlay {
     override val id: String = "call-live-frame"
     override val slot: CallOverlaySlot = CallOverlaySlot.Background
@@ -95,14 +72,62 @@ class CallLiveFrameOverlay @Inject constructor(
 
     @Composable
     override fun Content(context: CallOverlayContext) {
+        if (!CallLiveFrameRule.showsHeldFrame(isVisible(context.state), context.activeMode)) return
         val shared by frame.state.collectAsState()
-        val design = CallLiveFrameRule.displayed(shared.frameId, CallLiveFrameRule.PEOPLE) ?: return
+        val reduceMotion = rememberCallReduceMotion()
+        val constrained = rememberCallDeviceConstrained()
+        val design = CallLiveFrameRule.display(shared.frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design ?: return
+        val state = context.state
+        val people = remember(state.peerName, shared.remoteSharedName) { frame.people(state.peerName, shared.remoteSharedName) }
+        val call = frame.callContext()
+        val texts by produceState(textsResolver.immediate(call), call) { value = textsResolver.texts(call) }
+        val remote by engine.remoteVideoTracks.collectAsState(initial = null)
+        val local = engine.localVideoTrack
+        val sources = remember(local, remote, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
+            CallLiveFrameSources.of(people, local, remote, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff)
+        }
+        val egl = remember(engine) { runCatching { engine.eglBase.eglBaseContext }.getOrNull() }
         CallLiveFrameSurface(
             design = design,
-            people = frame.people(context.state.peerName, shared.remoteSharedName),
+            people = people,
+            texts = texts,
+            sources = sources,
+            eglContext = egl,
+            playsMotion = CallLiveFrameRule.playsMotion(design, reduceMotion, constrained),
             modifier = Modifier.fillMaxSize(),
         )
     }
+}
+
+/** Les pistes à poser dans les cases : celles qui montrent une image. Une caméra coupée garde sa case, avec son initiale. */
+internal object CallLiveFrameSources {
+    fun of(
+        people: List<CallFramePerson>,
+        local: VideoTrack?,
+        remote: VideoTrack?,
+        isCameraOn: Boolean,
+        isFrontCamera: Boolean,
+        isPeerCameraOff: Boolean,
+    ): Map<String, CallLiveFrameVideoSource> = people.mapNotNull { person ->
+        val track = if (person.isSelf) local?.takeIf { isCameraOn } else remote?.takeIf { !isPeerCameraOff }
+        track?.let { person.id to CallLiveFrameVideoSource(it, isMirrored = person.isSelf && isFrontCamera) }
+    }.toMap()
+}
+
+/**
+ * Un cadre affiché tient la scène du duo : il pose lui-même chaque vidéo dans sa case. La scène ne
+ * dessine alors ni la vidéo plein écran du pair, décodée pour rien sous le cadre, ni ma vignette, qui
+ * percerait sa fenêtre. Même condition que le calque qui peint le cadre : suspendu, il n'est pas peint.
+ */
+internal object CallLiveFrameStage {
+    fun framesTheDuo(
+        frameId: String?,
+        isVideoCall: Boolean,
+        showsConnectedLayout: Boolean,
+        constrained: Boolean,
+        reduceMotion: Boolean,
+    ): Boolean = isVideoCall && showsConnectedLayout &&
+        CallLiveFrameRule.display(frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design != null
 }
 
 /** Ce qui se dit du cadre en haut de l'écran, sous l'en-tête : une proposition à trancher, une réponse, un échec. */
@@ -118,7 +143,10 @@ class CallLiveFrameStatusOverlay @Inject constructor(
 }
 
 @HiltViewModel
-class CallLiveFrameViewModel @Inject constructor(val controller: CallLiveFrameController) : ViewModel()
+class CallLiveFrameViewModel @Inject constructor(
+    val controller: CallLiveFrameController,
+    val texts: CallFrameTextsResolver,
+) : ViewModel()
 
 /** Le texte du haut de l'écran : la proposition à trancher, la réponse de l'autre, ou l'échec de la mienne. */
 @Composable
@@ -127,6 +155,9 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
     val notice by controller.notices.collectAsState()
     val proposed = state.proposal?.let { p -> CallLiveFrameRule.frames().firstOrNull { it.id == p.frameId }?.let { p to it } }
     val answer = state.answer
+    val suspended = CallLiveFrameRule.display(
+        state.frameId, CallLiveFrameRule.PEOPLE, rememberCallDeviceConstrained(), rememberCallReduceMotion(),
+    ) as? CallLiveFrameDisplay.Suspended
     Column(modifier.padding(top = STATUS_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
         when {
             proposed != null -> CallLiveFrameProposalCard(
@@ -149,8 +180,14 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
                     controller.noticeShown()
                 }
             }
+            suspended != null -> CallLiveFrameNotice(stringResource(suspendedText(suspended.reason)))
         }
     }
+}
+
+private fun suspendedText(reason: CallLiveFrameSuspension): Int = when (reason) {
+    CallLiveFrameSuspension.DEVICE_CONSTRAINED -> R.string.call_live_frame_suspended_device
+    CallLiveFrameSuspension.REDUCE_MOTION -> R.string.call_live_frame_suspended_motion
 }
 
 @Composable
@@ -215,183 +252,4 @@ internal fun CallLiveFrameNotice(text: String, modifier: Modifier = Modifier) {
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
             .semantics(mergeDescendants = true) { },
     )
-}
-
-/**
- * Le cadre à l'écran : le DESSUS du cadre (traits de case, bordure, ornements de premier plan, noms,
- * titre, signature), peint hors du fil principal à la taille de l'écran puis posé tel quel par-dessus
- * les vidéos. Il ne prend aucun toucher. Les couches se repeignent seulement quand le cadre, les
- * personnes, les textes ou la taille changent — jamais à une image vidéo.
- */
-@Composable
-internal fun CallLiveFrameSurface(design: CallFrameDesign, people: List<CallFramePerson>, modifier: Modifier = Modifier) {
-    val density = LocalDensity.current
-    val locale = LocalConfiguration.current.locales[0]
-    val date = remember(locale) { DateFormat.getDateInstance(DateFormat.LONG, locale).format(Date()) }
-    BoxWithConstraints(modifier) {
-        val widthPx = with(density) { maxWidth.roundToPx() }
-        val heightPx = with(density) { maxHeight.roundToPx() }
-        val shrink = (PAINT_LONGEST_SIDE.toFloat() / maxOf(widthPx, heightPx)).coerceAtMost(1f)
-        val paintW = (widthPx * shrink).toInt()
-        val paintH = (heightPx * shrink).toInt()
-        val reserve = with(density) { CallFrameChromeReserve.covering(HEADER_RESERVE.toPx().toDouble(), PILL_RESERVE.toPx().toDouble(), heightPx.toDouble()) }
-        val overlay by produceState<ImageBitmap?>(null, design.id, people, paintW, paintH, date, reserve) {
-            if (paintW < 1 || paintH < 1) return@produceState
-            val texts = CallFrameTexts(groupName = null, isGroup = false, date = date, accentHex = null)
-            value = withContext(Dispatchers.Default) {
-                CallFrameRenderer.layers(CallFrameStage(design, people, texts, paintW, paintH, reserve))?.overlay?.asImageBitmap()
-            }
-        }
-        val description = stringResource(R.string.call_live_frame_surface, design.name)
-        overlay?.let {
-            Image(
-                bitmap = it,
-                contentDescription = description,
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-/**
- * Le choix du cadre en direct (le mode « Capturer l'appel », comme sur iOS) : « Aucun cadre », puis les cadres
- * d'une ambiance, chacun en vignette. Toucher un cadre l'applique tout de suite chez moi et le propose à l'autre.
- */
-@Composable
-internal fun CallLiveFramePicker(
-    controller: CallLiveFrameController,
-    peerName: String,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val state by controller.state.collectAsState()
-    val moods = remember { CallLiveFrameRule.moods() }
-    var mood by remember(moods) { mutableStateOf(moods.firstOrNull()) }
-    val frames = remember(mood) { CallLiveFrameRule.frames(mood) }
-    val people = remember(peerName, state.remoteSharedName) { controller.people(peerName, state.remoteSharedName) }
-    val haptics = LocalHapticFeedback.current
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = MeeshyRadius.xl, topEnd = MeeshyRadius.xl))
-            .background(Color.Black.copy(alpha = 0.72f))
-            .padding(top = MeeshySpacing.md, bottom = MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        Row(Modifier.padding(horizontal = MeeshySpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.call_live_frame_label),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = CallPalette.Ink,
-                modifier = Modifier.weight(1f),
-            )
-            CallPillButton(
-                icon = MeeshyIcons.Close,
-                kind = CallPillKind.Normal,
-                label = stringResource(R.string.call_panel_close),
-                onClick = onClose,
-                diameter = 40.dp,
-            )
-        }
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            items(moods) { m -> MoodChip(m, selected = m == mood) { mood = m } }
-        }
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = MeeshySpacing.lg), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            item {
-                FrameTile(label = stringResource(R.string.call_live_frame_none), selected = state.frameId == null, thumb = null, people = people) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    controller.apply(null)
-                }
-            }
-            items(frames, key = { it.id }) { design ->
-                FrameTile(label = design.name, selected = design.id == state.frameId, thumb = design, people = people) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    controller.apply(design.id)
-                }
-            }
-        }
-        Text(
-            stringResource(R.string.call_live_frame_hold_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = CallPalette.InkSecondary,
-            modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
-        )
-    }
-}
-
-@Composable
-private fun MoodChip(mood: CallFrameMood, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = stringResource(moodLabel(mood)),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink,
-        modifier = Modifier
-            .defaultMinSizeForTarget()
-            .clip(CircleShape)
-            .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .semantics { this.selected = selected },
-    )
-}
-
-private fun Modifier.defaultMinSizeForTarget(): Modifier = this.height(40.dp)
-
-@Composable
-private fun FrameTile(label: String, selected: Boolean, thumb: CallFrameDesign?, people: List<CallFramePerson>, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(MeeshyRadius.md)
-    Column(
-        Modifier
-            .width(THUMB_WIDTH + 8.dp)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.selected = selected; contentDescription = label },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        Box(
-            Modifier
-                .size(THUMB_WIDTH, THUMB_HEIGHT)
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = 0.3f), shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (thumb != null) FrameThumbnail(thumb, people)
-        }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = CallPalette.Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-private fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerson>) {
-    val density = LocalDensity.current
-    val w = with(density) { THUMB_WIDTH.roundToPx() }
-    val h = with(density) { THUMB_HEIGHT.roundToPx() }
-    val locale = LocalConfiguration.current.locales[0]
-    val date = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date()) }
-    val bitmap by produceState<ImageBitmap?>(null, design.id, w, h, people, date) {
-        val texts = CallFrameTexts(groupName = null, isGroup = false, date = date, accentHex = null)
-        value = withContext(Dispatchers.Default) {
-            CallFrameRenderer.render(design, people.map { CallFramePortrait(it.id, it.name, it.handle, it.isSelf, null) }, texts, w, h)?.asImageBitmap()
-        }
-    }
-    bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
-}
-
-private fun moodLabel(mood: CallFrameMood): Int = when (mood) {
-    CallFrameMood.CORPORATE -> R.string.call_frames_mood_corporate
-    CallFrameMood.DECONNECTE -> R.string.call_frames_mood_deconnecte
-    CallFrameMood.DISTINGUE -> R.string.call_frames_mood_distingue
-    CallFrameMood.ELEGANT -> R.string.call_frames_mood_elegant
-    CallFrameMood.FANTASTIQUE -> R.string.call_frames_mood_fantastique
-    CallFrameMood.FEERIQUE -> R.string.call_frames_mood_feerique
-    CallFrameMood.FUTURISTE -> R.string.call_frames_mood_futuriste
-    CallFrameMood.GLAUQUE -> R.string.call_frames_mood_glauque
-    CallFrameMood.HORS_NORME -> R.string.call_frames_mood_hors_norme
-    CallFrameMood.JOVIAL -> R.string.call_frames_mood_jovial
-    CallFrameMood.MORBIDE -> R.string.call_frames_mood_morbide
-    CallFrameMood.SIGNATURE -> R.string.call_frames_mood_signature
 }

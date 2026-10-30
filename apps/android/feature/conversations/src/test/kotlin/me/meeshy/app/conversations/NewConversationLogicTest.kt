@@ -88,4 +88,19 @@ class NewConversationLogicTest {
     fun a_group_without_a_typed_title_has_none() {
         assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ").title).isNull()
     }
+
+    @Test
+    fun a_row_carries_the_activity_date_the_gateway_served_so_its_dot_can_decay() {
+        val rows = NewConversationLogic.rows(
+            listOf(
+                UserSearchResult(id = "u1", username = "alice", isOnline = false, lastActiveAt = "2026-10-29T10:00:00Z"),
+                UserSearchResult(id = "u2", username = "bob"),
+            ),
+            selectedIds = emptySet(),
+        )
+
+        assertThat(rows[0].servedPresence?.lastActiveAt).isEqualTo("2026-10-29T10:00:00Z")
+        assertThat(rows[1].servedPresence?.state(0L)).isNotEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
+        assertThat(rows[1].lastActiveAt).isNull()
+    }
 }

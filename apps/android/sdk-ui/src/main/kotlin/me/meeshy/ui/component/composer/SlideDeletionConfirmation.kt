@@ -1,9 +1,5 @@
 package me.meeshy.ui.component.composer
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,15 +19,13 @@ public fun rememberConfirmedSlideDeletion(onConfirmed: (String) -> Unit): (Strin
     var pending by remember { mutableStateOf<String?>(null) }
     val confirmed by rememberUpdatedState(onConfirmed)
     pending?.let { id ->
-        AlertDialog(
+        ComposerConfirmationDialog(
+            title = stringResource(R.string.slide_rail_delete_confirm_title),
+            destructiveLabel = stringResource(R.string.slide_rail_delete_confirm_action),
+            onDestructive = { pending = null; confirmed(id) },
+            safeLabel = stringResource(R.string.slide_rail_delete_cancel),
+            onSafe = { pending = null },
             onDismissRequest = { pending = null },
-            title = { Text(stringResource(R.string.slide_rail_delete_confirm_title)) },
-            confirmButton = {
-                TextButton(onClick = { pending = null; confirmed(id) }) {
-                    Text(stringResource(R.string.slide_rail_delete_confirm_action), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text(stringResource(R.string.slide_rail_delete_cancel)) } },
         )
     }
     return remember { { id: String -> pending = id } }

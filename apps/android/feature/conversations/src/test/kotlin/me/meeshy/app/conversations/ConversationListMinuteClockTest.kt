@@ -73,7 +73,7 @@ class ConversationListMinuteClockTest {
                         ),
                         currentUserId = "me",
                         currentUserPrefs = null,
-                        presence = null,
+                        peerUserId = null,
                         storyRing = StoryRingState.None,
                         moodEmoji = null,
                         draft = null,

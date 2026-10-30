@@ -30,6 +30,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -110,7 +111,7 @@ private fun ViewerList(viewers: List<StoryViewer>) {
 }
 
 @Composable
-private fun ViewerRow(viewer: StoryViewer) {
+internal fun ViewerRow(viewer: StoryViewer) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -121,6 +122,7 @@ private fun ViewerRow(viewer: StoryViewer) {
             size = 40.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(viewer.displayName)),
             imageUrl = viewer.avatarUrl,
+            presence = rememberPresence(viewer.id),
         )
         Text(
             text = viewer.displayName,

@@ -74,4 +74,15 @@ class CallJoinAckParserTest {
 
         assertThat(result).isInstanceOf(CallJoinResult.Failure::class.java)
     }
+
+    @Test
+    fun `a join refused because the call already ended carries its code and the real end reason`() {
+        val result = parse(
+            """{"success":false,"error":{"code":"CALL_ENDED","message":"cet appel est terminé","endReason":"connectionLost"}}""",
+        ) as CallJoinResult.Failure
+
+        assertThat(result.message).isEqualTo("cet appel est terminé")
+        assertThat(result.code).isEqualTo("CALL_ENDED")
+        assertThat(result.endReason).isEqualTo("connectionLost")
+    }
 }

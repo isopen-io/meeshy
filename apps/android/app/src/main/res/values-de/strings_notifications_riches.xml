@@ -7,4 +7,7 @@
     <string name="push_message_you">Du</string>
     <string name="push_channel_messages_name">Nachrichten</string>
     <string name="push_channel_messages_description">Neue Nachrichten und Erwähnungen</string>
+    <string name="push_comment_unsent_title">Kommentar nicht gesendet</string>
+    <string name="push_comment_unsent_hint">Tippen, um den Beitrag zu öffnen – dein Text bleibt erhalten</string>
+    <string name="push_reply_kept_as_draft">Antwort als Entwurf gespeichert</string>
 </resources>

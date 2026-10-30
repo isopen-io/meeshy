@@ -27,6 +27,8 @@ import me.meeshy.sdk.net.MeeshyApi
 internal class MessageIngestPipeline(
     private val database: MeeshyDatabase,
     private val outboxGuard: PendingOutboxGuard = PendingOutboxGuard(database.outboxDao()),
+    /** #13792 — le registre des régimes, nourri par chaque message servi ; absent dans les seuls témoins qui ne le lisent pas. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) {
 
     /** Fusionne [messages] dans sa propre transaction ; rend les conversations réellement écrites. */
@@ -54,7 +56,8 @@ internal class MessageIngestPipeline(
         val writes = LinkedHashMap<String, MessageEntity>()
         val replacedLocalIds = mutableSetOf<String>()
         val changed = mutableSetOf<String>()
-        for (incoming in latestPerId(messages)) {
+        val latest = latestPerId(messages)
+        for (incoming in latest) {
             val filedUnder = conversationId ?: incoming.conversationId
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
             val direct = messageDao.find(incoming.id) ?: messageDao.findByServerId(incoming.id)
@@ -76,6 +79,7 @@ internal class MessageIngestPipeline(
         replacedLocalIds -= writes.keys
         if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
+        regime?.learnFromServed(latest, conversationId)
         return changed
     }
 

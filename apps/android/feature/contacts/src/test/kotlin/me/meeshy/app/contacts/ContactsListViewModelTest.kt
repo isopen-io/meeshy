@@ -73,6 +73,7 @@ class ContactsListViewModelTest {
 
     private fun socketManager(): PresenceStore = mockk<PresenceStore> {
         every { entries } returns presenceEntries
+        every { entriesNow() } answers { presenceEntries.value }
     }
 
     private fun user(
@@ -127,6 +128,78 @@ class ContactsListViewModelTest {
         assertThat(vm.state.value.friends.single().isOnline).isTrue()
         assertThat(vm.state.value.friends.single().lastActiveAt).isEqualTo("2026-08-11T20:00:00.000Z")
         coVerify(exactly = 1) { repository.friendshipGraph(any()) }
+    }
+
+    @Test
+    fun `a presence the map retires leaves the contact book and its filters, back on what the server served`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z"))))
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(1)
+
+        presenceEntries.value = emptyMap()
+
+        val friend = vm.state.value.friends.single()
+        assertThat(friend.isOnline).isFalse()
+        assertThat(friend.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(0)
+        assertThat(vm.state.value.filterCounts.offline).isEqualTo(1)
+        vm.setFilter(me.meeshy.sdk.model.friend.ContactFilter.Online)
+        assertThat(vm.state.value.visibleFriends).isEmpty()
+        vm.setFilter(me.meeshy.sdk.model.friend.ContactFilter.Offline)
+        assertThat(vm.state.value.visibleFriends.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun `a live presence is never written to the cache - only the list the server served`() = runTest {
+        val written = mutableListOf<List<FriendRequestUser>>()
+        coEvery { listRepository.persist(capture(written), any()) } returns Unit
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(
+                accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z")),
+                accepted("r2", sender = user("u2", isOnline = false)),
+            ),
+            cache = cache,
+        )
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        assertThat(vm.state.value.friends.first { it.id == "u1" }.isOnline).isTrue()
+
+        cache.didRemoveFriend("u2")
+        presenceEntries.value = emptyMap()
+
+        assertThat(written).isNotEmpty()
+        written.forEach { roster ->
+            val u1 = roster.first { it.id == "u1" }
+            assertThat(u1.isOnline).isFalse()
+            assertThat(u1.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
+        }
+        assertThat(written.last().map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun `after a restart the cold paint does not bring back a presence the map had retired`() = runTest {
+        val written = mutableListOf<List<FriendRequestUser>>()
+        coEvery { listRepository.persist(capture(written), any()) } returns Unit
+        val cache = FriendshipCache()
+        viewModel(
+            received = listOf(
+                accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z")),
+                accepted("r2", sender = user("u2", isOnline = false)),
+            ),
+            cache = cache,
+        )
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        cache.didRemoveFriend("u2")
+        presenceEntries.value = emptyMap()
+        val persisted = written.last()
+
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("boom"))
+        coEvery { listRepository.cachedSnapshot() } returns persisted
+        val restarted = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
+
+        val friend = restarted.state.value.friends.single()
+        assertThat(friend.isOnline).isFalse()
+        assertThat(friend.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
     }
 
     @Test

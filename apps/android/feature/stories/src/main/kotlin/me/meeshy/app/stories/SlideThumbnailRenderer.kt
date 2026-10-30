@@ -39,6 +39,7 @@ internal object SlideThumbnailRenderer {
     private fun drawFill(canvas: Canvas, spec: SlideThumbnailSpec, width: Float, height: Float) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         when (val fill = spec.fill) {
+            StorySceneFill.Black -> paint.color = Color.Black.toArgb()
             is StorySceneFill.Solid -> paint.color = argb(fill.hex)
             is StorySceneFill.Linear ->
                 paint.shader = LinearGradient(0f, 0f, width, height, argb(fill.start), argb(fill.end), Shader.TileMode.CLAMP)

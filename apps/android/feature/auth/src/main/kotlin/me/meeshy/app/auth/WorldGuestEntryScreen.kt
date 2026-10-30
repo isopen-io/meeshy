@@ -157,6 +157,7 @@ fun WorldGuestEntryScreen(
                             title = state.worldTitle,
                             name = state.name,
                             canContinue = state.canContinue,
+                            nameTooShort = state.nameTooShort,
                             onNameChange = viewModel::onNameChange,
                             onContinue = {
                                 haptics.light()
@@ -226,6 +227,7 @@ private fun NameStep(
     title: String,
     name: String,
     canContinue: Boolean,
+    nameTooShort: Boolean,
     onNameChange: (String) -> Unit,
     onContinue: () -> Unit,
 ) {
@@ -272,6 +274,7 @@ private fun NameStep(
             contentType = AuthContentType.PersonName,
             imeAction = ImeAction.Done,
             onImeAction = { if (canContinue) onContinue() },
+            errorText = if (nameTooShort) stringResource(R.string.signup_min_characters, WorldGuestEntryRules.MIN_NAME_LENGTH) else null,
             modifier = Modifier
                 .padding(top = MeeshySpacing.xl)
                 .focusRequester(focus),

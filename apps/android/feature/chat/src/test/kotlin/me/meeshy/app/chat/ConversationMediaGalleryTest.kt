@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleImage
+import me.meeshy.ui.component.viewer.ImageViewerAuthor
 import org.junit.Test
 
 class ConversationMediaGalleryTest {
@@ -18,6 +19,9 @@ class ConversationMediaGalleryTest {
         text: String = "",
         senderName: String? = null,
         createdAtIso: String? = null,
+        isOutgoing: Boolean = false,
+        authorId: String? = null,
+        avatarUrl: String? = null,
         isViewOnce: Boolean = false,
         isViewOnceOpenedByMe: Boolean = false,
         isBlurred: Boolean = false,
@@ -25,10 +29,12 @@ class ConversationMediaGalleryTest {
     ) = BubbleContent(
         messageId = id,
         text = text,
-        isOutgoing = false,
+        isOutgoing = isOutgoing,
         isTranslated = false,
         originalText = null,
         senderName = senderName,
+        senderAvatarUrl = avatarUrl,
+        senderProfile = authorId?.let { me.meeshy.sdk.model.profile.ProfileSheetUser(userId = it, username = "u") },
         showSenderName = false,
         isEdited = false,
         isDeleted = isDeleted,
@@ -714,5 +720,38 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.exportable).containsExactly(true, true)
         assertThat(gallery.shieldsCapture).isFalse()
+    }
+
+    @Test
+    fun each_page_carries_the_account_and_photo_of_its_author_for_the_presence_dot() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "Ana", authorId = "u1", avatarUrl = "https://f/a.png")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities).containsExactly(ImageViewerAuthor(userId = "u1", avatarUrl = "https://f/a.png"))
+    }
+
+    @Test
+    fun my_own_photo_carries_no_account_so_it_never_shows_a_dot() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "Moi", authorId = "me", isOutgoing = true)),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities.single()?.userId).isNull()
+    }
+
+    @Test
+    fun a_photo_without_a_named_author_carries_no_face() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities).containsExactly(null as ImageViewerAuthor?)
     }
 }

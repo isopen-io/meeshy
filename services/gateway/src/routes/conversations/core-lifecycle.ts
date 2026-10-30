@@ -23,6 +23,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
@@ -530,7 +531,7 @@ export function registerUpdateConversationRoute(
       // identifiant lisible. Toutes les routes voisines résolvent d'abord.
       const conversationId = id === 'meeshy' ? id : await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier les permissions d'administration
@@ -663,7 +664,7 @@ export function registerUpdateConversationRoute(
           include: conversationInclude
         });
         if (!unchanged) {
-          return sendNotFound(reply, 'Conversation not found');
+          return refuserCommeIntrouvable(reply);
         }
         return sendSuccess(reply, {
           ...unchanged,

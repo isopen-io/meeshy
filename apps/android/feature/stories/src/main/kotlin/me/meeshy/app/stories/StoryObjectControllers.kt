@@ -1,9 +1,10 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 
-/** Applies a controller of the plateau's trailing column to the object it targets; an action the law does not serve does nothing. */
+/** Applies a controller of the selected object — its bar, its sheet — to the object it targets; an action the law does not serve does nothing. */
 internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, action: Action) {
     when (ref.kind) {
         ComposerObjectKind.MEDIA -> return mediaController(ref.id, action)
@@ -18,6 +19,33 @@ internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, acti
         Action.SEND_BACKWARD -> reorder(ref, StoryZOrder.BACKWARD)
         else -> Unit
     }
+}
+
+/** A text touched on the scene is framed; touched again, written (#13836). */
+internal fun StoryComposerViewModel.onTapTextElement(id: String) = onSceneReduce { StoryComposerTextReducer.tapped(it, id) }
+
+/** Touching the empty scene releases whatever is selected, of any family, and gives the tools back (#13836). */
+internal fun StoryComposerViewModel.onSceneBackgroundTap() = onSceneReduce(StoryComposerSelectionReducer::cleared)
+
+/**
+ * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un média ou d'un
+ * son, ou l'échange d'un sticker ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
+ * L'Ordre ouvre son propre menu, dont chaque choix arrive ici par [onObjectController].
+ */
+internal fun StoryComposerViewModel.onSelectionAction(
+    ref: SceneObjectRef,
+    action: ComposerSelectionAction,
+    openSheet: (StoryComposerSheet) -> Unit,
+) = when (action) {
+    ComposerSelectionAction.EDIT -> when (ref.kind) {
+        ComposerObjectKind.TEXT -> onSelectTextElement(ref.id)
+        ComposerObjectKind.STICKER -> openSheet(StoryComposerSheet.STICKER_SWAP)
+        else -> openSheet(StoryComposerSheet.OBJECT_EDIT)
+    }
+    ComposerSelectionAction.TIME -> openSheet(StoryComposerSheet.OBJECT_TIME)
+    ComposerSelectionAction.DUPLICATE -> onObjectController(ref, Action.DUPLICATE)
+    ComposerSelectionAction.REMOVE -> onObjectController(ref, Action.DELETE)
+    ComposerSelectionAction.ORDER -> Unit
 }
 
 private fun StoryComposerViewModel.reorder(ref: SceneObjectRef, op: StoryZOrder) =

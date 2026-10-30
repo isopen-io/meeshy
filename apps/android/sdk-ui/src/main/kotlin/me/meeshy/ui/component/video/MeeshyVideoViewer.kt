@@ -37,6 +37,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.playback.PipAspect
+import me.meeshy.sdk.model.playback.VideoPresentation
 import me.meeshy.ui.R
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.icons.MeeshyIcons
@@ -47,6 +49,10 @@ import me.meeshy.ui.theme.MeeshySpacing
  * [mediaUrl] (par le cache disque de [ReelVideoSurface]), son audible, en entier dans l'écran. Un toucher met en
  * pause / reprend ; la barre de progression et la croix s'effacent après quelques secondes de lecture. Avec [secure], la fenêtre est exclue des captures (FLAG_SECURE) et le média ne passe pas par le cache disque. Un autre son
  * (vocal, appel) qui prend le focus met la lecture en pause, comme partout ailleurs.
+ *
+ * Le Picture-in-Picture (iOS `MeeshyVideoPlayer` plein écran, #13814) : quitter l'application pendant la lecture, ou
+ * toucher le bouton PiP, fait continuer la vidéo seule dans la fenêtre flottante, sans contrôles ; fermer la fenêtre la
+ * met en pause. Une vidéo [secure] (protégée) n'a ni bouton ni fenêtre.
  */
 @Composable
 public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Boolean = false) {
@@ -59,6 +65,17 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
         var controlsShown by remember { mutableStateOf(true) }
         var progress by remember { mutableFloatStateOf(0f) }
         val toggleTouch = remember { MutableInteractionSource() }
+        val pip = rememberVideoPictureInPicture(
+            presentation = VideoPresentation.FULLSCREEN,
+            isProtected = secure,
+            player = handle,
+            fallback = PipAspect.LANDSCAPE,
+            onWindowClosed = {
+                paused = true
+                controlsShown = true
+            },
+        )
+        val chromeShown = controlsShown && !pip.inPip
 
         LaunchedEffect(handle) {
             val live = handle ?: return@LaunchedEffect
@@ -98,7 +115,7 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
                 onAudioFocusLost = { paused = true; controlsShown = true },
                 cached = !secure,
             )
-            AnimatedVisibility(visible = paused, enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(visible = paused && !pip.inPip, enter = fadeIn(), exit = fadeOut()) {
                 Icon(
                     MeeshyIcons.PlayCircleFilled,
                     contentDescription = stringResource(R.string.fullscreen_play),
@@ -107,7 +124,7 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
                 )
             }
             AnimatedVisibility(
-                visible = controlsShown,
+                visible = chromeShown,
                 modifier = Modifier.align(Alignment.TopStart),
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -124,7 +141,28 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
                 }
             }
             AnimatedVisibility(
-                visible = controlsShown,
+                visible = chromeShown && pip.offersButton,
+                modifier = Modifier.align(Alignment.TopEnd),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                IconButton(
+                    onClick = pip.enter,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(MeeshySpacing.sm)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                ) {
+                    Icon(
+                        MeeshyIcons.PictureInPicture,
+                        contentDescription = stringResource(R.string.media_video_pip_enter),
+                        tint = Color.White,
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = chromeShown,
                 modifier = Modifier.align(Alignment.BottomCenter),
                 enter = fadeIn(),
                 exit = fadeOut(),

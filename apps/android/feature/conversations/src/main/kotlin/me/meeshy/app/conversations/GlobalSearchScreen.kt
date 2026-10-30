@@ -58,6 +58,9 @@ import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.search.MessageSearchHit
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -399,7 +402,7 @@ private fun buildHighlightedContent(content: String, query: String, wash: Color)
 private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 @Composable
-private fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
+internal fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
     val title = conversation.displayTitle(currentUserId)
     ResultCard(onClick = onClick) {
         MeeshyAvatar(
@@ -407,6 +410,7 @@ private fun ConversationHitRow(conversation: ApiConversation, currentUserId: Str
             size = 40.dp,
             containerColor = hexColor(conversation.accentColorPalette().primary),
             imageUrl = conversation.displayedAvatar(currentUserId),
+            presence = rememberPresence(conversation.otherParticipantUserId(currentUserId)),
         )
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
@@ -447,9 +451,10 @@ private fun ConversationHitRow(conversation: ApiConversation, currentUserId: Str
 }
 
 @Composable
-private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
+internal fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
+    val presence = rememberPresence(user.id, user.servedPresence())
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp, imageUrl = user.avatar)
+        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp, imageUrl = user.avatar, presence = presence)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -465,7 +470,7 @@ private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
                 maxLines = 1,
             )
         }
-        if (user.isOnline == true) {
+        if (presence == PresenceState.ONLINE) {
             Text(
                 text = stringResource(R.string.global_search_online),
                 style = MaterialTheme.typography.labelSmall,

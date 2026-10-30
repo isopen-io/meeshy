@@ -145,6 +145,32 @@ class MediaRepositoryTest {
     }
 
     @Test
+    fun upload_toAConversation_declaresItBeforeTheFiles_soTheGatewayNeverStoresTheBytesOfAnEndToEndOne() = runTest {
+        val captured = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(captured)) } returns
+            ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+
+        repository().upload(listOf(item("one.jpg")), conversationId = "c-1")
+
+        assertThat(captured.captured).hasSize(2)
+        assertThat(captured.captured[0].headers?.get("Content-Disposition")).isEqualTo("form-data; name=\"conversationId\"")
+        val value = okio.Buffer().also { captured.captured[0].body.writeTo(it) }.readUtf8()
+        assertThat(value).isEqualTo("c-1")
+        assertThat(captured.captured[1].headers?.get("Content-Disposition").orEmpty()).contains("filename=\"one.jpg\"")
+    }
+
+    @Test
+    fun upload_withoutAConversation_sendsOnlyTheFiles() = runTest {
+        val captured = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(captured)) } returns
+            ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+
+        repository().upload(listOf(item("one.jpg")))
+
+        assertThat(captured.captured).hasSize(1)
+    }
+
+    @Test
     fun upload_failureResponse_isFailure() = runTest {
         coEvery { api.upload(any()) } returns
             ApiResponse(success = false, error = "Payload too large")
@@ -169,5 +195,34 @@ class MediaRepositoryTest {
         val media = (repository().upload(listOf(item())) as NetworkResult.Success).data
 
         assertThat(media).isEmpty()
+    }
+
+    @Test
+    fun requestTranscription_alreadyTranscribed_returnsIt() = runTest {
+        val body = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"taskId":null,"status":"completed","transcription":{"text":"Bonjour","language":"fr","confidence":0.8}}""",
+        )
+        coEvery { api.transcribe("a1", me.meeshy.sdk.model.TranscribeRequest(force = false)) } returns ApiResponse(success = true, data = body)
+
+        val result = repository().requestTranscription("a1")
+
+        assertThat((result as NetworkResult.Success).data?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun requestTranscription_processing_returnsNothingYet() = runTest {
+        val body = kotlinx.serialization.json.Json.parseToJsonElement("""{"taskId":"t","status":"processing","transcription":null}""")
+        coEvery { api.transcribe(any(), any()) } returns ApiResponse(success = true, data = body)
+
+        val result = repository().requestTranscription("a1")
+
+        assertThat((result as NetworkResult.Success).data).isNull()
+    }
+
+    @Test
+    fun requestTranscription_refused_fails() = runTest {
+        coEvery { api.transcribe(any(), any()) } throws IOException("offline")
+
+        assertThat(repository().requestTranscription("a1")).isInstanceOf(NetworkResult.Failure::class.java)
     }
 }

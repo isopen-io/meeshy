@@ -25,6 +25,8 @@ import me.meeshy.sdk.model.share.ShareOutgoingBuilder
 import me.meeshy.sdk.model.share.ShareOutgoingResult
 import me.meeshy.sdk.model.share.SharePlanner
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 
@@ -41,6 +43,8 @@ internal class ChatForwardController(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
+    /** #13820 — every recipient is another conversation, known only by its cache: its mode is read again before anything is queued. */
+    private val outOfThread: OutOfThreadSendGate,
     /** The blocklist: a direct conversation with a blocked person is never a recipient. */
     private val blockedUserIds: () -> Set<String> = { emptySet() },
 ) {
@@ -252,8 +256,9 @@ internal class ChatForwardController(
             markDelivery(sourceId, target, ShareDelivery.Sending)
         }
         scope.launch {
+            val admissions = admissionsOf(pending)
             pending.forEach { target ->
-                val delivery = deliver(outgoing, shareKey(sourceId, target), target, user)
+                val delivery = deliver(outgoing, shareKey(sourceId, target), target, user, admissions[target])
                 inFlight -= shareKey(sourceId, target)
                 markDelivery(sourceId, target, delivery)
             }
@@ -261,7 +266,38 @@ internal class ChatForwardController(
         }
     }
 
-    private suspend fun deliver(outgoing: List<OutgoingShare>, key: Pair<String, String>, target: String, user: MeeshyUser): ShareDelivery = try {
+    /** #13820 — the modes of every recipient are read together, within the bound of a single gesture. */
+    private suspend fun admissionsOf(targets: List<String>): Map<String, OutOfThreadAdmission> = try {
+        outOfThread.admitAll(targets)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
+    private suspend fun deliver(
+        outgoing: List<OutgoingShare>,
+        key: Pair<String, String>,
+        target: String,
+        user: MeeshyUser,
+        admission: OutOfThreadAdmission?,
+    ): ShareDelivery = try {
+        when (admission) {
+            null -> ShareDelivery.Failed(ShareFailure.GENERIC)
+            OutOfThreadAdmission.END_TO_END -> ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION)
+            OutOfThreadAdmission.UNREACHABLE -> ShareDelivery.Failed(ShareFailure.UNREACHABLE)
+            OutOfThreadAdmission.SEND, OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN -> {
+                post(outgoing, key, target, user)
+                if (admission == OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN) ShareDelivery.Queued else ShareDelivery.Sent
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ShareDelivery.Failed(ShareFailure.GENERIC)
+    }
+
+    private suspend fun post(outgoing: List<OutgoingShare>, key: Pair<String, String>, target: String, user: MeeshyUser) {
         outgoing.drop(alreadyPosted[key] ?: 0).forEach { post ->
             messageRepository.sendOptimistic(
                 conversationId = target,
@@ -276,11 +312,6 @@ internal class ChatForwardController(
             alreadyPosted[key] = (alreadyPosted[key] ?: 0) + 1
         }
         alreadyPosted -= key
-        ShareDelivery.Sent
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        ShareDelivery.Failed(ShareFailure.GENERIC)
     }
 
     private fun markDelivery(sourceId: String, target: String, delivery: ShareDelivery) = updateForward { forward ->

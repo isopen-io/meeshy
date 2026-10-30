@@ -50,7 +50,7 @@ internal object StoryComposerSceneReducer {
     fun trackSelected(state: StoryComposerUiState, id: String): StoryComposerUiState {
         val slide = state.deck.selectedSlide
         return when {
-            slide.elements.any { it.id == id } -> StoryComposerTextReducer.selected(state, id)
+            slide.elements.any { it.id == id } -> StoryComposerTextReducer.selected(state, id).copy(framedTextElementId = id)
             slide.stickers.any { it.id == id } -> StoryComposerStickerReducer.selected(state, id)
             else -> state
         }

@@ -75,6 +75,11 @@ data class CallParticipantPayload(
 @Serializable
 data class CallParticipantRef(
     val userId: String? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val isAudioEnabled: Boolean? = null,
+    val isVideoEnabled: Boolean? = null,
 )
 
 /** `call:ended` — the definitive teardown, carrying the end [reason]. */
@@ -118,6 +123,8 @@ data class CallForceLeavePayload(
 data class CallMediaTogglePayload(
     val callId: String,
     val participantId: String? = null,
+    /** The toggling user's id — a group call keys its roster by it (`participantId` is the database row). */
+    val userId: String? = null,
     val mediaType: String,
     val enabled: Boolean,
 )
@@ -191,6 +198,8 @@ data class CallTranslatedSegmentPayload(
 /** The nested caption body a `call:translated-segment` frame carries. */
 @Serializable
 data class CallTranslatedSegmentRef(
+    /** #13333 — the cross-transport merge key minted by the speaker's device (absent from legacy peers). */
+    val id: String? = null,
     val text: String,
     val translatedText: String? = null,
     val speakerId: String? = null,
@@ -200,4 +209,8 @@ data class CallTranslatedSegmentRef(
     val sourceLanguage: String? = null,
     val targetLanguage: String? = null,
     val confidence: Double? = null,
+    /** Server-stamped speaker name (anti-spoof); the receiver still prefers its own roster. */
+    val speakerDisplayName: String? = null,
+    /** Wall-clock capture time (epoch ms) — the journal ordering key. */
+    val capturedAtMs: Long? = null,
 )

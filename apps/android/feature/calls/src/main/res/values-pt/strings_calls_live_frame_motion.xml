@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_suspended_device">Moldura em pausa: o dispositivo está se protegendo (calor ou economia de bateria)</string>
+    <string name="call_live_frame_suspended_motion">Esta moldura é animada: fica oculta enquanto «Remover animações» estiver ativado</string>
+    <string name="call_live_frame_declination_state">Versão %1$d de %2$d</string>
+    <string name="call_live_frame_declination_next">Próxima versão</string>
+    <string name="call_live_frame_declination_previous">Versão anterior</string>
+</resources>

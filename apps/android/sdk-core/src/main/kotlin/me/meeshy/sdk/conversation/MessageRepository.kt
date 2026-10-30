@@ -48,10 +48,12 @@ class MessageRepository internal constructor(
         syncMetaDao: SyncMetaDao,
         outboxRepository: OutboxRepository,
         clock: CacheClock,
+        /** #13792 — chaque message servi (REST, accusé d'envoi) nourrit le registre des régimes : jamais absent. */
+        regime: EndToEndRegimeKeeper,
         fence: AccountFence? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,
@@ -75,6 +77,13 @@ class MessageRepository internal constructor(
 
     /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
     suspend fun refresh(conversationId: String) = history.refresh(conversationId)
+
+    /**
+     * Targeted read of one message by its id, merged into Room (#13797) — see
+     * [MessageHistoryReader.refreshMessage]. Never throws; returns whether the row was merged.
+     */
+    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
+        history.refreshMessage(conversationId, messageId)
 
     /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"

@@ -259,8 +259,8 @@ struct CallView: View {
         // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
         // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
         .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
+        .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
-            showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
             // Expansion depuis la bannière PiP : le contenu démarre contracté
             // vers le haut (là où vivait la bannière) puis s'étire en plein

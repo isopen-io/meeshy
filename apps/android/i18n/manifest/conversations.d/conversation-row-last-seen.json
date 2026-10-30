@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {"androidName": "row_a11y_last_seen_action", "status": "android-only"}
+      ]
+    }
+  }
+}

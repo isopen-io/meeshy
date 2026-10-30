@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
+import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -145,7 +146,7 @@ private fun ConversationListRow(
             conversation = conversation,
             currentUserId = state.currentUserId,
             currentUserPrefs = state.currentUser,
-            presence = state.presenceStateFor(conversation, now),
+            peerUserId = conversation.otherParticipantUserId(currentUserId),
             storyRing = state.storyRingFor(conversation, now),
             moodEmoji = state.moodEmojiFor(conversation),
             draft = state.draftFor(conversation.id),

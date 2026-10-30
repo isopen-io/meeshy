@@ -23,4 +23,6 @@
     <string name="composer_mosaic_wave">En ola</string>
     <string name="composer_publish_menu_a11y_hint">Abre la elección del formato y la disposición</string>
     <string name="composer_publish_menu_title">Publicar como</string>
+    <string name="push_action_comment">Comentar</string>
+    <string name="push_action_comment_hint">Comentar…</string>
 </resources>

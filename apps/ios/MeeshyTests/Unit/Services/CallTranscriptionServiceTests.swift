@@ -9,7 +9,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
 
     private func makeSUT() -> (sut: CallTranscriptionService, socket: MockMessageSocket) {
         let socket = MockMessageSocket()
-        let sut = CallTranscriptionService(socket: socket)
+        let sut = CallTranscriptionService(socket: socket, gateResolver: MockCallCaptionsGateResolver(gate: .open))
+        sut.setCaptionsGateForTesting(.open)
         return (sut, socket)
     }
 

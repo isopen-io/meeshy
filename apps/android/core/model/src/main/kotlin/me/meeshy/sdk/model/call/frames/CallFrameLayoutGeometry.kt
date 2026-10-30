@@ -435,12 +435,54 @@ public object CallFrameLayoutGeometry {
         }
     }
 
-    /** Les cases d'un cadre pour [people] personnes. */
+    /**
+     * Les cases d'un cadre pour [people] personnes, et sous chacune la place de ses noms quand ils s'y posent
+     * (#9780) : sans elle, la banderole se replie DANS la case et couvre la moitié d'un visage.
+     */
     public fun slots(
         frame: CallFrameDesign,
         people: Int,
         width: Double,
         height: Double,
         reserve: CallFrameChromeReserve = CallFrameChromeReserve.NONE,
-    ): List<CallFrameSlotBox> = slots(frame.look.layout, frame.look.slot, people, width, height, reserve)
+    ): List<CallFrameSlotBox> {
+        val boxes = slots(frame.look.layout, frame.look.slot, people, width, height, reserve)
+        val room = CallFrameNameLayout.nameRoom(frame.look, min(width, height))
+        return leavingRoomBelow(boxes, room, areas(frame.look.layout, width, height, reserve).content.maxY)
+    }
+
+    /** La marge gardée en plus de la place demandée : un texte de la réserve basse peut mordre d'un point sur le contenu. */
+    public const val NAME_ROOM_SLACK: Double = 2.0
+
+    /** Une case ne cède jamais plus de la moitié de sa hauteur à ses noms : au-delà, ils se replient dans la case. */
+    public const val NAME_ROOM_MAX_SHARE: Double = 0.5
+
+    /**
+     * Raccourcit par le bas — le haut de son encombrement ne bouge pas — chaque case qui n'a pas [room] de libre
+     * au-dessus de la case suivante (ou de [floor]). Tout ou rien : si une case ne peut pas la céder (cases qui se
+     * chevauchent, case trop petite), aucune ne change.
+     */
+    public fun leavingRoomBelow(boxes: List<CallFrameSlotBox>, room: Double, floor: Double): List<CallFrameSlotBox> {
+        if (room <= 0) return boxes
+        val footprints = boxes.map { CallFrameRenderKit.footprint(it) }
+        val made = boxes.indices.map { index ->
+            val box = boxes[index]
+            val own = footprints[index]
+            val below = footprints.indices
+                .filter { it != index }
+                .map { footprints[it] }
+                .filter { it.minX < own.maxX && own.minX < it.maxX && it.maxY > own.maxY }
+            if (below.any { it.minY < own.maxY }) return@map null
+            val ground = (below.map { it.minY } + floor).minOrNull() ?: floor
+            val deficit = room + NAME_ROOM_SLACK - (ground - own.maxY)
+            if (deficit <= 0) return@map box
+            val radians = abs(box.rotation) * PI / 180
+            val cut = deficit / cos(radians)
+            if (cut > box.rect.height * NAME_ROOM_MAX_SHARE) return@map null
+            val lift = cut * (1 - cos(radians)) / 2
+            box.copy(rect = CallFrameRect(box.rect.minX, box.rect.minY + lift, box.rect.width, box.rect.height - cut))
+        }
+        val all = made.filterNotNull()
+        return if (all.size == boxes.size) all else boxes
+    }
 }

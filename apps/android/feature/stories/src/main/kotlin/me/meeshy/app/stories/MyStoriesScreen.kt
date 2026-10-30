@@ -98,6 +98,8 @@ fun MyStoriesScreen(
     onBack: () -> Unit,
     onCreateStory: () -> Unit,
     onOpenStory: (String) -> Unit,
+    /** « Modifier » : rouvre la story publiée dans le composeur (#13632). */
+    onEditStory: (String) -> Unit = {},
     viewModel: MyStoriesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -209,6 +211,7 @@ fun MyStoriesScreen(
                         onViewers = { viewersStoryId = it.id },
                         onDelete = { viewModel.onEvent(MyStoriesUiEvent.RequestDelete(it.id)) },
                         onRepublish = { viewModel.onEvent(MyStoriesUiEvent.RequestRepublish(it.id)) },
+                        onEdit = { onEditStory(it.id) },
                         onSelectStart = {
                             if (!state.isSelecting) viewModel.onEvent(MyStoriesUiEvent.ToggleSelecting)
                             viewModel.onEvent(MyStoriesUiEvent.ToggleSelected(it.id))
@@ -287,6 +290,7 @@ private fun MyStoriesGrid(
     onViewers: (MyStoryEntry) -> Unit,
     onDelete: (MyStoryEntry) -> Unit,
     onRepublish: (MyStoryEntry) -> Unit,
+    onEdit: (MyStoryEntry) -> Unit,
     onSelectStart: (MyStoryEntry) -> Unit,
 ) {
     LazyVerticalGrid(
@@ -306,6 +310,7 @@ private fun MyStoriesGrid(
                 onViewers = { onViewers(entry) },
                 onDelete = { onDelete(entry) },
                 onRepublish = { onRepublish(entry) },
+                onEdit = { onEdit(entry) },
                 modifier = Modifier.animateItem(),
             )
         }
@@ -323,6 +328,7 @@ private fun MyStoryCard(
     onViewers: () -> Unit,
     onDelete: () -> Unit,
     onRepublish: () -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val card = remember(entry) { MyStoryCardRules.fromStory(entry.item, entry.viewCount) }
@@ -383,6 +389,11 @@ private fun MyStoryCard(
                             text = { Text(stringResource(R.string.my_stories_viewers)) },
                             leadingIcon = { Icon(MeeshyIcons.Eye, null) },
                             onClick = { menuOpen = false; onViewers() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.my_stories_edit)) },
+                            leadingIcon = { Icon(MeeshyIcons.Edit, null) },
+                            onClick = { menuOpen = false; onEdit() },
                         )
                     } else {
                         DropdownMenuItem(

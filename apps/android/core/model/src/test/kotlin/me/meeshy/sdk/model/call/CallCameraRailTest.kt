@@ -55,6 +55,8 @@ class CallCameraRailTest {
             .containsExactly(CallActionFamily.MyImage, CallActionFamily.TheCall).inOrder()
         assertThat(CallCameraRail.menuRows(set, CallCameraControlsPlacement.SelfTile).map { it.family })
             .containsExactly(CallActionFamily.TheCall)
+        assertThat(CallCameraRail.menuRows(set, CallCameraControlsPlacement.TopCenter).map { it.family })
+            .containsExactly(CallActionFamily.TheCall)
     }
 
     @Test

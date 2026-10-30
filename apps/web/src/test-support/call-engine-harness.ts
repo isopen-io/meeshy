@@ -147,7 +147,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
-    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1' }),
+    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1', serverMayHearCaptions: () => true }),
     ...(options.cameraEffects === undefined ? {} : { cameraEffects: options.cameraEffects }),
   };
   const engine = createCallEngine(deps);

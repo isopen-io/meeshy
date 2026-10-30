@@ -30,8 +30,6 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -51,7 +49,8 @@ import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
-import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.ui.component.imageedit.sceneLook
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -61,17 +60,19 @@ import me.meeshy.ui.theme.hexColor
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
+ * declarative glue. A tap on an object selects it — framed by [sceneSelectionFrame], never in a capture —, a tap on the
+ * empty canvas deselects ([onBackgroundTap], #13836).
  *
- * Nothing but the scene's own objects is laid on it (#12298): the selected text's settings
- * live in the band under the stage ([TextStyleToolbar]), iOS `apps/ios/CLAUDE.md` § 1.
+ * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by
+ * [StorySceneFirstLayout] (#13834, which replaces the « nothing on the canvas » geography of #4561/#4633 for the story):
+ * that chrome is a sibling, never a child, so [capture] records the scene alone and the published render never shows it.
  */
 @Composable
 internal fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
     sceneBrush: Brush,
-    colorMatrix: StoryColorMatrix,
+    look: SceneLookRecipe,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
     sceneMenu: SceneObjectContextMenu?,
@@ -106,6 +107,7 @@ internal fun StoryCanvasSurface(
     backdrop: StoryBackdrop = StoryBackdrop.BLUR,
     capture: SceneCapture? = null,
     onBackgroundLongPress: (() -> Unit)? = null,
+    selectedMediaId: String? = null,
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
     val capturing = capture != null && capture.pass != SceneCapturePass.NONE
@@ -171,7 +173,6 @@ internal fun StoryCanvasSurface(
                     model = backgroundModel,
                     contentDescription = null,
                     contentScale = if (filled) ContentScale.Crop else ContentScale.Fit,
-                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -179,7 +180,8 @@ internal fun StoryCanvasSurface(
                             scaleY = transform.scale
                             translationX = transform.offsetX
                             translationY = transform.offsetY
-                        },
+                        }
+                        .sceneLook(look),
                 )
             }
             if (snapFeedback != null && !capturing) {
@@ -255,11 +257,12 @@ internal fun StoryCanvasSurface(
                     onDragEnd = onElementDragEnd,
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onTextChange = onElementTextChange,
+                    showsSelection = !capturing,
                 )
             }
             placedMedia.forEach { frame ->
                 key(frame.key) {
-                    PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures)
+                    PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId)
                 }
             }
             stickers.forEach { sticker ->
@@ -280,6 +283,7 @@ internal fun StoryCanvasSurface(
                     },
                     onDragEnd = onStickerDragEnd,
                     onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                    showsSelection = !capturing,
                 )
             }
             // Topmost: paints every committed stroke, and — only while isDrawingActive —

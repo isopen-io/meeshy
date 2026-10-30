@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TelecomConnectionUpdate
 import me.meeshy.sdk.session.SessionRepository
@@ -80,11 +81,13 @@ class CallViewModelPreviewTest {
         every { signalManager.events } returns MutableSharedFlow()
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns MutableSharedFlow()
-        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<List<SocketIceServer>>()
+        every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
         every { signalManager.mediaToggles } returns MutableSharedFlow()
+        every { signalManager.participantArrivals } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns MutableSharedFlow()
         every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1", iceServers = turn))
@@ -122,6 +125,8 @@ class CallViewModelPreviewTest {
         mockk(relaxed = true),
         CallPeerVisualSource { emptyFlow() },
         recordingCallPreview(links, signaling),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
     )
 
     private fun offer() = CallSignalEnvelope("call-9", CallSignalPayload(type = "offer", sdp = "v=0", from = "caller", to = "me", negotiationId = 1))

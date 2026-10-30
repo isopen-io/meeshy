@@ -47,6 +47,7 @@ internal fun MeeshyStoryRail(
         onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         onAddStory = { navController.navigate(storyDoor) },
         onManageStories = { navController.navigate(Routes.MY_STORIES) },
+        onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
         onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         moodEmojiOf = moods::emojiOf,
         myMoodEmoji = moods.myEmoji,

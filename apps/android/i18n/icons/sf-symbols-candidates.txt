@@ -10,6 +10,7 @@ arrow.down
 arrow.down.circle.fill
 arrow.down.doc.fill
 arrow.down.right
+arrow.down.right.and.arrow.up.left
 arrow.down.right.circle
 arrow.down.to.line
 arrow.forward.circle.fill

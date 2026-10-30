@@ -30,40 +30,53 @@ import javax.inject.Singleton
 class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureController {
     @Volatile private var isVideoCall = false
     @Volatile private var isEstablished = false
+    @Volatile private var isInProgress = false
     @Volatile private var callScreenShown = false
     @Volatile private var deviceSupportsPip = false
     @Volatile private var enter: (() -> Boolean)? = null
     @Volatile private var dismiss: (() -> Unit)? = null
     @Volatile private var heldByInAppLaunch = false
+    @Volatile private var owner: Any? = null
 
     private val _inPip = MutableStateFlow(false)
 
     /** `true` tant que l'activité est dans la fenêtre flottante. */
     val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
 
+    /** Un appel VIDÉO vit (de la sonnerie à la fin) : il garde la fenêtre flottante, une vidéo ne l'ouvre pas. */
+    val videoCallInProgress: Boolean
+        get() = isVideoCall && isInProgress
+
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
         isVideoCall = session.config.isVideo
         isEstablished = next is CallState.Connected
+        isInProgress = next.isActive
         if (next is CallState.Ended || next == CallState.Idle) leaveWindow()
     }
 
     override fun onCleared() {
         isEstablished = false
+        isInProgress = false
         leaveWindow()
     }
 
     /**
      * [enter] fait entrer l'activité dans la fenêtre flottante ; [dismiss] la retire quand l'appel
      * finit pendant qu'elle y est (iOS arrête son PiP avec l'appel) — sans lui, la fenêtre
-     * resterait ouverte sur l'écran d'en dessous.
+     * resterait ouverte sur l'écran d'en dessous. [owner] est l'activité qui s'inscrit : l'app se
+     * relance elle-même au démarrage par lien, et l'instance remplacée meurt APRÈS sa remplaçante.
      */
-    fun attachActivity(supportsPip: Boolean, dismiss: () -> Unit = {}, enter: () -> Boolean) {
+    fun attachActivity(owner: Any, supportsPip: Boolean, dismiss: () -> Unit = {}, enter: () -> Boolean) {
+        this.owner = owner
         deviceSupportsPip = supportsPip
         this.enter = enter
         this.dismiss = dismiss
     }
 
-    fun detachActivity() {
+    /** Retire l'inscription de [owner] seulement : celle d'une remplaçante déjà inscrite reste. */
+    fun detachActivity(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
         enter = null
         dismiss = null
         _inPip.value = false

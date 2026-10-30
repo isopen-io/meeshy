@@ -11,8 +11,10 @@ import me.meeshy.sdk.model.UserPresence
 internal object PresenceOverlay {
 
     /**
-     * Applique [entries] au carnet ; un ami absent de la carte garde ce que le REST a servi. Rend
-     * la MÊME liste quand rien ne change (pas de réémission d'état).
+     * Applique [entries] au carnet ; un ami absent de la carte garde ce que le REST a servi — donc
+     * [friends] doit être la liste SERVIE, jamais une liste déjà recouverte (une présence que la
+     * carte retire ne se retirerait pas). Rend la MÊME liste quand rien ne change (pas de
+     * réémission d'état).
      */
     fun apply(friends: List<FriendRequestUser>, entries: Map<String, UserPresence>): List<FriendRequestUser> {
         if (entries.isEmpty()) return friends

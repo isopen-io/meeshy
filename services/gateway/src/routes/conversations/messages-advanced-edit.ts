@@ -55,6 +55,7 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { servedQuotedMessage, withSealedQuote } from '../../services/messaging/servedQuotedMessage';
 import { loadSealedQuoteAudience } from '../../socketio/quotedEphemeralAudience';
 import { z } from 'zod';
@@ -180,7 +181,7 @@ export function registerEditMessagePutRoute(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier que le message existe

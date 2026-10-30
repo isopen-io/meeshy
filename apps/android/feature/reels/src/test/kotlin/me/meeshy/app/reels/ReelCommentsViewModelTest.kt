@@ -23,7 +23,9 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.InMemoryUnsentCommentStore
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -65,9 +67,10 @@ class ReelCommentsViewModelTest {
 
     private fun viewModel(
         identifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+        unsent: UnsentCommentStore? = null,
     ): ReelCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(me)
-        return ReelCommentsViewModel(repo, session, socialSocket, identifier)
+        return ReelCommentsViewModel(repo, session, socialSocket, identifier, unsent)
     }
 
     @Test
@@ -412,5 +415,58 @@ class ReelCommentsViewModelTest {
         commentAdded.tryEmit(SocketCommentAddedData(postId = "r1", comment = wire("dup")))
 
         assertThat(vm.state.value.comments.map { it.id }).containsExactly("dup")
+    }
+
+    @Test
+    fun unsentComment_comesBackInTheEmptyFieldOfItsReel() = runTest {
+        coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
+        val kept = InMemoryUnsentCommentStore().apply {
+            keep("r1", "Bravo pour ce reel")
+            keep("r2", "Autre reel")
+        }
+        val vm = viewModel(unsent = kept)
+
+        vm.load("r1")
+
+        assertThat(vm.state.value.draft).isEqualTo("Bravo pour ce reel")
+        assertThat(kept.peek("r1")).isNull()
+        assertThat(kept.peek("r2")).isEqualTo("Autre reel")
+    }
+
+    @Test
+    fun unsentComment_leavesATypedFieldIntactAndStaysKept() = runTest {
+        coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
+        val kept = InMemoryUnsentCommentStore().apply { keep("r1", "Texte garde") }
+        val vm = viewModel(unsent = kept)
+        vm.load("r1")
+        vm.setDraft("Autre chose")
+        kept.keep("r1", "Nouveau refus")
+
+        vm.load("r1")
+
+        assertThat(vm.state.value.draft).isEqualTo("Autre chose")
+        assertThat(kept.peek("r1")).isEqualTo("Nouveau refus")
+    }
+
+    @Test
+    fun unsentComment_withoutAStoreLeavesTheFieldEmpty() = runTest {
+        coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
+        val vm = viewModel(unsent = null)
+
+        vm.load("r1")
+
+        assertThat(vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun post_clearsTheDraftItSends() = runTest {
+        coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
+        val vm = viewModel()
+        vm.load("r1")
+        vm.setDraft("Salut")
+
+        vm.post("Salut")
+
+        assertThat(vm.state.value.draft).isEmpty()
     }
 }

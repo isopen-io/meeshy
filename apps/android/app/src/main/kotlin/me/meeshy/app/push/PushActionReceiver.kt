@@ -1,6 +1,5 @@
 package me.meeshy.app.push
 
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,7 +12,7 @@ import javax.inject.Inject
 
 /**
  * Les boutons de la bannière d'un message : « Répondre » (saisie en ligne) et « Marquer comme
- * lu ». Un récepteur, pas une activité : rien ne s'ouvre. La bannière disparaît quand l'action
+ * lu », et celui d'une notification sociale : « Commenter » (saisie en ligne). Un récepteur, pas une activité : rien ne s'ouvre. La bannière disparaît quand l'action
  * est prise en compte ; sinon elle est reposée telle quelle, ce qui arrête l'indicateur
  * d'attente de la saisie en ligne. Non exportée : seul un `PendingIntent` de l'app l'atteint.
  */
@@ -28,7 +27,6 @@ class PushActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val request = PushActionRequest.from(intent, proof) ?: return
-        val conversationId = request.conversationId
         val notificationId = request.notificationId
         val accountId = request.accountId
         val reply = request.reply
@@ -36,30 +34,34 @@ class PushActionReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 val outcome = when (request.action) {
-                    ACTION_REPLY -> handler.reply(conversationId, reply.orEmpty(), accountId)
-                    ACTION_MARK_READ -> handler.markRead(conversationId, accountId)
+                    ACTION_REPLY -> handler.reply(request.conversationId ?: return@launch, reply.orEmpty(), accountId, replyToId = request.messageId)
+                    ACTION_MARK_READ -> handler.markRead(request.conversationId ?: return@launch, accountId)
+                    ACTION_COMMENT -> handler.comment(
+                        postId = request.postId ?: return@launch,
+                        text = reply.orEmpty(),
+                        accountId = accountId,
+                        type = request.type,
+                        notifiedCommentId = request.commentId,
+                        serverNotificationId = request.serverNotificationId,
+                    )
                     else -> return@launch
                 }
-                settle(context, notificationId, outcome)
+                PushActionSettlement.settle(context, notificationId, outcome)
             } finally {
                 pending.finish()
             }
         }
     }
 
-    private fun settle(context: Context, notificationId: Int, outcome: PushNotificationActionHandler.Outcome) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (outcome.dismissesBanner) {
-            manager.cancel(notificationId)
-            return
-        }
-        manager.activeNotifications.firstOrNull { it.id == notificationId && it.tag == null }
-            ?.let { manager.notify(notificationId, it.notification) }
-    }
-
     companion object {
         const val ACTION_REPLY = "me.meeshy.app.push.action.REPLY"
         const val ACTION_MARK_READ = "me.meeshy.app.push.action.MARK_READ"
+        const val ACTION_COMMENT = "me.meeshy.app.push.action.COMMENT"
+        const val EXTRA_MESSAGE_ID = "messageId"
+        const val EXTRA_POST_ID = "postId"
+        const val EXTRA_COMMENT_ID = "commentId"
+        const val EXTRA_TYPE = "type"
+        const val EXTRA_SERVER_NOTIFICATION_ID = "serverNotificationId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
         const val EXTRA_ACCOUNT_ID = "accountId"

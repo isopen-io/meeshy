@@ -83,6 +83,24 @@ class OnboardingOverlayTest {
     }
 
     @Test
+    fun `les calques poses sous le parcours sont retires de l'arbre d'accessibilite avec lui`() {
+        compose.setContent {
+            BeneathOnboarding(isCovered = true) { Text("banniere") }
+        }
+
+        compose.onNodeWithText("banniere").assertDoesNotExist()
+    }
+
+    @Test
+    fun `sans parcours les calques restent lisibles`() {
+        compose.setContent {
+            BeneathOnboarding(isCovered = false) { Text("banniere") }
+        }
+
+        compose.onNodeWithText("banniere").assertExists()
+    }
+
+    @Test
     fun `Tout passer saute le parcours`() {
         var skipped = 0
         show({ state() }, onSkipAll = { skipped++ })

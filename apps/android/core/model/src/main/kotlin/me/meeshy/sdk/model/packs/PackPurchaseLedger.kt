@@ -57,6 +57,16 @@ data class PackPurchaseLedger(
         )
     }
 
+    /**
+     * Installer ou retirer un pack à moi : le geste est en vol, sans identifiant d'intention (PUT/DELETE sont idempotents
+     * par nature). `null` si le pack est inconnu, à acheter, pas débloqué, ou si un geste est déjà en vol dessus.
+     */
+    fun beginInstall(domain: AppearancePackDomain, pack: ShopPack?): PackPurchaseLedger? {
+        val key = key(domain, pack?.slug ?: return null)
+        if (key in pending || !pack.canToggleInstall) return null
+        return copy(pending = pending + key, failure = null)
+    }
+
     /** Le serveur a confirmé : le geste est clos. */
     fun settled(domain: AppearancePackDomain, slug: String): PackPurchaseLedger {
         val key = key(domain, slug)

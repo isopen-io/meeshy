@@ -1,8 +1,8 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.lang.AttachmentTranscriptPrism
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
-import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
@@ -182,12 +182,6 @@ internal object BubbleAttachmentBuilder {
         )
     }
 
-    private data class ResolvedTranscription(
-        val text: String,
-        val language: String?,
-        val isTranslated: Boolean,
-    )
-
     private data class ResolvedAudio(
         val url: String,
         val language: String,
@@ -223,36 +217,12 @@ internal object BubbleAttachmentBuilder {
         return null
     }
 
-    /**
-     * Prisme rule 1: prefer a translation targeting one of the viewer's preferred
-     * languages (in priority order); when the original transcription is already in
-     * a preferred language it wins as untranslated content; otherwise fall back to
-     * the ORIGINAL transcription (never an arbitrary translation). Returns null when
-     * no non-blank transcription exists at all.
-     */
+    /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
     private fun resolveTranscription(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedTranscription? {
-        val transcription: ApiAttachmentTranscription? = attachment.transcription
-        val originalText = (transcription?.transcribedText ?: transcription?.text)
-            ?.trim()?.ifBlank { null }
-        val originalLanguage = transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalText != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return ResolvedTranscription(originalText, originalLanguage, isTranslated = false)
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value?.transcription?.trim()?.ifBlank { null }
-            if (translated != null) {
-                return ResolvedTranscription(translated, language, isTranslated = true)
-            }
-        }
-        return originalText?.let { ResolvedTranscription(it, originalLanguage, isTranslated = false) }
-    }
+    ): AttachmentTranscriptPrism.Served? =
+        AttachmentTranscriptPrism.served(attachment.transcription, attachment.translations, preferences)
 
     /**
      * L'URL de la variante WebP d'aperçu quand elle est plus légère que l'original, `null`

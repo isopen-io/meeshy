@@ -64,4 +64,62 @@ object PresenceMapReducer {
         if (map.values.none { it.isOnline }) return map
         return map.mapValues { (_, presence) -> UserPresence(isOnline = false, lastActiveAt = presence.lastActiveAt) }
     }
+
+    /**
+     * Semis depuis la charge servie par la page de conversations (miroir de `PresenceManager.seed`
+     * iOS) : elle n'a d'autorité que sur les INCONNUS. Un utilisateur déjà suivi — par le socket, la
+     * frappe ou la relecture du disque — GARDE son entrée ; seules les sources vivantes en
+     * remplacent une. Le compte courant et un identifiant vide n'y entrent jamais.
+     */
+    fun seed(map: PresenceMap, served: Map<String, UserPresence>, currentUserId: String?): PresenceMap {
+        val unknown = served.filter { (userId, _) -> userId.isNotBlank() && userId != currentUserId && userId !in map }
+        return if (unknown.isEmpty()) map else map + unknown
+    }
+
+    /** La carte après un semis, et ceux de ses comptes dont l'entrée ne vient encore que du disque. */
+    data class Seeded(val entries: PresenceMap, val restored: Set<String>)
+
+    /**
+     * Semis d'une page servie sur une carte dont [restored] ne vient que de la relecture du disque :
+     * la page comble les inconnus ET remplace ce qui n'était que relu (le serveur parle maintenant,
+     * le disque parlait d'avant). Une ligne masquée RETIRE l'entrée QUELLE QUE SOIT son origine — page
+     * précédente, socket, frappe, disque (#13783) : la visibilité a changé, et le serveur n'émet plus
+     * rien pour ce compte qui la corrigerait. Seuls [newerThanPage], ceux dont un événement du socket est
+     * arrivé APRÈS la réception de la page, gardent la leur : le serveur les a autorisés depuis.
+     */
+    fun seed(
+        map: PresenceMap,
+        restored: Set<String>,
+        page: ServedPresencePage,
+        currentUserId: String?,
+        newerThanPage: Set<String> = emptySet(),
+    ): Seeded {
+        val accepted = page.served.filter { (userId, _) ->
+            userId.isNotBlank() && userId != currentUserId && (userId !in map || userId in restored)
+        }
+        val withdrawn = page.masked.filter { it in map && it !in page.served && it !in newerThanPage }.toSet()
+        if (accepted.isEmpty() && withdrawn.isEmpty()) return Seeded(map, restored)
+        return Seeded(map - withdrawn + accepted, restored - accepted.keys - withdrawn)
+    }
+
+    /**
+     * Ce qui n'a été que relu du disque ([readBack]) quitte la carte quand son point s'éteint : aucune
+     * source vivante ni page ne l'a confirmé, sa date ne vaut plus rien et ne doit dater aucune fiche.
+     * Une entrée vivante n'est jamais touchée ; rien d'éteint rend la MÊME carte.
+     */
+    fun expireReadBack(map: PresenceMap, readBack: Set<String>, nowMillis: Long): Seeded {
+        val expired = readBack.filter { userId -> map[userId]?.let { !PresenceRetention.isRetained(it, nowMillis) } ?: true }.toSet()
+        if (expired.isEmpty()) return Seeded(map, readBack)
+        val next = map - expired
+        return Seeded(if (next.size == map.size) map else next, readBack - expired)
+    }
+
+    /**
+     * Relecture du disque : elle comble les inconnus et cède à toute entrée vivante déjà posée. [withheld] :
+     * ceux qu'une page servie avant la relecture a MASQUÉS — le disque parlait d'avant, ils ne reviennent pas.
+     */
+    fun restore(map: PresenceMap, restored: PresenceMap, withheld: Set<String> = emptySet()): PresenceMap {
+        val unknown = restored.filterKeys { it !in map && it !in withheld }
+        return if (unknown.isEmpty()) map else map + unknown
+    }
 }

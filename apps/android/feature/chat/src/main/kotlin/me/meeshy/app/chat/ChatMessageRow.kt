@@ -31,6 +31,7 @@ import me.meeshy.ui.component.bubble.FocalFlatRow
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
+import me.meeshy.sdk.model.PlainSignalAdmission
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
@@ -121,12 +122,14 @@ internal fun ChatMessageRow(
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
     val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
+    // #13790 — vers une conversation qui n'est pas connue claire, la puce d'une réaction ne se touche pas et « + » n'existe pas.
+    val reacts = PlainSignalAdmission.offers(LocalChatSignalClearance.current)
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, reacts) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
-            onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
+            onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
             onReactionLongPress = { actions.onReactionLongPress(messageId) },
             onImageClick = { index -> actions.onImageClick(messageId, index) },
             onImageLongClick = { index ->
@@ -141,7 +144,7 @@ internal fun ChatMessageRow(
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onRetry = { actions.onRetry(messageId) },
-            onAddReaction = { actions.onAddReaction(messageId) },
+            onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }
             } else {

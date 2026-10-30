@@ -6,7 +6,6 @@ import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallState
-import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -20,12 +19,17 @@ data class PeerIndicators(
     val qualityDegraded: Boolean = false,
     /** The peer's live screen capture (`call:screen-capture-alert`). */
     val screenCapturing: Boolean = false,
-    /** The latest live caption of the peer's speech (`call:translated-segment`). */
+    /**
+     * Retired by #13333: the peer's words are the captions band's (CallCaptionsController), read
+     * only while the reader opened them, merged per utterance and resolved through the Prisme.
+     */
     val caption: String? = null,
     /** The peer's mic state (`call:media-toggled` audio). */
     val audioEnabled: Boolean = true,
     /** The peer's camera state (`call:media-toggled` video). */
     val videoEnabled: Boolean = true,
+    /** The peer shares their screen (`call:media-toggled` screen) — iOS `isRemoteSharing`, #13332. */
+    val screenSharing: Boolean = false,
 )
 
 /**
@@ -70,7 +74,6 @@ class CallPeerIndicatorsController @Inject constructor(
         this.host = host
         host.scope.launch { signals.qualityAlerts.collect(::onQualityAlert) }
         host.scope.launch { signals.screenCaptureAlerts.collect(::onScreenCaptureAlert) }
-        host.scope.launch { signals.translatedSegments.collect(::onTranslatedSegment) }
         host.scope.launch { signals.mediaToggles.collect(::onMediaToggle) }
     }
 
@@ -109,14 +112,6 @@ class CallPeerIndicatorsController @Inject constructor(
         host.publish()
     }
 
-    /** A live caption landed — prefer the server-side translation over the original. */
-    private fun onTranslatedSegment(segment: CallTranslatedSegmentPayload) {
-        val host = host ?: return
-        if (host.callId.isBlank() || segment.callId != host.callId) return
-        indicators = indicators.copy(caption = segment.segment.translatedText ?: segment.segment.text)
-        host.publish()
-    }
-
     /**
      * The remote peer muted/unmuted the mic or toggled the camera — flip the
      * matching indicator (iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
@@ -126,9 +121,11 @@ class CallPeerIndicatorsController @Inject constructor(
     private fun onMediaToggle(toggle: CallMediaTogglePayload) {
         val host = host ?: return
         if (host.callId.isBlank() || toggle.callId != host.callId) return
+        if (host.routesGroupMediaToggle(toggle)) return
         indicators = when (toggle.mediaType) {
             "audio" -> indicators.copy(audioEnabled = toggle.enabled)
             "video" -> indicators.copy(videoEnabled = toggle.enabled)
+            "screen" -> indicators.copy(screenSharing = toggle.enabled)
             else -> return
         }
         host.publish()

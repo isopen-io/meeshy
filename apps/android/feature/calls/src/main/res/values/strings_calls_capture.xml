@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_saved">Capture saved</string>
+    <string name="call_capture_video_saved">Video saved</string>
+    <string name="call_capture_denied">Allow Meeshy to save to your gallery in Settings to keep your captures.</string>
+    <string name="call_capture_no_video">No image to capture yet</string>
+    <string name="call_capture_failed">The capture couldn\'t be saved</string>
+    <string name="call_capture_preview">Montage preview</string>
+    <string name="call_capture_working">Saving…</string>
+    <string name="call_mode_gesture_hint">Double tap: photo · Long press: video</string>
+    <string name="call_mode_photo">Take a photo</string>
+    <string name="call_mode_record">Record</string>
+    <string name="call_mode_record_stop">Stop recording</string>
+    <string name="call_mode_record_stop_hint">Saves the video to your gallery</string>
+</resources>

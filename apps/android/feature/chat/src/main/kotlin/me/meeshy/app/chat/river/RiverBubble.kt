@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.reading.river.RiverMetrics
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.BubbleBlurReveal
 import me.meeshy.ui.component.bubble.RichMessageText
+import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -340,6 +341,7 @@ private fun IdentityHeader(content: RiverBubbleContent, laneColor: Color, conten
             containerColor = laneColor,
             storyRing = identity?.storyRing ?: me.meeshy.ui.component.StoryRingState.None,
             presence = rememberPresence(identity?.userId),
+            here = rememberConversationHere(identity?.userId, identity?.conversationId),
             imageUrl = identity?.avatarUrl,
         )
         Text(

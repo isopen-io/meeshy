@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_suspended_device">Cornice in pausa: il dispositivo si sta proteggendo (calore o risparmio energetico)</string>
+    <string name="call_live_frame_suspended_motion">Questa cornice è animata: resta nascosta finché «Rimuovi animazioni» è attivo</string>
+    <string name="call_live_frame_declination_state">Versione %1$d di %2$d</string>
+    <string name="call_live_frame_declination_next">Versione successiva</string>
+    <string name="call_live_frame_declination_previous">Versione precedente</string>
+</resources>

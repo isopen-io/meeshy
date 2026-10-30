@@ -249,6 +249,16 @@ describe('posts routes — error response format', () => {
     expect(body.error).toBe('Invalid request');
   });
 
+  it('core: un corps refusé nomme ses champs fautifs, jamais leur valeur (POST /posts, #13824)', async () => {
+    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'POST', content: 'é'.repeat(5001) } });
+    expect(resp.statusCode).toBe(400);
+    const body = resp.json() as ErrorBody & { code?: string; issues?: Array<{ code: string; path: string[]; message: string }> };
+    assertErrorShape(body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.issues?.map((issue) => issue.path)).toEqual([['content']]);
+    expect(JSON.stringify(body)).not.toContain('éé');
+  });
+
   it('core: un plafond de story dépassé nomme sa borne à la racine du 400 (POST /posts, #13590)', async () => {
     const stickers = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}`, emoji: '😀' }));
     const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'STORY', storyEffects: { stickerObjects: stickers } } });

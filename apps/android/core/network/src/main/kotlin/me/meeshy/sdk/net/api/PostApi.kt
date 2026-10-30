@@ -4,6 +4,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.DiscoverabilityPrecision
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ApiPost
@@ -16,6 +17,7 @@ import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.PostStoryEffectsWireSerializer
+import me.meeshy.sdk.model.StoryEditEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -108,7 +110,7 @@ data class UpdatePostRequest(
     val originalLanguage: String? = null,
     val type: String? = null,
     val removeMediaIds: List<String>? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    @Serializable(with = StoryEditEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val mediaIds: List<String>? = null,
     /** `null` = clé absente ; [kotlinx.serialization.json.JsonNull] = effacer ; objet = remplacer. */
@@ -282,6 +284,10 @@ interface PostApi {
 
     @GET("posts/{id}")
     suspend fun getPost(@Path("id") postId: String): ApiResponse<ApiPost>
+
+    /** Le même post, tel que la passerelle le sert, sans le rabattre sur le modèle : la base de l'édition d'une story (#13632). */
+    @GET("posts/{id}")
+    suspend fun getPostDocument(@Path("id") postId: String): ApiResponse<JsonObject>
 
     @POST("posts/{id}/like")
     suspend fun like(@Path("id") postId: String): ApiResponse<Unit>

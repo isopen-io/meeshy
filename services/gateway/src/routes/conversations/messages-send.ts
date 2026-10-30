@@ -24,6 +24,7 @@ import type {
   SendMessageBody
 } from './types';
 import { sendSuccess, sendError, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
@@ -301,7 +302,7 @@ export function registerSendMessageRoute(
       // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Compute effectFlags from legacy fields if not provided

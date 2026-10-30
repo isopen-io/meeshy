@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 
@@ -18,10 +19,15 @@ data class SelectableUser(
     val username: String,
     val avatarUrl: String?,
     val isOnline: Boolean,
+    val lastActiveAt: String? = null,
     val isSelected: Boolean = false,
     /** Blocked by me: the row says « Blocked », dims, and cannot be picked (iOS `isBlocked`). */
     val isBlocked: Boolean = false,
-)
+) {
+    /** La présence que la ligne a servie, recoupée par la carte vivante ; rien servi = aucun point. */
+    val servedPresence: UserPresence?
+        get() = UserPresence.served(isOnline, lastActiveAt)
+}
 
 /**
  * Stateless rules behind the new-conversation flow (port of the iOS
@@ -85,6 +91,7 @@ object NewConversationLogic {
                 username = result.username,
                 avatarUrl = result.avatar,
                 isOnline = result.isOnline == true,
+                lastActiveAt = result.lastActiveAt,
                 isSelected = result.id in selectedIds,
             )
         }
@@ -109,6 +116,7 @@ object NewConversationLogic {
                 username = friend.username,
                 avatarUrl = friend.avatar,
                 isOnline = friend.isOnline == true,
+                lastActiveAt = friend.lastActiveAt,
                 isSelected = friend.id in selectedIds,
             )
         }

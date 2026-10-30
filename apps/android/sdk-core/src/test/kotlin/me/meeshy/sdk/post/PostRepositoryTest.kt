@@ -26,6 +26,8 @@ import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxRepository
 import org.junit.Test
 import java.io.IOException
@@ -1085,5 +1087,50 @@ class PostRepositoryTest {
         )
 
         assertThat(merged).isNull()
+    }
+
+    @Test
+    fun queueComment_enqueuesADurableCommentAndRaisesTheCachedCount() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", commentCount = 2))
+        val queued = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(queued), any()) } returns "cmid_c1"
+
+        val cmid = repo.queueComment("p1", "Bravo", parentId = "c9")
+
+        assertThat(cmid).isEqualTo("cmid_c1")
+        assertThat(queued.captured.kind).isEqualTo(OutboxKind.CREATE_COMMENT)
+        assertThat(queued.captured.lane).isEqualTo(OutboxLanes.COMMENT)
+        assertThat(queued.captured.targetId).isEqualTo("p1")
+        assertThat(MeeshyApi.json.decodeFromString(CommentPayload.serializer(), queued.captured.payload))
+            .isEqualTo(CommentPayload("Bravo", parentId = "c9"))
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(3)
+    }
+
+    @Test
+    fun queueComment_onAPostOutsideTheCacheStillQueuesAndTouchesNothing() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 2))
+        coEvery { outbox.enqueue(any(), any()) } returns "cmid_c2"
+
+        assertThat(repo.queueComment("elsewhere", "Bravo")).isEqualTo("cmid_c2")
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun queueComment_refusedByTheQueueChangesNoCount() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 2))
+        coEvery { outbox.enqueue(any(), any()) } returns null
+
+        assertThat(repo.queueComment("p1", "Bravo")).isNull()
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun rollbackQueuedComment_givesTheCountBackAndNeverGoesBelowZero() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 1))
+
+        repo.rollbackQueuedComment("p1")
+        repo.rollbackQueuedComment("p1")
+
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(0)
     }
 }

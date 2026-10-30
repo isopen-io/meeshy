@@ -101,4 +101,127 @@ class PresenceMapReducerTest {
         assertThat(PresenceDecayClock.derive(null, now)).isNull()
         assertThat(PresenceDecayClock.derive(UserPresence(true, iso(0)), now)).isEqualTo(PresenceState.ONLINE)
     }
+
+    @Test
+    fun `a served page seeds the users nobody knows yet`() {
+        val after = PresenceMapReducer.seed(emptyMap(), mapOf("u1" to UserPresence(true, iso(-1000))), "me")
+
+        assertThat(after["u1"]).isEqualTo(UserPresence(true, iso(-1000)))
+    }
+
+    @Test
+    fun `a served page never replaces an entry the socket already gave`() {
+        val live: PresenceMap = mapOf("u1" to UserPresence(false, iso(-10)))
+        val after = PresenceMapReducer.seed(live, mapOf("u1" to UserPresence(true, iso(-5000))), "me")
+
+        assertThat(after).isSameInstanceAs(live)
+    }
+
+    @Test
+    fun `a served page never writes the current account nor a blank id`() {
+        val empty: PresenceMap = emptyMap()
+        val after = PresenceMapReducer.seed(empty, mapOf("me" to UserPresence(true, iso(0)), " " to UserPresence(true, iso(0))), "me")
+
+        assertThat(after).isSameInstanceAs(empty)
+    }
+
+    @Test
+    fun `what was read back fills the unknown and yields to the live entries`() {
+        val live: PresenceMap = mapOf("a" to UserPresence(true, iso(0)))
+        val after = PresenceMapReducer.restore(live, mapOf("a" to UserPresence(false, iso(-9000)), "b" to UserPresence(false, iso(-9000))))
+
+        assertThat(after["a"]).isEqualTo(UserPresence(true, iso(0)))
+        assertThat(after["b"]).isEqualTo(UserPresence(false, iso(-9000)))
+    }
+
+    @Test
+    fun `a served page replaces what was only read back from the disk`() {
+        val map: PresenceMap = mapOf("u1" to UserPresence(false, iso(-60_000)))
+        val after = PresenceMapReducer.seed(map, setOf("u1"), ServedPresencePage(served = mapOf("u1" to UserPresence(false, iso(-600_000)))), "me")
+
+        assertThat(after.entries["u1"]).isEqualTo(UserPresence(false, iso(-600_000)))
+        assertThat(after.restored).isEmpty()
+    }
+
+    @Test
+    fun `a masked row of the page withdraws what was only read back from the disk`() {
+        val map: PresenceMap = mapOf("u1" to UserPresence(false, iso(-60_000)), "u2" to UserPresence(false, iso(-60_000)))
+        val after = PresenceMapReducer.seed(map, setOf("u1", "u2"), ServedPresencePage(masked = setOf("u1")), "me")
+
+        assertThat(after.entries.keys).containsExactly("u2")
+        assertThat(after.restored).containsExactly("u2")
+    }
+
+    @Test
+    fun `a page never replaces a live entry`() {
+        val live: PresenceMap = mapOf("u2" to UserPresence(false, iso(-10)))
+        val after = PresenceMapReducer.seed(
+            live,
+            emptySet(),
+            ServedPresencePage(served = mapOf("u2" to UserPresence(true, iso(-5000)))),
+            "me",
+        )
+
+        assertThat(after.entries).isSameInstanceAs(live)
+    }
+
+    @Test
+    fun `a masked row withdraws the entry whatever gave it, a previous page or the socket`() {
+        val map: PresenceMap = mapOf(
+            "seeded" to UserPresence(false, iso(-3 * 3_600_000)),
+            "live" to UserPresence(true, iso(0)),
+            "other" to UserPresence(false, iso(-10)),
+        )
+
+        val after = PresenceMapReducer.seed(map, emptySet(), ServedPresencePage(masked = setOf("seeded", "live")), "me")
+
+        assertThat(after.entries.keys).containsExactly("other")
+    }
+
+    @Test
+    fun `a masked row spares only what the socket said after the page was received`() {
+        val map: PresenceMap = mapOf("before" to UserPresence(true, iso(-1000)), "after" to UserPresence(true, iso(0)))
+
+        val after = PresenceMapReducer.seed(
+            map,
+            emptySet(),
+            ServedPresencePage(masked = setOf("before", "after")),
+            "me",
+            newerThanPage = setOf("after"),
+        )
+
+        assertThat(after.entries.keys).containsExactly("after")
+    }
+
+    @Test
+    fun `a read back never reinjects a user a page already masked`() {
+        val after = PresenceMapReducer.restore(
+            emptyMap(),
+            mapOf("u1" to UserPresence(false, iso(-60_000)), "u2" to UserPresence(false, iso(-60_000))),
+            withheld = setOf("u1"),
+        )
+
+        assertThat(after.keys).containsExactly("u2")
+    }
+
+    @Test
+    fun `what was only read back leaves the map when its dot goes out, a live entry stays`() {
+        val map: PresenceMap = mapOf(
+            "old" to UserPresence(false, iso(-UserPresence.IDLE_WINDOW_MS - 1)),
+            "young" to UserPresence(false, iso(-60_000)),
+            "live" to UserPresence(false, iso(-3_600_000)),
+        )
+
+        val after = PresenceMapReducer.expireReadBack(map, readBack = setOf("old", "young"), nowMillis = now)
+
+        assertThat(after.entries.keys).containsExactly("young", "live")
+        assertThat(after.restored).containsExactly("young")
+    }
+
+    @Test
+    fun `an expiry that removes nothing gives back the same map`() {
+        val map: PresenceMap = mapOf("young" to UserPresence(false, iso(-60_000)))
+
+        assertThat(PresenceMapReducer.expireReadBack(map, setOf("young"), now).entries).isSameInstanceAs(map)
+    }
 }

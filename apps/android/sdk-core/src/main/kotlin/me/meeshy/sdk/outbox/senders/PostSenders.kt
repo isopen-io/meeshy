@@ -7,20 +7,28 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.outbox.UnsentCommentNotice
 import me.meeshy.sdk.outbox.withPayload
 import me.meeshy.sdk.post.PostComposerDraftStore
 import me.meeshy.sdk.post.PostPublishMediaWriteBack
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -71,6 +79,68 @@ public class CreatePostHandler @Inject constructor(
     }
 }
 
+/**
+ * `CREATE_COMMENT` (#13679): posts the comment the device queued — typed in a notification banner, with no screen open —
+ * under the row's own `cmid` as `X-Client-Mutation-Id`: the gateway's MutationLog answers a replay with the comment it
+ * already wrote (`replayCost: 'diverges'`), so a response lost on the way back never comments twice. A 410
+ * carrying `MUTATION_RESULT_GONE` (the first comment was deleted since) means the gesture WAS applied: success, never a second
+ * insert. A refusal the same payload would meet again (a deleted or private post, a closed thread, a validation error
+ * carried by the gateway envelope) exhausts the row at once and takes the optimistic count back; anything else (401 during
+ * a session renewal, 408, 429, 5xx, network) is replayed. A row that gives up (#13693) keeps its text on the device
+ * ([UnsentCommentStore]) and tells the author ([UnsentCommentNotice]) — the banner left at COMMENT_QUEUED, so nothing else would.
+ * Only for its AUTHOR, under the account fence: a row with no author, or exhausted while another account is signed in or
+ * while the author's account closes, leaves no text behind.
+ */
+public class CreateCommentHandler @Inject constructor(
+    private val postApi: PostApi,
+    private val json: Json,
+    private val postRepository: PostRepository,
+    private val unsent: UnsentCommentStore,
+    private val notice: UnsentCommentNotice,
+    private val fence: AccountFence? = null,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<CommentPayload>(row) { comment ->
+            val request = CreateCommentRequest(
+                content = comment.content,
+                parentId = comment.parentId,
+                originalLanguage = comment.originalLanguage,
+            )
+            val result = apiCall { postApi.addComment(row.targetId, request, row.cmid) }
+            when (result) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> result.error.toCommentFailure()
+            }
+        }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        postRepository.rollbackQueuedComment(row.targetId)
+        val author = row.ownerId?.takeIf { it.isNotBlank() } ?: return
+        val text = runCatching { json.decodeFromString<CommentPayload>(row.payload).content }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+        runCatching {
+            val ticket = fence?.ticket()
+            if (ticket != null && ticket.ownerId != author) return@runCatching
+            fence.commitOrWrite(ticket) { unsent.keep(row.targetId, text) } ?: return@runCatching
+            notice.commentNotSent(author, row.targetId, text)
+        }.onFailure { if (it is CancellationException) throw it }
+    }
+
+    private fun ApiError.toCommentFailure(): SendResult = when {
+        httpStatus == HTTP_GONE && code == MUTATION_RESULT_GONE -> SendResult.Success
+        httpStatus in DEFINITIVE_REFUSALS && code != "HTTP_$httpStatus" -> SendResult.PermanentFailure("Comment refused: HTTP $httpStatus $code")
+        else -> SendResult.TransientFailure
+    }
+
+    private companion object {
+        const val HTTP_GONE = 410
+        const val MUTATION_RESULT_GONE = "MUTATION_RESULT_GONE"
+        val DEFINITIVE_REFUSALS = setOf(400, 403, 404, 422)
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 public interface PostSendersModule {
@@ -79,4 +149,9 @@ public interface PostSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.CREATE_POST)
     public fun createPost(handler: CreatePostHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CREATE_COMMENT)
+    public fun createComment(handler: CreateCommentHandler): OutboxKindHandler
 }

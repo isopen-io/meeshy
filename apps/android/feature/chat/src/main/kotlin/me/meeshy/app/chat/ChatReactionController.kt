@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawal
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -38,6 +40,7 @@ internal class ChatReactionController(
     private val emojiUsageStore: EmojiUsageStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    private val ownReactionWithdrawals: OwnReactionWithdrawals,
 ) {
 
     private val mutableOwnReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -70,6 +73,21 @@ internal class ChatReactionController(
                 applyPeerReactionEvent(event, delta = -1)
             }
         }
+        scope.launch {
+            ownReactionWithdrawals.withdrawals.collect(::applyWithdrawal)
+        }
+    }
+
+    /**
+     * #13803 — the outbox gave a reaction up (refused in clear for an end-to-end conversation, retries spent) and already
+     * took its chip back in the cached summary: the viewer's own mark follows, here and in the open who-reacted sheet. A
+     * message this screen never reacted to has no mark to take back.
+     */
+    private fun applyWithdrawal(withdrawal: OwnReactionWithdrawal) {
+        val mine = mutableOwnReactions.value[withdrawal.messageId] ?: return
+        val restored = if (withdrawal.stillMine) mine + withdrawal.emoji else mine - withdrawal.emoji
+        mutableOwnReactions.update { it + (withdrawal.messageId to restored) }
+        applySelfToOpenDetails(withdrawal.messageId, withdrawal.emoji, present = withdrawal.stillMine)
     }
 
     /**
@@ -94,8 +112,10 @@ internal class ChatReactionController(
         }
     }
 
+    /** #13790 — an end-to-end conversation carries reactions as encrypted signals this device cannot seal: no picker opens. */
     fun openEmojiPicker(messageId: String) {
-        state.update { it.copy(emojiPickerMessageId = messageId, actionMessageId = null) }
+        val picked = messageId.takeUnless { state.value.isEndToEnd }
+        state.update { it.copy(emojiPickerMessageId = picked, actionMessageId = null) }
     }
 
     fun dismissEmojiPicker() {
@@ -111,11 +131,12 @@ internal class ChatReactionController(
      * One toggle per `message + emoji` is in flight at a time: a second tap while the first
      * is still being persisted is inert, so a burst of taps can never send two mutations
      * that race each other's rollback snapshot. Either way the action sheet and the
-     * picker close.
+     * picker close. In an end-to-end conversation (#13790) the toggle has no effect at all:
+     * the reaction would leave in clear, which the gateway refuses.
      */
     fun toggle(messageId: String, emoji: String) {
         val key = "$messageId|$emoji"
-        if (!togglesInFlight.add(key)) {
+        if (state.value.isEndToEnd || !togglesInFlight.add(key)) {
             state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
             return
         }

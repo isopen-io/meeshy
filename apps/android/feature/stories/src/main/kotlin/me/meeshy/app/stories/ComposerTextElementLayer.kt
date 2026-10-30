@@ -50,7 +50,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 /**
  * One on-canvas text element: positioned at its normalised ([StoryTextElement.x],
  * [StoryTextElement.y]) of the measured canvas (centred on that point), draggable,
- * tappable to edit, and — when selected — carrying a small remove affordance. The
+ * tappable to select (#13836) — framed by the dashed selection frame, written once edited. The
  * normalised→pixel placement and the pixel→normalised drag delta are the only
  * arithmetic here; the clamp lives in [StoryTextElement.nudged]. Pure glue.
  */
@@ -71,6 +71,7 @@ internal fun TextElementLayer(
     onTransform: (Float, Float) -> Unit,
     onMeasured: (IntSize) -> Unit = {},
     onTextChange: (String) -> Unit = {},
+    showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val haptics = rememberMeeshyHaptics()
@@ -127,8 +128,9 @@ internal fun TextElementLayer(
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
+            .sceneSelectionFrame(selected && showsSelection && !(menu == null && inlineEditEnabled), element.scale)
             .background(
-                color = if (selected) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
+                color = if (selected && menu == null && inlineEditEnabled) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
                 shape = RoundedCornerShape(8.dp),
             )
             .padding(horizontal = 8.dp, vertical = 4.dp),

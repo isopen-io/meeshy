@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Effekte</string>
+    <string name="call_effects_title">Effekte meiner Kamera</string>
+    <string name="call_effects_category_face">Gesicht</string>
+    <string name="call_effects_category_color">Farbe</string>
+    <string name="call_effects_face_none">Keiner</string>
+    <string name="call_effects_face_smoothing">Hautglättung</string>
+    <string name="call_effects_face_toad">Kröte</string>
+    <string name="call_effects_face_angel">Engel</string>
+    <string name="call_effects_face_demon">Dämon</string>
+    <string name="call_effects_face_volcano">Ausbruch</string>
+    <string name="call_effects_preset_natural">Natürlich</string>
+    <string name="call_effects_preset_warm">Warm</string>
+    <string name="call_effects_preset_cool">Kühl</string>
+    <string name="call_effects_preset_vivid">Lebendig</string>
+    <string name="call_effects_preset_muted">Sanft</string>
+    <string name="call_effects_settings">Einstellungen</string>
+    <string name="call_effects_settings_hint">Zeigt Helligkeit und Hintergrundunschärfe statt der Effekte</string>
+    <string name="call_effects_validate">Übernehmen</string>
+    <string name="call_effects_validate_hint">Behält diesen Effekt und kehrt zum Anruf zurück</string>
+    <string name="call_effects_quit">Beenden</string>
+    <string name="call_effects_quit_hint">Stellt dein Bild wie zuvor wieder her und kehrt zum Anruf zurück</string>
+    <string name="call_effects_blur">Hintergrund unscharf</string>
+    <string name="call_effects_smoothing_strength">Stärke der Glättung</string>
+    <string name="call_effects_brightness">Helligkeit</string>
+    <string name="call_effects_percent">%1$d %%</string>
+    <string name="call_effects_next">Nächster Effekt</string>
+    <string name="call_effects_previous">Vorheriger Effekt</string>
+</resources>

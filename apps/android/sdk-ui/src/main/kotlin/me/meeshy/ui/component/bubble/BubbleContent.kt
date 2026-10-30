@@ -45,6 +45,8 @@ public data class BubbleContent(
     val senderId: String? = null,
     /** La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `ProfileSheetUser.from(message)`). */
     val senderProfile: ProfileSheetUser? = null,
+    /** La conversation du message : « ici » (`viewing:*`) ne vaut que pour elle. */
+    val viewingConversationId: String? = null,
     /** Pseudo de l'auteur, lu « @pseudo » sous son nom dans le pied d'identité. */
     val senderUsername: String? = null,
     /** Photo de l'auteur, telle que servie (résolue par `MeeshyAvatar`). */
