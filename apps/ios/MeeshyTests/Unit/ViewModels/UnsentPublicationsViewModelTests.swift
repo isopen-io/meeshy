@@ -122,6 +122,16 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
         XCTAssertEqual(UnsentPublicationFailureReason(lastError: nil), .other)
     }
 
+    /// #13824 — le serveur refuse la publication TELLE QU'ELLE EST (400, 413,
+    /// 422) : la dire « échouée » invitait à réessayer sans fin le même refus.
+    func test_failureReason_definitiveServerRefusal_saysThePublicationIsRefused() {
+        let refusal = String(describing: MeeshyError.server(statusCode: 400, message: "Invalid request"))
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: refusal), .refusedByServer)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "server(statusCode: 413, message: \"too large\")"), .refusedByServer)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "server(statusCode: 422, message: \"x\")"), .refusedByServer)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "server(statusCode: 500, message: \"x\")"), .other)
+    }
+
     @MainActor
     final class FakeDrafts: UnsentPublicationDrafts {
         var parked: Set<String>
