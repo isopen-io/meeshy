@@ -98,6 +98,23 @@ class WorldGuestEntryViewModelTest {
     }
 
     @Test
+    fun `un nom de deux caracteres ne passe pas a la langue et dit son minimum, trois caracteres passent`() = runTest(dispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.onNameChange(" Al ")
+        assertThat(vm.state.value.nameTooShort).isTrue()
+        assertThat(vm.state.value.canContinue).isFalse()
+        vm.continueToLanguage()
+        assertThat(vm.state.value.step).isEqualTo(WorldGuestStep.NAME)
+
+        vm.onNameChange("Ali")
+        assertThat(vm.state.value.nameTooShort).isFalse()
+        vm.continueToLanguage()
+        assertThat(vm.state.value.step).isEqualTo(WorldGuestStep.LANGUAGE)
+    }
+
+    @Test
     fun `l'entree envoie la cle lue, le nom rogne et la langue choisie, puis ouvre le fil`() = runTest(dispatcher) {
         val repository = repository()
         val vm = viewModel(repository)

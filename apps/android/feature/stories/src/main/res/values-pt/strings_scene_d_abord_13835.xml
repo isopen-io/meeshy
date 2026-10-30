@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_typing_font">Fonte</string>
+    <string name="composer_typing_color">Cor</string>
+    <string name="composer_typing_align">Alinhamento</string>
+    <string name="composer_typing_backing">Fundo do texto</string>
+    <string name="composer_typing_language">Idioma do texto</string>
+    <string name="composer_typing_done">Terminar de escrever</string>
+</resources>

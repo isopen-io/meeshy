@@ -23,7 +23,8 @@ fun StoryComposerContent(
     carry: ComposerCarry? = null,
     onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     onClose: () -> Unit,
-    titleContent: @Composable () -> Unit,
+    /** Le menu « Publier comme » de l'hôte, rendu dans le chevron de Publier (#13834). */
+    formatChevron: @Composable () -> Unit,
     /** La matière que la porte pose (partage entrant, média de conversation ou de post) : déjà jugée et copiée dans le cache privé, elle rejoint la scène par le chemin d'un média choisi. */
     seedMedia: List<MediaUploadItem> = emptyList(),
     seededByDoor: Boolean = false,
@@ -31,7 +32,7 @@ fun StoryComposerContent(
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, titleContent = titleContent, viewModel = viewModel)
+    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, formatChevron = formatChevron, viewModel = viewModel)
     LaunchedEffect(seedMedia) {
         if (seedMedia.isEmpty()) return@LaunchedEffect
         viewModel.onMediaPicked(seedMedia)

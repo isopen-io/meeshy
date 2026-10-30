@@ -79,6 +79,7 @@ import { announceParticipantRoleUpdated } from '../conversations/participant-rol
 import { participantListUserSelect } from '../conversations/utils/participant-projection';
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { logError } from '../../utils/logger.js';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import {
@@ -203,11 +204,11 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
     try {
       const cible = await resoudre(fastify, request.params.conversationId);
       if (cible === 'meeshy') return sendForbidden(reply, 'The global conversation cannot be modified');
-      if (!cible) return sendNotFound(reply, 'Conversation not found');
+      if (!cible) return refuserCommeIntrouvable(reply);
       const { conversationId } = cible;
 
       const avant = await fastify.prisma.conversation.findUnique({ where: { id: conversationId }, select: SELECT_ECRITURE });
-      if (!avant) return sendNotFound(reply, 'Conversation not found');
+      if (!avant) return refuserCommeIntrouvable(reply);
       if (estGlobale(avant)) return sendForbidden(reply, 'The global conversation cannot be modified');
 
       const { isActive, closed, reason, ...metadonnees } = request.body;
@@ -298,13 +299,13 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
   async function membreActif(reply: FastifyReply, adresse: string, userId: string) {
     const cible = await resoudre(fastify, adresse);
     if (cible === 'meeshy') { sendForbidden(reply, 'The global conversation cannot be modified'); return null; }
-    if (!cible) { sendNotFound(reply, 'Conversation not found'); return null; }
+    if (!cible) { refuserCommeIntrouvable(reply); return null; }
 
     const conversation = await fastify.prisma.conversation.findUnique({
       where: { id: cible.conversationId },
       select: { id: true, identifier: true, type: true },
     });
-    if (!conversation) { sendNotFound(reply, 'Conversation not found'); return null; }
+    if (!conversation) { refuserCommeIntrouvable(reply); return null; }
     if (estGlobale(conversation)) { sendForbidden(reply, 'The global conversation cannot be modified'); return null; }
 
     const participant = await fastify.prisma.participant.findFirst({

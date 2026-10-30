@@ -10,11 +10,13 @@ class OutboxFlushPlanTest {
         exhausted: Int = 0,
         transient: Boolean = false,
         blocked: Boolean = false,
+        heldBack: Boolean = false,
     ) = DrainReport(
         delivered = delivered,
         exhausted = exhausted,
         stoppedOnTransientFailure = transient,
         stoppedOnBlockedDependency = blocked,
+        heldBack = heldBack,
     )
 
     @Test
@@ -30,6 +32,12 @@ class OutboxFlushPlanTest {
     @Test
     fun `a transient failure on the only lane retries`() {
         assertThat(OutboxFlushPlan.outcome(listOf(report(transient = true))))
+            .isEqualTo(FlushOutcome.RETRY)
+    }
+
+    @Test
+    fun `an independent lane that drained past rows held back for later retries`() {
+        assertThat(OutboxFlushPlan.outcome(listOf(report(delivered = 2, heldBack = true))))
             .isEqualTo(FlushOutcome.RETRY)
     }
 

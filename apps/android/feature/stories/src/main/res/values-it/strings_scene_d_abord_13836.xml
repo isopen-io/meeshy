@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_selection_order">Ordine</string>
+    <string name="composer_selection_remove">Rimuovi</string>
+    <string name="composer_selection_selected">Selezionato</string>
+    <string name="composer_selection_set_background">Usa come sfondo</string>
+    <string name="composer_selection_replace_background">Sostituisci lo sfondo</string>
+    <string name="composer_selection_placed_media">Contenuto multimediale sulla scena</string>
+</resources>

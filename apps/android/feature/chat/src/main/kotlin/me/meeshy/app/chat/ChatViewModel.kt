@@ -57,6 +57,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
@@ -112,6 +113,7 @@ class ChatViewModel @Inject constructor(
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val blockCache: BlockCache = BlockCache(),
     ownReactionWithdrawals: OwnReactionWithdrawals,
+    outOfThreadSendGate: OutOfThreadSendGate,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -236,6 +238,7 @@ class ChatViewModel @Inject constructor(
         messageRepository = messageRepository,
         sessionRepository = sessionRepository,
         workManager = workManager,
+        outOfThread = outOfThreadSendGate,
         blockedUserIds = { blockCache.currentBlockedIds },
     )
 

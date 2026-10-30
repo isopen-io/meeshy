@@ -97,6 +97,7 @@ const en = {
   'invite.ended.body': 'Come back with a new invitation link.',
   'invite.ended.join': 'Open this link',
   'invite.missing.nickname': 'Choose a first name for this conversation.',
+  'invite.tooShort.nickname': 'At least {min} characters are needed.',
   'invite.missing.email': 'This link requires a valid email address.',
   'invite.missing.birthday': 'This link requires your date of birth.',
   'invite.missing.language': 'Choose one of the languages this link accepts.',

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_selection_order",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_selection_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_selection_selected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_selection_set_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_selection_replace_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_selection_placed_media",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

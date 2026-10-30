@@ -16,6 +16,9 @@ public enum class SignupField { DISPLAY_NAME, EMAIL, PHONE, PASSWORD }
 public enum class SignupFieldIssue {
     /** Vide, ou sans une seule lettre — le miroir de `(?=.*\p{L})`. */
     DISPLAY_NAME_REQUIRED,
+
+    /** Une saisie de moins de [RegistrationIdentity.NAME_MIN] caractères rognés : « A » n'est pas un nom, « Al » en est un. */
+    DISPLAY_NAME_TOO_SHORT,
     DISPLAY_NAME_TOO_LONG,
 
     /** Un caractère hors du jeu de la passerelle : lettres, marques, espaces, apostrophes, point, tiret. */
@@ -123,7 +126,9 @@ public data class SignupForm(
     /** Nom affiché ET pseudo existent et tiennent leurs bornes : c'est alors que paraît le mot de passe. */
     public val isIdentityDefined: Boolean
         get() = SignupFieldValidation.isEmailValidLocally(email.trim()) &&
-            effectiveDisplayName.let { it.isNotEmpty() && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter) } &&
+            effectiveDisplayName.let {
+                RegistrationIdentity.isNameLongEnough(it) && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter)
+            } &&
             effectiveUsername.isNotEmpty() && usernameRefusal == null
 
     /** Le numéro est REQUIS par l'écran (#9343) alors que la requête reste valide sans lui côté serveur. */
@@ -271,6 +276,7 @@ public data class SignupForm(
         return when {
             trimmed.length > DISPLAY_NAME_MAX_LENGTH -> SignupFieldIssue.DISPLAY_NAME_TOO_LONG
             trimmed.none(Char::isLetter) -> SignupFieldIssue.DISPLAY_NAME_REQUIRED
+            !RegistrationIdentity.isNameLongEnough(trimmed) -> SignupFieldIssue.DISPLAY_NAME_TOO_SHORT
             !PERSON_NAME_CHARACTERS.matches(trimmed) -> SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS
             else -> null
         }

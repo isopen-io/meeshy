@@ -104,6 +104,7 @@ const fr = {
   'invite.ended.body': 'Reviens par un nouveau lien d’invitation.',
   'invite.ended.join': 'Ouvrir ce lien',
   'invite.missing.nickname': 'Choisis un prénom pour cette conversation.',
+  'invite.tooShort.nickname': 'Il faut au moins {min} caractères.',
   'invite.missing.email': 'Ce lien demande une adresse e-mail valide.',
   'invite.missing.birthday': 'Ce lien demande ta date de naissance.',
   'invite.missing.language': 'Choisis une langue parmi celles que ce lien accepte.',

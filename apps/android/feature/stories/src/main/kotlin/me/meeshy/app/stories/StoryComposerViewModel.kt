@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -95,7 +96,6 @@ class StoryComposerViewModel @Inject constructor(
     private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
-    /** La base d'API qui résout la clé d'un média envoyé en adresse chargeable ([ComposerMediaAddress]). */
     val mediaBaseUrl: String? get() = config.apiBaseUrl
 
     /** The author colour the reader paints a background-less slide with (#12314). */
@@ -190,10 +190,17 @@ class StoryComposerViewModel @Inject constructor(
     private suspend fun isRestoredMediaAvailable(id: String, swept: Boolean): Boolean =
         if (OutboxIds.isCmid(id)) mediaBlobStore.has(id) else !swept
 
-    /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
+    /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
+    fun onDiscardDraft() {
+        if (editMode != null) return
+        _state.value.also { _state.value = StoryComposerUiState() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        resetHistory()
+    }
+
+    /** Persists or purges the draft on leave ([StoryComposerAutosave]); the write outlives the cleared ViewModel (#13838). */
     fun persistDraft() {
         if (editMode != null) return
-        viewModelScope.launch {
+        viewModelScope.launch(NonCancellable) {
             val orphans = underOpeningAccount {
                 val current = _state.value
                 val previous = draftStore.load()
@@ -688,15 +695,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private fun cancelDurableUpload(cmid: String) {
-        viewModelScope.launch {
-            try {
-                mediaUploadQueue.cancel(cmid)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own.
-            }
-        }
+        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(cmid) }.exceptionOrNull()?.let { if (it is CancellationException) throw it } }
     }
 
     fun publish() {

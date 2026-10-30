@@ -16,8 +16,34 @@ public object RegistrationIdentity {
     /** Longueur maximale d'un `username` — borne de `registerRequestSchema`. */
     public const val PSEUDO_MAX: Int = 16
 
-    /** En deçà, un pseudo n'est pas recevable. */
-    public const val PSEUDO_MIN: Int = 2
+    /** En deçà, un pseudo n'est pas recevable (directive porteur 2026-10-30, #13825 : « le pseudo commence à 3 caractères »). */
+    public const val PSEUDO_MIN: Int = 3
+
+    /** En deçà, un prénom, un nom ou un nom affiché n'est pas recevable : « Al », « Li » passent, « A » non. */
+    public const val NAME_MIN: Int = 2
+
+    /** Le nombre de points de code d'une saisie une fois rognée — la mesure d'un pseudo d'inscription (Ajv). */
+    public fun trimmedLength(value: String): Int = value.trim().let { it.codePointCount(0, it.length) }
+
+    /**
+     * Un prénom, un nom ou un nom affiché atteint [NAME_MIN] caractères VISIBLES ([VisibleNameLength], la mesure
+     * de la passerelle) ; une saisie vide n'y atteint pas.
+     */
+    public fun isNameLongEnough(value: String): Boolean = VisibleNameLength.of(value) >= NAME_MIN
+
+    /** Une saisie NON vide qui reste en deçà de [NAME_MIN] : le cas où le minimum se DIT sous le champ. */
+    public fun isNameTooShort(value: String): Boolean =
+        value.isNotBlank() && VisibleNameLength.of(value) < NAME_MIN
+
+    /** Ce que la passerelle garde d'un pseudo d'invité (`SecuritySanitizer.sanitizeUsername`). */
+    private val servedNicknameChar = Regex("[a-zA-Z0-9_.-]")
+
+    /**
+     * Le pseudo d'un INVITÉ se mesure sur la base que la passerelle en SERT (`servedGuestNicknameViolation`) :
+     * « Al# » ou « Zoé » n'y gardent que deux caractères.
+     */
+    public fun isGuestNicknameLongEnough(value: String): Boolean =
+        servedNicknameChar.findAll(value.trim()).count() >= PSEUDO_MIN
 
     /** Le recours quand le nom affiché ET l'adresse ne donnent rien de slugifiable. */
     public const val PSEUDO_DE_SECOURS: String = "user"

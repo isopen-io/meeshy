@@ -213,6 +213,48 @@ class GuestJoinViewModelTest {
     }
 
     @Test
+    fun submit_refusesANameOfOneCharacterBeforeAnyRequest_andAcceptsTwo() = runTest {
+        val api = FakeShareLinkApi(
+            linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1")),
+            joinResponse = ApiResponse(success = true, data = joinResponse()),
+        )
+        val vm = viewModel(api)
+        advanceUntilIdle()
+        vm.onFirstNameChange("A")
+        vm.onLastNameChange("Lovelace")
+
+        assertThat(vm.state.value.form.isFirstNameTooShort).isTrue()
+        assertThat(vm.state.value.canSubmit).isFalse()
+        vm.submit()
+        advanceUntilIdle()
+        assertThat(api.joinCalls).isEmpty()
+
+        vm.onFirstNameChange("Al")
+        assertThat(vm.state.value.form.isFirstNameTooShort).isFalse()
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
+    @Test
+    fun submit_refusesATwoCharacterNicknameBeforeAnyRequest() = runTest {
+        val api = FakeShareLinkApi(
+            linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1", requireNickname = true)),
+        )
+        val vm = viewModel(api)
+        advanceUntilIdle()
+        vm.onFirstNameChange("Ada")
+        vm.onLastNameChange("Lovelace")
+        vm.onUsernameChange("Al")
+
+        assertThat(vm.state.value.form.isUsernameTooShort).isTrue()
+        vm.submit()
+        advanceUntilIdle()
+        assertThat(api.joinCalls).isEmpty()
+
+        vm.onUsernameChange("Ali")
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
+    @Test
     fun anAccountRequiredLink_cannotBeJoinedAnonymously() = runTest {
         val api = FakeShareLinkApi(
             linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1", requireAccount = true)),

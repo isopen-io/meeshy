@@ -78,6 +78,8 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    /** Le texte touché sur la scène, SÉLECTIONNÉ sans être écrit (#13836) : son cadre et sa barre d'actions, pas de clavier. */
+    val framedTextElementId: String? = null,
     val elementMenuId: String? = null,
     val stickerMenuId: String? = null,
     val playheadSeconds: Float = 0f,
@@ -255,8 +257,9 @@ data class StoryComposerUiState(
     val selectedTextElement: StoryTextElement?
         get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
 
-    /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null && !isTimelineOpen
+    /** True while the text field edits an on-canvas element rather than the slide caption — a text only touched is framed, not written. */
+    val isEditingTextElement: Boolean
+        get() = selectedTextElement != null && !isTimelineOpen && selectedTextElementId != framedTextElementId
 
     /** La frise est le panneau ouvert : sélectionner un texte y règle sa fenêtre, sans clavier. */
     val isTimelineOpen: Boolean get() = band.activeTool == StoryToolMode.TIMELINE

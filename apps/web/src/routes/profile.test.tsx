@@ -237,6 +237,32 @@ describe('l’identité', () => {
   });
 });
 
+describe('le plancher des noms (#13825)', () => {
+  const edit = (draft: { firstName: string; lastName: string; displayName: string }) =>
+    renderToStaticMarkup(<IdentitySection language="fr" profile={profileOf()} editing draft={{ ...draft, bio: '' }} onDraft={noop} />);
+
+  for (const key of ['firstName', 'lastName', 'displayName'] as const) {
+    test(`« A » dans ${key} : le refus DIT le minimum sous le champ`, () => {
+      const html = edit({ firstName: 'Ada', lastName: 'Lovelace', displayName: 'Ada L.', [key]: 'A' });
+      expect(html).toContain('role="alert"');
+      expect(html).toContain('2 caractères au moins.');
+      expect(html).toContain('aria-invalid="true"');
+    });
+  }
+
+  test('« Al » passe : aucun refus', () => {
+    const html = edit({ firstName: 'Al', lastName: 'Li', displayName: 'Ly', });
+    expect(html).not.toContain('role="alert"');
+  });
+
+  test('Enregistrer est inactif tant qu\'un nom est trop court', () => {
+    const blocked = renderToStaticMarkup(<ProfileHeaderBar language="fr" editing saving={false} online ready onEdit={noop} onCancel={noop} onSave={noop} saveBlocked />);
+    expect(blocked).toMatch(/<button[^>]*data-profile-save[^>]*disabled=""/u);
+    const free = renderToStaticMarkup(<ProfileHeaderBar language="fr" editing saving={false} online ready onEdit={noop} onCancel={noop} onSave={noop} />);
+    expect(free).not.toMatch(/<button[^>]*data-profile-save[^>]*disabled=""/u);
+  });
+});
+
 describe('le contact', () => {
   test('masqué, avec l’état de vérification ; rien à montrer se dit « — »', () => {
     const html = renderToStaticMarkup(<ContactSection language="fr" email={profileOf().email} phone={profileOf().phone} />);

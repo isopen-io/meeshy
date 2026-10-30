@@ -217,7 +217,7 @@ describe('non-membre sur lien direct ≡ conversation inexistante (#8099, #8116)
 
     expect(nonMembre.statut).toBe(404);
     expect(nonMembre.corps.error).toBe('Conversation not found');
-    expect(nonMembre.corps.code).toBeUndefined();
+    expect(nonMembre.corps.code).toBe('CONVERSATION_NOT_FOUND');
     expect(nonMembre).toEqual(inexistante);
   });
 

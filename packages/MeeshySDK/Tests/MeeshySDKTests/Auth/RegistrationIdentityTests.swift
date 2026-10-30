@@ -78,4 +78,26 @@ final class RegistrationIdentityTests: XCTestCase {
         XCTAssertEqual(RegistrationIdentity.capitalizeName("jean-pierre"), "Jean-Pierre")
         XCTAssertEqual(RegistrationIdentity.capitalizeName("o'brien"), "O'Brien")
     }
+
+    func test_pseudoRacine_aTwoCharacterNameFallsBackToTheAddress() {
+        XCTAssertEqual(RegistrationIdentity.pseudoRacine(displayName: "Al", email: "jean.dupont@example.com"), "jean-dupont")
+        XCTAssertEqual(RegistrationIdentity.pseudoRacine(displayName: "Ali", email: "jean.dupont@example.com"), "ali")
+    }
+
+    func test_pseudoRacine_aTwoCharacterAddressNeverMakesAPseudo() {
+        XCTAssertEqual(RegistrationIdentity.pseudoRacine(displayName: nil, email: "al@example.com"), RegistrationIdentity.pseudoDeSecours)
+        XCTAssertEqual(RegistrationIdentity.slugDAdresse("al@example.com").count, 2)
+    }
+
+    func test_displayNameDepuisEmail_skipsOneLetterWords_andKeepsATwoLetterAddress() {
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("j.dupont@example.com"), "Dupont")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("al@example.com"), "Al")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("a.b.durand@example.com"), "Durand")
+    }
+
+    func test_displayNameDepuisEmail_nothingBeyondOneLetterWords_givesNoName() {
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("a@example.com"), "")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("a.b@example.com"), "")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("a1b@example.com"), "")
+    }
 }

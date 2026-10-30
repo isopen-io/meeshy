@@ -70,12 +70,24 @@ final class JoinFlowViewModel: ObservableObject, JoinFlowModeling {
     }
 
     var isFormValid: Bool {
-        guard !firstName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        guard !lastName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        guard IdentityRules.meetsMinimum(firstName, for: .firstName) else { return false }
+        guard IdentityRules.meetsMinimum(lastName, for: .lastName) else { return false }
+        guard !IdentityRules.isGuestPseudoTooShort(username) else { return false }
         guard let info = linkInfo else { return true }
-        if info.requireNickname && username.trimmingCharacters(in: .whitespaces).isEmpty { return false }
+        if info.requireNickname && !IdentityRules.meetsGuestPseudoMinimum(username) { return false }
         if info.requireEmail && !isValidEmail(email) { return false }
         return true
+    }
+
+    func minimumLengthMessage(for field: IdentityRules.Field) -> String? {
+        let tooShort: Bool
+        switch field {
+        case .firstName: tooShort = IdentityRules.isTooShort(firstName, for: .firstName)
+        case .lastName: tooShort = IdentityRules.isTooShort(lastName, for: .lastName)
+        case .pseudo: tooShort = IdentityRules.isGuestPseudoTooShort(username)
+        case .displayName: return nil
+        }
+        return tooShort ? SignupViewModel.minimumLengthMessage(for: field) : nil
     }
 
     func submitJoin() async {
@@ -96,11 +108,11 @@ final class JoinFlowViewModel: ObservableObject, JoinFlowModeling {
     }
 
     private func makeRequest(for info: ShareLinkInfo) -> AnonymousJoinRequest {
-        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         return AnonymousJoinRequest(
-            firstName: firstName.trimmingCharacters(in: .whitespaces),
-            lastName: lastName.trimmingCharacters(in: .whitespaces),
+            firstName: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+            lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),
             username: trimmedUsername.isEmpty ? nil : trimmedUsername,
             email: trimmedEmail.isEmpty ? nil : trimmedEmail,
             birthday: JoinFlowWire.birthdayField(birthday, required: info.requireBirthday),
@@ -117,7 +129,7 @@ final class JoinFlowViewModel: ObservableObject, JoinFlowModeling {
     }
 
     private func isValidEmail(_ email: String) -> Bool {
-        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         return trimmed.contains("@") && trimmed.contains(".")
     }

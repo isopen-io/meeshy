@@ -11,6 +11,7 @@ import { usernameRefusal, type UsernameRefusal } from '@meeshy/shared/utils/user
 import type { RegisterBody } from './api/auth';
 import { isReferralCodeShaped, normalizeReferralCode } from './view/referral-code';
 import { countryOf, type Country } from './countries';
+import { isNameLongEnough, isNameTooShort } from './identity-bounds';
 
 /**
  * LE MODÈLE D'INSCRIPTION (#5555, E4) — miroir pur de `SignupForm.swift`
@@ -82,8 +83,19 @@ const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
 export function isDisplayNameValid(value: string | null): boolean {
   const trimmed = (value ?? '').trim();
   if (trimmed.length === 0) return true;
+  if (!isNameLongEnough(trimmed)) return false;
   if (trimmed.length > DISPLAY_NAME_MAX) return false;
   return PERSON_NAME_PATTERN.test(trimmed);
+}
+
+/**
+ * LE REFUS DE LONGUEUR DU NOM AFFICHÉ, PENDANT LA SAISIE (#13825) — « A » est
+ * refusé, « Al » passe, jugé sur la saisie ROGNÉE. `null` pour un champ vide
+ * ou jamais touché : il est LÉGITIME (dérivé de l'adresse, § `isDisplayNameValid`).
+ * Seule la saisie TAPÉE est jugée ici ; le nom dérivé l'est par `isIdentityDefined`.
+ */
+export function displayNameFieldRefusal(form: SignupFormState): 'too-short' | null {
+  return isNameTooShort(form.displayName ?? '') ? 'too-short' : null;
 }
 
 /** `true` quand un nom affiché a réellement été TAPÉ. Distinct de
@@ -133,6 +145,7 @@ export function hasPassword(value: string): boolean {
 export function canSubmit(form: SignupFormState): boolean {
   return (
     isDisplayNameValid(form.displayName) &&
+    isDisplayNameValid(effectiveDisplayName(form)) &&
     isEmailValid(form.email) &&
     isPasswordValid(form.password) &&
     isPhoneValid(form.phoneDigits) &&

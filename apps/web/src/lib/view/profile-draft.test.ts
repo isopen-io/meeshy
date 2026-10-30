@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { MyProfile } from '@/lib/api/profile';
 
-import { draftOf, draftPatch } from './profile-draft';
+import { draftIssues, draftOf, draftPatch } from './profile-draft';
 
 /**
  * LE BROUILLON DE L'IDENTITÉ (#6289) — ce que l'écran d'édition porte, et le
@@ -54,5 +54,44 @@ describe('le corps tiré du brouillon', () => {
 
   test('une espace ajoutée autour d’un nom inchangé ne fait rien partir', () => {
     expect(draftPatch(profileOf(), { firstName: ' Ada ', lastName: '', displayName: 'Ada L.', bio: 'Pionnière' })).toEqual({});
+  });
+});
+
+/**
+ * LE PLANCHER DES NOMS (#13825, directive porteur 2026-10-30) — un prénom, un
+ * nom ou un nom affiché ÉDITÉ garde au moins deux caractères une fois rogné ;
+ * « A » est refusé AVANT l'envoi, « Al » passe. Un champ vidé reste un champ
+ * non envoyé (la règle d'avant) et n'est pas un refus de longueur.
+ */
+describe('les refus du brouillon', () => {
+  const draft = (overrides: Partial<ReturnType<typeof draftOf>> = {}) => ({ ...draftOf(profileOf()), ...overrides });
+
+  test('un brouillon intact n\'a aucun refus', () => {
+    expect(draftIssues(profileOf(), draftOf(profileOf()))).toEqual({});
+  });
+
+  for (const key of ['firstName', 'lastName', 'displayName'] as const) {
+    test(`« A » dans ${key} est refusé, « Al » passe`, () => {
+      expect(draftIssues(profileOf(), draft({ [key]: 'A' }))).toEqual({ [key]: 'too-short' });
+      expect(draftIssues(profileOf(), draft({ [key]: 'Al' }))).toEqual({});
+    });
+  }
+
+  test('les espaces ne comptent pas', () => {
+    expect(draftIssues(profileOf(), draft({ lastName: '  B  ' }))).toEqual({ lastName: 'too-short' });
+    expect(draftIssues(profileOf(), draft({ lastName: '  Li  ' }))).toEqual({});
+  });
+
+  test('un champ vidé n\'est pas un refus de longueur (il ne part simplement pas)', () => {
+    expect(draftIssues(profileOf(), draft({ firstName: '   ' }))).toEqual({});
+  });
+
+  test('plusieurs champs trop courts sont tous nommés', () => {
+    expect(draftIssues(profileOf(), draft({ firstName: 'A', displayName: 'B' }))).toEqual({ firstName: 'too-short', displayName: 'too-short' });
+  });
+
+  test('un nom DÉJÀ servi d\'un seul caractère, laissé tel quel, ne bloque pas l\'enregistrement de la bio', () => {
+    const served = profileOf({ firstName: 'A' });
+    expect(draftIssues(served, { ...draftOf(served), bio: 'Nouvelle bio' })).toEqual({});
   });
 });

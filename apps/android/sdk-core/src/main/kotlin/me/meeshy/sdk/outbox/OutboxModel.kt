@@ -76,6 +76,12 @@ public object OutboxLanes {
     public const val MEDIA_STATUS: String = "mediaStatus"
     public const val POST: String = "post"
     public const val COMMENT: String = "comment"
+
+    /**
+     * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
+     * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
+     */
+    public fun isIndependent(lane: String): Boolean = lane == MEDIA
 }
 
 /**

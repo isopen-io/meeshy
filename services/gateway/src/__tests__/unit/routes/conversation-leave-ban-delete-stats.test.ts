@@ -1128,14 +1128,14 @@ describe('registerStatsRoutes — GET /conversations/:id/stats', () => {
     const { route, reply } = setup();
     mockedResolve.mockResolvedValue(null);
     await route.handler(makeStatsRequest(), reply);
-    expect(mockedSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockedSendNotFound).toHaveBeenCalledWith(reply, expect.any(String), { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns the same 404 as a missing conversation when user has no access (#8099)', async () => {
     const { route, reply } = setup();
     mockedCanAccess.mockResolvedValue(false);
     await route.handler(makeStatsRequest(), reply);
-    expect(mockedSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockedSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns enriched stats with user info', async () => {

@@ -93,8 +93,15 @@ final class WorldGuestEntryViewModel: ObservableObject {
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// Le nom part comme pseudo d'invité (`nickname`) : la passerelle le mesure
+    /// sur ce qu'elle en garde (#13825), d'où `IdentityRules.meetsGuestPseudoMinimum`.
     var canContinue: Bool {
-        !trimmedName.isEmpty && trimmedName.count <= Self.maxNameLength
+        IdentityRules.meetsGuestPseudoMinimum(trimmedName) && trimmedName.count <= Self.maxNameLength
+    }
+
+    /// Le minimum à dire sous le champ quand le nom est tapé mais trop court ; `nil` sinon.
+    var nameMinimumMessage: String? {
+        IdentityRules.isGuestPseudoTooShort(trimmedName) ? SignupViewModel.minimumLengthMessage(for: .pseudo) : nil
     }
 
     var worldTitle: String {

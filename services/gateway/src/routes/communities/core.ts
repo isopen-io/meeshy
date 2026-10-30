@@ -18,6 +18,7 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
@@ -786,7 +787,7 @@ const community = await fastify.prisma.community.findFirst({
       });
 
       if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Le Swagger de cette route promet « admin/creator of BOTH the community
@@ -809,7 +810,7 @@ const community = await fastify.prisma.community.findFirst({
         // 404 et non 403 : distinguer « elle existe mais tu n'y as pas droit »
         // de « elle n'existe pas » ferait de cette route un oracle d'existence
         // sur tout identifiant de conversation.
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à

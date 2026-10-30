@@ -34,6 +34,12 @@ import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
 import { admittedUploadMimeType } from '../../services/attachments/uploadMimeType';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+import {
+  E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE,
+  E2EE_PLAINTEXT_REFUSED,
+} from '../../services/messaging/e2eePlaintextAdmission';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { discardFilePart, isFileSizeOverflow, judgeUploadDestination, UPLOAD_DESTINATION_FIELD, type UploadDestinationVerdict } from './uploadDestination';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -83,7 +89,7 @@ export async function registerUploadRoutes(
     {
       onRequest: [authOptional],
       schema: {
-        description: 'Upload one or multiple files. Supports both authenticated and anonymous users. Files are processed with metadata extraction (dimensions for images, duration for audio/video). Anonymous users must have file/image upload permissions on their share link.',
+        description: 'Upload one or multiple files. Supports both authenticated and anonymous users. Files are processed with metadata extraction (dimensions for images, duration for audio/video). Anonymous users must have file/image upload permissions on their share link. An optional `conversationId` field, sent before the files, names the conversation the pieces are destined for: the pieces of an end-to-end encrypted conversation are received to the end of the body, then discarded, never stored (400 E2EE_PLAINTEXT_REFUSED), a conversation the caller is not a member of is not found (404 CONVERSATION_NOT_FOUND, the same as an absent one).',
         tags: ['attachments'],
         summary: 'Upload file attachments',
         consumes: ['multipart/form-data'],
@@ -161,34 +167,65 @@ export async function registerUploadRoutes(
         const metadataMap: Map<number, any> = new Map();
 
         let fileIndex = 0;
-        for await (const part of parts) {
-          if (part.type === 'file') {
-            const buffer = await part.toBuffer();
-            files.push({
-              buffer,
-              filename: part.filename,
-              // #9693 — le type ADMIS est celui du média : `audio/x-wav`
-              // devient `audio/wav`, un MP3 sans type devient `audio/mpeg`
-              // quand ses octets le confirment.
-              mimeType: admittedUploadMimeType({
-                declared: normalizeContactCardMimeType(part.mimetype, part.filename),
-                fileName: part.filename,
-                head: buffer,
-              }),
-              size: buffer.length,
-            });
-            fileIndex++;
-          } else if (part.type === 'field' && part.fieldname.startsWith('metadata_')) {
-            const index = parseInt(part.fieldname.replace('metadata_', ''), 10);
-            const metadataValue = await part.value;
-            try {
-              const metadata = JSON.parse(metadataValue as string);
-              logger.debug('Metadata received for file', { index, hasDuration: !!metadata.duration, duration: metadata.duration, fullMetadata: metadata });
-              metadataMap.set(index, metadata);
-            } catch (error) {
-              logger.warn('Impossible de parser les métadonnées', error as Error);
+        // #13820 — une destination refusée ne coupe pas la lecture du corps : un
+        // client HTTP/1.1 écrit TOUT le corps avant de lire la réponse, et un
+        // `return` ici le laissait bloqué au premier Mo. Les fichiers suivants
+        // sont lus jusqu'au bout et jetés, jamais gardés ; la réponse part après.
+        let refusedDestination: Exclude<UploadDestinationVerdict, 'admitted'> | null = null;
+        try {
+          for await (const part of parts) {
+            if (part.type === 'file' && refusedDestination !== null) {
+              await discardFilePart(part.file);
+            } else if (part.type === 'file') {
+              const buffer = await part.toBuffer();
+              files.push({
+                buffer,
+                filename: part.filename,
+                // #9693 — le type ADMIS est celui du média : `audio/x-wav`
+                // devient `audio/wav`, un MP3 sans type devient `audio/mpeg`
+                // quand ses octets le confirment.
+                mimeType: admittedUploadMimeType({
+                  declared: normalizeContactCardMimeType(part.mimetype, part.filename),
+                  fileName: part.filename,
+                  head: buffer,
+                }),
+                size: buffer.length,
+              });
+              fileIndex++;
+            } else if (part.type === 'field' && part.fieldname === UPLOAD_DESTINATION_FIELD && refusedDestination === null) {
+              // #13820 — la destination se juge dès qu'elle arrive : une pièce vers une
+              // conversation chiffrée de bout en bout n'est jamais STOCKÉE — ses octets
+              // sont reçus, puis jetés.
+              const destination = await judgeUploadDestination(prisma, authContext, String(part.value ?? ''));
+              if (destination !== 'admitted') {
+                refusedDestination = destination;
+                files.length = 0;
+              }
+            } else if (refusedDestination !== null) {
+              continue;
+            } else if (part.type === 'field' && part.fieldname.startsWith('metadata_')) {
+              const index = parseInt(part.fieldname.replace('metadata_', ''), 10);
+              const metadataValue = await part.value;
+              try {
+                const metadata = JSON.parse(metadataValue as string);
+                logger.debug('Metadata received for file', { index, hasDuration: !!metadata.duration, duration: metadata.duration, fullMetadata: metadata });
+                metadataMap.set(index, metadata);
+              } catch (error) {
+                logger.warn('Impossible de parser les métadonnées', error as Error);
+              }
             }
           }
+        } catch (error) {
+          // #13820 — le fichier jeté d'une destination refusée a pu dépasser `fileSize` :
+          // le corps est lu jusqu'au bout, et c'est le refus qui répond, jamais un 500.
+          if (refusedDestination === null || !isFileSizeOverflow(error)) throw error;
+        }
+
+        if (refusedDestination === 'end-to-end') {
+          return sendBadRequest(reply, E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE, { code: E2EE_PLAINTEXT_REFUSED });
+        }
+        if (refusedDestination === 'not-found') {
+          return refuserCommeIntrouvable(reply);
         }
 
         logger.debug('Files received', { count: files.length });

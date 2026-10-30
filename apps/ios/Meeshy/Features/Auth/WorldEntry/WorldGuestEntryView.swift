@@ -168,6 +168,13 @@ struct WorldGuestEntryView: View {
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.inputBackground))
                     .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).strokeBorder(MeeshyColors.indigo500, lineWidth: 2))
                     .accessibilityLabel(WorldGuestEntryCopy.nameLabel)
+                if let minimum = viewModel.nameMinimumMessage {
+                    Text(minimum)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(MeeshyColors.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("worldEntry.name.minimumLength")
+                }
             }
             .padding(.top, MeeshySpacing.lg)
 

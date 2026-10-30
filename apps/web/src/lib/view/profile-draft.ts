@@ -1,4 +1,5 @@
 import type { MyProfile, ProfilePatch } from '@/lib/api/profile';
+import { isNameTooShort } from '@/lib/identity-bounds';
 
 /**
  * **LE BROUILLON DE L'IDENTITÉ** (#6289) — les quatre saisies de l'édition, et
@@ -42,4 +43,24 @@ export function draftPatch(profile: MyProfile, draft: ProfileDraft): ProfilePatc
     ...(displayName === undefined ? {} : { displayName }),
     ...(draft.bio === profile.bio ? {} : { bio: draft.bio }),
   };
+}
+
+export type DraftNameField = 'firstName' | 'lastName' | 'displayName';
+
+export type DraftIssues = Partial<Record<DraftNameField, 'too-short'>>;
+
+const NAME_FIELDS: readonly DraftNameField[] = ['firstName', 'lastName', 'displayName'];
+
+/**
+ * LES REFUS QUI BLOQUENT L'ENREGISTREMENT (#13825, directive porteur
+ * 2026-10-30) — un prénom, un nom ou un nom affiché CHANGÉ garde au moins deux
+ * caractères une fois rogné. Seul un champ que l'utilisateur a modifié est
+ * jugé : un nom déjà servi d'un caractère, laissé tel quel, n'empêche pas
+ * d'éditer la bio. Un champ vidé n'est pas un refus de longueur — il ne part
+ * simplement pas (`changedName`).
+ */
+export function draftIssues(profile: MyProfile, draft: ProfileDraft): DraftIssues {
+  return Object.fromEntries(
+    NAME_FIELDS.filter((key) => changedName(draft[key], profile[key]) !== undefined && isNameTooShort(draft[key])).map((key) => [key, 'too-short' as const]),
+  );
 }

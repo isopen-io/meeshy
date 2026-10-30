@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerSelectionAction
+import me.meeshy.sdk.model.composer.ComposerSelectionActions
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.timeline.Plan2DLayout
 import me.meeshy.sdk.model.composer.timeline.Plan2DTrack
@@ -15,6 +17,18 @@ data class SceneObjectRef(val kind: ComposerObjectKind, val id: String)
 /** Le menu d'appui long résolu : l'objet touché et les seules actions qu'il accepte. */
 @Immutable
 data class SceneObjectContextMenu(val ref: SceneObjectRef, val actions: List<SceneObjectMenu.Action>)
+
+/**
+ * La barre d'actions de l'objet sélectionné (#13836) : ses actions libellées, ce que son Ordre ouvre, et ce que la feuille
+ * de son Modifier range en plus de ses sections (faire le fond, le remplacer).
+ */
+@Immutable
+data class SceneSelectionBar(
+    val ref: SceneObjectRef,
+    val actions: List<ComposerSelectionAction>,
+    val orderChoices: List<SceneObjectMenu.Action>,
+    val sheetActions: List<SceneObjectMenu.Action>,
+)
 
 /** L'inspecteur : une rangée de jetons au-dessus du socle, qui change de contenu selon la famille. */
 @Immutable
@@ -131,4 +145,30 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
             else -> stickerSubject() to controllerActions
         }
         return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
+    }
+
+/**
+ * La barre d'actions de l'objet SÉLECTIONNÉ — ni écrit, ni sous le pinceau (#13836). Elle part de ce que la loi
+ * [SceneObjectMenu] sert à l'objet : le MÊME menu que son appui long pour un texte ou un sticker, les contrôleurs d'un
+ * média ou d'un son ; chaque famille y câble son Modifier — écrire le texte, la feuille du média ou du son, l'échange du
+ * sticker. Le Temps est celui des objets qui ont une fenêtre propre, un texte ou un sticker, dans une scène animée.
+ */
+val StoryComposerUiState.selectionBar: SceneSelectionBar?
+    get() {
+        if (isEditingTextElement || isDrawingActive) return null
+        val controllers = selectedObjectControllers ?: return null
+        val offered = when (controllers.ref.kind) {
+            ComposerObjectKind.TEXT -> SceneObjectMenu.offered(textSubject())
+            ComposerObjectKind.STICKER -> SceneObjectMenu.offered(stickerSubject())
+            else -> controllers.actions
+        }
+        val timed = controllers.ref.kind == ComposerObjectKind.TEXT || controllers.ref.kind == ComposerObjectKind.STICKER
+        return SceneSelectionBar(
+            ref = controllers.ref,
+            actions = ComposerSelectionActions.served(
+                ComposerSelectionActions.Input(offered = offered, editable = true, timed = timed, sceneAnimated = sceneIsAnimated),
+            ),
+            orderChoices = ComposerSelectionActions.orderChoices(offered),
+            sheetActions = ComposerSelectionActions.editSheetActions(offered),
+        )
     }

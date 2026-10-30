@@ -211,6 +211,20 @@ class OutboxRepository @Inject constructor(
         return true
     }
 
+    /**
+     * #13820 — the message lane [lane] waits for its conversation's mode behind [cmid]: every row not waiting yet waits since
+     * [cmid] does (or since it was queued, if later), so N queued messages fail together, never one bound after the other.
+     */
+    suspend fun waitBehind(lane: String, cmid: String, reason: String) {
+        val since = outboxDao.find(cmid)?.waitingSince ?: now()
+        outboxDao.waitBehind(lane, cmid, since, reason, now())
+    }
+
+    /** #13820 — [cmid] waited for its conversation's mode ([reason]) and is now admitted: the wait starts over next time. */
+    suspend fun endWait(cmid: String, reason: String) {
+        outboxDao.endWait(cmid, reason, now())
+    }
+
     /** Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). */
     suspend fun reclaimStaleInflight(staleAfterMs: Long = STALE_INFLIGHT_MS): Int {
         val at = now()

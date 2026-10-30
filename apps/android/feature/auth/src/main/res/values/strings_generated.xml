@@ -267,6 +267,7 @@
     <string name="signup_legal">By continuing, you agree to the terms of use and the privacy policy.</string>
     <string name="signup_legal_privacy">Privacy Policy</string>
     <string name="signup_legal_terms">Terms of Service</string>
+    <string name="signup_min_characters">At least %1$d characters.</string>
     <string name="signup_password_hide">Hide password</string>
     <string name="signup_password_label">Password</string>
     <string name="signup_password_show">Show password</string>

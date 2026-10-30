@@ -287,6 +287,7 @@
     <string name="signup_legal">بالمتابعة، فإنك توافق على شروط الاستخدام وسياسة الخصوصية.</string>
     <string name="signup_legal_privacy">سياسة الخصوصية</string>
     <string name="signup_legal_terms">شروط الاستخدام</string>
+    <string name="signup_min_characters">%1$d أحرف على الأقل.</string>
     <string name="signup_password_hide">إخفاء كلمة المرور</string>
     <string name="signup_password_label">كلمة المرور</string>
     <string name="signup_password_show">إظهار كلمة المرور</string>

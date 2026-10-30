@@ -143,6 +143,27 @@ final class WorldGuestEntryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.canContinue)
     }
 
+    /// Le nom part comme pseudo d'invité (`nickname`), que la passerelle mesure
+    /// sur ce qu'elle en garde (#13825) : « Al » et « Zoé » n'y gardent que deux
+    /// caractères, comme sur le web et Android.
+    func test_continueToLanguage_nameTheGatewayWouldKeepUnderThree_staysOnNameStep_andSaysTheMinimum() {
+        let (sut, _, _) = makeSUT()
+        for typed in ["Al", " Al ", "Zoé"] {
+            sut.name = typed
+
+            sut.continueToLanguage()
+
+            XCTAssertEqual(sut.step, .name, typed)
+            XCTAssertFalse(sut.canContinue, typed)
+            XCTAssertEqual(sut.nameMinimumMessage, SignupViewModel.minimumLengthMessage(for: .pseudo), typed)
+        }
+        sut.name = ""
+        XCTAssertNil(sut.nameMinimumMessage)
+        sut.name = "Ali"
+        XCTAssertNil(sut.nameMinimumMessage)
+        XCTAssertTrue(sut.canContinue)
+    }
+
     func test_continueToLanguage_validName_movesToLanguageStep() {
         let (sut, _, _) = makeSUT()
         sut.name = "Amina"

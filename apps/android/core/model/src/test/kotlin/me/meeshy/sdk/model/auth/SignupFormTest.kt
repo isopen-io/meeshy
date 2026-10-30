@@ -40,6 +40,31 @@ class SignupFormTest {
     }
 
     @Test
+    fun nameOfASingleCharacter_isRefusedWithTheMinimumIssue() {
+        // #13825 : « A » ou « B » ne sont pas des noms ; « Al », « Li », « Sy » le sont.
+        assertThat(valid(displayName = "A").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "A").canSubmit).isFalse()
+        listOf("Al", "Li", "Sy").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+            assertThat(valid(displayName = name).canSubmit).isTrue()
+        }
+    }
+
+    @Test
+    fun nameMinimumIsMeasuredAfterTrim() {
+        assertThat(valid(displayName = "   A   ").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "  Al  ").validate().displayName).isNull()
+    }
+
+    @Test
+    fun aSingleCharacterNameIsShownRefusedAsSoonAsItIsTyped() {
+        assertThat(valid(displayName = "A").visibleValidation().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+    }
+
+    @Test
     fun blankName_isRefused() {
         assertThat(valid(displayName = "   ").validate().displayName)
             .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
@@ -382,6 +407,29 @@ class SignupFormPhasedTest {
         assertThat(form.effectiveDisplayName).isEqualTo("Ada Lovelace")
         assertThat(form.effectiveUsername).isEqualTo("ada-lovelace")
         assertThat(form.isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un pseudo de deux caracteres est refuse, trois sont acceptes, rognes`() {
+        assertThat(phased(username = "Al").usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(phased(username = "Al").isIdentityDefined).isFalse()
+        assertThat(phased(username = "  Al  ").isIdentityDefined).isFalse()
+        assertThat(phased(username = "Ali").usernameRefusal).isNull()
+        assertThat(phased(username = "  Ali  ").isIdentityDefined).isTrue()
+        assertThat(phased(username = "Al").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `un nom tape d'un caractere ne definit pas l'identite, deux oui`() {
+        assertThat(phased(displayName = "A").isIdentityDefined).isFalse()
+        assertThat(phased(displayName = "A").canSubmitPhased).isFalse()
+        assertThat(phased(displayName = "Al").isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un nom derive d'une adresse d'une seule lettre ne definit pas l'identite`() {
+        assertThat(phased(email = "a12@meeshy.me").effectiveDisplayName).isEqualTo("A")
+        assertThat(phased(email = "a12@meeshy.me").isIdentityDefined).isFalse()
     }
 
     @Test

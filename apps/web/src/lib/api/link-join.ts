@@ -5,6 +5,7 @@ import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
 import { isGuestAttachmentKind, type GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 
+import { isGuestNicknameTooShort } from '../identity-bounds';
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
 
@@ -414,7 +415,7 @@ export type GuestJoinBody = {
 
 export type GuestDraftValidation =
   | { readonly ok: true; readonly body: GuestJoinBody }
-  | { readonly ok: false; readonly field: GuestField };
+  | { readonly ok: false; readonly field: GuestField; readonly reason?: 'too-short' };
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/u;
@@ -435,6 +436,7 @@ export function validateGuestDraft(draft: GuestDraft, terms: GuestTerms): GuestD
   const language = draft.language.trim();
 
   if (terms.nicknameRequired && nickname === '') return { ok: false, field: 'nickname' };
+  if (isGuestNicknameTooShort(nickname)) return { ok: false, field: 'nickname', reason: 'too-short' };
   if (terms.emailRequired && email === '') return { ok: false, field: 'email' };
   if (email !== '' && !EMAIL_SHAPE.test(email)) return { ok: false, field: 'email' };
   if (terms.birthdayRequired && birthday === '') return { ok: false, field: 'birthday' };

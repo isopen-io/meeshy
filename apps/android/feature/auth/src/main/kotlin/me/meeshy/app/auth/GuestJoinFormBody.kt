@@ -34,6 +34,7 @@ import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.GuestJoinError
 import me.meeshy.sdk.model.GuestJoinForm
 import me.meeshy.sdk.model.GuestJoinLanguages
+import me.meeshy.sdk.model.auth.RegistrationIdentity
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -56,6 +57,11 @@ private fun focusColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = MeeshyPalette.Indigo500,
     cursorColor = MeeshyPalette.Indigo500,
 )
+
+/** « N caractères au moins » sous un champ d'identité tapé mais trop court ; rien sous un champ juste ou encore vide. */
+@Composable
+private fun minimumText(tooShort: Boolean, minimum: Int): String? =
+    if (tooShort) stringResource(R.string.signup_min_characters, minimum) else null
 
 @Composable
 private fun SectionTitle(text: String) {
@@ -108,13 +114,21 @@ internal fun GuestJoinFormBody(state: GuestJoinUiState, viewModel: GuestJoinView
     GuestTextField(
         form.firstName, viewModel::onFirstNameChange, stringResource(R.string.guest_join_first_name), enabled,
         capitalization = KeyboardCapitalization.Words,
+        isError = form.isFirstNameTooShort,
+        supportingText = minimumText(form.isFirstNameTooShort, RegistrationIdentity.NAME_MIN),
     )
     GuestTextField(
         form.lastName, viewModel::onLastNameChange, stringResource(R.string.guest_join_last_name), enabled,
         capitalization = KeyboardCapitalization.Words,
+        isError = form.isLastNameTooShort,
+        supportingText = minimumText(form.isLastNameTooShort, RegistrationIdentity.NAME_MIN),
     )
     if (form.requireNickname) {
-        GuestTextField(form.username, viewModel::onUsernameChange, stringResource(R.string.guest_join_username), enabled)
+        GuestTextField(
+            form.username, viewModel::onUsernameChange, stringResource(R.string.guest_join_username), enabled,
+            isError = form.isUsernameTooShort,
+            supportingText = minimumText(form.isUsernameTooShort, RegistrationIdentity.PSEUDO_MIN),
+        )
     }
     if (form.requireEmail) {
         EmailField(form, viewModel, stringResource(R.string.guest_join_email), enabled)
@@ -128,6 +142,8 @@ internal fun GuestJoinFormBody(state: GuestJoinUiState, viewModel: GuestJoinView
         if (!form.requireNickname) {
             GuestTextField(
                 form.username, viewModel::onUsernameChange, stringResource(R.string.guest_join_username_optional), enabled,
+                isError = form.isUsernameTooShort,
+                supportingText = minimumText(form.isUsernameTooShort, RegistrationIdentity.PSEUDO_MIN),
             )
         }
         if (!form.requireEmail) {

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_rail_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_rail_selection",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

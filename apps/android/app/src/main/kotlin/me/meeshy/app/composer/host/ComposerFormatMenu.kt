@@ -7,7 +7,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +30,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
@@ -39,6 +46,7 @@ import me.meeshy.app.R
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerMosaicChoice
+import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.FormatVerdict
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -64,8 +72,7 @@ fun ComposerFormatMenu(
     onChooseLayout: (MosaicLayoutMode) -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val haptics = rememberMeeshyHaptics()
-    val hasMenu = verdicts.size > 1 || layouts.isNotEmpty()
+    val hasMenu = ComposerSceneTools.showsFormatChevron(formats = verdicts.size, layouts = layouts.size)
     val hint = stringResource(R.string.composer_publish_menu_a11y_hint)
     val onPlateau = LocalOnComposerPlateau.current
     val ink = if (onPlateau) ComposerPlateauInk.primary else MeeshyTheme.tokens.textPrimary
@@ -86,29 +93,90 @@ fun ComposerFormatMenu(
         )
         if (hasMenu) Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = chevronInk)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Text(
-                text = stringResource(R.string.composer_publish_menu_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-            )
-            verdicts.forEach { verdict ->
-                FormatEntry(verdict, isSelected = verdict.format == selected) {
-                    open = false
-                    onChoose(verdict.format)
-                }
-            }
-            AnimatedVisibility(
-                visible = layouts.isNotEmpty(),
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
+            FormatMenuItems(selected, verdicts, onChoose, layouts, armedLayout, onChooseLayout) { open = false }
+        }
+    }
+}
+
+/**
+ * Le même choix, posé en CHEVRON au bout de « Publier la story ▾ » (#13834) : la story ne nomme plus son format en haut,
+ * elle le choisit là où elle publie. Une cible de 48 dp nommée « Publier comme » ; sans autre format ni disposition, le
+ * chevron n'existe pas (loi 4, route autonome comprise).
+ */
+@Composable
+fun ComposerFormatChevron(
+    selected: ComposerFormat,
+    verdicts: List<FormatVerdict>,
+    onChoose: (ComposerFormat) -> Unit,
+    layouts: List<MosaicLayoutMode> = emptyList(),
+    armedLayout: MosaicLayoutMode? = null,
+    onChooseLayout: (MosaicLayoutMode) -> Unit = {},
+) {
+    if (!ComposerSceneTools.showsFormatChevron(formats = verdicts.size, layouts = layouts.size)) return
+    var open by rememberSaveable { mutableStateOf(false) }
+    val label = stringResource(R.string.composer_publish_menu_title)
+    val hint = stringResource(R.string.composer_publish_menu_a11y_hint)
+    Box {
+        Box(
+            modifier = Modifier
+                .size(CHEVRON_TARGET)
+                .clip(CircleShape)
+                .clickable(role = Role.Button) { open = true }
+                .semantics {
+                    contentDescription = label
+                    stateDescription = hint
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier.size(CHEVRON_DISC).background(Color.White.copy(alpha = 0.22f), CircleShape),
+                contentAlignment = Alignment.Center,
             ) {
-                LayoutSection(layouts, ComposerMosaicChoice.checked(armedLayout)) { mode ->
-                    haptics.selection()
-                    open = false
-                    onChooseLayout(mode)
-                }
+                Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = Color.White)
             }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            FormatMenuItems(selected, verdicts, onChoose, layouts, armedLayout, onChooseLayout) { open = false }
+        }
+    }
+}
+
+private val CHEVRON_TARGET = 48.dp
+private val CHEVRON_DISC = 30.dp
+
+/** « Publier comme » : chaque format, grisé avec sa raison s'il est refusé, puis la disposition d'un post. */
+@Composable
+private fun FormatMenuItems(
+    selected: ComposerFormat,
+    verdicts: List<FormatVerdict>,
+    onChoose: (ComposerFormat) -> Unit,
+    layouts: List<MosaicLayoutMode>,
+    armedLayout: MosaicLayoutMode?,
+    onChooseLayout: (MosaicLayoutMode) -> Unit,
+    close: () -> Unit,
+) {
+    val haptics = rememberMeeshyHaptics()
+    Text(
+        text = stringResource(R.string.composer_publish_menu_title),
+        style = MaterialTheme.typography.labelMedium,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    )
+    verdicts.forEach { verdict ->
+        FormatEntry(verdict, isSelected = verdict.format == selected) {
+            close()
+            onChoose(verdict.format)
+        }
+    }
+    AnimatedVisibility(
+        visible = layouts.isNotEmpty(),
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        LayoutSection(layouts, ComposerMosaicChoice.checked(armedLayout)) { mode ->
+            haptics.selection()
+            close()
+            onChooseLayout(mode)
         }
     }
 }

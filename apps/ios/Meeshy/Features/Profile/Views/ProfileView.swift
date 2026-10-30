@@ -845,17 +845,93 @@ struct ProfileView: View {
         return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
     }
 
+    /// Ce qui part pour un champ d'identité : la saisie ROGNÉE, ou `nil` quand
+    /// elle est vide ou inchangée — une valeur héritée trop courte, que
+    /// l'utilisateur ne touche pas, ne bloque pas un autre enregistrement.
+    static func identityValueToSend(_ typed: String, original: String?) -> String? {
+        let trimmed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed == original?.trimmingCharacters(in: .whitespacesAndNewlines) ? nil : trimmed
+    }
+
+    /// Le refus AVANT l'envoi : le premier champ d'identité modifié et sous sa
+    /// borne (`IdentityRules`), nommé, avec le minimum de la copie existante.
+    static func identityRefusalMessage(firstName: String?, lastName: String?, displayName: String?) -> String? {
+        guard let field = IdentityRules
+            .shortFields(firstName: firstName ?? "", lastName: lastName ?? "", displayName: displayName ?? "")
+            .first
+        else { return nil }
+        let label: String
+        switch field {
+        case .firstName: label = String(localized: "profile.first_name", bundle: .main)
+        case .lastName: label = String(localized: "profile.last_name", bundle: .main)
+        case .displayName: label = String(localized: "profile.display_name", bundle: .main)
+        case .pseudo: return SignupViewModel.minimumLengthMessage(for: field)
+        }
+        return "\(label) : \(SignupViewModel.minimumLengthMessage(for: field))"
+    }
+
+    /// Hors ligne : la requête est mise en file (`SettingsActionQueue`) et
+    /// rejouée au retour du réseau ; l'apply optimiste reste en place.
+    private func queueOfflineSave(_ request: UpdateProfileRequest, rollingBackTo original: MeeshyUser) {
+        do {
+            let payload = try JSONEncoder().encode(request)
+            // The gateway route is `PATCH /users/me` (services/gateway/src/routes/users/profile.ts) —
+            // `/users/me/profile` does not exist and 404s forever on replay.
+            // `SettingsAction` PERSISTE ce chemin pour le rejouer plus tard :
+            // il lui faut une chaîne, pas une adresse typée. Elle est DÉRIVÉE
+            // du catalogue plutôt qu'écrite — sinon ce site redeviendrait le
+            // seul endroit du dépôt où un chemin s'écrit à la main, et le
+            // commentaire ci-dessus dit ce que ça coûte.
+            let action = SettingsAction(
+                endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me),
+                httpMethod: "PATCH",
+                payload: payload
+            )
+            Task { await SettingsActionQueue.shared.enqueue(action) }
+            FeedbackToastManager.shared.showSuccess(String(
+                localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
+
+            ))
+        } catch {
+            // Encoding failure means nothing was queued — the optimistic
+            // apply made by the caller must not be left standing as a silent lie.
+            Logger.settings.error("Offline profile save failed to encode payload: \(error.localizedDescription, privacy: .public)")
+            authManager.currentUser = original
+            isEditing = true
+            HapticFeedback.error()
+            withAnimation {
+                errorMessage = String(localized: "profile.save.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)
+            }
+        }
+    }
+
     private func saveProfile() {
         guard let original = authManager.currentUser else { return }
+
+        let identityEdits = (
+            firstName: Self.identityValueToSend(firstName, original: original.firstName),
+            lastName: Self.identityValueToSend(lastName, original: original.lastName),
+            displayName: Self.identityValueToSend(displayName, original: original.displayName)
+        )
+        if let refusal = Self.identityRefusalMessage(
+            firstName: identityEdits.firstName,
+            lastName: identityEdits.lastName,
+            displayName: identityEdits.displayName
+        ) {
+            HapticFeedback.error()
+            withAnimation { errorMessage = refusal }
+            return
+        }
 
         // Optimistic update — apply the edits to the local user immediately
         // so the UI reflects them without waiting for the round-trip. Server
         // response replaces this with the canonical form on success; on
         // failure we roll back to the snapshot and re-open the editor.
         let optimistic = original.applyingProfileEdits(
-            firstName: firstName.isEmpty ? nil : firstName,
-            lastName: lastName.isEmpty ? nil : lastName,
-            displayName: displayName.isEmpty ? nil : displayName,
+            firstName: identityEdits.firstName,
+            lastName: identityEdits.lastName,
+            displayName: identityEdits.displayName,
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
@@ -866,9 +942,9 @@ struct ProfileView: View {
         HapticFeedback.success()
 
         let request = UpdateProfileRequest(
-            firstName: firstName.isEmpty ? nil : firstName,
-            lastName: lastName.isEmpty ? nil : lastName,
-            displayName: displayName.isEmpty ? nil : displayName,
+            firstName: identityEdits.firstName,
+            lastName: identityEdits.lastName,
+            displayName: identityEdits.displayName,
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
@@ -879,36 +955,7 @@ struct ProfileView: View {
         // replays automatically once connectivity returns. The optimistic
         // UI is already in place; the user gets a confirmation toast.
         if NetworkMonitor.shared.isOffline {
-            do {
-                let payload = try JSONEncoder().encode(request)
-                // The gateway route is `PATCH /users/me` (services/gateway/src/routes/users/profile.ts) —
-                // `/users/me/profile` does not exist and 404s forever on replay.
-                // `SettingsAction` PERSISTE ce chemin pour le rejouer plus tard :
-                // il lui faut une chaîne, pas une adresse typée. Elle est DÉRIVÉE
-                // du catalogue plutôt qu'écrite — sinon ce site redeviendrait le
-                // seul endroit du dépôt où un chemin s'écrit à la main, et le
-                // commentaire ci-dessus dit ce que ça coûte.
-                let action = SettingsAction(
-                    endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me),
-                    httpMethod: "PATCH",
-                    payload: payload
-                )
-                Task { await SettingsActionQueue.shared.enqueue(action) }
-                FeedbackToastManager.shared.showSuccess(String(
-                    localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
-
-                ))
-            } catch {
-                // Encoding failure means nothing was queued — the optimistic
-                // apply above must not be left standing as a silent lie.
-                Logger.settings.error("Offline profile save failed to encode payload: \(error.localizedDescription, privacy: .public)")
-                authManager.currentUser = original
-                isEditing = true
-                HapticFeedback.error()
-                withAnimation {
-                    errorMessage = String(localized: "profile.save.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)
-                }
-            }
+            queueOfflineSave(request, rollingBackTo: original)
             return
         }
 

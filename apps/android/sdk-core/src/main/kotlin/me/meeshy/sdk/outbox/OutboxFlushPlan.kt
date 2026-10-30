@@ -23,11 +23,15 @@ public enum class FlushOutcome { SUCCESS, RETRY }
  *   the prerequisite gives up (an `EXHAUSTED` prerequisite flips the verdict to
  *   `FAILED`, never `BLOCKED`), so the loop always terminates.
  *
- * A pass with neither signal succeeds — every queued row was delivered or exhausted.
+ * - **held-back rows** — an independent lane ([OutboxLanes.isIndependent]) drained past uploads waiting for their
+ *   conversation's mode or not yet due again (#13820): they are owed another pass, bounded by
+ *   [OutboxDrainer.DEFERRED_MAX_WAIT_MS], after which they are exhausted.
+ *
+ * A pass with none of these signals succeeds — every queued row was delivered or exhausted.
  */
 public object OutboxFlushPlan {
     public fun outcome(reports: Iterable<DrainReport>): FlushOutcome =
-        if (reports.any { it.stoppedOnTransientFailure || it.stoppedOnBlockedDependency }) {
+        if (reports.any { it.stoppedOnTransientFailure || it.stoppedOnBlockedDependency || it.heldBack }) {
             FlushOutcome.RETRY
         } else {
             FlushOutcome.SUCCESS

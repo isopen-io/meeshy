@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupField
 import me.meeshy.sdk.model.auth.PhonePlausibility
+import me.meeshy.sdk.model.auth.RegistrationIdentity
 import me.meeshy.sdk.model.auth.SignupFieldIssue
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupRefusal
@@ -479,6 +480,8 @@ private fun fieldMessageText(field: SignupField, message: SignupFieldMessage?): 
     is SignupFieldMessage.Local -> when (message.issue) {
         SignupFieldIssue.PHONE_TOO_SHORT ->
             stringResource(R.string.signup_phone_too_short, PhonePlausibility.MIN_DIGITS)
+        SignupFieldIssue.DISPLAY_NAME_TOO_SHORT ->
+            stringResource(R.string.signup_min_characters, RegistrationIdentity.NAME_MIN)
         else -> stringResource(message.issue.labelRes())
     }
     is SignupFieldMessage.Refused -> stringResource(SignupRefusalCopy.fieldRefusal(field, message.refusal))
@@ -486,6 +489,7 @@ private fun fieldMessageText(field: SignupField, message: SignupFieldMessage?): 
 
 private fun SignupFieldIssue.labelRes(): Int = when (this) {
     SignupFieldIssue.DISPLAY_NAME_REQUIRED -> R.string.signup_display_name_required
+    SignupFieldIssue.DISPLAY_NAME_TOO_SHORT -> R.string.signup_min_characters
     SignupFieldIssue.DISPLAY_NAME_TOO_LONG -> R.string.signup_display_name_too_long
     SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS -> R.string.signup_display_name_invalid_characters
     SignupFieldIssue.EMAIL_INVALID -> R.string.signup_email_invalid

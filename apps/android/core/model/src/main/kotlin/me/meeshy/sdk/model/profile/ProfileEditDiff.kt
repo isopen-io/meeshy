@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.profile
 
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.auth.RegistrationIdentity
 
 /** Les tampons bruts de l'éditeur de profil, tels que tapés ou choisis. */
 data class ProfileEditBuffers(
@@ -13,6 +14,9 @@ data class ProfileEditBuffers(
     val regionalLanguage: String = "",
     val customDestinationLanguage: String = "",
 )
+
+/** Un champ de nom de l'éditeur de profil — l'adresse sous laquelle le minimum se dit. */
+enum class ProfileNameField { FIRST_NAME, LAST_NAME, DISPLAY_NAME }
 
 /**
  * La loi « seuls les champs modifiés partent » (iOS `ProfileView.changedOrNil`).
@@ -49,6 +53,20 @@ object ProfileEditDiff {
         return primary.takeIf { LANGUAGE_CODE.matches(it) }
     }
 
+    /**
+     * Les noms que l'éditeur REFUSE d'envoyer (#13825) : modifiés, non vides, et en deçà de
+     * [RegistrationIdentity.NAME_MIN] caractères rognés. Un champ vidé reste simplement omis, et un
+     * nom hérité de un caractère que l'utilisateur n'a pas touché ne bloque pas l'enregistrement.
+     */
+    fun tooShortNames(original: MeeshyUser?, buffers: ProfileEditBuffers): Set<ProfileNameField> = buildSet {
+        if (isTooShortEdit(buffers.firstName, original?.firstName)) add(ProfileNameField.FIRST_NAME)
+        if (isTooShortEdit(buffers.lastName, original?.lastName)) add(ProfileNameField.LAST_NAME)
+        if (isTooShortEdit(buffers.displayName, original?.displayName)) add(ProfileNameField.DISPLAY_NAME)
+    }
+
+    private fun isTooShortEdit(current: String, original: String?): Boolean =
+        RegistrationIdentity.isNameTooShort(current) && current.trim() != original?.trim()
+
     /** La requête qui ne porte que ce qui a changé par rapport à [original]. */
     fun request(original: MeeshyUser?, buffers: ProfileEditBuffers): UpdateProfileRequest =
         UpdateProfileRequest(
@@ -84,7 +102,7 @@ object ProfileEditDiff {
 
     private fun requiredText(current: String, original: String?): String? {
         val trimmed = current.trim()
-        if (trimmed.isEmpty()) return null
+        if (!RegistrationIdentity.isNameLongEnough(trimmed)) return null
         return trimmed.takeIf { it != original?.trim() }
     }
 
