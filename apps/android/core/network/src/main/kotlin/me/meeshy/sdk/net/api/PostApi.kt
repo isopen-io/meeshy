@@ -98,6 +98,8 @@ data class CreateStoryRequest(
     val mediaAlt: Map<String, String>? = null,
     val mediaCaption: Map<String, String>? = null,
     val alsoAsReel: Boolean? = null,
+    /** La transcription faite sur l'appareil du premier son du post (même champ qu'iOS) ; absente, la passerelle transcrit. */
+    val mobileTranscription: MobileTranscriptionPayload? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */

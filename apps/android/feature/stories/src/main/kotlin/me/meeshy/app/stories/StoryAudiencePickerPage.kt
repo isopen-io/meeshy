@@ -49,7 +49,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Le sélecteur de personnes (`ONLY` / `EXCEPT` / mention) — une PAGE de la feuille d'audience,
  * pas une seconde feuille. Annuler / OK dans l'en-tête ; les contacts du cache paraissent à
  * l'ouverture, la saisie filtre le local puis complète par l'annuaire. [single] (mention) valide
- * dès le premier choix.
+ * dès le premier choix. [requiresSelection] grise OK tant que personne n'est choisi et que rien n'a changé ([hasEdits]) ; [options] pose, sous la recherche,
+ * ce que la page règle en plus (le mode d'une mention, #13846).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +59,9 @@ internal fun StoryAudiencePickerPage(
     initialSelection: List<String>,
     single: Boolean,
     keepsBlocked: Boolean = false,
+    requiresSelection: Boolean = false,
+    hasEdits: Boolean = false,
+    options: @Composable () -> Unit = {},
     onCancel: () -> Unit,
     onDone: (ids: List<String>, people: List<AudienceCandidate>) -> Unit,
     viewModel: StoryAudiencePickerViewModel = hiltViewModel(),
@@ -80,7 +84,10 @@ internal fun StoryAudiencePickerPage(
                 modifier = Modifier.weight(1f),
             )
             if (!single) {
-                TextButton(onClick = { onDone(state.selectedIds, state.selected) }) {
+                TextButton(
+                    onClick = { onDone(state.selectedIds, state.selected) },
+                    enabled = !requiresSelection || hasEdits || state.selected.isNotEmpty(),
+                ) {
                     Text(stringResource(R.string.stories_audience_picker_done), fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -96,6 +103,7 @@ internal fun StoryAudiencePickerPage(
             placeholder = { Text(stringResource(R.string.audience_picker_search)) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg),
         )
+        options()
         if (!single && state.selected.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.sm),

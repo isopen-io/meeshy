@@ -13,6 +13,7 @@ import android.widget.Toast
 import me.meeshy.app.chat.rememberChatAudioPlayer
 import me.meeshy.ui.component.video.MeeshyVideoViewer
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -107,6 +108,36 @@ internal fun ConversationMediaHubSheet(
     onDismiss: () -> Unit,
     viewModel: ConversationMediaHubViewModel = hiltViewModel(),
 ) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+    ) {
+        ConversationMediaHubContent(
+            conversationId = conversationId,
+            accentColor = accentColor,
+            isEndToEnd = isEndToEnd,
+            conversationTitle = conversationTitle,
+            onGoToMessage = onGoToMessage,
+            onOpenFile = onOpenFile,
+            modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+            viewModel = viewModel,
+        )
+    }
+}
+
+/** La grille Médias, liens et documents, montée par la feuille ou par l'onglet Médias de la fiche (#13785). */
+@Composable
+internal fun ConversationMediaHubContent(
+    conversationId: String,
+    accentColor: Color,
+    isEndToEnd: Boolean,
+    conversationTitle: String?,
+    onGoToMessage: ((String) -> Unit)?,
+    onOpenFile: (carrier: ApiMessage, attachment: ApiMessageAttachment) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: ConversationMediaHubViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(conversationId) { viewModel.start(conversationId) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -146,16 +177,12 @@ internal fun ConversationMediaHubSheet(
     }
     val shieldsCapture = remember(state.items) { state.items.any { viewModel.rowExit(it, isEndToEnd).shieldsCapture } }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-    ) {
+    Box(modifier = modifier) {
         HubCaptureShield(active = shieldsCapture)
         LazyVerticalGrid(
             columns = GridCells.Fixed(COLUMNS),
             state = gridState,
-            modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+            modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {

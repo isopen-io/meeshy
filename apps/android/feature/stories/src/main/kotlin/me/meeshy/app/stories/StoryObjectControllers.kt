@@ -9,6 +9,7 @@ internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, acti
     when (ref.kind) {
         ComposerObjectKind.MEDIA -> return mediaController(ref.id, action)
         ComposerObjectKind.AUDIO -> return if (action == Action.DELETE) onRemoveSound(ref.id) else Unit
+        ComposerObjectKind.PLACE -> return if (action == Action.DELETE) onRemovePlace(ref.id) else Unit
         else -> Unit
     }
     val text = ref.kind == ComposerObjectKind.TEXT

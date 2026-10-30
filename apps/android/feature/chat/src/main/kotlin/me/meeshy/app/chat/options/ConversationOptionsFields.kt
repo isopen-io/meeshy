@@ -145,7 +145,7 @@ internal fun ConversationCustomNameField(draft: String, color: Color, onEdit: (S
     }
 }
 
-/** « Catégorie » (iOS `CategoryPickerField`) : la catégorie choisie, la recherche, les autres et la création. */
+/** « Catégorie » (iOS `CategoryPickerField`) : la catégorie choisie (et son ✕ qui la retire), la recherche, les autres et la création. */
 @Composable
 internal fun ConversationCategoryField(
     categories: List<CategoryOption>,
@@ -153,6 +153,7 @@ internal fun ConversationCategoryField(
     color: Color,
     onSelect: (String) -> Unit,
     onCreate: (String) -> Unit,
+    onRemove: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val picker = ConversationCategoryPicker.resolve(categories, selectedId, query)
@@ -162,17 +163,7 @@ internal fun ConversationCategoryField(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         FieldLabel(MeeshyIcons.GridViewFilled, stringResource(R.string.conversation_options_category), color)
-        selected?.let { category ->
-            Text(
-                text = category.name,
-                color = color,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(MeeshyRadius.pill))
-                    .background(color.copy(alpha = 0.15f))
-                    .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-            )
-        }
+        selected?.let { category -> SelectedCategoryChip(category.name, color, onRemove) }
         OptionsTextField(
             value = query,
             onValueChange = { query = it },
@@ -194,6 +185,24 @@ internal fun ConversationCategoryField(
                 onCreate(name)
                 query = ""
             }
+        }
+    }
+}
+
+/** La pastille de la catégorie choisie ; son ✕ la retire (iOS `selectedChip`, `category.remove`). */
+@Composable
+private fun SelectedCategoryChip(name: String, color: Color, onRemove: () -> Unit) {
+    val removeLabel = stringResource(R.string.conversation_options_category_remove, name)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(color.copy(alpha = 0.15f))
+            .padding(start = MeeshySpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = name, color = color, fontWeight = FontWeight.SemiBold)
+        IconButton(onClick = onRemove, modifier = Modifier.semantics { contentDescription = removeLabel }) {
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
         }
     }
 }

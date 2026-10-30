@@ -23,6 +23,7 @@
     <string name="conversations_action_more">Weitere Aktionen</string>
     <string name="conversations_action_mute">Stumm</string>
     <string name="conversations_action_pin">Anheften</string>
+    <string name="conversations_action_remove_category">Kategorie %1$s entfernen</string>
     <string name="conversations_action_tags">Tags</string>
     <string name="conversations_action_unarchive">Archivierung aufheben</string>
     <string name="conversations_action_unlock">Entsperren</string>

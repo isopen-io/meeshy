@@ -58,6 +58,14 @@ object CallTurnCredentialsLaw {
     /** Après [attempt] relances sans réponse, la demande repart-elle ? */
     fun shouldRetry(attempt: Int): Boolean = attempt < MAX_RETRIES
 
+    /**
+     * iOS `CallManager+Reconnection` (#13801) : chaque NOUVELLE tentative de reconnexion demande des identifiants
+     * frais, pour que sa relance ICE re-collecte ses relais avec un jeu loin de son expiration. Une tentative qui se
+     * répète (le même `Reconnecting(attempt)`) ne redemande rien.
+     */
+    fun requestsFreshOn(previous: CallState, next: CallState): Boolean =
+        next is CallState.Reconnecting && next != previous
+
     /** iOS `TurnCredentialRefreshPolicy.iceAction(after:)`. */
     fun iceAction(state: CallState): TurnRefreshIceAction = when (state) {
         is CallState.Reconnecting -> TurnRefreshIceAction.RearmReconnect

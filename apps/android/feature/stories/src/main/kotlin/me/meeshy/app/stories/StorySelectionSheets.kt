@@ -54,7 +54,8 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE -> Unit
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
     }
 }
 
@@ -63,7 +64,8 @@ internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = w
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedTextElement != null || selectedSticker != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE -> true
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
 /** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */
@@ -87,6 +89,7 @@ private fun ObjectEditSheet(state: StoryComposerUiState, viewModel: StoryCompose
                 )
             }
             state.selectionBar?.let { bar -> bar.sheetActions.forEach { action -> BackgroundChip(bar.ref, action, viewModel) } }
+            media?.let { MakeStickerChip(state, it, viewModel) }
         }
         when {
             media != null -> MediaSectionContent(state, media, viewModel, comparison)
@@ -169,6 +172,7 @@ internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
         MediaEditTool.EFFECTS -> MeeshyIcons.Sparkles
         MediaEditTool.ALT_TEXT -> MeeshyIcons.TextFields
         MediaEditTool.TRIM -> MeeshyIcons.Cut
+        MediaEditTool.CROP -> MeeshyIcons.Crop
         else -> MeeshyIcons.Layers
     }
     ComposerObjectEditorSection.Plan -> MeeshyIcons.Layers
@@ -193,6 +197,7 @@ internal fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
         MediaEditTool.EFFECTS -> R.string.stories_composer_band_effets
         MediaEditTool.ALT_TEXT -> R.string.composer_column_media_alt_text
         MediaEditTool.TRIM -> R.string.composer_column_media_trim
+        MediaEditTool.CROP -> R.string.composer_column_media_crop
         else -> R.string.composer_column_text_plan
     }
 }

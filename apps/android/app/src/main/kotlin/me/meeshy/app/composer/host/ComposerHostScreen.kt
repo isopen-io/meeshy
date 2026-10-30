@@ -86,6 +86,7 @@ fun ComposerHostScreen(
             seedMedia = (seed as? SeedState.Ready)?.items.orEmpty(),
             seededByDoor = viewModel.seededByDoor,
             onSeedApplied = viewModel::onSeedApplied,
+            opening = viewModel.opening,
         ) }
         ComposerFormat.POST, ComposerFormat.REEL -> CompositionLocalProvider(LocalOnComposerPlateau provides true) { PostComposerContent(
             seedText = state.text,

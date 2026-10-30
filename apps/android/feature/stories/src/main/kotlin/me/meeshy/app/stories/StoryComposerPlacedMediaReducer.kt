@@ -4,6 +4,8 @@ import me.meeshy.sdk.model.AdjustmentFamily
 import me.meeshy.sdk.model.AdjustmentKind
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaCrop
+import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
 
@@ -67,6 +69,26 @@ internal object StoryComposerPlacedMediaReducer {
         val fields = MediaTrimRule.fields(MediaTrimRule.resolved(bounds.start, bounds.end, source), source)
         if (fields.start == current.sourceStart && fields.end == current.sourceEnd) return state
         return rewritten(state, mediaId) { it.copy(sourceStart = fields.start, sourceEnd = fields.end) }
+    }
+
+    /**
+     * Recadre l'IMAGE posée [mediaId] à [crop] (iOS `StoryMediaObject.crop`, #13849) : bornes ramenées dans la source et au
+     * plancher, la source entière n'écrit aucun recadrage. Rien n'est réécrit dans le fichier. Inerte si le média n'est pas
+     * posé ou si le cadre ne change rien.
+     */
+    fun cropped(state: StoryComposerUiState, mediaId: String, crop: StoryMediaCrop?): StoryComposerUiState {
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val next = crop?.let { StoryMediaCrop.fromPayloadBounds(it.x, it.y, it.width, it.height) }
+        if (next == current.crop) return state
+        return rewritten(state, mediaId) { it.copy(crop = next) }
+    }
+
+    /** Les proportions [preset] : le plus grand cadre centré dans la source mesurée ; « Original » rend la source entière. */
+    fun preset(state: StoryComposerUiState, mediaId: String, preset: ComposerCropPreset): StoryComposerUiState {
+        if (preset == ComposerCropPreset.ORIGINAL) return cropped(state, mediaId, null)
+        val (width, height) = state.placedSourceSizeOf(mediaId) ?: return state
+        val framed = ComposerCropPreset.centeredCrop(preset.aspect(width, height), width, height)
+        return cropped(state, mediaId, StoryMediaCrop.ofNormalized(framed))
     }
 
     private fun adjustments(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">معاينة</string>
+    <string name="composer_more_pick_background">اختيار خلفية</string>
+    <string name="composer_more_remove_background">إزالة خلفية المشهد</string>
+    <string name="composer_more_clear_all">مسح الكل</string>
+    <string name="composer_clear_all_title">مسح كل شيء؟</string>
+    <string name="composer_clear_all_message">تبدأ كل الشرائح من جديد فارغة على الخلفية المحايدة. التراجع يعيد الشرائح.</string>
+    <string name="composer_clear_all_cancel">إلغاء</string>
+    <string name="composer_media_from_library">مكتبة الصور</string>
+    <string name="composer_media_from_files">من الملفات</string>
+    <string name="composer_media_sources">اختيار مصدر</string>
+    <string name="composer_preview_close">إغلاق المعاينة</string>
+    <string name="composer_preview_previous">الشريحة السابقة</string>
+    <string name="composer_preview_next">الشريحة التالية</string>
+</resources>

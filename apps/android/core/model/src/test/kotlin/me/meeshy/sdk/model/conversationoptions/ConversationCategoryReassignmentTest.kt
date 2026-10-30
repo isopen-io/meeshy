@@ -41,4 +41,24 @@ class ConversationCategoryReassignmentTest {
 
         assertThat(outcome).isEqualTo(CategoryReassignment.Unchanged)
     }
+
+    @Test
+    fun `removing the category of a categorized conversation clears it`() {
+        val outcome = ConversationCategoryReassignment.resolve(
+            currentCategoryId = "work",
+            targetCategoryId = null,
+        )
+
+        assertThat(outcome).isEqualTo(CategoryReassignment.Clear)
+    }
+
+    @Test
+    fun `removing the category of an uncategorized conversation is a no-op`() {
+        val outcome = ConversationCategoryReassignment.resolve(
+            currentCategoryId = null,
+            targetCategoryId = null,
+        )
+
+        assertThat(outcome).isEqualTo(CategoryReassignment.Unchanged)
+    }
 }

@@ -104,7 +104,7 @@ struct ComposerSlideRail: View {
     /// cette vue la consulte, elle ne la refait pas.
     @ViewBuilder
     private func corbeille(_ index: Int) -> some View {
-        if let onDelete, ComposerHeaderTiles.showsDelete(sceneIndex: index,
+        if onDelete != nil, ComposerHeaderTiles.showsDelete(sceneIndex: index,
                                            currentIndex: currentIndex,
                                            sceneCount: slides.count) {
             Button { deletion = deletion.asking(index: index) } label: {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Vista previa</string>
+    <string name="composer_more_pick_background">Elegir un fondo</string>
+    <string name="composer_more_remove_background">Quitar el fondo de la escena</string>
+    <string name="composer_more_clear_all">Borrar todo</string>
+    <string name="composer_clear_all_title">¿Borrar todo?</string>
+    <string name="composer_clear_all_message">Todas las diapositivas vuelven a empezar vacías, sobre el fondo neutro. Deshacer restaura las diapositivas.</string>
+    <string name="composer_clear_all_cancel">Cancelar</string>
+    <string name="composer_media_from_library">Fototeca</string>
+    <string name="composer_media_from_files">Desde archivos</string>
+    <string name="composer_media_sources">Elegir una fuente</string>
+    <string name="composer_preview_close">Cerrar la vista previa</string>
+    <string name="composer_preview_previous">Diapositiva anterior</string>
+    <string name="composer_preview_next">Diapositiva siguiente</string>
+</resources>

@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,7 +35,11 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** The scene of the story composer: the canvas and the long-press menu of its background media. */
+/**
+ * The scene of the story composer: the canvas and the long-press menu of its background media. Blank and at rest
+ * ([captureOffered]), the scene arms [capture]'s viewfinder on a touch, and films on a hold (#13849); armed, the viewfinder
+ * covers the scene alone.
+ */
 @Composable
 internal fun StoryComposerScene(
     state: StoryComposerUiState,
@@ -42,9 +47,12 @@ internal fun StoryComposerScene(
     sceneExport: SceneExportHost,
     comparison: LookComparison,
     modifier: Modifier = Modifier,
+    capture: StorySceneCapture? = null,
+    captureOffered: Boolean = false,
 ) {
     var backgroundMenuOpen by remember { mutableStateOf(false) }
-    Box(modifier) {
+    val armsCapture = capture?.takeIf { captureOffered }
+    Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideBackdropModel(viewModel.mediaBaseUrl),
@@ -86,7 +94,7 @@ internal fun StoryComposerScene(
                         onTap = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                     )
                 },
-                onBackgroundTap = viewModel::onSceneBackgroundTap,
+                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: viewModel::onSceneBackgroundTap,
                 selectedMediaId = state.selectedMedia,
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier.fillMaxSize(),
@@ -94,7 +102,23 @@ internal fun StoryComposerScene(
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
                 capture = sceneExport.capture,
                 onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
-                    ?.let { { backgroundMenuOpen = true } },
+                    ?.let { { backgroundMenuOpen = true } }
+                    ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
+                places = { width, height, capturing ->
+                    state.deck.selectedSlide.places.forEach { place ->
+                        key(place.id) {
+                            ComposerPlaceLayer(
+                                place = place,
+                                selected = !capturing && place.id == state.selectedPlaceId,
+                                canvasWidthPx = width,
+                                canvasHeightPx = height,
+                                onTap = { viewModel.onSelectPlace(place.id) },
+                                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
+                                onDragEnd = viewModel::onStickerDragEnd,
+                            )
+                        }
+                    }
+                },
             )
             ComposerBackgroundMenu(
                 expanded = backgroundMenuOpen,
@@ -109,6 +133,8 @@ internal fun StoryComposerScene(
                     }
                 },
             )
+            armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
+            capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
 }
 
@@ -229,6 +255,7 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
 internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
     null -> null
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)

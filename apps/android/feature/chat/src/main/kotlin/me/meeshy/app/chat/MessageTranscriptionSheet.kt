@@ -5,9 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +48,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 /**
  * La fiche « Transcription » d'un message audio ou vidéo (#13779, iOS `MessageTranscriptionDetailView`) : écran mince
@@ -114,6 +118,7 @@ private fun TranscriptionReady(state: State.Ready, accentColor: Color) {
         original.durationSeconds?.let { Text(clock(it), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted) }
     }
     Text(original.text, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
+    if (original.segments.isNotEmpty()) TranscriptionWords(original.segments)
     original.speakerCount?.let { count ->
         Text(
             stringResource(R.string.transcription_fiche_speakers, count),
@@ -129,6 +134,37 @@ private fun TranscriptionReady(state: State.Ready, accentColor: Color) {
             modifier = Modifier.padding(top = MeeshySpacing.sm).semantics { heading() },
         )
         state.translations.forEach { TranslationRow(it, accentColor) }
+    }
+}
+
+/**
+ * Les mots de la transcription, teintés par locuteur quand plusieurs parlent (iOS : FlowLayout de
+ * `TranscriptionDisplaySegment`). Masqués à TalkBack : le texte complet, juste au-dessus, dit déjà les mêmes mots.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TranscriptionWords(segments: List<MessageTranscriptionFiche.Segment>) {
+    Spacer(Modifier.fillMaxWidth().height(0.5.dp).background(MeeshyTheme.tokens.textMuted.copy(alpha = 0.12f)))
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MeeshyTheme.tokens.textMuted.copy(alpha = 0.04f), RoundedCornerShape(MeeshyRadius.sm))
+            .padding(MeeshySpacing.sm)
+            .clearAndSetSemantics {},
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
+    ) {
+        segments.forEach { segment ->
+            val tint = segment.speakerColorHex?.let { hexColor(it, Color.Transparent).copy(alpha = 0.1f) } ?: Color.Transparent
+            Text(
+                segment.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier
+                    .background(tint, RoundedCornerShape(MeeshyRadius.xxs))
+                    .padding(horizontal = MeeshySpacing.xxs, vertical = 1.dp),
+            )
+        }
     }
 }
 

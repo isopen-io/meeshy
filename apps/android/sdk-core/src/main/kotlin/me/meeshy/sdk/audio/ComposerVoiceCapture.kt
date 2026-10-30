@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.audio
 
 import android.content.Context
 import android.media.MediaRecorder
@@ -10,7 +10,7 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 
 /** The microphone behind a voice take — `MediaRecorder` on device, a fake in tests. */
-internal interface VoiceRecorderEngine {
+public interface VoiceRecorderEngine {
     fun start(output: File)
     fun stop()
     fun release()
@@ -18,7 +18,7 @@ internal interface VoiceRecorderEngine {
 }
 
 /** A finished take: its file and how long it lasts. */
-internal data class VoiceTake(val file: File, val durationSeconds: Double)
+public data class VoiceTake(val file: File, val durationSeconds: Double)
 
 /**
  * One voice take of the composer: the hardware recorder AND the pure pill state
@@ -27,7 +27,7 @@ internal data class VoiceTake(val file: File, val durationSeconds: Double)
  * the mic is freed and a long enough take is handed over to join the tray, as iOS does
  * when the screen changes (`stopRecordingToAttachment`); a too short one is deleted.
  */
-internal class ComposerVoiceCapture(
+public class ComposerVoiceCapture(
     private val directory: File,
     private val engineFactory: () -> VoiceRecorderEngine,
     private val clockMillis: () -> Long = System::currentTimeMillis,
@@ -100,7 +100,7 @@ internal class ComposerVoiceCapture(
 }
 
 /** [VoiceRecorderEngine] over the platform `MediaRecorder` (AAC in MPEG-4, like iOS m4a). */
-internal class MediaRecorderEngine(private val context: Context) : VoiceRecorderEngine {
+public class MediaRecorderEngine(private val context: Context) : VoiceRecorderEngine {
     private var recorder: MediaRecorder? = null
 
     override fun start(output: File) {

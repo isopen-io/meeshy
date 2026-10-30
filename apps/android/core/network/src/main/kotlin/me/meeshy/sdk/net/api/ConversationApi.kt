@@ -37,7 +37,12 @@ data class ConversationPreferencesUpdate(
     val isMuted: Boolean? = null,
     val isArchived: Boolean? = null,
     val mentionsOnly: Boolean? = null,
-    val categoryId: String? = null,
+    /**
+     * A JSON element, not a string: `null` (Kotlin) is dropped by the `explicitNulls = false` encoder and leaves
+     * the category untouched, while [kotlinx.serialization.json.JsonNull] reaches the gateway as an explicit
+     * `"categoryId": null` — the only way to uncategorize (#13784).
+     */
+    val categoryId: kotlinx.serialization.json.JsonElement? = null,
     val customName: String? = null,
     val reaction: String? = null,
     val tags: List<String>? = null,

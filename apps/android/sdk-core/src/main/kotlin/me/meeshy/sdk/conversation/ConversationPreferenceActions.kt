@@ -52,12 +52,17 @@ class ConversationPreferenceActions @Inject constructor(
 
     suspend fun setTags(id: String, tags: List<String>): PreferenceWrite = write { repository.setTagsOptimistic(id, tags) }
 
-    /** Files [id] in [targetCategoryId]; the category it already sits in is inert ([ConversationCategoryReassignment]). */
-    suspend fun assignCategory(id: String, currentCategoryId: String?, targetCategoryId: String): PreferenceWrite =
+    /** Files [id] in [targetCategoryId] (`null` uncategorizes); the category it already sits in is inert ([ConversationCategoryReassignment]). */
+    suspend fun assignCategory(id: String, currentCategoryId: String?, targetCategoryId: String?): PreferenceWrite =
         when (val outcome = ConversationCategoryReassignment.resolve(currentCategoryId, targetCategoryId)) {
             CategoryReassignment.Unchanged -> PreferenceWrite.Unchanged
             is CategoryReassignment.AssignTo -> write { repository.setCategoryOptimistic(id, outcome.categoryId) }
+            CategoryReassignment.Clear -> write { repository.setCategoryOptimistic(id, null) }
         }
+
+    /** Takes [id] back out of its category (iOS `category.remove`); an uncategorized row is inert. */
+    suspend fun removeCategory(id: String, currentCategoryId: String?): PreferenceWrite =
+        assignCategory(id, currentCategoryId, null)
 
     /** Creates the category [name] (trimmed; blank is inert) then files [id] in it. */
     suspend fun createCategoryAndAssign(id: String, currentCategoryId: String?, name: String): CategoryCreation {

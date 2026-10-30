@@ -1,7 +1,6 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +38,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerLabeledRail
+import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneTool
+import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.ui.icons.MeeshyIcons
@@ -65,6 +66,7 @@ internal data class LeadingRailModel(
     val moreEntries: List<ComposerMoreEntry>,
     val animated: Boolean,
     val exportEnabled: Boolean,
+    val cameraServed: Boolean = false,
 )
 
 /**
@@ -78,6 +80,7 @@ internal fun StoryLeadingRail(
     onClose: () -> Unit,
     onTool: (ComposerSceneTool) -> Unit,
     onEntry: (ComposerMoreEntry) -> Unit,
+    onMediaSource: (ComposerMediaSource) -> Unit = {},
 ) {
     val overflow = remember(rail.moreEntries) { ComposerLabeledRail.overflow(rail.moreEntries) }
     Column(
@@ -85,7 +88,7 @@ internal fun StoryLeadingRail(
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
         if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
-        if (rail.showsTools) LeadingRailTools(rail, overflow, onTool, onEntry)
+        if (rail.showsTools) LeadingRailTools(rail, overflow, onTool, onEntry, onMediaSource)
     }
 }
 
@@ -95,9 +98,12 @@ private fun LeadingRailTools(
     overflow: List<ComposerMoreEntry>,
     onTool: (ComposerSceneTool) -> Unit,
     onEntry: (ComposerMoreEntry) -> Unit,
+    onMediaSource: (ComposerMediaSource) -> Unit,
 ) {
     ComposerLabeledRail.tools.forEach { tool ->
-        LabeledRailItem(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == rail.activeTool)
+        MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, rail.cameraServed), onMediaSource) { press ->
+            LabeledRailItem(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == rail.activeTool, press = press)
+        }
     }
     if (ComposerMoreEntry.BACKGROUND in rail.moreEntries) {
         LabeledRailItem(
@@ -197,7 +203,8 @@ private fun RailOrderItem(choices: List<SceneObjectMenu.Action>, onOrder: (Scene
 
 /**
  * Une rangée de rail : une icône et son mot, une cible de 48 dp ; l'outil ouvert est surligné et annoncé comme tel. Les
- * autres ne portent aucun état : une action (Modifier, Retirer, Fermer) n'est jamais lue « non sélectionnée ».
+ * autres ne portent aucun état : une action (Modifier, Retirer, Fermer) n'est jamais lue « non sélectionnée ». [press] : son
+ * appui long (Média, #13845).
  */
 @Composable
 internal fun LabeledRailItem(
@@ -206,6 +213,7 @@ internal fun LabeledRailItem(
     onClick: () -> Unit,
     active: Boolean = false,
     tint: Color = Color.White,
+    press: ToolLongPress? = null,
 ) {
     Row(
         modifier = Modifier
@@ -213,7 +221,7 @@ internal fun LabeledRailItem(
             .height(RAIL_ROW)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(if (active) ComposerPlateauInk.accent.copy(alpha = 0.55f) else Color.Transparent)
-            .clickable(role = Role.Button, onClick = onClick)
+            .toolPress(onClick, press = press)
             .then(if (active) Modifier.semantics { selected = true } else Modifier)
             .padding(horizontal = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,

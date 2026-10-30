@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.sound.SoundTranscriptions
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
@@ -158,7 +159,7 @@ object StoryComposerAutosave {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
                     it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty() &&
-                    it.frame.isNeutral
+                    it.frame.isNeutral && it.places.isEmpty()
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -185,7 +186,7 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundMediaId = it.backgroundMediaId,
             backgroundLoop = it.backgroundLoop,
             elements = it.elements.map { element -> element.toDraftSnapshot() },
-            stickers = it.stickers.map { sticker -> sticker.toDraftSnapshot() },
+            stickers = it.stickers.filterNot { sticker -> sticker.isAwaitingImage }.map { sticker -> sticker.toDraftSnapshot() },
             audio = it.audio,
             fitMode = it.frame.fitMode,
             backdrop = it.frame.backdrop,
@@ -194,6 +195,9 @@ fun StorySlideDeck.toDraftSnapshot(
             soundSources = it.soundSources,
             placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
             backgroundAdjustments = it.backgroundAdjustments,
+            places = it.places,
+            soundTranscriptions = it.soundTranscriptions,
+            videosDuckUnderSound = it.videosDuckUnderSound,
         )
     },
     selectedId = selectedId,
@@ -237,6 +241,9 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
                 placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 backgroundAdjustments = it.backgroundAdjustments?.takeIf { adjustments -> !adjustments.isNeutral && it.backgroundMediaId != null },
+                places = it.places,
+                soundTranscriptions = SoundTranscriptions.pruned(it.soundTranscriptions, it.audio),
+                videosDuckUnderSound = it.videosDuckUnderSound,
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,
@@ -307,6 +314,7 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        referenceUserId = referenceUserId,
     )
 
 /**
@@ -342,13 +350,14 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         y = y,
         scale = scale,
         rotationDeg = rotationDeg,
+        referenceUserId = referenceUserId,
     )
 
 /**
  * Projects an on-canvas [StoryStickerElement] onto its flat, primitive-only durable form.
- * Thinner than a text element — no enums, no backing, no outline/fade/timing — so every
- * field (the [StoryStickerElement.emoji] glyph and the normalised position/scale/rotation)
- * rides verbatim as a scalar.
+ * Thinner than a text element — no enums, no backing, no outline/fade — so every field (the
+ * glyph, the template and its slots, the uploaded image, the normalised pose) rides verbatim.
+ * An image still uploading is not kept: its bytes are not in the draft, so it could never leave.
  */
 private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnapshot =
     StoryDraftStickerElementSnapshot(
@@ -360,6 +369,12 @@ private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnaps
         rotationDeg = rotationDeg,
         startSeconds = timing.startSeconds,
         durationSeconds = timing.durationSeconds,
+        templateId = templateId,
+        slots = slots,
+        postMediaId = postMediaId,
+        provider = provider,
+        imageUrl = imageUrl,
+        animation = animation,
     )
 
 /**
@@ -378,6 +393,12 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         scale = scale,
         rotationDeg = rotationDeg,
         timing = me.meeshy.sdk.model.scene.StoryElementTiming(startSeconds, durationSeconds),
+        templateId = templateId,
+        slots = slots,
+        postMediaId = postMediaId,
+        provider = provider,
+        imageUrl = imageUrl,
+        animation = animation,
     ).normalised()
 
 /** What the composer's draft attaches beside its slides, in the durable form (#13451). */

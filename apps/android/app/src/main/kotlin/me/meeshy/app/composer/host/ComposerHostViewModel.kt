@@ -21,6 +21,7 @@ import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
+import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.sdk.model.composer.ComposerProfile
 import me.meeshy.sdk.model.composer.ComposerTextSelection
 import me.meeshy.sdk.model.composer.sceneOpening
@@ -48,6 +49,9 @@ class ComposerHostViewModel @Inject constructor(
 
     /** La porte pose elle-même la matière : le brouillon enregistré ne se restaure pas par-dessus (iOS `seededByDoor`). */
     val seededByDoor: Boolean = door.origin.postsItsOwnMatter
+
+    /** Ce que la porte promet que la scène vide ouvrira d'un geste : le viseur photo et vidéo, ou vidéo seulement (#13849). */
+    val opening: ComposerOpening get() = ComposerProfile.of(door.origin).opensWith
 
     /**
      * La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le

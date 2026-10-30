@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_sound_sheet_add",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_back",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_current",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_ducking",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_import_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_language",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_language_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_mic_denied",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_new_take",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_recording",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_redo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_role_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_role_scene",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_source_files",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_source_library",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_source_record",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_stop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_running",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_server",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_silent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_transcription_write",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_trim",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_upload_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_uploading",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sound_sheet_volume",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

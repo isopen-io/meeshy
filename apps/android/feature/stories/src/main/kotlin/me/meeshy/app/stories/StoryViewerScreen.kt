@@ -138,6 +138,8 @@ fun StoryViewerScreen(
     onRepost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onEditStory: ((String) -> Unit)? = null,
+    /** « Composer » (#13849, iOS `message.compose.title`) : une scène NEUVE semée de celle de la story, pour toute story. */
+    onComposeStory: ((String) -> Unit)? = null,
     onStoryMissing: (String) -> Unit = { onClose() },
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
@@ -556,6 +558,18 @@ fun StoryViewerScreen(
                                     }
                                 },
                             )
+                            if (onComposeStory != null && state.canCompose) {
+                                state.currentStoryId?.let { storyId ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.story_viewer_compose)) },
+                                        leadingIcon = { Icon(MeeshyIcons.MagicWand, contentDescription = null) },
+                                        onClick = {
+                                            showOptions = false
+                                            onComposeStory(storyId)
+                                        },
+                                    )
+                                }
+                            }
                             if (state.isOwnStory) {
                                 if (onEditStory != null && StoryEditEntry.offered(state.isOwnStory, state.currentStoryId)) {
                                     DropdownMenuItem(

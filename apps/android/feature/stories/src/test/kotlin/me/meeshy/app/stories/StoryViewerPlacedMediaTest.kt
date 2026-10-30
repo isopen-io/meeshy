@@ -166,4 +166,16 @@ class StoryViewerPlacedMediaTest {
         assertThat(slide.foregroundMedia.map { it.sourceWindow?.startMs }).containsExactly(2_000L, null).inOrder()
         assertThat(slide.foregroundMedia.first().sourceWindow?.endMs).isEqualTo(6_500L)
     }
+
+    @Test
+    fun `a cropped placed image is framed at its effective ratio and carries its crop to the reader`() = runTest {
+        val crop = me.meeshy.sdk.model.StoryMediaCrop(x = 0.0, y = 0.25, width = 1.0, height = 0.5)
+        val slide = slideOf(
+            story(media = listOf(photo("p", 1000, 1000)), objects = listOf(StoryMediaObject(id = "o", postMediaId = "p", crop = crop))),
+        )
+
+        val placed = slide.foregroundMedia.single()
+        assertThat(placed.crop).isEqualTo(crop)
+        assertThat(placed.aspectRatio).isWithin(1e-9).of(2.0)
+    }
 }

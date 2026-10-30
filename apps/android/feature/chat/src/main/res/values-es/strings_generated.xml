@@ -94,6 +94,11 @@
     <string name="conversation_appearance_section_solid">Color liso</string>
     <string name="conversation_appearance_sheet_title">Fondo y acento</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_info_pinned_see_all">Ver los %1$d mensajes fijados</string>
+    <string name="conversation_info_tab_media">Multimedia</string>
+    <string name="conversation_info_tab_members">Miembros</string>
+    <string name="conversation_info_tab_options">Opciones</string>
+    <string name="conversation_info_tab_stats">Estadísticas</string>
     <string name="conversation_options_archive">Archivar</string>
     <string name="conversation_options_archive_title">¿Archivar la conversación?</string>
     <string name="conversation_options_block_a11y">Bloquear a %1$s</string>
@@ -104,6 +109,7 @@
     <string name="conversation_options_cancel">Cancelar</string>
     <string name="conversation_options_category">Categoría</string>
     <string name="conversation_options_category_create">Crear la categoría %1$s</string>
+    <string name="conversation_options_category_remove">Quitar la categoría %1$s</string>
     <string name="conversation_options_category_select">Seleccionar la categoría %1$s</string>
     <string name="conversation_options_custom_name">Nombre personalizado</string>
     <string name="conversation_options_custom_name_clear">Borrar el nombre personalizado</string>

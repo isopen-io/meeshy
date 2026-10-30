@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import me.meeshy.sdk.model.StickerSheetPage
 import me.meeshy.sdk.model.StickerSheetTab
+import me.meeshy.sdk.model.sticker.MeeStickerCatalog
 import me.meeshy.ui.R
 
 /** Une entrée de la barre d'onglets : la page, son mot et son glyphe. */
@@ -24,7 +26,7 @@ internal class StickerSheetTabEntry(
     val icon: ImageVector,
 )
 
-/** Le mot d'une page fixe ; un pack porte le nom que le serveur lui donne. */
+/** Le mot d'une page fixe ; un pack porte le nom que le serveur lui donne, un pack intégré le sien avant qu'il réponde. */
 @Composable
 internal fun stickerSheetTabEntries(
     pages: List<StickerSheetPage>,
@@ -47,8 +49,9 @@ internal fun stickerSheetTabEntries(
             }
             is StickerSheetPage.Pack -> StickerSheetTabEntry(
                 page,
-                capabilities.installedPacks?.firstOrNull { it.slug == page.slug }?.title ?: page.slug,
-                Icons.Filled.Inventory2,
+                capabilities.installedPacks?.firstOrNull { it.slug == page.slug }?.title
+                    ?: MeeStickerCatalog.builtinPackTitle(page.slug) ?: page.slug,
+                if (MeeStickerCatalog.cast(page.slug) != null) Icons.Filled.Pets else Icons.Filled.Inventory2,
             )
             StickerSheetPage.Shop -> StickerSheetTabEntry(page, shopTitle, Icons.Filled.Storefront)
         }

@@ -110,6 +110,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.ui.sticker.StickerTemplateArtwork
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
@@ -184,13 +185,15 @@ internal fun StoryForegroundLayer(
                 onAudioFocusLost = onAudioFocusLost,
             )
         } else {
-            AsyncImage(
-                model = media.url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
-                modifier = layerModifier,
-            )
+            Box(layerModifier) {
+                AsyncImage(
+                    model = media.url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
+                    modifier = Modifier.croppedSource(media.crop),
+                )
+            }
         }
     }
 }
@@ -293,8 +296,8 @@ internal fun StoryTextObjectLayer(
 /**
  * Un sticker posé par l'auteur, centré sur son point normalisé, à son côté projeté
  * ([StoryStickerView.sideFraction] de la largeur, plancher 8 dp comme iOS), incliné de sa
- * rotation et fondu selon son enveloppe. Une image intégrée prime sur l'emoji (iOS
- * `StoryStickerLayer`) ; l'emoji reste dessous tant que l'image charge.
+ * rotation et fondu selon son enveloppe. Un gabarit connu se dessine ([StickerTemplateArtwork]) ; une image
+ * intégrée prime sur l'emoji (iOS `StoryStickerLayer`), qui ne tient la place que tant qu'elle charge.
  */
 @Composable
 internal fun StoryStickerLayer(sticker: StoryStickerView, playheadSeconds: Float, modifier: Modifier = Modifier) {
@@ -312,24 +315,35 @@ internal fun StoryStickerLayer(sticker: StoryStickerView, playheadSeconds: Float
                 .alpha(sticker.opacity(playheadSeconds).toFloat().coerceIn(0f, 1f)),
             contentAlignment = Alignment.Center,
         ) {
-            if (sticker.emoji.isNotBlank()) {
-                Text(
-                    text = sticker.emoji,
-                    fontSize = with(density) { (side * STICKER_GLYPH_FRACTION).toSp() },
-                    maxLines = 1,
-                )
-            }
-            sticker.imageUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                )
+            if (StickerTemplateArtwork.knows(sticker.templateId)) {
+                StickerTemplateArtwork(sticker.templateId, sticker.slots, body = side * STICKER_TEMPLATE_BODY_FRACTION)
+            } else {
+                StickerGlyphOrImage(sticker, with(density) { (side * STICKER_GLYPH_FRACTION).toSp() })
             }
         }
     }
 }
+
+/** L'emoji tient la place tant que l'image intégrée charge, puis s'efface : jamais les deux à la fois. */
+@Composable
+private fun StickerGlyphOrImage(sticker: StoryStickerView, glyphSize: androidx.compose.ui.unit.TextUnit) {
+    var imageShown by remember(sticker.imageUrl) { mutableStateOf(false) }
+    if (sticker.emoji.isNotBlank() && !imageShown) {
+        Text(text = sticker.emoji, fontSize = glyphSize, maxLines = 1)
+    }
+    sticker.imageUrl?.let { url ->
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize(),
+            onSuccess = { imageShown = true },
+        )
+    }
+}
+
+/** Le corps de texte d'un gabarit, en part du côté du sticker : un cadre à mots tient dans le carré qu'iOS lui donne. */
+private const val STICKER_TEMPLATE_BODY_FRACTION = 0.16f
 
 /**
  * La puce d'un son de premier plan, aux mesures d'iOS `AudioForegroundChip` (capsule de

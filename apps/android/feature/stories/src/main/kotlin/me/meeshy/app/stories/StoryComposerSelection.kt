@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.look.ComposerCropPreset
+
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryFilter
@@ -86,7 +88,7 @@ internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObj
     if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) {
         val trim = ComposerObjectEditorSection.Media(MediaEditTool.TRIM)
         return when {
-            !placedMediaIsVideo(id) -> ServedPlacedMediaSections - trim
+            !placedMediaIsVideo(id) -> listOf(ComposerObjectEditorSection.Media(MediaEditTool.CROP)) + (ServedPlacedMediaSections - trim)
             placedTrimSourceOf(id) == null -> ServedPlacedMediaSections - trim - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS)
             else -> ServedPlacedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS)
         }
@@ -129,6 +131,21 @@ internal fun StoryComposerUiState.selectedSlideLook(comparing: String?): SceneLo
 }
 
 /** Le média posé [id] est-il une vidéo ? (téléversé ou encore en attente) — elle ne reçoit ni netteté, ni flou, ni effets. */
+/** Les dimensions MESURÉES de la source du média [id] (largeur, hauteur) ; `null` tant qu'elles ne sont pas connues. */
+internal fun StoryComposerUiState.placedSourceSizeOf(id: String): Pair<Double, Double>? {
+    val media = attachments.firstOrNull { it.id == id } ?: return null
+    val width = media.width?.takeIf { it > 0 } ?: return null
+    val height = media.height?.takeIf { it > 0 } ?: return null
+    return width.toDouble() to height.toDouble()
+}
+
+/** Les proportions que réalise le recadrage du média posé [id] : « Original » sans recadrage, `null` pour un cadre libre. */
+internal fun StoryComposerUiState.placedCropPresetOf(id: String): ComposerCropPreset? {
+    val crop = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.crop ?: return ComposerCropPreset.ORIGINAL
+    val (width, height) = placedSourceSizeOf(id) ?: return null
+    return ComposerCropPreset.matching((crop.width * width) / (crop.height * height), width, height)
+}
+
 internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
     val mime = attachments.firstOrNull { it.id == id }?.mimeType ?: pendingUploads.firstOrNull { it.cmid == id }?.item?.mimeType
     return mime?.startsWith("video", ignoreCase = true) == true
@@ -202,7 +219,7 @@ internal object StoryComposerSelectionReducer {
     fun cleared(state: StoryComposerUiState): StoryComposerUiState = state.withoutObjectSelection()
 
     private fun StoryComposerUiState.withoutObjectSelection(): StoryComposerUiState =
-        copy(selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null)
+        copy(selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null, selectedMediaId = null, selectedSoundId = null, selectedPlaceId = null)
 
     /** Toucher l'effet ouvert le referme, en toucher un autre bascule le carrousel ; il prend la place du panneau du bas. */
     fun sceneEffectToggled(state: StoryComposerUiState, effect: ComposerSceneEffect): StoryComposerUiState =

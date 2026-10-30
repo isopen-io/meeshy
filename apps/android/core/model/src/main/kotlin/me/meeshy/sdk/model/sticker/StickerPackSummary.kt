@@ -24,7 +24,7 @@ data class StickerPackItemSummary(
     val isSendable: Boolean get() = kind == "static" || kind == "cinematic"
 }
 
-/** Un pack installé, tel que `GET /sticker-packs/installed` le sert — tout est additif (vieille passerelle). */
+/** Un pack, tel que `GET /sticker-packs/installed` (ou la Boutique, `GET /sticker-packs`) le sert — tout est additif (vieille passerelle). */
 @Serializable
 data class StickerPackSummary(
     val slug: String,
@@ -33,6 +33,10 @@ data class StickerPackSummary(
     val builtin: Boolean = false,
     val removable: Boolean? = null,
     val items: List<StickerPackItemSummary> = emptyList(),
+    /** La Boutique (`GET /sticker-packs`) : qui l'a fait, ce qu'il contient, sa couverture — additifs, lus s'ils viennent. */
+    val author: String? = null,
+    val description: String? = null,
+    val coverUrl: String? = null,
 ) {
     val title: String get() = name.ifBlank { slug }
     val sendableItems: List<StickerPackItemSummary> get() = items.filter { it.isSendable }

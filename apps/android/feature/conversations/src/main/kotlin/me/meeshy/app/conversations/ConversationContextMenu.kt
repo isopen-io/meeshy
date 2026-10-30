@@ -111,6 +111,7 @@ internal fun ConversationContextMenu(
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
     isLocked: Boolean,
+    onRemoveCategory: () -> Unit = {},
     onLockToggle: () -> Unit,
     onViewInfo: (() -> Unit)? = null,
     onViewProfile: (() -> Unit)? = null,
@@ -383,6 +384,13 @@ internal fun ConversationContextMenu(
                 text = { Text(category.name) },
                 leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
                 onClick = { onAssignCategory(category.id); onDismiss() },
+            )
+        }
+        categories.firstOrNull { it.id == currentCategoryId }?.let { current ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_remove_category, current.name)) },
+                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                onClick = { onRemoveCategory(); onDismiss() },
             )
         }
         HorizontalDivider()

@@ -589,6 +589,7 @@ class StoryViewerViewModel @Inject constructor(
             myReactions = reaction.mine,
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
             currentStoryId = currentId,
+            canCompose = rawItems[currentId]?.let { StoryRecomposition.offered(it.storyEffects, it.content, it.media.size) } == true,
             prefetchUrls = StoryPrefetchPlanner.plan(playback),
             canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
             availableLanguages = availableLanguagesFor(currentId),

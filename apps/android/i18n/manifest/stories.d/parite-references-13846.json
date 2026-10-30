@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_more_mention",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_hashtag_field",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_hashtag_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_hashtag_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_hashtag_trending",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_already",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_audience_warning",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_mode_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_mode_pinned",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_mode_silent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_mention_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_around",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_denied",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_here",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_pastille_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_place_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_references_with",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

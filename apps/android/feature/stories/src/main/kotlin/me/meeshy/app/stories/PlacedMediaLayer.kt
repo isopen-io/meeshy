@@ -38,11 +38,11 @@ import androidx.compose.ui.unit.IntOffset
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Size
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.previewModel
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.ui.component.imageedit.sceneLook
@@ -79,7 +79,8 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 PlacedMediaFrame(
                     placed = placed,
                     model = if (isVideo) uploaded.thumbnailUrl?.let { ComposerMediaAddress.of(it, mediaBaseUrl) } else ComposerMediaAddress.preview(uploaded, mediaBaseUrl),
-                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
+                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
+                        ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
                     isVideo = isVideo,
                 )
             }
@@ -139,10 +140,12 @@ internal fun PlacedMediaLayer(
     }
     val widthPx = base.width.toFloat()
     val heightPx = base.height.toFloat()
-    val request = remember(frame.model, widthPx, heightPx) {
+    val crop = placed.crop.takeUnless { frame.isVideo }
+    val request = remember(frame.model, widthPx, heightPx, crop) {
+        val (decodeWidth, decodeHeight) = croppedDecodeSize(widthPx, heightPx, crop)
         ImageRequest.Builder(context)
             .data(frame.model)
-            .size(Size(max(1, widthPx.roundToInt()), max(1, heightPx.roundToInt())))
+            .size(Size(decodeWidth, decodeHeight))
             .crossfade(false)
             .build()
     }
@@ -192,12 +195,14 @@ internal fun PlacedMediaLayer(
         if (frame.model == null && frame.isVideo) {
             VideoFramePlaceholder(frameModifier)
         } else {
-            AsyncImage(
-                model = request,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = frameModifier.sceneLook(frame.look),
-            )
+            Box(frameModifier) {
+                AsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.croppedSource(crop).sceneLook(frame.look),
+                )
+            }
         }
     }
 }

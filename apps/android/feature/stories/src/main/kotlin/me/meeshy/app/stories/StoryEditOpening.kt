@@ -106,6 +106,7 @@ internal data class StoryEditOpening(
                     closing = effects.closing,
                 ),
                 placedMedia = placed,
+                places = effects.locationObjects,
             )
             val attachments = mediaIds.mapNotNull { id ->
                 val wire = (objects.firstOrNull { it.postMediaId == id })
@@ -145,7 +146,7 @@ internal data class StoryEditOpening(
 }
 
 /** Un sticker que le composeur sait éditer : un emoji nu (une image posée ou un modèle ne s'y réduit pas). */
-private val StorySticker.editable: Boolean get() = !hasImage && templateId.isBlank()
+internal val StorySticker.editable: Boolean get() = !hasImage && templateId.isBlank()
 
 internal fun StorySticker.toElement(): StoryStickerElement = StoryStickerElement(
     id = id,
@@ -185,5 +186,6 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         y = y.toFloat(),
         scale = (scale * fontSize / size.designSize).toFloat(),
         rotationDeg = rotation.toFloat(),
+        referenceUserId = referenceUserId,
     ).normalised()
 }

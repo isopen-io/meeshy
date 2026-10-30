@@ -4,6 +4,7 @@ import android.net.Uri
 import me.meeshy.app.composer.host.ComposerHostRoute
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ShareLinkEntryViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
@@ -33,7 +34,12 @@ object Routes {
     const val VERIFY_EMAIL_LINK = "auth/verify-email?token={token}&email={email}"
     fun verifyEmailLink(token: String, email: String): String = "auth/verify-email?token=$token&email=$email"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
-    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
+
+    /**
+     * `?anonymous=true` (optionnel) : l'identité est déjà choisie — « Anonyme » d'une carte de
+     * conversation (#13683) mène droit au formulaire invité, sans l'écran de choix.
+     */
+    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN?${ShareLinkEntryViewModel.ANONYMOUS_ARG}={${ShareLinkEntryViewModel.ANONYMOUS_ARG}}"
 
     /**
      * LEGACY receiver — `https://meeshy.me/join/{identifier}`, the shape the
@@ -180,7 +186,9 @@ object Routes {
     const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
     /** La story PUBLIÉE que le composeur rouvre pour la modifier (#13632) — absente, c'est une story neuve. */
     const val STORY_COMPOSER_EDIT_ARG = "editStoryId"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}&$STORY_COMPOSER_EDIT_ARG={$STORY_COMPOSER_EDIT_ARG}"
+    /** La story VUE dont « Composer » sème une scène neuve (#13849) — ni une édition, ni une republication. */
+    const val STORY_COMPOSER_RECOMPOSE_ARG = "recomposeStoryId"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}&$STORY_COMPOSER_EDIT_ARG={$STORY_COMPOSER_EDIT_ARG}&$STORY_COMPOSER_RECOMPOSE_ARG={$STORY_COMPOSER_RECOMPOSE_ARG}"
     /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
     const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
@@ -198,6 +206,10 @@ object Routes {
     /** Rouvre la story publiée [storyId] dans le composeur : l'enregistrement la met à jour. */
     fun storyComposerEdit(storyId: String): String =
         "story_composer?$STORY_COMPOSER_EDIT_ARG=${Uri.encode(storyId)}"
+
+    /** « Composer » depuis la story [storyId] : une scène neuve semée de la sienne, ses médias faits siens. */
+    fun storyComposerRecompose(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_RECOMPOSE_ARG=${Uri.encode(storyId)}"
 
     /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
     fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =

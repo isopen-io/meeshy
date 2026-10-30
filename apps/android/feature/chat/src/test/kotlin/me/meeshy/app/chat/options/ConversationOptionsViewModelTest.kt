@@ -171,6 +171,37 @@ class ConversationOptionsViewModelTest {
     }
 
     @Test
+    fun `removing the category shows the conversation uncategorized at once and writes the removal`() = runTest(dispatcher) {
+        val f = fixture(conversation(prefs = ApiConversationPreferences(categoryId = "work")))
+        val write = CompletableDeferred<PreferenceWrite>()
+        coEvery { f.preferences.removeCategory("c1", "work") } coAnswers { write.await() }
+        f.vm.start("c1", null)
+        advanceUntilIdle()
+
+        f.vm.removeCategory()
+        runCurrent()
+
+        assertThat(f.vm.state.value.values.categoryId).isNull()
+        write.complete(PreferenceWrite.Queued)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { f.preferences.removeCategory("c1", "work") }
+    }
+
+    @Test
+    fun `a failed category removal puts the category back and says so`() = runTest(dispatcher) {
+        val f = fixture(conversation(prefs = ApiConversationPreferences(categoryId = "work")))
+        coEvery { f.preferences.removeCategory("c1", "work") } returns PreferenceWrite.Failed("disk")
+        f.vm.start("c1", null)
+        advanceUntilIdle()
+
+        f.vm.removeCategory()
+        advanceUntilIdle()
+
+        assertThat(f.vm.state.value.values.categoryId).isEqualTo("work")
+        assertThat(f.vm.state.value.error).isEqualTo(ConversationOptionsError.SAVE)
+    }
+
+    @Test
     fun `the archive confirmation toggles the archive`() = runTest(dispatcher) {
         val f = fixture(conversation(prefs = ApiConversationPreferences(isArchived = true)))
         f.vm.start("c1", null)

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StorySlideDuration
@@ -60,6 +61,8 @@ data class StoryForegroundMediaView(
     /** Le ThumbHash de la pièce : l'affiche de repli quand le serveur n'a pas de vignette. */
     val thumbHash: String? = null,
     val zIndex: Int = 0,
+    /** Le recadrage d'une IMAGE posée (#13849) : le cadre en montre cette part, la source entière peinte derrière. */
+    val crop: me.meeshy.sdk.model.StoryMediaCrop? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -238,6 +241,8 @@ data class StorySlideView(
     val strokes: List<StoryDrawingStroke> = emptyList(),
     /** Les stickers posés sur la scène (iOS `StoryStickerLayer`), du plus bas au plus haut. */
     val stickers: List<StoryStickerView> = emptyList(),
+    /** Les pastilles de lieu posées sur la scène (#13846, `storyEffects.locationObjects`). */
+    val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
@@ -288,6 +293,8 @@ data class StoryViewerUiState(
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
+    /** « Composer » sait reprendre la story courante à l'identique (#13849, iOS `composableSlide`) : sinon l'entrée n'existe pas. */
+    val canCompose: Boolean = false,
     val prefetchUrls: List<String> = emptyList(),
     val canAutoAdvance: Boolean = false,
     val availableLanguages: List<StoryLanguageOption> = emptyList(),

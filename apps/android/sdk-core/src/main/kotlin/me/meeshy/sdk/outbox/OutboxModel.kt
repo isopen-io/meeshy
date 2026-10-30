@@ -345,6 +345,14 @@ public data class ConversationPrefsPayload(
      * would refuse an unrelated pin), and [OutboxCoalescer] carries it onto any snapshot that supersedes it.
      */
     val appearance: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * This snapshot takes the conversation OUT of its category (#13784, iOS `category.remove`). A `null`
+     * [categoryId] alone means "leave it untouched" (the encoder drops it), so a removal needs this flag,
+     * which the sender turns into an explicit `"categoryId": null`. Like [appearance] it rides only the
+     * snapshot that made the change, and [OutboxCoalescer] carries it onto an uncategorized snapshot that
+     * supersedes it.
+     */
+    val clearCategory: Boolean = false,
 )
 
 /**

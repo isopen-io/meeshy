@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sound_sheet_title">صوت القصة</string>
+    <string name="story_sound_sheet_current">في هذه الشريحة</string>
+    <string name="story_sound_sheet_role_background">في الخلفية</string>
+    <string name="story_sound_sheet_role_scene">على المشهد</string>
+    <string name="story_sound_sheet_volume">مستوى الصوت</string>
+    <string name="story_sound_sheet_language">لغة الصوت</string>
+    <string name="story_sound_sheet_language_more">المزيد</string>
+    <string name="story_sound_sheet_transcription">النص المكتوب</string>
+    <string name="story_sound_sheet_transcription_edit">تعديل</string>
+    <string name="story_sound_sheet_transcription_write">كتابة</string>
+    <string name="story_sound_sheet_transcription_retry">إعادة المحاولة</string>
+    <string name="story_sound_sheet_transcription_running">جارٍ النسخ على جهازك…</string>
+    <string name="story_sound_sheet_transcription_server">لا يستطيع جهازك نسخ هذه اللغة: سيتولى Meeshy ذلك عند النشر.</string>
+    <string name="story_sound_sheet_transcription_failed">فشل النسخ.</string>
+    <string name="story_sound_sheet_transcription_silent">لم يُسمع شيء.</string>
+    <string name="story_sound_sheet_trim">قص</string>
+    <string name="story_sound_sheet_ducking">خفض صوت الفيديوهات تحت صوت الخلفية</string>
+    <string name="story_sound_sheet_source_record">تسجيل</string>
+    <string name="story_sound_sheet_source_files">الملفات</string>
+    <string name="story_sound_sheet_source_library">المكتبة</string>
+    <string name="story_sound_sheet_recording">جارٍ التسجيل %1$s</string>
+    <string name="story_sound_sheet_stop">إيقاف</string>
+    <string name="story_sound_sheet_redo">إعادة</string>
+    <string name="story_sound_sheet_add">إضافة</string>
+    <string name="story_sound_sheet_uploading">جارٍ الإضافة…</string>
+    <string name="story_sound_sheet_mic_denied">اسمح باستخدام الميكروفون لتسجيل صوت.</string>
+    <string name="story_sound_sheet_import_failed">تعذّرت قراءة هذا الملف كصوت.</string>
+    <string name="story_sound_sheet_upload_failed">تعذّر إرسال الصوت. تحقق من اتصالك وحاول مرة أخرى.</string>
+    <string name="story_sound_sheet_back">رجوع</string>
+    <string name="story_sound_sheet_new_take">صوت جديد</string>
+</resources>

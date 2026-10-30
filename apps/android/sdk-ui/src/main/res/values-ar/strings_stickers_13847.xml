@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">ملصقاتي</string>
+    <string name="sticker_library_empty">الصق صورة لبدء مكتبتك</string>
+    <string name="sticker_library_lift">قصّ</string>
+    <string name="sticker_library_lift_a11y">قصّ العنصر الرئيسي من صورة</string>
+    <string name="sticker_library_item_a11y">ملصق من مكتبتك</string>
+    <string name="sticker_library_paste">لصق</string>
+    <string name="sticker_pack_by">من %1$s</string>
+    <string name="sticker_text_example">مرحباً!</string>
+    <string name="sticker_text_placeholder">اكتب كلماتك…</string>
+    <string name="sticker_text_field_a11y">نص الزخرفة</string>
+    <string name="sticker_custom_text">نص</string>
+    <string name="sticker_custom_time">الوقت</string>
+    <string name="sticker_shop_install">تثبيت</string>
+    <string name="sticker_shop_remove">إزالة</string>
+    <string name="sticker_shop_failed">تعذّر تغيير الحزمة. حاول مجدداً.</string>
+    <string name="sticker_template_text_speech_bubble">فقاعة كلام</string>
+    <string name="sticker_template_text_thought_bubble">فقاعة تفكير</string>
+    <string name="sticker_template_text_sticky_note">ورقة ملاحظات</string>
+    <string name="sticker_template_text_ribbon">شريط</string>
+    <string name="sticker_template_text_badge">شارة</string>
+    <string name="sticker_template_text_neon">نيون</string>
+    <string name="sticker_template_text_tag">بطاقة</string>
+    <string name="sticker_template_text_signboard">لافتة</string>
+    <string name="sticker_template_text_tape">شريط لاصق</string>
+    <string name="sticker_template_text_stamp">ختم</string>
+    <string name="sticker_template_time_digital">ساعة رقمية</string>
+    <string name="sticker_template_time_analog">وجه الساعة</string>
+    <string name="sticker_template_time_ribbon">شريط</string>
+    <string name="sticker_template_time_calendar_day">ورقة تقويم</string>
+    <string name="sticker_template_time_a11y">%1$s، %2$s</string>
+</resources>

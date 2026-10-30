@@ -108,6 +108,12 @@ public class ShareLinkEntryViewModel @Inject constructor(
         "ShareLinkEntryViewModel requires an '${GuestJoinViewModel.IDENTIFIER_ARG}' navigation argument"
     }
 
+    /**
+     * L'identité est déjà choisie là où le lien a été touché : « Anonyme » d'une carte de conversation
+     * (#13683, iOS `DeepLinkRouter.requestedGuestJoin`). On ne repose pas la question.
+     */
+    private val anonymityChosen: Boolean = savedStateHandle.get<Any?>(ANONYMOUS_ARG)?.toString() == "true"
+
     private val _state = MutableStateFlow<ShareLinkEntryUiState>(ShareLinkEntryUiState.Resolving)
     public val state: StateFlow<ShareLinkEntryUiState> = _state.asStateFlow()
 
@@ -119,7 +125,7 @@ public class ShareLinkEntryViewModel @Inject constructor(
     public fun resolve() {
         _state.value = ShareLinkEntryUiState.Resolving
         viewModelScope.launch {
-            _state.value = decide()
+            _state.value = if (anonymityChosen) resumeStoredGuestSession() else decide()
         }
     }
 
@@ -197,4 +203,9 @@ public class ShareLinkEntryViewModel @Inject constructor(
 
     private suspend fun hasStoredGuestSessionForThisLink(): Boolean =
         sessionStore.load()?.linkId?.trim() == identifier.trim()
+
+    public companion object {
+        /** `meeshy://join/<id>?anonymous=true` : la personne a déjà choisi d'entrer sans compte. */
+        public const val ANONYMOUS_ARG: String = "anonymous"
+    }
 }

@@ -78,7 +78,7 @@ class RoutesContractTest {
             "USER_POSTS", "profile/{userId}/posts",
             "REPORT_USER", "report/{userId}?username={username}",
             "STORY_VIEWER", "story/{userId}?storyId={storyId}",
-            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}&editStoryId={editStoryId}",
+            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}&editStoryId={editStoryId}&recomposeStoryId={recomposeStoryId}",
             "REELS", "reels?seed={seed}",
             "CALL", CallRoute.PATTERN,
         )
@@ -100,8 +100,14 @@ class RoutesContractTest {
     }
 
     @Test
+    fun `composer depuis une story vue ouvre le composeur par son propre argument, jamais celui d'une edition`() {
+        assertThat(Routes.STORY_COMPOSER_RECOMPOSE_ARG).isEqualTo("recomposeStoryId")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).contains("&recomposeStoryId={recomposeStoryId}")
+    }
+
+    @Test
     fun `deep link patterns are frozen`() {
-        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}")
+        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}?anonymous={anonymous}")
         assertThat(Routes.GUEST_JOIN_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/join/{identifier}")
         assertThat(Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/chat/{identifier}")
         assertThat(Routes.CONVERSATIONS_DEEP_LINK).isEqualTo("meeshy://conversations")

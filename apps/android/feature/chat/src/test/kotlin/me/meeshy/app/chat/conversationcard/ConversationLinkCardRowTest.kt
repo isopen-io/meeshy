@@ -18,6 +18,7 @@ import me.meeshy.sdk.link.LinkPreviewCache
 import me.meeshy.sdk.link.LinkPreviewFetcher
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.model.conversationcard.ConversationCard
+import me.meeshy.sdk.model.conversationcard.ConversationCardJoinAccount
 import me.meeshy.sdk.model.conversationcard.ConversationCardKind
 import me.meeshy.sdk.model.conversationcard.ConversationCardLink
 import me.meeshy.sdk.model.conversationcard.ConversationCardStats
@@ -32,6 +33,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -50,8 +53,12 @@ class ConversationLinkCardRowTest {
         override suspend fun fetch(url: String): LinkPreviewOutcome = LinkPreviewOutcome.Empty
     }
 
-    private class FakeCards(initial: ConversationLinkCardState) : ConversationLinkCards {
+    private class FakeCards(
+        initial: ConversationLinkCardState,
+        account: ConversationCardJoinAccount? = null,
+    ) : ConversationLinkCards {
         override val webOrigin: String = "https://meeshy.me"
+        override val joinAccount = MutableStateFlow(account)
         val state = MutableStateFlow(initial)
         val requested = mutableListOf<ConversationCardTarget>()
         val joined = mutableListOf<ConversationCardTarget>()
@@ -127,6 +134,30 @@ class ConversationLinkCardRowTest {
         compose.onNodeWithContentDescription("Join anonymously").assertExists()
         compose.onNodeWithContentDescription("Join with my account").assertExists()
         assertThat(cards.requested).containsExactly(ConversationCardTarget.ShareLink("club"))
+    }
+
+    @Test
+    fun `the join button names the signed-in account and TalkBack speaks its handle`() {
+        val account = ConversationCardJoinAccount(title = "Moussa Traoré", handle = "@moussa")
+        val cards = FakeCards(ConversationLinkCardState(ConversationLinkCardState.Phase.Card(outsider)), account)
+
+        show("https://meeshy.me/join/club", cards)
+
+        compose.onNodeWithContentDescription("Join with the account @moussa").assertExists()
+        compose.onNodeWithContentDescription("Join with my account").assertDoesNotExist()
+    }
+
+    @Test
+    fun `joining anonymously opens the guest form directly, never the identity choice`() {
+        val cards = FakeCards(ConversationLinkCardState(ConversationLinkCardState.Phase.Card(outsider)))
+
+        show("https://meeshy.me/join/club", cards)
+        compose.onNodeWithContentDescription("Join anonymously").performClick()
+
+        val app = RuntimeEnvironment.getApplication()
+        val started = shadowOf(app).nextStartedActivity
+        assertThat(started.data.toString()).isEqualTo("meeshy://join/club?anonymous=true")
+        assertThat(started.`package`).isEqualTo(app.packageName)
     }
 
     @Test

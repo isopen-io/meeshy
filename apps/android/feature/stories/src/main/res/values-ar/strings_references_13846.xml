@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_mention">إشارة</string>
+    <string name="story_mention_title">الإشارة إلى أشخاص</string>
+    <string name="story_mention_mode_pinned">على المشهد</string>
+    <string name="story_mention_mode_note">في «مع …»</string>
+    <string name="story_mention_mode_silent">بصمت</string>
+    <string name="story_hashtag_title">الوسوم</string>
+    <string name="story_hashtag_field">إضافة وسم</string>
+    <string name="story_hashtag_trending">الرائجة</string>
+    <string name="story_hashtag_remove">إزالة #%1$s</string>
+    <string name="story_place_title">المكان</string>
+    <string name="story_place_search">البحث عن مكان</string>
+    <string name="story_place_around">بالقرب مني</string>
+    <string name="story_place_here">موقعي</string>
+    <string name="story_place_denied">لا يملك Meeshy إذن الوصول إلى موقعك، لذا لا تُقترح أماكن قريبة. يمكنك البحث عن مكان باسمه.</string>
+    <string name="story_place_pastille_a11y">المكان: %1$s</string>
+    <string name="story_references_with">مع %1$s</string>
+    <string name="story_mention_already">مذكورون بالفعل</string>
+    <string name="story_mention_remove">إزالة %1$s</string>
+    <string name="story_mention_audience_warning">سيتمكن هذا الشخص من رؤية هذا المحتوى حتى خارج الجمهور المختار</string>
+</resources>

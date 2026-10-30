@@ -91,6 +91,7 @@ internal object StoryEditMerge {
             filterIntensity = if (filterKept) original.filterIntensity else built.filterIntensity,
             timelineDuration = if (slide.durationSecondsPin == hydrated.durationSecondsPin) original.timelineDuration else built.timelineDuration,
             audioPlayerObjects = if (slide.audio == hydrated.audio) original.audioPlayerObjects else built.audioPlayerObjects,
+            locationObjects = if (slide.places == hydrated.places) original.locationObjects else built.locationObjects,
             backgroundTransform = if (frameKept) original.backgroundTransform else framed(original, built),
             opening = if (frameKept) original.opening else built.opening,
             closing = if (frameKept) original.closing else built.closing,

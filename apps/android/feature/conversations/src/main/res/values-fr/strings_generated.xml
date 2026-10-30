@@ -23,6 +23,7 @@
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_action_mute">Muet</string>
     <string name="conversations_action_pin">Épingler</string>
+    <string name="conversations_action_remove_category">Retirer la catégorie %1$s</string>
     <string name="conversations_action_tags">Étiquettes</string>
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_unlock">Déverrouiller</string>
