@@ -8,7 +8,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.CallPreviewPeer
 import me.meeshy.sdk.call.CallPreviewPeerListener
@@ -28,10 +32,10 @@ import org.webrtc.SessionDescription
 @OptIn(ExperimentalCoroutinesApi::class)
 class WebRtcCallPreviewLinkTest {
 
-    private class Rig(receiveOnly: Boolean) {
+    private class Rig(receiveOnly: Boolean, dispatcher: kotlinx.coroutines.CoroutineDispatcher = UnconfinedTestDispatcher()) {
         val listener = slot<CallPreviewPeerListener>()
         val peer: CallPreviewPeer = mockk(relaxed = true) {
-            coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0 offer")
+            coEvery { createOffer(any()) } returns SessionDescription(SessionDescription.Type.OFFER, "v=0 offer")
             coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0 answer")
         }
         val engine: WebRtcEngine = mockk {
@@ -42,7 +46,7 @@ class WebRtcCallPreviewLinkTest {
             engine,
             CallPreviewLinkConfig("peer", emptyList(), receiveOnly, sendsAudio = false, sendsVideo = !receiveOnly),
             { events += it },
-            UnconfinedTestDispatcher(),
+            dispatcher,
         )
         val signals: List<CallPreviewLinkEvent.Signal> get() = events.filterIsInstance<CallPreviewLinkEvent.Signal>()
     }
@@ -98,15 +102,16 @@ class WebRtcCallPreviewLinkTest {
     }
 
     @Test
-    fun `l'etat du pair devient connexion ou echec`() {
+    fun `l'etat du pair devient connexion ou coupure, un echec n'est pas encore une fin`() {
         val rig = Rig(receiveOnly = true)
 
         rig.listener.captured.onConnectionChange(PeerConnectionState.CONNECTED)
+        rig.listener.captured.onConnectionChange(PeerConnectionState.DISCONNECTED)
         rig.listener.captured.onConnectionChange(PeerConnectionState.FAILED)
 
         assertThat(rig.events).containsExactly(
             CallPreviewLinkEvent.Connection(connected = true),
-            CallPreviewLinkEvent.Failed,
+            CallPreviewLinkEvent.Connection(connected = false),
         ).inOrder()
     }
 
@@ -145,5 +150,73 @@ class WebRtcCallPreviewLinkTest {
 
         verify(exactly = 1) { rig.peer.close() }
         assertThat(rig.events).isEmpty()
+    }
+
+    @Test
+    fun `un lien en echec est relance par l'appelant, offre de reprise ICE dans une nouvelle epoque`() = runTest {
+        val rig = Rig(receiveOnly = false, dispatcher = StandardTestDispatcher(testScheduler))
+        rig.link.offer()
+        rig.listener.captured.onConnectionChange(PeerConnectionState.FAILED)
+        runCurrent()
+
+        assertThat(rig.events).doesNotContain(CallPreviewLinkEvent.Failed)
+        coVerify(exactly = 1) { rig.peer.createOffer(true) }
+        assertThat(rig.signals.last().type).isEqualTo("offer")
+        assertThat(rig.signals.last().negotiationId).isEqualTo(2)
+    }
+
+    @Test
+    fun `un lien qui ne revient pas retombe sur l'avatar apres cinq reprises au recul borne`() = runTest {
+        val rig = Rig(receiveOnly = false, dispatcher = StandardTestDispatcher(testScheduler))
+        rig.listener.captured.onConnectionChange(PeerConnectionState.FAILED)
+        runCurrent()
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertThat(rig.events).doesNotContain(CallPreviewLinkEvent.Failed)
+
+        advanceUntilIdle()
+
+        coVerify(exactly = 5) { rig.peer.createOffer(true) }
+        assertThat(rig.events.count { it == CallPreviewLinkEvent.Failed }).isEqualTo(1)
+    }
+
+    @Test
+    fun `un lien revenu entre deux reprises ne retombe pas`() = runTest {
+        val rig = Rig(receiveOnly = false, dispatcher = StandardTestDispatcher(testScheduler))
+        rig.listener.captured.onConnectionChange(PeerConnectionState.FAILED)
+        runCurrent()
+        rig.listener.captured.onConnectionChange(PeerConnectionState.CONNECTED)
+
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { rig.peer.createOffer(true) }
+        assertThat(rig.events).doesNotContain(CallPreviewLinkEvent.Failed)
+        assertThat(rig.events.last()).isEqualTo(CallPreviewLinkEvent.Connection(connected = true))
+    }
+
+    @Test
+    fun `l'appele n'offre jamais, attend la reprise de l'appelant, puis retombe sur l'avatar`() = runTest {
+        val rig = Rig(receiveOnly = true, dispatcher = StandardTestDispatcher(testScheduler))
+        rig.listener.captured.onConnectionChange(PeerConnectionState.FAILED)
+        runCurrent()
+        assertThat(rig.events).doesNotContain(CallPreviewLinkEvent.Failed)
+
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { rig.peer.createOffer(any()) }
+        assertThat(rig.events.count { it == CallPreviewLinkEvent.Failed }).isEqualTo(1)
+    }
+
+    @Test
+    fun `un lien ferme ne relance plus rien`() = runTest {
+        val rig = Rig(receiveOnly = false, dispatcher = StandardTestDispatcher(testScheduler))
+        rig.listener.captured.onConnectionChange(PeerConnectionState.DISCONNECTED)
+        runCurrent()
+        rig.link.close()
+
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { rig.peer.createOffer(true) }
+        assertThat(rig.events).doesNotContain(CallPreviewLinkEvent.Failed)
     }
 }

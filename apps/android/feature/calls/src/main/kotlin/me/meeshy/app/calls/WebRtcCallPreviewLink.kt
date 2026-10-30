@@ -3,8 +3,10 @@ package me.meeshy.app.calls
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,6 +17,7 @@ import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.model.call.group.GroupPeerLinkRestart
 import org.webrtc.IceCandidate
 import org.webrtc.PeerConnection.PeerConnectionState
 import org.webrtc.SessionDescription
@@ -31,7 +34,11 @@ import javax.inject.Inject
  *   l'offre, un signal plus ancien que l'époque vue est écarté (sauf un candidat) ;
  * - les opérations passent l'une après l'autre ([Mutex]) : un candidat ne double pas l'offre qui le
  *   précède ; elles vivent dans la portée du lien, que [close] annule avant de disposer le pair ;
- * - un lien perdu (`failed`) n'est pas relancé : l'aperçu se ferme, l'appel sonne toujours.
+ * - un lien coupé est relancé comme iOS `WebRTCGroupPeerLink` ([GroupPeerLinkRestart], #13817) :
+ *   `disconnected` attend 3 s, `failed` relance tout de suite, puis 2 → 16 s entre deux reprises,
+ *   cinq au plus. L'appelant relance par une offre de reprise ICE dans une nouvelle époque ;
+ *   l'appelé, qui n'offre jamais, attend la sienne au même rythme. Le budget épuisé, le lien
+ *   rend `Failed` : l'aperçu retombe sur l'avatar, l'appel sonne toujours.
  *
  * Les rappels de libwebrtc reviennent sur le fil principal avant d'atteindre le coordinateur.
  */
@@ -47,6 +54,10 @@ internal class WebRtcCallPreviewLink(
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val turns = Mutex()
     private var epoch = 0
+    private val receiveOnly = config.receiveOnly
+    private var lastState: PeerConnectionState? = null
+    private var restartJob: Job? = null
+    private var restartAttempts = 0
 
     private val listener = object : CallPreviewPeerListener {
         override fun onIceCandidate(candidate: IceCandidate) = post {
@@ -61,11 +72,8 @@ internal class WebRtcCallPreviewLink(
             )
         }
 
-        override fun onConnectionChange(state: PeerConnectionState) = when (state) {
-            PeerConnectionState.CONNECTED -> post { CallPreviewLinkEvent.Connection(connected = true) }
-            PeerConnectionState.DISCONNECTED -> post { CallPreviewLinkEvent.Connection(connected = false) }
-            PeerConnectionState.FAILED -> post { CallPreviewLinkEvent.Failed }
-            else -> Unit
+        override fun onConnectionChange(state: PeerConnectionState) {
+            scope.launch { connectionChanged(state) }
         }
 
         override fun onRemoteVideo(track: VideoTrack) = post { CallPreviewLinkEvent.RemoteVideo(track) }
@@ -140,6 +148,62 @@ internal class WebRtcCallPreviewLink(
     override fun close() {
         scope.cancel()
         peer?.close()
+    }
+
+    private fun connectionChanged(state: PeerConnectionState) {
+        lastState = state
+        when (state) {
+            PeerConnectionState.CONNECTED -> {
+                restartJob?.cancel()
+                restartJob = null
+                restartAttempts = 0
+                onEvent(CallPreviewLinkEvent.Connection(connected = true))
+            }
+            PeerConnectionState.DISCONNECTED -> {
+                onEvent(CallPreviewLinkEvent.Connection(connected = false))
+                scheduleRestart(GroupPeerLinkRestart.DISCONNECT_GRACE_MS)
+            }
+            PeerConnectionState.FAILED -> scheduleRestart(0)
+            else -> Unit
+        }
+    }
+
+    /** Une reprise à la fois ; chaque tentative laisse à la précédente le délai de grâce pour revenir. */
+    private fun scheduleRestart(graceMs: Long) {
+        if (restartJob != null) return
+        restartJob = scope.launch {
+            delay(graceMs)
+            if (!isBroken()) {
+                restartJob = null
+                return@launch
+            }
+            restartAttempts += 1
+            if (GroupPeerLinkRestart.isExhausted(restartAttempts)) {
+                onEvent(CallPreviewLinkEvent.Failed)
+                return@launch
+            }
+            delay(GroupPeerLinkRestart.backoffMs(restartAttempts))
+            restartJob = null
+            if (!receiveOnly) restartOffer()
+            if (isBroken()) scheduleRestart(GroupPeerLinkRestart.DISCONNECT_GRACE_MS)
+        }
+    }
+
+    private fun isBroken(): Boolean =
+        lastState == PeerConnectionState.DISCONNECTED || lastState == PeerConnectionState.FAILED
+
+    private suspend fun restartOffer() {
+        val current = peer ?: return
+        turns.withLock {
+            try {
+                epoch += 1
+                val offer = current.createOffer(iceRestart = true)
+                current.setLocalDescription(offer)
+                emit(OFFER, offer)
+            } catch (_: WebRtcError) {
+                // La reprise est refusée : la tentative suivante, ou la fin du budget, décidera.
+            }
+        }
     }
 
     private fun emit(type: String, description: SessionDescription) =

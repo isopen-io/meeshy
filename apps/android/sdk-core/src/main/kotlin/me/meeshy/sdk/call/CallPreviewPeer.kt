@@ -136,11 +136,15 @@ public class CallPreviewPeer internal constructor(
     /** Vrai si ce lien porte des pistes tirées des sources de l'appel : il doit mourir AVANT elles. */
     internal val usesCallSources: Boolean get() = localAudio != null || localVideo != null
 
-    /** L'appelant : la première offre pose ses transceivers et son canal de contrôle. */
-    public suspend fun createOffer(): SessionDescription {
+    /**
+     * L'appelant : la première offre pose ses transceivers et son canal de contrôle. Une offre de
+     * reprise ([iceRestart]) re-collecte les candidats d'un lien en échec, sur la même connexion.
+     */
+    public suspend fun createOffer(iceRestart: Boolean = false): SessionDescription {
         val pc = live()
         addOffererTransceiversIfNeeded(pc)
         openControlChannelIfNeeded(pc)
+        if (iceRestart) pc.restartIce()
         return pc.awaitCreate(isOffer = true)
     }
 
