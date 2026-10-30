@@ -52,7 +52,6 @@ class ThreadPieceOpenerTest {
 
     @Test
     fun `une video protegee s'ouvre dans la couche securisee`() {
-        assertThat((ThreadPieceOpener.of(bubble(isViewOnce = true), video(isProtected = true)) as ThreadPieceOpening.Video).secure).isTrue()
         assertThat((ThreadPieceOpener.of(bubble(isBlurred = true), video(isProtected = true)) as ThreadPieceOpening.Video).secure).isTrue()
         assertThat((ThreadPieceOpener.of(bubble(), video(isProtected = true)) as ThreadPieceOpening.Video).secure).isTrue()
     }
@@ -64,7 +63,9 @@ class ThreadPieceOpenerTest {
     }
 
     @Test
-    fun `une vue unique deja consumee par ce lecteur ne s'ouvre plus`() {
+    fun `une video a vue unique ne s'ouvre pas tant qu'Android ne consomme pas la vue`() {
+        assertThat(ThreadPieceOpener.of(bubble(isViewOnce = true), video(isProtected = true)))
+            .isEqualTo(ThreadPieceOpening.Nothing)
         assertThat(ThreadPieceOpener.of(bubble(isViewOnce = true, isViewOnceOpenedByMe = true), video(isProtected = true)))
             .isEqualTo(ThreadPieceOpening.Nothing)
     }
