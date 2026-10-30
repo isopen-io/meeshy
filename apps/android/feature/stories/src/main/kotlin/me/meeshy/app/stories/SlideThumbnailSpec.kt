@@ -97,10 +97,10 @@ internal object SlideThumbnailRefresh {
 internal class ThumbnailBackground(val key: String, val model: Any)
 
 /** The media painted behind [slide]: its designated background, else its first media — exactly what the scene canvas renders. */
-internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide): ThumbnailBackground? {
+internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide, mediaBaseUrl: String?): ThumbnailBackground? {
     val id = slide.backgroundMediaId?.takeIf { it in slide.mediaIds } ?: slide.mediaIds.firstOrNull() ?: return null
     attachments.firstOrNull { it.id == id }?.let { media ->
-        val url = media.thumbnailUrl ?: media.url
+        val url = ComposerMediaAddress.preview(media, mediaBaseUrl)
         return ThumbnailBackground(url, url)
     }
     val item = pendingUploads.firstOrNull { it.cmid == id }?.item ?: return null

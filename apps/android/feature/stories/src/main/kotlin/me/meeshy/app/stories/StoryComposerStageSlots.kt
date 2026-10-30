@@ -51,7 +51,7 @@ internal fun StoryComposerScene(
     Box(modifier) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideBackdropModel,
+                backgroundModel = state.selectedSlideBackdropModel(viewModel.mediaBaseUrl),
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },
@@ -81,7 +81,7 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(comparison.mediaId) },
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId) },
                 placedMediaGestures = remember(viewModel) {
                     PlacedMediaGestures(viewModel::onMediaPlacementMoved, viewModel::onMediaPlacementDragEnd, viewModel::onMediaPlacementTransformed)
                 },
@@ -216,6 +216,7 @@ internal fun ColumnScope.StoryComposerFooter(state: StoryComposerUiState, viewMo
             MediaPreviewRow(
                 attachments = state.selectedSlideAttachments,
                 pending = state.selectedSlidePending,
+                mediaBaseUrl = viewModel.mediaBaseUrl,
                 backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
                 backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
                 backgroundLoop = state.selectedSlideBackgroundLoop,

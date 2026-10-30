@@ -57,7 +57,7 @@ internal fun StoryComposerBody(
         }
         if (!state.band.isChromeHidden) {
             val backgrounds = remember(state.deck.slides, state.attachments, state.pendingUploads) {
-                state.deck.slides.associate { it.id to state.thumbnailBackgroundOf(it) }
+                state.deck.slides.associate { it.id to state.thumbnailBackgroundOf(it, viewModel.mediaBaseUrl) }
             }
             ComposerSlideRail(
                 deck = state.deck,

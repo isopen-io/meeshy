@@ -145,7 +145,7 @@ class StoryPlacedMediaFilterTest {
     fun `le plateau peint le media pose avec son filtre propre, neutre sans filtre`() {
         val s = state(StoryPlacedMedia("m1", filter = StoryFilter.BW), StoryPlacedMedia("m2"))
 
-        val frames = s.placedMediaFrames().associateBy { it.key }
+        val frames = s.placedMediaFrames(mediaBaseUrl = null).associateBy { it.key }
 
         assertThat(frames.getValue("m1").look.filterMatrix).isEqualTo(StoryFilterMatrix.effectiveMatrix(StoryFilter.BW, 1f))
         assertThat(frames.getValue("m2").look.isNeutral).isTrue()

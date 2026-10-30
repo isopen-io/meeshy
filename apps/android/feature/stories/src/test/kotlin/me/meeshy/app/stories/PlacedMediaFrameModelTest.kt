@@ -37,7 +37,7 @@ class PlacedMediaFrameModelTest {
     @Test
     fun `a video the server gave no thumbnail has no image to decode`() {
         val frames = stateWith(slide, attachments = listOf(uploaded("v", "video/mp4", null), uploaded("p", "image/jpeg", null)))
-            .placedMediaFrames()
+            .placedMediaFrames(mediaBaseUrl = null)
 
         assertThat(frames.first { it.key == "v" }.model).isNull()
         assertThat(frames.first { it.key == "p" }.model).isEqualTo("https://x/p")
@@ -45,7 +45,7 @@ class PlacedMediaFrameModelTest {
 
     @Test
     fun `a video with its thumbnail paints that thumbnail`() {
-        val frames = stateWith(slide, attachments = listOf(uploaded("v", "video/mp4", "https://x/v.jpg"))).placedMediaFrames()
+        val frames = stateWith(slide, attachments = listOf(uploaded("v", "video/mp4", "https://x/v.jpg"))).placedMediaFrames(mediaBaseUrl = null)
 
         assertThat(frames.single().model).isEqualTo("https://x/v.jpg")
     }
@@ -54,7 +54,7 @@ class PlacedMediaFrameModelTest {
     fun `a video waiting on the device has no image to decode either`() {
         val pending = listOf(PendingMediaUpload("q", MediaUploadItem(ByteArray(4), "q.mp4", "video/mp4")))
 
-        val frame = stateWith(slide, pending = pending).placedMediaFrames().single()
+        val frame = stateWith(slide, pending = pending).placedMediaFrames(mediaBaseUrl = null).single()
 
         assertThat(frame.model).isNull()
         assertThat(frame.isVideo).isTrue()

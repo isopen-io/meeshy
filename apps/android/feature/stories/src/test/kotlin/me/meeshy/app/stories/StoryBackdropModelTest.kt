@@ -16,19 +16,19 @@ class StoryBackdropModelTest {
 
     @Test
     fun `sans fond designe le plateau peint le premier media`() {
-        assertThat(state("a", "b").selectedSlideBackdropModel).isEqualTo("https://cdn/a")
+        assertThat(state("a", "b").selectedSlideBackdropModel(mediaBaseUrl = null)).isEqualTo("https://cdn/a")
     }
 
     @Test
     fun `le fond designe est peint a la place du premier media`() {
         val designated = StoryComposerBackgroundReducer.backgroundMediaToggled(state("a", "b"), "b")
-        assertThat(designated.selectedSlideBackdropModel).isEqualTo("https://cdn/b")
+        assertThat(designated.selectedSlideBackdropModel(mediaBaseUrl = null)).isEqualTo("https://cdn/b")
     }
 
     @Test
     fun `retirer la designation rend le plateau au premier media`() {
         val designated = StoryComposerBackgroundReducer.backgroundMediaToggled(state("a", "b"), "b")
         val cleared = StoryComposerBackgroundReducer.backgroundMediaToggled(designated, "b")
-        assertThat(cleared.selectedSlideBackdropModel).isEqualTo("https://cdn/a")
+        assertThat(cleared.selectedSlideBackdropModel(mediaBaseUrl = null)).isEqualTo("https://cdn/a")
     }
 }

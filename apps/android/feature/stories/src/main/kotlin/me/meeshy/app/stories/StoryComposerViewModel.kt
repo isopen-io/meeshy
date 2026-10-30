@@ -95,6 +95,9 @@ class StoryComposerViewModel @Inject constructor(
     private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
+    /** La base d'API qui résout la clé d'un média envoyé en adresse chargeable ([ComposerMediaAddress]). */
+    val mediaBaseUrl: String? get() = config.apiBaseUrl
+
     /** The author colour the reader paints a background-less slide with (#12314). */
     val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 

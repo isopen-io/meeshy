@@ -60,7 +60,7 @@ internal data class PlacedMediaFrame(
 }
 
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
-internal fun StoryComposerUiState.placedMediaFrames(comparing: String? = null): List<PlacedMediaFrame> {
+internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, comparing: String? = null): List<PlacedMediaFrame> {
     val background = deck.selectedSlide.backgroundMediaId
     return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
         if (placed.mediaId == comparing) placed.copy(filter = null, adjustments = null) else placed
@@ -72,7 +72,7 @@ internal fun StoryComposerUiState.placedMediaFrames(comparing: String? = null): 
                 val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
                 PlacedMediaFrame(
                     placed = placed,
-                    model = if (isVideo) uploaded.thumbnailUrl else uploaded.thumbnailUrl ?: uploaded.url,
+                    model = if (isVideo) uploaded.thumbnailUrl?.let { ComposerMediaAddress.of(it, mediaBaseUrl) } else ComposerMediaAddress.preview(uploaded, mediaBaseUrl),
                     aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
                     isVideo = isVideo,
                 )
