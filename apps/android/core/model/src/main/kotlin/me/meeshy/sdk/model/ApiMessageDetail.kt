@@ -2,6 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.auth.TolerantStringSerializer
 import me.meeshy.sdk.model.serialization.LossyListSerializer
 import me.meeshy.sdk.model.serialization.LossyNullableListSerializer
 import me.meeshy.sdk.model.serialization.TolerantSerializer
@@ -78,6 +79,11 @@ data class ApiAttachmentTranslation(
     val voiceModelId: String? = null,
     val ttsModel: String? = null,
     val segments: List<TranscriptionSegment>? = null,
+    /** Horodatage SERVI de la piste (`AttachmentTranslation.createdAt` / `updatedAt`) : il départage deux versions d'une même langue. */
+    @Serializable(with = TolerantStringSerializer::class)
+    val createdAt: String? = null,
+    @Serializable(with = TolerantStringSerializer::class)
+    val updatedAt: String? = null,
 )
 
 /** The message a forward originates from — port of APIForwardedFrom (MessageModels.swift). */

@@ -260,7 +260,11 @@ class ConversationRepository @Inject constructor(
         if (conversationDao.find(conversationId) != null) return true
         if (!learning.add(conversationId)) return true
         try {
-            return when (val served = getById(conversationId)) {
+            val fence = fence
+            val read: suspend () -> NetworkResult<ApiConversation> = { getById(conversationId) }
+            val outcome = if (fence == null || ticket == null) read() else fence.guard(ticket, read)
+            return when (val served = outcome) {
+                null -> false
                 is NetworkResult.Success -> {
                     noteCreated(conversationId)
                     cacheSource.rememberServed(served.data)

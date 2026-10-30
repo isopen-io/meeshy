@@ -773,4 +773,53 @@ class ConversationMembersViewModelTest {
         assertThat(vm.state.value.members.map { it.id }).isEqualTo((1..served).map { "p$it" })
         assertThat(vm.state.value.memberCount).isEqualTo(served)
     }
+
+    @Test
+    fun `a storm of joins costs one silent refetch, not one per event`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        (2..9).forEach { index ->
+            joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p$index"))
+            advanceTimeBy(40)
+        }
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.participants("c1", null, any(), any()) }
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+    }
+
+    @Test
+    fun `joins far apart each get their own refetch`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        advanceUntilIdle()
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p3"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 3) { repository.participants("c1", null, any(), any()) }
+    }
+
+    @Test
+    fun `a join announced then a rebinding to another conversation fetches nothing for the old one`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        vm.load("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.participants("c1", null, any(), any()) }
+    }
 }

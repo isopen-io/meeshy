@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,6 +100,9 @@ class ConversationMembersViewModel @Inject constructor(
     /** La relecture silencieuse en cours : une arrivée plus récente la remplace, la plus lente ne l'écrase jamais. */
     private var revalidation: Job? = null
 
+    /** La fenêtre de regroupement ouverte par la première arrivée : celles qui la suivent y sont absorbées. */
+    private var revalidationWindow: Job? = null
+
     /**
      * Bind to a conversation and load its first page. Idempotent for the same id —
      * reopening the sheet serves what is already loaded instead of restarting.
@@ -109,6 +113,7 @@ class ConversationMembersViewModel @Inject constructor(
         if (_state.value.conversationId == conversationId) return
         bindings.forEach(Job::cancel)
         revalidation?.cancel()
+        revalidationWindow?.cancel()
         searchQuery.value = ""
         _state.value = ConversationMembersUiState(
             conversationId = conversationId,
@@ -364,11 +369,16 @@ class ConversationMembersViewModel @Inject constructor(
      * Un membre vient d'arriver (adhésion, débannissement) : la fiche d'un nouveau membre (avatar, rang, nom servi) ne se
      * devine pas de l'événement, donc la première page se relit — sans écran de chargement, pour la requête affichée
      * (la recherche en cours se relit elle-même, jamais remplacée par la liste complète). L'effectif suit le total servi.
+     * Les arrivées rapprochées (≤ 300 ms de la première) sont regroupées : une rafale ne coûte qu'UNE requête.
      */
     private fun revalidateRoster(conversationId: String) {
-        revalidation?.cancel()
-        revalidation = viewModelScope.launch {
-            fetchFirstPage(conversationId, _state.value.searchQuery, revalidate = true)
+        if (revalidationWindow?.isActive == true) return
+        revalidationWindow = viewModelScope.launch {
+            delay(ROSTER_COALESCE_MS)
+            revalidation?.cancel()
+            revalidation = viewModelScope.launch {
+                fetchFirstPage(conversationId, _state.value.searchQuery, revalidate = true)
+            }
         }
     }
 
@@ -376,5 +386,8 @@ class ConversationMembersViewModel @Inject constructor(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L
+
+        /** Une rafale d'arrivées (import de groupe) se regroupe en UNE relecture. */
+        const val ROSTER_COALESCE_MS = 300L
     }
 }

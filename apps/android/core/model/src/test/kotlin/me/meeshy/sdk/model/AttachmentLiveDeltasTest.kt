@@ -215,22 +215,121 @@ class AttachmentLiveDeltasTest {
     }
 
     @Test
-    fun `the carried translations join the ones already played, the carried entry winning`() {
+    fun `the carried translations join the ones already played, a newer carried entry winning`() {
         val current = message(
             audio {
                 copy(
                     translations = mapOf(
                         "de" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/de.mp3"),
-                        "en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/old-en.mp3"),
+                        "en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/old-en.mp3", createdAt = "2026-10-29T08:00:00Z"),
                     ),
                 )
             },
         )
+        val newer = incoming.copy(
+            translations = mapOf("en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/en.mp3", createdAt = "2026-10-29T09:00:00Z")),
+        )
 
-        val piece = AttachmentLiveDeltas.enriched(current, "c1", "a1", incoming).attachments.single()
+        val piece = AttachmentLiveDeltas.enriched(current, "c1", "a1", newer).attachments.single()
 
         assertThat(piece.translations?.keys).containsExactly("de", "en")
         assertThat(piece.translations?.getValue("en")?.url).isEqualTo("https://cdn/en.mp3")
+    }
+
+    @Test
+    fun `a late replayed older track never overwrites a newer one of the same language`() {
+        val current = message(
+            audio {
+                copy(
+                    translations = mapOf(
+                        "en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/new-en.mp3", createdAt = "2026-10-29T08:00:00Z", updatedAt = "2026-10-29T10:00:00Z"),
+                    ),
+                )
+            },
+        )
+        val replayed = incoming.copy(
+            translations = mapOf("en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/old-en.mp3", createdAt = "2026-10-29T08:00:00Z", updatedAt = "2026-10-29T09:00:00Z")),
+        )
+
+        val result = AttachmentLiveDeltas.enriched(current, "c1", "a1", replayed)
+        val piece = result.attachments.single()
+
+        assertThat(piece.translations?.getValue("en")?.url).isEqualTo("https://cdn/new-en.mp3")
+        assertThat(piece.translations?.getValue("en")?.updatedAt).isEqualTo("2026-10-29T10:00:00Z")
+    }
+
+    @Test
+    fun `without a served timestamp a playable track already held is kept`() {
+        val current = message(
+            audio { copy(translations = mapOf("en" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/held-en.mp3"))) },
+        )
+
+        val piece = AttachmentLiveDeltas.enriched(current, "c1", "a1", incoming).attachments.single()
+
+        assertThat(piece.translations?.getValue("en")?.url).isEqualTo("https://cdn/held-en.mp3")
+    }
+
+    @Test
+    fun `a track held without an address is completed by the carried one of the same language`() {
+        val current = message(
+            audio { copy(translations = mapOf("en" to ApiAttachmentTranslation(type = "audio", transcription = "hello"))) },
+        )
+
+        val piece = AttachmentLiveDeltas.enriched(current, "c1", "a1", incoming).attachments.single()
+
+        assertThat(piece.translations?.getValue("en")?.url).isEqualTo("https://cdn/en.mp3")
+    }
+
+    // ── Une vue unique consommée ou purgée ne revient jamais ──
+
+    private fun viewOnceVoice(build: ApiMessageAttachment.() -> ApiMessageAttachment = { this }) =
+        audio { copy(isViewOnce = true).build() }
+
+    @Test
+    fun `a purged view-once voice is not given back its address or transcript by a replayed update`() {
+        val purged = ConversationEventDeltas.viewOncePurged(message(viewOnceVoice { copy(transcription = ApiAttachmentTranscription(text = "secret")) }))
+
+        val result = AttachmentLiveDeltas.enriched(purged, "c1", "a1", incoming)
+
+        assertThat(result).isSameInstanceAs(purged)
+        val piece = result.attachments.single()
+        assertThat(piece.fileUrl).isNull()
+        assertThat(piece.transcription).isNull()
+        assertThat(piece.translations).isNull()
+    }
+
+    @Test
+    fun `a purged view-once declared only on the message is not refilled either`() {
+        val purged = ConversationEventDeltas.viewOncePurged(
+            message(audio()).copy(isViewOnce = true, viewOnceCount = 1),
+        )
+
+        assertThat(AttachmentLiveDeltas.enriched(purged, "c1", "a1", incoming)).isSameInstanceAs(purged)
+    }
+
+    @Test
+    fun `a view-once voice I already opened takes no enrichment`() {
+        val opened = message(viewOnceVoice()).copy(consumedByMe = true)
+
+        assertThat(AttachmentLiveDeltas.enriched(opened, "c1", "a1", incoming)).isSameInstanceAs(opened)
+    }
+
+    @Test
+    fun `a view-once voice not yet opened is still enriched`() {
+        val fresh = message(viewOnceVoice())
+
+        val piece = AttachmentLiveDeltas.enriched(fresh, "c1", "a1", incoming).attachments.single()
+
+        assertThat(piece.transcription?.text).isEqualTo("bonjour")
+    }
+
+    @Test
+    fun `an ordinary piece without an address yet is still enriched`() {
+        val pending = message(ApiMessageAttachment(id = "a1", mimeType = "audio/mp4"))
+
+        val piece = AttachmentLiveDeltas.enriched(pending, "c1", "a1", incoming).attachments.single()
+
+        assertThat(piece.fileUrl).isEqualTo("https://cdn/a1-final")
     }
 
     @Test

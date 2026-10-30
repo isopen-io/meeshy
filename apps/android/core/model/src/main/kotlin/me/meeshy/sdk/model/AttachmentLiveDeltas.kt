@@ -46,13 +46,33 @@ object AttachmentLiveDeltas {
      * SE JOIGNENT à celles déjà jouables (l'entrée servie gagne) ; les agrégats du serveur n'avancent que
      * vers l'avant. Ce qui est PERSONNEL (mes réactions, ma progression) et ce qui PROTÈGE (vue unique,
      * flou, effets) n'est jamais remplacé par une diffusion.
+     *
+     * Une vue unique CONSOMMÉE par moi ou PURGÉE ne revient jamais : la passerelle rejoue ces diffusions
+     * depuis sa file hors ligne bien après la purge, et y répondre rendrait l'adresse, la vignette et la
+     * transcription que la purge a détruites ([ConversationEventDeltas.viewOncePurged]).
      */
     fun enriched(message: ApiMessage, conversationId: String, attachmentId: String, incoming: ApiMessageAttachment): ApiMessage {
         val index = pieceIndex(message, conversationId, attachmentId)
         if (index < 0 || incoming.holdsCiphertext) return message
         val piece = message.attachments[index]
+        if (message.viewOnceSpent(piece)) return message
         return message.replacing(index, piece, piece.enrichedBy(incoming))
     }
+
+    /**
+     * La purge ne laisse aucun drapeau : elle VIDE la pièce. Une vue unique est donc « épuisée » quand je l'ai
+     * ouverte, ou quand la pièce n'a plus rien à montrer (ni adresse, ni vignette, ni transcription).
+     */
+    private fun ApiMessage.viewOnceSpent(piece: ApiMessageAttachment): Boolean {
+        val viewOnce = piece.isViewOnce == true ||
+            MessageEffectFlags.has(piece.effectFlags ?: 0L, MessageEffectFlags.VIEW_ONCE) ||
+            effects.has(MessageEffectFlags.VIEW_ONCE)
+        return viewOnce && (consumedByMe == true || piece.isEmptied)
+    }
+
+    private val ApiMessageAttachment.isEmptied: Boolean
+        get() = fileUrl.isNullOrBlank() && thumbnailUrl.isNullOrBlank() && thumbHash.isNullOrBlank() &&
+            imageVariants.isNullOrEmpty() && transcription == null && translations.isNullOrEmpty()
 
     private fun pieceIndex(message: ApiMessage, conversationId: String, attachmentId: String): Int {
         if (message.conversationId != conversationId || message.deletedAt != null || message.holdsCiphertext) return -1
@@ -139,14 +159,36 @@ object AttachmentLiveDeltas {
         consumedCount = forward(consumedCount, incoming.consumedCount),
     )
 
+    /**
+     * Les pistes se joignent par langue. À langue égale, l'entrée reçue gagne seulement si elle est AU MOINS aussi
+     * récente que celle qu'on tient (horodatage servi des deux côtés) : une diffusion rejouée tard ne ressuscite
+     * pas une piste ancienne. Sans horodatage comparable, la piste jouable déjà tenue reste ; une piste tenue
+     * sans adresse est complétée par la reçue.
+     */
     private fun joined(
         current: Map<String, ApiAttachmentTranslation>?,
         carried: Map<String, ApiAttachmentTranslation>?,
     ): Map<String, ApiAttachmentTranslation>? {
         if (carried.isNullOrEmpty()) return current
         if (current.isNullOrEmpty()) return carried
-        return current + carried
+        return carried.entries.fold(current) { joined, (language, incoming) ->
+            val held = joined[language]
+            if (held == null || incoming.supersedes(held)) joined + (language to incoming) else joined
+        }
     }
+
+    private fun ApiAttachmentTranslation.supersedes(held: ApiAttachmentTranslation): Boolean {
+        if (!held.isPlayable) return true
+        val heldAt = held.servedAtMillis ?: return false
+        val incomingAt = servedAtMillis ?: return false
+        return incomingAt >= heldAt
+    }
+
+    private val ApiAttachmentTranslation.isPlayable: Boolean
+        get() = !url.isNullOrBlank()
+
+    private val ApiAttachmentTranslation.servedAtMillis: Long?
+        get() = isoToEpochMillisOrNull(updatedAt) ?: isoToEpochMillisOrNull(createdAt)
 
     private fun forward(current: Int?, carried: Int?): Int? = when {
         carried == null -> current

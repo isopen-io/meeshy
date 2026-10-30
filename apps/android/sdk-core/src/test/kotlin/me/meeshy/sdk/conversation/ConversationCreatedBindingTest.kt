@@ -6,6 +6,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -202,5 +203,36 @@ class ConversationCreatedBindingTest {
 
         assertThat(cachedIds()).isEmpty()
         binding.detach()
+    }
+
+    @Test
+    fun `un changement de compte pendant la lecture annule le GET et n'ecrit rien`(): Unit = kotlinx.coroutines.runBlocking {
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var cancelled = false
+        coEvery { api.getById("c1") } coAnswers {
+            started.complete(Unit)
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } catch (stopped: kotlinx.coroutines.CancellationException) {
+                cancelled = true
+                throw stopped
+            }
+        }
+        val repository = repository()
+        val learning = async {
+            me.meeshy.sdk.session.withAccountTicket(fence.ticket()) { repository.learnCreated("c1") }
+        }
+        started.await()
+
+        owner.id = null
+        transition.bumpGeneration()
+        kotlinx.coroutines.withTimeout(5_000) { fence.close { db.clearAllTables() } }
+        owner.id = "B"
+        transition.bumpGeneration()
+
+        val learned = kotlinx.coroutines.withTimeoutOrNull(5_000) { learning.await() }
+        assertThat(learned).isFalse()
+        assertThat(cancelled).isTrue()
+        assertThat(cachedIds()).isEmpty()
     }
 }
