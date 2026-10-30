@@ -16,6 +16,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallRecordingController
 import me.meeshy.sdk.call.CallRecordingHost
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshySpacing
 import javax.inject.Inject
@@ -121,7 +122,11 @@ class CallRecordingConsentOverlay @Inject constructor(
     }
 }
 
-/** Le voyant « Enregistrement en cours » (persistant chez tous), l'attente de l'accord, et les avis. */
+/**
+ * Le voyant « Enregistrement en cours » (persistant chez tous), l'attente de l'accord, et les avis. Ils
+ * s'effacent avec les commandes de l'appel (`CallChromeElement.RecordingStatus`, iOS `showsStatus`, #13766) ;
+ * la carte de consentement, elle, reste.
+ */
 @Singleton
 class CallRecordingStatusOverlay @Inject constructor(
     private val recording: CallRecordingController,
@@ -135,19 +140,26 @@ class CallRecordingStatusOverlay @Inject constructor(
         val state by recording.state.collectAsState()
         val status = CallRecordingPresenter.status(state.phase)
         val notice = state.notice
+        val showsNotice = notice != null && !CallRecordingPresenter.asksConsent(state.phase)
+        if (status == null && !showsNotice) return
         val modifier = Modifier.padding(top = MeeshySpacing.sm)
-        when {
-            status != null -> CallRecordingStatusPill(
-                text = stringResource(status.textRes),
-                stopLabel = stringResource(status.stopLabelRes),
-                onStop = { recording.stop() },
-                modifier = modifier,
-            )
-            notice != null && !CallRecordingPresenter.asksConsent(state.phase) -> CallRecordingNoticePill(
-                notice = notice,
-                onDismiss = recording::dismissNotice,
-                modifier = modifier,
-            )
+        CallChromeFade(
+            isVisible = context.chrome.isVisible(CallChromeElement.RecordingStatus),
+            onRevive = context.onChromeRevive,
+        ) {
+            when {
+                status != null -> CallRecordingStatusPill(
+                    text = stringResource(status.textRes),
+                    stopLabel = stringResource(status.stopLabelRes),
+                    onStop = { recording.stop() },
+                    modifier = modifier,
+                )
+                notice != null -> CallRecordingNoticePill(
+                    notice = notice,
+                    onDismiss = recording::dismissNotice,
+                    modifier = modifier,
+                )
+            }
         }
     }
 }
