@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.translation.DeviceTranslationEligibility
+
 /**
  * **RÉAGIR, ÉPINGLER, DÉSÉPINGLER, SUPPRIMER POUR TOUS** (#13790) : en bout en bout, ces gestes voyagent en SIGNAUX chiffrés
  * (`POST /e2ee/conversations/:id/signals`, #13142) que l'Android natif ne sait pas encore sceller (#13015). Leurs routes en clair
@@ -21,4 +23,19 @@ object PlainSignalAdmission {
 
     /** L'interface dit pourquoi le geste manque seulement quand le bout en bout est SU. */
     fun saysWhy(clearance: ConversationClearance): Boolean = clearance == ConversationClearance.END_TO_END
+
+    /**
+     * **Supprimer pour tous se juge sur la LIGNE du message** (#13804), comme la passerelle (`messageRefusesPlainErasure`,
+     * `services/gateway/src/services/e2ee/e2ee-signal-channel.ts`) et iOS (`EndToEndSignalCommands.erasureTravelsAsSignal`) :
+     * un message que le serveur lit déjà — écrit en clair avant l'activation — garde sa route en clair, qui ne lui apprend
+     * rien de neuf ; seul un message scellé exige le canal des signaux, que cet appareil n'a pas encore.
+     */
+    fun offersErasure(clearance: ConversationClearance, rowReadByServer: Boolean): Boolean = rowReadByServer || offers(clearance)
+
+    /** Le serveur lit-il cette ligne ? La règle de la passerelle, sans le mode de la conversation (`messageRowSealedFromServer`). */
+    fun rowReadByServer(isEncrypted: Boolean?, encryptionMode: String?): Boolean =
+        DeviceTranslationEligibility.serverReadsMessage(conversationEncryptionMode = null, isEncrypted = isEncrypted, encryptionMode = encryptionMode)
+
+    /** [rowReadByServer] d'un message servi. */
+    fun rowReadByServer(message: ApiMessage): Boolean = rowReadByServer(message.isEncrypted, message.encryptionMode)
 }
