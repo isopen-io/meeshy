@@ -200,16 +200,16 @@ describe('normalizeUsername', () => {
   });
 
   describe('length validation', () => {
-    it('should accept username with exactly 2 characters', () => {
-      expect(normalizeUsername('ab')).toBe('ab');
+    it('should accept username with exactly 3 characters (#13825)', () => {
+      expect(normalizeUsername('abc')).toBe('abc');
     });
 
-    it('should throw error for username with 1 character', () => {
-      expect(() => normalizeUsername('a')).toThrow('Le nom d\'utilisateur doit contenir au moins 2 caractères');
+    it('should throw error for username with 2 characters (#13825)', () => {
+      expect(() => normalizeUsername('ab')).toThrow('Le nom d\'utilisateur doit contenir au moins 3 caractères');
     });
 
     it('should throw error for empty username after trim', () => {
-      expect(() => normalizeUsername('   ')).toThrow('Le nom d\'utilisateur doit contenir au moins 2 caractères');
+      expect(() => normalizeUsername('   ')).toThrow('Le nom d\'utilisateur doit contenir au moins 3 caractères');
     });
 
     it('should accept username with exactly 16 characters', () => {
@@ -592,7 +592,7 @@ describe('normalizeUserData', () => {
         username: 'a' // Too short
       };
 
-      expect(() => normalizeUserData(data)).toThrow('Le nom d\'utilisateur doit contenir au moins 2 caractères');
+      expect(() => normalizeUserData(data)).toThrow('Le nom d\'utilisateur doit contenir au moins 3 caractères');
     });
 
     it('should throw error for username with invalid characters in composite data', () => {
@@ -790,7 +790,7 @@ describe('Integration scenarios', () => {
 
     it('should handle edge case usernames', () => {
       // Valid edge cases
-      expect(normalizeUsername('AB')).toBe('AB');
+      expect(normalizeUsername('ABC')).toBe('ABC');
       expect(normalizeUsername('1234567890123456')).toBe('1234567890123456');
       expect(normalizeUsername('_-_-_-_-_-_-_-_-')).toBe('_-_-_-_-_-_-_-_-');
       expect(normalizeUsername('CamelCaseUser')).toBe('CamelCaseUser');

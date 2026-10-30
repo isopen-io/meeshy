@@ -27,12 +27,17 @@
 
 import { z } from 'zod';
 
+import { nameMinLength, usernameMaxLength, usernameMinLength } from '../types/api-schemas/auth.js';
 import {
   PASSWORD_MIN_LENGTH,
   PERSON_NAME_PATTERN,
   USERNAME_PATTERN,
+  atLeastVisible,
+  nameTooShort,
   passwordTooShort,
   supportedLanguageCode,
+  usernameTooLong,
+  usernameTooShort,
 } from './validation-primitives.js';
 
 /**
@@ -62,12 +67,13 @@ export const AuthSchemas = {
    * plus haut, et même remède.
    */
   register: z.object({
-    displayName: z.string().min(1).max(100)
+    displayName: z.string().max(100)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
       .regex(PERSON_NAME_PATTERN, 'Le nom affiché doit contenir au moins une lettre')
       .optional(),
     username: z.string()
-      .min(2, 'Username trop court (min 2)')
-      .max(16, 'Username trop long (max 16)')
+      .min(usernameMinLength, usernameTooShort)
+      .max(usernameMaxLength, usernameTooLong)
       .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)')
       .optional(),
     /**
@@ -79,10 +85,12 @@ export const AuthSchemas = {
     password: z.string()
       .min(PASSWORD_MIN_LENGTH, passwordTooShort)
       .optional(),
-    firstName: z.string().min(1).max(50)
+    firstName: z.string().max(50)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
       .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre')
       .optional(),
-    lastName: z.string().min(1).max(50)
+    lastName: z.string().max(50)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
       .regex(PERSON_NAME_PATTERN, 'Le nom doit contenir au moins une lettre')
       .optional(),
     email: z.email('Email invalide'),

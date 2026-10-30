@@ -7,6 +7,14 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { spokenLanguagesOf, SPOKEN_LANGUAGES_SAMPLE_CAP } from '../services/conversationCard';
 import { linkJoinProfileSchema } from '@meeshy/shared/types/link-join';
 import {
+  presentViolations,
+  sendLengthFloorRefusal,
+  sendZodRefusal,
+  servedGuestNicknameViolation,
+  storedGuestNameViolation,
+} from '../utils/identity-name-floor';
+import { nameMinLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+import {
   errorResponseSchema,
   validationErrorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
@@ -69,6 +77,25 @@ const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = SPOKEN_LANGUAGES_SAMPLE_CAP;
 // AVEC le schéma : elle est dans sa transformation, pas chez son appelant.
 const joinAnonymousSchema = linkJoinProfileSchema;
 
+/**
+ * Le corps de `POST /anonymous/join/:linkId`, extrait pour que son contrat Ajv
+ * se mesure par le vrai compilateur. Prénom et nom tiennent la borne d'un nom
+ * (#13825) ; « au moins 2 caractères visibles » est jugé par `linkJoinProfileSchema`.
+ */
+export const anonymousJoinBodySchema = {
+  type: 'object',
+  required: ['firstName', 'lastName'],
+  properties: {
+    firstName: { type: 'string', minLength: nameMinLength, maxLength: 50, description: `First name (required, at least ${nameMinLength} chars)` },
+    lastName: { type: 'string', minLength: nameMinLength, maxLength: 50, description: `Last name (required, at least ${nameMinLength} chars)` },
+    username: { type: 'string', description: `Optional username (at least ${usernameMinLength} chars once trimmed; auto-generated if not provided)` },
+    email: { type: 'string', format: 'email', description: 'Email address (required if link requires email)' },
+    birthday: { type: 'string', format: 'date-time', description: 'Date of birth (required if link requires birthday)' },
+    language: { type: 'string', default: 'fr', description: 'Preferred language code' },
+    deviceFingerprint: { type: 'string', description: 'Optional device fingerprint for session tracking' }
+  }
+} as const;
+
 const refreshSessionSchema = z.object({
   sessionToken: z.string().min(1, 'Session token requis')
 });
@@ -113,19 +140,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           linkId: { type: 'string', description: 'Share link identifier (format: mshy_...)' }
         }
       },
-      body: {
-        type: 'object',
-        required: ['firstName', 'lastName'],
-        properties: {
-          firstName: { type: 'string', minLength: 1, maxLength: 50, description: 'First name (required)' },
-          lastName: { type: 'string', minLength: 1, maxLength: 50, description: 'Last name (required)' },
-          username: { type: 'string', description: 'Optional username (auto-generated if not provided)' },
-          email: { type: 'string', format: 'email', description: 'Email address (required if link requires email)' },
-          birthday: { type: 'string', format: 'date-time', description: 'Date of birth (required if link requires birthday)' },
-          language: { type: 'string', default: 'fr', description: 'Preferred language code' },
-          deviceFingerprint: { type: 'string', description: 'Optional device fingerprint for session tracking' }
-        }
-      },
+      body: anonymousJoinBodySchema,
       response: {
         201: {
           type: 'object',
@@ -226,6 +241,17 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       const { linkId } = request.params as { linkId: string };
       const body = joinAnonymousSchema.parse(request.body);
 
+      // La borne se juge sur ce qui sera STOCKÉ (nom nettoyé) et SERVI (pseudo
+      // réduit à sa base), pas sur la saisie brute (#13825).
+      const tropCourts = presentViolations([
+        storedGuestNameViolation('firstName', body.firstName),
+        storedGuestNameViolation('lastName', body.lastName),
+        servedGuestNicknameViolation('username', body.username),
+      ]);
+      if (tropCourts.length > 0) {
+        return sendLengthFloorRefusal(reply, 'Donnees invalides', tropCourts);
+      }
+
       // #4167 — cette porte DÉLÈGUE à `performLinkJoin` (la loi d'admission
       // UNIQUE, `admitLinkEntry`, appliquée pour les deux identités) plutôt
       // que de recopier la séquence de contrôles. Elle reste PUREMENT
@@ -284,7 +310,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Donnees invalides');
+        return sendZodRefusal(reply, 'Donnees invalides', error);
       }
 
       logError(fastify.log, 'Anonymous join error:', error);

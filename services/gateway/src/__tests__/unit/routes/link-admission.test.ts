@@ -155,6 +155,20 @@ describe('POST /links/:key/members — invité (S1)', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('400 quand le pseudo SAISI a moins de 3 caractères rognés (#13825) — et rien n\'est créé', async () => {
+    const create = (app as any).prisma.participant.create;
+    create.mockClear();
+
+    const res = await postMembers(app, { nickname: ' Al ' });
+
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('201 sans pseudo saisi — la passerelle nomme l\'invité (#13825 ne le refuse pas)', async () => {
+    expect((await postMembers(app, { nickname: '  ' })).statusCode).toBe(201);
+  });
+
   it('201 — jointure réussie, jeton remis, droits complets', async () => {
     const res = await postMembers(app, { nickname: 'Ana', language: 'fr' });
     expect(res.statusCode).toBe(201);

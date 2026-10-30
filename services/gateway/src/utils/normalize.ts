@@ -5,6 +5,7 @@
 import { capitalizeName } from '@meeshy/shared/utils/registration-identity';
 import { parsePhoneNumber, isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
 import { usernamePatternSource } from '@meeshy/shared/types';
+import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 import { enhancedLogger } from './logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'Normalize' });
@@ -155,17 +156,17 @@ export function normalizePhoneNumber(phoneNumber: string, defaultCountry: string
 /**
  * Normalise un username
  * Préserve la capitalisation telle qu'entrée par l'utilisateur
- * Valide la longueur (2-16 caractères)
+ * Valide la longueur — les bornes partagées `usernameMinLength` /
+ * `usernameMaxLength` (3-16 depuis #13825), jamais une copie.
  */
 export function normalizeUsername(username: string): string {
   const trimmed = username.trim();
 
-  // Validation de la longueur
-  if (trimmed.length < 2) {
-    throw new Error('Le nom d\'utilisateur doit contenir au moins 2 caractères');
+  if (trimmed.length < usernameMinLength) {
+    throw new Error(`Le nom d'utilisateur doit contenir au moins ${usernameMinLength} caractères`);
   }
-  if (trimmed.length > 16) {
-    throw new Error('Le nom d\'utilisateur ne peut pas dépasser 16 caractères');
+  if (trimmed.length > usernameMaxLength) {
+    throw new Error(`Le nom d'utilisateur ne peut pas dépasser ${usernameMaxLength} caractères`);
   }
 
   // Validation des caractères — compilée depuis `usernamePatternSource`

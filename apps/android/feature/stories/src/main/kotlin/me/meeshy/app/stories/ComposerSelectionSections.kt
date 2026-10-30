@@ -106,7 +106,7 @@ private fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: 
 private fun PlacedTrimSection(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
     val source = state.placedTrimSourceOf(mediaId) ?: return
     val bounds = state.placedTrimOf(mediaId) ?: return
-    val url = state.attachments.firstOrNull { it.id == mediaId }?.url.orEmpty()
+    val url = state.attachments.firstOrNull { it.id == mediaId }?.url.orEmpty().let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) }
     MediaTrimStrip(
         content = MediaTrimContent.VIDEO,
         sourceDuration = source,

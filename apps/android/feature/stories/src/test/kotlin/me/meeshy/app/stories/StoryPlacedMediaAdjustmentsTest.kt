@@ -196,7 +196,7 @@ class StoryPlacedMediaAdjustmentsTest {
     fun `le plateau peint le media pose avec ses reglages, neutre sans`() {
         val s = state(StoryPlacedMedia("m1", adjustments = tuned), StoryPlacedMedia("m2"))
 
-        val frames = s.placedMediaFrames().associateBy { it.key }
+        val frames = s.placedMediaFrames(mediaBaseUrl = null).associateBy { it.key }
 
         assertThat(frames.getValue("m1").look.params.brightness).isEqualTo(0.2f)
         assertThat(frames.getValue("m2").look.isNeutral).isTrue()
@@ -206,7 +206,7 @@ class StoryPlacedMediaAdjustmentsTest {
     fun `le plateau ne paie pas les effets a une video posee`() {
         val s = state(StoryPlacedMedia("v1", adjustments = tuned), mimes = mapOf("v1" to "video/mp4"))
 
-        val look = s.placedMediaFrames().single().look
+        val look = s.placedMediaFrames(mediaBaseUrl = null).single().look
 
         assertThat(look.params.brightness).isEqualTo(0.2f)
         assertThat(look.params.grain).isEqualTo(0f)

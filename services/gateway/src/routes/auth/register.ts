@@ -23,7 +23,7 @@ import { depreciee } from '../../utils/deprecation';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
-import { candidatsDePseudo } from '../../utils/username-candidates';
+import { candidatsDePseudo, pseudoSousLePlancher } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
@@ -612,7 +612,9 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       if (username) {
         const demande = username.trim();
-        const pris = await fastify.prisma.user.findFirst({
+        // Un pseudo sous le plancher (#13825) n'est pas « disponible » : la
+        // soumission le refuserait. La base n'est pas même interrogée.
+        const pris = pseudoSousLePlancher(demande) || await fastify.prisma.user.findFirst({
           where: { username: { equals: demande, mode: 'insensitive' } },
           select: { id: true }
         });

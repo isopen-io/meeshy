@@ -242,7 +242,7 @@ class StoryBackgroundAdjustmentsTest {
     fun `comparer un media pose montre son original et lui seul`() {
         val s = state(placed = listOf(StoryPlacedMedia("m1", filter = StoryFilter.WARM, adjustments = tuned), StoryPlacedMedia("m2", adjustments = tuned)), adjustments = tuned)
 
-        val frames = s.placedMediaFrames(comparing = "m1").associateBy { it.key }
+        val frames = s.placedMediaFrames(mediaBaseUrl = null, comparing = "m1").associateBy { it.key }
 
         assertThat(frames.getValue("m1").look.isNeutral).isTrue()
         assertThat(frames.getValue("m2").look.params.brightness).isEqualTo(0.2f)

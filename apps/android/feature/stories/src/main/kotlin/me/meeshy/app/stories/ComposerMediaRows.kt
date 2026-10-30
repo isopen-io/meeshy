@@ -49,6 +49,7 @@ import me.meeshy.sdk.model.UploadedMedia
 internal fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
     pending: List<PendingMediaUpload>,
+    mediaBaseUrl: String?,
     backgroundMediaId: String?,
     backgroundIsVideo: Boolean,
     backgroundLoop: Boolean,
@@ -67,7 +68,7 @@ internal fun MediaPreviewRow(
         items(attachments, key = { it.id }) { media ->
             val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
-                model = media.thumbnailUrl ?: media.url,
+                model = ComposerMediaAddress.preview(media, mediaBaseUrl),
                 isPending = false,
                 isBackground = isBackground,
                 selected = media.id == selectedMediaId,

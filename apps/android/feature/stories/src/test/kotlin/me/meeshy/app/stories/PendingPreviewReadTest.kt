@@ -46,6 +46,7 @@ class PendingPreviewReadTest {
                 MediaPreviewRow(
                     attachments = emptyList(),
                     pending = pending,
+                    mediaBaseUrl = null,
                     backgroundMediaId = "bg-$tick",
                     backgroundIsVideo = false,
                     backgroundLoop = tick % 2 == 0,

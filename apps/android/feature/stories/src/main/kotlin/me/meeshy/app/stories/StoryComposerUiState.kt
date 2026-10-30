@@ -168,18 +168,17 @@ data class StoryComposerUiState(
      * Ce que le plateau peint en fond : le média que la publication désigne (envoyé ou encore en attente), sinon le premier
      * média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas).
      */
-    val selectedSlideBackdropModel: Any?
-        get() {
-            val designated = deck.selectedSlideBackgroundMediaId
-            val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
-            val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
-            return when {
-                uploaded != null -> uploaded.thumbnailUrl ?: uploaded.url
-                pending != null -> pending.item.previewModel
-                else -> selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: selectedSlidePending.firstOrNull()?.item?.previewModel
-            }
+    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
+        val designated = deck.selectedSlideBackgroundMediaId
+        val uploaded = selectedSlideAttachments.firstOrNull { it.id == designated }
+        val pending = selectedSlidePending.firstOrNull { it.cmid == designated }
+        return when {
+            uploaded != null -> ComposerMediaAddress.preview(uploaded, mediaBaseUrl)
+            pending != null -> pending.item.previewModel
+            else -> selectedSlideAttachments.firstOrNull()?.let { ComposerMediaAddress.preview(it, mediaBaseUrl) }
+                ?: selectedSlidePending.firstOrNull()?.item?.previewModel
         }
+    }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform
