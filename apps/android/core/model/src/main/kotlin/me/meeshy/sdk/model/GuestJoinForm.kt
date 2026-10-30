@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.auth.RegistrationIdentity
+
 /**
  * The guest (anonymous shared-link) join form — the pure, immutable SSOT for what
  * a visitor must supply before joining a conversation via a share link, and how
@@ -32,9 +34,21 @@ data class GuestJoinForm(
     val requireBirthday: Boolean = false,
     val requireAccount: Boolean = false,
 ) {
-    val isFirstNameValid: Boolean get() = firstName.isNotBlank()
-    val isLastNameValid: Boolean get() = lastName.isNotBlank()
-    val isUsernameValid: Boolean get() = !requireNickname || username.isNotBlank()
+    val isFirstNameValid: Boolean get() = RegistrationIdentity.isNameLongEnough(firstName)
+    val isLastNameValid: Boolean get() = RegistrationIdentity.isNameLongEnough(lastName)
+
+    /**
+     * Un pseudo d'invité, exigé ou facultatif, atteint [RegistrationIdentity.PSEUDO_MIN] dès qu'il est tapé,
+     * compté sur ce que la passerelle en garde ([RegistrationIdentity.isGuestNicknameLongEnough]).
+     */
+    val isUsernameValid: Boolean
+        get() = if (username.isBlank()) !requireNickname else RegistrationIdentity.isGuestNicknameLongEnough(username)
+
+    /** Une saisie NON vide en deçà du minimum : le minimum se dit sous le champ, un champ encore vide ne reçoit aucun reproche. */
+    val isFirstNameTooShort: Boolean get() = RegistrationIdentity.isNameTooShort(firstName)
+    val isLastNameTooShort: Boolean get() = RegistrationIdentity.isNameTooShort(lastName)
+    val isUsernameTooShort: Boolean
+        get() = username.isNotBlank() && !RegistrationIdentity.isGuestNicknameLongEnough(username)
     val isEmailValid: Boolean get() = !requireEmail || isPlausibleEmail(email)
     val isBirthdayValid: Boolean get() = !requireBirthday || birthday.isNotBlank()
 

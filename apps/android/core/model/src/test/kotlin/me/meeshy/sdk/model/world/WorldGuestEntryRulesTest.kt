@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.world
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.auth.RegistrationIdentity
 import org.junit.Test
 
 class WorldGuestEntryRulesTest {
@@ -26,6 +27,19 @@ class WorldGuestEntryRulesTest {
         assertThat(WorldGuestEntryRules.canContinue("a".repeat(50))).isTrue()
         assertThat(WorldGuestEntryRules.canContinue("a".repeat(51))).isFalse()
         assertThat(WorldGuestEntryRules.boundedName("a".repeat(80))).hasLength(50)
+    }
+
+    @Test
+    fun `le nom part comme pseudo d'invite - trois caracteres gardes par la passerelle, une fois rogne`() {
+        assertThat(WorldGuestEntryRules.MIN_NAME_LENGTH).isEqualTo(RegistrationIdentity.PSEUDO_MIN)
+        assertThat(WorldGuestEntryRules.canContinue("A")).isFalse()
+        assertThat(WorldGuestEntryRules.canContinue("  Al  ")).isFalse()
+        assertThat(WorldGuestEntryRules.canContinue("Zoé")).isFalse()
+        assertThat(WorldGuestEntryRules.canContinue("Ali")).isTrue()
+        assertThat(WorldGuestEntryRules.canContinue(" Awa ")).isTrue()
+        assertThat(WorldGuestEntryRules.isNameTooShort("Al")).isTrue()
+        assertThat(WorldGuestEntryRules.isNameTooShort("")).isFalse()
+        assertThat(WorldGuestEntryRules.isNameTooShort("Ali")).isFalse()
     }
 
     @Test

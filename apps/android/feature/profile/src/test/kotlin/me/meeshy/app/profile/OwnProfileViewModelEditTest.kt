@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.profile.ProfileNameField
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
@@ -167,6 +168,61 @@ class OwnProfileViewModelEditTest {
         assertThat(s.systemLanguage).isEqualTo("de")
         assertThat(s.regionalLanguage).isEqualTo("it")
         assertThat(s.customDestinationLanguage).isEqualTo("pt")
+    }
+
+    @Test
+    fun saveProfile_refusesANameOfOneCharacterBeforeAnyRequest_andKeepsTheEditorOpen() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.FirstNameChanged(" A "))
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("B"))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        val s = vm.state.value
+        assertThat(s.isEditing).isTrue()
+        assertThat(s.nameIssues).containsExactly(ProfileNameField.FIRST_NAME, ProfileNameField.DISPLAY_NAME)
+        assertThat(s.firstName).isEqualTo(" A ")
+        coVerify(exactly = 0) { userRepo.enqueueProfileEdit(any()) }
+    }
+
+    @Test
+    fun editingARefusedNameClearsItsRefusal_andTwoCharactersAreSaved() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>()
+        val captured = slot<UpdateProfileRequest>()
+        coEvery { userRepo.enqueueProfileEdit(capture(captured)) } returns "cmid_1"
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.LastNameChanged("L"))
+        vm.onEvent(OwnProfileUiEvent.Save)
+        assertThat(vm.state.value.nameIssues).containsExactly(ProfileNameField.LAST_NAME)
+
+        vm.onEvent(OwnProfileUiEvent.LastNameChanged("Li"))
+        assertThat(vm.state.value.nameIssues).isEmpty()
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isEditing).isFalse()
+        assertThat(captured.captured.lastName).isEqualTo("Li")
+    }
+
+    @Test
+    fun cancellingTheEditorForgetsTheNameRefusals() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.FirstNameChanged("A"))
+        vm.onEvent(OwnProfileUiEvent.Save)
+
+        vm.onEvent(OwnProfileUiEvent.CancelEditing)
+
+        assertThat(vm.state.value.nameIssues).isEmpty()
+        assertThat(vm.state.value.firstName).isEqualTo("Alice")
     }
 
     @Test

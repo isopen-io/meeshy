@@ -27,8 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +43,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.auth.RegistrationIdentity
+import me.meeshy.sdk.model.profile.ProfileNameField
 
 /** Les destinations que MA page ouvre ; `null` = destination absente, l'entrée ne s'affiche pas. */
 internal class OwnProfileDestinations(
@@ -159,12 +163,20 @@ private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnPro
     val missing = stringResource(R.string.profile_own_value_missing)
     OwnProfileSectionBlock(MeeshyIcons.AccountFilled, stringResource(R.string.profile_section_identity), MeeshyPalette.Indigo500) {
         OwnProfileCard {
-            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_first_name_label), state.firstName, state.isEditing) {
-                onEvent(OwnProfileUiEvent.FirstNameChanged(it))
-            }
-            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_last_name_label), state.lastName, state.isEditing) {
-                onEvent(OwnProfileUiEvent.LastNameChanged(it))
-            }
+            OwnProfileField(
+                icon = MeeshyIcons.PersonFilled,
+                title = stringResource(R.string.profile_first_name_label),
+                value = state.firstName,
+                isEditing = state.isEditing,
+                errorText = nameMinimumText(ProfileNameField.FIRST_NAME in state.nameIssues),
+            ) { onEvent(OwnProfileUiEvent.FirstNameChanged(it)) }
+            OwnProfileField(
+                icon = MeeshyIcons.PersonFilled,
+                title = stringResource(R.string.profile_last_name_label),
+                value = state.lastName,
+                isEditing = state.isEditing,
+                errorText = nameMinimumText(ProfileNameField.LAST_NAME in state.nameIssues),
+            ) { onEvent(OwnProfileUiEvent.LastNameChanged(it)) }
             OwnProfileRow {
                 OwnProfileFieldIcon(MeeshyIcons.Mention)
                 Text(
@@ -181,9 +193,13 @@ private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnPro
                     maxLines = 1,
                 )
             }
-            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_display_name_label), state.displayName, state.isEditing) {
-                onEvent(OwnProfileUiEvent.DisplayNameChanged(it))
-            }
+            OwnProfileField(
+                icon = MeeshyIcons.PersonFilled,
+                title = stringResource(R.string.profile_display_name_label),
+                value = state.displayName,
+                isEditing = state.isEditing,
+                errorText = nameMinimumText(ProfileNameField.DISPLAY_NAME in state.nameIssues),
+            ) { onEvent(OwnProfileUiEvent.DisplayNameChanged(it)) }
             OwnProfileField(
                 icon = MeeshyIcons.Quote,
                 title = stringResource(R.string.profile_bio_label),
@@ -196,6 +212,11 @@ private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnPro
     }
 }
 
+/** « 2 caractères au moins » sous un nom que l'enregistrement a refusé ; rien sous un nom accepté. */
+@Composable
+private fun nameMinimumText(refused: Boolean): String? =
+    if (refused) stringResource(R.string.profile_name_min_characters, RegistrationIdentity.NAME_MIN) else null
+
 /** Un champ d'identité (iOS `profileField`) : titre au-dessus, valeur ou champ de saisie en ligne. */
 @Composable
 private fun OwnProfileField(
@@ -205,6 +226,7 @@ private fun OwnProfileField(
     isEditing: Boolean,
     placeholder: String = title,
     isMultiline: Boolean = false,
+    errorText: String? = null,
     onValueChange: (String) -> Unit,
 ) {
     val tokens = MeeshyTheme.tokens
@@ -234,6 +256,14 @@ private fun OwnProfileField(
                 Text(
                     text = value.ifEmpty { placeholder },
                     style = valueStyle.copy(color = if (value.isEmpty()) tokens.textMuted else tokens.textPrimary),
+                )
+            }
+            if (errorText != null) {
+                Text(
+                    text = errorText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
         }

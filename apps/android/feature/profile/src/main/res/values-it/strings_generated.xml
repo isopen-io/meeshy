@@ -57,6 +57,7 @@
     <string name="profile_language_unset">Non impostato</string>
     <string name="profile_last_name_label">Cognome</string>
     <string name="profile_loadFailed_message">Impossibile caricare questo profilo.</string>
+    <string name="profile_name_min_characters">Almeno %1$d caratteri.</string>
     <string name="profile_not_verified">Non verificato</string>
     <string name="profile_open_conversation_error">Impossibile aprire la conversazione</string>
     <string name="profile_phone">Telefono</string>

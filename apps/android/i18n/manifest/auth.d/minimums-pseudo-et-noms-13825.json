@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.username.tooShort",
+          "androidName": "signup_min_characters",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

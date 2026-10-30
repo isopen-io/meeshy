@@ -18,7 +18,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.profile.ProfileEditBuffers
 import me.meeshy.sdk.model.profile.ProfileEditDiff
+import me.meeshy.sdk.model.profile.ProfileNameField
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import me.meeshy.sdk.network.NetworkMonitor
@@ -43,6 +45,8 @@ data class OwnProfileUiState(
     val regionalLanguage: String = "",
     val customDestinationLanguage: String = "",
     val errorMessage: String? = null,
+    /** Les noms que l'enregistrement a refusés faute de [me.meeshy.sdk.model.auth.RegistrationIdentity.NAME_MIN] caractères. */
+    val nameIssues: Set<ProfileNameField> = emptySet(),
     val isSaving: Boolean = false,
     val stats: UserStatsPresentation? = null,
     val timeline: StatsTimelinePresentation? = null,
@@ -159,14 +163,20 @@ class OwnProfileViewModel @Inject constructor(
         when (event) {
             OwnProfileUiEvent.StartEditing -> {
                 editOrigin = _state.value.user
-                _state.update { it.copy(isEditing = true, errorMessage = null).withBuffersFrom(it.user) }
+                _state.update { it.copy(isEditing = true, errorMessage = null, nameIssues = emptySet()).withBuffersFrom(it.user) }
             }
             OwnProfileUiEvent.CancelEditing ->
-                _state.update { it.copy(isEditing = false).withBuffersFrom(it.user) }
+                _state.update { it.copy(isEditing = false, nameIssues = emptySet()).withBuffersFrom(it.user) }
             OwnProfileUiEvent.Save -> saveProfile()
-            is OwnProfileUiEvent.FirstNameChanged -> _state.update { it.copy(firstName = event.value) }
-            is OwnProfileUiEvent.LastNameChanged -> _state.update { it.copy(lastName = event.value) }
-            is OwnProfileUiEvent.DisplayNameChanged -> _state.update { it.copy(displayName = event.value) }
+            is OwnProfileUiEvent.FirstNameChanged -> _state.update {
+                it.copy(firstName = event.value, nameIssues = it.nameIssues - ProfileNameField.FIRST_NAME)
+            }
+            is OwnProfileUiEvent.LastNameChanged -> _state.update {
+                it.copy(lastName = event.value, nameIssues = it.nameIssues - ProfileNameField.LAST_NAME)
+            }
+            is OwnProfileUiEvent.DisplayNameChanged -> _state.update {
+                it.copy(displayName = event.value, nameIssues = it.nameIssues - ProfileNameField.DISPLAY_NAME)
+            }
             is OwnProfileUiEvent.BioChanged ->
                 _state.update { it.copy(bio = event.value.take(ProfileEditDiff.BIO_MAX_LENGTH)) }
             is OwnProfileUiEvent.SystemLanguageChanged -> _state.update { it.copy(systemLanguage = event.code) }
@@ -186,6 +196,19 @@ class OwnProfileViewModel @Inject constructor(
      */
     private fun saveProfile() {
         val attempted = _state.value
+        val tooShort = ProfileEditDiff.tooShortNames(
+            original = editOrigin ?: attempted.user,
+            buffers = ProfileEditBuffers(
+                firstName = attempted.firstName,
+                lastName = attempted.lastName,
+                displayName = attempted.displayName,
+            ),
+        )
+        if (tooShort.isNotEmpty()) {
+            _state.update { it.copy(nameIssues = tooShort) }
+            _effects.trySend(OwnProfileUiEffect.SaveFailed(showDefaultMessage = false))
+            return
+        }
         val request = ProfileEditRequestBuilder.build(
             original = editOrigin ?: attempted.user,
             firstName = attempted.firstName,

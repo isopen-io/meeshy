@@ -94,6 +94,47 @@ class ProfileEditDiffTest {
     }
 
     @Test
+    fun `a first name, last name or display name of one character is refused, two pass, trimmed`() {
+        // #13825 : « A » n'est pas un nom ; « Al », « Li », « Sy » le sont.
+        val user = original()
+
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(firstName = "A")))
+            .containsExactly(ProfileNameField.FIRST_NAME)
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(lastName = "  B ")))
+            .containsExactly(ProfileNameField.LAST_NAME)
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(displayName = "Z")))
+            .containsExactly(ProfileNameField.DISPLAY_NAME)
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(firstName = "A", lastName = "B", displayName = "C")))
+            .containsExactly(ProfileNameField.FIRST_NAME, ProfileNameField.LAST_NAME, ProfileNameField.DISPLAY_NAME)
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(firstName = "Al", lastName = " Li ", displayName = "Sy")))
+            .isEmpty()
+    }
+
+    @Test
+    fun `an emptied name is not a too short name - it stays omitted`() {
+        val user = original()
+
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user).copy(firstName = "", lastName = "   "))).isEmpty()
+    }
+
+    @Test
+    fun `an untouched legacy one character name is not refused and is not sent`() {
+        val user = original().copy(firstName = "A")
+
+        assertThat(ProfileEditDiff.tooShortNames(user, untouched(user))).isEmpty()
+        assertThat(ProfileEditDiff.request(user, untouched(user))).isEqualTo(UpdateProfileRequest())
+    }
+
+    @Test
+    fun `a too short name never leaves in the request`() {
+        val user = original()
+
+        val request = ProfileEditDiff.request(user, untouched(user).copy(firstName = "A", displayName = "Alicia"))
+
+        assertThat(request).isEqualTo(UpdateProfileRequest(displayName = "Alicia"))
+    }
+
+    @Test
     fun `a field identical to the original once trimmed is omitted`() {
         val user = original()
 
