@@ -31,6 +31,9 @@ public protocol JoinFlowModeling: ObservableObject {
     var language: String { get set }
     var isSubmitting: Bool { get }
     var isFormValid: Bool { get }
+    /// Le minimum de caractères à dire sous un champ d'identité dont la saisie
+    /// est trop courte (`.firstName`, `.lastName`, `.pseudo`) ; `nil` sinon.
+    func minimumLengthMessage(for field: IdentityRules.Field) -> String?
 
     func loadLinkInfo() async
     func proceedToForm()

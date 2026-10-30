@@ -83,6 +83,7 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
                 placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prénom", bundle: .module),
                 text: $viewModel.firstName,
                 field: .firstName,
+                identity: .firstName,
                 autocapitalization: .words
             )
 
@@ -91,6 +92,7 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
                 placeholder: String(localized: "joinFlow.form.lastName", defaultValue: "Nom", bundle: .module),
                 text: $viewModel.lastName,
                 field: .lastName,
+                identity: .lastName,
                 autocapitalization: .words
             )
 
@@ -99,7 +101,8 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
                     icon: "at",
                     placeholder: String(localized: "joinFlow.form.username", defaultValue: "Nom d'utilisateur", bundle: .module),
                     text: $viewModel.username,
-                    field: .username
+                    field: .username,
+                    identity: .pseudo
                 )
             }
 
@@ -138,7 +141,8 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
                         icon: "at",
                         placeholder: String(localized: "joinFlow.form.usernameOptional", defaultValue: "Nom d'utilisateur (optionnel)", bundle: .module),
                         text: $viewModel.username,
-                        field: .username
+                        field: .username,
+                    identity: .pseudo
                     )
                 }
 
@@ -166,8 +170,29 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
         placeholder: String,
         text: Binding<String>,
         field: FormField,
+        identity: IdentityRules.Field? = nil,
         keyboardType: UIKeyboardType = .default,
         autocapitalization: TextInputAutocapitalization = .never
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            fieldRow(icon: icon, placeholder: placeholder, text: text, field: field, keyboardType: keyboardType, autocapitalization: autocapitalization)
+            if let identity, let message = viewModel.minimumLengthMessage(for: identity) {
+                Text(message)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(MeeshyColors.error)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .accessibilityIdentifier("joinFlow.form.minimumLength")
+            }
+        }
+    }
+
+    private func fieldRow(
+        icon: String,
+        placeholder: String,
+        text: Binding<String>,
+        field: FormField,
+        keyboardType: UIKeyboardType,
+        autocapitalization: TextInputAutocapitalization
     ) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
