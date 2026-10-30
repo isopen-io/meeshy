@@ -128,12 +128,18 @@ nonisolated enum UnsentPublicationFailureReason: Equatable {
     case unsupportedFormat
     case offline
     case sessionExpired
+    /// #13824 — refus définitif du serveur sur la publication elle-même.
+    case refusedByServer
     case other
+
+    private static let refusalTraces = ["statusCode: 400,", "statusCode: 413,", "statusCode: 422,"]
 
     init(lastError: String?) {
         let trace = lastError ?? ""
         if trace.contains("UnsupportedImageFormatRefusal") || trace.contains("statusCode: 415") {
             self = .unsupportedFormat
+        } else if Self.refusalTraces.contains(where: trace.contains) {
+            self = .refusedByServer
         } else if trace.contains("NSURLErrorDomain") || trace.contains("network") || trace.contains("URLError") {
             self = .offline
         } else if trace.contains("sessionExpired") {
@@ -151,6 +157,8 @@ nonisolated enum UnsentPublicationFailureReason: Equatable {
             return String(localized: "feed.unsent.reason.offline", defaultValue: "Pas de connexion au moment de l'envoi.", bundle: .main)
         case .sessionExpired:
             return String(localized: "feed.unsent.reason.session", defaultValue: "Session expirée : reconnectez-vous, puis réessayez.", bundle: .main)
+        case .refusedByServer:
+            return String(localized: "feed.unsent.reason.refused", defaultValue: "Le serveur a refusé cette publication telle quelle.", bundle: .main)
         case .other:
             return String(localized: "feed.unsent.reason.other", defaultValue: "L'envoi a échoué.", bundle: .main)
         }
