@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallTurnCredentialsLaw
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TurnCredentialsStart
@@ -66,6 +67,20 @@ class CallTurnCredentialsController @Inject constructor(
 
     /** Un jeu servi de durée [ttlSeconds] (`null` : le défaut de la passerelle) : l'échéance repart de zéro. */
     fun schedule(ttlSeconds: Long?) = arm(CallTurnCredentialsLaw.refreshDelayMs(ttlSeconds))
+
+    /**
+     * L'appel a changé de phase : une nouvelle tentative de reconnexion ([CallTurnCredentialsLaw.requestsFreshOn],
+     * #13801, iOS `CallManager+Reconnection`) annule l'échéance périodique — elle partirait sinon dans la même
+     * fenêtre, en doublon — puis demande un jeu frais sous chien de garde. Une reconnexion ne suit qu'un appel établi,
+     * donc une salle rejointe ; sans identifiant d'appel, rien ne part.
+     */
+    fun onTransition(previous: CallState, next: CallState) {
+        if (!CallTurnCredentialsLaw.requestsFreshOn(previous, next)) return
+        val callId = host?.callId?.takeIf { it.isNotBlank() } ?: return
+        refreshJob?.cancel()
+        refreshJob = null
+        request(callId)
+    }
 
     /** Plus aucune échéance ni relance : l'appel est fini, ou un autre commence. */
     fun cancelAll() {

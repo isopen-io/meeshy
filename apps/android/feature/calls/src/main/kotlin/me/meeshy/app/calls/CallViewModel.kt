@@ -592,7 +592,7 @@ class CallViewModel @Inject constructor(
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
         if (callState is CallState.Connected) mediaEstablished = true
-        if (!callState.isActive) turnCredentials.cancelAll()
+        if (!callState.isActive) turnCredentials.cancelAll() else turnCredentials.onTransition(previous, callState)
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
