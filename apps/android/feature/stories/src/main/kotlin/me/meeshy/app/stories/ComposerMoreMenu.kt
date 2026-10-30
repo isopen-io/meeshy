@@ -23,18 +23,22 @@ import me.meeshy.ui.icons.MeeshyIcons
  * Le « ⋯ » posé sur la scène (#13834) : ce que la colonne d'outils ne porte pas — une diapo de plus, le fond, la durée,
  * l'animation et son temps, le cadre et les effets d'un fond média, la légende — puis l'export (miroir de
  * `ComposerOverflowCopy` iOS, #4996). Les entrées sont celles de [me.meeshy.sdk.model.composer.ComposerSceneTools.moreEntries] ;
- * l'animation dit si elle est allumée, et l'export se tait pendant un export ou une publication.
+ * l'animation dit si elle est allumée, et l'export se tait pendant un export ou une publication. [anchor] est ce qu'on
+ * touche pour l'ouvrir : le bouton rond de la scène, ou « Plus » au pied du rail du grand écran (#13837).
  */
 @Composable
 internal fun ComposerMoreMenu(
     entries: List<ComposerMoreEntry>,
     animated: Boolean,
     exportEnabled: Boolean,
+    anchor: @Composable (expanded: Boolean, open: () -> Unit) -> Unit = { expanded, open ->
+        SceneRoundButton(MeeshyIcons.MoreHorizontal, stringResource(R.string.stories_scene_overflow_menu), open, active = expanded)
+    },
     onPick: (ComposerMoreEntry) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        SceneRoundButton(MeeshyIcons.MoreHorizontal, stringResource(R.string.stories_scene_overflow_menu), { expanded = true }, active = expanded)
+        anchor(expanded) { expanded = true }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             entries.forEach { entry ->
                 val checked = entry == ComposerMoreEntry.ANIMATION && animated
@@ -54,7 +58,7 @@ internal fun ComposerMoreMenu(
     }
 }
 
-private fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
+internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
     ComposerMoreEntry.ADD_SLIDE -> MeeshyIcons.Add
     ComposerMoreEntry.BACKGROUND -> MeeshyIcons.Palette
     ComposerMoreEntry.SLIDE_DURATION -> MeeshyIcons.Timer
@@ -68,7 +72,7 @@ private fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
     ComposerMoreEntry.SHARE -> MeeshyIcons.Share
 }
 
-private fun ComposerMoreEntry.labelRes(): Int = when (this) {
+internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
     ComposerMoreEntry.ADD_SLIDE -> R.string.stories_composer_add_slide
     ComposerMoreEntry.BACKGROUND -> R.string.story_tool_texture
     ComposerMoreEntry.SLIDE_DURATION -> R.string.stories_composer_slide_duration

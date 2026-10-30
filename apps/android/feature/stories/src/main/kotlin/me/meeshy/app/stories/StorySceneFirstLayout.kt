@@ -50,6 +50,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.width
+import me.meeshy.sdk.model.composer.ComposerSceneArrangement
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
@@ -74,6 +78,12 @@ import me.meeshy.ui.theme.PlateauTint
  *
  * Pendant la frappe ([typing], #13835), aucune surimpression : la scène se réduit, entière, au-dessus d'une barre de style
  * collée au clavier, qui suit le clavier image par image sans relayout ; ses choix prennent la place du clavier.
+ *
+ * Grand écran (#13837) : quand la fenêtre laisse à côté de la scène la place de deux rails libellés
+ * ([ComposerSceneArrangement], jamais le modèle d'appareil), [rails] remplace la barre du haut, la colonne et le socle :
+ * la scène prend toute la hauteur, Publier posé sous elle, entre le rail de ce qu'on ajoute et celui de la sélection
+ * (inversés en arabe). Les rails se taisent pendant la frappe ou une feuille, sans libérer leur place. La bascule ne
+ * touche que la disposition : la scène reste le même nœud, et rien de l'état ne se perd.
  */
 @Composable
 internal fun StorySceneFirstLayout(
@@ -91,6 +101,113 @@ internal fun StorySceneFirstLayout(
     onSheetDismiss: () -> Unit = {},
     sheetContent: @Composable (StoryComposerSheet) -> Unit = {},
     typing: StoryTypingSlot? = null,
+    rails: StorySceneRails? = null,
+) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .background(tint.color)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+    ) {
+        val arrangement = rememberSceneArrangement(maxWidth, maxHeight, offered = rails != null)
+        val onRails = rails != null && arrangement == ComposerSceneArrangement.RAILS
+        val railsServe = typing == null && sheet == null
+        val railHeight = maxHeight - RAIL_MARGIN * 2
+        Row(Modifier.fillMaxSize()) {
+            if (onRails) LabeledRailSlot { if (railsServe) rails?.leading?.invoke(this, railHeight) }
+            Box(Modifier.weight(1f).fillMaxHeight().padding(top = if (onRails) RAIL_MARGIN else 0.dp)) {
+                SceneFirstStage(
+                    onDismiss = onDismiss,
+                    reduced = reduced,
+                    scene = scene,
+                    overlays = SceneOverlaySlots(
+                        top = if (onRails) NoOverlay else top,
+                        strip = strip,
+                        trailing = if (onRails) NoColumn else trailing,
+                        panel = panel,
+                        socle = if (onRails) rails?.socle ?: NoColumn else socle,
+                    ),
+                    reservesBelow = onRails,
+                    below = rails?.below?.takeIf { onRails && railsServe },
+                    sheet = sheet,
+                    onSheetDismiss = onSheetDismiss,
+                    sheetContent = sheetContent,
+                    typing = typing,
+                )
+            }
+            if (onRails) LabeledRailSlot { if (railsServe) rails?.trailing?.invoke(this) }
+        }
+    }
+}
+
+/**
+ * Ce que le grand écran range autour de la scène (#13837) : [leading] le rail de ce qu'on ajoute (il reçoit sa hauteur
+ * pour savoir ce qui y tient), [trailing] celui de la sélection, [socle] ce qui reste posé au bas de la scène (un message
+ * de l'éditeur) et [below] Publier, sous la scène. La disposition ne les sert que si la place libre le permet.
+ */
+internal class StorySceneRails(
+    val leading: @Composable ColumnScope.(railHeight: Dp) -> Unit,
+    val trailing: @Composable ColumnScope.() -> Unit,
+    val socle: @Composable ColumnScope.() -> Unit,
+    val below: @Composable () -> Unit,
+)
+
+private class SceneOverlaySlots(
+    val top: @Composable () -> Unit,
+    val strip: @Composable () -> Unit,
+    val trailing: @Composable ColumnScope.() -> Unit,
+    val panel: @Composable () -> Unit,
+    val socle: @Composable ColumnScope.() -> Unit,
+)
+
+private val NoOverlay: @Composable () -> Unit = {}
+private val NoColumn: @Composable ColumnScope.() -> Unit = {}
+
+/**
+ * La disposition que la fenêtre permet, relue à chaque changement de taille (rotation, multi-fenêtre, pliage) : la loi
+ * reçoit la disposition en place, pour que l'hystérésis empêche un redimensionnement de la faire clignoter.
+ */
+@Composable
+private fun rememberSceneArrangement(width: Dp, height: Dp, offered: Boolean): ComposerSceneArrangement {
+    val memory = remember { ArrangementMemory() }
+    if (!offered) return ComposerSceneArrangement.OVERLAY
+    return remember(width, height) {
+        ComposerSceneArrangement.resolve(width.value, height.value, memory.last).also { memory.last = it }
+    }
+}
+
+private class ArrangementMemory(var last: ComposerSceneArrangement? = null)
+
+/** Un rail libellé : sa largeur fixe et ses marges, quel que soit ce qu'il porte à cet instant. */
+@Composable
+private fun LabeledRailSlot(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(ComposerSceneArrangement.RAIL_WIDTH.dp)
+            .fillMaxHeight()
+            .padding(vertical = RAIL_MARGIN, horizontal = MeeshySpacing.xs),
+        content = content,
+    )
+}
+
+/**
+ * La scène et ce qui se pose sur elle. Sur les rails ([reservesBelow]), la place de Publier est réservée sous la scène,
+ * même quand une feuille ou la frappe le retirent, pour que la scène ne saute pas ; [below] s'y pose, à la largeur de la
+ * scène ou au moins à [BELOW_MIN_WIDTH].
+ */
+@Composable
+private fun SceneFirstStage(
+    onDismiss: () -> Unit,
+    reduced: Boolean,
+    scene: @Composable (Modifier) -> Unit,
+    overlays: SceneOverlaySlots,
+    reservesBelow: Boolean,
+    below: (@Composable () -> Unit)?,
+    sheet: StoryComposerSheet?,
+    onSheetDismiss: () -> Unit,
+    sheetContent: @Composable (StoryComposerSheet) -> Unit,
+    typing: StoryTypingSlot?,
 ) {
     val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
     val windowKeyboard = rememberWindowTypingKeyboard()
@@ -98,11 +215,8 @@ internal fun StorySceneFirstLayout(
         TypingMeasures(mutableFloatStateOf(0f), mutableFloatStateOf(ComposerKeyboardOrOptions.BAR_HEIGHT))
     }
     BoxWithConstraints(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(tint.color)
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .then(if (typing == null) Modifier.imePadding().nestedScroll(pull.connection) else Modifier),
     ) {
         val windowHeight = maxHeight.value
@@ -122,9 +236,11 @@ internal fun StorySceneFirstLayout(
         }
         val scale by animateFloatAsState(framing.scale, label = "sceneFirstScale")
         val offsetY by animateFloatAsState(framing.offsetY, label = "sceneFirstOffset")
+        val reserve = if (reservesBelow) BELOW_RESERVE else 0.dp
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .padding(bottom = reserve)
                 .aspectRatio(StoryCanvasFraming.PORTRAIT_RATIO)
                 .onGloballyPositioned {
                     frameWidth = it.size.width.toFloat()
@@ -149,12 +265,25 @@ internal fun StorySceneFirstLayout(
             } else if (sheet != null) {
                 SheetDismissCatcher(onSheetDismiss)
             } else {
-                SceneOverlays(pull, top, strip, trailing, panel = panel, onPanelTop = { panelTop = it }, socle = socle)
+                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it })
             }
         }
+        below?.let { BelowScene(frameWidth, frameHeight, it) }
         typing?.let { TypingDock(it, it.keyboard ?: windowKeyboard, measures, windowHeight) }
         AnchoredSheetHost(sheet.takeIf { typing == null }, maxHeight * SHEET_MAX_FRACTION, sheetHeights, sheetContent)
     }
+}
+
+/** Publier sous la scène (grand écran) : à la largeur de la scène, ou au moins à [BELOW_MIN_WIDTH]. */
+@Composable
+private fun BoxScope.BelowScene(frameWidthPx: Float, frameHeightPx: Float, content: @Composable () -> Unit) {
+    val frame = with(LocalDensity.current) { DpSize(frameWidthPx.toDp(), frameHeightPx.toDp()) }
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = frame.height + BELOW_GAP)
+            .width(maxOf(frame.width, BELOW_MIN_WIDTH)),
+    ) { content() }
 }
 
 /** La feuille ouverte, ancrée en bas sur toute la largeur et sans voile : sa hauteur mesurée réduit la scène au-dessus d'elle. */
@@ -184,15 +313,7 @@ private fun BoxScope.AnchoredSheetHost(
 
 /** Les contrôles du geste en cours, posés sur la scène : la barre du haut (qui se tire pour fermer), la colonne, le panneau et le socle. */
 @Composable
-private fun SceneOverlays(
-    pull: ComposerPullDismiss,
-    top: @Composable () -> Unit,
-    strip: @Composable () -> Unit,
-    trailing: @Composable ColumnScope.() -> Unit,
-    panel: @Composable () -> Unit,
-    onPanelTop: (Float) -> Unit,
-    socle: @Composable ColumnScope.() -> Unit,
-) {
+private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, onPanelTop: (Float) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(OVERLAY_INSET)) {
         Box(
             modifier = Modifier.fillMaxWidth().draggable(
@@ -200,22 +321,22 @@ private fun SceneOverlays(
                 state = rememberDraggableState { deltaPx -> pull.onDrag(deltaPx) },
                 onDragStopped = { velocityPx -> pull.onRelease(velocityPx) },
             ),
-        ) { top() }
-        strip()
+        ) { slots.top() }
+        slots.strip()
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Spacer(Modifier.weight(1f))
             Column(
                 modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                content = trailing,
+                content = slots.trailing,
             )
         }
-        Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { onPanelTop(it.positionInRoot().y) }) { panel() }
+        Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { onPanelTop(it.positionInRoot().y) }) { slots.panel() }
         Column(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xs),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            content = socle,
+            content = slots.socle,
         )
     }
 }
@@ -239,6 +360,11 @@ private fun SheetDismissCatcher(onSheetDismiss: () -> Unit) {
 private const val SHEET_MAX_FRACTION = 0.55f
 
 private val OVERLAY_INSET = 10.dp
+
+private val RAIL_MARGIN = ComposerSceneArrangement.MARGIN.dp
+private val BELOW_GAP = 8.dp
+private val BELOW_RESERVE = ComposerSceneArrangement.PUBLISH_RESERVE.dp + RAIL_MARGIN
+private val BELOW_MIN_WIDTH = 300.dp
 
 private fun sceneFraming(reduced: Boolean, width: Float, height: Float, overlap: Float): StoryCanvasFraming.Result =
     StoryCanvasFraming.resolve(

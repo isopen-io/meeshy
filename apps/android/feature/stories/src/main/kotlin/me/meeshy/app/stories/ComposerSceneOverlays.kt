@@ -210,7 +210,7 @@ private fun AudiencePastille(audience: SceneAudience, onClick: () -> Unit) {
     }
 }
 
-private fun ComposerSceneTool.glyph(): ImageVector = when (this) {
+internal fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.TEXT -> MeeshyIcons.TextFields
     ComposerSceneTool.MEDIA -> MeeshyIcons.PhotoFilled
     ComposerSceneTool.STICKER -> MeeshyIcons.EmojiFilled
@@ -219,7 +219,7 @@ private fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.MORE -> MeeshyIcons.MoreHorizontal
 }
 
-private fun ComposerSceneTool.labelRes(): Int = when (this) {
+internal fun ComposerSceneTool.labelRes(): Int = when (this) {
     ComposerSceneTool.TEXT -> R.string.story_tool_text
     ComposerSceneTool.MEDIA -> R.string.story_tool_media
     ComposerSceneTool.STICKER -> R.string.stories_composer_add_sticker
