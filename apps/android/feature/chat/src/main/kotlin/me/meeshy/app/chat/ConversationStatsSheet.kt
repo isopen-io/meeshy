@@ -68,44 +68,58 @@ internal fun ConversationStatsSheet(
     onDismiss: () -> Unit,
     viewModel: ConversationStatsViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-
-    LaunchedEffect(conversationId) { viewModel.load(conversationId, clientMessages) }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MeeshySpacing.lg)
-                .padding(bottom = MeeshySpacing.xl),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        ) {
-            Text(
-                stringResource(R.string.conversation_stats_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MeeshyTheme.tokens.textPrimary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
+        ConversationStatsContent(conversationId, accentColor, clientMessages, viewModel = viewModel)
+    }
+}
+
+/** Les statistiques, montées par la feuille ou par l'onglet Stats de la fiche (#13785) ; [header] précède le titre. */
+@Composable
+internal fun ConversationStatsContent(
+    conversationId: String,
+    accentColor: Color,
+    clientMessages: List<ClientStatMessage>,
+    modifier: Modifier = Modifier,
+    viewModel: ConversationStatsViewModel = hiltViewModel(),
+    header: @Composable () -> Unit = {},
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(conversationId) { viewModel.load(conversationId, clientMessages) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = MeeshySpacing.lg)
+            .padding(bottom = MeeshySpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        header()
+        Text(
+            stringResource(R.string.conversation_stats_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MeeshyTheme.tokens.textPrimary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = MeeshySpacing.sm),
+        )
+
+        when {
+            state.isLoading -> CircularProgressIndicator(
+                modifier = Modifier
+                    .size(24.dp)
+                    .padding(vertical = MeeshySpacing.lg),
+                color = accentColor,
             )
 
-            when {
-                state.isLoading -> CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .padding(vertical = MeeshySpacing.lg),
-                    color = accentColor,
-                )
+            state.hasError -> ErrorState(accentColor, onRetry = viewModel::retry)
 
-                state.hasError -> ErrorState(accentColor, onRetry = viewModel::retry)
+            state.phase == StatsPhase.Empty -> CenteredHint(stringResource(R.string.conversation_stats_empty))
 
-                state.phase == StatsPhase.Empty -> CenteredHint(stringResource(R.string.conversation_stats_empty))
-
-                else -> LoadedContent(state, accentColor, viewModel::selectPeriod)
-            }
+            else -> LoadedContent(state, accentColor, viewModel::selectPeriod)
         }
     }
 }
