@@ -5,12 +5,9 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
-          "androidName": "composer_media_place_on_scene",
-          "status": "android-only"
-        },
-        {
-          "androidName": "composer_media_unplace_from_scene",
-          "status": "android-only"
+          "catalog": "app",
+          "iosKey": "composer.audio.promote.action",
+          "status": "adopted"
         }
       ]
     }

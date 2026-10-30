@@ -21,6 +21,7 @@
     <string name="composer_audience_sub_public">Tutti, anche i non follower</string>
     <string name="composer_audience_title">Pubblico</string>
     <string name="composer_audio_delete_action">Elimina il suono</string>
+    <string name="composer_audio_promote_action">Metti sulla scena</string>
     <string name="composer_capture_sound_mute">Disattiva l’audio</string>
     <string name="composer_capture_sound_unmute">Riattiva l’audio</string>
     <string name="composer_capture_tool_sound">Audio</string>

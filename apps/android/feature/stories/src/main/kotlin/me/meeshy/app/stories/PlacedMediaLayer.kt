@@ -7,7 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -27,6 +35,7 @@ import coil.size.Size
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
@@ -37,7 +46,13 @@ import me.meeshy.ui.component.imageedit.sceneLook
  * et son ratio mesuré — `null` tant que le média n'est pas téléversé, peint alors en carré comme chez les lecteurs.
  */
 @Immutable
-internal data class PlacedMediaFrame(val placed: StoryPlacedMedia, val model: Any?, val aspectRatio: Double? = null, val isVideo: Boolean = false) {
+internal data class PlacedMediaFrame(
+    val placed: StoryPlacedMedia,
+    val model: Any?,
+    val aspectRatio: Double? = null,
+    val isVideo: Boolean = false,
+    val pendingItem: MediaUploadItem? = null,
+) {
     val key: String get() = placed.mediaId
 
     /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
@@ -53,13 +68,24 @@ internal fun StoryComposerUiState.placedMediaFrames(comparing: String? = null): 
         val uploaded = selectedSlideAttachments.firstOrNull { it.id == placed.mediaId }
         val pending = selectedSlidePending.firstOrNull { it.cmid == placed.mediaId }
         when {
-            uploaded != null -> PlacedMediaFrame(
-                placed = placed,
-                model = uploaded.thumbnailUrl ?: uploaded.url,
-                aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
-                isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true),
-            )
-            pending != null -> PlacedMediaFrame(placed, pending.item.previewModel, isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true))
+            uploaded != null -> {
+                val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
+                PlacedMediaFrame(
+                    placed = placed,
+                    model = if (isVideo) uploaded.thumbnailUrl else uploaded.thumbnailUrl ?: uploaded.url,
+                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height),
+                    isVideo = isVideo,
+                )
+            }
+            pending != null -> {
+                val isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true)
+                PlacedMediaFrame(
+                    placed = placed,
+                    model = if (isVideo) null else pending.item.previewModel,
+                    isVideo = isVideo,
+                    pendingItem = pending.item.takeUnless { isVideo },
+                )
+            }
             else -> null
         }
     }
@@ -89,10 +115,16 @@ internal fun PlacedMediaLayer(
     val currentDrag by rememberUpdatedState(gestures.onDrag)
     val currentDragEnd by rememberUpdatedState(gestures.onDragEnd)
     val currentTransform by rememberUpdatedState(gestures.onTransform)
+    val currentScale by rememberUpdatedState(placed.scale)
+    val currentRotation by rememberUpdatedState(placed.rotationDeg)
     val context = LocalContext.current
     val density = LocalDensity.current
-    val base = remember(frame.aspectRatio, canvasWidthPx) {
-        ForegroundMediaFrame.renderedSize(frame.aspectRatio, scale = 1.0, canvasWidth = canvasWidthPx.toDouble())
+    val measuredRatio by produceState<Double?>(initialValue = null, frame.pendingItem) {
+        value = frame.pendingItem?.let { PendingPlacedMediaRatio.of(it) }
+    }
+    val ratio = frame.aspectRatio ?: measuredRatio
+    val base = remember(ratio, canvasWidthPx) {
+        ForegroundMediaFrame.renderedSize(ratio, scale = 1.0, canvasWidth = canvasWidthPx.toDouble())
     }
     val widthPx = base.width.toFloat()
     val heightPx = base.height.toFloat()
@@ -106,6 +138,7 @@ internal fun PlacedMediaLayer(
     val corner = with(density) { (min(widthPx, heightPx) * CORNER_FRACTION).toDp() }
     Box(
         modifier = Modifier
+            .testTag("placed-media")
             .offset {
                 IntOffset(
                     x = (placed.x * canvasWidthPx - widthPx / 2f).roundToInt(),
@@ -120,7 +153,8 @@ internal fun PlacedMediaLayer(
             .pointerInput(frame.key) {
                 detectTransformGestures { _, pan, zoom, rotation ->
                     if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                        currentDrag(frame.key, pan.x / canvasWidthPx, pan.y / canvasHeightPx)
+                        val onCanvas = PlacedMediaPan.toCanvas(pan, currentScale, currentRotation)
+                        currentDrag(frame.key, onCanvas.x / canvasWidthPx, onCanvas.y / canvasHeightPx)
                     }
                     currentTransform(frame.key, zoom, rotation)
                 }
@@ -135,17 +169,41 @@ internal fun PlacedMediaLayer(
                 }
             },
     ) {
-        AsyncImage(
-            model = request,
+        val frameModifier = Modifier
+            .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
+            .clip(RoundedCornerShape(corner))
+        if (frame.model == null && frame.isVideo) {
+            VideoFramePlaceholder(frameModifier)
+        } else {
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = frameModifier.sceneLook(frame.look),
+            )
+        }
+    }
+}
+
+/** Une vidéo dont on n'a aucune image à décoder : un cadre à la forme de la vidéo, jamais un calque vide qu'on ne saisit pas. */
+@Composable
+private fun VideoFramePlaceholder(modifier: Modifier) {
+    Box(
+        modifier = modifier
+            .testTag("placed-media-placeholder")
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Video,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
-                .clip(RoundedCornerShape(corner))
-                .sceneLook(frame.look),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(PLACEHOLDER_ICON),
         )
     }
 }
+
+private val PLACEHOLDER_ICON = 32.dp
 
 /** L'arrondi d'un média posé, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
 private const val CORNER_FRACTION = 0.06f

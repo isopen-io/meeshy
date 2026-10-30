@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.onboarding.OnboardingGain
 import me.meeshy.sdk.model.onboarding.OnboardingPlan
 import me.meeshy.sdk.model.onboarding.OnboardingRecap
 import me.meeshy.sdk.model.onboarding.OnboardingSendState
+import me.meeshy.sdk.model.onboarding.OnboardingStepId
 import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.onboarding.OnboardingSuggestion
 
@@ -32,7 +33,7 @@ data class OnboardingUiState(
     val storyReward: Int? = null,
     val storyVisibility: OnboardingStoryVisibility = OnboardingStoryVisibility.FRIENDS,
     val storyNeedsEmailVerification: Boolean = false,
-    /** Le composeur s'est refermé sur une publication que le serveur n'a pas encore vue : la carte relit l'état. */
+    /** Le composeur s'est refermé sur une publication qui part encore et que le serveur n'a pas vue : la carte dit « ta story part… » et relit l'état. */
     val storyAwaitsPublication: Boolean = false,
     val verificationLinkState: OnboardingSendState = OnboardingSendState.IDLE,
     val accountEmail: String? = null,
@@ -55,6 +56,17 @@ data class OnboardingUiState(
     val stepPosition: Int get() = plan.position(card)
 
     val stepCount: Int get() = plan.plannedSteps.size
+
+    /**
+     * L'état serveur est relu à intervalle tant qu'une carte l'attend : l'adresse vérifiée, ou une story qui part — elle
+     * crédite ses points où que l'on soit dans le parcours (iOS : « les points arriveront avec le succès »).
+     */
+    val watchesServer: Boolean
+        get() = isPresented && (
+            card == OnboardingCard.Step(OnboardingStepId.EMAIL) ||
+                (card == OnboardingCard.Step(OnboardingStepId.STORY) && storyNeedsEmailVerification) ||
+                storyAwaitsPublication
+            )
 
     val friendRows: List<OnboardingSuggestion>
         get() = (contactsPhase as? OnboardingContactsPhase.Found)

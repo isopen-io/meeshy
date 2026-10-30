@@ -216,6 +216,16 @@
         },
         {
           "catalog": "app",
+          "iosKey": "onboarding.story.sending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.sending.detail",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "onboarding.story.verify",
           "status": "adopted"
         },

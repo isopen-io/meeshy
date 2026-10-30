@@ -19,6 +19,7 @@ import org.junit.Test
 private class SessionGateway : OnboardingGateway {
     var served: ApiOnboardingState? = ApiOnboardingState(eligible = true)
     var fetches = 0
+    var sending: Set<String>? = null
     val settled = mutableSetOf<String>()
     val recorded = mutableListOf<Pair<OnboardingStepId, OnboardingStepOutcome>>()
     var birthResult: OnboardingBirthDateResult = OnboardingBirthDateResult.Declared(closesGlobal = false)
@@ -40,6 +41,7 @@ private class SessionGateway : OnboardingGateway {
     override suspend fun fetchProgress(): OnboardingProgress? = null
     override suspend fun contactsPermission() = MediaPermissionState.NOT_DETERMINED
     override suspend fun notificationsUndetermined() = false
+    override suspend fun sendingStoryPublications(): Set<String>? = sending
     override fun isSettled(userId: String) = userId in settled
     override fun markSettled(userId: String) { settled += userId }
 }
@@ -187,5 +189,85 @@ class OnboardingSessionTest {
 
         assertThat(vm.state.value.storyAwaitsPublication).isFalse()
         assertThat(vm.state.value.storyState).isEqualTo(OnboardingStoryState.IDLE)
+    }
+
+    @Test
+    fun `a composer closed on a publication that is still leaving makes the card wait for it`() = runTest {
+        val gateway = SessionGateway().apply { served = storyFirst; sending = emptySet() }
+        val vm = sessionModel(gateway)
+        vm.start(ada)
+        vm.storyComposerOpened()
+
+        gateway.sending = setOf("cmid-1")
+        vm.storyComposerClosed()
+
+        assertThat(vm.state.value.storyAwaitsPublication).isTrue()
+    }
+
+    @Test
+    fun `a composer closed without publishing waits for nothing and the card keeps its gesture`() = runTest {
+        val gateway = SessionGateway().apply { served = storyFirst; sending = emptySet() }
+        val vm = sessionModel(gateway)
+        vm.start(ada)
+        vm.storyComposerOpened()
+
+        vm.storyComposerClosed()
+
+        assertThat(vm.state.value.storyAwaitsPublication).isFalse()
+    }
+
+    @Test
+    fun `a publication that was already leaving before the composer opened is not this composer's`() = runTest {
+        val gateway = SessionGateway().apply { served = storyFirst; sending = setOf("older") }
+        val vm = sessionModel(gateway)
+        vm.start(ada)
+        vm.storyComposerOpened()
+
+        vm.storyComposerClosed()
+
+        assertThat(vm.state.value.storyAwaitsPublication).isFalse()
+    }
+
+    @Test
+    fun `a publication delivered before the composer's close is still credited`() = runTest {
+        val gateway = SessionGateway().apply { served = storyFirst; sending = emptySet() }
+        val vm = sessionModel(gateway)
+        vm.start(ada)
+        vm.storyComposerOpened()
+
+        gateway.served = storyFirst.copy(prefilledSteps = listOf(OnboardingStepId.STORY))
+        vm.storyComposerClosed()
+
+        assertThat(vm.state.value.storyState).isEqualTo(OnboardingStoryState.PUBLISHED)
+    }
+
+    @Test
+    fun `a publication that gave up before the server saw it hands the card its gesture back`() = runTest {
+        val gateway = SessionGateway().apply { served = storyFirst; sending = emptySet() }
+        val vm = sessionModel(gateway)
+        vm.start(ada)
+        vm.storyComposerOpened()
+        gateway.sending = setOf("cmid-1")
+        vm.storyComposerClosed()
+        assertThat(vm.state.value.storyAwaitsPublication).isTrue()
+
+        gateway.sending = emptySet()
+        vm.refreshVerification()
+
+        assertThat(vm.state.value.storyAwaitsPublication).isFalse()
+        assertThat(vm.state.value.storyState).isEqualTo(OnboardingStoryState.IDLE)
+    }
+
+    @Test
+    fun `the card keeps watching the server for a publication it awaits, whichever card is shown`() {
+        val awaiting = OnboardingUiState(
+            isPresented = true,
+            card = OnboardingCard.Step(OnboardingStepId.NOTIFICATIONS),
+            storyAwaitsPublication = true,
+        )
+
+        assertThat(awaiting.watchesServer).isTrue()
+        assertThat(awaiting.copy(storyAwaitsPublication = false).watchesServer).isFalse()
+        assertThat(awaiting.copy(isPresented = false).watchesServer).isFalse()
     }
 }

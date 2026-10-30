@@ -260,6 +260,8 @@
         <item quantity="many">+%1$d شرارةً · أول قصة</item>
         <item quantity="other">+%1$d شرارة · أول قصة</item>
     </plurals>
+    <string name="onboarding_story_sending">قصتك في الطريق…</string>
+    <string name="onboarding_story_sending_detail">يمكنك المتابعة، ستُنشر في الخلفية.</string>
     <string name="onboarding_story_title">أظهِر نفسك</string>
     <string name="onboarding_story_verify">أكّد بريدك الإلكتروني لنشر قصتك</string>
     <string name="onboarding_story_verify_detail">المس الرابط الذي وصلك بالبريد: ستنطلق قصتك بعده مباشرة.</string>

@@ -56,6 +56,7 @@ data class StoryTextObjectView(
     val outline: StoryTextOutline = StoryTextOutline(),
     /** The published box ([StoryTextObject.frameShape] & co.), iOS `StoryTextLayer`'s — shape, padding scale and ring. */
     val frame: StoryTextFrame = StoryTextFrame(),
+    val zIndex: Int = 0,
 ) {
     /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's own scale — the frame's unit. */
     fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(renderScale, canvasWidthPx)
@@ -199,6 +200,7 @@ object StoryTextObjectProjection {
                 width = textObject.borderWidth?.toFloat()?.takeIf { it > StoryTextOutline.NONE_WIDTH } ?: StoryTextOutline.NONE_WIDTH,
                 color = textObject.borderColor,
             ),
+            zIndex = textObject.zIndex,
             frame = StoryTextFrame(
                 shape = StoryTextFrameShape.fromWire(textObject.frameShape),
                 paddingScale = textObject.framePaddingScale?.toFloat()?.takeIf { it.isFinite() }

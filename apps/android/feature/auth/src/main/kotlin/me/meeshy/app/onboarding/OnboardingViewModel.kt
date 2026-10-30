@@ -67,6 +67,8 @@ class OnboardingViewModel @Inject constructor(
     private var isRoutingElsewhere = false
     private var isArrivalCelebrated = false
     private var awaitsRoute = false
+    private var sendingAtOpen: Set<String>? = null
+    private var awaitedPublications: Set<String> = emptySet()
     private var knownScore: Int? = null
     private var servedElanFactor = 1
     private var servedRewards: OnboardingStepRewards? = null
@@ -109,6 +111,8 @@ class OnboardingViewModel @Inject constructor(
         initialLanguages = "" to null
         rewardSequence = 0
         awaitsRoute = false
+        sendingAtOpen = null
+        awaitedPublications = emptySet()
         knownScore = null
         servedElanFactor = 1
         servedRewards = null
@@ -297,6 +301,7 @@ class OnboardingViewModel @Inject constructor(
         val served = gateway.fetchState() ?: return
         mutableState.update { it.copy(storyNeedsEmailVerification = served.canPublishStory == false) }
         adoptPublishedStory(served)
+        releaseAbandonedPublication()
         if (served.emailVerified != true) return
         if (current.card == OnboardingCard.Step(OnboardingStepId.EMAIL)) {
             showNext()
@@ -418,32 +423,62 @@ class OnboardingViewModel @Inject constructor(
     // region Carte première story
 
     /**
+     * Le composeur de story s'ouvre : on note les publications de story qui partent DÉJÀ, pour reconnaître à la fermeture
+     * celle que ce composeur a lancée (iOS `storyComposerOpened`).
+     */
+    suspend fun storyComposerOpened() {
+        sendingAtOpen = gateway.sendingStoryPublications()
+    }
+
+    /**
      * Le composeur de story s'est refermé : la passerelle relit l'état. Une story publiée est vue par l'engagement
      * (`prefilledSteps`) — c'est le SEUL moment où elle rapporte ses points et où l'étape s'écrit `done`.
      *
-     * La publication part par la file d'envoi durable : elle atteint en général le serveur APRÈS la fermeture. La carte
-     * l'ATTEND donc ([OnboardingUiState.storyAwaitsPublication]) et chaque relecture suivante ([refreshVerification])
-     * la crédite dès qu'elle est vue. Un composeur ouvert hors du parcours ne demande rien au serveur.
+     * La publication part par la file d'envoi durable : elle atteint en général le serveur APRÈS la fermeture. Tant qu'une
+     * publication NOUVELLE part encore, la carte l'ATTEND ([OnboardingUiState.storyAwaitsPublication]) — elle dit « ta story
+     * part… » et n'offre plus d'en créer une seconde — et chaque relecture suivante ([refreshVerification]) la crédite dès
+     * qu'elle est vue. Un composeur refermé sans rien lancer n'attend rien : la carte garde son geste. Un composeur ouvert
+     * hors du parcours ne demande rien au serveur.
      */
     suspend fun storyComposerClosed() {
         val current = mutableState.value
         if (!current.isPresented || current.storyState == OnboardingStoryState.PUBLISHED) return
-        mutableState.update { it.copy(storyAwaitsPublication = true) }
+        val before = sendingAtOpen
+        sendingAtOpen = null
+        val now = gateway.sendingStoryPublications()
+        awaitedPublications = if (before == null || now == null) emptySet() else now - before
+        val awaits = (before == null || now == null) || awaitedPublications.isNotEmpty()
+        mutableState.update { it.copy(storyAwaitsPublication = awaits) }
         val served = gateway.fetchState() ?: return
         mutableState.update { it.copy(storyNeedsEmailVerification = served.canPublishStory == false) }
-        adoptPublishedStory(served)
+        adoptPublishedStory(served, composerJustClosed = true)
     }
 
-    private suspend fun adoptPublishedStory(served: ApiOnboardingState) {
+    private suspend fun adoptPublishedStory(served: ApiOnboardingState, composerJustClosed: Boolean = false) {
         val current = mutableState.value
-        if (!current.storyAwaitsPublication || current.storyState == OnboardingStoryState.PUBLISHED) return
+        if (!(current.storyAwaitsPublication || composerJustClosed) || current.storyState == OnboardingStoryState.PUBLISHED) return
         if (OnboardingStepId.STORY !in served.prefilledSteps) return
         mutableState.update { it.copy(storyState = OnboardingStoryState.PUBLISHED, storyAwaitsPublication = false) }
+        awaitedPublications = emptySet()
         produce()
         val points = creditedPoints(OnboardingRewards.story, servedRewards?.story)
         mutableState.update { it.copy(storyReward = points) }
         reward(points)
         gateway.record(OnboardingStepId.STORY, OnboardingStepOutcome.DONE)
+    }
+
+    /**
+     * La publication attendue a quitté la file sans que le serveur la voie (refusée, abandonnée, écartée) : rien n'est parti,
+     * la carte retrouve son geste — rien n'a été gagné, rien n'est retiré (iOS `storyUploadsChanged`).
+     */
+    private suspend fun releaseAbandonedPublication() {
+        val current = mutableState.value
+        if (!current.storyAwaitsPublication || current.storyState == OnboardingStoryState.PUBLISHED) return
+        if (awaitedPublications.isEmpty()) return
+        val now = gateway.sendingStoryPublications() ?: return
+        if (awaitedPublications.any { it in now }) return
+        awaitedPublications = emptySet()
+        mutableState.update { it.copy(storyAwaitsPublication = false) }
     }
 
     // endregion

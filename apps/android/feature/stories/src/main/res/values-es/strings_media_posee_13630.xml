@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="composer_media_place_on_scene">Colocar en la escena</string>
-    <string name="composer_media_unplace_from_scene">Quitar de la escena</string>
-</resources>

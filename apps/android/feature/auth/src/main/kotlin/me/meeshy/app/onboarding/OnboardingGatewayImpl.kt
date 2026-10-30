@@ -9,6 +9,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.util.Locale
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.conversation.MessageRepository
@@ -32,6 +34,9 @@ import me.meeshy.sdk.onboarding.OnboardingRepository
 import me.meeshy.sdk.onboarding.OnboardingSettledStore
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.permission.PermissionRequestHistory
+import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.publication.UnsentPublicationKind
+import me.meeshy.sdk.publication.UnsentPublicationStatus
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.user.BirthDateOutcome
@@ -61,6 +66,7 @@ class OnboardingGatewayImpl @Inject constructor(
     private val engagement: EngagementProgressRepository,
     private val session: SessionRepository,
     private val workManager: WorkManager,
+    private val publications: PublicationOutbox,
 ) : OnboardingGateway {
 
     override suspend fun fetchState(): ApiOnboardingState? = onboarding.fetchState()
@@ -132,6 +138,18 @@ class OnboardingGatewayImpl @Inject constructor(
         val asked = PermissionRequestHistory.shared(context).wasRequested(AndroidPermissions.POST_NOTIFICATIONS)
         return NotificationPermissionPrompt.asksOnArrival(Build.VERSION.SDK_INT, state, asked)
     }
+
+    /** La file durable des publications : celles de story que le serveur n'a pas confirmées et qui partent encore. */
+    override suspend fun sendingStoryPublications(): Set<String>? =
+        try {
+            publications.unsent().first()
+                .filter { it.kind == UnsentPublicationKind.STORY && it.status == UnsentPublicationStatus.SENDING }
+                .mapTo(mutableSetOf()) { it.cmid }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
 
     override fun isSettled(userId: String): Boolean = settled.isSettled(userId)
 

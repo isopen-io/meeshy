@@ -100,6 +100,31 @@ class OnboardingCardsTest {
     }
 
     @Test
+    fun `une story qui part dit ta story part et ne propose plus d'en creer une seconde`() {
+        var opened = 0
+        var advanced = 0
+        show(
+            OnboardingUiState(card = step(OnboardingStepId.STORY), storyAwaitsPublication = true),
+            OnboardingCardActions(openStory = { opened++ }, advance = { advanced++ }),
+        )
+
+        compose.onNodeWithText(context.getString(R.string.onboarding_story_sending)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.onboarding_story_sending_detail)).assertExists()
+        compose.onNodeWithTag("onboarding.story.create").assertDoesNotExist()
+        compose.onNodeWithTag("onboarding.later").assertDoesNotExist()
+        compose.onNodeWithTag("onboarding.continue").performClick()
+        assertThat(advanced).isEqualTo(1)
+        assertThat(opened).isEqualTo(0)
+    }
+
+    @Test
+    fun `une story qui part n'affiche aucun gain`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.STORY), storyAwaitsPublication = true, storyReward = null))
+
+        compose.onNodeWithText(context.getString(R.string.onboarding_story_published)).assertDoesNotExist()
+    }
+
+    @Test
     fun `la carte amis demande une personne, puis laisse continuer`() {
         var added: String? = null
         val friend = OnboardingSuggestion("u1", "lina", "Lina", languages = listOf("fr"))
