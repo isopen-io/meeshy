@@ -93,6 +93,9 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         cache.keys.toList().forEach { key -> runCatching { cache.removeResource(key) } }
     }
 
+    /** Octets que [category] occupe sur le disque, tels que le cache les compte (tronçons validés). */
+    public fun diskBytes(category: MediaCacheCategory): Long = cacheFor(category).cacheSpace
+
     /** Retire de l'audio et de la vidéo la ressource de [url] (pièce supprimée) ; absente, rien ne se passe. */
     public fun evict(url: String) {
         val key = MeeshyMediaCacheKey.of(url)
