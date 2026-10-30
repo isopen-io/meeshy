@@ -36,7 +36,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerLabeledRail
@@ -55,8 +54,8 @@ private val RAIL_GAP = ComposerLabeledRail.GAP.dp
 
 /**
  * Ce que le rail gauche du grand écran montre (#13837), en valeurs primitives : [showsClose] et [showsTools] se taisent
- * le pinceau en main ; [activeTool] et [openEntry] (Fond, Durée, Temps) surlignent l'outil ouvert ; [moreEntries] sont celles du « ⋯ »
- * de la scène, que le rail range d'après sa hauteur.
+ * le pinceau en main ; [activeTool] et [openEntry] surlignent l'outil ouvert, ou « Plus » quand il range l'entrée ouverte ; [moreEntries] sont celles du « ⋯ »
+ * de la scène, que le rail range derrière « Plus », Fond excepté.
  */
 internal data class LeadingRailModel(
     val showsClose: Boolean,
@@ -69,32 +68,31 @@ internal data class LeadingRailModel(
 )
 
 /**
- * Le rail de ce qu'on AJOUTE (#13837, maquette du 2026-10-30) : Fermer, Texte, Média, Sticker, Son, Dessin, Fond, puis
- * les entrées du « ⋯ » qui tiennent dans [railHeight] ([ComposerLabeledRail]) et « Plus » pour le reste. Une icône et un
- * mot par rangée, une cible de 48 dp ; trop court, le rail défile au lieu d'écraser ses cibles.
+ * Le rail de ce qu'on AJOUTE (#13837, maquette du 2026-10-30) : Fermer, Texte, Média, Sticker, Son, Dessin, Fond, et
+ * « Plus » pour le reste du « ⋯ » ([ComposerLabeledRail]). Une icône et un mot par rangée, une cible de 48 dp ; trop
+ * court, le rail défile au lieu d'écraser ses cibles.
  */
 @Composable
 internal fun StoryLeadingRail(
     rail: LeadingRailModel,
-    railHeight: Dp,
     onClose: () -> Unit,
     onTool: (ComposerSceneTool) -> Unit,
     onEntry: (ComposerMoreEntry) -> Unit,
 ) {
-    val split = remember(rail.moreEntries, railHeight) { ComposerLabeledRail.leading(rail.moreEntries, railHeight.value) }
+    val overflow = remember(rail.moreEntries) { ComposerLabeledRail.overflow(rail.moreEntries) }
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
         if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
-        if (rail.showsTools) LeadingRailTools(rail, split, onTool, onEntry)
+        if (rail.showsTools) LeadingRailTools(rail, overflow, onTool, onEntry)
     }
 }
 
 @Composable
 private fun LeadingRailTools(
     rail: LeadingRailModel,
-    split: ComposerLabeledRail.Leading,
+    overflow: List<ComposerMoreEntry>,
     onTool: (ComposerSceneTool) -> Unit,
     onEntry: (ComposerMoreEntry) -> Unit,
 ) {
@@ -109,29 +107,17 @@ private fun LeadingRailTools(
             active = rail.openEntry == ComposerMoreEntry.BACKGROUND,
         )
     }
-    split.inline.forEach { entry -> MoreEntryItem(entry, rail, onEntry) }
-    if (split.overflow.isNotEmpty()) {
+    if (overflow.isNotEmpty()) {
         ComposerMoreMenu(
-            entries = split.overflow,
+            entries = overflow,
             animated = rail.animated,
             exportEnabled = rail.exportEnabled,
             anchor = { expanded, open ->
-                LabeledRailItem(MeeshyIcons.MoreHorizontal, stringResource(R.string.composer_rail_more), open, active = expanded)
+                LabeledRailItem(MeeshyIcons.MoreHorizontal, stringResource(R.string.composer_rail_more), open, active = expanded || rail.openEntry in overflow)
             },
             onPick = onEntry,
         )
     }
-}
-
-@Composable
-private fun MoreEntryItem(entry: ComposerMoreEntry, rail: LeadingRailModel, onEntry: (ComposerMoreEntry) -> Unit) {
-    LabeledRailItem(
-        icon = entry.glyph(),
-        label = stringResource(entry.labelRes()),
-        onClick = { onEntry(entry) },
-        active = entry == rail.openEntry || (entry == ComposerMoreEntry.ANIMATION && rail.animated),
-        enabled = entry.export == null || rail.exportEnabled,
-    )
 }
 
 /**
@@ -219,7 +205,6 @@ internal fun LabeledRailItem(
     label: String,
     onClick: () -> Unit,
     active: Boolean = false,
-    enabled: Boolean = true,
     tint: Color = Color.White,
 ) {
     Row(
@@ -228,17 +213,16 @@ internal fun LabeledRailItem(
             .height(RAIL_ROW)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(if (active) ComposerPlateauInk.accent.copy(alpha = 0.55f) else Color.Transparent)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .then(if (active) Modifier.semantics { selected = true } else Modifier)
             .padding(horizontal = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        val shade = if (enabled) tint else tint.copy(alpha = 0.4f)
-        Icon(icon, contentDescription = null, tint = shade, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         Text(
             text = label,
-            color = shade,
+            color = tint,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,

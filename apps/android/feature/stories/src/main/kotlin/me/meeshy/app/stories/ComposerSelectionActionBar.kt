@@ -37,13 +37,14 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 
 internal const val SELECTION_BAR_TAG = "composer-selection-bar"
 
 private val BAR_HEIGHT = 56.dp
-private val BAR_VEIL = Color(0xFF0F0F1E).copy(alpha = 0.72f)
+private val BAR_VEIL = MeeshyMediaChromeColors.ScrimStrong
 
 /**
  * La barre d'actions de l'élément sélectionné (#13836, état 3 de la maquette), posée sur la scène juste au-dessus de

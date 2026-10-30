@@ -162,10 +162,11 @@ class ComposerLabeledRailsTest {
     }
 
     @Test
-    fun `the more entries that fit are laid in the rail, the rest goes to more`() {
+    fun `the left rail shows the mockup set, the rest of the more entries waits behind more`() {
         showTablet(viewModel())
 
-        compose.onNodeWithText("Add slide").assertExists()
+        listOf("Close", "Text", "Background", "More").forEach { label -> compose.onNodeWithText(label).assertExists() }
+        compose.onNodeWithText("Add slide").assertDoesNotExist()
     }
 
     @Test
@@ -270,22 +271,21 @@ class ComposerLabeledRailsTest {
     }
 
     @Test
-    fun `the left rail hands the entries it cannot hold to more`() {
+    fun `a tall left rail still keeps the more entries behind more, as the phone does`() {
         var picked: ComposerMoreEntry? = null
         compose.setContent {
             MeeshyTheme {
-                Box(Modifier.size(width = 112.dp, height = 300.dp)) {
+                Box(Modifier.size(width = 112.dp, height = 1200.dp)) {
                     StoryLeadingRail(
                         rail = LeadingRailModel(
                             showsClose = true,
                             showsTools = true,
                             activeTool = null,
                             openEntry = null,
-                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.CAPTION),
+                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
                             animated = false,
                             exportEnabled = true,
                         ),
-                        railHeight = 300.dp,
                         onClose = {},
                         onTool = {},
                         onEntry = { picked = it },
@@ -295,6 +295,7 @@ class ComposerLabeledRailsTest {
         }
 
         compose.onNodeWithText("Add slide").assertDoesNotExist()
+        compose.onNodeWithText("Slide duration").assertDoesNotExist()
         compose.onNodeWithText("More").performScrollTo().performClick()
         compose.onNodeWithText("Add slide").performClick()
         assertThat(picked).isEqualTo(ComposerMoreEntry.ADD_SLIDE)
@@ -308,13 +309,13 @@ class ComposerLabeledRailsTest {
         showTablet(vm)
         compose.onNodeWithContentDescription("😀").performClick()
 
-        listOf("Close", "Edit", "Duplicate", "Remove", "Add slide").forEach { label ->
+        listOf("Close", "Edit", "Duplicate", "Remove", "More").forEach { label ->
             compose.onNodeWithText(label).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
         }
     }
 
     @Test
-    fun `the entry whose panel is open is highlighted in the rail`() {
+    fun `an open panel of an entry behind more highlights more, never the background`() {
         compose.setContent {
             MeeshyTheme {
                 Box(Modifier.size(width = 112.dp, height = 900.dp)) {
@@ -328,7 +329,6 @@ class ComposerLabeledRailsTest {
                             animated = false,
                             exportEnabled = true,
                         ),
-                        railHeight = 900.dp,
                         onClose = {},
                         onTool = {},
                         onEntry = {},
@@ -337,7 +337,7 @@ class ComposerLabeledRailsTest {
             }
         }
 
-        compose.onNodeWithText("Slide duration").assertIsSelected()
+        compose.onNodeWithText("More").assertIsSelected()
         compose.onNodeWithText("Background").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
     }
 

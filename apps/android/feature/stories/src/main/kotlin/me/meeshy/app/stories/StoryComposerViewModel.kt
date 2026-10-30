@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -196,10 +197,10 @@ class StoryComposerViewModel @Inject constructor(
         resetHistory()
     }
 
-    /** Persists or purges the draft when the screen leaves — iOS's save-on-dismiss; [StoryComposerAutosave] decides. */
+    /** Persists or purges the draft on leave ([StoryComposerAutosave]); the write outlives the cleared ViewModel (#13838). */
     fun persistDraft() {
         if (editMode != null) return
-        viewModelScope.launch {
+        viewModelScope.launch(NonCancellable) {
             val orphans = underOpeningAccount {
                 val current = _state.value
                 val previous = draftStore.load()
@@ -693,7 +694,6 @@ class StoryComposerViewModel @Inject constructor(
         record()
     }
 
-    /** Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own; only the scope's cancellation propagates. */
     private fun cancelDurableUpload(cmid: String) {
         viewModelScope.launch { runCatching { mediaUploadQueue.cancel(cmid) }.exceptionOrNull()?.let { if (it is CancellationException) throw it } }
     }

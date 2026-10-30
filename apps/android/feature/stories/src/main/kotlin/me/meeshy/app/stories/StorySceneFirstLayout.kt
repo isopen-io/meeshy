@@ -113,9 +113,8 @@ internal fun StorySceneFirstLayout(
         val arrangement = rememberSceneArrangement(maxWidth, maxHeight, offered = rails != null)
         val onRails = rails != null && arrangement == ComposerSceneArrangement.RAILS
         val railsServe = typing == null && sheet == null
-        val railHeight = maxHeight - RAIL_MARGIN * 2
         Row(Modifier.fillMaxSize()) {
-            if (onRails) LabeledRailSlot { if (railsServe) rails?.leading?.invoke(this, railHeight) }
+            if (onRails) LabeledRailSlot { if (railsServe) rails?.leading?.invoke(this) }
             Box(Modifier.weight(1f).fillMaxHeight().padding(top = if (onRails) RAIL_MARGIN else 0.dp)) {
                 SceneFirstStage(
                     onDismiss = onDismiss,
@@ -142,12 +141,11 @@ internal fun StorySceneFirstLayout(
 }
 
 /**
- * Ce que le grand écran range autour de la scène (#13837) : [leading] le rail de ce qu'on ajoute (il reçoit sa hauteur
- * pour savoir ce qui y tient), [trailing] celui de la sélection, [socle] ce qui reste posé au bas de la scène (un message
- * de l'éditeur) et [below] Publier, sous la scène. La disposition ne les sert que si la place libre le permet.
+ * Ce que le grand écran range autour de la scène (#13837) : [leading] le rail de ce qu'on ajoute, [trailing] celui de
+ * la sélection, [socle] ce qui reste posé au bas de la scène (un message de l'éditeur) et [below] Publier, sous la scène. La disposition ne les sert que si la place libre le permet.
  */
 internal class StorySceneRails(
-    val leading: @Composable ColumnScope.(railHeight: Dp) -> Unit,
+    val leading: @Composable ColumnScope.() -> Unit,
     val trailing: @Composable ColumnScope.() -> Unit,
     val socle: @Composable ColumnScope.() -> Unit,
     val below: @Composable () -> Unit,

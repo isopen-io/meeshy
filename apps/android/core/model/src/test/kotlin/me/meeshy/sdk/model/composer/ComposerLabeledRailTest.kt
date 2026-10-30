@@ -4,8 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Le rail gauche du grand écran (#13837) : Fermer, les cinq outils et Fond toujours, puis les entrées du « ⋯ » qui tiennent
- * dans sa hauteur ; le reste va dans « Plus », qui n'existe que s'il range quelque chose.
+ * Le rail gauche du grand écran (#13837, maquette du 2026-10-30) : Fermer, les cinq outils et Fond, rien d'autre ; les
+ * entrées du « ⋯ » restent derrière « Plus », quelle que soit la hauteur du rail, comme sur le petit écran.
  */
 class ComposerLabeledRailTest {
 
@@ -17,8 +17,6 @@ class ComposerLabeledRailTest {
         ComposerMoreEntry.CAPTION,
     )
 
-    private fun rows(count: Int): Float = count * ComposerLabeledRail.ROW - ComposerLabeledRail.GAP + count * ComposerLabeledRail.GAP
-
     @Test
     fun `the rail always carries the five tools and the background, never the more button`() {
         assertThat(ComposerLabeledRail.tools).containsExactly(
@@ -28,40 +26,20 @@ class ComposerLabeledRailTest {
     }
 
     @Test
-    fun `a tall rail lays every more entry inline and has no more button`() {
-        val rail = ComposerLabeledRail.leading(more, railHeightDp = rows(20))
-
-        assertThat(rail.inline).containsExactly(
+    fun `every more entry but the background stays behind more, in its order`() {
+        assertThat(ComposerLabeledRail.overflow(more)).containsExactly(
             ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION,
             ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
         ).inOrder()
-        assertThat(rail.overflow).isEmpty()
     }
 
     @Test
-    fun `the background is a fixed row of the rail, never repeated among the more entries`() {
-        val rail = ComposerLabeledRail.leading(more, railHeightDp = rows(20))
-
-        assertThat(rail.inline).doesNotContain(ComposerMoreEntry.BACKGROUND)
-        assertThat(rail.overflow).doesNotContain(ComposerMoreEntry.BACKGROUND)
+    fun `the background is a fixed row of the rail, never repeated behind more`() {
+        assertThat(ComposerLabeledRail.overflow(more)).doesNotContain(ComposerMoreEntry.BACKGROUND)
     }
 
     @Test
-    fun `a rail one row short keeps what fits and moves the rest to more, which takes a row`() {
-        val rail = ComposerLabeledRail.leading(more, railHeightDp = rows(ComposerLabeledRail.FIXED_ROWS + 3))
-
-        assertThat(rail.inline).containsExactly(ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION).inOrder()
-        assertThat(rail.overflow).containsExactly(ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION).inOrder()
-    }
-
-    @Test
-    fun `a short rail sends every more entry to more and loses none`() {
-        val rail = ComposerLabeledRail.leading(more, railHeightDp = rows(4))
-
-        assertThat(rail.inline).isEmpty()
-        assertThat(rail.overflow).containsExactly(
-            ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
-        ).inOrder()
+    fun `with only the background to offer, there is nothing behind more`() {
+        assertThat(ComposerLabeledRail.overflow(listOf(ComposerMoreEntry.BACKGROUND))).isEmpty()
     }
 }

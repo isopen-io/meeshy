@@ -199,7 +199,7 @@ private fun storySceneRails(
         exportEnabled = !sceneExport.isExporting && !state.isPublishing,
     )
     return StorySceneRails(
-        leading = { railHeight -> StoryLeadingRail(model, railHeight, doors.onClose, onTool, onEntry) },
+        leading = { StoryLeadingRail(model, doors.onClose, onTool, onEntry) },
         trailing = {
             StoryTrailingRail(
                 bar = selection,
