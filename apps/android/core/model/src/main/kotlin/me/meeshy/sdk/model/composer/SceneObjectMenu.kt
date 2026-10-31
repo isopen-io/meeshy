@@ -8,7 +8,7 @@ package me.meeshy.sdk.model.composer
 object SceneObjectMenu {
 
     enum class Action {
-        EDIT, TRIM, DUPLICATE, BRING_FORWARD, SEND_BACKWARD, LEAVE_SCENE,
+        EDIT, TRIM, DUPLICATE, BRING_TO_FRONT, BRING_FORWARD, SEND_BACKWARD, SEND_TO_BACK, LEAVE_SCENE,
         SET_AS_BACKGROUND, REPLACE_BACKGROUND, DELETE;
 
         /** La seule entrée qui DÉTRUIT : couleur d'alerte, rangée en dernier. */
@@ -32,13 +32,16 @@ object SceneObjectMenu {
         val canDuplicate: Boolean = true,
     )
 
+    /** L'Ordre d'iOS (`StoryComposerViewModel+ZOrder`) : tout devant, un cran devant, un cran derrière, tout derrière. */
+    val ORDER: List<Action> = listOf(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK)
+
     fun offered(subject: Subject): List<Action> = with(subject) {
         val stacks = !isBackground && sharesPlaneWithAnother
         buildList {
             if (!isLocked && hasEditor) add(Action.EDIT)
             if (!isLocked && hasTrimmableSource) add(Action.TRIM)
             if (!isLocked && canDuplicate) add(Action.DUPLICATE)
-            if (stacks) addAll(listOf(Action.BRING_FORWARD, Action.SEND_BACKWARD))
+            if (stacks) addAll(ORDER)
             if (!isLocked && canLeaveScene) add(Action.LEAVE_SCENE)
             if (!isLocked && !isBackground && canBecomeBackground) {
                 add(if (sceneHasBackground) Action.REPLACE_BACKGROUND else Action.SET_AS_BACKGROUND)

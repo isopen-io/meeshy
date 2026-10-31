@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.SceneEntryWindow
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
@@ -38,8 +39,12 @@ internal object StoryComposerSceneReducer {
         )
     }
 
-    fun stickerReordered(state: StoryComposerUiState, id: String, op: StoryZOrder): StoryComposerUiState {
-        val deck = state.deck.reorderSticker(id, op)
+    fun stickerReordered(state: StoryComposerUiState, id: String, op: StoryZOrder): StoryComposerUiState =
+        restacked(state, SceneObjectRef(ComposerObjectKind.STICKER, id), op)
+
+    /** L'Ordre d'un objet de la scène, quelle que soit sa famille (#13852) : même instance quand rien ne change. */
+    fun restacked(state: StoryComposerUiState, ref: SceneObjectRef, op: StoryZOrder): StoryComposerUiState {
+        val deck = state.deck.restacked(ref, op)
         return if (deck === state.deck) state else state.copy(deck = deck)
     }
 

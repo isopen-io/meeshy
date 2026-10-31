@@ -105,9 +105,10 @@ private fun StoryComposerUiState.servedMediaSectionsOf(id: String): List<Compose
     return ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
 }
 
-/** Le média que le plateau peint en fond : celui que la publication désigne, sinon le premier envoyé de la slide. */
+/** Le média que le plateau peint en fond : celui que la publication désigne, sinon le premier envoyé de la slide qui n'est pas posé sur la scène (#13853). */
 internal val StoryComposerUiState.sceneBackgroundMediaId: String?
-    get() = deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id
+    get() = deck.selectedSlideBackgroundMediaId ?: deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+        .let { posed -> selectedSlideAttachments.firstOrNull { it.id !in posed }?.id }
 
 /** Les réglages et effets PROPRES du média [id], posé ou de fond ; `null` : rien de réglé, ou ni l'un ni l'autre. */
 internal fun StoryComposerUiState.adjustmentsOf(id: String): ImageAdjustments? =

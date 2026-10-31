@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_composer_scene_voice_a11y",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -41,6 +41,8 @@ data class StoryStickerElement(
     val imageUrl: String? = null,
     /** Le mouvement, par son nom de fil. */
     val animation: String? = null,
+    /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
+    val zIndex: Int = 0,
 ) {
     /** Une image posée dont les octets ne sont pas encore arrivés : elle se voit, elle ne part pas. */
     val isAwaitingImage: Boolean get() = imageUrl != null && postMediaId.isBlank()
@@ -102,5 +104,6 @@ data class StoryStickerElement(
         rotation = rotationDeg.toDouble(),
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
+        zIndex = zIndex,
     )
 }

@@ -92,6 +92,7 @@ internal fun ComposerSlideRail(
     showsAdd: Boolean = true,
     scenePresent: Boolean = true,
     onEditBackground: ((String) -> Unit)? = null,
+    placedMedia: Map<String, List<ThumbnailPlaced>> = emptyMap(),
 ) {
     if (!ComposerHeaderTiles.showsRail(deck.size, scenePresent)) return
     val density = LocalDensity.current
@@ -122,8 +123,9 @@ internal fun ComposerSlideRail(
                 index = index,
                 count = deck.size,
                 currentIndex = deck.selectedIndex,
-                spec = rememberTileSpec(slide, backgrounds[slide.id], accentHex, tileWidth, canvasWidthPx),
+                spec = rememberTileSpec(slide, backgrounds[slide.id], placedMedia[slide.id].orEmpty(), accentHex, tileWidth, canvasWidthPx),
                 backgroundModel = backgrounds[slide.id]?.model,
+                placedModels = placedMedia[slide.id].orEmpty(),
                 isDragged = dragFrom == index,
                 dragPx = dragPx,
                 shift = shift,
@@ -164,9 +166,16 @@ internal fun slotShift(index: Int, dragFrom: Int, target: Int, slotPx: Float, rt
 }
 
 @Composable
-private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?, accentHex: String, tileWidth: Dp, canvasWidthPx: Float): SlideThumbnailSpec {
+private fun rememberTileSpec(
+    slide: StorySlide,
+    background: ThumbnailBackground?,
+    placed: List<ThumbnailPlaced>,
+    accentHex: String,
+    tileWidth: Dp,
+    canvasWidthPx: Float,
+): SlideThumbnailSpec {
     val density = LocalDensity.current
-    return remember(slide, background?.key, accentHex, tileWidth, density.density, canvasWidthPx) {
+    return remember(slide, background?.key, placed.map { it.key }, accentHex, tileWidth, density.density, canvasWidthPx) {
         with(density) {
             SlideThumbnailSpec.of(
                 slide = slide,
@@ -175,6 +184,7 @@ private fun rememberTileSpec(slide: StorySlide, background: ThumbnailBackground?
                 widthPx = tileWidth.roundToPx(),
                 heightPx = SlideRailGeometry.TileHeight.roundToPx(),
                 canvasWidthPx = canvasWidthPx,
+                placedMedia = placed,
             )
         }
     }
@@ -188,6 +198,7 @@ private fun SlideTile(
     currentIndex: Int,
     spec: SlideThumbnailSpec,
     backgroundModel: Any?,
+    placedModels: List<ThumbnailPlaced>,
     isDragged: Boolean,
     dragPx: Float,
     shift: Float,
@@ -248,7 +259,7 @@ private fun SlideTile(
         },
         actions = actions,
     ) {
-        SlideThumbnail(spec = spec, backgroundModel = backgroundModel, modifier = Modifier.fillMaxSize())
+        SlideThumbnail(spec = spec, backgroundModel = backgroundModel, placedModels = placedModels, modifier = Modifier.fillMaxSize())
         DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
             if (canEditBackground) DropdownMenuItem(
                 text = { Text(editBackgroundLabel) },
@@ -272,10 +283,10 @@ private fun SlideTile(
 /**
  * The picture of a scene. The bitmap comes from [SlideThumbnailStore] when this exact scene was painted before, otherwise it
  * is painted on `Dispatchers.Default` — never on the main thread — after a settling delay if a previous picture is on screen,
- * which stays in place meanwhile (no hole, no repaint per frame of a gesture). Black until the first picture exists.
+ * which stays in place meanwhile (no hole, no repaint per frame of a gesture). Black until the first picture exists; posed media are decoded beside the background (#13867).
  */
 @Composable
-private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, modifier: Modifier = Modifier) {
+private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, placedModels: List<ThumbnailPlaced>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var shown by remember { mutableStateOf<Bitmap?>(SlideThumbnailStore.shared.get(spec)) }
     LaunchedEffect(spec) {
@@ -285,8 +296,9 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, modi
         }
         val painted = withContext(Dispatchers.Default) {
             val image = backgroundModel?.let { loadThumbnailBackground(context, it, spec) }
-            SlideThumbnailRenderer.render(spec, image).also { bitmap ->
-                if (backgroundModel == null || image != null) SlideThumbnailStore.shared.put(spec, bitmap)
+            val placed = placedModels.mapNotNull { media -> loadThumbnailPlaced(context, media.model, spec)?.let { media.key to it } }.toMap()
+            SlideThumbnailRenderer.render(spec, image, placed).also { bitmap ->
+                if ((backgroundModel == null || image != null) && placed.size == placedModels.size) SlideThumbnailStore.shared.put(spec, bitmap)
             }
         }
         shown = painted
@@ -294,6 +306,17 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, modi
     Box(modifier.background(Color.Black)) {
         shown?.let { Image(bitmap = it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
+}
+
+/** A posed media, decoded at the tile's own size: it never covers more than the tile. */
+private suspend fun loadThumbnailPlaced(context: android.content.Context, model: Any, spec: SlideThumbnailSpec): Bitmap? {
+    val request = ImageRequest.Builder(context)
+        .data(model)
+        .size(spec.widthPx.coerceAtLeast(1), spec.heightPx.coerceAtLeast(1))
+        .scale(Scale.FIT)
+        .allowHardware(false)
+        .build()
+    return (context.imageLoader.execute(request) as? SuccessResult)?.drawable?.toBitmap()
 }
 
 private suspend fun loadThumbnailBackground(context: android.content.Context, model: Any, spec: SlideThumbnailSpec): Bitmap? {

@@ -352,7 +352,7 @@ private const val STICKER_TEMPLATE_BODY_FRACTION = 0.16f
  * scène que chez l'auteur.
  */
 @Composable
-internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier) {
+internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier, chipModifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val unit = maxWidth / AUDIO_CHIP_REFERENCE_WIDTH
         val contentWidth = unit * if (chip.credit != null) AUDIO_CHIP_CREDIT_WIDTH else AUDIO_CHIP_WAVE_WIDTH
@@ -366,6 +366,7 @@ internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = 
                     y = maxHeight * chip.y.toFloat() - chipHeight / 2,
                 )
                 .size(width = chipWidth, height = chipHeight)
+                .then(chipModifier)
                 .background(Color.Black.copy(alpha = 0.28f), CircleShape)
                 .border(width = unit, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
                 .padding(horizontal = unit * AUDIO_CHIP_PAD_X, vertical = unit * AUDIO_CHIP_PAD_Y),

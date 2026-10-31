@@ -78,6 +78,8 @@ data class StoryDraftTextElementSnapshot(
     val rotationDeg: Float = 0f,
     /** La personne que nomme un badge de mention épinglée (#13846) ; un blob d'avant se lit « un texte ». */
     val referenceUserId: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
 ) {
     /** True once the element carries publishable content — non-blank [text]. */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -122,6 +124,8 @@ data class StoryDraftStickerElementSnapshot(
     val provider: String? = null,
     val imageUrl: String? = null,
     val animation: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
 ) {
     /** True once the sticker carries publishable content — an emoji, a template or an uploaded image. */
     val isPublishable: Boolean get() = emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank()
@@ -144,6 +148,8 @@ data class StoryDraftPlacedMediaSnapshot(
     val sourceEnd: Double? = null,
     /** Le recadrage d'une image posée (#13849), en fractions de la source ; un blob d'avant se lit « source entière ». */
     val crop: StoryMediaCrop? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
 )
 
 /**

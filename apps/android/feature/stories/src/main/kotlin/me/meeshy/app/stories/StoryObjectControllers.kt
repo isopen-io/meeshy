@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 
 /** Applies a controller of the selected object — its bar, its sheet — to the object it targets; an action the law does not serve does nothing. */
 internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, action: Action) {
+    orderOf(action)?.let { return reorder(ref, it) }
     when (ref.kind) {
         ComposerObjectKind.MEDIA -> return mediaController(ref.id, action)
         ComposerObjectKind.AUDIO -> return if (action == Action.DELETE) onRemoveSound(ref.id) else Unit
@@ -16,10 +17,17 @@ internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, acti
     when (action) {
         Action.DUPLICATE -> if (text) onDuplicateTextElement(ref.id) else onDuplicateSticker(ref.id)
         Action.DELETE -> if (text) onRemoveTextElement(ref.id) else onRemoveSticker(ref.id)
-        Action.BRING_FORWARD -> reorder(ref, StoryZOrder.FORWARD)
-        Action.SEND_BACKWARD -> reorder(ref, StoryZOrder.BACKWARD)
         else -> Unit
     }
+}
+
+/** Le geste de pile qu'une action de l'Ordre porte, `null` pour toute autre action. */
+private fun orderOf(action: Action): StoryZOrder? = when (action) {
+    Action.BRING_TO_FRONT -> StoryZOrder.TO_FRONT
+    Action.BRING_FORWARD -> StoryZOrder.FORWARD
+    Action.SEND_BACKWARD -> StoryZOrder.BACKWARD
+    Action.SEND_TO_BACK -> StoryZOrder.TO_BACK
+    else -> null
 }
 
 /** A text touched on the scene is framed; touched again, written (#13836). */
@@ -51,7 +59,7 @@ internal fun StoryComposerViewModel.onSelectionAction(
 
 private fun StoryComposerViewModel.reorder(ref: SceneObjectRef, op: StoryZOrder) =
     if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-    else onSceneReduce { StoryComposerSceneReducer.stickerReordered(it, ref.id, op) }
+    else onSceneReduce { StoryComposerSceneReducer.restacked(it, ref, op) }
 
 /** Un média fait fond ou le remplace (la désignation est exclusive), ou se retire — sa sélection tombe avec lui. */
 private fun StoryComposerViewModel.mediaController(id: String, action: Action) = when (action) {

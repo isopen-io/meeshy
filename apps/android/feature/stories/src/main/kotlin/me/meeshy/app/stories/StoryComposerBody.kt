@@ -139,6 +139,9 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     val backgrounds = remember(state.deck.slides, state.attachments, state.pendingUploads) {
         state.deck.slides.associate { it.id to state.thumbnailBackgroundOf(it, viewModel.mediaBaseUrl) }
     }
+    val placedMedia = remember(state.deck.slides, state.attachments, state.pendingUploads) {
+        state.deck.slides.associate { it.id to state.thumbnailPlacedOf(it, viewModel.mediaBaseUrl) }
+    }
     ComposerSlideRail(
         deck = state.deck,
         backgrounds = backgrounds,
@@ -151,6 +154,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
         onMove = viewModel::onMoveSlide,
         showsAdd = false,
         onEditBackground = viewModel::onEditSlideBackground,
+        placedMedia = placedMedia,
     )
 }
 

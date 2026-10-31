@@ -3,6 +3,8 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerMediaPlacement
+import me.meeshy.sdk.model.composer.ComposerMediaRole
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.net.ApiError
 
@@ -12,8 +14,30 @@ import me.meeshy.sdk.net.ApiError
  */
 internal object StoryComposerUploadReducer {
 
-    fun started(state: StoryComposerUiState, count: Int): StoryComposerUiState =
-        state.copy(isUploadingMedia = true, errorMessage = null, uploadingMedia = List(count) { MediaUploadProgress.Idle })
+    /**
+     * Where each of [count] picked media lands (R4 de #13863, [ComposerMediaPlacement]): the first of a slide without a
+     * background becomes it, the next is posed ON the scene, a series founds one slide per media. Shorter than [count]
+     * at the slide cap: what finds no slide is refused, never slipped onto the last one.
+     */
+    fun landings(state: StoryComposerUiState, count: Int, asBackground: Boolean = false): List<ComposerMediaPlacement.Landing> =
+        ComposerMediaPlacement.plan(
+            count = count,
+            slideHasBackground = state.selectedSlideBackdropMediaId != null,
+            freeSlides = if (state.canAddSlide) StorySlideDeck.MAX_SLIDES - state.deck.size else 0,
+            asBackground = asBackground,
+        )
+
+    fun started(state: StoryComposerUiState, count: Int, asBackground: Boolean = false): StoryComposerUiState =
+        started(state, landings(state, count, asBackground))
+
+    /** The pick is under way: one line per media, each knowing where it will land; [refused] media found no slide, and it is said. */
+    fun started(state: StoryComposerUiState, landings: List<ComposerMediaPlacement.Landing>, refused: Int = 0): StoryComposerUiState =
+        state.copy(
+            isUploadingMedia = true,
+            errorMessage = SLIDES_FULL.takeIf { refused > 0 },
+            uploadingMedia = List(landings.size) { MediaUploadProgress.Idle },
+            mediaLandings = landings,
+        )
 
     fun progressed(state: StoryComposerUiState, index: Int, sent: Long, total: Long): StoryComposerUiState {
         if (index !in state.uploadingMedia.indices) return state
@@ -25,29 +49,48 @@ internal object StoryComposerUploadReducer {
     }
 
     /**
-     * The uploaded media join the selected slide; nothing usable comes back as a said error, never silence. [asBackground]
-     * (« ⋯ › Choisir un fond », #13845) : the first becomes the slide's designated background.
+     * The uploaded media take the places decided at the pick; nothing usable comes back as a said error, never silence.
+     * [asBackground] (« ⋯ › Choisir un fond », #13845) : the first becomes the slide's designated background.
      */
     fun uploaded(state: StoryComposerUiState, uploaded: List<UploadedMedia>, asBackground: Boolean = false): StoryComposerUiState {
         if (uploaded.isEmpty()) return settled(state).copy(errorMessage = StoryComposerViewModel.MEDIA_UNUSABLE)
-        val deck = uploaded.fold(state.deck) { acc, media -> acc.addMediaToSelected(media.id) }
-            .designatingBackground(uploaded.first().id.takeIf { asBackground })
-        return settled(state).copy(deck = deck, attachments = state.attachments + uploaded).mirrorDraftToSelection()
+        val landings = state.mediaLandings.takeIf { it.size >= uploaded.size } ?: landings(state, uploaded.size, asBackground)
+        val withMedia = state.copy(attachments = state.attachments + uploaded)
+        val landed = uploaded.withIndex().fold(withMedia) { acc, (index, media) ->
+            acc.landing(media.id, landings.getOrNull(index), asBackground && index == 0)
+        }
+        return settled(landed).mirrorDraftToSelection()
     }
 
-    /** A media kept on the device for the outbox to send: a placeholder id rides in the slide until then (and may be its background). */
-    fun queued(state: StoryComposerUiState, cmid: String, item: MediaUploadItem, asBackground: Boolean = false): StoryComposerUiState =
-        state.copy(
-            deck = state.deck.addMediaToSelected(cmid).designatingBackground(cmid.takeIf { asBackground }),
-            pendingUploads = state.pendingUploads + PendingMediaUpload(cmid = cmid, item = item),
-            errorMessage = null,
-        ).mirrorDraftToSelection()
+    /**
+     * A media kept on the device for the outbox to send: a placeholder id rides in the slide until then, at the place the
+     * pick decided for it ([index] in the pick) — a background, posed on the scene, or the root of its own slide.
+     */
+    fun queued(
+        state: StoryComposerUiState,
+        cmid: String,
+        item: MediaUploadItem,
+        asBackground: Boolean = false,
+        index: Int = 0,
+    ): StoryComposerUiState {
+        val landing = state.mediaLandings.getOrNull(index) ?: landings(state, 1, asBackground).firstOrNull()
+        val kept = state.copy(pendingUploads = state.pendingUploads + PendingMediaUpload(cmid = cmid, item = item))
+        return kept.landing(cmid, landing, asBackground && index == 0).mirrorDraftToSelection()
+    }
+
+    /** [id] joins the scene where [landing] says: its own new slide, the current slide's background, or posed on it and selected. */
+    private fun StoryComposerUiState.landing(id: String, landing: ComposerMediaPlacement.Landing?, designates: Boolean): StoryComposerUiState {
+        val onSlide = if (landing?.newSlide == true) withDeckTransform { it.addSlide(newSlideId()) } else this
+        val attached = onSlide.copy(deck = onSlide.deck.addMediaToSelected(id).designatingBackground(id.takeIf { designates }))
+        if (landing?.role != ComposerMediaRole.FOREGROUND) return attached
+        return StoryComposerSelectionReducer.mediaSelected(StoryComposerPlacedMediaReducer.placed(attached, id), id)
+    }
 
     private fun StorySlideDeck.designatingBackground(mediaId: String?): StorySlideDeck =
         if (mediaId == null || isSelectedBackgroundMedia(mediaId)) this else toggleSelectedBackgroundMedia(mediaId)
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
-        state.copy(isUploadingMedia = false, uploadingMedia = emptyList())
+        state.copy(isUploadingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList())
 
     /**
      * A pick whose location cannot be removed (#13550) is NOT kept behind a placeholder: the same bytes would be refused on
@@ -60,4 +103,7 @@ internal object StoryComposerUploadReducer {
 
     /** The [StoryComposerUiState.errorMessage] key the screen renders as its localized refusal. */
     const val LOCATION_REFUSED: String = "media-location-not-removable"
+
+    /** A series that met the slide cap: what found no slide was not taken, and the screen says why. */
+    const val SLIDES_FULL: String = "media-slides-full"
 }

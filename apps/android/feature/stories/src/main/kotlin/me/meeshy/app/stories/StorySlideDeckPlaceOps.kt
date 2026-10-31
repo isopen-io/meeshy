@@ -10,7 +10,7 @@ val StorySlideDeck.selectedCanAddPlace: Boolean get() = selectedSlide.places.siz
 fun StorySlideDeck.addPlaceToSelected(place: StoryLocationObject): StorySlideDeck {
     if (!selectedCanAddPlace || slides.any { slide -> slide.places.any { it.id == place.id } }) return this
     val index = selectedIndex
-    return copy(slides = slides.mapIndexed { i, slide -> if (i == index) slide.copy(places = slide.places + place) else slide })
+    return copy(slides = slides.mapIndexed { i, slide -> if (i == index) slide.copy(places = slide.places + place.copy(zIndex = StorySceneStack.nextZ(slide))) else slide })
 }
 
 /** Réécrit la pastille [id] où qu'elle soit ; sa position reste dans la scène. */

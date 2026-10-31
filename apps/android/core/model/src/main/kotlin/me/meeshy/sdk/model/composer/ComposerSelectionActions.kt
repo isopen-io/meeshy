@@ -46,11 +46,11 @@ object ComposerSelectionActions {
     fun of(action: Action): ComposerSelectionAction = when (action) {
         Action.EDIT, Action.TRIM, Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> ComposerSelectionAction.EDIT
         Action.DUPLICATE -> ComposerSelectionAction.DUPLICATE
-        Action.BRING_FORWARD, Action.SEND_BACKWARD -> ComposerSelectionAction.ORDER
+        Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK -> ComposerSelectionAction.ORDER
         Action.LEAVE_SCENE, Action.DELETE -> ComposerSelectionAction.REMOVE
     }
 
-    /** Ce que l'Ordre ouvre : premier plan puis arrière-plan, tels que l'objet les offre. */
+    /** Ce que l'Ordre ouvre : tout devant, un cran devant, un cran derrière, tout derrière, tels que l'objet les offre. */
     fun orderChoices(offered: List<Action>): List<Action> =
         offered.filter { of(it) == ComposerSelectionAction.ORDER }
 

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryObjectPlacement
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectCaps
 import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.composer.scene.SceneFrame
@@ -239,7 +240,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(elements = slide.elements + element.normalised()) else slide
+            if (i == index) slide.copy(elements = slide.elements + element.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }
@@ -323,29 +324,12 @@ data class StorySlideDeck(
     }
 
     /**
-     * Restacks the on-canvas text element [id] within its holding slide's paint order
-     * per [op] (the list order *is* the z-order: index 0 = back, last = front). The
-     * other elements keep their relative order and every other slide and the selection
-     * are untouched. Inert (same instance) when [id] is unknown or the move would not
-     * change the order (already at the extreme, a single-element slide), so the ≤1
-     * paint-order invariant lives in one place and the caller stays glue.
+     * Restacks the text element [id] on the ONE pile of its slide's scene objects ([StorySceneStack], #13852): a step or
+     * to either end, across texts, placed media, stickers, places and voices. Inert (same instance) when [id] is unknown
+     * or the move would not change the order.
      */
-    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck {
-        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == id } }
-        if (slideIndex < 0) return this
-        val elements = slides[slideIndex].elements
-        val from = elements.indexOfFirst { it.id == id }
-        val target = when (op) {
-            StoryZOrder.TO_BACK -> 0
-            StoryZOrder.BACKWARD -> from - 1
-            StoryZOrder.FORWARD -> from + 1
-            StoryZOrder.TO_FRONT -> elements.lastIndex
-        }.coerceIn(0, elements.lastIndex)
-        if (target == from) return this
-        val restacked = elements.toMutableList().apply { add(target, removeAt(from)) }
-        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = restacked) else s }
-        return copy(slides = next)
-    }
+    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck =
+        restacked(SceneObjectRef(ComposerObjectKind.TEXT, id), op)
 
     /**
      * Appends [sticker] (with its position clamped into the canvas) to the **selected**
@@ -361,7 +345,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised()) else slide
+            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }

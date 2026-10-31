@@ -21,7 +21,7 @@ internal object StoryComposerPlacedMediaReducer {
         if (mediaId !in slide.mediaIds || mediaId == slide.backgroundMediaId) return state
         if (slide.placedMedia.any { it.mediaId == mediaId }) return state
         val at = state.deck.nextObjectPosition()
-        val placed = StoryPlacedMedia(mediaId = mediaId, x = at.x.toFloat(), y = at.y.toFloat())
+        val placed = StoryPlacedMedia(mediaId = mediaId, x = at.x.toFloat(), y = at.y.toFloat(), zIndex = StorySceneStack.nextZ(slide))
         return state.copy(deck = state.deck.updatePlacedMedia(slide.id) { it + placed.normalised() })
     }
 

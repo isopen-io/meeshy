@@ -857,7 +857,7 @@ class StoryComposerAutosaveTest {
 
         val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
 
-        assertThat(rebuilt!!.slides.single().elements.single()).isEqualTo(styledElement().normalised())
+        assertThat(rebuilt!!.slides.single().elements.single()).isEqualTo(deck.slides.single().elements.single())
     }
 
     @Test
@@ -989,7 +989,7 @@ class StoryComposerAutosaveTest {
 
         val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
 
-        assertThat(rebuilt!!.slides.single().stickers.single()).isEqualTo(placedSticker().normalised())
+        assertThat(rebuilt!!.slides.single().stickers.single()).isEqualTo(deck.slides.single().stickers.single())
     }
 
     @Test
@@ -1107,7 +1107,7 @@ class StoryComposerAutosaveTest {
         )
         val deck = StorySlideDeck.single("s1").addTextElementToSelected(element)
         val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()!!
-        assertThat(rebuilt.selectedSlide.elements.single()).isEqualTo(element)
+        assertThat(rebuilt.selectedSlide.elements.single()).isEqualTo(deck.selectedSlide.elements.single())
     }
 
     @Test

@@ -33,7 +33,9 @@ class SceneObjectMenuTest {
     @Test
     fun `l'empilement n'est servi qu'a un objet qui partage son plan`() {
         assertThat(offered(sharesPlaneWithAnother = true))
-            .containsExactly(Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE).inOrder()
+            .containsExactly(
+                Action.DUPLICATE, Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK, Action.DELETE,
+            ).inOrder()
     }
 
     @Test
@@ -66,7 +68,7 @@ class SceneObjectMenuTest {
             hasTrimmableSource = true, canBecomeBackground = true,
         )
         assertThat(all).containsExactly(
-            Action.EDIT, Action.TRIM, Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD,
+            Action.EDIT, Action.TRIM, Action.DUPLICATE, Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK,
             Action.LEAVE_SCENE, Action.SET_AS_BACKGROUND, Action.DELETE,
         ).inOrder()
     }
@@ -92,7 +94,7 @@ class SceneObjectMenuTest {
                 isLocked = true, sharesPlaneWithAnother = true, hasEditor = true, canLeaveScene = true,
                 hasTrimmableSource = true, canBecomeBackground = true,
             ),
-        ).containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
+        ).containsExactly(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK).inOrder()
     }
 
     @Test

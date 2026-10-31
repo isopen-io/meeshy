@@ -156,6 +156,7 @@ internal fun StorySticker.toElement(): StoryStickerElement = StoryStickerElement
     scale = scale.toFloat(),
     rotationDeg = rotation.toFloat(),
     timing = StoryElementTiming(startSeconds = startTime?.toFloat() ?: 0f, durationSeconds = duration?.toFloat() ?: 0f),
+    zIndex = zIndex,
 ).normalised()
 
 /**
@@ -187,5 +188,6 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         scale = (scale * fontSize / size.designSize).toFloat(),
         rotationDeg = rotation.toFloat(),
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     ).normalised()
 }

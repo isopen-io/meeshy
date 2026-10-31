@@ -324,6 +324,7 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         scale = scale,
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     )
 
 /**
@@ -360,6 +361,7 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         scale = scale,
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     )
 
 /**
@@ -384,6 +386,7 @@ private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnaps
         provider = provider,
         imageUrl = imageUrl,
         animation = animation,
+        zIndex = zIndex,
     )
 
 /**
@@ -408,6 +411,7 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         provider = provider,
         imageUrl = imageUrl,
         animation = animation,
+        zIndex = zIndex,
     ).normalised()
 
 /** What the composer's draft attaches beside its slides, in the durable form (#13451). */

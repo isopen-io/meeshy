@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
 import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
@@ -109,21 +110,8 @@ internal fun StoryComposerScene(
                 onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
                     ?.let { { backgroundMenuOpen = true } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
-                places = { width, height, capturing ->
-                    state.deck.selectedSlide.places.forEach { place ->
-                        key(place.id) {
-                            ComposerPlaceLayer(
-                                place = place,
-                                selected = !capturing && place.id == state.selectedPlaceId,
-                                canvasWidthPx = width,
-                                canvasHeightPx = height,
-                                onTap = { viewModel.onSelectPlace(place.id) },
-                                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
-                                onDragEnd = viewModel::onStickerDragEnd,
-                            )
-                        }
-                    }
-                },
+                stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
+                pins = { ref, width, height, capturing -> ScenePin(state, viewModel, ref, width, height, capturing) },
             )
             ComposerBackgroundMenu(
                 expanded = backgroundMenuOpen,
@@ -261,12 +249,44 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
 internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
     null -> null
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+    StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
     StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
     StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
     else -> error
+}
+
+/** A place or a voice chip of the scene, at its rank in the stack: touched, it is selected; dragged, it moves. */
+@Composable
+private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewModel, ref: SceneObjectRef, width: Float, height: Float, capturing: Boolean) {
+    val slide = state.deck.selectedSlide
+    when (ref.kind) {
+        ComposerObjectKind.PLACE -> slide.places.firstOrNull { it.id == ref.id }?.let { place ->
+            ComposerPlaceLayer(
+                place = place,
+                selected = !capturing && place.id == state.selectedPlaceId,
+                canvasWidthPx = width,
+                canvasHeightPx = height,
+                onTap = { viewModel.onSelectPlace(place.id) },
+                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
+                onDragEnd = viewModel::onStickerDragEnd,
+            )
+        }
+        ComposerObjectKind.AUDIO -> slide.audio.firstOrNull { it.id == ref.id }?.let { track ->
+            ComposerAudioChipLayer(
+                track = track,
+                selected = !capturing && track.id == state.selectedSoundId,
+                canvasWidthPx = width,
+                canvasHeightPx = height,
+                onTap = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, track.id) } },
+                onDrag = { dx, dy -> viewModel.onSoundMoved(track.id, dx, dy) },
+                onDragEnd = viewModel::onStickerDragEnd,
+            )
+        }
+        else -> Unit
+    }
 }
 
 /** The open tool's panel, raised over the bottom of the scene, which shrinks whole above it. */

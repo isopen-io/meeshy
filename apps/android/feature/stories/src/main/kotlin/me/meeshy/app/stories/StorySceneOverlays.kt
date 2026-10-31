@@ -48,12 +48,10 @@ internal fun StorySceneOverlays(
                 is StorySceneLayer.Place -> if (layer.view.isVisible(playheadSeconds)) {
                     StoryPlaceObjectLayer(place = layer.view)
                 }
+                is StorySceneLayer.Audio -> if (layer.view.isVisible(playheadSeconds)) {
+                    StoryAudioChipLayer(chip = layer.view)
+                }
             }
-        }
-    }
-    slide.audioChips.forEach { chip ->
-        if (chip.isVisible(playheadSeconds)) {
-            key(chip.id) { StoryAudioChipLayer(chip = chip) }
         }
     }
     // Le trait de l'auteur, en lecture seule : une slide faite du seul dessin est publiable.

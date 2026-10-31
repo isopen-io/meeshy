@@ -48,13 +48,13 @@ val StoryComposerUiState.sceneContextMenu: SceneObjectContextMenu?
         elementMenuId?.takeIf { id -> slide.elements.any { it.id == id } }?.let { id ->
             return SceneObjectContextMenu(
                 SceneObjectRef(ComposerObjectKind.TEXT, id),
-                SceneObjectMenu.offered(textSubject()),
+                SceneObjectMenu.offered(textSubject(id)),
             )
         }
         return stickerMenuId?.takeIf { id -> slide.stickers.any { it.id == id } }?.let { id ->
             SceneObjectContextMenu(
                 SceneObjectRef(ComposerObjectKind.STICKER, id),
-                SceneObjectMenu.offered(stickerSubject()),
+                SceneObjectMenu.offered(stickerSubject(id)),
             )
         }
     }
@@ -103,33 +103,41 @@ val StoryComposerUiState.sceneTracks: List<Plan2DTrack>
 val StoryComposerUiState.sceneEditableTrackIds: Set<String>
     get() = deck.selectedSlide.let { slide -> slide.elements.map { it.id } + slide.stickers.map { it.id } }.toSet()
 
-private fun StoryComposerUiState.textSubject() = SceneObjectMenu.Subject(
-    sharesPlaneWithAnother = deck.selectedSlide.elements.size > 1,
+/**
+ * L'objet [ref] est sur la pile de la scène avec au moins un autre, de quelque famille qu'il soit (#13852) : l'Ordre a un
+ * effet. Le fond et le son d'ambiance ne sont pas sur la pile.
+ */
+private fun StoryComposerUiState.stacksWithAnother(ref: SceneObjectRef): Boolean =
+    StorySceneStack.order(deck.selectedSlide).let { ref in it && it.size > 1 }
+
+private fun StoryComposerUiState.textSubject(id: String) = SceneObjectMenu.Subject(
+    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.TEXT, id)),
     hasEditor = true,
     canDuplicate = deck.selectedCanAddTextElement,
 )
 
-private fun StoryComposerUiState.stickerSubject() = SceneObjectMenu.Subject(
-    sharesPlaneWithAnother = deck.selectedSlide.stickers.size > 1,
+private fun StoryComposerUiState.stickerSubject(id: String) = SceneObjectMenu.Subject(
+    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.STICKER, id)),
     canDuplicate = deck.selectedCanAddSticker,
 )
 
-/** Un média se fait fond de la scène (ou le REMPLACE) et se retire ; il ne se duplique ni ne s'empile. */
-private val mediaActions = listOf(
+/** Un média se fait fond de la scène (ou le REMPLACE), s'ordonne quand il est posé, et se retire ; il ne se duplique pas. */
+private val mediaActions = SceneObjectMenu.ORDER + listOf(
     SceneObjectMenu.Action.SET_AS_BACKGROUND, SceneObjectMenu.Action.REPLACE_BACKGROUND, SceneObjectMenu.Action.DELETE,
 )
 
 private fun StoryComposerUiState.mediaSubject(id: String) = SceneObjectMenu.Subject(
     isBackground = deck.selectedSlideBackgroundMediaId == id,
+    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.MEDIA, id)),
     canBecomeBackground = true,
     sceneHasBackground = deck.selectedSlideBackgroundMediaId != null,
     canDuplicate = false,
 )
 
-private val controllerActions = listOf(
-    SceneObjectMenu.Action.DUPLICATE, SceneObjectMenu.Action.BRING_FORWARD,
-    SceneObjectMenu.Action.SEND_BACKWARD, SceneObjectMenu.Action.DELETE,
-)
+private val controllerActions = listOf(SceneObjectMenu.Action.DUPLICATE) + SceneObjectMenu.ORDER + SceneObjectMenu.Action.DELETE
+
+/** Un lieu, une pastille de son : ils s'ordonnent et se retirent. */
+private val pinActions = SceneObjectMenu.ORDER + SceneObjectMenu.Action.DELETE
 
 /**
  * Les contrôleurs de l'objet SÉLECTIONNÉ (empilement, dupliquer, supprimer) : ce que la loi [SceneObjectMenu] lui sert,
@@ -140,11 +148,11 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
     get() {
         val ref = selectedSceneObject ?: return null
         val (subject, served) = when (ref.kind) {
-            ComposerObjectKind.TEXT -> textSubject() to controllerActions
+            ComposerObjectKind.TEXT -> textSubject(ref.id) to controllerActions
             ComposerObjectKind.MEDIA -> mediaSubject(ref.id) to mediaActions
             ComposerObjectKind.AUDIO, ComposerObjectKind.PLACE ->
-                SceneObjectMenu.Subject(canDuplicate = false) to listOf(SceneObjectMenu.Action.DELETE)
-            else -> stickerSubject() to controllerActions
+                SceneObjectMenu.Subject(sharesPlaneWithAnother = stacksWithAnother(ref), canDuplicate = false) to pinActions
+            else -> stickerSubject(ref.id) to controllerActions
         }
         return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
     }
@@ -160,8 +168,8 @@ val StoryComposerUiState.selectionBar: SceneSelectionBar?
         if (isEditingTextElement || isDrawingActive) return null
         val controllers = selectedObjectControllers ?: return null
         val offered = when (controllers.ref.kind) {
-            ComposerObjectKind.TEXT -> SceneObjectMenu.offered(textSubject())
-            ComposerObjectKind.STICKER -> SceneObjectMenu.offered(stickerSubject())
+            ComposerObjectKind.TEXT -> SceneObjectMenu.offered(textSubject(controllers.ref.id))
+            ComposerObjectKind.STICKER -> SceneObjectMenu.offered(stickerSubject(controllers.ref.id))
             else -> controllers.actions
         }
         val timed = controllers.ref.kind == ComposerObjectKind.TEXT || controllers.ref.kind == ComposerObjectKind.STICKER

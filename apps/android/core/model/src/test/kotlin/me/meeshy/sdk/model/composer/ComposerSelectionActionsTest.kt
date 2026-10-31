@@ -61,9 +61,9 @@ class ComposerSelectionActionsTest {
     }
 
     @Test
-    fun `order opens bring forward then send backward, as the object offers them`() {
+    fun `order opens front, forward, backward and back, as the object offers them`() {
         assertThat(ComposerSelectionActions.orderChoices(textAmongOthers))
-            .containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
+            .containsExactly(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK).inOrder()
         assertThat(ComposerSelectionActions.orderChoices(listOf(Action.DELETE))).isEmpty()
     }
 

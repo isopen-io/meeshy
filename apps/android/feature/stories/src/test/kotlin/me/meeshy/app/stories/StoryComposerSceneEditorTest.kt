@@ -115,7 +115,7 @@ class StoryComposerSceneEditorTest {
         val state = StoryComposerSceneReducer.stickerMenuOpened(withStickers("s1", "s2"), "s1")
 
         assertThat(state.sceneContextMenu!!.actions)
-            .containsExactly(Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE).inOrder()
+            .containsExactly(Action.DUPLICATE, Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK, Action.DELETE).inOrder()
     }
 
     @Test
@@ -126,7 +126,7 @@ class StoryComposerSceneEditorTest {
 
         assertThat(menu.ref).isEqualTo(SceneObjectRef(ComposerObjectKind.TEXT, "t1"))
         assertThat(menu.actions)
-            .containsExactly(Action.EDIT, Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE)
+            .containsExactly(Action.EDIT, Action.DUPLICATE, Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK, Action.DELETE)
             .inOrder()
     }
 

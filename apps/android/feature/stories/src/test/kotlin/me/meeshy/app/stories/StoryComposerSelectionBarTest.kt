@@ -88,11 +88,11 @@ class StoryComposerSelectionBarTest {
     }
 
     @Test
-    fun `stickers sharing the plane are ordered, and Order opens both directions`() {
+    fun `stickers sharing the plane are ordered, and Order opens its four moves`() {
         val bar = StoryComposerStickerReducer.selected(withStickers("s1", "s2"), "s1").selectionBar!!
 
         assertThat(bar.actions).containsExactly(EDIT, ORDER, DUPLICATE, REMOVE).inOrder()
-        assertThat(bar.orderChoices).containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
+        assertThat(bar.orderChoices).containsExactly(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK).inOrder()
     }
 
     @Test

@@ -19,7 +19,7 @@ class StoryComposerPlacedMediaReducerTest {
     fun `the first media placed sits at the centre`() {
         val after = StoryComposerPlacedMediaReducer.placed(withMedia("m1"), "m1")
 
-        assertThat(after.placedMedia()).containsExactly(StoryPlacedMedia("m1", 0.5f, 0.5f, 1f, 0f))
+        assertThat(after.placedMedia()).containsExactly(StoryPlacedMedia("m1", 0.5f, 0.5f, 1f, 0f, zIndex = 1))
     }
 
     @Test

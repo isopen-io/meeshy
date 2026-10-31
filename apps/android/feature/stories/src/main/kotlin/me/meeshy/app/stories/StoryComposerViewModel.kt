@@ -282,8 +282,10 @@ class StoryComposerViewModel @Inject constructor(
                 SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
                 SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
                 SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
+                SceneObjectMenu.Action.BRING_TO_FRONT -> onReorderScene(menu.ref, StoryZOrder.TO_FRONT)
                 SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.FORWARD)
                 SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.BACKWARD)
+                SceneObjectMenu.Action.SEND_TO_BACK -> onReorderScene(menu.ref, StoryZOrder.TO_BACK)
                 SceneObjectMenu.Action.TRIM,
                 SceneObjectMenu.Action.LEAVE_SCENE,
                 SceneObjectMenu.Action.SET_AS_BACKGROUND,
@@ -296,7 +298,7 @@ class StoryComposerViewModel @Inject constructor(
 
     private fun onReorderScene(ref: SceneObjectRef, op: StoryZOrder) =
         if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-        else reduce { StoryComposerSceneReducer.stickerReordered(it, ref.id, op) }
+        else reduce { StoryComposerSceneReducer.restacked(it, ref, op) }
 
     fun onDuplicateSticker(id: String) {
         val newId = newStickerId()
@@ -639,13 +641,14 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
-        val remaining = _state.value.deck.selectedRemainingMediaSlots
-        if (remaining <= 0) {
+        val landings = StoryComposerUploadReducer.landings(_state.value, items.size, asBackground)
+        if (landings.any { !it.newSlide } && _state.value.deck.selectedRemainingMediaSlots <= 0) {
             _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
             return
         }
-        val accepted = items.take(remaining)
-        _state.update { StoryComposerUploadReducer.started(it, accepted.size) }
+        val accepted = items.take(landings.size)
+        items.drop(landings.size).forEach(MediaIntake::release)
+        _state.update { StoryComposerUploadReducer.started(it, landings, refused = items.size - accepted.size) }
         viewModelScope.launch {
             try {
                 val onProgress = { index: Int, sent: Long, total: Long ->
@@ -673,7 +676,7 @@ class StoryComposerViewModel @Inject constructor(
     private suspend fun queueDurably(items: List<MediaUploadItem>, asBackground: Boolean) {
         items.forEachIndexed { index, item ->
             val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update { StoryComposerUploadReducer.queued(it, cmid, item, asBackground && index == 0) }
+            _state.update { StoryComposerUploadReducer.queued(it, cmid, item, asBackground, index) }
             record()
         }
         _state.update { StoryComposerUploadReducer.settled(it) }

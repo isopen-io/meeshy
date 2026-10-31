@@ -83,6 +83,12 @@ class StoryComposerViewModelTest {
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
         NetworkResult.Failure(ApiError("offline", httpStatus = status))
 
+    /** Fills the selected slide with [media] already on the gateway, as a draft reopened at the cap would. */
+    private fun StoryComposerViewModel.seedSelectedSlide(media: List<UploadedMedia>) = onSceneReduce { state ->
+        state.copy(deck = media.fold(state.deck) { deck, it -> deck.addMediaToSelected(it.id) }, attachments = state.attachments + media)
+            .mirrorDraftToSelection()
+    }
+
     private fun item(name: String = "pic.jpg"): MediaUploadItem =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = "image/jpeg")
 
@@ -622,13 +628,11 @@ class StoryComposerViewModelTest {
     @Test
     fun `onMediaPicked is inert and warns once the draft is at the media cap`() = runTest {
         val vm = viewModel()
-        val full = (1..StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") }
-        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(full)
-        vm.onMediaPicked(List(StoryComposerDraft.MAX_MEDIA) { item("p$it.jpg") })
+        vm.seedSelectedSlide((1..StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") })
 
         vm.onMediaPicked(listOf(item("over.jpg")))
 
-        coVerify(exactly = 1) { media.upload(any(), any()) }
+        coVerify(exactly = 0) { media.upload(any(), any()) }
         assertThat(vm.state.value.errorMessage).isNotNull()
         assertThat(vm.state.value.attachments).hasSize(StoryComposerDraft.MAX_MEDIA)
     }
@@ -721,7 +725,7 @@ class StoryComposerViewModelTest {
 
         coVerify(exactly = 2) { uploadQueue.enqueue(any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
-        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.deck.slides.map { it.mediaIds }).containsExactly(listOf("up-1"), listOf("up-2")).inOrder()
         assertThat(vm.state.value.errorMessage).isNull()
         assertThat(vm.state.value.canPublish).isTrue()
     }
@@ -742,20 +746,18 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `an offline pick is truncated to the free slots before being durably queued`() = runTest {
+    fun `an offline series is truncated to the free slides before being durably queued, and says so`() = runTest {
         val vm = viewModel()
-        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any(), any()) } returns
-            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
-        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
+        repeat(StorySlideDeck.MAX_SLIDES - 2) { vm.onAddSlide() }
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
+        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2", "up-3")
 
-        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")))
 
-        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
-        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
-        assertThat(vm.state.value.draft.mediaIds).hasSize(StoryComposerDraft.MAX_MEDIA)
+        coVerify(exactly = 2) { uploadQueue.enqueue(any(), any()) }
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.deck.size).isEqualTo(StorySlideDeck.MAX_SLIDES)
+        assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerUploadReducer.SLIDES_FULL)
     }
 
     @Test
@@ -778,20 +780,20 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `publish gates the story on every pending upload and carries all placeholder ids`() = runTest {
+    fun `publish gates each story on its own pending upload, one slide per media of the pick`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
-        val request = slot<CreateStoryRequest>()
-        val dependsOn = slot<List<String>>()
-        coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "story-cmid"
+        val requests = mutableListOf<CreateStoryRequest>()
+        val dependsOn = mutableListOf<List<String>>()
+        coEvery { repo.enqueuePublish(capture(requests), capture(dependsOn)) } returns "story-cmid"
 
         vm.publish()
 
-        assertThat(dependsOn.captured).containsExactly("up-1", "up-2").inOrder()
-        assertThat(request.captured.mediaIds).containsExactly("up-1", "up-2").inOrder()
-        assertThat(request.captured.content).isNull()
+        assertThat(dependsOn).containsExactly(listOf("up-1"), listOf("up-2")).inOrder()
+        assertThat(requests.map { it.mediaIds }).containsExactly(listOf("up-1"), listOf("up-2")).inOrder()
+        assertThat(requests.map { it.content }).containsExactly(null, null)
     }
 
     @Test
@@ -951,10 +953,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `the pending upload counts toward the media cap`() = runTest {
         val vm = viewModel()
-        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any(), any()) } returns
-            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
-        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
+        vm.seedSelectedSlide((1 until StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") })
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-last"
         vm.onMediaPicked(listOf(item("offline.jpg")))
@@ -1358,9 +1357,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `the media cap is per-slide so a fresh slide can attach its own ten`() = runTest {
         val vm = viewModel()
-        val full = (1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { uploaded("a$it") }
-        coEvery { media.upload(any(), any()) } returns NetworkResult.Success(full)
-        vm.onMediaPicked(List(StorySlideDeck.MAX_MEDIA_PER_SLIDE) { item("a$it.jpg") })
+        vm.seedSelectedSlide((1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { uploaded("a$it") })
         assertThat(vm.state.value.draft.isMediaFull).isTrue()
 
         vm.onAddSlide()

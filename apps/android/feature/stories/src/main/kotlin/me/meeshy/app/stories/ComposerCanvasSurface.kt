@@ -56,7 +56,9 @@ import me.meeshy.ui.theme.hexColor
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
- * media as the background, the slide's on-canvas [textElements] on top, and lets the
+ * media as the background, then the scene's objects in the ONE order of its [stack] (#13852: texts, placed media,
+ * stickers, and the [pins] — places and voice chips — interleaved by rank; composition order is paint AND touch order),
+ * the drawing on top, and lets the
  * user pinch-zoom + drag-pan the background and drag / tap / remove each element. All
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
@@ -109,7 +111,8 @@ internal fun StoryCanvasSurface(
     capture: SceneCapture? = null,
     onBackgroundLongPress: (() -> Unit)? = null,
     selectedMediaId: String? = null,
-    places: @Composable (canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _ -> },
+    stack: List<SceneObjectRef>,
+    pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _, _ -> },
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -241,56 +244,63 @@ internal fun StoryCanvasSurface(
                     }
                 }
             }
-            textElements.forEach { element ->
-                TextElementLayer(
-                    element = element,
-                    selected = element.id == selectedElement?.id,
-                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.TEXT && it.ref.id == element.id },
-                    inlineEditEnabled = inlineEditEnabled,
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onElementTap(element.id) },
-                    onLongPress = { onElementLongPress(element.id) },
-                    onMenuAction = onSceneMenuAction,
-                    onMenuDismiss = onSceneMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+            val textById = textElements.associateBy { it.id }
+            val stickerById = stickers.associateBy { it.id }
+            val mediaById = placedMedia.associateBy { it.key }
+            stack.forEach { ref ->
+                key(ref.kind, ref.id) {
+                    when (ref.kind) {
+                        ComposerObjectKind.TEXT -> textById[ref.id]?.let { element ->
+                            TextElementLayer(
+                                element = element,
+                                selected = element.id == selectedElement?.id,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                inlineEditEnabled = inlineEditEnabled,
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onElementTap(element.id) },
+                                onLongPress = { onElementLongPress(element.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onElementDragEnd,
+                                onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
+                                onTextChange = onElementTextChange,
+                                showsSelection = !capturing,
+                            )
                         }
-                    },
-                    onDragEnd = onElementDragEnd,
-                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
-                    onTextChange = onElementTextChange,
-                    showsSelection = !capturing,
-                )
-            }
-            placedMedia.forEach { frame ->
-                key(frame.key) {
-                    PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId)
+                        ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
+                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId)
+                        }
+                        ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
+                            StickerLayer(
+                                sticker = sticker,
+                                selected = sticker.id == selectedStickerId,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onStickerTap(sticker.id) },
+                                onLongPress = { onStickerLongPress(sticker.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onStickerDragEnd,
+                                onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                                showsSelection = !capturing,
+                            )
+                        }
+                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx, capturing)
+                    }
                 }
             }
-            stickers.forEach { sticker ->
-                StickerLayer(
-                    sticker = sticker,
-                    selected = sticker.id == selectedStickerId,
-                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.STICKER && it.ref.id == sticker.id },
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onStickerTap(sticker.id) },
-                    onLongPress = { onStickerLongPress(sticker.id) },
-                    onMenuAction = onSceneMenuAction,
-                    onMenuDismiss = onSceneMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
-                        }
-                    },
-                    onDragEnd = onStickerDragEnd,
-                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                    showsSelection = !capturing,
-                )
-            }
-            places(canvasWidthPx, canvasHeightPx, capturing)
             // Topmost: paints every committed stroke, and — only while isDrawingActive —
             // also captures the drag that draws the next one, blocking the pan/zoom/tap
             // gestures underneath so a stroke never fights the background transform.

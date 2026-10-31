@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.composer.ComposerFormatVariant
 import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.ComposerMediaPlacement
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryPublishTitle
 import me.meeshy.sdk.model.composer.StoryToolMode
@@ -96,6 +97,8 @@ data class StoryComposerUiState(
     val isUploadingMedia: Boolean = false,
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
+    /** Où chaque média de la sélection en cours d'envoi se posera (R4 de #13863), décidé au choix, dans l'ordre des lignes. */
+    val mediaLandings: List<ComposerMediaPlacement.Landing> = emptyList(),
     val isPublishing: Boolean = false,
     /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
     val editing: Boolean = false,
@@ -192,7 +195,10 @@ data class StoryComposerUiState(
         get() {
             val designated = deck.selectedSlideBackgroundMediaId
             val served = selectedSlideAttachments.any { it.id == designated } || selectedSlidePending.any { it.cmid == designated }
-            return designated?.takeIf { served } ?: selectedSlideAttachments.firstOrNull()?.id ?: selectedSlidePending.firstOrNull()?.cmid
+            val posed = deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+            return designated?.takeIf { served }
+                ?: selectedSlideAttachments.firstOrNull { it.id !in posed }?.id
+                ?: selectedSlidePending.firstOrNull { it.cmid !in posed }?.cmid
         }
 
     fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
