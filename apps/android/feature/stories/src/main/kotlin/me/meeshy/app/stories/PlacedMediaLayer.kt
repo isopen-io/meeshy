@@ -73,11 +73,13 @@ internal data class PlacedMediaFrame(
     val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, placed.adjustments, isVideo)
 }
 
-/** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
+/**
+ * Les médias posés de la slide choisie, dans l'ordre de pose. Un objet devenu fond a quitté la scène ; une copie du même
+ * fichier y reste et se peint (#13905).
+ */
 internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, comparing: String? = null): List<PlacedMediaFrame> {
-    val background = deck.selectedSlide.backgroundMediaId
     val looks = deck.selectedSlide.mediaLooks
-    return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
+    return deck.selectedSlide.placedMedia.map { placed ->
         if (placed.id == comparing) placed.copy(filter = null, adjustments = null) else placed
     }.mapNotNull { placed ->
         val look = looks[placed.mediaId].takeUnless { placed.id == comparing }

@@ -18,6 +18,22 @@ data class ComposerFormatVariant(
 ) {
     val channel: ComposerPublishChannel get() = ComposerPublishChannel.of(format)
 
+    /** Le mot qui nomme ce format dans le compositeur (#13913) ; l'humeur, qui n'a pas de scène, n'en montre aucun. */
+    val noun: ComposerSceneNoun
+        get() = when (format) {
+            ComposerFormat.POST -> ComposerSceneNoun.POST
+            ComposerFormat.REEL -> ComposerSceneNoun.REEL
+            ComposerFormat.STORY, ComposerFormat.STATUS -> ComposerSceneNoun.STORY
+        }
+
+    /** Les libellés qui nomment le format et que ce format montre (#13913) : « Texte du post » pour qui l'écrit seulement. */
+    val labels: List<ComposerFormatLabel>
+        get() = when {
+            !composesOnScene -> emptyList()
+            writesPostText -> ComposerFormatLabel.entries
+            else -> ComposerFormatLabel.entries - ComposerFormatLabel.POST_TEXT
+        }
+
     fun publishTitle(slideCount: Int, editing: Boolean = false): StoryPublishTitle = when {
         editing -> StoryPublishTitle.Save
         format == ComposerFormat.POST -> StoryPublishTitle.Post

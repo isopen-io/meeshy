@@ -78,6 +78,24 @@ internal object StoryComposerTextReducer {
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =
         if (state.selectedTextElementId == null) state else state.copy(selectedTextElementId = null, framedTextElementId = null)
 
+    /**
+     * Un texte resté vide quand on le quitte est un fantôme (#13910, iOS `exitTextEditingMode`) : invisible, il compterait
+     * au plafond, partirait au brouillon et à la publication. Quoi que fasse [after] — OK, la scène touchée à vide, un autre
+     * objet ou un autre texte choisi, une autre diapo —, le texte que [before] tenait s'en va s'il n'est plus tenu et ne
+     * porte rien ; son menu ouvert ou son cadre le tiennent encore.
+     */
+    fun blankLeftBehind(before: StoryComposerUiState, after: StoryComposerUiState): StoryComposerUiState {
+        val left = before.selectedTextElementId ?: return after
+        if (after.selectedTextElementId == left) return after
+        val element = after.deck.slides.firstNotNullOfOrNull { slide -> slide.elements.firstOrNull { it.id == left } } ?: return after
+        if (element.text.isNotBlank()) return after
+        return after.copy(
+            deck = after.deck.removeTextElement(left),
+            framedTextElementId = after.framedTextElementId.takeIf { it != left },
+            elementMenuId = after.elementMenuId.takeIf { it != left },
+        )
+    }
+
     /** Opens the long-press menu on [id], selecting it (inert when it is not on the selected slide). */
     fun menuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state

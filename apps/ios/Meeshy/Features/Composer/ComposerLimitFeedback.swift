@@ -10,26 +10,27 @@ import MeeshyUI
 @MainActor
 enum ComposerLimitFeedback {
 
-    /// Le message du refus, dans la langue de l'interface.
-    static func message(for limit: StoryComposerLimit) -> String {
-        let format: String
+    /// Le message du refus, dans la langue de l'interface et le nom du format
+    /// composé (#13913) : seule la durée nomme le format.
+    static func message(for limit: StoryComposerLimit, format composed: ComposerFormat = .story) -> String {
+        let pattern: String
         switch limit {
         case .sticker:
-            format = String(localized: "composer.limit.sticker", defaultValue: "%lld stickers au maximum par scène", bundle: .main)
+            pattern = String(localized: "composer.limit.sticker", defaultValue: "%lld stickers au maximum par scène", bundle: .main)
         case .image:
-            format = String(localized: "composer.limit.image", defaultValue: "%lld images au maximum par scène", bundle: .main)
+            pattern = String(localized: "composer.limit.image", defaultValue: "%lld images au maximum par scène", bundle: .main)
         case .text:
-            format = String(localized: "composer.limit.text", defaultValue: "%lld textes au maximum par scène", bundle: .main)
+            pattern = String(localized: "composer.limit.text", defaultValue: "%lld textes au maximum par scène", bundle: .main)
         case .audio:
-            format = String(localized: "composer.limit.audio", defaultValue: "%lld audios au maximum par scène", bundle: .main)
+            pattern = String(localized: "composer.limit.audio", defaultValue: "%lld audios au maximum par scène", bundle: .main)
         case .video:
-            format = String(localized: "composer.limit.video", defaultValue: "%lld vidéos au maximum par scène", bundle: .main)
+            pattern = String(localized: "composer.limit.video", defaultValue: "%lld vidéos au maximum par scène", bundle: .main)
         case .textLength:
-            format = String(localized: "composer.limit.textLength", defaultValue: "%lld caractères au maximum par texte", bundle: .main)
+            pattern = String(localized: "composer.limit.textLength", defaultValue: "%lld caractères au maximum par texte", bundle: .main)
         case .duration:
-            format = String(localized: "composer.limit.duration", defaultValue: "Une story dure %lld h au maximum", bundle: .main)
+            return ComposerFormatVariant.of(composed).durationLimitMessage(hours: limit.value)
         }
-        return String(format: format, limit.value)
+        return String(format: pattern, limit.value)
     }
 
     /// Branche le retour sur `composer` et le rend : `showError` porte l'haptique
@@ -88,6 +89,8 @@ final class ComposerLimitNoticeBoard {
     private let speaker: ComposerLimitSpeaking
     private let clock: () -> Date
     private var last: ComposerLimitNotice.Spoken?
+    /// Le format armé par l'hôte, pour nommer le plafond de durée.
+    var format: ComposerFormat = .story
 
     init(speaker: ComposerLimitSpeaking, clock: @escaping () -> Date = Date.init) {
         self.speaker = speaker
@@ -100,6 +103,6 @@ final class ComposerLimitNoticeBoard {
         let now = clock()
         guard ComposerLimitNotice.speaks(limit, at: now, last: last) else { return }
         last = .init(limit: limit, at: now)
-        speaker.say(ComposerLimitFeedback.message(for: limit))
+        speaker.say(ComposerLimitFeedback.message(for: limit, format: format))
     }
 }

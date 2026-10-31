@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.gold",
+          "androidName": "game_atlas_coin_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.line",
+          "androidName": "game_atlas_coin_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.obverse",
+          "androidName": "game_atlas_coin_obverse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.prism",
+          "androidName": "game_atlas_coin_prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.reverse",
+          "androidName": "game_atlas_coin_reverse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.coin.title",
+          "androidName": "game_atlas_coin_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.flames.line",
+          "androidName": "game_atlas_flames_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.flames.title",
+          "androidName": "game_atlas_flames_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.leagues.line",
+          "androidName": "game_atlas_leagues_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.leagues.title",
+          "androidName": "game_atlas_leagues_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.accumulation",
+          "androidName": "game_atlas_medals_accumulation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.collection",
+          "androidName": "game_atlas_medals_collection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.imprint",
+          "androidName": "game_atlas_medals_imprint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.line",
+          "androidName": "game_atlas_medals_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.record",
+          "androidName": "game_atlas_medals_record",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.medals.title",
+          "androidName": "game_atlas_medals_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.ranks.line",
+          "androidName": "game_atlas_ranks_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.ranks.myth",
+          "androidName": "game_atlas_ranks_myth",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.ranks.title",
+          "androidName": "game_atlas_ranks_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarities.line",
+          "androidName": "game_atlas_rarities_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarities.title",
+          "androidName": "game_atlas_rarities_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarity.common",
+          "androidName": "game_atlas_rarity_common",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarity.epic",
+          "androidName": "game_atlas_rarity_epic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarity.legendary",
+          "androidName": "game_atlas_rarity_legendary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarity.mythic",
+          "androidName": "game_atlas_rarity_mythic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.rarity.rare",
+          "androidName": "game_atlas_rarity_rare",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.cap.base",
+          "androidName": "game_atlas_tiers_cap_base",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.cap.none",
+          "androidName": "game_atlas_tiers_cap_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.cap.one",
+          "androidName": "game_atlas_tiers_cap_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.cap.ranks",
+          "androidName": "game_atlas_tiers_cap_ranks",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.glory",
+          "androidName": "game_atlas_tiers_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.line",
+          "androidName": "game_atlas_tiers_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.prestige",
+          "androidName": "game_atlas_tiers_prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.tiers.title",
+          "androidName": "game_atlas_tiers_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.treasury.line",
+          "androidName": "game_atlas_treasury_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.treasury.title",
+          "androidName": "game_atlas_treasury_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophies.line",
+          "androidName": "game_atlas_trophies_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophies.title",
+          "androidName": "game_atlas_trophies_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophy.flame",
+          "androidName": "game_atlas_trophy_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophy.league",
+          "androidName": "game_atlas_trophy_league",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophy.prestige",
+          "androidName": "game_atlas_trophy_prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.atlas.trophy.season",
+          "androidName": "game_atlas_trophy_season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.hero.level",
+          "androidName": "game_hero_level",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

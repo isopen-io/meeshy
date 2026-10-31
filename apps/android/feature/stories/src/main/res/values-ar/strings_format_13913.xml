@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13913 : le compositeur nomme le format qu'il compose — les variantes post et réel (ou story) des libellés qui le nomment. -->
+<resources>
+    <string name="stories_composer_canvas_post">لوحة المنشور — اقرص للتكبير واسحب للتحريك</string>
+    <string name="stories_composer_canvas_reel">لوحة الريل — اقرص للتكبير واسحب للتحريك</string>
+    <string name="story_sound_sheet_title_post">صوت المنشور</string>
+    <string name="story_sound_sheet_title_reel">صوت الريل</string>
+    <string name="story_sound_library_emptyMine_post">ستظهر أصواتك هنا بمجرد نشرك منشورًا يحتوي على صوت أصلي.</string>
+    <string name="story_sound_library_emptyMine_reel">ستظهر أصواتك هنا بمجرد نشرك ريلًا يحتوي على صوت أصلي.</string>
+    <string name="story_media_soundExtraction_caption_story">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذه القصة.</string>
+    <string name="story_media_soundExtraction_caption_reel">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا الريل.</string>
+    <string name="story_media_soundExtraction_a11yHint_story">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذه القصة في محتواهم الخاص.</string>
+    <string name="story_media_soundExtraction_a11yHint_reel">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا الريل في محتواهم الخاص.</string>
+    <string name="composer_post_text_reel">نص الريل</string>
+</resources>

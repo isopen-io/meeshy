@@ -441,7 +441,8 @@ struct ReelsPlayerView: View {
                         onEdit: { editingReel = reel },
                         onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
                         canSaveMedia: PostSaveAction.route(for: reel, coordinator: mediaSaveCoordinator) != .unavailable,
-                        onSaveMedia: { requestSaveMedia(reel) }
+                        onSaveMedia: { requestSaveMedia(reel) },
+                        onImager: PostSaveAction.imagerAction(for: reel, coordinator: mediaSaveCoordinator)
                     )
                 }
             }

@@ -80,10 +80,8 @@ extension MeeshyComposerHost {
     /// L'espace réservé que la scène pose sur sa carte, `nil` quand rien n'entre.
     var sceneIntakeGhost: AnyView? {
         guard let sceneIntake else { return nil }
-        return AnyView(ComposerSceneIntakeGhost(intake: sceneIntake,
-                                                onCancel: { cancelSceneIntake() },
-                                                onRetry: { retrySceneIntake() },
-                                                onDismissFailure: { dismissSceneIntakeFailure() }))
+        return AnyView(ComposerSceneIntakeGhost(intake: sceneIntake, onCancel: { cancelSceneIntake() },
+                                                onRetry: { retrySceneIntake() }, onDismissFailure: { dismissSceneIntakeFailure() }))
     }
 
     // MARK: - Les portes qui ouvrent un ajout

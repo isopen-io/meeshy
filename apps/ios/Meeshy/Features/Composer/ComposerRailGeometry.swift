@@ -81,7 +81,7 @@ nonisolated enum ComposerRailGeometry {
         CGFloat([undo, redo].filter { $0 }.count) * (railWidth + floatingEntrySpacing)
     }
 
-    /// La marge verticale d'une colonne flottante (`ComposerLeadingRail`).
+    /// La marge verticale d'une colonne flottante.
     static let floatingColumnPadding: CGFloat = 8
 
     /// L'encastrement d'AVANT les rails, conservé tel quel là où aucun rail

@@ -44,6 +44,8 @@ import me.meeshy.app.game.pages.rememberGameHidden
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.pages.GamePageLinks
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
+import me.meeshy.sdk.model.game.GameText
+import me.meeshy.sdk.model.game.progression.FicheHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
@@ -78,6 +80,7 @@ fun ProgressionConceptScreen(
     val hidden = rememberGameHidden()
     val snapshot = state.snapshot
     val card = snapshot?.cards?.firstOrNull { it.concept == concept }
+    val fiche = snapshot?.fiches?.get(concept)
 
     GamePageScaffold(
         title = stringResource(ConceptCopy.name(concept)),
@@ -93,11 +96,23 @@ fun ProgressionConceptScreen(
         }
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
-            if (card != null) ConceptHero(card, snapshot.game)
+            val sparks = (fiche?.head as? FicheHead.Sparks)?.head
+            when {
+                // TA LUMIÈRE (iOS `GameSparksHeadView`) : la poche en grand, le « depuis toujours » en petit.
+                sparks != null -> GameSparksHeadView(sparks, snapshot.game)
+                // UNE pièce, UN héros (iOS `ProgressionConceptPage.hero`, `.piece`) : elle REMPLACE le héros générique.
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
+                // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
+                card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
+            }
             FicheSection(stringResource(R.string.game_fiche_what)) {
                 Sentence(stringResource(ConceptCopy.what(concept)))
                 Sentence(stringResource(ConceptCopy.why(concept)), strong = true)
                 Sentence(stringResource(ConceptCopy.how(concept)))
+            }
+            // « Où j'en suis » ne redit rien : la section disparaît quand elle n'a rien à ajouter (iOS #11180).
+            if (fiche != null && fiche.hasWhere) {
+                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
             FicheSection(stringResource(R.string.game_fiche_earn)) {
                 Sentence(stringResource(ConceptCopy.tip1(concept)))
@@ -132,10 +147,10 @@ fun ProgressionConceptScreen(
 
 /** La tête générique : l'emblème en grand, la valeur, la ligne, la jauge qui se remplit à l'ouverture. */
 @Composable
-private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.game.GameBlock?) {
+private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.game.GameBlock?, line: GameText?) {
     val tokens = MeeshyTheme.tokens
     val value = card.value?.let { gameString(it) }.orEmpty()
-    val line = card.line?.let { gameString(it) }
+    val line = line?.let { gameString(it) }
     Column(
         Modifier
             .fillMaxWidth()

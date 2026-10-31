@@ -17,7 +17,7 @@ import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.sdk.net.MeeshyConfig
 
 /**
- * L'export vidéo d'une story depuis le lecteur : Enregistrer, Partager ou Imager. Le bake vit à la portée du ViewModel —
+ * L'export vidéo d'une story depuis le lecteur, ou des scènes d'un post ou d'un réel : Enregistrer, Partager ou Imager. Le bake vit à la portée du ViewModel —
  * quitter le lecteur arrête le moteur et efface ce qu'il avait écrit.
  */
 @HiltViewModel
@@ -40,9 +40,13 @@ class StoryVideoExportViewModel @Inject constructor(
         paint = stages::askPaint,
     )
 
-    fun export(mode: StoryExportMode, item: StoryItem, slide: StorySlideView) {
-        val subject = StoryExportSubject.of(item, slide, config.apiBaseUrl)
-        coordinator.export(mode.destination) { output, work -> preparer.prepare(mode, subject, slide, output, work) }
+    fun export(mode: StoryExportMode, item: StoryItem, slide: StorySlideView) = export(mode, listOf(item to slide))
+
+    /** Les scènes d'un post ou d'un réel, rendues bout à bout dans UNE vidéo (#13896) ; une story n'en a qu'une. */
+    fun export(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>) {
+        if (scenes.isEmpty()) return
+        val exported = scenes.map { (item, slide) -> StoryExportScene.of(item, slide, config.apiBaseUrl) }
+        coordinator.export(mode.destination) { output, work -> preparer.prepare(mode, exported, output, work) }
     }
 
     /** `null` : l'auteur renonce au choix de longueur, l'export s'arrête. */

@@ -64,8 +64,8 @@ struct ComposerTrailingRail: View {
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
-    /// **Le ressort qui pousse vers le pouce** — le même contrat que
-    /// `ComposerLeadingRail.pushesToThumb`. Sur la scène plein écran (#8370), le
+    /// **Le ressort qui pousse vers le pouce** — le contrat qu'avait le rail
+    /// gauche, retiré au #13907. Sur la scène plein écran (#8370), le
     /// rail FLOTTE au bas de la scène libre : un ressort l'y étirait sur toute la
     /// hauteur, colonne de verre vide au-dessus du `[+]`.
     var pushesToThumb: Bool = true

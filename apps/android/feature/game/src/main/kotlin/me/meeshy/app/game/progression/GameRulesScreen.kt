@@ -2,19 +2,28 @@ package me.meeshy.app.game.progression
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -32,6 +41,7 @@ import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.engagement.BadgeGuideFamilyGroup
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
 import me.meeshy.ui.component.game.GameMedalView
@@ -40,7 +50,7 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Les sections du carnet des règles qu'une entrée peut viser (iOS `GameRulesSection`). */
+/** Les sections du carnet des règles qu'une entrée peut viser (iOS `GameRulesSection`) ; sans section, il s'ouvre en haut. */
 enum class GameRulesSection(val wire: String) {
     Badges("badges"),
     ;
@@ -51,22 +61,45 @@ enum class GameRulesSection(val wire: String) {
 }
 
 /**
- * « COMMENT ÇA MARCHE » (iOS `GameRulesPage`) — le carnet des règles, ouvert À SA SECTION. Une page qui EXPLIQUE, sans
- * geste ni lecture réseau : elle s'ouvre instantanément, hors ligne comme en ligne, et ne se tire pas pour rafraîchir.
- * Elle porte aujourd'hui la section des médailles, que tous les liens « Comprendre les médailles » atteignent ; le reste
- * du carnet (règles, glossaire, atlas, étapes) la rejoindra.
+ * « COMMENT ÇA MARCHE » (iOS `GameRulesPage`) — le carnet des règles : Mee et Meo, les huit règles, chaque concept en
+ * clair, les médailles, l'atlas illustré (paliers, Meesh, trésor, blasons, Flammes, ligues, médailles, trophées, raretés),
+ * puis les sept étapes de l'intégration. Une page qui EXPLIQUE, sans geste ni lecture réseau :
+ * elle s'ouvre instantanément, hors ligne comme en ligne, et ne se tire pas pour rafraîchir. Ouverte à une section
+ * ([focused]), elle y défile ; sans section, elle s'ouvre en haut.
  */
 @Composable
-fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = GameRulesSection.Badges) {
+fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null) {
+    val scroll = rememberScrollState()
+    val reduceMotion = LocalReduceMotion.current
+    var topY by remember { mutableStateOf<Float?>(null) }
+    var badgesY by remember { mutableStateOf<Float?>(null) }
+    var focusDone by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, topY, badgesY) {
+        if (focusDone) return@LaunchedEffect
+        val top = topY ?: return@LaunchedEffect
+        val target = when (focused) {
+            GameRulesSection.Badges -> badgesY
+            null -> null
+        } ?: return@LaunchedEffect
+        val offset = (target - top).toInt().coerceAtLeast(0)
+        if (reduceMotion) scroll.scrollTo(offset) else scroll.animateScrollTo(offset)
+        focusDone = true
+    }
     GamePageScaffold(
         title = stringResource(R.string.game_rules_page_title),
         onBack = onBack,
         isRefreshing = false,
         onRefresh = null,
+        scroll = scroll,
     ) {
-        when (focused ?: GameRulesSection.Badges) {
-            GameRulesSection.Badges -> RulesBadgesSection()
+        RulesIntro(Modifier.onGloballyPositioned { topY = it.positionInParent().y })
+        RulesList(Modifier.padding(top = MeeshySpacing.md))
+        RulesGlossary(Modifier.padding(top = MeeshySpacing.md))
+        Box(Modifier.padding(top = MeeshySpacing.md).onGloballyPositioned { badgesY = it.positionInParent().y }) {
+            RulesBadgesSection()
         }
+        RulesAtlas(Modifier.padding(top = MeeshySpacing.md))
+        RulesSteps(Modifier.padding(top = MeeshySpacing.md))
     }
 }
 

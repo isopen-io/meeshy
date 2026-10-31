@@ -262,8 +262,8 @@ extension StoryCanvasUIView {
             guard let id = manipulatedItemId else { return }
             // **La borne a un nom depuis le #4722.** Elle était écrite en
             // littéral ici, et la puce audio en ajoute un SECOND geste de
-            // taille — en SwiftUI, sur un objet que ce recognizer ne saisit
-            // même pas (`manipulable` exclut `.audio`). Deux littéraux
+            // taille — en SwiftUI, pour la puce que rien ne recouvre (celle
+            // qui est recouverte passe par ce recognizer, #13864). Deux littéraux
             // identiques divergent au premier ajustement de l'un, et aucun
             // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
             // lui-même.
@@ -536,7 +536,8 @@ extension StoryCanvasUIView {
             return
         }
 
-        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
+        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }),
+              !StoryAudioChipLayer.follows(layer, in: slide) else { return }
 
         // Position dans le même référentiel que `StoryRenderer.renderItem` :
         // - x  est mappé en `media.x * renderWidth` (linéaire sur la largeur)
@@ -554,7 +555,6 @@ extension StoryCanvasUIView {
             return geo.render(CGPoint(x: designX, y: designY))
         }
 
-        // Read the current model values for this item
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
             // Alignement strict sur `StoryMediaLayer.configure` : scale cuit
             // dans `bounds` (base × scale), transform = rotation only.

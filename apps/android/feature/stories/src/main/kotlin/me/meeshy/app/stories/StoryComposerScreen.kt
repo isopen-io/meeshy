@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -100,6 +101,8 @@ fun StoryComposerScreen(
         )
         onDispose { viewModel.persistDraft() }
     }
+    // Tuer l'app passe par l'arrière-plan (#13869, iOS didEnterBackground) : la dernière fenêtre où l'écriture n'attend pas l'accalmie.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.persistDraft() }
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
     StoryRecomposeGate(recomposeStoryId = recomposeStoryId, viewModel = viewModel, onClose = onClose)

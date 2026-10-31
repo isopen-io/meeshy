@@ -1,0 +1,53 @@
+package me.meeshy.sdk.model.game.progression
+
+/**
+ * LES DONNÉES QUI ONT LEUR PHRASE (miroir de `GameDetailFactKey`, iOS, et de `GAME_DETAIL_FACTS`, web) : [wire] est le
+ * segment `<donnée>` de la clé `game.detail.fact.<donnée>`. Une ligne « Où j'en suis » qui n'en porte pas dit, au
+ * toucher, la phrase de son concept.
+ */
+public enum class GameDetailFactKey(public val wire: String) {
+    Tier("tier"),
+    Score("score"),
+    Convertible("convertible"),
+    LevelNext("level_next"),
+    LevelRecord("level_record"),
+    Tailwind("tailwind"),
+    MintPrice("mint_price"),
+    MintMissing("mint_missing"),
+    CanMint("can_mint"),
+    Factor("factor"),
+    MintNext("mint_next"),
+    MintGlory("mint_glory"),
+    Minted("minted"),
+    Glory("glory"),
+    GloryMissing("glory_missing"),
+    Streak("streak"),
+    StreakRecord("streak_record"),
+    FlameState("flame_state"),
+    MissionsDone("missions_done"),
+    LeaguePlace("league_place"),
+    WeekPoints("week_points"),
+    LeagueZone("league_zone"),
+    LeagueMissing("league_missing"),
+    LeagueCloses("league_closes"),
+    LeagueFriends("league_friends"),
+    Season("season"),
+    SeasonWeek("season_week"),
+    SeasonSteps("season_steps"),
+    SeasonStars("season_stars"),
+    PrestigeGlory("prestige_glory"),
+    ElanFamilies("elan_families"),
+    BadgesEarned("badges_earned"),
+    DefisEarned("defis_earned"),
+    SuccesEarned("succes_earned"),
+    Trophies("trophies"),
+    ShowcaseVisibility("showcase_visibility"),
+    AtlasStamps("atlas_stamps"),
+    AtlasPending("atlas_pending"),
+    SpendHeld("spend_held"),
+    SpendCost("spend_cost"),
+    SpendAfter("spend_after"),
+    SpendMissing("spend_missing"),
+    LevelNow("level_now"),
+    LevelRequired("level_required"),
+}

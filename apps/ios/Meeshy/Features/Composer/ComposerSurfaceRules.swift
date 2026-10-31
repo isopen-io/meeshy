@@ -346,8 +346,8 @@ nonisolated enum ComposerChromeOwnership {
     /// la surface publie.
     ///
     /// Seul `.mood` répond `true` aujourd'hui : le document garde sa flèche au
-    /// socle (sa surface n'a pas d'en-tête propre à elle — `ComposerTopBar`
-    /// est le chrome PARTAGÉ des trois surfaces, pas celui du document seul),
+    /// socle (sa surface n'a pas d'en-tête propre à elle — le chrome du repos
+    /// est PARTAGÉ, pas celui du document seul),
     /// et la scène publie par l'atelier, jamais par ceci.
     static func headerPaintsPublish(for surface: ComposerSurfaceKind) -> Bool {
         surface == .mood

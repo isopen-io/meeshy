@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import * as exportJobs from '@/lib/export/scene/scene-export-jobs';
 import { imagerLengthChoices } from '@/lib/export/scene/scene-export-length';
@@ -33,12 +33,18 @@ function mount(): HTMLElement {
   return container;
 }
 
-afterEach(() => {
+function drainExportJobs(): void {
   act(() => {
     for (const job of exportJobs.getSnapshot().jobs) exportJobs.cancel(job.key);
     const notice = exportJobs.getSnapshot().notice;
     if (notice !== null) exportJobs.dismissNotice(notice.id);
   });
+}
+
+beforeEach(drainExportJobs);
+
+afterEach(() => {
+  drainExportJobs();
   if (mounted !== null) {
     const { root, container } = mounted;
     act(() => root.unmount());

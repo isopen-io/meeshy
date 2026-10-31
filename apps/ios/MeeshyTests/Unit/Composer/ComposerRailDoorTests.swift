@@ -418,129 +418,9 @@ final class ComposerRailDoorTests: XCTestCase {
 
 }
 
-/// La VUE du rail — trois faits qu'un rendu ne prouverait pas plus vite, et que
-/// seule la source oppose (#4062).
-final class ComposerLeadingRailSourceGuardTests: XCTestCase {
-
-    private func railSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-    }
-
-    private func compact(_ t: String) -> String {
-        t.components(separatedBy: .whitespacesAndNewlines).joined()
-    }
-
-    /// **Le fusible.** Sans lui, les gardes qui suivent seraient vertes par
-    /// omission le jour où le fichier bouge.
-    func test_laSourceDuRail_estLisibleEtNonVide() throws {
-        let source = try railSource()
-        XCTAssertGreaterThan(source.count, 800)
-        XCTAssertTrue(source.contains("struct ComposerLeadingRail"))
-    }
-
-    /// **Le rail ne nomme JAMAIS un côté.** En arabe les deux s'échangent : un
-    /// `.leading` codé en `.left` mettrait les portes du côté des contrôleurs.
-    /// Cette garde rougit sur le retour du vocabulaire absolu.
-    func test_leRail_neNommeAucunCoteAbsolu() throws {
-        let source = compact(try railSource())
-        for interdit in [".left)", ".right)", "alignment:.left", "alignment:.right",
-                         "edge:.left", "edge:.right"] {
-            XCTAssertFalse(source.contains(interdit),
-                           "`\(interdit)` : un côté ABSOLU se retourne en RTL.")
-        }
-    }
-
-    /// **Ancré en BAS.** Un `Spacer` en TÊTE du `VStack` pousse les portes vers
-    /// le bas ; le retirer les recentrerait et remettrait les portes hautes
-    /// hors de portée du pouce sur le côté LOIN de la main.
-    func test_lesPortes_sontPousseesVersLeBas() throws {
-        let source = compact(try railSource())
-        // Le rail est MODAL depuis la directive du 2026-08-30 : un `switch`
-        // s'intercale entre le ressort et les entrées. Ce qui reste vrai — et
-        // qui est la seule chose que ce témoin doit dire — c'est que le ressort
-        // PRÉCÈDE tout ce qui se peint, portes comme contrôleurs.
-        // **Le ressort est CONDITIONNEL depuis #4072** : il n'a de sens que pour
-        // un rail de COULOIR, vertical et pleine hauteur. Sur le rail qui FLOTTE
-        // sur la scène il étirait le socle de verre sur toute la carte et faisait
-        // déborder la dernière entrée — mesuré à l'écran.
-        //
-        // Ce que le témoin doit dire n'a pas changé : le ressort PRÉCÈDE tout ce
-        // qui se peint. Sa condition s'intercale, elle ne le déplace pas.
-        // **Le `switch` a été EXTRAIT le 2026-09-12** (`d76b5468d7`, #6131 : le
-        // rail défile quand il ne tient pas). Il vit désormais dans
-        // `railEntries`, et le ressort ne le précède plus TEXTUELLEMENT — il
-        // précède l'appel. L'ancrage, lui, n'a pas bougé d'un point.
-        //
-        // > C'est la TROISIÈME fois que ce témoin épingle une forme en croyant
-        // > tenir l'ancrage : son propre doc-comment raconte déjà #4072 et
-        // > #4582. Un témoin qui exige une concaténation littérale mesure la
-        // > façon d'écrire, pas la propriété — et il rougit sur chaque
-        // > extraction légitime, en annonçant que les portes ont cessé d'être
-        // > poussées vers le bas alors qu'elles le sont toujours.
-        //
-        // Ce qu'il doit dire tient en deux faits, et ils survivent à
-        // l'extraction : le ressort est CONDITIONNEL et POSÉ, et il précède ce
-        // qui se peint — quel que soit le nom sous lequel cela se peint.
-        guard let ressort = source.range(of: "ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}") else {
-            return XCTFail("""
-                Le ressort conditionnel a disparu du rail : sans lui, un `VStack` centré \
-                remet les entrées hautes hors de portée du pouce dès que la scène rétrécit.
-                """)
-        }
-        guard let entrees = source.range(of: "railEntries", range: ressort.upperBound..<source.endIndex) else {
-            return XCTFail("""
-                Le ressort ne précède plus les entrées : c'est lui, et non un alignement, \
-                qui les ancre en bas.
-                """)
-        }
-        XCTAssertTrue(ressort.upperBound <= entrees.lowerBound,
-                      "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
-        // Et les entrées peignent bien les deux modes — extraites ou non.
-        // Les portes sont peintes par `doorEntries` (#8558 : la colonne
-        // d'options s'accroche à une porte sans retirer les autres).
-        XCTAssertTrue(source.contains("case.doors(letdoors):doorEntries(doors)"))
-        XCTAssertTrue(source.contains("funcdoorEntries(_doors:[ComposerRailDoor])->someView{ForEach(doors"))
-        // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
-        //
-        // L'assertion littérale `case.tool(letcontrols):ForEach(controls)` est
-        // tombée au #4582, quand un `ScrollView` horizontal s'est intercalé — un
-        // changement légitime, et le témoin le refusait pour une raison qu'il
-        // n'avait jamais eue : il vérifiait une DISPOSITION en croyant vérifier
-        // un ANCRAGE.
-        //
-        // Ce que ce témoin doit dire est plus haut : le ressort précède tout ce
-        // qui se peint. Que les contrôleurs soient peints se vérifie sans
-        // épingler par quoi ils sont enveloppés.
-        XCTAssertTrue(source.contains("case.tool(letcontrols):"))
-        // Les entrées sont construites dans `body` et relues par le `ForEach`
-        // (#9135, #9456 : aucune fermeture isolée sur le fil de rendu asynchrone).
-        XCTAssertTrue(source.contains("ForEach(controls.map{AsyncRenderRow("))
-    }
-
-    /// **La vue ne décide de rien.** Elle reçoit `doors` déjà filtrées ; si elle
-    /// se mettait à filtrer, une seconde loi 4 naîtrait et les deux
-    /// divergeraient.
-    func test_laVue_neRefiltrePasLesPortes() throws {
-        let source = compact(try railSource())
-        XCTAssertFalse(source.contains("ComposerRailDoor.offered("),
-                       "Le filtrage appartient à la règle, jamais à la vue.")
-    }
-
-    /// La cible touchable vaut la largeur du rail — 44 pt —, indépendamment de
-    /// la taille du glyphe.
-    func test_laCibleTouchable_vientDeLaRegleDeGeometrie() throws {
-        let source = compact(try railSource())
-        XCTAssertTrue(source.contains("width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth"),
-                      "La cible se lit de la règle, jamais d'un littéral.")
-        XCTAssertTrue(source.contains(".contentShape(Rectangle())"),
-                      "Sans forme de contenu, la zone touchable retombe sur le dessin du glyphe.")
-    }
+/// Les mots du rail, qui servent encore la colonne et le ⋯ depuis que sa vue a
+/// quitté le projet (#13907).
+final class ComposerRailCopyTests: XCTestCase {
 
     /// VoiceOver entend le VERBE, pas le glyphe (loi 7).
     func test_chaquePorte_aUnLibelleVoiceOver() {
@@ -1237,25 +1117,6 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
     func test_leRail_nExistePasVide() throws {
         let rail = compact(try trailingRailSource())
         XCTAssertTrue(rail.contains("actions.isEmpty&&onAddSlide==nil&&onUndo==nil&&onRedo==nil"))
-    }
-
-
-    /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
-    /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
-    /// chaque frappe.
-    /// **La barre haute ne porte plus rien de l'historique.** Ce témoin est le
-    /// contrepoids du déplacement : sans lui, les deux contrôles pourraient
-    /// revenir en haut sans que rien ne rougisse.
-    func test_laBarreHaute_nePorteplusLHistorique() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Composer/ComposerTopBar.swift")
-        let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertFalse(source.contains("historyControls"))
-        XCTAssertFalse(source.contains("canUndo"))
-        XCTAssertTrue(source.contains("structComposerTopBar"),
-                      "…et le fichier lu est bien celui de la barre haute.")
     }
 }
 

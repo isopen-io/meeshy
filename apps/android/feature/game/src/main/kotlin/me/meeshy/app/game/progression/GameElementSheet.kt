@@ -74,7 +74,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * LA FEUILLE DE PRÉCISIONS d'une médaille ou d'un défi (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
+ * LA FEUILLE DE PRÉCISIONS d'une médaille, d'un défi, d'une famille d'élan ou d'une ligne de donnée (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
  * à son contenu, poignée visible ; elle se ferme en la glissant vers le bas, au toucher du voile ou par « Fermer ».
  * L'emblème entre en grand avec un ressort (un fondu sous « réduire les animations »), puis le nom, l'état, la jauge,
  * et pour une médaille ses étoiles, sa matière et pourquoi, ce qu'elle suit, la prochaine étoile et ses sept paliers.
@@ -140,7 +140,7 @@ private fun GameElementSheetContent(detail: GameElementDetail, onClose: () -> Un
             Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tokens.textPrimary, textAlign = TextAlign.Center)
         }
         SheetSection(texts.whatTitle, texts.what)
-        SheetSection(texts.howTitle, texts.how)
+        texts.how?.let { SheetSection(texts.howTitle, it) }
         if (texts.ladder.isNotEmpty()) Ladder(texts.ladder)
         if (texts.facts.isNotEmpty()) Facts(texts.facts)
         onOpenBadgesGuide?.let { BadgeGuideLink(it) }
@@ -188,12 +188,18 @@ private fun ElementEmblem(detail: GameElementDetail) {
             muted = tokens.textMuted,
             modifier = modifier,
         )
+        is GameElementDetail.Fact, is GameElementDetail.ElanFamily ->
+            ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
     }
 }
 
 /** « Obtenu le … » au sceau vert, ou « Pas encore obtenu · … » au cadenas : lus d'un trait. */
 @Composable
 private fun StatusLine(status: GameElementStatus, line: String) {
+    if (status is GameElementStatus.Value) {
+        Text(line, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MeeshyTheme.tokens.textPrimary, textAlign = TextAlign.Center)
+        return
+    }
     val obtained = status is GameElementStatus.Obtained
     val color = if (obtained) MeeshyPalette.Success else MeeshyTheme.tokens.textMuted
     Row(

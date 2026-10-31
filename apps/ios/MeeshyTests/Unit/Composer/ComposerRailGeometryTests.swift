@@ -288,48 +288,6 @@ final class ComposerRailGeometryTests: XCTestCase {
         XCTAssertEqual(ComposerRailGeometry.rowWidth(entries: 1), ComposerRailGeometry.railWidth)
     }
 
-    /// **La rangée horizontale DÉFILE, et le `(x)` reste hors du défilement.**
-    ///
-    /// Le faire défiler avec le reste l'enverrait hors champ précisément quand
-    /// il y a le plus de contrôleurs — c'est-à-dire quand on en a le plus
-    /// besoin. Le rail promet que « la position que le doigt apprend pour sortir
-    /// ne dépend pas du nombre de contrôleurs » ; un `(x)` qui défile en fait
-    /// une promesse creuse.
-    func test_laRangeeHorizontale_defile_etLaSortieResteEpinglee() throws {
-        var racine = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
-        let url = racine.appendingPathComponent(
-            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(brut.contains("struct ComposerLeadingRail"),
-                      "ce n'est pas le rail — la garde lirait à côté")
-        let code = AppSourceGuard.stripComments(brut)
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-
-        XCTAssertTrue(code.contains("ScrollView(.horizontal,showsIndicators:false)"))
-        // Le `(x)` est posé APRÈS la fermeture du ScrollView, donc hors de lui.
-        let apresDefilement = code.components(separatedBy: "ScrollView(.horizontal").last ?? ""
-        XCTAssertTrue(apresDefilement.contains("exitButton"),
-                      "la sortie doit rester hors du défilement")
-    }
-
-    /// **L'écart vient de la RÈGLE, jamais d'un littéral recopié.** Deux
-    /// valeurs, l'une dans la vue et l'autre dans le calcul, rendraient la
-    /// mesure fausse sans que rien ne rougisse — la rangée déborderait
-    /// exactement de leur différence.
-    func test_lEcart_aUnSeulSite() throws {
-        var racine = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
-        let url = racine.appendingPathComponent(
-            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-
-        XCTAssertFalse(code.contains("HStack(spacing:10)"),
-                       "l'écart doit venir de ComposerRailGeometry.entrySpacing")
-        XCTAssertFalse(code.contains("VStack(spacing:10)"))
-    }
-
     // MARK: - #10542 · Le rail droit tient dans la hauteur de la scène
 
     /// Quinze entrées : les sous-outils d'un texte, ses actions, le `(x)` et

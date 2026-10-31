@@ -7,7 +7,8 @@ import MeeshyUI
 ///
 /// Posé sur la CARTE par `ComposerSceneSurface` : il la couvre quand le média
 /// en fondera le fond, sinon il se centre là où le prochain objet se posera.
-/// Une forme neutre (la vignette n'existe pas encore), son anneau, ce qu'il dit,
+/// La vignette d'une photo dès qu'elle est lisible (#13906), sinon une forme
+/// neutre — toujours pour une vidéo, comme Android —, son anneau, ce qu'il dit,
 /// et ✕ dessous pour annuler. Un échec ne garde de lui qu'une ligne discrète au bas de
 /// la carte, avec « Réessayer ».
 struct ComposerSceneIntakeGhost: View {
@@ -42,9 +43,14 @@ struct ComposerSceneIntakeGhost: View {
         return CGSize(width: cote, height: cote)
     }
 
-    private var placeholder: some View {
+    private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: intake.foundsScene ? MeeshyRadius.xlPlus : MeeshyRadius.lg, style: .continuous)
+    }
+
+    private var placeholder: some View {
+        shape
             .fill(Color.white.opacity(0.08))
+            .overlay { preview }
             .overlay {
                 // Le ✕ sous l'anneau, jamais dans un coin : la colonne des outils
                 // se pose sur le bord droit de la carte.
@@ -54,6 +60,19 @@ struct ComposerSceneIntakeGhost: View {
                 }
             }
             .accessibilityElement(children: .contain)
+    }
+
+    /// La vignette, assombrie pour que l'anneau, le statut et ✕ restent lisibles.
+    @ViewBuilder
+    private var preview: some View {
+        if let thumbnail = intake.thumbnail {
+            Image(uiImage: thumbnail)
+                .resizable()
+                .scaledToFill()
+                .overlay(Color.black.opacity(0.25))
+                .clipShape(shape)
+                .accessibilityHidden(true)
+        }
     }
 
     private var progress: some View {

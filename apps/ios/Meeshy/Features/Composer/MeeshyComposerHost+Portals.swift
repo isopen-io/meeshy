@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 import MeeshySDK
 import MeeshyUI
 
@@ -200,7 +201,7 @@ extension MeeshyComposerHost {
         // six alimentent une feuille ; `storyPaste` alimente AUSSI le canvas,
         // qui est plus bas — un injecteur posé haut sert les deux, l'inverse
         // n'est pas vrai.
-        .composerPortalProviders()
+        .composerPortalProviders(format: selectedFormat)
         // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
         // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
         // feuille, celle de la conversation, avec tous ses onglets.
@@ -260,7 +261,7 @@ extension MeeshyComposerHost {
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared()
         )
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }
@@ -305,12 +306,15 @@ extension View {
     /// L'onglet « Lieu » de la palette (#4579) est absent — jamais grisé —
     /// quand l'autorisation de localisation est refusée : c'est l'injecteur
     /// qui le décide, pas la feuille.
-    func composerPortalProviders() -> some View {
+    /// Le vocabulaire du format composé voyage avec eux (#13913) : l'atelier et
+    /// ses feuilles lisent le même mot que le socle.
+    func composerPortalProviders(format: ComposerFormat) -> some View {
         self.storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
             .storyPasteProvided()
             .storyStickerLibraryProvided()
             .stickerNearbyPlacesProvided()
+            .environment(\.composerFormatWording, ComposerFormatVariant.of(format).wording)
     }
 }

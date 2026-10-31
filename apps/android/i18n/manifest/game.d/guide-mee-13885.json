@@ -1,0 +1,766 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.guide.hint",
+          "androidName": "game_concept_guide_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.do_easiest_mission",
+          "androidName": "game_guide_action_do_easiest_mission",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.do_easy_mission_or_freeze",
+          "androidName": "game_guide_action_do_easy_mission_or_freeze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.earn_first_points",
+          "androidName": "game_guide_action_earn_first_points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.keep_or_spend",
+          "androidName": "game_guide_action_keep_or_spend",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.mint_or_climb",
+          "androidName": "game_guide_action_mint_or_climb",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.open_first_mission",
+          "androidName": "game_guide_action_open_first_mission",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.prestige_or_stay",
+          "androidName": "game_guide_action_prestige_or_stay",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.relight_flame",
+          "androidName": "game_guide_action_relight_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_flame",
+          "androidName": "game_guide_action_see_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_level",
+          "androidName": "game_guide_action_see_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_meeshes",
+          "androidName": "game_guide_action_see_meeshes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_mint_preview",
+          "androidName": "game_guide_action_see_mint_preview",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_missions",
+          "androidName": "game_guide_action_see_missions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_next_tier",
+          "androidName": "game_guide_action_see_next_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_progress",
+          "androidName": "game_guide_action_see_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.see_rank",
+          "androidName": "game_guide_action_see_rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.start_game",
+          "androidName": "game_guide_action_start_game",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.take_photo",
+          "androidName": "game_guide_action_take_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.action.take_start_photo",
+          "androidName": "game_guide_action_take_start_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.dismiss",
+          "androidName": "game_guide_dismiss",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.means_label",
+          "androidName": "game_guide_means_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_level.means",
+          "androidName": "game_guide_moment_first_level_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_level.next",
+          "androidName": "game_guide_moment_first_level_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_level.short",
+          "androidName": "game_guide_moment_first_level_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_level.what",
+          "androidName": "game_guide_moment_first_level_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint.means",
+          "androidName": "game_guide_moment_first_mint_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint.next",
+          "androidName": "game_guide_moment_first_mint_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint.short",
+          "androidName": "game_guide_moment_first_mint_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint.what",
+          "androidName": "game_guide_moment_first_mint_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint_possible.means_drop",
+          "androidName": "game_guide_moment_first_mint_possible_means_drop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint_possible.means_free",
+          "androidName": "game_guide_moment_first_mint_possible_means_free",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint_possible.next",
+          "androidName": "game_guide_moment_first_mint_possible_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint_possible.short",
+          "androidName": "game_guide_moment_first_mint_possible_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.first_mint_possible.what",
+          "androidName": "game_guide_moment_first_mint_possible_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_at_risk.means",
+          "androidName": "game_guide_moment_flame_at_risk_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_at_risk.next",
+          "androidName": "game_guide_moment_flame_at_risk_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_at_risk.short",
+          "androidName": "game_guide_moment_flame_at_risk_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_at_risk.what",
+          "androidName": "game_guide_moment_flame_at_risk_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.means",
+          "androidName": "game_guide_moment_flame_out_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.next",
+          "androidName": "game_guide_moment_flame_out_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.next_new",
+          "androidName": "game_guide_moment_flame_out_next_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.short",
+          "androidName": "game_guide_moment_flame_out_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.short_new",
+          "androidName": "game_guide_moment_flame_out_short_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.flame_out.what",
+          "androidName": "game_guide_moment_flame_out_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.level_100.means",
+          "androidName": "game_guide_moment_level_100_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.level_100.next",
+          "androidName": "game_guide_moment_level_100_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.level_100.next_stay",
+          "androidName": "game_guide_moment_level_100_next_stay",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.level_100.short",
+          "androidName": "game_guide_moment_level_100_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.level_100.what",
+          "androidName": "game_guide_moment_level_100_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.missions_unlocked.means",
+          "androidName": "game_guide_moment_missions_unlocked_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.missions_unlocked.next",
+          "androidName": "game_guide_moment_missions_unlocked_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.missions_unlocked.short",
+          "androidName": "game_guide_moment_missions_unlocked_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.missions_unlocked.what",
+          "androidName": "game_guide_moment_missions_unlocked_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_rank.means",
+          "androidName": "game_guide_moment_new_rank_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_rank.next",
+          "androidName": "game_guide_moment_new_rank_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_rank.next_top",
+          "androidName": "game_guide_moment_new_rank_next_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_rank.short",
+          "androidName": "game_guide_moment_new_rank_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_rank.what",
+          "androidName": "game_guide_moment_new_rank_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_tier.means",
+          "androidName": "game_guide_moment_new_tier_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_tier.next",
+          "androidName": "game_guide_moment_new_tier_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_tier.next_last",
+          "androidName": "game_guide_moment_new_tier_next_last",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_tier.short",
+          "androidName": "game_guide_moment_new_tier_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.new_tier.what",
+          "androidName": "game_guide_moment_new_tier_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.price_rises.means",
+          "androidName": "game_guide_moment_price_rises_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.price_rises.next",
+          "androidName": "game_guide_moment_price_rises_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.price_rises.short",
+          "androidName": "game_guide_moment_price_rises_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.price_rises.what",
+          "androidName": "game_guide_moment_price_rises_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.return_after_absence.means",
+          "androidName": "game_guide_moment_return_after_absence_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.return_after_absence.next",
+          "androidName": "game_guide_moment_return_after_absence_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.return_after_absence.short",
+          "androidName": "game_guide_moment_return_after_absence_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.return_after_absence.what",
+          "androidName": "game_guide_moment_return_after_absence_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.treasury_tier.means",
+          "androidName": "game_guide_moment_treasury_tier_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.treasury_tier.next",
+          "androidName": "game_guide_moment_treasury_tier_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.treasury_tier.next_top",
+          "androidName": "game_guide_moment_treasury_tier_next_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.treasury_tier.short",
+          "androidName": "game_guide_moment_treasury_tier_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.moment.treasury_tier.what",
+          "androidName": "game_guide_moment_treasury_tier_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.more",
+          "androidName": "game_guide_more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.next_label",
+          "androidName": "game_guide_next_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.photo",
+          "androidName": "game_guide_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.skip",
+          "androidName": "game_guide_skip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.skip_all",
+          "androidName": "game_guide_skip_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.speaker.duo",
+          "androidName": "game_guide_speaker_duo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.speaker.mee",
+          "androidName": "game_guide_speaker_mee",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.speaker.meo",
+          "androidName": "game_guide_speaker_meo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.action.see_atlas",
+          "androidName": "game2_guide_action_see_atlas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.action.see_league",
+          "androidName": "game2_guide_action_see_league",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.action.see_season",
+          "androidName": "game2_guide_action_see_season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.action.see_trophies",
+          "androidName": "game2_guide_action_see_trophies",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.atlas_stamp.means",
+          "androidName": "game2_guide_moment_atlas_stamp_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.atlas_stamp.next",
+          "androidName": "game2_guide_moment_atlas_stamp_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.atlas_stamp.short",
+          "androidName": "game2_guide_moment_atlas_stamp_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.atlas_stamp.what",
+          "androidName": "game2_guide_moment_atlas_stamp_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_first.means",
+          "androidName": "game2_guide_moment_league_first_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_first.next",
+          "androidName": "game2_guide_moment_league_first_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_first.next_top",
+          "androidName": "game2_guide_moment_league_first_next_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_first.short",
+          "androidName": "game2_guide_moment_league_first_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_first.what",
+          "androidName": "game2_guide_moment_league_first_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_promoted.means",
+          "androidName": "game2_guide_moment_league_promoted_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_promoted.next",
+          "androidName": "game2_guide_moment_league_promoted_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_promoted.short",
+          "androidName": "game2_guide_moment_league_promoted_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_promoted.what",
+          "androidName": "game2_guide_moment_league_promoted_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_relegated.means",
+          "androidName": "game2_guide_moment_league_relegated_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_relegated.next",
+          "androidName": "game2_guide_moment_league_relegated_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_relegated.next_far",
+          "androidName": "game2_guide_moment_league_relegated_next_far",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_relegated.short",
+          "androidName": "game2_guide_moment_league_relegated_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.league_relegated.what",
+          "androidName": "game2_guide_moment_league_relegated_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.prestige.means",
+          "androidName": "game2_guide_moment_prestige_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.prestige.next",
+          "androidName": "game2_guide_moment_prestige_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.prestige.short",
+          "androidName": "game2_guide_moment_prestige_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.prestige.what",
+          "androidName": "game2_guide_moment_prestige_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.means",
+          "androidName": "game2_guide_moment_season_end_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.means_done",
+          "androidName": "game2_guide_moment_season_end_means_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.next",
+          "androidName": "game2_guide_moment_season_end_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.short",
+          "androidName": "game2_guide_moment_season_end_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.what",
+          "androidName": "game2_guide_moment_season_end_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_end.what_done",
+          "androidName": "game2_guide_moment_season_end_what_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_start.means",
+          "androidName": "game2_guide_moment_season_start_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_start.means_plain",
+          "androidName": "game2_guide_moment_season_start_means_plain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_start.next",
+          "androidName": "game2_guide_moment_season_start_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_start.short",
+          "androidName": "game2_guide_moment_season_start_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.season_start.what",
+          "androidName": "game2_guide_moment_season_start_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.trophy.means",
+          "androidName": "game2_guide_moment_trophy_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.trophy.next",
+          "androidName": "game2_guide_moment_trophy_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.trophy.short",
+          "androidName": "game2_guide_moment_trophy_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.trophy.what",
+          "androidName": "game2_guide_moment_trophy_what",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

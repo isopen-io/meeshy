@@ -18,6 +18,8 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -48,10 +50,14 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerObjectTiming
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.ui.component.media.MEDIA_TRIM_END_HANDLE_TAG
+import me.meeshy.ui.component.media.MEDIA_TRIM_START_HANDLE_TAG
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
@@ -210,16 +216,85 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `timing is offered in a still scene and opens the start and duration of the element`() {
+    fun `timing is offered in a still scene and opens the window of the element`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         show(vm)
 
         compose.onNodeWithText("Timing").performClick()
 
-        compose.onNodeWithContentDescription("Text start time").assertExists()
-        compose.onNodeWithContentDescription("Text visible duration").assertExists()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
         compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `Timing on a placed video says its family and window, never the text's words, and lights its own track`() {
+        val vm = viewModel()
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        vm.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, SceneObjectRef(ComposerObjectKind.MEDIA, "p"), ComposerObjectTiming(1.0, 3.0)) }
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNodeWithText("From 1.0 s to 3.0 s").assertExists()
+        compose.onNodeWithContentDescription("Start").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1.0 s"))
+        compose.onNodeWithContentDescription("End").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "3.0 s"))
+        compose.onNodeWithContentDescription("Text start time").assertDoesNotExist()
+        compose.onNode(hasText("Video") and isSelected()).assertExists()
+    }
+
+    private fun withVoice(vm: StoryComposerViewModel, sourceSeconds: Float?) {
+        val voice = me.meeshy.sdk.model.StoryAudioPlayerObject(id = "a1", postMediaId = "pm", mediaURL = "https://cdn/a1.m4a", x = 0.5, y = 0.7)
+        val sources = sourceSeconds?.let { mapOf("a1" to it) }.orEmpty()
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { it.copy(audio = listOf(voice), soundSources = sources) })) }
+        vm.onSceneReduce { StoryComposerSelectionReducer.soundSelected(it, "a1") }
+    }
+
+    @Test
+    fun `Timing on a sound chip trims the sound too, beside its window, as on iOS`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNode(hasText("Sound") and isSelected()).assertExists()
+        compose.onNodeWithText("Trim").assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_END_HANDLE_TAG).assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
+    }
+
+    @Test
+    fun `a sound whose source length is unknown offers no trim in Timing, only its window`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = null)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertDoesNotExist()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
+    }
+
+    @Test
+    fun `Timing on a place names it a place, and its permanent switch closes the window to the slide`() {
+        val vm = viewModel()
+        val place = me.meeshy.sdk.model.StoryLocationObject(id = "l1", place = me.meeshy.sdk.model.SharedPlace(latitude = 48.8, longitude = 2.3, name = "Paris"))
+        vm.onSceneReduce { it.copy(deck = it.deck.addPlaceToSelected(place)) }
+        vm.onSelectPlace("l1")
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithText("Place").assertExists()
+        compose.onNode(hasText("Paris") and isSelected()).assertExists()
+        compose.onNodeWithText("Visible from start to end").performSemanticsAction(SemanticsActions.OnClick)
+
+        val stored = vm.state.value.deck.selectedSlide.places.single()
+        assertThat(stored.duration).isEqualTo(vm.state.value.selectedSlideDurationSeconds)
+        compose.onNodeWithContentDescription("End").assertExists()
     }
 
     @Test
@@ -290,7 +365,7 @@ class ComposerSelectionActionBarTest {
         assertThat(vm.state.value.selectedMediaId).isEqualTo(slide.placedMedia.last().id)
         assertThat(slide.mediaIds).containsExactly("p")
         compose.onNodeWithText("Timing").performClick()
-        compose.onNodeWithContentDescription("Text start time").assertExists()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
     }
 
     @Test

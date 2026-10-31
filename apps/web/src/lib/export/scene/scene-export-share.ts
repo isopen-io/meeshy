@@ -1,4 +1,4 @@
-import { fileDeliveryPortal, shareFileOnce, type DeliverFileOutcome } from '@/lib/media/deliver-file';
+import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
 import type { SceneDelivery } from './scene-export-run';
@@ -16,6 +16,10 @@ import type { SceneDelivery } from './scene-export-run';
  * bandeau), dans lequel la livraison part — partage d'abord, téléchargement
  * si le partage est refusé. Retomber tout de suite sur l'ancre aurait rendu
  * un téléchargement là où la feuille du système était à un toucher.
+ *
+ * La livraison (`deliver-file`) reste À LA DEMANDE (`budgets.json` ›
+ * `story_export.dynamic_only`) : même le moteur d'export ne l'importe que par
+ * `import()`, que `startSceneExport` amorce dès le début du rendu.
  */
 
 export const sceneDeliveryOf = (outcome: DeliverFileOutcome): SceneDelivery =>
@@ -29,6 +33,7 @@ export async function shareSceneFile(params: {
   readonly awaitTap: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
 }): Promise<SceneDelivery> {
   const { blob, fileName, mimeType, host } = params;
+  const { fileDeliveryPortal, shareFileOnce } = await import('@/lib/media/deliver-file');
   const portal = fileDeliveryPortal(host);
   if (portal === null) return 'failed';
   const first = await shareFileOnce(host, blob, fileName, mimeType);

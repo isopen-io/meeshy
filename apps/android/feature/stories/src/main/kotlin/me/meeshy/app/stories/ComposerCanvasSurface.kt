@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -114,7 +115,7 @@ internal fun StoryCanvasSurface(
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _, _ -> },
 ) {
-    val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
     val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
     val capturing = capture != null && capture.pass != SceneCapturePass.NONE

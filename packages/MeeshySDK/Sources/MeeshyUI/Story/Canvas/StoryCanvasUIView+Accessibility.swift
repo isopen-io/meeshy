@@ -168,9 +168,7 @@ extension StoryCanvasUIView {
             : String(localized: "story.composer.a11y.compositionCount.many", defaultValue: "\(count) objets", bundle: .module)
         let joined = objectLabels.joined(separator: ", ")
         let el = UIAccessibilityElement(accessibilityContainer: self)
-        el.accessibilityLabel = String(localized: "story.composer.a11y.composition",
-                                       defaultValue: "Story, \(countLabel) : \(joined)",
-                                       bundle: .module)
+        el.accessibilityLabel = formatWording.compositionSummary(count: countLabel, objects: joined)
         el.accessibilityTraits = .staticText
         el.accessibilityFrameInContainerSpace = bounds
         return el

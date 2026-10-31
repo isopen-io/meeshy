@@ -49,6 +49,8 @@ public final class StoryCanvasUIView: UIView {
     }
     public internal(set) var mode: RenderMode
     public internal(set) var currentTime: CMTime = .zero
+    /// Le format composé, que le résumé VoiceOver nomme (#13913).
+    var formatWording: ComposerFormatWording = .story
 
     /// Timeline preview (« preview vivante ») : non-nil tant que la sheet
     /// timeline pilote ce canvas comme moniteur de preview. Le canvas reste

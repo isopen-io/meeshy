@@ -252,7 +252,7 @@ internal object StoryComposerSelectionReducer {
 
     /** Le départ du son avance d'un cran, comme celui d'un texte ou d'un sticker ; la durée est intacte. */
     fun soundStartCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
-        state.withSoundTiming(id) { it.cycledStart() }
+        soundRetimed(state, id) { it.cycledStart() }
 
     /**
      * La fenêtre propre du son [id] dans sa source (#13601) : bornes ramenées dans la source par la loi, durée occupée
@@ -266,11 +266,12 @@ internal object StoryComposerSelectionReducer {
     }
 
     fun soundDurationCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
-        state.withSoundTiming(id) { it.cycledDuration() }
+        soundRetimed(state, id) { it.cycledDuration() }
 
-    private fun StoryComposerUiState.withSoundTiming(id: String, cycle: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
-        if (deck.selectedSlide.audio.none { it.id == id }) return this
-        return copy(deck = deck.updateSelectedSound(id) { sound ->
+    /** La fenêtre d'apparition de la pastille [id] réécrite par [cycle] ; `0` se range en champ absent. */
+    fun soundRetimed(state: StoryComposerUiState, id: String, cycle: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
+        if (state.deck.selectedSlide.audio.none { it.id == id }) return state
+        return state.copy(deck = state.deck.updateSelectedSound(id) { sound ->
             val next = cycle(sound.timing())
             sound.copy(
                 startTime = next.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS },

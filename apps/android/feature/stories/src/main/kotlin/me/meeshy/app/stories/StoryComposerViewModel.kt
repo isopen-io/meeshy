@@ -115,6 +115,7 @@ class StoryComposerViewModel @Inject constructor(
     private var seededByDoor = false
     private var ownsStoredDraft = false
     private var restoring: Job? = null
+    private var autosave: Job? = null
 
     /** Une story PUBLIÉE rouverte (#13632) : son enregistrement la met à jour, il ne publie jamais une story neuve. */
     private var editMode: StoryEditMode? = null
@@ -188,6 +189,7 @@ class StoryComposerViewModel @Inject constructor(
             }
             resetHistory()
         }
+        if (autosave?.isActive != true) autosave = StoryComposerAutosaveWatch.start(viewModelScope, restoring, _state, ::persistDraft)
     }
 
     /**
@@ -623,7 +625,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
-        _state.update(next)
+        _state.update { StoryComposerTextReducer.blankLeftBehind(it, next(it)) }
         record(gesture)
     }
 

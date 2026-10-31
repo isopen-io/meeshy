@@ -1,7 +1,6 @@
 import { fetchCardMediaBlob } from '@/lib/export/message-card-fetch';
 import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
-import { fileDeliveryPortal } from '@/lib/media/deliver-file';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
 import { prepareSceneExport } from './scene-export-assets';
@@ -68,6 +67,7 @@ async function deliverFile(params: {
 }): Promise<SceneDelivery> {
   const gallery = await saveToGallery({ saver: params.gallerySaver, blob: params.blob, fileName: params.fileName, mimeType: params.mimeType });
   if (gallery !== null) return gallery === 'media.viewer.saved' ? 'delivered' : 'failed';
+  const { fileDeliveryPortal } = await import('@/lib/media/deliver-file');
   const portal = fileDeliveryPortal(params.host);
   return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));
 }
@@ -89,6 +89,9 @@ export async function startSceneExport(params: {
 }): Promise<SceneExportResult> {
   const { subject, audioContext } = params;
   const doc = document;
+  /* La livraison se charge PENDANT le rendu : prête au moment de livrer,
+     elle ne retarde pas le partage au-delà de l'activation du geste. */
+  void import('@/lib/media/deliver-file').catch(() => undefined);
   const env: RenderEnvironment = {
     doc,
     MediaRecorder: typeof MediaRecorder === 'undefined' ? undefined : MediaRecorder,

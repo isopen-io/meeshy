@@ -54,7 +54,11 @@ public enum StoryStaticSnapshot {
     /// elle-même. `size` est en PIXELS : l'image rendue a exactement cette taille.
     public static func foreground(slide: StorySlide, size: CGSize) -> CGImage? {
         guard size.width >= 1, size.height >= 1 else { return nil }
-        let layer = foregroundLayer(slide: slide, loadedImages: [:], geometry: CanvasGeometry(renderSize: size))
+        // Sans puce : même une pastille enfouie, que l'arbre peint à son rang
+        // depuis le #13901, reste hors de ce calque d'objets.
+        var objets = slide
+        objets.effects.audioPlayerObjects = nil
+        let layer = foregroundLayer(slide: objets, loadedImages: [:], geometry: CanvasGeometry(renderSize: size))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false

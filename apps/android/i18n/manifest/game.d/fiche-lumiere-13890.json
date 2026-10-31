@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.light.label",
+          "androidName": "game_fiche_light_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.record.line",
+          "androidName": "game_sparks_record_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.cumul.record",
+          "androidName": "game_sparks_cumul_record",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

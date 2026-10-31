@@ -54,20 +54,23 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
         StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
-        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
     }
 }
 
-/** Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. */
+/**
+ * Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. Les portes du
+ * rail et du socle (stickers, son, audience, références) ne servent aucun élément : elles le sont toujours (#13910).
+ */
 internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = when (sheet) {
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
     StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
-    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+    StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
 /** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */
@@ -117,22 +120,25 @@ private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, 
 }
 
 /**
- * Le Temps de l'objet posé (#13902) — texte, sticker, média, lieu ou pastille de son : son départ et sa durée dans la slide,
- * puis la frise du plan, où toucher une piste sélectionne son objet.
+ * Le Temps de l'objet posé (#13902, #13904) — texte, sticker, média, lieu ou pastille de son : sa famille, sa fenêtre en
+ * début et fin (iOS `ComposerObjectTimingControls`), puis la frise du plan, où sa piste est surlignée et où toucher une
+ * autre piste sélectionne son objet. Une pastille de son dont la source est connue s'y rogne aussi (#13903) : iOS sert
+ * ROGNER au côté de la fenêtre pour l'audio (`ComposerObjectEditorRail.entries(.audio)`), le Modifier le garde aussi.
  */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            val ref = state.selectedSceneObject
-            val timing = state.selectedObjectTiming
-            if (ref != null && timing != null) {
-                TimingCycleButtons(
-                    timing,
-                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.startCycled(it, ref) } },
-                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.durationCycled(it, ref) } },
-                )
+        val ref = state.selectedSceneObject
+        val window = state.selectedObjectWindow
+        val family = state.selectedObjectFamily
+        if (ref != null && window != null && family != null) {
+            ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
+                viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
             }
+        }
+        state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
+            Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
+            SoundTrimSection(state, sound, viewModel)
         }
         Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
             StoryPlanFrise(state, viewModel)

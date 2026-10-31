@@ -8,13 +8,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
+import me.meeshy.app.feed.LocalPostSceneExportRenderer
 import me.meeshy.app.feed.LocalPostSceneReaderRenderer
 import me.meeshy.app.feed.LocalReelSceneRenderer
 import me.meeshy.app.feed.LocalRepostSceneRenderer
 import me.meeshy.app.feed.LocalStoryOpener
+import me.meeshy.app.feed.PostSceneExportRenderer
 import me.meeshy.app.feed.PostSceneReaderRenderer
 import me.meeshy.app.feed.ReelSceneRenderer
 import me.meeshy.app.feed.RepostSceneRenderer
+import me.meeshy.app.stories.PostSceneExportMenu
 import me.meeshy.app.stories.PostSceneReaderScene
 import me.meeshy.app.stories.ReelCardScene
 import me.meeshy.app.stories.RepostSceneCard
@@ -40,6 +43,8 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val reelScene: ReelSceneRenderer = remember { { item, accent, live, modifier -> ReelCardScene(item, accent, live, modifier) } }
     // Une scène de post touchée s'ouvre en plein écran, entière et sonore (iOS `PostSceneCardContainer`).
     val postSceneReader: PostSceneReaderRenderer = remember { { item, accent, playing, modifier -> PostSceneReaderScene(item, accent, playing, modifier) } }
+    // Son menu « … » exporte le post entier, toutes ses scènes, par le moteur d'export des stories (#13896).
+    val postSceneExport: PostSceneExportRenderer = remember { { scenes, accent, modifier -> PostSceneExportMenu(scenes, accent, modifier) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
@@ -47,6 +52,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalRepostSceneRenderer provides repostScene,
         LocalReelSceneRenderer provides reelScene,
         LocalPostSceneReaderRenderer provides postSceneReader,
+        LocalPostSceneExportRenderer provides postSceneExport,
         LocalStoryOpener provides openStory,
     ) { content() }
     pending?.let { share ->

@@ -44,6 +44,7 @@
     <string name="composer_column_text_frame">Cadrage du texte</string>
     <string name="composer_column_text_language">Langue du texte</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_family_text">Texte</string>
     <string name="composer_frise_earlier">Plus tôt</string>
     <string name="composer_frise_empty">Posez un texte ou un sticker : chaque objet devient une piste.</string>
     <string name="composer_frise_entry">Entre ici</string>
@@ -54,6 +55,7 @@
     <string name="composer_frise_place">Lieu</string>
     <string name="composer_frise_ruler">Déplacer la tête de lecture</string>
     <string name="composer_frise_sound">Son</string>
+    <string name="composer_frise_video">Vidéo</string>
     <string name="composer_object_editor_adjust_blur">Flou</string>
     <string name="composer_object_editor_adjust_brightness">Luminosité</string>
     <string name="composer_object_editor_adjust_compare">Comparer</string>
@@ -71,6 +73,11 @@
     <string name="composer_object_editor_adjust_vignette">Vignette</string>
     <string name="composer_object_editor_effects_bloom">Bloom</string>
     <string name="composer_object_editor_effects_grain">Grain</string>
+    <string name="composer_object_editor_end">Fin</string>
+    <string name="composer_object_editor_permanent">Visible du début à la fin</string>
+    <string name="composer_object_editor_start">Début</string>
+    <string name="composer_object_editor_window">De %1$s à %2$s</string>
+    <string name="composer_object_editor_window_permanent">De %1$s à la fin</string>
     <string name="composer_publish_as_post">Publier le post</string>
     <string name="composer_publish_as_reel">Publier le réel</string>
     <string name="composer_publish_as_story">Publier la story</string>

@@ -28,6 +28,8 @@ Tout le reste est identique : outils, rails, barre de frappe, sélection, feuill
 
 Un format refusé reste dans le menu, grisé, avec sa raison, comme aujourd'hui sur Android.
 
+**Le choix du format est composite, jamais exclusif** (décision porteur du 2026-10-31, #13919 Android, #13920 iOS) : au moment de publier, l'auteur coche un ou plusieurs formats parmi Story, Post et Réel, au moins un, et un seul geste les publie tous ; chaque format garde ses refus motivés. Quand le post est coché et qu'il porte plusieurs images ou scènes, le menu propose leur disposition comme iOS (`ComposerMosaicChoice`, #13921). La scène affichée suit le premier format coché ; le contenu ne bouge pas.
+
 ### R3. Post sans scène
 Un post qui ne porte que du texte, et aucun objet ni fond, se publie comme un post texte ordinaire, comme aujourd'hui sur le fil : la charge envoyée est rétrocompatible. Dès qu'un objet ou un fond existe, il se publie en scène. C'est le compositeur qui fait ce choix : l'utilisateur n'a rien à décider.
 
@@ -45,7 +47,7 @@ Un post qui ne porte que du texte, et aucun objet ni fond, se publie comme un po
 - Le téléversement en arrière-plan d'un élément déjà posé (pré-téléversement) ne bloque rien. Il se lit sur l'élément sélectionné (« envoi 40 % »), et la publication l'attend ou le reprend.
 
 ### R6. Le même vocabulaire
-Les six outils de la maquette : Texte, Média, Sticker, Son, Dessin, ⋯. Le ⋯ contient fond, mention, hashtag, lieu, durée et animation. La sélection affiche Modifier, Ordre, Dupliquer, Temps et Retirer. Les mots et les icônes sont identiques sur iOS et Android, et sur grand écran les mêmes outils deviennent des rails libellés.
+Les six outils de la maquette : Texte, Média, Sticker, Son, Dessin, ⋯. Le ⋯ contient fond, mention, hashtag, lieu, durée et animation. La sélection affiche Modifier, Dupliquer, Temps et Retirer. Il n'y a pas d'action « Ordre » : toucher un objet posé le fait passer au premier plan, tout naturellement ; pour envoyer un objet au dernier rang, on touche les autres, du plus profond au plus haut (décision porteur du 2026-10-31, #13917 Android, #13918 iOS). Le fond n'entre jamais dans cet ordre. Les mots et les icônes sont identiques sur iOS et Android, et sur grand écran les mêmes outils deviennent des rails libellés.
 
 ### R7. Lecture
 - Post, story et réel composés se lisent dans le moteur unique de la scène : `MeeshyScenePlayer` sur iOS, `StoryScenePlayer` sur Android, dans les modes reader, card et reel.

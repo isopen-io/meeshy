@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions.Surface as TypingSurface
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
@@ -117,7 +118,7 @@ private fun CaptionTypingBar(state: StoryComposerUiState, viewModel: StoryCompos
 @Composable
 private fun PostTextTypingBar(text: String, onTextChange: (String) -> Unit, onDone: () -> Unit) {
     LimitReachedHaptic(ComposerPostTextPolicy.length(text), ComposerPostTextPolicy.CONTENT_LIMIT)
-    HostedTypingBar(text, onTextChange, stringResource(R.string.composer_post_text), onDone) { PostTextCounter(text) }
+    HostedTypingBar(text, onTextChange, formatLabel(ComposerFormatLabel.POST_TEXT), onDone) { PostTextCounter(text) }
 }
 
 /** Le champ collé au clavier et OK, sous ce que [header] a à dire ; le clavier monte dès que la fenêtre a rendu le focus. */

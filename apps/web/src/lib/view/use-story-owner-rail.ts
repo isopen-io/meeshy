@@ -1,20 +1,35 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import type { StoryActionRailHandlers } from '@/components/story-action-rail';
-import { currentCredential } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
-import { apiDeps } from '@/lib/api/deps';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
-import { storyDownloadableMedia, storyExportUrl } from '@/lib/api/story-export';
+import { storyDownloadableMedia } from '@/lib/api/story-export';
 import { gestureAudioContext, storyExportSubject, storyMediaExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
-import type { SceneExportResult } from '@/lib/export/scene/scene-export-run';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { browserFileDeliveryHost, hasFileDeliveryDoor, type FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import * as storySaveStore from '@/lib/stories/save-store';
 
+import type { StorySaveNoticeKey, StorySceneExporter } from './owner-rail-export';
 import { useCommentsSheetHost, type CommentsSheetHost } from './use-comments-sheet-host';
+
+export type { StorySceneExporter } from './owner-rail-export';
+
+type OwnerRailExport = typeof import('./owner-rail-export');
+
+/** Le geste tapé, son exécution se charge : un chunk qui ne vient pas libère le job et le DIT. */
+function runOwnerRailExport(params: {
+  readonly job: storySaveStore.StorySaveJobHandle;
+  readonly run: (module: OwnerRailExport) => Promise<StorySaveNoticeKey>;
+  readonly onUnavailable?: () => void;
+}): Promise<StorySaveNoticeKey> {
+  const { job } = params;
+  return import('./owner-rail-export').then(params.run, () => {
+    params.onUnavailable?.();
+    job.finish();
+    return job.signal.aborted ? 'story.save.cancelled' : 'story.save.offline';
+  });
+}
 
 /**
  * **LE RAIL DU PLAN AUTEUR** (#7116) — « Vues », « Partager », « Enregistrer »,
@@ -54,7 +69,10 @@ import { useCommentsSheetHost, type CommentsSheetHost } from './use-comments-she
  * `downloadFile`, `fileDeliveryPortal` et le moteur d'export ne pèsent sur
  * aucun lecteur qui ne tape jamais « Enregistrer », « Partager » ou
  * « Imager ». Le rendu dure au moins la story : le partage du fichier ne peut
- * pas partir dans le geste, le bandeau offre un toucher neuf (#13881).
+ * pas partir dans le geste, le bandeau offre un toucher neuf (#13881). Ce que
+ * fait « Enregistrer » une fois tapé (`owner-rail-export.ts`) se charge de
+ * même : le lecteur ne garde que ce qui DÉCIDE d'offrir le geste et ce qui
+ * doit naître DANS le geste (le job, le contexte audio).
  */
 export type StoryOwnerRail = {
   /** La feuille « Vues » — `postId !== null` ⇒ ouverte. */
@@ -67,111 +85,6 @@ export type StoryOwnerRail = {
   /** L'export en cours de LA story affichée — l'instantané du store. */
   readonly saving: storySaveStore.StorySaveJobView | null;
   readonly cancelSave: () => void;
-};
-
-type StorySaveNoticeKey = Extract<
-  InterfaceCatalogKey,
-  | 'story.save.success'
-  | 'story.save.cancelled'
-  | 'story.save.failed'
-  | 'story.save.offline'
-  | 'story.save.refused'
-  | 'story.save.missing'
-  | 'story.save.retry'
->;
-
-/**
- * UNE ISSUE, UNE PHRASE (miroir des quatre toasts d'iOS, `story.mine.save.*`).
- * Le premier jet ne connaissait que « échec » : un refus de session, un média
- * disparu et une coupure réseau se disaient de la même façon.
- */
-async function runStoryExport(params: {
-  readonly job: storySaveStore.StorySaveJobHandle;
-  readonly url: string;
-  readonly mediaId: string;
-  readonly host: FileDeliveryHost;
-  readonly gallerySaver: GallerySaver | null | undefined;
-}): Promise<StorySaveNoticeKey> {
-  const { job } = params;
-  try {
-    const [{ downloadFile }, { fileDeliveryPortal }, { saveToGallery }, { currentGallerySaver }] = await Promise.all([
-      import('@/lib/media/download-file'),
-      import('@/lib/media/deliver-file'),
-      import('@/lib/gallery/save-to-gallery'),
-      import('@/lib/gallery/gallery-saver'),
-    ]);
-    const result = await downloadFile({
-      url: params.url,
-      fallbackMediaId: params.mediaId,
-      deps: { fetchImpl: (input, init) => fetch(input, init), credential: currentCredential },
-      signal: job.signal,
-      onProgress: job.report,
-    });
-    if (result.status === 'cancelled') return 'story.save.cancelled';
-    if (result.status === 'offline') return 'story.save.offline';
-    if (result.status === 'unavailable') return result.reason === 'refused' ? 'story.save.refused' : 'story.save.missing';
-    job.lockDelivery();
-    /* La coque Android range la story DROIT dans l'album « Meeshy » (#9246),
-       comme la visionneuse (#8308) et Photos sur iOS : ni feuille de partage,
-       ni activation de geste à tenir après un long téléchargement. */
-    const saver = params.gallerySaver === undefined ? currentGallerySaver() : params.gallerySaver;
-    const gallery = await saveToGallery({ saver, blob: result.blob, fileName: result.fileName, mimeType: result.blob.type });
-    if (gallery !== null) return gallery === 'media.viewer.saved' ? 'story.save.success' : 'story.save.failed';
-    const portal = fileDeliveryPortal(params.host);
-    const outcome = portal === null ? 'unavailable' : await portal.deliver(result.blob, result.fileName, result.blob.type);
-    if (outcome === 'delivered') return 'story.save.success';
-    if (outcome === 'cancelled') return 'story.save.cancelled';
-    /* `expired` (revue #7116) — l'activation du geste a expiré PENDANT le
-       téléchargement, dans une coque sans ancre de repli (`deliver-file.ts`).
-       Rien ne dit que le PROCHAIN tap échouera : c'est une activation neuve.
-       « Échec de l'enregistrement » aurait annoncé un verdict définitif que
-       rien ne prouve — `story.save.retry` dit ce qui est vrai : retaper. */
-    return outcome === 'expired' ? 'story.save.retry' : 'story.save.failed';
-  } catch {
-    /* Le chunk à la demande n'a pas pu se charger (réseau tombé entre la
-       première peinture et le geste) — jamais un job coincé à 0 % qu'aucune
-       issue ne libérerait. */
-    return job.signal.aborted ? 'story.save.cancelled' : 'story.save.offline';
-  } finally {
-    job.finish();
-  }
-}
-
-/**
- * **UNE STORY À SCÈNE S'EXPORTE TELLE QU'ON LA VOIT** (#13873) — tous ses
- * calques, chaque slide à sa durée, la piste son qui JOUE (fond, vocaux,
- * vidéos, gains et coupures respectés), rendus par le moteur d'export
- * (`lib/export/scene/`), chargé au geste. Une story v1 (sans document) garde
- * le téléchargement du média filigrané par la passerelle.
- */
-export type StorySceneExporter = (input: {
-  readonly subject: SceneExportSubject;
-  readonly audioContext: AudioContext | null;
-  readonly preferredLanguages: readonly string[];
-  readonly placeHere: string;
-  readonly host: FileDeliveryHost;
-  readonly gallerySaver: GallerySaver | null | undefined;
-  readonly job: storySaveStore.StorySaveJobHandle;
-}) => Promise<SceneExportResult>;
-
-const browserStorySceneExporter: StorySceneExporter = async (input) => {
-  const [{ startSceneExport }, { currentGallerySaver }] = await Promise.all([
-    import('@/lib/export/scene/scene-export-browser'),
-    import('@/lib/gallery/gallery-saver'),
-  ]);
-  return startSceneExport({
-    subject: input.subject,
-    mode: 'save',
-    audioContext: input.audioContext,
-    preferredLanguages: input.preferredLanguages,
-    placeHere: input.placeHere,
-    host: input.host,
-    gallerySaver: input.gallerySaver === undefined ? currentGallerySaver() : input.gallerySaver,
-    chooseLength: async () => 4,
-    signal: input.job.signal,
-    onProgress: input.job.report,
-    onDelivering: input.job.lockDelivery,
-  });
 };
 
 /**
@@ -189,25 +102,6 @@ export type StoryExportLauncher = (input: {
 
 const browserStoryExportLauncher: StoryExportLauncher = (input) =>
   import('@/lib/export/scene/scene-export-launch').then(({ launchSceneExport }) => launchSceneExport(input));
-
-const SCENE_NOTICE: Readonly<Record<SceneExportResult, StorySaveNoticeKey>> = {
-  saved: 'story.save.success',
-  shared: 'story.save.success',
-  cancelled: 'story.save.cancelled',
-  retry: 'story.save.retry',
-  failed: 'story.save.failed',
-  unsupported: 'story.save.failed',
-};
-
-async function runComposedStoryExport(input: Parameters<StorySceneExporter>[0] & { readonly exporter: StorySceneExporter }): Promise<StorySaveNoticeKey> {
-  try {
-    return SCENE_NOTICE[await input.exporter(input)];
-  } catch {
-    return input.job.signal.aborted ? 'story.save.cancelled' : 'story.save.offline';
-  } finally {
-    input.job.finish();
-  }
-}
 
 export function useStoryOwnerRail(params: {
   readonly story: StoryPlaybackStory | undefined;
@@ -227,7 +121,7 @@ export function useStoryOwnerRail(params: {
 }): StoryOwnerRail {
   const { story, online, announce, language, gallerySaver } = params;
   const preferredLanguages = params.preferredLanguages;
-  const sceneExporter = params.sceneExporter ?? browserStorySceneExporter;
+  const sceneExporter = params.sceneExporter;
   const exportLauncher = params.exportLauncher ?? browserStoryExportLauncher;
   const storyId = story?.id;
   const viewers = useCommentsSheetHost(storyId);
@@ -300,15 +194,20 @@ export function useStoryOwnerRail(params: {
         return;
       }
       if (sceneSubject !== null) {
-        void runComposedStoryExport({
-          exporter: sceneExporter,
-          subject: sceneSubject,
-          audioContext,
-          preferredLanguages: preferredLanguages ?? [language],
-          placeHere: translate(language, 'scene.place.here'),
-          host,
-          gallerySaver,
+        void runOwnerRailExport({
           job,
+          onUnavailable: () => void audioContext?.close().catch(() => undefined),
+          run: (module) =>
+            module.runComposedStoryExport({
+              exporter: sceneExporter ?? module.browserStorySceneExporter,
+              subject: sceneSubject,
+              audioContext,
+              preferredLanguages: preferredLanguages ?? [language],
+              placeHere: translate(language, 'scene.place.here'),
+              host,
+              gallerySaver,
+              job,
+            }),
         }).then((key) => announce(translate(language, key)));
         return;
       }
@@ -316,8 +215,10 @@ export function useStoryOwnerRail(params: {
         job.finish();
         return;
       }
-      const url = storyExportUrl({ source: apiDeps.source, base: apiConfig.base, postId: storyId, media: exportMedia });
-      void runStoryExport({ job, url, mediaId: exportMedia.id, host, gallerySaver }).then((key) => announce(translate(language, key)));
+      void runOwnerRailExport({
+        job,
+        run: (module) => module.runStoryExport({ job, storyId, media: exportMedia, host, gallerySaver }),
+      }).then((key) => announce(translate(language, key)));
     };
     if (composedSubject === null) return { handlers: { views, save } };
     return {

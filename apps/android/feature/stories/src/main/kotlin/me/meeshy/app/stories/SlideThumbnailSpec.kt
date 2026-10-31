@@ -129,7 +129,7 @@ internal class ThumbnailPlaced(
 
 /** The media posed on [slide] that the tile can load — an uploaded one by its url, a pending one by its local preview. */
 internal fun StoryComposerUiState.thumbnailPlacedOf(slide: StorySlide, mediaBaseUrl: String?): List<ThumbnailPlaced> =
-    slide.placedMedia.filter { it.mediaId != slide.backgroundMediaId && it.mediaId in slide.mediaIds }.mapNotNull { placed ->
+    slide.placedMedia.filter { it.mediaId in slide.mediaIds }.mapNotNull { placed ->
         val uploaded = attachments.firstOrNull { it.id == placed.mediaId }
         val source = when {
             uploaded != null -> {

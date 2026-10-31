@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.where",
+          "androidName": "game_fiche_where",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.glory.next",
+          "androidName": "game_state_glory_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.glory.top",
+          "androidName": "game_state_glory_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.none",
+          "androidName": "game_state_flame_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.lit",
+          "androidName": "game_state_flame_lit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.at_risk",
+          "androidName": "game_state_flame_at_risk",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.covered",
+          "androidName": "game_state_flame_covered",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.out",
+          "androidName": "game_state_flame_out",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.flame.streak",
+          "androidName": "game_state_flame_streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.missions.progress",
+          "androidName": "game_state_missions_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.missions.ready",
+          "androidName": "game_state_missions_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.missions.claimed",
+          "androidName": "game_state_missions_claimed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.count.badges",
+          "androidName": "game_state_count_badges",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.count.defis",
+          "androidName": "game_state_count_defis",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.count.succes",
+          "androidName": "game_state_count_succes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.count.complete",
+          "androidName": "game_state_count_complete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.showcase.count",
+          "androidName": "game_state_showcase_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.atlas.progress",
+          "androidName": "game_state_atlas_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.next_rank",
+          "androidName": "game_concept_fact_next_rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fact.missing_for.rank",
+          "androidName": "game_fact_missing_for_rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.record",
+          "androidName": "game_concept_fact_record",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.state",
+          "androidName": "game_concept_fact_state",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.remaining",
+          "androidName": "game_concept_fact_remaining",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.visible",
+          "androidName": "game_concept_fact_visible",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.pending",
+          "androidName": "game_concept_fact_pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.status.none",
+          "androidName": "game_flame_status_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.status.covered",
+          "androidName": "game_flame_status_covered",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.status.out",
+          "androidName": "game_flame_status_out",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

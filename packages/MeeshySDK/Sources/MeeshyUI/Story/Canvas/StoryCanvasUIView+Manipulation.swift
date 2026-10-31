@@ -135,23 +135,16 @@ extension StoryCanvasUIView {
         return slide.effects.resolvedBackgroundMedia?.id
     }
 
-    /// **Ce qu'un GESTE peut saisir — quatre familles sur cinq** (#4591).
+    /// **Ce qu'un GESTE peut saisir — les cinq familles** (#4591, #13864).
     ///
-    /// L'audio en est exclu, et la cascade qui vivait ici ne le disait pas :
-    /// elle interrogeait quatre tableaux et rendait `nil` pour le cinquième par
-    /// omission. Le `switch` exhaustif préserve exactement ce comportement et
-    /// le rend visible.
-    ///
-    /// > **Cette exclusion est DATÉE.** La directive porteur du 2026-08-31 pose
-    /// > que tout objet de scène se redimensionne et tourne, et #4579 veut des
-    /// > chips de son déplaçables. Le jour où l'audio devient saisissable, c'est
-    /// > ICI que la décision se prend — le `switch` l'exige, là où la cascade
-    /// > l'aurait laissée passer en silence.
+    /// La pastille de son en était exclue tant qu'elle ne vivait que dans la
+    /// surcouche SwiftUI, qui porte ses propres gestes. Depuis qu'une pastille
+    /// recouverte se peint dans le canvas à son rang (#13901), c'est le canvas
+    /// qui reçoit le doigt : l'exclure la rendait touchable mais figée.
     private func manipulable(_ id: String) -> MeeshySceneObject? {
         guard let objet = slide.sceneObject(id: id) else { return nil }
         switch objet.kind {
-        case .text, .media, .sticker, .place: return objet
-        case .audio: return nil
+        case .text, .media, .sticker, .place, .audio: return objet
         }
     }
 

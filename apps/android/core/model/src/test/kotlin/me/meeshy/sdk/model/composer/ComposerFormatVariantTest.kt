@@ -51,4 +51,19 @@ class ComposerFormatVariantTest {
         assertThat(ComposerFormatVariant.of(REEL).channel).isEqualTo(ComposerPublishChannel.DOCUMENT)
         assertThat(ComposerFormatVariant.of(STATUS).composesOnScene).isFalse()
     }
+
+    @Test
+    fun `the composer names the format it composes, never another one`() {
+        assertThat(ComposerFormatVariant.of(STORY).noun).isEqualTo(ComposerSceneNoun.STORY)
+        assertThat(ComposerFormatVariant.of(POST).noun).isEqualTo(ComposerSceneNoun.POST)
+        assertThat(ComposerFormatVariant.of(REEL).noun).isEqualTo(ComposerSceneNoun.REEL)
+    }
+
+    @Test
+    fun `every label that names the format is shown by story, post and reel, except the post text a story never writes`() {
+        assertThat(ComposerFormatVariant.of(POST).labels).containsExactlyElementsIn(ComposerFormatLabel.entries)
+        assertThat(ComposerFormatVariant.of(REEL).labels).containsExactlyElementsIn(ComposerFormatLabel.entries)
+        assertThat(ComposerFormatVariant.of(STORY).labels).containsExactlyElementsIn(ComposerFormatLabel.entries - ComposerFormatLabel.POST_TEXT)
+        assertThat(ComposerFormatVariant.of(STATUS).labels).isEmpty()
+    }
 }

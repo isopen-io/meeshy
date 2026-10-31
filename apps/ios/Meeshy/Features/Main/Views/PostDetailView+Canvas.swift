@@ -210,7 +210,7 @@ extension PostDetailView {
                 // Les sons de PREMIER PLAN de la scène, en pastille (#9737) —
                 // le son de fond se dit par l'en-tête au-dessus, jamais ici.
                 .overlay {
-                    SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],
+                    SceneSoundChipLayer(audios: renderedItem.storyEffects.map { SceneAudioStageRule.overlaidAudios(in: $0) } ?? [],
                                         isInteractive: true,
                                         isHostMuted: isCanvasMuted)
                 }

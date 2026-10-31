@@ -90,3 +90,29 @@ struct ComposerSceneMoreMenuItems: View {
         }
     }
 }
+
+/// **Qui PEINT le visage d'un menu rond** (#10542) — le ⋯ de la colonne, depuis
+/// que la barre haute qui l'a vu naître a quitté le projet (#13907).
+///
+/// Retour porteur 2026-10-13, iOS 17.5 : le `⋯` se lisait plus bas que la croix
+/// et le `(+)`, dans une rangée qui les centre pourtant tous les trois. La
+/// croix et le `(+)` sont des `Button`, mis en page par SwiftUI de bout en
+/// bout ; le libellé d'un `Menu` est peint par le système, qui n'en garantit
+/// pas la place là où la barre monte dans la zone sûre. Sans verre natif, le
+/// visage sort donc du `Menu` : une vue ordinaire de la rangée, comme ses
+/// voisins. iOS 26 garde le verre interactif sur le libellé.
+nonisolated enum ComposerTopBarMenuFace: Equatable, Sendable {
+    /// Le visage est le libellé du `Menu`.
+    case label
+    /// Le visage est peint HORS du `Menu`, qui ne garde qu'une cible vide.
+    case detached
+
+    static func resolve(nativeGlass: Bool) -> ComposerTopBarMenuFace {
+        nativeGlass ? .label : .detached
+    }
+
+    static var current: ComposerTopBarMenuFace {
+        if #available(iOS 26.0, *) { return resolve(nativeGlass: true) }
+        return resolve(nativeGlass: false)
+    }
+}

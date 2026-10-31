@@ -24,8 +24,9 @@ internal object StoryComposerBackgroundReducer {
     fun backgroundChanged(state: StoryComposerUiState, background: StoryBackgroundValue?): StoryComposerUiState =
         state.withDeckTransform { it.setSelectedBackground(background) }
 
-    fun backgroundMediaToggled(state: StoryComposerUiState, mediaId: String): StoryComposerUiState =
-        state.withDeckTransform { it.toggleSelectedBackgroundMedia(mediaId) }
+    /** [objectId] : l'objet posé qui devient le fond (#13905) — lui seul quitte la scène, ses copies y restent. */
+    fun backgroundMediaToggled(state: StoryComposerUiState, mediaId: String, objectId: String? = null): StoryComposerUiState =
+        state.withDeckTransform { it.toggleSelectedBackgroundMedia(mediaId, objectId) }
 
     fun backgroundLoopSet(state: StoryComposerUiState, loop: Boolean): StoryComposerUiState =
         state.withDeckTransform { it.setSelectedBackgroundLoop(loop) }

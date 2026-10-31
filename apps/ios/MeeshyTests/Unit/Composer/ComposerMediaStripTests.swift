@@ -58,17 +58,9 @@ final class ComposerMediaStripTests: XCTestCase {
         // Un son, un document, une image de premier plan sont des pièces
         // jointes qui ne sont aucune page.
         //
-        // **RE-POINTÉE au #4064.** #4070 a sorti la barre haute de la surface
-        // document pour en faire `ComposerTopBar`, partagée avec la surface de
-        // scène ; cette garde lisait toujours `ComposerDocumentSurface.swift` et
-        // rougissait donc sur un fichier où le ruban n'était plus. Une garde de
-        // source ne suit pas le code qu'elle protège : c'est à la main qu'on la
-        // déplace, et un gate CIBLÉ ne l'exécute pas pour le dire.
-        let raw = try source("Meeshy/Features/Composer/ComposerTopBar.swift")
-        XCTAssertTrue(raw.contains("private var slideRail"), "slideRail introuvable ou source vide")
-        XCTAssertFalse(raw.contains("private var mediaStrip"),
-            "Le ruban vit en DEUX exemplaires — l'ancien en bas, le rail en haut : deux inventaires du "
-                + "même média, à faire diverger au premier chemin d'ingestion qui n'alimente que l'un.")
+        // **#13907 — la barre haute a quitté le projet**, et avec elle le
+        // logement que ce témoin relisait depuis le #4064 : le rail des slides
+        // vit dans `ComposerSlideRail`, lu plus bas.
         XCTAssertFalse(
             try AppSourceGuard.composerSurfaceSource()
                 .contains("private var mediaStrip"),

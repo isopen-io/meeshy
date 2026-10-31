@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -199,7 +200,10 @@ private fun SceneSurface(item: StoryItem, accentHex: String?, live: Boolean, mod
     }
 }
 
-/** Le plein écran des scènes, ouvert sur celle qu'on a touchée : une page par scène, seule la page montrée joue, son compris. */
+/**
+ * Le plein écran des scènes, ouvert sur celle qu'on a touchée : une page par scène, seule la page montrée joue, son compris. Son
+ * menu « … » exporte le post entier en vidéo (#13896).
+ */
 @Composable
 private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
     Dialog(
@@ -214,12 +218,18 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
             if (scenes.items.size > 1) {
                 PageCounter(position = pagerState.currentPage + 1, count = scenes.items.size, modifier = Modifier.align(Alignment.TopStart))
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(MeeshySpacing.sm)) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(imageVector = MeeshyIcons.Close, contentDescription = stringResource(R.string.feed_translation_close), tint = MeeshyPalette.White)
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd).padding(MeeshySpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier)
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(imageVector = MeeshyIcons.Close, contentDescription = stringResource(R.string.feed_translation_close), tint = MeeshyPalette.White)
+                    }
                 }
             }
         }

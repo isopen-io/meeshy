@@ -95,4 +95,32 @@ final class ComposerSceneSurfaceTests: XCTestCase {
         XCTAssertFalse(compact(try source("ComposerSceneSurface.swift")).contains("ComposerTopBar("),
                        "la barre haute est revenue au-dessus de la scène")
     }
+
+    /// #13907 — **la barre haute et le rail gauche ont quitté le projet** :
+    /// aucun hôte ne les montait plus. Leurs mots (`ComposerRailCopy`) et le
+    /// visage du ⋯ (`ComposerTopBarMenuFace`) restent, chez qui les sert.
+    func test_laBarreHauteEtLeRailGauche_ontQuitteLeProjet() throws {
+        let ios = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let projet = try String(contentsOf: ios.appendingPathComponent("Meeshy.xcodeproj/project.pbxproj"),
+                                encoding: .utf8)
+        for fichier in ["ComposerTopBar.swift", "ComposerLeadingRail.swift"] {
+            XCTAssertFalse(FileManager.default.fileExists(
+                atPath: ios.appendingPathComponent("Meeshy/Features/Composer/\(fichier)").path), fichier)
+            XCTAssertFalse(projet.contains("/* \(fichier) */"), "\(fichier) reste inscrit au projet")
+        }
+        let composer = ios.appendingPathComponent("Meeshy/Features/Composer")
+        let sources = try FileManager.default.contentsOfDirectory(at: composer, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(sources.count, 50, "le dossier lu n'est pas celui du composer")
+        for url in sources {
+            let code = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+            for type in ["structComposerTopBar:", "structComposerTopBarMenu<", "structComposerLeadingRail:",
+                         "structComposerSceneToggleEntry:"] {
+                XCTAssertFalse(code.contains(type), "\(type) revit dans \(url.lastPathComponent)")
+            }
+        }
+        XCTAssertFalse(ComposerRailCopy.label(.media).isEmpty, "les mots du rail servent encore la colonne")
+    }
 }
