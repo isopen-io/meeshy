@@ -230,7 +230,7 @@ class TusUploadRepositoryTest {
 
     @Test
     fun `uploadAll stops at the first failure and never uploads the remaining items`() = runTest {
-        coEvery { api.createUpload(any(), any(), any()) } returnsMany listOf(locationResponse(), errorResponse(500))
+        coEvery { api.createUpload(any(), any(), any()) } returnsMany listOf(locationResponse(), errorResponse(400))
         coEvery { api.uploadData(any(), any(), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "a", fileUrl = "https://cdn/a.jpg"))
 
@@ -338,13 +338,14 @@ class TusUploadRepositoryTest {
         }
 
     @Test
-    fun `a single-chunk upload never persists intermediate progress via upsert`() = runTest {
+    fun `a fresh session is checkpointed at offset zero before its first byte, so even a single chunk can resume`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
 
         repository().upload(item(), TusUploadContext.STORY)
 
-        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+        coVerify(exactly = 1) { checkpoints.upsert(match { it.uploadedBytes == 0L && it.location == "https://gate/api/v1/uploads/abc123" }) }
+        coVerify(exactly = 0) { checkpoints.upsert(match { it.uploadedBytes > 0L }) }
     }
 
     @Test
@@ -382,10 +383,11 @@ class TusUploadRepositoryTest {
         val savedOffsets = mutableListOf<Long>()
         coEvery { checkpoints.upsert(any()) } coAnswers { savedOffsets += (it.invocation.args[0] as TusUploadCheckpointEntity).uploadedBytes }
 
-        // 25 bytes over a 10-byte chunk size makes two intermediate chunks ([0,10), [10,20)).
+        // 25 bytes over a 10-byte chunk size makes two intermediate chunks ([0,10), [10,20)), after the session's own
+        // checkpoint at zero (#13959).
         repository().upload(bigItem(bytes = 25), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
-        assertThat(savedOffsets).containsExactly(10L, 20L).inOrder()
+        assertThat(savedOffsets).containsExactly(0L, 10L, 20L).inOrder()
     }
 
     @Test
@@ -412,7 +414,7 @@ class TusUploadRepositoryTest {
 
         repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
-        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+        coVerify(exactly = 0) { checkpoints.upsert(match { it.uploadedBytes > 0L }) }
     }
 
     @Test

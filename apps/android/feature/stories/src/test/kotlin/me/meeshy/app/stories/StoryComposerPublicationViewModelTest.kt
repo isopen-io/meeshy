@@ -48,7 +48,7 @@ class StoryComposerPublicationViewModelTest {
     private val repo: StoryRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val uploadQueue: MediaUploadQueue = mockk(relaxed = true)
 
     private val blocks = BlockCache()

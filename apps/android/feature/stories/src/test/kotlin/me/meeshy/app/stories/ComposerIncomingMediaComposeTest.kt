@@ -57,6 +57,8 @@ import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -77,7 +79,7 @@ class ComposerIncomingMediaComposeTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val uploader: StoryMediaUploader = mockk(relaxed = true)
+    private val uploader: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val queue: MediaUploadQueue = mockk(relaxed = true)
 
     @Before
@@ -101,13 +103,13 @@ class ComposerIncomingMediaComposeTest {
 
     private val adding get() = string(me.meeshy.feature.stories.R.string.story_composer_incoming_a11y)
 
-    private fun viewModel(): StoryComposerViewModel {
+    private fun viewModel(network: NetworkMonitor? = null): StoryComposerViewModel {
         val session: SessionRepository = mockk(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
         return StoryComposerViewModel(
             mockk<StoryRepository>(relaxed = true), session, uploader, queue,
             mockk<WorkManager>(relaxed = true), InMemoryStoryComposerDraftStore(), mockk<MediaBlobStore>(relaxed = true),
-            mockk<StoryDraftConfirmation>(relaxed = true), BlockCache(),
+            mockk<StoryDraftConfirmation>(relaxed = true), BlockCache(), network = network,
         ).also { it.onEnterComposer() }
     }
 
@@ -222,7 +224,7 @@ class ComposerIncomingMediaComposeTest {
         coEvery { uploader.upload(any(), any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
         var next = 0
         coEvery { queue.enqueue(any(), any(), any()) } answers { "cmid_${++next}" }
-        val vm = viewModel()
+        val vm = viewModel(network = InMemoryNetworkMonitor(initialOnline = false))
         show(vm)
 
         vm.onMediaPicked(listOf(photo()))
@@ -235,6 +237,23 @@ class ComposerIncomingMediaComposeTest {
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
         compose.runOnIdle { vm.onSceneBackgroundTap() }
         compose.onNodeWithText("Publish story").assertExists()
+    }
+
+    @Test
+    fun `online, a media whose upload failed never says waiting on the scene, it says Failed — Retry and the line offers it`() {
+        coEvery { uploader.upload(any(), any()) } returns NetworkResult.Failure(ApiError(message = "timeout", code = "NETWORK"))
+        coEvery { queue.enqueue(any(), any(), any()) } returns "cmid_1"
+        val vm = viewModel(network = InMemoryNetworkMonitor(initialOnline = true))
+        show(vm)
+
+        vm.onMediaPicked(listOf(photo()))
+        compose.waitForIdle()
+
+        val waiting = string(me.meeshy.feature.stories.R.string.story_composer_incoming_waiting)
+        val failed = string(me.meeshy.feature.stories.R.string.story_composer_upload_failed_retry)
+        assertThat(compose.onAllNodesWithText(waiting).fetchSemanticsNodes()).isEmpty()
+        assertThat(compose.onAllNodesWithText(failed).fetchSemanticsNodes()).isNotEmpty()
+        compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_retry)).assertExists()
     }
 
     @Test

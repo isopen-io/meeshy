@@ -103,6 +103,12 @@ data class StoryComposerUiState(
     val incomingMedia: List<MediaUploadItem> = emptyList(),
     /** Un envoi a échoué et ses octets sont gardés : la ligne d'erreur offre « Réessayer » (R5 de #13863). */
     val canRetryMedia: Boolean = false,
+    /** Le réseau est coupé (#13959) : un média en file se dit « Hors ligne » — et seulement alors. */
+    val isOffline: Boolean = false,
+    /** Les médias en file qui repartent maintenant, composeur ouvert (#13959). */
+    val resendingUploads: Set<String> = emptySet(),
+    /** Les médias en file dont le dernier envoi a échoué en ligne : ils proposent « Réessayer » (#13959). */
+    val failedUploads: Set<String> = emptySet(),
     val isPublishing: Boolean = false,
     /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
     val editing: Boolean = false,

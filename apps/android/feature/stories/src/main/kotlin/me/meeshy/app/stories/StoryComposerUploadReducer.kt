@@ -73,6 +73,15 @@ internal object StoryComposerUploadReducer {
     }
 
     /**
+     * One media of the pick, RECEIVED (#13959): it takes the place decided for it at the pick ([index]), whatever became of
+     * its siblings — a video the gateway holds is never thrown back into the queue because the photo picked with it failed.
+     */
+    fun landedAt(state: StoryComposerUiState, media: UploadedMedia, asBackground: Boolean = false, index: Int? = 0): StoryComposerUiState {
+        val landing = index?.let(state.mediaLandings::getOrNull) ?: landings(state, 1, asBackground).firstOrNull()
+        return state.copy(attachments = state.attachments + media).landing(media.id, landing, asBackground && index == 0).mirrorDraftToSelection()
+    }
+
+    /**
      * A media kept on the device for the outbox to send: a placeholder id rides in the slide until then, at the place the
      * pick decided for it ([index] in the pick) — a background, posed on the scene, or the root of its own slide.
      */

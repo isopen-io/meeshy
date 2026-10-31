@@ -173,9 +173,12 @@ internal fun IncomingCancel(onCancel: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
-/** « En attente » : un média hors ligne posé sur la scène, qui partira avec la publication par la file d'envoi. */
+/**
+ * Le badge d'un média posé sur la scène qui attend sa file d'envoi (#13959) : « En attente » sans réseau, l'anneau et
+ * « Envoi… » quand il repart, « Échec — Réessayer » quand son dernier essai a échoué — jamais une attente figée en ligne.
+ */
 @Composable
-internal fun IncomingWaitingBadge(modifier: Modifier = Modifier) {
+internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase.OFFLINE, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.sm))
@@ -183,8 +186,18 @@ internal fun IncomingWaitingBadge(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
-        Icon(MeeshyIcons.Hourglass, contentDescription = null, tint = Color.White, modifier = Modifier.size(BADGE_ICON))
-        Text(stringResource(R.string.story_composer_incoming_waiting), color = Color.White, style = MaterialTheme.typography.labelSmall)
+        when (phase) {
+            PendingUploadPhase.SENDING ->
+                CircularProgressIndicator(color = Color.White, strokeWidth = BADGE_STROKE, modifier = Modifier.size(BADGE_ICON))
+            PendingUploadPhase.OFFLINE ->
+                Icon(MeeshyIcons.Hourglass, contentDescription = null, tint = Color.White, modifier = Modifier.size(BADGE_ICON))
+            PendingUploadPhase.FAILED -> Unit
+        }
+        val text = when (phase) {
+            PendingUploadPhase.OFFLINE -> stringResource(R.string.story_composer_incoming_waiting)
+            else -> phase.label()
+        }
+        Text(text, color = Color.White, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -235,4 +248,5 @@ private val STICKER_RING = 22.dp
 private val RING_STROKE = 3.dp
 private val TARGET = 48.dp
 private val BADGE_ICON = 14.dp
+private val BADGE_STROKE = 2.dp
 private val NOTICE_VERTICAL = 6.dp

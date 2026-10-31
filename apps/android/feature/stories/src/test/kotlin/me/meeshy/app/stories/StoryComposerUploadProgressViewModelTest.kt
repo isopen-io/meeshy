@@ -44,7 +44,7 @@ class StoryComposerUploadProgressViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val session: SessionRepository = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val blobs: MediaBlobStore = mockk(relaxed = true)
 
     private fun viewModel(store: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore()): StoryComposerViewModel {
