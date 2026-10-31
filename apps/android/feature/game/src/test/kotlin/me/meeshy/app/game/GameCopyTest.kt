@@ -125,7 +125,7 @@ class GameCopyTest {
         listOf("en", "fr", "ar").forEach { tag ->
             val res = resourcesIn(tag)
             GameTextKey.entries.forEach { key ->
-                val text = GameText(key, listOf(GameTextArg.Count(2), GameTextArg.Count(3), GameTextArg.Count(4)))
+                val text = GameText(key, (2..7).map { GameTextArg.Count(it) })
                 if (key != GameTextKey.JoinedBySpace) {
                     assertThat(GameCopy.resolve(res, text)).isNotEmpty()
                 }

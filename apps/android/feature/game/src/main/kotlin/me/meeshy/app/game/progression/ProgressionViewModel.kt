@@ -31,7 +31,10 @@ import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementMeeshProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgressResolver
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
+import me.meeshy.sdk.model.game.progression.ProgressionConceptFiche
+import me.meeshy.sdk.model.game.progression.ProgressionConceptFiches
 import me.meeshy.sdk.model.game.progression.ProgressionConceptModel
 import me.meeshy.sdk.model.game.progression.ProgressionFailure
 import me.meeshy.sdk.model.game.progression.ProgressionScreenPlan
@@ -52,6 +55,8 @@ data class ProgressionSnapshot(
     val cards: List<ProgressionConceptCard>,
     val standing: ProgressionStanding,
     val gameRevision: Long? = null,
+    /** Ce que la fiche de chaque concept servi dit sous sa tête (« Où j'en suis », dédoublonné). */
+    val fiches: Map<ProgressionConcept, ProgressionConceptFiche> = emptyMap(),
 )
 
 data class ProgressionUiState(
@@ -149,12 +154,15 @@ class ProgressionViewModel @Inject constructor(
         val game = payload.game
         val now = LocalDateTime.now(ZoneId.systemDefault())
         val moment = SeasonMoment(now.toLocalDate().toString(), now.hour * MINUTES_PER_HOUR + now.minute)
+        val nowMillis = System.currentTimeMillis()
+        val cards = ProgressionConceptModel.cards(progress, game, nowMillis, moment)
         return ProgressionSnapshot(
             progress = progress,
             game = game,
-            cards = ProgressionConceptModel.cards(progress, game, System.currentTimeMillis(), moment),
+            cards = cards,
             standing = ProgressionStanding(glory = game?.glory, meesh = progress.meesh),
             gameRevision = payload.gameRevision,
+            fiches = cards.associate { it.concept to ProgressionConceptFiches.make(it.concept, progress, game, nowMillis, moment) },
         )
     }
 

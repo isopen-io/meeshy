@@ -43,7 +43,12 @@ public data class ProgressionConceptCard(
     val urgent: Boolean,
     /** La part parcourue vers l'étape suivante (0..1) ; `null` sans étape suivante. */
     val gauge: Double?,
-)
+    /** Les faits que la ligne dit (une ligne peut en porter deux : « Coffret · le Coffre s'ouvre à 100 »). */
+    val lineFacts: Set<ConceptFact> = emptySet(),
+) {
+    /** Le fait que l'emblème montre lui-même : l'anneau porte le niveau. */
+    val emblemFact: ConceptFact? get() = emblemLevel?.let { ConceptFact.Level }
+}
 
 /** L'identité d'un fait rendu : le dédoublonnage compare des identités, jamais des chaînes. */
 public enum class ConceptFact {
@@ -103,6 +108,7 @@ public object ProgressionConceptModel {
             line = line?.text,
             urgent = head.urgent != null && line === head.urgent,
             gauge = gauge(concept, progress, game),
+            lineFacts = line?.facts.orEmpty(),
         )
     }
 
@@ -249,9 +255,14 @@ public object ProgressionConceptModel {
     /** Le rang et sa division V–I ; le Mythe dit sa PLACE quand le serveur la sert. */
     public fun rankLabel(glory: me.meeshy.sdk.model.game.GameGlory): GameText {
         glory.mythicSeat?.let { return GameCopyLaws.mythicSeat(it.number) }
-        val name = GameCopyLaws.rankName(glory.rank)
-        val division = glory.shownDivision?.let(::roman) ?: return name
-        return GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Nested(name), GameTextArg.Verbatim(division)))
+        return rankLabel(glory.rank, glory.shownDivision)
+    }
+
+    /** Un rang et sa division V–I en chiffres romains ; sans division, le nom seul. */
+    public fun rankLabel(rank: me.meeshy.sdk.model.game.GloryRank, division: Int?): GameText {
+        val name = GameCopyLaws.rankName(rank)
+        val roman = division?.let(::roman) ?: return name
+        return GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Nested(name), GameTextArg.Verbatim(roman)))
     }
 
     private fun roman(division: Int): String? = listOf("I", "II", "III", "IV", "V").getOrNull(division - 1)
@@ -437,7 +448,7 @@ public object ProgressionConceptModel {
         ),
     )
 
-    private fun visibilityLabel(level: ShowcaseVisibility): GameText = GameText(
+    public fun visibilityLabel(level: ShowcaseVisibility): GameText = GameText(
         when (level) {
             ShowcaseVisibility.Everyone -> GameTextKey.VisibilityEveryone
             ShowcaseVisibility.Friends -> GameTextKey.VisibilityFriends
