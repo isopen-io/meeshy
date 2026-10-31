@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #12473 — la banniere d'une conversation empile ses messages (MessagingStyle) :
+     le nom de l'utilisateur lui-meme. Sept langues, les memes cles partout. -->
+<resources>
+    <string name="notification_conversation_me">Moi</string>
+</resources>

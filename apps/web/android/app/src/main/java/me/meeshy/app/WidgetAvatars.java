@@ -46,6 +46,12 @@ final class WidgetAvatars {
         return presence == null ? base : withDot(base, presence);
     }
 
+    /** #12473 — le visage seul, pour la banniere d'une conversation : `null` sans photo, jamais d'initiales. */
+    static Bitmap photoCircle(Context context, String url, int sizePx) {
+        Bitmap photo = photo(context, url, sizePx);
+        return photo == null ? null : circle(photo, sizePx);
+    }
+
     private static Bitmap photo(Context context, String url, int sizePx) {
         boolean debug = (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
         if (!WidgetAvatarRules.isFetchable(url, debug)) return null;

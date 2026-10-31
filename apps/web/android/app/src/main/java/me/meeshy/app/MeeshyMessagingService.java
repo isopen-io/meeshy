@@ -81,7 +81,19 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         Map<String, String> data = NotificationFunnelStore.extrasOf(extras);
         boolean inForeground = MainActivity.isInForeground();
         boolean displayed = inForeground || !withheld(data);
+        // #12473 — les lignes de la banniere que FCM va remplacer, lues AVANT lui.
+        boolean stacks = displayed && !inForeground && NotificationConversationStyle.applies(data);
+        Log.i(TAG, "DIAG12473 stacks=" + stacks + " fg=" + inForeground + " conv=" + data.containsKey("conversationId") + " msg=" + data.containsKey("messageId") + " tag=" + NotificationFunnelRules.bannerTag(data) + " fcm=" + NotificationFunnelRules.fcmDisplays(data) + " keys=" + data.keySet());
+        List<NotificationConversationRules.Line> previous = stacks
+            ? NotificationConversationStyle.previous(this, data) : java.util.Collections.emptyList();
         if (displayed) super.handleIntent(intent);
+        if (stacks) {
+            try {
+                NotificationConversationStyle.restyle(this, data, previous);
+            } catch (RuntimeException failure) {
+                Log.w(TAG, "banniere de conversation non empilee", failure);
+            }
+        }
         try {
             NotificationFunnelStore.noteShown(this, data, inForeground, displayed && (inForeground || systemShows(data)));
         } catch (RuntimeException failure) {
