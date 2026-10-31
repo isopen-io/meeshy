@@ -489,6 +489,7 @@
 		1CCDE088BB602DB50933BCD3 /* futuriste_orbite_front.webp in Resources */ = {isa = PBXBuildFile; fileRef = 72051B160CE648F3C1135388 /* futuriste_orbite_front.webp */; };
 		1CD8712FBD606C9A7157CF56 /* ActivationInviteViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3637C4A5F83B0AE9A814F1F8 /* ActivationInviteViewModelTests.swift */; };
 		8B9E3C8CFC917C5CA5525C1C /* ActivationInvitePresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCBCC7248EDED095FF62A22 /* ActivationInvitePresenterTests.swift */; };
+		9684239D8546246DC92E3140 /* ActivationInviteWindowHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B216F978CA39181614DB85 /* ActivationInviteWindowHostTests.swift */; };
 		1CE3547C916894F8A82920C1 /* GroupCallRoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC93F92480FF5A5B92E89554 /* GroupCallRoster.swift */; };
 		1CE9F9AD489505221ECEDDD4 /* SearchPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A9AE851374BDB3ABDE2BFA /* SearchPerformanceTests.swift */; };
 		1CEB1CAA6439C3F8DB7C1447 /* ComposerBottomReservationGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220382748F5F28F2BD26C722 /* ComposerBottomReservationGuardTests.swift */; };
@@ -5173,6 +5174,7 @@
 		361FEFC0DCC60D5EDA4AAE94 /* CameraModel+Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Recovery.swift"; sourceTree = "<group>"; };
 		3637C4A5F83B0AE9A814F1F8 /* ActivationInviteViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationInviteViewModelTests.swift; sourceTree = "<group>"; };
 		CFCBCC7248EDED095FF62A22 /* ActivationInvitePresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationInvitePresenterTests.swift; sourceTree = "<group>"; };
+		92B216F978CA39181614DB85 /* ActivationInviteWindowHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationInviteWindowHostTests.swift; sourceTree = "<group>"; };
 		363CB24D822FD012375D1841 /* QuickEmojiGridTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEmojiGridTests.swift; sourceTree = "<group>"; };
 		364C7DFE0839802A06C986DF /* MintCeremonyParticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MintCeremonyParticles.swift; sourceTree = "<group>"; };
 		36511F048F266943B5E6B929 /* ComposerOpeningFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerOpeningFormatTests.swift; sourceTree = "<group>"; };
@@ -13479,6 +13481,7 @@
 			children = (
 				3637C4A5F83B0AE9A814F1F8 /* ActivationInviteViewModelTests.swift */,
 				CFCBCC7248EDED095FF62A22 /* ActivationInvitePresenterTests.swift */,
+				92B216F978CA39181614DB85 /* ActivationInviteWindowHostTests.swift */,
 				3E4CAF35E10B79F719899161 /* EmailVerificationGateControllerTests.swift */,
 				D02D1FB29097A44FDC1B2D48 /* EmailVerificationGateTests.swift */,
 			);
@@ -16601,6 +16604,7 @@
 				B2570EC808F46EC7E343E8CF /* AchievementRevealMedalTests.swift in Sources */,
 				1CD8712FBD606C9A7157CF56 /* ActivationInviteViewModelTests.swift in Sources */,
 				8B9E3C8CFC917C5CA5525C1C /* ActivationInvitePresenterTests.swift in Sources */,
+				9684239D8546246DC92E3140 /* ActivationInviteWindowHostTests.swift in Sources */,
 				688B7BAB353710EB6C816AD4 /* ActiveSessionsViewAccessibilityTests.swift in Sources */,
 				197E00CBD546808B2E71C629 /* ActiveSessionsViewModelTests.swift in Sources */,
 				3919BB9B371EF7801770600E /* AdaptiveHorizontalPagerPinningTests.swift in Sources */,
