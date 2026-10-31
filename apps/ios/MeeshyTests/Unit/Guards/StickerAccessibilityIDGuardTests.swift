@@ -40,11 +40,6 @@ final class StickerAccessibilityIDGuardTests: XCTestCase {
         XCTAssertTrue(source.contains(".accessibilityIdentifier(StickerAccessibilityID.messageArtwork)"))
     }
 
-    func test_everyComposerRailDoor_carriesItsIdentifier() throws {
-        let source = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        XCTAssertTrue(source.contains(".accessibilityIdentifier(\"composer.rail.\\(door.rawValue)\")"))
-    }
-
     func test_identifiers_areStableAndDistinctPerKind() {
         XCTAssertEqual(StickerAccessibilityID.mee("mee-coucou"), "sticker.mee.mee-coucou")
         XCTAssertEqual(StickerAccessibilityID.pack("chats", item: "c1"), "sticker.pack.chats.c1")

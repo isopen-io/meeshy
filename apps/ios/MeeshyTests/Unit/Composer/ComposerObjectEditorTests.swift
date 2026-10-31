@@ -426,8 +426,6 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         let trailing = try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerTrailingRail.swift")
-        let leading = try AppSourceGuard.unit(
-            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
 
         // **Les rails FLOTTENT sur la scène depuis #8370** : leur carte est un
         // verre (Liquid Glass sur iOS 26, matériau translucide avant), TEINTÉ du
@@ -462,10 +460,7 @@ final class ComposerObjectEditorTests: XCTestCase {
              ".padding(.vertical,8)"),
             ("le couloir d'HISTORIQUE", trailing,
              ".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
-             ".padding(.vertical,8)"),
-            ("le couloir des PORTES", leading,
-             ".modifier(ComposerRailCard(separate:separateButtons,plateauTint:plateauTint))",
-             ".padding(axis==.vertical?.vertical:.horizontal,ComposerRailGeometry.floatingColumnPadding)")
+             ".padding(.vertical,8)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")

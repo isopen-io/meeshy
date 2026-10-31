@@ -142,15 +142,11 @@ final class ComposerFloatingSocleTests: XCTestCase {
                        "Un verre nu dans le socle choisit seul sa luminance, et le libellé blanc s'y perd.")
     }
 
-    /// **La barre haute flotte AUSSI sur la scène** : sa croix et son `⋯`
-    /// portent le même verre teinté, sinon ils virent au clair sur une photo
-    /// claire et leurs glyphes blancs disparaissent (simulateur, 2026-09-27).
-    func test_leVerreDeLaBarreHaute_estTeinteDuPlateau() throws {
-        let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Composer/ComposerTopBar.swift"))
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
-                      "La croix doit porter un verre teinté du plateau.")
+    /// **Le chrome qui flotte sur la scène ne porte aucun verre nu**, sinon il
+    /// vire au clair sur une photo claire et ses glyphes blancs disparaissent
+    /// (simulateur, 2026-09-27). La barre haute qui le portait a quitté le
+    /// projet (#13907) ; la règle reste pour le meuble.
+    func test_leChromeDuMeuble_neRevetAucunVerreNu() throws {
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertFalse(hote.contains(".adaptiveGlass(in:Circle())"),
@@ -172,16 +168,18 @@ final class ComposerFloatingSocleTests: XCTestCase {
     }
 
     /// Le visage détaché est une vue ordinaire ; le `Menu` posé dessus ne garde
-    /// qu'une cible vide au même gabarit, et le nom accessible.
-    func test_leMenuDeLaBarreHaute_poseSaCibleVideSurLeVisage() throws {
-        let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Composer/ComposerTopBar.swift"))
+    /// qu'une cible vide au même gabarit, et le nom accessible. Le ⋯ de la
+    /// colonne tient cette règle depuis que la barre haute a quitté le projet
+    /// (#13907).
+    func test_leMenuRond_poseSaCibleVideSurLeVisage() throws {
+        let menu = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Composer/ComposerSceneMoreMenu.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(barre.contains("structComposerTopBarMenu<"),
-                      "Le menu de la barre haute a changé de nom — la garde doit être re-pointée.")
-        XCTAssertTrue(barre.contains("case.detached:face().accessibilityHidden(true).overlay{Menu(content:items){Color.clear"),
+        XCTAssertTrue(menu.contains("structComposerSceneMoreMenu<"),
+                      "Le ⋯ de la colonne a changé de nom — la garde doit être re-pointée.")
+        XCTAssertTrue(menu.contains("case.detached:ComposerSceneRoundGlyph(symbol:ComposerRestTool.more.symbol).accessibilityHidden(true).overlay{Menu(content:items){Color.clear"),
                       "Sans verre natif, le visage se peint hors du menu, qui ne porte qu'une cible vide.")
-        XCTAssertTrue(barre.contains("case.label:Menu(content:items,label:face)"),
+        XCTAssertTrue(menu.contains("case.label:Menu(content:items){ComposerSceneRoundGlyph(symbol:ComposerRestTool.more.symbol)}"),
                       "Avec le verre natif, le visage reste le libellé du menu.")
     }
 

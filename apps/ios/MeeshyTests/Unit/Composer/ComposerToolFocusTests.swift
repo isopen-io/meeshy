@@ -78,8 +78,6 @@ final class ComposerToolFocusTests: XCTestCase {
     @MainActor
     func test_leRail_occupeParUnOutil_sAnnonceCommeSesReglages() throws {
         XCTAssertNotEqual(ComposerRailCopy.toolRailLabel, ComposerRailCopy.railLabel)
-        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        XCTAssertTrue(rail.contains("mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel"))
     }
 
     // MARK: - Les sites de montage demandent à la règle
@@ -138,22 +136,6 @@ final class ComposerToolFocusTests: XCTestCase {
                        "la rangée du bas n'est pas concernée")
         XCTAssertGreaterThan(ComposerFloatingRailInk.shadowOpacity, 0, "le relief vient d'une ombre portée")
         XCTAssertGreaterThan(ComposerFloatingRailInk.shadowRadius, 0)
-    }
-
-    /// Le gabarit commun peint l'encre de la loi et son relief, sans plus
-    /// aucun disque de verre ; la pastille de compte porte le même relief.
-    func test_10358_leGabaritDuRail_neMontePlusDeVerreParBouton() throws {
-        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(rail.contains("structComposerLeadingRail"), "le fichier lu n'est pas le rail")
-        XCTAssertFalse(rail.contains("ComposerRailButtonGlass("), "plus de bulle de verre autour des outils")
-        XCTAssertTrue(rail.contains(".foregroundColor(ComposerFloatingRailInk.glyph(separate:separateButtons,active:isOn,columnTint:tint))"))
-        XCTAssertEqual(rail.components(separatedBy: ".modifier(ComposerRailGlyphRelief(active:separateButtons))").count - 1, 2,
-                       "le glyphe ET la pastille de compte portent l'ombre")
-        XCTAssertTrue(rail.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
-                      "la cible reste de 44 pt")
-        XCTAssertTrue(rail.contains("isOn:control.isExpanded"),
-                      "un outil ouvert est une entrée active : jaune, et annoncée sélectionnée")
     }
 
     // MARK: - #10364 · Plus aucun cercle autour des outils du composer

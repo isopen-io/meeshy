@@ -349,7 +349,6 @@
 		1410EFDA726B2C732128D935 /* ComposerDocumentQuoteRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569441FE2B5A8EDB46449BE3 /* ComposerDocumentQuoteRefusalTests.swift */; };
 		14111F5D6E610BF02A4C0074 /* CommunityInviteViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E60E0085D29A90E1E53C4B /* CommunityInviteViewModelTests.swift */; };
 		141E482C2067EBDBAF06871D /* GamePhotoLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3945422B83AA5623640D1D7 /* GamePhotoLayout.swift */; };
-		14202FB647993A802F2F5A46 /* ComposerTopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76E4FD63F122DF7268AAF073 /* ComposerTopBar.swift */; };
 		143F3E57403828EA7A62121F /* StickerLibraryArtworkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A36F39E12141695837389D0 /* StickerLibraryArtworkTests.swift */; };
 		1488B9C4923792F73A60D75A /* MockAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248A4CD91F884CC1887542B0 /* MockAuthManager.swift */; };
 		14A4FA5CADE86F65013093F2 /* RenderedPixels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99760977113E41B57CF4E8D6 /* RenderedPixels.swift */; };
@@ -2460,6 +2459,7 @@
 		95B9A7795C387DF85F3AF68C /* CallMontageLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BC985E10011FA35A880AB4 /* CallMontageLayoutTests.swift */; };
 		95C45D0DC872E82DF97EBBA3 /* CallTurnCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232F803E355753D1EAEBF8C9 /* CallTurnCredentials.swift */; };
 		95C4D25BB4823C18152797B6 /* ComposerRailDoorBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8A32832AED9B19CE9CB97E /* ComposerRailDoorBadge.swift */; };
+		14EDD09E4645EF4031B41B33 /* ComposerRailCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E95D68208663A343D4C9B5 /* ComposerRailCopy.swift */; };
 		95E00FB7A6C0128F9224D87E /* GameSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DB9D761952B1922671E1C7 /* GameSourceGuardTests.swift */; };
 		95E3820F796C751BA8197F24 /* ConnectionStatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB1C4FE83A6839017FA891F /* ConnectionStatusViewModel.swift */; };
 		9603E45C3477F2ABF0BE652D /* MessageListViewController+LongMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF25F23599555992D5EE644C /* MessageListViewController+LongMessage.swift */; };
@@ -4004,7 +4004,6 @@
 		F45D8B8700D2440EE7B6227E /* MessageCardExportText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492FF55D385D5145608F1A31 /* MessageCardExportText.swift */; };
 		F45EA9581EC67148DB882E5B /* PasteIntoComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BE4B84C7C8F3FBD6EF6BA1E /* PasteIntoComposer.swift */; };
 		F462112AC18F1A0D98B11AB7 /* TopChromeExitRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60507534A1B7C3E834681A92 /* TopChromeExitRenderTests.swift */; };
-		F46DED67D370EAFB3C45B83F /* ComposerLeadingRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13DFDB0E3FF40E7EB7CF5192 /* ComposerLeadingRail.swift */; };
 		F48C2EFDD74B119D0CED0B4E /* MessageListViewControllerCellRegistrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D6E452AA7C9F3122A8CF99 /* MessageListViewControllerCellRegistrationTests.swift */; };
 		F4A3BB4486F0D3DE97A912BD /* ComposerCanonicalZoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45AB35F3938D39ABD9EACD27 /* ComposerCanonicalZoneTests.swift */; };
 		F4BF74C19C7B66378664A680 /* StoryCoverURLMemoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124E3BC4B8F9D8B8049C4527 /* StoryCoverURLMemoTests.swift */; };
@@ -4599,7 +4598,6 @@
 		13ADC1DF51A4D9A7F1F5B782 /* CameraModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModel.swift; sourceTree = "<group>"; };
 		13B6AFBDCA69220393EF2C4D /* SyncPillPauseGestureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillPauseGestureTests.swift; sourceTree = "<group>"; };
 		13CFEE28F793009BBCA7621F /* FaceRampRanking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceRampRanking.swift; sourceTree = "<group>"; };
-		13DFDB0E3FF40E7EB7CF5192 /* ComposerLeadingRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLeadingRail.swift; sourceTree = "<group>"; };
 		13E0093588E570A338A6204F /* ContactSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactSyncService.swift; sourceTree = "<group>"; };
 		13E2B2168CA62096CD1E3A4D /* EquatableFocalRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EquatableFocalRow.swift; sourceTree = "<group>"; };
 		13E932FAEE1375FF08BBA43C /* P2PWebRTCClientConcurrencySourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClientConcurrencySourceTests.swift; sourceTree = "<group>"; };
@@ -6223,7 +6221,6 @@
 		76C4CBDFE5A97EE1E295A30E /* QRCodeCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeCameraView.swift; sourceTree = "<group>"; };
 		76C9E5349D6E0BA1D88E8C0D /* ConversationEncryptionDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEncryptionDetailSheet.swift; sourceTree = "<group>"; };
 		76DCA2F8BFE5E5088CA80A1B /* CallRingPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRingPlayback.swift; sourceTree = "<group>"; };
-		76E4FD63F122DF7268AAF073 /* ComposerTopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTopBar.swift; sourceTree = "<group>"; };
 		76EBA9BFFA266F128587D133 /* CallRecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRecordingController.swift; sourceTree = "<group>"; };
 		76F17DEB0A27F244F9E14273 /* PiPSourceAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPSourceAnchor.swift; sourceTree = "<group>"; };
 		76F3272A5EEF900891FDB3E2 /* GameWave2Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameWave2Model.swift; sourceTree = "<group>"; };
@@ -6312,6 +6309,7 @@
 		7B6563DAC3060C3E0DCADF37 /* QuotedMediaFaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotedMediaFaceTests.swift; sourceTree = "<group>"; };
 		7B6CC85C64B7B434D8D7849D /* ComposerRailDoor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailDoor.swift; sourceTree = "<group>"; };
 		7B8A32832AED9B19CE9CB97E /* ComposerRailDoorBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailDoorBadge.swift; sourceTree = "<group>"; };
+		47E95D68208663A343D4C9B5 /* ComposerRailCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailCopy.swift; sourceTree = "<group>"; };
 		7B8BC3F34F907C8233345C25 /* GameDetailCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDetailCopy.swift; sourceTree = "<group>"; };
 		7B90A943A5F0FD3FD7CB0AD4 /* CallFaceEffectGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFaceEffectGeometryTests.swift; sourceTree = "<group>"; };
 		7BA14227939FBED847345E37 /* FocalFocusDetailsMotionLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalFocusDetailsMotionLaw.swift; sourceTree = "<group>"; };
@@ -11911,7 +11909,6 @@
 				23A4F485349BC68115985CE5 /* ComposerInlineEdit.swift */,
 				1F6DB384E75277E564DC583E /* ComposerInlineToolPanel.swift */,
 				0F602DE1EBB96A0D8C8A2B57 /* ComposerIntent.swift */,
-				13DFDB0E3FF40E7EB7CF5192 /* ComposerLeadingRail.swift */,
 				AA3241CD785CCA1DEB4B6B1F /* ComposerLimitFeedback.swift */,
 				9890BCD27029BEA604B6FBE8 /* ComposerLiveLook.swift */,
 				09248FDD2F038C5BC76B636E /* ComposerLiveLookSurface.swift */,
@@ -11958,6 +11955,7 @@
 				8B29F97BA46C7B1A9C2E21FC /* ComposerPublishMenu.swift */,
 				7B6CC85C64B7B434D8D7849D /* ComposerRailDoor.swift */,
 				7B8A32832AED9B19CE9CB97E /* ComposerRailDoorBadge.swift */,
+				47E95D68208663A343D4C9B5 /* ComposerRailCopy.swift */,
 				7B035E4B7B140AF93E4EC136 /* ComposerRailDoorLongPress.swift */,
 				ED65D4A085592DFE249E6314 /* ComposerRailGeometry.swift */,
 				2055F793AB04A8EDB41E3B05 /* ComposerRailGlass.swift */,
@@ -12032,7 +12030,6 @@
 				023290008CE9D191BE1387B8 /* ComposerRestChrome.swift */,
 				BF97F30A971411E70AE2F98F /* ComposerMoreMenuPolicy.swift */,
 				B11C0D9A3914BC52BFBF7472 /* ComposerThermalBudget.swift */,
-				76E4FD63F122DF7268AAF073 /* ComposerTopBar.swift */,
 				3A58A5E6DCF323662750E733 /* ComposerTrailingRail.swift */,
 				0AC88D33B1E679B6EA91D677 /* ComposerTriggerOutline.swift */,
 				DB47C7DDF6B6B7C784B66AB6 /* ComposerTrimRule.swift */,
@@ -14855,7 +14852,6 @@
 				E30B15FA8547C601D38952B5 /* ComposerInlineEdit.swift in Sources */,
 				AF69EE18E96AEF6412C8578A /* ComposerInlineToolPanel.swift in Sources */,
 				C91A1B642433BA98981D3D84 /* ComposerIntent.swift in Sources */,
-				F46DED67D370EAFB3C45B83F /* ComposerLeadingRail.swift in Sources */,
 				FF79F2905E8CD3524ED030FF /* ComposerLimitFeedback.swift in Sources */,
 				D79EEB52400E7682372DD1CC /* ComposerLiveLook.swift in Sources */,
 				C867074AE1D5B5C09797DF65 /* ComposerLiveLookSurface.swift in Sources */,
@@ -14910,6 +14906,7 @@
 				3189586EFB9D910ED41FDA77 /* ComposerPublishMenu.swift in Sources */,
 				8E962D4C18BE79BBEC62D016 /* ComposerRailDoor.swift in Sources */,
 				95C4D25BB4823C18152797B6 /* ComposerRailDoorBadge.swift in Sources */,
+				14EDD09E4645EF4031B41B33 /* ComposerRailCopy.swift in Sources */,
 				D6F97907CF7D3CBFA0B5DBD3 /* ComposerRailDoorLongPress.swift in Sources */,
 				3F5B1E223AC9800B86D9AE44 /* ComposerRailGeometry.swift in Sources */,
 				B2E1D2E6CE095DDA742628FD /* ComposerRailGlass.swift in Sources */,
@@ -14990,7 +14987,6 @@
 				0F61819D5293CAB194AF0AC4 /* ComposerTextStickerChoice.swift in Sources */,
 				B32E868CD3FEC59FD9797960 /* ComposerTextStickerSheet.swift in Sources */,
 				232AF6ED5DBCD573F0C0982D /* ComposerThermalBudget.swift in Sources */,
-				14202FB647993A802F2F5A46 /* ComposerTopBar.swift in Sources */,
 				7E26F46710549EFE5D621C21 /* ComposerTrailingRail.swift in Sources */,
 				2F598A98299D611D525F94E6 /* ComposerTriggerOutline.swift in Sources */,
 				FBF5A680AEA3BE390DEF74FE /* ComposerTrimRule.swift in Sources */,

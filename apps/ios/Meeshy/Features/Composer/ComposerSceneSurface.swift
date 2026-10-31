@@ -27,8 +27,7 @@ import MeeshyUI
 ///
 /// | zone | niveau |
 /// |---|---|
-/// | barre haute (`ComposerTopBar`) | la `MeeshyPublication` |
-/// | rail *leading* — les portes | crée un `MeeshySceneObject` (sauf « description ») |
+/// | le repos posé sur la scène (`ComposerSceneOverlayChrome`) | la `MeeshyPublication` et ses portes |
 /// | la scène, cadrée sur le viewport entier | une `MeeshyScene` |
 /// | rail *trailing* — les contrôleurs | UN `MeeshySceneObject` |
 /// | la description | la `MeeshySlide` |

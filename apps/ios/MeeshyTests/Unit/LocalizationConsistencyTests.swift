@@ -241,7 +241,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",  // 8
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
-        "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",  // 7
+        // #13907 — les mots du rail ont quitté sa vue retirée ; le cliquet les suit.
+        "apps/ios/Meeshy/Features/Composer/ComposerRailCopy.swift",  // 7
         "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7

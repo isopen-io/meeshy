@@ -93,14 +93,16 @@ final class ComposerRailDoorLongPressTests: XCTestCase {
 
     // MARK: - Le câblage
 
-    func test_rail_offersEachSourceAsANamedVoiceOverAction() throws {
-        let rail = try Self.source("ComposerLeadingRail.swift")
-        XCTAssertTrue(rail.contains("LongPressGesture(minimumDuration: ComposerRailDoorPress.minimumDuration)"))
-        XCTAssertTrue(rail.contains("longPress.begin()"), "l'appui long présente le choix")
-        XCTAssertTrue(rail.contains("ForEach(longPress.actions.map { named in"),
+    /// Le rail gauche a quitté le projet (#13907) : la porte média vit dans la
+    /// colonne posée sur la scène, qui tient la même promesse.
+    func test_sceneColumn_offersEachSourceAsANamedVoiceOverAction() throws {
+        let colonne = try Self.source("ComposerSceneOverlayChrome.swift")
+        XCTAssertTrue(colonne.contains("LongPressGesture(minimumDuration: ComposerRailDoorPress.minimumDuration)"))
+        XCTAssertTrue(colonne.contains("mediaLongPress.offer(.media)"), "l'appui long présente le choix")
+        XCTAssertTrue(colonne.contains(".accessibilityActions { mediaSourceActions }"),
                       "VoiceOver reçoit chaque source en action nommée")
-        XCTAssertTrue(rail.contains("label: ComposerMediaSourcePolicy.longPressLabel(source)"))
-        XCTAssertTrue(rail.contains("press.admitsTap(id: id, at: Date()) else { return }"))
+        XCTAssertTrue(colonne.contains("Button(ComposerMediaSourcePolicy.longPressLabel(source))"))
+        XCTAssertTrue(colonne.contains("press.admitsTap(id: outil.rawValue, at: Date())"))
     }
 
     func test_host_longPressPresentsTheChoice_thenOpensTheChosenSource() throws {
