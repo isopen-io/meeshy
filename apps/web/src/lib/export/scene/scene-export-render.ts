@@ -7,6 +7,8 @@ import { recordingMimeOf } from '@/lib/media/recording-codec';
 
 import type { PreparedSceneExport } from './scene-export-assets';
 import { playSoundSchedule, soundSchedule } from './scene-export-audio';
+import { brandAudioPlan, playBrandAudio } from './scene-export-branding-audio';
+import { paintBrandedFrame } from './scene-export-branding-render';
 import { paintSceneFrame, type ExportPalette, type ScenePaintable } from './scene-export-paint';
 import type { ExportSlide } from './scene-export-plan';
 
@@ -77,20 +79,24 @@ function paintAt(params: RenderParams, stage: Stage, tMs: number): ExportSlide |
   const slide = slideAt(params.prepared.plan.slides, tMs);
   const scene = slide === undefined ? undefined : params.document.scenes[slide.sceneIndex];
   if (slide === undefined || scene === undefined) return slide;
-  paintSceneFrame({
-    ctx: stage.ctx,
-    width: EXPORT_WIDTH,
-    height: EXPORT_HEIGHT,
-    scene,
-    carrier: params.carrier,
-    tSeconds: (tMs - slide.startMs) / 1000,
-    assets: params.prepared.assets,
-    preferredLanguages: params.preferredLanguages,
-    palette: params.env.palette,
-    labels: params.env.labels,
-    watermark: params.watermark,
-    slideDurationMs: slide.durationMs,
-  });
+  const paintStory = () =>
+    paintSceneFrame({
+      ctx: stage.ctx,
+      width: EXPORT_WIDTH,
+      height: EXPORT_HEIGHT,
+      scene,
+      carrier: params.carrier,
+      tSeconds: (tMs - slide.startMs) / 1000,
+      assets: params.prepared.assets,
+      preferredLanguages: params.preferredLanguages,
+      palette: params.env.palette,
+      labels: params.env.labels,
+      watermark: params.watermark,
+      slideDurationMs: slide.durationMs,
+    });
+  const { branding } = params.prepared;
+  if (branding === undefined) paintStory();
+  else paintBrandedFrame({ canvas: { ctx: stage.ctx, width: EXPORT_WIDTH, height: EXPORT_HEIGHT, fontFamily: params.env.palette.fontFamily }, branding, tMs, paintStory });
   return slide;
 }
 
@@ -146,7 +152,8 @@ export async function renderSceneExport(params: RenderParams): Promise<RenderOut
     clipDurationsS: new Map([...prepared.buffers].map(([src, buffer]) => [src, buffer.duration] as const)),
     lengthMs,
   });
-  const audio = plays.length === 0 ? null : await runningAudio(env.audioContext);
+  const brandPlan = prepared.branding === undefined ? null : brandAudioPlan({ timeline: prepared.branding.timeline, lengthMs });
+  const audio = plays.length === 0 && brandPlan === null ? null : await runningAudio(env.audioContext);
   const stream = stage.canvas.captureStream(FRAME_RATE);
   const destination = audio?.createMediaStreamDestination() ?? null;
   for (const track of destination?.stream.getAudioTracks() ?? []) stream.addTrack(track);
@@ -163,7 +170,12 @@ export async function renderSceneExport(params: RenderParams): Promise<RenderOut
 
   paintAt(params, stage, 0);
   const startAt = audio === null ? 0 : audio.currentTime + AUDIO_LEAD_S;
-  const stopSounds = audio === null || destination === null ? () => undefined : playSoundSchedule({ context: audio, destination, plays, buffers: prepared.buffers, startAt });
+  const brand = audio === null || destination === null || brandPlan === null ? null : playBrandAudio({ context: audio, destination, startAt, plan: brandPlan });
+  const stopStory = audio === null || destination === null ? () => undefined : playSoundSchedule({ context: audio, destination: brand?.storyBus ?? destination, plays, buffers: prepared.buffers, startAt });
+  const stopSounds = () => {
+    stopStory();
+    brand?.stop();
+  };
   const startedAt = env.now() + AUDIO_LEAD_S * 1000;
   const clock = audio === null ? () => env.now() - startedAt : () => (audio.currentTime - startAt) * 1000;
   recorder.start(1000);
@@ -176,7 +188,7 @@ export async function renderSceneExport(params: RenderParams): Promise<RenderOut
       }
       const tMs = Math.min(lengthMs, Math.max(0, clock()));
       const slide = paintAt(params, stage, tMs);
-      syncVideos(params, slide, tMs);
+      syncVideos(params, slide !== undefined && tMs < slide.startMs ? undefined : slide, tMs);
       params.onProgress(tMs / lengthMs);
       if (tMs >= lengthMs) {
         resolve();
