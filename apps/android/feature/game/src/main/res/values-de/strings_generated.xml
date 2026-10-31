@@ -486,6 +486,7 @@
     <string name="game_fiche_heritage_opens_escarcelle">der Beutel öffnet sich bei %1$s</string>
     <string name="game_fiche_heritage_opens_reserve">die Reserve öffnet sich bei %1$s</string>
     <string name="game_fiche_heritage_opens_tresor">der Schatz öffnet sich bei %1$s</string>
+    <string name="game_fiche_light_label">Dein Licht</string>
     <string name="game_fiche_light_to_heritage">Dein Erbe öffnen</string>
     <string name="game_fiche_mint_mee_gold">Diese wird aus Gold sein: Deine Ahnen werden sie sehen.</string>
     <string name="game_fiche_mint_mee_next_gold">Nr. %1$s wird aus Gold sein.</string>
@@ -741,7 +742,9 @@
         <item quantity="one">%1$d Funke</item>
         <item quantity="other">%1$d Funken</item>
     </plurals>
+    <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
     <string name="game_sparks_debt">Ein Schatten auf %1$s Funken</string>
+    <string name="game_sparks_record_line">%1$s seit jeher empfangen</string>
     <string name="game_spend_missing_freeze">Es fehlen %1$s, um eine Hüterin zu rufen.</string>
     <string name="game_spend_missing_relight">Es fehlen %1$s, um deine Flamme neu zu entzünden.</string>
     <string name="game_spend_missing_reroll">Es fehlen %1$s, um diesen Akt zu tauschen.</string>

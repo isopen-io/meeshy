@@ -486,6 +486,7 @@
     <string name="game_fiche_heritage_opens_escarcelle">the Pouch opens at %1$s</string>
     <string name="game_fiche_heritage_opens_reserve">the Reserve opens at %1$s</string>
     <string name="game_fiche_heritage_opens_tresor">the Treasure opens at %1$s</string>
+    <string name="game_fiche_light_label">Your light</string>
     <string name="game_fiche_light_to_heritage">Open your Legacy</string>
     <string name="game_fiche_mint_mee_gold">This one will be gold: your ancestors will see it.</string>
     <string name="game_fiche_mint_mee_next_gold">No. %1$s will be gold.</string>
@@ -741,7 +742,9 @@
         <item quantity="one">%1$d spark</item>
         <item quantity="other">%1$d sparks</item>
     </plurals>
+    <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
     <string name="game_sparks_debt">A shadow on %1$s sparks</string>
+    <string name="game_sparks_record_line">%1$s received since the beginning</string>
     <string name="game_spend_missing_freeze">You lack %1$s to take a Vigil.</string>
     <string name="game_spend_missing_relight">Still missing to relight your Flame: %1$s.</string>
     <string name="game_spend_missing_reroll">You lack %1$s to change this act.</string>

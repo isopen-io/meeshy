@@ -486,6 +486,7 @@
     <string name="game_fiche_heritage_opens_escarcelle">la Escarcela se abre con %1$s</string>
     <string name="game_fiche_heritage_opens_reserve">la Reserva se abre con %1$s</string>
     <string name="game_fiche_heritage_opens_tresor">el Tesoro se abre con %1$s</string>
+    <string name="game_fiche_light_label">Tu luz</string>
     <string name="game_fiche_light_to_heritage">Abrir tu Legado</string>
     <string name="game_fiche_mint_mee_gold">Esta será de oro: tus ancestros la verán.</string>
     <string name="game_fiche_mint_mee_next_gold">La n.º %1$s será de oro.</string>
@@ -743,7 +744,9 @@
         <item quantity="many">%1$d chispas</item>
         <item quantity="other">%1$d chispas</item>
     </plurals>
+    <string name="game_sparks_cumul_record">%1$s en esta Edad · %2$s en total</string>
     <string name="game_sparks_debt">Una sombra sobre %1$s chispas</string>
+    <string name="game_sparks_record_line">%1$s recibidas desde siempre</string>
     <string name="game_spend_missing_freeze">Te faltan %1$s para tomar una Vela.</string>
     <string name="game_spend_missing_relight">Te faltan %1$s para volver a encender tu Llama.</string>
     <string name="game_spend_missing_reroll">Te faltan %1$s para cambiar este acto.</string>
