@@ -38,6 +38,9 @@ const FAMILIES = [
   { slug: 'cadres-nordiques', order: 13, issue: 13965 },
   { slug: 'cadres-egyptiens', order: 14, issue: 13966 },
   { slug: 'cadres-mayas', order: 15, issue: 13967 },
+  { slug: 'cadres-indiens', order: 16, issue: 13968 },
+  { slug: 'cadres-amerindiens', order: 17, issue: 13969 },
+  { slug: 'cadres-australs', order: 18, issue: 13970 },
 ] as const;
 
 const filmOf = (ref: Ref): { readonly film: Film; readonly bytes: Buffer } => {

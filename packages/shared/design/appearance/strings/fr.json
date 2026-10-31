@@ -119,6 +119,18 @@
     "cadres-mayas": {
       "name": "Cadres mayas",
       "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
+    },
+    "cadres-indiens": {
+      "name": "Cadres indiens",
+      "description": "Trois cadres inspirés des motifs de l’Inde : un mandala floral qui s’ouvre, un paon qui fait la roue, une guirlande de soucis et de jasmin qui se balance."
+    },
+    "cadres-amerindiens": {
+      "name": "Cadres amérindiens",
+      "description": "Trois cadres inspirés du tissage et du perlage : un cercle tissé dont les plumes stylisées se balancent, un perlage de losanges qui tourne, un soleil en escalier sur des montagnes et leur rivière."
+    },
+    "cadres-australs": {
+      "name": "Cadres australs",
+      "description": "Trois cadres inspirés de la peinture de points et du ciel austral : des cercles de points qui scintillent, une tortue marine qui nage autour de l’avatar, la Croix du Sud qui brille."
     }
   },
   "designs": {
@@ -193,7 +205,16 @@
     "serpent-de-jade": "Serpent de jade",
     "cartouches-de-glyphes": "Cartouches de glyphes",
     "frise-a-gradins": "Frise à gradins",
-    "jaguar-de-jungle": "Jaguar de la jungle"
+    "jaguar-de-jungle": "Jaguar de la jungle",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Paon qui fait la roue",
+    "guirlande-soucis": "Guirlande de soucis",
+    "cercle-tisse": "Cercle tissé aux plumes",
+    "perlage-losanges": "Perlage en losanges",
+    "soleil-montagnes": "Soleil sur les montagnes",
+    "cercles-points": "Cercles de points",
+    "tortue-marine": "Tortue marine",
+    "croix-du-sud": "Croix du Sud"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",

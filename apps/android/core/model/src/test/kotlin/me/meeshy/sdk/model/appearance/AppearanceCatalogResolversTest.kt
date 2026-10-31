@@ -85,7 +85,7 @@ class AppearanceCatalogResolversTest {
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.BANNER).map { it.slug })
             .containsExactly("bannieres-essentielles", "bannieres-animees").inOrder()
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.AVATAR_RING).map { it.slug })
-            .containsExactly("contours-essentiels", "contours-animes", "cadres-illustres", "cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas").inOrder()
+            .containsExactly("contours-essentiels", "contours-animes", "cadres-illustres", "cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas", "cadres-indiens", "cadres-amerindiens", "cadres-australs").inOrder()
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.BANNER_FRAME).map { it.slug })
             .containsExactly("cadres-haussmannien", "cadres-ancestral").inOrder()
     }

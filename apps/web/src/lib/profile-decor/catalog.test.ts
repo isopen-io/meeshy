@@ -3,9 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { BUILTIN_BANNER_FRAME_PACKS, BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, appearanceNames, builtinBannerDesign, builtinBannerFrameDesign, builtinRingDesign } from './catalog';
 
 describe('le catalogue embarqué du décor de profil', () => {
-  test('50 contours et neuf bannières, tous lisibles par le contrat partagé', () => {
+  test('59 contours et neuf bannières, tous lisibles par le contrat partagé', () => {
     expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items.map((item) => item.key)).slice(0, 9)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier', 'halo-or', 'prisme-vivant', 'onde']);
-    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(50);
+    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(59);
     expect(BUILTIN_RING_PACKS.find((pack) => pack.slug === 'cadres-illustres')?.items.map((item) => item.decor?.reach)).toEqual([1.4, 1.4, 1.4, 1.4, 1.4, 1.4]);
     const families = BUILTIN_RING_PACKS.filter((pack) => pack.slug.startsWith('cadres-') && pack.slug !== 'cadres-illustres');
     expect(families.length).toBeGreaterThanOrEqual(3);

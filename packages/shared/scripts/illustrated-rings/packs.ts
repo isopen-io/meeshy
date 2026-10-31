@@ -3,9 +3,12 @@
  * langues — ceux du pack et ceux de chaque cadre. Installés d'office, retirables, comme les packs animés.
  */
 import { CADRES_AFRICAINS } from './famille-africaine.js';
+import { CADRES_AMERINDIENS } from './famille-amerindienne.js';
 import { CADRES_ASIATIQUES } from './famille-asiatique.js';
+import { CADRES_AUSTRAUX } from './famille-australe.js';
 import { CADRES_CELTES } from './famille-celte.js';
 import { CADRES_EGYPTIENS } from './famille-egyptienne.js';
+import { CADRES_INDIENS } from './famille-indienne.js';
 import { CADRES_MAYAS } from './famille-maya.js';
 import { CADRES_NORDIQUES } from './famille-nordique.js';
 import type { IllustratedFrame } from './frame.js';
@@ -46,4 +49,4 @@ const VITRINE: IllustratedPack = {
   ],
 };
 
-export const ILLUSTRATED_PACKS: readonly IllustratedPack[] = [VITRINE, CADRES_ASIATIQUES, CADRES_AFRICAINS, CADRES_CELTES, CADRES_NORDIQUES, CADRES_EGYPTIENS, CADRES_MAYAS];
+export const ILLUSTRATED_PACKS: readonly IllustratedPack[] = [VITRINE, CADRES_ASIATIQUES, CADRES_AFRICAINS, CADRES_CELTES, CADRES_NORDIQUES, CADRES_EGYPTIENS, CADRES_MAYAS, CADRES_INDIENS, CADRES_AMERINDIENS, CADRES_AUSTRAUX];

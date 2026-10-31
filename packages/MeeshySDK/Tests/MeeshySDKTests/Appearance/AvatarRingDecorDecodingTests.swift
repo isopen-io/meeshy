@@ -60,7 +60,7 @@ final class AvatarRingDecorDecodingTests: XCTestCase {
 
     /// #13962–#13970 — les familles culturelles de cadres illustrés : un pack installé d'office par
     /// famille, après la vitrine, de trois à quatre cadres qui portent chacun leurs deux films, nommés en arabe.
-    static let culturalFamilies: [String] = ["cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas"]
+    static let culturalFamilies: [String] = ["cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas", "cadres-indiens", "cadres-amerindiens", "cadres-australs"]
 
     func test_catalog_embedsTheCulturalFamilies_eachInstalledByDefault_withBothFilmsPerFrame() throws {
         let slugs = AvatarRingCatalog.shared.packs.map(\.slug).filter { $0.hasPrefix("cadres-") && $0 != "cadres-illustres" }

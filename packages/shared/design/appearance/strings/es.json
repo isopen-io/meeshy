@@ -119,6 +119,18 @@
     "cadres-mayas": {
       "name": "Marcos mayas",
       "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
+    },
+    "cadres-indiens": {
+      "name": "Marcos indios",
+      "description": "Tres marcos inspirados en los motivos de la India: un mandala floral que se abre, un pavo real que despliega la cola y una guirnalda de caléndulas y jazmín que se balancea."
+    },
+    "cadres-amerindiens": {
+      "name": "Marcos amerindios",
+      "description": "Tres marcos inspirados en el tejido y el abalorio: un aro tejido con plumas estilizadas que se mecen, una banda de rombos de cuentas que gira y un sol escalonado sobre montañas y su río."
+    },
+    "cadres-australs": {
+      "name": "Marcos australes",
+      "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
     }
   },
   "designs": {
@@ -193,7 +205,16 @@
     "serpent-de-jade": "Serpiente de jade",
     "cartouches-de-glyphes": "Cartuchos de glifos",
     "frise-a-gradins": "Friso escalonado",
-    "jaguar-de-jungle": "Jaguar de la selva"
+    "jaguar-de-jungle": "Jaguar de la selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavo real en abanico",
+    "guirlande-soucis": "Guirnalda de caléndulas",
+    "cercle-tisse": "Aro tejido con plumas",
+    "perlage-losanges": "Rombos de cuentas",
+    "soleil-montagnes": "Sol sobre las montañas",
+    "cercles-points": "Círculos de puntos",
+    "tortue-marine": "Tortuga marina",
+    "croix-du-sud": "Cruz del Sur"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

@@ -119,6 +119,18 @@
     "cadres-mayas": {
       "name": "Maya frames",
       "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
+    },
+    "cadres-indiens": {
+      "name": "Indian frames",
+      "description": "Three frames inspired by Indian motifs: a floral mandala that unfolds, a peacock fanning its tail, a swaying garland of marigolds and jasmine."
+    },
+    "cadres-amerindiens": {
+      "name": "Native American frames",
+      "description": "Three frames inspired by weaving and beadwork: a woven hoop with swaying stylised feathers, a turning band of beaded diamonds, a stepped sun over mountains and their river."
+    },
+    "cadres-australs": {
+      "name": "Southern frames",
+      "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
     }
   },
   "designs": {
@@ -193,7 +205,16 @@
     "serpent-de-jade": "Jade serpent",
     "cartouches-de-glyphes": "Glyph cartouches",
     "frise-a-gradins": "Stepped frieze",
-    "jaguar-de-jungle": "Jungle jaguar"
+    "jaguar-de-jungle": "Jungle jaguar",
+    "mandala-floral": "Floral mandala",
+    "paon-roue": "Fanning peacock",
+    "guirlande-soucis": "Marigold garland",
+    "cercle-tisse": "Feathered woven hoop",
+    "perlage-losanges": "Beaded diamonds",
+    "soleil-montagnes": "Sun over the mountains",
+    "cercles-points": "Dot circles",
+    "tortue-marine": "Sea turtle",
+    "croix-du-sud": "Southern Cross"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

@@ -119,6 +119,18 @@
     "cadres-mayas": {
       "name": "Maya-Rahmen",
       "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
+    },
+    "cadres-indiens": {
+      "name": "Indische Rahmen",
+      "description": "Drei Rahmen nach indischen Motiven: ein florales Mandala, das sich öffnet, ein Pfau, der ein Rad schlägt, und eine schwingende Girlande aus Ringelblumen und Jasmin."
+    },
+    "cadres-amerindiens": {
+      "name": "Indigene amerikanische Rahmen",
+      "description": "Drei Rahmen nach Web- und Perlenmustern: ein gewebter Reif mit schwingenden stilisierten Federn, ein drehendes Perlenband aus Rauten und eine gestufte Sonne über Bergen und ihrem Fluss."
+    },
+    "cadres-australs": {
+      "name": "Südliche Rahmen",
+      "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
     }
   },
   "designs": {
@@ -193,7 +205,16 @@
     "serpent-de-jade": "Jadeschlange",
     "cartouches-de-glyphes": "Glyphenkartuschen",
     "frise-a-gradins": "Stufenfries",
-    "jaguar-de-jungle": "Dschungeljaguar"
+    "jaguar-de-jungle": "Dschungeljaguar",
+    "mandala-floral": "Blumenmandala",
+    "paon-roue": "Radschlagender Pfau",
+    "guirlande-soucis": "Ringelblumengirlande",
+    "cercle-tisse": "Gewebter Federreif",
+    "perlage-losanges": "Perlenrauten",
+    "soleil-montagnes": "Sonne über den Bergen",
+    "cercles-points": "Punktkreise",
+    "tortue-marine": "Meeresschildkröte",
+    "croix-du-sud": "Kreuz des Südens"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",

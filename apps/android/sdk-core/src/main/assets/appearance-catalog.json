@@ -6371,6 +6371,709 @@
           }
         }
       ]
+    },
+    {
+      "slug": "cadres-indiens",
+      "order": 16,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "mandala-floral",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F97316",
+              "#7C2D12",
+              "#FACC15",
+              "#BE185D"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6.2L48.46 4.03L50 1.8L51.54 4.03ZM66.76 9.53L66.17 6.94L68.45 5.47L69.01 8.11ZM80.97 19.03L81.42 16.41L84.08 15.92L83.59 18.58ZM90.47 33.24L91.89 30.99L94.53 31.55L93.06 33.83ZM93.8 50L95.97 48.46L98.2 50L95.97 51.54ZM90.47 66.76L93.06 66.17L94.53 68.45L91.89 69.01ZM80.97 80.97L83.59 81.42L84.08 84.08L81.42 83.59ZM66.76 90.47L69.01 91.89L68.45 94.53L66.17 93.06ZM50 93.8L51.54 95.97L50 98.2L48.46 95.97ZM33.24 90.47L33.83 93.06L31.55 94.53L30.99 91.89ZM19.03 80.97L18.58 83.59L15.92 84.08L16.41 81.42ZM9.53 66.76L8.11 69.01L5.47 68.45L6.94 66.17ZM6.2 50L4.03 51.54L1.8 50L4.03 48.46ZM9.53 33.24L6.94 33.83L5.47 31.55L8.11 30.99ZM19.03 19.03L16.41 18.58L15.92 15.92L18.58 16.41ZM33.24 9.53L30.99 8.11L31.55 5.47L33.83 6.94Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M58.58 6.85L59.36 2.92M74.45 13.42L76.67 10.09M86.58 25.55L89.91 23.33M93.15 41.42L97.08 40.64M93.15 58.58L97.08 59.36M86.58 74.45L89.91 76.67M74.45 86.58L76.67 89.91M58.58 93.15L59.36 97.08M41.42 93.15L40.64 97.08M25.55 86.58L23.33 89.91M13.42 74.45L10.09 76.67M6.85 58.58L2.92 59.36M6.85 41.42L2.92 40.64M13.42 25.55L10.09 23.33M25.55 13.42L23.33 10.09M41.42 6.85L40.64 2.92",
+                "color": 3,
+                "opacity": 0.9,
+                "width": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "5a0933f4868ef32e.json",
+              "bytes": 6160,
+              "sha256": "5a0933f4868ef32eea14062d149e66e76f645310d6fa642c1c2914a8e34ac68a"
+            },
+            "front": {
+              "src": "ac177b955221bef4.json",
+              "bytes": 20602,
+              "sha256": "ac177b955221bef47aee13ccb04d6cbf5060e23dafb763e69474cfa67621c5ca"
+            }
+          }
+        },
+        {
+          "key": "paon-roue",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0F766E",
+              "#1E1B4B",
+              "#FACC15",
+              "#38BDF8",
+              "#15803D"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 4,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6.6L48.19 4.04L50 1.4L51.81 4.04ZM80.69 19.31L81.22 16.22L84.37 15.63L83.78 18.78ZM93.4 50L95.96 48.19L98.6 50L95.96 51.81ZM80.69 80.69L83.78 81.22L84.37 84.37L81.22 83.78ZM50 93.4L51.81 95.96L50 98.6L48.19 95.96ZM19.31 80.69L18.78 83.78L15.63 84.37L16.22 81.22ZM6.6 50L4.04 51.81L1.4 50L4.04 48.19ZM19.31 19.31L16.22 18.78L15.63 15.63L18.78 16.22Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M50 5.6L50 2.4M61.49 7.11L62.32 4.02M72.2 11.55L73.8 8.78M81.4 18.6L83.66 16.34M88.45 27.8L91.22 26.2M92.89 38.51L95.98 37.68M94.4 50L97.6 50M92.89 61.49L95.98 62.32M88.45 72.2L91.22 73.8M81.4 81.4L83.66 83.66M72.2 88.45L73.8 91.22M61.49 92.89L62.32 95.98M50 94.4L50 97.6M38.51 92.89L37.68 95.98M27.8 88.45L26.2 91.22M18.6 81.4L16.34 83.66M11.55 72.2L8.78 73.8M7.11 61.49L4.02 62.32M5.6 50L2.4 50M7.11 38.51L4.02 37.68M11.55 27.8L8.78 26.2M18.6 18.6L16.34 16.34M27.8 11.55L26.2 8.78M38.51 7.11L37.68 4.02",
+                "color": 2,
+                "opacity": 0.7,
+                "width": 0.5
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "d2aa538d178a9e7b.json",
+              "bytes": 34606,
+              "sha256": "d2aa538d178a9e7bce470cf1aa33dde913a73a4a6960981c8d32d76a94373ac9"
+            },
+            "front": {
+              "src": "a9e2c516d292ad85.json",
+              "bytes": 9970,
+              "sha256": "a9e2c516d292ad85ed2b6786a6f173cafdb5a533d21eff7a083a7ec39e36ea62"
+            }
+          }
+        },
+        {
+          "key": "guirlande-soucis",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F97316",
+              "#C2410C",
+              "#FBBF24",
+              "#15803D",
+              "#FFFBEB"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.55
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6.4L48.32 4.03L50 1.6L51.68 4.03ZM71.8 12.24L71.53 9.35L74.2 8.08L74.44 11.03ZM87.76 28.2L88.97 25.56L91.92 25.8L90.65 28.47ZM93.6 50L95.97 48.32L98.4 50L95.97 51.68ZM87.76 71.8L90.65 71.53L91.92 74.2L88.97 74.44ZM71.8 87.76L74.44 88.97L74.2 91.92L71.53 90.65ZM50 93.6L51.68 95.97L50 98.4L48.32 95.97ZM28.2 87.76L28.47 90.65L25.8 91.92L25.56 88.97ZM12.24 71.8L11.03 74.44L8.08 74.2L9.35 71.53ZM6.4 50L4.03 51.68L1.6 50L4.03 48.32ZM12.24 28.2L9.35 28.47L8.08 25.8L11.03 25.56ZM28.2 12.24L25.56 11.03L25.8 8.08L28.47 9.35Z",
+                "color": 4,
+                "opacity": 1
+              },
+              {
+                "d": "M61.54 6.92L62.27 4.22M81.54 18.46L83.52 16.48M93.08 38.46L95.78 37.73M93.08 61.54L95.78 62.27M81.54 81.54L83.52 83.52M61.54 93.08L62.27 95.78M38.46 93.08L37.73 95.78M18.46 81.54L16.48 83.52M6.92 61.54L4.22 62.27M6.92 38.46L4.22 37.73M18.46 18.46L16.48 16.48M38.46 6.92L37.73 4.22",
+                "color": 1,
+                "opacity": 0.8,
+                "width": 1.2
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "f53fe2fc4ef360fb.json",
+              "bytes": 12016,
+              "sha256": "f53fe2fc4ef360fb7220d79ad060d8365e6a788054218d260506e5616a480f43"
+            },
+            "front": {
+              "src": "977f998454f50e23.json",
+              "bytes": 25792,
+              "sha256": "977f998454f50e231f17f7219c7a90fa064a14a7a2e02ba2916d80c5616ea415"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cadres-amerindiens",
+      "order": 17,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "cercle-tisse",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#7C4A21",
+              "#C08A52",
+              "#14B8A6",
+              "#C2410C",
+              "#FAFAF9"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.6
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M53 7.1L53.42 1.12M61.85 8.67L63.51 2.9M70.19 12.03L73 6.74M77.64 17.06L81.5 12.46M83.88 23.53L88.61 19.83M88.65 31.15L94.04 28.52M91.72 39.6L97.54 38.15M92.97 48.5L98.97 48.29M92.35 57.47L98.26 58.51M89.87 66.11L95.43 68.36M85.65 74.05L90.62 77.4M79.87 80.93L84.04 85.25M72.79 86.47L75.97 91.55M64.71 90.41L66.76 96.04M55.98 92.58L56.82 98.52M47 92.9L46.58 98.88M38.15 91.33L36.49 97.1M29.81 87.97L27 93.26M22.36 82.94L18.5 87.54M16.12 76.47L11.39 80.17M11.35 68.85L5.96 71.48M8.28 60.4L2.46 61.85M7.03 51.5L1.03 51.71M7.65 42.53L1.74 41.49M10.13 33.89L4.57 31.64M14.35 25.95L9.38 22.6M20.13 19.07L15.96 14.75M27.21 13.53L24.03 8.45M35.29 9.59L33.24 3.96M44.02 7.42L43.18 1.48",
+                "color": 1,
+                "opacity": 0.8,
+                "width": 0.6
+              },
+              {
+                "d": "M50 6.6L48.19 4.04L50 1.4L51.81 4.04ZM87.59 28.3L88.9 25.45L92.09 25.7L90.71 28.59ZM87.59 71.7L90.71 71.41L92.09 74.3L88.9 74.55ZM50 93.4L51.81 95.96L50 98.6L48.19 95.96ZM12.41 71.7L11.1 74.55L7.91 74.3L9.29 71.41ZM12.41 28.3L9.29 28.59L7.91 25.7L11.1 25.45Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 0.9,
+                "width": 0.7
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "58c4a90b5017dd6e.json",
+              "bytes": 5648,
+              "sha256": "58c4a90b5017dd6ed89aa67f46eb6dac85b4569da5d39ba1b5ed44a7e02cd60b"
+            },
+            "front": {
+              "src": "1694175548d7adae.json",
+              "bytes": 22293,
+              "sha256": "1694175548d7adaecfe3ed422c57dd8cdc8a8f1086c5a00f082548d184b86d8d"
+            }
+          }
+        },
+        {
+          "key": "perlage-losanges",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F5DEB3",
+              "#14B8A6",
+              "#C2410C",
+              "#1C1917"
+            ]
+          },
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4
+              },
+              {
+                "d": "M50 6.8L48.05 4.04L50 1.2L51.95 4.04ZM87.41 28.4L88.82 25.33L92.26 25.6L90.78 28.71ZM87.41 71.6L90.78 71.29L92.26 74.4L88.82 74.67ZM50 93.2L51.95 95.96L50 98.8L48.05 95.96ZM12.59 71.6L11.18 74.67L7.74 74.4L9.22 71.29ZM12.59 28.4L9.22 28.71L7.74 25.6L11.18 25.33Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M71.6 12.59L71.29 9.22L74.4 7.74L74.67 11.18ZM93.2 50L95.96 48.05L98.8 50L95.96 51.95ZM71.6 87.41L74.67 88.82L74.4 92.26L71.29 90.78ZM28.4 87.41L28.71 90.78L25.6 92.26L25.33 88.82ZM6.8 50L4.04 51.95L1.2 50L4.04 48.05ZM28.4 12.59L25.33 11.18L25.6 7.74L28.71 9.22Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.8
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "748791d7f763ae32.json",
+              "bytes": 4077,
+              "sha256": "748791d7f763ae328edeb1b85c4a943fe53e515ba300c95d5e1d5c228efa9ef9"
+            },
+            "front": {
+              "src": "2164a180021bedc1.json",
+              "bytes": 18697,
+              "sha256": "2164a180021bedc17ee07291f0331a04ec5f232667595ceb258406a6399a81f5"
+            }
+          }
+        },
+        {
+          "key": "soleil-montagnes",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#EAB308",
+              "#C2410C",
+              "#0F5E59",
+              "#FAFAF9"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 0.55
+                },
+                {
+                  "color": 2,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 6.6L50 1.4M71.7 12.41L74.3 7.91M87.59 28.3L92.09 25.7M93.4 50L98.6 50M87.59 71.7L92.09 74.3M71.7 87.59L74.3 92.09M50 93.4L50 98.6M28.3 87.59L25.7 92.09M12.41 71.7L7.91 74.3M6.6 50L1.4 50M12.41 28.3L7.91 25.7M28.3 12.41L25.7 7.91",
+                "color": 1,
+                "opacity": 1,
+                "width": 2
+              },
+              {
+                "d": "M80.69 19.31L81.22 16.22L84.37 15.63L83.78 18.78ZM80.69 80.69L83.78 81.22L84.37 84.37L81.22 83.78ZM19.31 80.69L18.78 83.78L15.63 84.37L16.22 81.22ZM19.31 19.31L16.22 18.78L15.63 15.63L18.78 16.22Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "c590385ce44aa0ef.json",
+              "bytes": 10778,
+              "sha256": "c590385ce44aa0efb49bbe32f2c504a768df7aa918d639d904a59a3f03a451d4"
+            },
+            "front": {
+              "src": "6e820be9e62e8761.json",
+              "bytes": 7035,
+              "sha256": "6e820be9e62e8761a1e864f1659131cc8f078314e3e47275a7ae98e010f12951"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cadres-australs",
+      "order": 18,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "cercles-points",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#9A3412",
+              "#1C1917",
+              "#FDF4E3",
+              "#FBBF24",
+              "#D97706"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 6.2L50 6M57.61 6.87L57.64 6.67M64.98 8.84L65.05 8.65M71.9 12.07L72 11.89M78.15 16.45L78.28 16.29M83.55 21.85L83.71 21.72M87.93 28.1L88.11 28M91.16 35.02L91.35 34.95M93.13 42.39L93.33 42.36M93.8 50L94 50M93.13 57.61L93.33 57.64M91.16 64.98L91.35 65.05M87.93 71.9L88.11 72M83.55 78.15L83.71 78.28M78.15 83.55L78.28 83.71M71.9 87.93L72 88.11M64.98 91.16L65.05 91.35M57.61 93.13L57.64 93.33M50 93.8L50 94M42.39 93.13L42.36 93.33M35.02 91.16L34.95 91.35M28.1 87.93L28 88.11M21.85 83.55L21.72 83.71M16.45 78.15L16.29 78.28M12.07 71.9L11.89 72M8.84 64.98L8.65 65.05M6.87 57.61L6.67 57.64M6.2 50L6 50M6.87 42.39L6.67 42.36M8.84 35.02L8.65 34.95M12.07 28.1L11.89 28M16.45 21.85L16.29 21.72M21.85 16.45L21.72 16.29M28.1 12.07L28 11.89M35.02 8.84L34.95 8.65M42.39 6.87L42.36 6.67",
+                "color": 2,
+                "opacity": 1,
+                "width": 1.2
+              },
+              {
+                "d": "M54.81 4.25L54.83 4.05M64.21 6.25L64.28 6.06M73 10.16L73.1 9.99M80.78 15.82L80.91 15.67M87.21 22.96L87.38 22.84M92.02 31.29L92.21 31.21M94.99 40.44L95.19 40.39M96 50L96.2 50M94.99 59.56L95.19 59.61M92.02 68.71L92.21 68.79M87.21 77.04L87.38 77.16M80.78 84.18L80.91 84.33M73 89.84L73.1 90.01M64.21 93.75L64.28 93.94M54.81 95.75L54.83 95.95M45.19 95.75L45.17 95.95M35.79 93.75L35.72 93.94M27 89.84L26.9 90.01M19.22 84.18L19.09 84.33M12.79 77.04L12.62 77.16M7.98 68.71L7.79 68.79M5.01 59.56L4.81 59.61M4 50L3.8 50M5.01 40.44L4.81 40.39M7.98 31.29L7.79 31.21M12.79 22.96L12.62 22.84M19.22 15.82L19.09 15.67M27 10.16L26.9 9.99M35.79 6.25L35.72 6.06M45.19 4.25L45.17 4.05",
+                "color": 3,
+                "opacity": 1,
+                "width": 1.3
+              },
+              {
+                "d": "M50 2L50 1.8M62.42 3.64L62.48 3.44M74 8.43L74.1 8.26M83.94 16.06L84.08 15.92M91.57 26L91.74 25.9M96.36 37.58L96.56 37.52M98 50L98.2 50M96.36 62.42L96.56 62.48M91.57 74L91.74 74.1M83.94 83.94L84.08 84.08M74 91.57L74.1 91.74M62.42 96.36L62.48 96.56M50 98L50 98.2M37.58 96.36L37.52 96.56M26 91.57L25.9 91.74M16.06 83.94L15.92 84.08M8.43 74L8.26 74.1M3.64 62.42L3.44 62.48M2 50L1.8 50M3.64 37.58L3.44 37.52M8.43 26L8.26 25.9M16.06 16.06L15.92 15.92M26 8.43L25.9 8.26M37.58 3.64L37.52 3.44",
+                "color": 4,
+                "opacity": 1,
+                "width": 1.4
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "12a4cace4108bbc4.json",
+              "bytes": 2087,
+              "sha256": "12a4cace4108bbc4f95373fef3b7e45de78137042b1f6d40f53a05df3ec5e2b6"
+            },
+            "front": {
+              "src": "de83674671c06d32.json",
+              "bytes": 19480,
+              "sha256": "de83674671c06d32aeb67ae55d24b9dc136a3fc9f38be2f4849e786aa577fe65"
+            }
+          }
+        },
+        {
+          "key": "tortue-marine",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0E7490",
+              "#083344",
+              "#FDF4E3",
+              "#D97706"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 4L50 3.8M57.2 4.57L57.23 4.37M64.21 6.25L64.28 6.06M70.88 9.01L70.97 8.84M77.04 12.79L77.16 12.62M82.53 17.47L82.67 17.33M87.21 22.96L87.38 22.84M90.99 29.12L91.16 29.03M93.75 35.79L93.94 35.72M95.43 42.8L95.63 42.77M96 50L96.2 50M95.43 57.2L95.63 57.23M93.75 64.21L93.94 64.28M90.99 70.88L91.16 70.97M87.21 77.04L87.38 77.16M82.53 82.53L82.67 82.67M77.04 87.21L77.16 87.38M70.88 90.99L70.97 91.16M64.21 93.75L64.28 93.94M57.2 95.43L57.23 95.63M50 96L50 96.2M42.8 95.43L42.77 95.63M35.79 93.75L35.72 93.94M29.12 90.99L29.03 91.16M22.96 87.21L22.84 87.38M17.47 82.53L17.33 82.67M12.79 77.04L12.62 77.16M9.01 70.88L8.84 70.97M6.25 64.21L6.06 64.28M4.57 57.2L4.37 57.23M4 50L3.8 50M4.57 42.8L4.37 42.77M6.25 35.79L6.06 35.72M9.01 29.12L8.84 29.03M12.79 22.96L12.62 22.84M17.47 17.47L17.33 17.33M22.96 12.79L22.84 12.62M29.12 9.01L29.03 8.84M35.79 6.25L35.72 6.06M42.8 4.57L42.77 4.37",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 1.2
+              },
+              {
+                "d": "M50 7.4L47.63 4.06L50 0.6L52.37 4.06Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 1,
+                "width": 0.7
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "3583d233f7c85fc2.json",
+              "bytes": 2594,
+              "sha256": "3583d233f7c85fc2e4cf05bbb2994d3aacb910c553c9e5ff6d12998207464f8e"
+            },
+            "front": {
+              "src": "426edf1416a6a885.json",
+              "bytes": 19901,
+              "sha256": "426edf1416a6a885c02d4474ed8bc193e42f23848a5a2614cfcf6fe965fc9edd"
+            }
+          }
+        },
+        {
+          "key": "croix-du-sud",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0B1E3F",
+              "#1E3A8A",
+              "#FFFFFF",
+              "#93C5FD"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M70.75 10.97L70.48 8.81L72.44 7.8L72.7 9.99ZM89.03 70.75L91.19 70.48L92.2 72.44L90.01 72.7ZM29.25 89.03L29.52 91.19L27.56 92.2L27.3 90.01ZM10.97 29.25L8.81 29.52L7.8 27.56L9.99 27.3Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M2.53 41.63A48.2 48.2 0 0 1 41.63 2.53",
+                "color": 3,
+                "opacity": 0.8,
+                "width": 0.6
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 0.8,
+                "width": 0.6
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "26e127fa6db7319c.json",
+              "bytes": 5416,
+              "sha256": "26e127fa6db7319c0bb52b14609b3acf0d538fdba85b30aa7cc5ba1ed6705c07"
+            },
+            "front": {
+              "src": "ca970e7c170b2a54.json",
+              "bytes": 10295,
+              "sha256": "ca970e7c170b2a54d12e64577f63a04363454a943db18aa2cdbd24a98dc8154f"
+            }
+          }
+        }
+      ]
     }
   ],
   "bannerFrames": [
@@ -10073,6 +10776,18 @@
         "cadres-mayas": {
           "name": "Cadres mayas",
           "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
+        },
+        "cadres-indiens": {
+          "name": "Cadres indiens",
+          "description": "Trois cadres inspirés des motifs de l’Inde : un mandala floral qui s’ouvre, un paon qui fait la roue, une guirlande de soucis et de jasmin qui se balance."
+        },
+        "cadres-amerindiens": {
+          "name": "Cadres amérindiens",
+          "description": "Trois cadres inspirés du tissage et du perlage : un cercle tissé dont les plumes stylisées se balancent, un perlage de losanges qui tourne, un soleil en escalier sur des montagnes et leur rivière."
+        },
+        "cadres-australs": {
+          "name": "Cadres australs",
+          "description": "Trois cadres inspirés de la peinture de points et du ciel austral : des cercles de points qui scintillent, une tortue marine qui nage autour de l’avatar, la Croix du Sud qui brille."
         }
       },
       "designs": {
@@ -10147,7 +10862,16 @@
         "serpent-de-jade": "Serpent de jade",
         "cartouches-de-glyphes": "Cartouches de glyphes",
         "frise-a-gradins": "Frise à gradins",
-        "jaguar-de-jungle": "Jaguar de la jungle"
+        "jaguar-de-jungle": "Jaguar de la jungle",
+        "mandala-floral": "Mandala floral",
+        "paon-roue": "Paon qui fait la roue",
+        "guirlande-soucis": "Guirlande de soucis",
+        "cercle-tisse": "Cercle tissé aux plumes",
+        "perlage-losanges": "Perlage en losanges",
+        "soleil-montagnes": "Soleil sur les montagnes",
+        "cercles-points": "Cercles de points",
+        "tortue-marine": "Tortue marine",
+        "croix-du-sud": "Croix du Sud"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -10311,6 +11035,18 @@
         "cadres-mayas": {
           "name": "Maya frames",
           "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
+        },
+        "cadres-indiens": {
+          "name": "Indian frames",
+          "description": "Three frames inspired by Indian motifs: a floral mandala that unfolds, a peacock fanning its tail, a swaying garland of marigolds and jasmine."
+        },
+        "cadres-amerindiens": {
+          "name": "Native American frames",
+          "description": "Three frames inspired by weaving and beadwork: a woven hoop with swaying stylised feathers, a turning band of beaded diamonds, a stepped sun over mountains and their river."
+        },
+        "cadres-australs": {
+          "name": "Southern frames",
+          "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
         }
       },
       "designs": {
@@ -10385,7 +11121,16 @@
         "serpent-de-jade": "Jade serpent",
         "cartouches-de-glyphes": "Glyph cartouches",
         "frise-a-gradins": "Stepped frieze",
-        "jaguar-de-jungle": "Jungle jaguar"
+        "jaguar-de-jungle": "Jungle jaguar",
+        "mandala-floral": "Floral mandala",
+        "paon-roue": "Fanning peacock",
+        "guirlande-soucis": "Marigold garland",
+        "cercle-tisse": "Feathered woven hoop",
+        "perlage-losanges": "Beaded diamonds",
+        "soleil-montagnes": "Sun over the mountains",
+        "cercles-points": "Dot circles",
+        "tortue-marine": "Sea turtle",
+        "croix-du-sud": "Southern Cross"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -10549,6 +11294,18 @@
         "cadres-mayas": {
           "name": "Marcos mayas",
           "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
+        },
+        "cadres-indiens": {
+          "name": "Marcos indios",
+          "description": "Tres marcos inspirados en los motivos de la India: un mandala floral que se abre, un pavo real que despliega la cola y una guirnalda de caléndulas y jazmín que se balancea."
+        },
+        "cadres-amerindiens": {
+          "name": "Marcos amerindios",
+          "description": "Tres marcos inspirados en el tejido y el abalorio: un aro tejido con plumas estilizadas que se mecen, una banda de rombos de cuentas que gira y un sol escalonado sobre montañas y su río."
+        },
+        "cadres-australs": {
+          "name": "Marcos australes",
+          "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
         }
       },
       "designs": {
@@ -10623,7 +11380,16 @@
         "serpent-de-jade": "Serpiente de jade",
         "cartouches-de-glyphes": "Cartuchos de glifos",
         "frise-a-gradins": "Friso escalonado",
-        "jaguar-de-jungle": "Jaguar de la selva"
+        "jaguar-de-jungle": "Jaguar de la selva",
+        "mandala-floral": "Mandala floral",
+        "paon-roue": "Pavo real en abanico",
+        "guirlande-soucis": "Guirnalda de caléndulas",
+        "cercle-tisse": "Aro tejido con plumas",
+        "perlage-losanges": "Rombos de cuentas",
+        "soleil-montagnes": "Sol sobre las montañas",
+        "cercles-points": "Círculos de puntos",
+        "tortue-marine": "Tortuga marina",
+        "croix-du-sud": "Cruz del Sur"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -10787,6 +11553,18 @@
         "cadres-mayas": {
           "name": "Molduras maias",
           "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
+        },
+        "cadres-indiens": {
+          "name": "Molduras indianas",
+          "description": "Três molduras inspiradas nos motivos da Índia: uma mandala floral que se abre, um pavão que abre a cauda e uma grinalda de cravos-de-defunto e jasmim que balança."
+        },
+        "cadres-amerindiens": {
+          "name": "Molduras ameríndias",
+          "description": "Três molduras inspiradas na tecelagem e no trabalho de miçangas: um aro tecido com penas estilizadas que balançam, uma faixa de losangos de miçangas que gira e um sol em degraus sobre montanhas e o seu rio."
+        },
+        "cadres-australs": {
+          "name": "Molduras austrais",
+          "description": "Três molduras inspiradas na pintura de pontos e no céu austral: círculos de pontos que cintilam, uma tartaruga marinha que nada à volta do avatar e o Cruzeiro do Sul a brilhar."
         }
       },
       "designs": {
@@ -10861,7 +11639,16 @@
         "serpent-de-jade": "Serpente de jade",
         "cartouches-de-glyphes": "Cartuchos de glifos",
         "frise-a-gradins": "Friso em degraus",
-        "jaguar-de-jungle": "Jaguar da selva"
+        "jaguar-de-jungle": "Jaguar da selva",
+        "mandala-floral": "Mandala floral",
+        "paon-roue": "Pavão em leque",
+        "guirlande-soucis": "Grinalda de cravos",
+        "cercle-tisse": "Aro tecido com penas",
+        "perlage-losanges": "Losangos de miçangas",
+        "soleil-montagnes": "Sol sobre as montanhas",
+        "cercles-points": "Círculos de pontos",
+        "tortue-marine": "Tartaruga marinha",
+        "croix-du-sud": "Cruzeiro do Sul"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -11025,6 +11812,18 @@
         "cadres-mayas": {
           "name": "Maya-Rahmen",
           "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
+        },
+        "cadres-indiens": {
+          "name": "Indische Rahmen",
+          "description": "Drei Rahmen nach indischen Motiven: ein florales Mandala, das sich öffnet, ein Pfau, der ein Rad schlägt, und eine schwingende Girlande aus Ringelblumen und Jasmin."
+        },
+        "cadres-amerindiens": {
+          "name": "Indigene amerikanische Rahmen",
+          "description": "Drei Rahmen nach Web- und Perlenmustern: ein gewebter Reif mit schwingenden stilisierten Federn, ein drehendes Perlenband aus Rauten und eine gestufte Sonne über Bergen und ihrem Fluss."
+        },
+        "cadres-australs": {
+          "name": "Südliche Rahmen",
+          "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
         }
       },
       "designs": {
@@ -11099,7 +11898,16 @@
         "serpent-de-jade": "Jadeschlange",
         "cartouches-de-glyphes": "Glyphenkartuschen",
         "frise-a-gradins": "Stufenfries",
-        "jaguar-de-jungle": "Dschungeljaguar"
+        "jaguar-de-jungle": "Dschungeljaguar",
+        "mandala-floral": "Blumenmandala",
+        "paon-roue": "Radschlagender Pfau",
+        "guirlande-soucis": "Ringelblumengirlande",
+        "cercle-tisse": "Gewebter Federreif",
+        "perlage-losanges": "Perlenrauten",
+        "soleil-montagnes": "Sonne über den Bergen",
+        "cercles-points": "Punktkreise",
+        "tortue-marine": "Meeresschildkröte",
+        "croix-du-sud": "Kreuz des Südens"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -11263,6 +12071,18 @@
         "cadres-mayas": {
           "name": "Cornici maya",
           "description": "Quattro cornici di pietra e giada: un serpente di giada dalla cresta piumata, cartigli di glifi che si illuminano, un fregio a gradoni sotto il sole nascente e un giaguaro nascosto nella giungla."
+        },
+        "cadres-indiens": {
+          "name": "Cornici indiane",
+          "description": "Tre cornici ispirate ai motivi dell’India: un mandala floreale che si apre, un pavone che fa la ruota e una ghirlanda di calendule e gelsomino che ondeggia."
+        },
+        "cadres-amerindiens": {
+          "name": "Cornici amerindie",
+          "description": "Tre cornici ispirate alla tessitura e alle perline: un cerchio intrecciato con piume stilizzate che ondeggiano, una fascia di rombi di perline che gira e un sole a gradini sopra montagne e il loro fiume."
+        },
+        "cadres-australs": {
+          "name": "Cornici australi",
+          "description": "Tre cornici ispirate alla pittura a punti e al cielo australe: cerchi di punti che scintillano, una tartaruga marina che nuota intorno all’avatar e la Croce del Sud che brilla."
         }
       },
       "designs": {
@@ -11337,7 +12157,16 @@
         "serpent-de-jade": "Serpente di giada",
         "cartouches-de-glyphes": "Cartigli di glifi",
         "frise-a-gradins": "Fregio a gradoni",
-        "jaguar-de-jungle": "Giaguaro della giungla"
+        "jaguar-de-jungle": "Giaguaro della giungla",
+        "mandala-floral": "Mandala floreale",
+        "paon-roue": "Pavone che fa la ruota",
+        "guirlande-soucis": "Ghirlanda di calendule",
+        "cercle-tisse": "Cerchio intrecciato con piume",
+        "perlage-losanges": "Rombi di perline",
+        "soleil-montagnes": "Sole sulle montagne",
+        "cercles-points": "Cerchi di punti",
+        "tortue-marine": "Tartaruga marina",
+        "croix-du-sud": "Croce del Sud"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -11501,6 +12330,18 @@
         "cadres-mayas": {
           "name": "إطارات مايا",
           "description": "أربعة إطارات من الحجر واليشم: ثعبان من اليشم بعُرف من الريش، وخراطيش رموز تضيء، وإفريز مدرّج تحت شمس مشرقة، ونمر أمريكي يختبئ في الأدغال."
+        },
+        "cadres-indiens": {
+          "name": "إطارات هندية",
+          "description": "ثلاثة إطارات مستوحاة من زخارف الهند: ماندالا زهرية تتفتح، وطاووس يفرد ذيله، وإكليل من القطيفة والياسمين يتمايل."
+        },
+        "cadres-amerindiens": {
+          "name": "إطارات أمريكية أصلية",
+          "description": "ثلاثة إطارات مستوحاة من النسيج والخرز: طوق منسوج تتمايل منه ريش مبسّط، وشريط معيّنات من الخرز يدور، وشمس مدرّجة فوق الجبال ونهرها."
+        },
+        "cadres-australs": {
+          "name": "إطارات جنوبية",
+          "description": "ثلاثة إطارات مستوحاة من الرسم بالنقاط والسماء الجنوبية: دوائر نقاط تتلألأ، وسلحفاة بحرية تسبح حول صورتك الرمزية، وصليب الجنوب يلمع."
         }
       },
       "designs": {
@@ -11575,7 +12416,16 @@
         "serpent-de-jade": "ثعبان اليشم",
         "cartouches-de-glyphes": "خراطيش الرموز",
         "frise-a-gradins": "الإفريز المدرّج",
-        "jaguar-de-jungle": "نمر الأدغال"
+        "jaguar-de-jungle": "نمر الأدغال",
+        "mandala-floral": "ماندالا زهرية",
+        "paon-roue": "طاووس يفرد ذيله",
+        "guirlande-soucis": "إكليل القطيفة",
+        "cercle-tisse": "طوق منسوج بالريش",
+        "perlage-losanges": "معيّنات الخرز",
+        "soleil-montagnes": "شمس فوق الجبال",
+        "cercles-points": "دوائر النقاط",
+        "tortue-marine": "سلحفاة بحرية",
+        "croix-du-sud": "صليب الجنوب"
       },
       "gamut": {
         "indigo": "نيلي ميشي",

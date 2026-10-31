@@ -119,6 +119,18 @@
     "cadres-mayas": {
       "name": "Molduras maias",
       "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
+    },
+    "cadres-indiens": {
+      "name": "Molduras indianas",
+      "description": "Três molduras inspiradas nos motivos da Índia: uma mandala floral que se abre, um pavão que abre a cauda e uma grinalda de cravos-de-defunto e jasmim que balança."
+    },
+    "cadres-amerindiens": {
+      "name": "Molduras ameríndias",
+      "description": "Três molduras inspiradas na tecelagem e no trabalho de miçangas: um aro tecido com penas estilizadas que balançam, uma faixa de losangos de miçangas que gira e um sol em degraus sobre montanhas e o seu rio."
+    },
+    "cadres-australs": {
+      "name": "Molduras austrais",
+      "description": "Três molduras inspiradas na pintura de pontos e no céu austral: círculos de pontos que cintilam, uma tartaruga marinha que nada à volta do avatar e o Cruzeiro do Sul a brilhar."
     }
   },
   "designs": {
@@ -193,7 +205,16 @@
     "serpent-de-jade": "Serpente de jade",
     "cartouches-de-glyphes": "Cartuchos de glifos",
     "frise-a-gradins": "Friso em degraus",
-    "jaguar-de-jungle": "Jaguar da selva"
+    "jaguar-de-jungle": "Jaguar da selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavão em leque",
+    "guirlande-soucis": "Grinalda de cravos",
+    "cercle-tisse": "Aro tecido com penas",
+    "perlage-losanges": "Losangos de miçangas",
+    "soleil-montagnes": "Sol sobre as montanhas",
+    "cercles-points": "Círculos de pontos",
+    "tortue-marine": "Tartaruga marinha",
+    "croix-du-sud": "Cruzeiro do Sul"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

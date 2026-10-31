@@ -34,12 +34,12 @@ describe('registres d’apparence générés', () => {
     expect(wallpapers.every((pack) => pack.origin === 'builtin' && pack.price === undefined)).toBe(true);
   });
 
-  it('porte 17 modèles de fonds, 9 bannières, 50 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
+  it('porte 17 modèles de fonds, 9 bannières, 59 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
     const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
     expect(count('wallpaper')).toBe(17);
     expect(count('banner')).toBe(9);
-    expect(count('avatar-ring')).toBe(50);
+    expect(count('avatar-ring')).toBe(59);
     expect(count('banner-frame')).toBe(14);
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
@@ -118,7 +118,7 @@ describe('registres d’apparence générés', () => {
 
   it('les familles culturelles de cadres illustrés (#13962-#13970) sont installées d’office, trois à quatre cadres chacune, et chaque film est servi à son empreinte', () => {
     const families = index.entries('avatar-ring').filter((entry) => entry.slug.startsWith('cadres-') && entry.slug !== 'cadres-illustres');
-    expect(families.map((pack) => pack.slug)).toEqual(['cadres-asiatiques', 'cadres-africains', 'cadres-celtes', 'cadres-nordiques', 'cadres-egyptiens', 'cadres-mayas']);
+    expect(families.map((pack) => pack.slug)).toEqual(['cadres-asiatiques', 'cadres-africains', 'cadres-celtes', 'cadres-nordiques', 'cadres-egyptiens', 'cadres-mayas', 'cadres-indiens', 'cadres-amerindiens', 'cadres-australs']);
     const films = families.flatMap((pack) => {
       expect({ slug: pack.slug, installed: pack.installedByDefault, removable: pack.removable, names: Object.keys(pack.names).length }).toEqual({ slug: pack.slug, installed: true, removable: true, names: 7 });
       const keys = index.itemKeys(pack);
@@ -129,7 +129,7 @@ describe('registres d’apparence générés', () => {
       contract.rings.forEach((ring) => expect({ key: ring.key, both: ring.decor?.back !== undefined && ring.decor?.front !== undefined }).toEqual({ key: ring.key, both: true }));
       return contract.rings.flatMap((ring) => [ring.decor?.back, ring.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
     });
-    expect(films).toHaveLength(42);
+    expect(films).toHaveLength(60);
     films.forEach((ref) => {
       expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
       expect({ src: ref.src, served: index.isServedAsset(ref.src) }).toEqual({ src: ref.src, served: true });
