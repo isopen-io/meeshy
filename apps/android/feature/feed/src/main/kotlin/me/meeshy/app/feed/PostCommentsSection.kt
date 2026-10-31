@@ -36,6 +36,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,6 +62,9 @@ import kotlinx.coroutines.flow.map
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.wrapContentHeight
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.card.PostCommentCardLabels
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
@@ -84,6 +90,7 @@ internal fun PostCommentsSection(
     viewModel: PostCommentsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
     onNotice: suspend (CommentNotice) -> Unit = {},
+    support: PostCommentCardPost? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
@@ -93,11 +100,32 @@ internal fun PostCommentsSection(
         }
     }
 
-    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier) }
+    val imaging = rememberCommentImaging(viewModel, support)
+    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging) }
+}
+
+/**
+ * #13922 — « Imager » un commentaire ouvre l'atelier de carte que l'application fournit ([LocalCommentCardExporter]) ;
+ * sans lui, l'entrée n'existe pas. La carte se compose au moment du geste, sur le fil chargé.
+ */
+@Composable
+private fun rememberCommentImaging(viewModel: PostCommentsViewModel, support: PostCommentCardPost?): CommentImaging? {
+    val exporter = LocalCommentCardExporter.current ?: return null
+    val title = stringResource(R.string.feed_comment_card_thread)
+    val folded = stringResource(R.string.feed_comment_card_folded)
+    val labels = remember(title, folded) { PostCommentCardLabels(thread = title, folded = { count -> String.format(folded, count) }) }
+    var imaged by remember { mutableStateOf<Pair<String, PostCommentCardSubject>?>(null) }
+    imaged?.let { (id, card) -> exporter(id, card) { imaged = null } }
+    return remember(viewModel, support, labels) {
+        CommentImaging(
+            cardOf = { id -> viewModel.commentCard(id, support, labels) },
+            open = { id, card -> imaged = id to card },
+        )
+    }
 }
 
 @Composable
-private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier) {
+private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.post_comments_title),
@@ -138,6 +166,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
                         onDelete = viewModel::deleteComment,
+                        imaging = imaging,
                     )
                     ReplyThread(
                         comment = comment,
@@ -148,6 +177,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
                         onDelete = viewModel::deleteComment,
+                        imaging = imaging,
                     )
                 }
             }
@@ -189,6 +219,7 @@ private fun CommentRow(
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    imaging: CommentImaging? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
@@ -261,7 +292,7 @@ private fun CommentRow(
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
                 CommentReplyButton(comment = comment, onReply = onReply)
-                CommentMoreMenu(comment = comment, onDelete = onDelete)
+                CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
         }
     }
@@ -363,6 +394,7 @@ private fun ReplyThread(
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    imaging: CommentImaging? = null,
 ) {
     val isExpanded = thread?.isExpanded == true
     val isPreview = thread?.isPreview == true
@@ -379,6 +411,7 @@ private fun ReplyThread(
                         onReply = onReply,
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
+                        imaging = imaging,
                     )
                 }
             }
@@ -445,6 +478,7 @@ private fun ReplyThread(
                         onReply = onReply,
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
+                        imaging = imaging,
                     )
                 }
             }

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostMediaPresentation
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
@@ -101,6 +102,8 @@ data class FeedPostPresentation(
     val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
     /** Les scènes d'un post composé sur la scène, peintes à la place de [images] ; `null` pour tout autre post. */
     val scenes: FeedPostScenes? = null,
+    /** Le post tel qu'« Imager » un de ses commentaires le met en tête (#13922) : son texte servi, son audience, ses médias. */
+    val commentCardSupport: PostCommentCardPost? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -167,6 +170,7 @@ object FeedPostBuilder {
         val isTranslated = post.isTranslated(preferences)
         val activeCode = resolveActiveCode(post, preferences, activeLanguageCode)
         val activeIsOriginal = activeCode == null || activeCode == originalCode
+        val content = resolveContent(post, preferences, activeCode, activeIsOriginal)
         return FeedPostPresentation(
             id = post.id,
             authorId = post.author?.id,
@@ -176,7 +180,7 @@ object FeedPostBuilder {
             authorAvatarUrl = post.author?.avatar
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             createdAtIso = post.createdAt,
-            content = resolveContent(post, preferences, activeCode, activeIsOriginal),
+            content = content,
             isTranslated = isTranslated,
             languageStrip = PostLanguageStrip.build(
                 originalLanguage = post.originalLanguage,
@@ -209,6 +213,7 @@ object FeedPostBuilder {
             reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
             scenes = if (isReel) null else post.sceneItems()?.let { FeedPostScenes(it.items, it.layout, post.authorAccentHex()) },
+            commentCardSupport = CommentCardReading.support(post, content),
         )
     }
 

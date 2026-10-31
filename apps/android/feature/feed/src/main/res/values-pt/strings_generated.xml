@@ -11,6 +11,9 @@
     <string name="feed_action_repost">Republicar</string>
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_view_profile">Ver o perfil</string>
+    <string name="feed_comment_card_folded">+%1$d respostas</string>
+    <string name="feed_comment_card_thread">Conversa de comentários</string>
+    <string name="feed_comment_imagine">Criar imagem</string>
     <string name="feed_comments">Comentários</string>
     <string name="feed_composer_open_label">Compartilhar algo</string>
     <string name="feed_delete_cancel">Cancelar</string>

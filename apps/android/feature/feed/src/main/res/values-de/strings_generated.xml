@@ -11,6 +11,9 @@
     <string name="feed_action_repost">Erneut teilen</string>
     <string name="feed_action_share">Teilen</string>
     <string name="feed_action_view_profile">Profil ansehen</string>
+    <string name="feed_comment_card_folded">+%1$d Antworten</string>
+    <string name="feed_comment_card_thread">Kommentarverlauf</string>
+    <string name="feed_comment_imagine">Als Bild</string>
     <string name="feed_comments">Kommentare</string>
     <string name="feed_composer_open_label">Etwas teilen</string>
     <string name="feed_delete_cancel">Abbrechen</string>

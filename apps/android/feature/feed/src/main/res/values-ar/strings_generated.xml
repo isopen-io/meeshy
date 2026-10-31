@@ -11,6 +11,9 @@
     <string name="feed_action_repost">إعادة نشر</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
+    <string name="feed_comment_card_folded">+%1$d ردود</string>
+    <string name="feed_comment_card_thread">سلسلة التعليقات</string>
+    <string name="feed_comment_imagine">حوِّل إلى صورة</string>
     <string name="feed_comments">التعليقات</string>
     <string name="feed_composer_open_label">شارِك شيئًا</string>
     <string name="feed_delete_cancel">إلغاء</string>
