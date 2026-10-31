@@ -86,7 +86,8 @@ import {
   SCENE_DEPTHS,
   BEHAVIOR_TRIGGERS,
   BEHAVIOR_ACTIONS,
-  BEHAVIOR_CONDITIONS
+  BEHAVIOR_CONDITIONS,
+  FRAME_NAME_LANGUAGES
 } from '../types/capture-frames.js';
 
 /** Les formes admises par source (spec 01 § 2) : une forme hors de SA source fait échouer la génération, comme le schéma zod. */
@@ -423,6 +424,24 @@ const lookOverride = (value: unknown, path: string): string => {
   return `CallFrameLookOverride(${fields.join(', ')})`;
 };
 
+/**
+ * Le nom dans chaque langue (#13953), en dictionnaire Swift rangé dans l'ordre des langues ; absent ⇒ rien
+ * (le cadre d'avant n'a que `name`). Une langue inconnue ou un nom vide fait échouer, comme le schéma zod.
+ */
+const localizedNames = (value: unknown, path: string): string | null => {
+  if (value === undefined) return null;
+  const it = record(value, path);
+  Object.keys(it)
+    .filter((key) => !(FRAME_NAME_LANGUAGES as readonly string[]).includes(key))
+    .forEach((key) => fail(path, `langue inconnue « ${key} »`));
+  const entries = FRAME_NAME_LANGUAGES.flatMap((language) => {
+    const name = it[language];
+    if (name === undefined) return [];
+    return typeof name === 'string' && name.trim().length > 0 && name.length <= 40 ? [`${quote(language)}: ${quote(name)}`] : fail(`${path}.${language}`, 'nom attendu (40 caractères au plus)');
+  });
+  return entries.length === 0 ? null : `[${entries.join(', ')}]`;
+};
+
 const styles = (value: unknown, path: string): string => {
   const list = items(value, path, 6);
   const ids = list.map((item, index) => slug(record(item, `${path}[${index}]`).id, `${path}[${index}].id`));
@@ -430,7 +449,8 @@ const styles = (value: unknown, path: string): string => {
   return `[${list.map((item, index) => {
     const it = record(item, `${path}[${index}]`);
     const name = typeof it.name === 'string' && it.name.length > 0 && it.name.length <= 40 ? quote(it.name) : fail(`${path}[${index}].name`, 'nom attendu (40 caractères au plus)');
-    return `CallFrameStyle(id: ${ids[index]}, name: ${name}, look: ${lookOverride(it.look, `${path}[${index}].look`)})`;
+    const localized = localizedNames(it.localizedNames, `${path}[${index}].localizedNames`);
+    return `CallFrameStyle(id: ${ids[index]}, name: ${name}, ${localized === null ? '' : `localizedNames: ${localized}, `}look: ${lookOverride(it.look, `${path}[${index}].look`)})`;
   }).join(', ')}]`;
 };
 
@@ -462,6 +482,8 @@ export type ExpandedFrame = {
   readonly motif: string;
   readonly mood: string;
   readonly name: string;
+  /** Le nom dans chaque langue, en littéral Swift (#13953) ; `null` quand le motif n'en déclare pas. */
+  readonly localizedNames: string | null;
   readonly bucket: string;
   readonly look: Json;
   /** `credits`, `surfaces`, `cost` — seulement ceux que le motif déclare. */
@@ -475,6 +497,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
   const id = typeof motif.id === 'string' && MOTIF_ID.test(motif.id) ? motif.id : fail(path, `identifiant de motif invalide ${JSON.stringify(motif.id)}`);
   const name = typeof motif.name === 'string' && motif.name.length > 0 ? motif.name : fail(path, 'nom de motif vide');
   const mood = typeof motif.mood === 'string' ? motif.mood : fail(path, 'ambiance absente');
+  const localized = localizedNames(motif.localizedNames, `${path}.localizedNames`);
   const base = record(motif.base, `${path}.base`);
   const variants = record(motif.variants, `${path}.variants`);
   const motifKeys: Json = Object.fromEntries(MOTIF_KEYS.filter((key) => motif[key] !== undefined).map((key) => [key, motif[key]]));
@@ -488,7 +511,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
     Object.keys(merged)
       .filter((key) => !(LOOK_KEYS as readonly string[]).includes(key))
       .forEach((key) => fail(`${path}.${bucket}`, `clé inconnue « ${key} »`));
-    return [{ id: `${id}.${bucket}`, motif: id, mood, name, bucket, look: merged, motifKeys }];
+    return [{ id: `${id}.${bucket}`, motif: id, mood, name, localizedNames: localized, bucket, look: merged, motifKeys }];
   });
 }
 
@@ -514,6 +537,7 @@ const frameLiteral = (frame: ExpandedFrame): string => {
     `motif: ${quote(frame.motif)}`,
     `mood: ${member(frame.mood, FRAME_MOODS, frame.id)}`,
     `name: ${quote(frame.name)}`,
+    ...(frame.localizedNames === null ? [] : [`localizedNames: ${frame.localizedNames}`]),
     `bucket: ${member(frame.bucket, FRAME_BUCKETS, frame.id)}`,
     `look: ${look(frame.look, frame.id)}`,
     ...present(frame.motifKeys.credits, (declared) => `credits: ${credits(declared, `${frame.id}.credits`)}`),

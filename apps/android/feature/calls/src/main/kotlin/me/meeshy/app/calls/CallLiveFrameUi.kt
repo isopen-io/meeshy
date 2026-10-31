@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -161,7 +162,7 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
     Column(modifier.padding(top = STATUS_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
         when {
             proposed != null -> CallLiveFrameProposalCard(
-                text = proposalText(proposed.first.from, proposed.second.name),
+                text = proposalText(proposed.first.from, proposed.second.displayName(LocalConfiguration.current.locales[0]?.language)),
                 onAccept = controller::accept,
                 onDecline = controller::decline,
             )

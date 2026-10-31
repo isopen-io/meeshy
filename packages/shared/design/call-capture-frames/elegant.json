@@ -5,6 +5,15 @@
       "id": "elegant.gala",
       "mood": "elegant",
       "name": "Gala",
+      "localizedNames": {
+        "fr": "Gala",
+        "en": "Gala",
+        "es": "Gala",
+        "pt": "Gala",
+        "de": "Gala",
+        "it": "Gala",
+        "ar": "حفل"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -157,6 +166,15 @@
       "id": "elegant.art-deco",
       "mood": "elegant",
       "name": "Art déco",
+      "localizedNames": {
+        "fr": "Art déco",
+        "en": "Art Deco",
+        "es": "Art déco",
+        "pt": "Art déco",
+        "de": "Art déco",
+        "it": "Art déco",
+        "ar": "آرت ديكو"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -306,6 +324,15 @@
       "id": "elegant.opera",
       "mood": "elegant",
       "name": "Opéra",
+      "localizedNames": {
+        "fr": "Opéra",
+        "en": "Opera",
+        "es": "Ópera",
+        "pt": "Ópera",
+        "de": "Oper",
+        "it": "Opera",
+        "ar": "أوبرا"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -460,6 +487,15 @@
       "id": "elegant.tete-a-tete",
       "mood": "elegant",
       "name": "Tête-à-tête",
+      "localizedNames": {
+        "fr": "Tête-à-tête",
+        "en": "Tête-à-tête",
+        "es": "Cara a cara",
+        "pt": "Frente a frente",
+        "de": "Zu zweit",
+        "it": "A tu per tu",
+        "ar": "وجهاً لوجه"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -542,6 +578,15 @@
       "id": "elegant.premiere-neige",
       "mood": "elegant",
       "name": "Première neige",
+      "localizedNames": {
+        "fr": "Première neige",
+        "en": "First Snow",
+        "es": "Primera nieve",
+        "pt": "Primeira neve",
+        "de": "Erster Schnee",
+        "it": "Prima neve",
+        "ar": "أول ثلج"
+      },
       "surfaces": [
         "capture",
         "live"

@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.monogramme",
             mood: .distingue,
             name: "Monogramme",
+            localizedNames: ["fr": "Monogramme", "en": "Monogram", "es": "Monograma", "pt": "Monograma", "de": "Monogramm", "it": "Monogramma", "ar": "مونوغرام"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.1, gap: 0.04, top: 0.22, bottom: 0.16),
@@ -31,6 +32,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.monogramme",
             mood: .distingue,
             name: "Monogramme",
+            localizedNames: ["fr": "Monogramme", "en": "Monogram", "es": "Monograma", "pt": "Monograma", "de": "Monogramm", "it": "Monogramma", "ar": "مونوغرام"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.08, gap: 0.03, top: 0.2, bottom: 0.14),
@@ -51,6 +53,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.monogramme",
             mood: .distingue,
             name: "Monogramme",
+            localizedNames: ["fr": "Monogramme", "en": "Monogram", "es": "Monograma", "pt": "Monograma", "de": "Monogramm", "it": "Monogramma", "ar": "مونوغرام"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.07, gap: 0.02, top: 0.18, bottom: 0.16),
@@ -71,6 +74,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.bibliotheque",
             mood: .distingue,
             name: "Bibliothèque",
+            localizedNames: ["fr": "Bibliothèque", "en": "Library", "es": "Biblioteca", "pt": "Biblioteca", "de": "Bibliothek", "it": "Biblioteca", "ar": "مكتبة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.14, bottom: 0.1),
@@ -94,6 +98,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.bibliotheque",
             mood: .distingue,
             name: "Bibliothèque",
+            localizedNames: ["fr": "Bibliothèque", "en": "Library", "es": "Biblioteca", "pt": "Biblioteca", "de": "Bibliothek", "it": "Biblioteca", "ar": "مكتبة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.035, top: 0.16, bottom: 0.1),
@@ -117,6 +122,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.bibliotheque",
             mood: .distingue,
             name: "Bibliothèque",
+            localizedNames: ["fr": "Bibliothèque", "en": "Library", "es": "Biblioteca", "pt": "Biblioteca", "de": "Bibliothek", "it": "Biblioteca", "ar": "مكتبة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.14, bottom: 0.1),
@@ -140,6 +146,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.cercle",
             mood: .distingue,
             name: "Cercle",
+            localizedNames: ["fr": "Cercle", "en": "Circle", "es": "Círculo", "pt": "Círculo", "de": "Zirkel", "it": "Circolo", "ar": "دائرة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.14, bottom: 0.1),
@@ -162,6 +169,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.cercle",
             mood: .distingue,
             name: "Cercle",
+            localizedNames: ["fr": "Cercle", "en": "Circle", "es": "Círculo", "pt": "Círculo", "de": "Zirkel", "it": "Circolo", "ar": "دائرة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -184,6 +192,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.cercle",
             mood: .distingue,
             name: "Cercle",
+            localizedNames: ["fr": "Cercle", "en": "Circle", "es": "Círculo", "pt": "Círculo", "de": "Zirkel", "it": "Circolo", "ar": "دائرة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.03, top: 0.14, bottom: 0.1),
@@ -206,6 +215,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.cercle",
             mood: .distingue,
             name: "Cercle",
+            localizedNames: ["fr": "Cercle", "en": "Circle", "es": "Círculo", "pt": "Círculo", "de": "Zirkel", "it": "Circolo", "ar": "دائرة"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.12, bottom: 0.08),
@@ -228,6 +238,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "distingue.correspondance",
             mood: .distingue,
             name: "Correspondance",
+            localizedNames: ["fr": "Correspondance", "en": "Correspondence", "es": "Correspondencia", "pt": "Correspondência", "de": "Briefwechsel", "it": "Corrispondenza", "ar": "مراسلات"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.08, gap: 0.03, top: 0.16, bottom: 0.12),

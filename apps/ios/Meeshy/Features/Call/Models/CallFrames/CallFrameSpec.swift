@@ -449,6 +449,8 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
     let motif: String
     let mood: CallFrameMood
     let name: String
+    /// #13953 — le nom dans chaque langue (code court) ; `name`, le français, en est le repli.
+    let localizedNames: [String: String]
     let bucket: CallFrameBucket
     let people: ClosedRange<Int>
     let look: CallFrameLook
@@ -462,7 +464,8 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
     let styleId: String?
 
     init(
-        id: String, motif: String, mood: CallFrameMood, name: String, bucket: CallFrameBucket, look: CallFrameLook,
+        id: String, motif: String, mood: CallFrameMood, name: String, localizedNames: [String: String] = [:],
+        bucket: CallFrameBucket, look: CallFrameLook,
         credits: CallFrameCredits? = nil, surfaces: [CallFrameSurface] = [.capture], cost: CallFrameCost? = nil,
         styles: [CallFrameStyle] = [], styleId: String? = nil
     ) {
@@ -470,6 +473,7 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
         self.motif = motif
         self.mood = mood
         self.name = name
+        self.localizedNames = localizedNames
         self.bucket = bucket
         self.people = bucket.people
         self.look = look
@@ -478,6 +482,11 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
         self.cost = cost
         self.styles = styles
         self.styleId = styleId
+    }
+
+    /// Le nom du cadre dans la langue d'interface (#13953).
+    func displayName(language: String? = Bundle.main.preferredLocalizations.first) -> String {
+        CallFrameNaming.name(name, localized: localizedNames, language: language)
     }
 
     func isOffered(on surface: CallFrameSurface) -> Bool { surfaces.contains(surface) }

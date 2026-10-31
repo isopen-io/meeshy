@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.04, top: 0.22, bottom: 0.14),
@@ -34,6 +35,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.2, bottom: 0.14),
@@ -57,6 +59,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.18, bottom: 0.12),
@@ -80,6 +83,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.05, gap: 0.015, top: 0.16, bottom: 0.1),
@@ -103,6 +107,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.025, top: 0.14, bottom: 0.12),
@@ -125,6 +130,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.02, top: 0.16, bottom: 0.12),
@@ -147,6 +153,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.015, top: 0.14, bottom: 0.12),
@@ -169,6 +176,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.01, top: 0.12, bottom: 0.1),
@@ -191,6 +199,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -213,6 +222,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -236,6 +246,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.12),
@@ -258,6 +269,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.tete-a-tete",
             mood: .elegant,
             name: "Tête-à-tête",
+            localizedNames: ["fr": "Tête-à-tête", "en": "Tête-à-tête", "es": "Cara a cara", "pt": "Frente a frente", "de": "Zu zweit", "it": "A tu per tu", "ar": "وجهاً لوجه"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.1, gap: 0.05, top: 0.18, bottom: 0.14),
@@ -281,6 +293,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.premiere-neige",
             mood: .elegant,
             name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.04, top: 0.22, bottom: 0.14),
@@ -306,6 +319,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.premiere-neige",
             mood: .elegant,
             name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.2, bottom: 0.14),
@@ -331,6 +345,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.premiere-neige",
             mood: .elegant,
             name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.18, bottom: 0.12),
@@ -356,6 +371,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.premiere-neige",
             mood: .elegant,
             name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.015, top: 0.16, bottom: 0.1),

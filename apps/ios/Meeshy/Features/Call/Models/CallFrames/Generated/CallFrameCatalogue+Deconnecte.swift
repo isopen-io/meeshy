@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.carte-postale",
             mood: .deconnecte,
             name: "Carte postale",
+            localizedNames: ["fr": "Carte postale", "en": "Postcard", "es": "Postal", "pt": "Cartão-postal", "de": "Postkarte", "it": "Cartolina", "ar": "بطاقة بريدية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.08, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -34,6 +35,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.carte-postale",
             mood: .deconnecte,
             name: "Carte postale",
+            localizedNames: ["fr": "Carte postale", "en": "Postcard", "es": "Postal", "pt": "Cartão-postal", "de": "Postkarte", "it": "Cartolina", "ar": "بطاقة بريدية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.08, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -57,6 +59,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.carte-postale",
             mood: .deconnecte,
             name: "Carte postale",
+            localizedNames: ["fr": "Carte postale", "en": "Postcard", "es": "Postal", "pt": "Cartão-postal", "de": "Postkarte", "it": "Cartolina", "ar": "بطاقة بريدية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.09, gap: 0.025, top: 0.14, bottom: 0.1),
@@ -80,6 +83,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.carte-postale",
             mood: .deconnecte,
             name: "Carte postale",
+            localizedNames: ["fr": "Carte postale", "en": "Postcard", "es": "Postal", "pt": "Cartão-postal", "de": "Postkarte", "it": "Cartolina", "ar": "بطاقة بريدية"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.08, gap: 0.02, top: 0.12, bottom: 0.08),
@@ -103,6 +107,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.road-trip",
             mood: .deconnecte,
             name: "Road trip",
+            localizedNames: ["fr": "Road trip", "en": "Road Trip", "es": "Viaje por carretera", "pt": "Viagem de carro", "de": "Roadtrip", "it": "Road trip", "ar": "رحلة برية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.12, gap: 0.03, top: 0.12, bottom: 0.1),
@@ -126,6 +131,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.road-trip",
             mood: .deconnecte,
             name: "Road trip",
+            localizedNames: ["fr": "Road trip", "en": "Road Trip", "es": "Viaje por carretera", "pt": "Viagem de carro", "de": "Roadtrip", "it": "Road trip", "ar": "رحلة برية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.12, gap: 0.025, top: 0.12, bottom: 0.1),
@@ -149,6 +155,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.road-trip",
             mood: .deconnecte,
             name: "Road trip",
+            localizedNames: ["fr": "Road trip", "en": "Road Trip", "es": "Viaje por carretera", "pt": "Viagem de carro", "de": "Roadtrip", "it": "Road trip", "ar": "رحلة برية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.12, gap: 0.02, top: 0.1, bottom: 0.1),
@@ -172,6 +179,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.cahier-de-vacances",
             mood: .deconnecte,
             name: "Cahier de vacances",
+            localizedNames: ["fr": "Cahier de vacances", "en": "Summer Notebook", "es": "Cuaderno de verano", "pt": "Caderno de férias", "de": "Ferienheft", "it": "Quaderno delle vacanze", "ar": "دفتر العطلة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.08, gap: 0.03, top: 0.15, bottom: 0.08),
@@ -195,6 +203,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.cahier-de-vacances",
             mood: .deconnecte,
             name: "Cahier de vacances",
+            localizedNames: ["fr": "Cahier de vacances", "en": "Summer Notebook", "es": "Cuaderno de verano", "pt": "Caderno de férias", "de": "Ferienheft", "it": "Quaderno delle vacanze", "ar": "دفتر العطلة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.15, bottom: 0.08),
@@ -218,6 +227,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.cahier-de-vacances",
             mood: .deconnecte,
             name: "Cahier de vacances",
+            localizedNames: ["fr": "Cahier de vacances", "en": "Summer Notebook", "es": "Cuaderno de verano", "pt": "Caderno de férias", "de": "Ferienheft", "it": "Quaderno delle vacanze", "ar": "دفتر العطلة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.03, top: 0.14, bottom: 0.08),
@@ -241,6 +251,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.cahier-de-vacances",
             mood: .deconnecte,
             name: "Cahier de vacances",
+            localizedNames: ["fr": "Cahier de vacances", "en": "Summer Notebook", "es": "Cuaderno de verano", "pt": "Caderno de férias", "de": "Ferienheft", "it": "Quaderno delle vacanze", "ar": "دفتر العطلة"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.02, top: 0.12, bottom: 0.08),
@@ -263,6 +274,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.coucher-de-soleil",
             mood: .deconnecte,
             name: "Coucher de soleil",
+            localizedNames: ["fr": "Coucher de soleil", "en": "Sunset", "es": "Atardecer", "pt": "Pôr do sol", "de": "Sonnenuntergang", "it": "Tramonto", "ar": "غروب الشمس"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.07, gap: 0.05, top: 0.08, bottom: 0.2),
@@ -286,6 +298,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.lagon",
             mood: .deconnecte,
             name: "Lagon",
+            localizedNames: ["fr": "Lagon", "en": "Lagoon", "es": "Laguna", "pt": "Lagoa", "de": "Lagune", "it": "Laguna", "ar": "بحيرة ساحلية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -311,6 +324,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.lagon",
             mood: .deconnecte,
             name: "Lagon",
+            localizedNames: ["fr": "Lagon", "en": "Lagoon", "es": "Laguna", "pt": "Lagoa", "de": "Lagune", "it": "Laguna", "ar": "بحيرة ساحلية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -336,6 +350,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.lagon",
             mood: .deconnecte,
             name: "Lagon",
+            localizedNames: ["fr": "Lagon", "en": "Lagoon", "es": "Laguna", "pt": "Lagoa", "de": "Lagune", "it": "Laguna", "ar": "بحيرة ساحلية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -361,6 +376,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "deconnecte.lagon",
             mood: .deconnecte,
             name: "Lagon",
+            localizedNames: ["fr": "Lagon", "en": "Lagoon", "es": "Laguna", "pt": "Lagoa", "de": "Lagune", "it": "Laguna", "ar": "بحيرة ساحلية"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.13, bottom: 0.09),

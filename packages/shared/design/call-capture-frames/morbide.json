@@ -5,6 +5,15 @@
       "id": "morbide.faire-part",
       "mood": "morbide",
       "name": "Faire-part",
+      "localizedNames": {
+        "fr": "Faire-part",
+        "en": "Death Notice",
+        "es": "Esquela",
+        "pt": "Aviso fúnebre",
+        "de": "Traueranzeige",
+        "it": "Necrologio",
+        "ar": "نعي"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -162,6 +171,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",
@@ -235,6 +253,15 @@
       "id": "morbide.memento",
       "mood": "morbide",
       "name": "Memento",
+      "localizedNames": {
+        "fr": "Memento",
+        "en": "Memento",
+        "es": "Memento",
+        "pt": "Memento",
+        "de": "Memento",
+        "it": "Memento",
+        "ar": "تذكار"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -441,6 +468,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",
@@ -496,6 +532,15 @@
       "id": "morbide.crypte",
       "mood": "morbide",
       "name": "Crypte",
+      "localizedNames": {
+        "fr": "Crypte",
+        "en": "Crypt",
+        "es": "Cripta",
+        "pt": "Cripta",
+        "de": "Krypta",
+        "it": "Cripta",
+        "ar": "سرداب"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -690,6 +735,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "linear",
@@ -754,6 +808,15 @@
       "id": "morbide.veillee",
       "mood": "morbide",
       "name": "Veillée",
+      "localizedNames": {
+        "fr": "Veillée",
+        "en": "Wake",
+        "es": "Velatorio",
+        "pt": "Velório",
+        "de": "Totenwache",
+        "it": "Veglia",
+        "ar": "سهرة عزاء"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -846,6 +909,15 @@
       "id": "morbide.tombe",
       "mood": "morbide",
       "name": "Tombe",
+      "localizedNames": {
+        "fr": "Tombe",
+        "en": "Grave",
+        "es": "Tumba",
+        "pt": "Túmulo",
+        "de": "Grab",
+        "it": "Tomba",
+        "ar": "قبر"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -1023,6 +1095,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "linear",

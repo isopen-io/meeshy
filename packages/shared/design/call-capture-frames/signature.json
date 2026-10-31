@@ -5,6 +5,15 @@
       "id": "signature.aurore",
       "mood": "signature",
       "name": "Aurore",
+      "localizedNames": {
+        "fr": "Aurore",
+        "en": "Dawn",
+        "es": "Aurora",
+        "pt": "Aurora",
+        "de": "Morgenröte",
+        "it": "Aurora",
+        "ar": "فجر"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -177,6 +186,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "pattern": {
               "kind": "stars",
@@ -231,6 +249,15 @@
       "id": "signature.prisme",
       "mood": "signature",
       "name": "Prisme",
+      "localizedNames": {
+        "fr": "Prisme",
+        "en": "Prism",
+        "es": "Prisma",
+        "pt": "Prisma",
+        "de": "Prisma",
+        "it": "Prisma",
+        "ar": "منشور"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -409,6 +436,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "linear",
@@ -479,6 +515,15 @@
       "id": "signature.bulle",
       "mood": "signature",
       "name": "Bulle",
+      "localizedNames": {
+        "fr": "Bulle",
+        "en": "Bubble",
+        "es": "Burbuja",
+        "pt": "Bolha",
+        "de": "Blase",
+        "it": "Bolla",
+        "ar": "فقاعة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -610,6 +655,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",
@@ -684,6 +738,15 @@
       "id": "signature.echo",
       "mood": "signature",
       "name": "Écho",
+      "localizedNames": {
+        "fr": "Écho",
+        "en": "Echo",
+        "es": "Eco",
+        "pt": "Eco",
+        "de": "Echo",
+        "it": "Eco",
+        "ar": "صدى"
+      },
       "surfaces": [
         "capture",
         "live"

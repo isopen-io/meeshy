@@ -2,6 +2,7 @@ package me.meeshy.ui.appearance
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,6 +25,7 @@ import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.appearance.AvatarRingGeometry
 import me.meeshy.sdk.model.appearance.AvatarRingOrnamentPath
 import me.meeshy.sdk.model.appearance.RingStrokeLayer
+import me.meeshy.ui.component.lottie.PackLottieLayer
 
 /**
  * Le plan de dessin d'un contour, calculé UNE fois par modèle : couches du trait de base et chemins d'ornement
@@ -127,6 +129,11 @@ private const val DOT_LENGTH = 0.001f
  * rien ne grandit, rien ne se décale. Le contenu (avatar, anneau de story compris) se ramène au trou du contour et
  * l'anneau de story reste concentrique dedans — le contour et l'anneau restent tous deux visibles. [footprint] est la
  * cote de l'avatar nu, [storyRingSize] l'emprise du contenu quand il porte un anneau de story. `null` ⇒ le contenu tel quel.
+ *
+ * La couche animée du contour (#13952, miroir d'`avatarRingWithin`) se pose PAR-DESSUS, à la cote de l'empreinte :
+ * elle joue en boucle, se fige à sa première image sous « Réduire les animations » ou [animates] faux, et s'arrête hors
+ * écran ([PackLottieLayer]). Une liste en porte des dizaines : le budget des films vivants n'en fait jouer que
+ * quelques-uns à la fois, et un même fichier ne se décode qu'une fois.
  */
 @Composable
 public fun AvatarRingLayer(
@@ -134,6 +141,7 @@ public fun AvatarRingLayer(
     footprint: Dp,
     modifier: Modifier = Modifier,
     storyRingSize: Dp? = null,
+    animates: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (design == null) {
@@ -157,5 +165,6 @@ public fun AvatarRingLayer(
             contentAlignment = Alignment.Center,
             content = content,
         )
+        design.lottie?.let { PackLottieLayer(it, Modifier.size(footprint), animates = animates) }
     }
 }

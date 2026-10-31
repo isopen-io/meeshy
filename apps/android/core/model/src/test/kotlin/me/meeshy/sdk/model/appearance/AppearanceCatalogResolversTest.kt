@@ -117,8 +117,9 @@ class AppearanceCatalogResolversTest {
         val defaults = embedded().defaultWallpapers
 
         assertThat(defaults.map { it.packSlug }.distinct()).containsExactly("essentiels", "animes").inOrder()
-        assertThat(defaults.map { it.design.key }).containsAtLeast("monogramme", "chevrons", "aurore", "maille")
-        assertThat(defaults).hasSize(5)
+        assertThat(defaults.map { it.design.key })
+            .containsAtLeast("monogramme", "chevrons", "aurore", "maille", "bulles-legeres", "pluie-de-petales")
+        assertThat(defaults).hasSize(7)
     }
 
     @Test
