@@ -133,3 +133,19 @@ export async function evaluateAutoAcquaintance(
   }
   return outcome === 'ignored' ? 'ignored' : 'unchanged';
 }
+
+/**
+ * Le blocage vient d'être posé (#13932) : la Connaissance née toute seule est
+ * défaite TOUT DE SUITE, en silence — le rattrapage ne relit que les paires de la
+ * semaine glissante, et une paire sans échange récent garderait sinon son lien
+ * jusqu'au déblocage. Rien à attendre, rien qui jette ; un lien monté par une
+ * demande n'est pas touché (`cancelIfAutomatic`).
+ */
+export function cancelAutoAcquaintanceOnBlock(
+  prisma: AutoAcquaintanceDeps['prisma'],
+  params: { blockerId: string; blockedId: string },
+): void {
+  evaluateAutoAcquaintance({ prisma }, { userA: params.blockerId, userB: params.blockedId }).catch((error: unknown) =>
+    logger.warn('acquaintance not cancelled after block', { error }),
+  );
+}

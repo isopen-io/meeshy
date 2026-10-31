@@ -83,6 +83,20 @@ export function pairInteractionStore(
 
   const user = {
     findFirst: (args?: unknown) => findFirstHonouringWhere(state.users)(args),
+    findUnique: (args: { where: { id: string }; select?: Record<string, boolean> }): Promise<Row | null> => {
+      const found = state.users.find((row) => row.id === args.where.id);
+      if (!found) return Promise.resolve(null);
+      const keys = args.select ? Object.keys(args.select) : null;
+      return Promise.resolve(keys ? Object.fromEntries(keys.map((k) => [k, found[k]])) : { ...found });
+    },
+    /** Seul `blockedUserIds: { push }` est honoré : c'est l'écriture du blocage. */
+    update: (args: { where: { id: string }; data: Row }): Promise<Row> => {
+      const found = state.users.find((row) => row.id === args.where.id);
+      const pushed = (args.data.blockedUserIds as { push?: unknown } | undefined)?.push;
+      if (!found || typeof pushed !== 'string' || Object.keys(args.data).length !== 1) return unsupported('user.update');
+      found.blockedUserIds = [...((found.blockedUserIds as string[] | undefined) ?? []), pushed];
+      return Promise.resolve({ ...found });
+    },
     findMany: (args: { where?: Row; select?: Record<string, boolean> }): Promise<Row[]> => {
       const keys = args.select ? Object.keys(args.select) : null;
       return Promise.resolve(
