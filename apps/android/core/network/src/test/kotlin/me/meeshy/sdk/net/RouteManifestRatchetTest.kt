@@ -83,8 +83,12 @@ class RouteManifestRatchetTest {
          * Progression), que porte `GameApi.markGuideSeen`.
          * 205 : moins `POST /conversations/:id/messages/after-read/consume` et `POST …/messages/:messageId/consume`
          * (#13995 : la flamme-œil consommée à la sortie, la vue unique consommée à la fermeture), que porte `MessageApi`.
+         * 199 : moins les six routes que `StickerPackApi` et `SharedTranslationApi` déclarent par les constantes du
+         * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
+         * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
+         * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
          */
-        const val TO_PORT_CEILING = 205
+        const val TO_PORT_CEILING = 199
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
