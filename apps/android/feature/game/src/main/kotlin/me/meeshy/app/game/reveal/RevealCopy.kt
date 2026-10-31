@@ -105,6 +105,12 @@ internal object RevealCopy {
     fun obtained(res: Resources, locale: Locale, reachedAt: String?): String? =
         reachedAt?.let { obtainedOn(it, locale) }?.let { res.getString(R.string.progression_obtained, it) }
 
+    /** La date longue d'un palier (« 3 octobre 2026 »), ou `null` quand elle ne se lit pas. */
+    fun longDate(locale: Locale, reachedAt: String): String? = obtainedOn(reachedAt, locale)
+
+    /** La famille de défis a-t-elle son gabarit ? Sans lui, iOS ne l'ouvre pas : on ne montre pas une clé technique. */
+    fun knowsFamily(family: AchievementFamily): Boolean = FAMILY_LABELS.containsKey(family.id)
+
     private fun obtainedOn(reachedAt: String, locale: Locale): String? = runCatching {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
             .format(Instant.parse(reachedAt).atZone(ZoneId.systemDefault()))

@@ -120,13 +120,11 @@ class ProgressionRevealTest {
         assertThat(text.lit).isTrue()
         assertThat(text.stars).isEqualTo(4)
         assertThat(text.nextThreshold).isEqualTo(500)
-        assertThat(text.request).isEqualTo(
-            ProgressionRevealRequest(EngagementReveal.Badge(EngagementAxisKey.TEXT_MESSAGE.wire, 100), "2026-10-03T08:00:00.000Z", unlocked = true),
-        )
+        assertThat(text.reachedAt).isEqualTo("2026-10-03T08:00:00.000Z")
     }
 
     @Test
-    fun `a medal dimmed by a strike stays on the shelf as an imprint and still opens as obtained`() {
+    fun `a medal dimmed by a strike stays on the shelf as an imprint, its engraved date kept`() {
         val shelf = BadgeShelf.of(
             progress(
                 counters = mapOf(EngagementAxisKey.REACTION to 13),
@@ -139,7 +137,7 @@ class ProgressionRevealTest {
         assertThat(reaction.lit).isFalse()
         assertThat(reaction.missing).isEqualTo(37)
         assertThat(reaction.progress).isEqualTo(0.0)
-        assertThat(reaction.request.occasion).isEqualTo(RevealOccasion.Consultation(unlocked = true, reachedAt = "2026-09-20T08:00:00.000Z"))
+        assertThat(reaction.reachedAt).isEqualTo("2026-09-20T08:00:00.000Z")
     }
 
     @Test

@@ -89,7 +89,7 @@ class ProgressionSectionsComposeTest {
     @Test
     fun `the medals page lists every axis with its suite and leads to the guide`() {
         var opened = 0
-        show { BadgesSection(progress(mapOf(EngagementAxisKey.TEXT_MESSAGE to 37)), game = null, hidden = false, onOpenGuide = { opened++ }) }
+        show { BadgesSection(progress(mapOf(EngagementAxisKey.TEXT_MESSAGE to 37)), onOpenGuide = { opened++ }) }
 
         compose.onNodeWithContentDescription(context.getString(R.string.progression_axis_social_friendship), substring = true).assertExists()
         compose.onAllNodesWithContentDescription(nextStar(R.string.game_material_copper, "1", "1"), substring = true).onFirst().assertExists()
@@ -97,31 +97,6 @@ class ProgressionSectionsComposeTest {
 
         compose.onNodeWithText(context.getString(R.string.game_badge_guide_link)).performClick()
         compose.runOnIdle { check(opened == 1) { "le lien de la page des médailles n'a rien ouvert" } }
-    }
-
-    @Test
-    fun `an earned medal of the medals page opens as a consultation`() {
-        show { BadgesSection(progress(mapOf(EngagementAxisKey.TEXT_MESSAGE to 37)), game = null, hidden = false, onOpenGuide = {}) }
-
-        compose.onNodeWithContentDescription(context.getString(R.string.progression_axis_content_text_message), substring = true).performScrollTo().performClick()
-
-        compose.onNodeWithText(context.getString(R.string.reveal_close)).assertExists()
-    }
-
-    @Test
-    fun `a challenge of the challenges page opens as a consultation, locked`() {
-        val p = progress()
-        show { ChallengesSection(p, game = null, hidden = false) }
-        val first = p.achievementSections.first().entries.first()
-        check(!first.unlocked)
-        val res = context.resources
-        val locale = res.configuration.locales[0]
-        val label = me.meeshy.app.game.reveal.RevealCopy.title(res, locale, me.meeshy.sdk.model.game.engagement.RevealTitle.Composed(first.family, first.tier))
-
-        compose.onAllNodesWithText(label)[0].performScrollTo().performClick()
-
-        compose.onNodeWithText(context.getString(R.string.reveal_close)).assertExists()
-        compose.onNodeWithContentDescription(context.getString(R.string.reveal_badge_locked), substring = true).assertExists()
     }
 
     @Test

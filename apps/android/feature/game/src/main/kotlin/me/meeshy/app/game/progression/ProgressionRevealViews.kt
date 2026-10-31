@@ -72,8 +72,8 @@ internal fun conceptHasRevealPiece(concept: ProgressionConcept): Boolean =
 
 /**
  * LA PIÈCE D'UNE FICHE QUI OUVRE SES PALIERS — l'étagère des médailles (Badges), le héros du dernier haut fait (Succès).
- * La révélation est portée ICI, là où le doigt se pose, et toujours en CONSULTATION : on arrive depuis la fiche, la
- * célébration n'a nulle part où « mener ».
+ * Une médaille ouvre sa FEUILLE DE PRÉCISIONS (iOS `GameElementSheet`) ; un haut fait, sa révélation en CONSULTATION :
+ * on arrive depuis la fiche, la célébration n'a nulle part où « mener ».
  */
 @Composable
 internal fun ConceptRevealPiece(
@@ -84,12 +84,18 @@ internal fun ConceptRevealPiece(
     onOpenBadgesGuide: (() -> Unit)? = null,
 ) {
     var shown by remember { mutableStateOf<ProgressionRevealRequest?>(null) }
+    var detail by remember { mutableStateOf<GameElementDetail?>(null) }
     when (concept) {
-        ProgressionConcept.Badges -> BadgeShelfView(remember(progress) { BadgeShelf.of(progress) }, onOpen = { shown = it }, onOpenGuide = onOpenBadgesGuide)
+        ProgressionConcept.Badges -> BadgeShelfView(
+            remember(progress) { BadgeShelf.of(progress) },
+            onOpen = { detail = GameElementDetails.badge(it) },
+            onOpenGuide = onOpenBadgesGuide,
+        )
         ProgressionConcept.Succes -> AchievementHeroCard(remember(progress) { AchievementHero.of(progress) }, onOpen = { shown = it })
         else -> Unit
     }
     ProgressionConsultation(shown, game, hidden, onDismiss = { shown = null })
+    detail?.let { GameElementSheet(it, onDismiss = { detail = null }, onOpenBadgesGuide = onOpenBadgesGuide) }
 }
 
 /** La liste des hauts faits (iOS `ProgressionSectionPage(.succes)`) : chaque ligne rebondit et ouvre SA révélation. */
@@ -222,7 +228,7 @@ private fun AchievementListRow(row: AchievementRow, onOpen: () -> Unit) {
  * seul le lien.
  */
 @Composable
-private fun BadgeShelfView(groups: List<BadgeShelfGroup>, onOpen: (ProgressionRevealRequest) -> Unit, onOpenGuide: (() -> Unit)?) {
+private fun BadgeShelfView(groups: List<BadgeShelfGroup>, onOpen: (BadgeShelfEntry) -> Unit, onOpenGuide: (() -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
         groups.forEach { group ->
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
@@ -230,7 +236,7 @@ private fun BadgeShelfView(groups: List<BadgeShelfGroup>, onOpen: (ProgressionRe
                 ProgressionCardFrame {
                     group.entries.forEachIndexed { index, entry ->
                         if (index > 0) RowDivider()
-                        BadgeShelfRow(entry, onOpen = { onOpen(entry.request) })
+                        BadgeShelfRow(entry, onOpen = { onOpen(entry) })
                         BadgeUpcomingView(entry.guide)
                     }
                 }
@@ -248,7 +254,7 @@ private fun BadgeShelfRow(entry: BadgeShelfEntry, onOpen: () -> Unit) {
     val axis = remember(entry.axis, res) { RevealCopy.axisTitle(res, entry.axis) }
     val stars = stringResource(R.string.game_concept_ratio, GameNumberFormat.formatCount(entry.stars, locale), GameNumberFormat.formatCount(BadgeShelfEntry.STARS_MAX, locale))
     val spoken = badgeSpoken(res, locale, entry, axis)
-    Box(Modifier.fillMaxWidth().bounceDoor(label = null, onOpen)) {
+    Box(Modifier.fillMaxWidth().bounceDoor(stringResource(R.string.game_detail_open, axis), onOpen)) {
         Row(
             Modifier
                 .fillMaxWidth()

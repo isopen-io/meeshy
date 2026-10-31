@@ -47,7 +47,6 @@ import java.util.Locale
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.app.game.reveal.toGameMaterial
 import me.meeshy.feature.game.R
-import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.engagement.AchievementEntry
 import me.meeshy.sdk.model.game.engagement.AchievementSectionView
@@ -155,12 +154,12 @@ internal fun MaterialSwatch(material: BadgeMaterialKey, lit: Boolean, size: Dp) 
 
 /**
  * LA PAGE DES MÉDAILLES (iOS `ProgressionSectionPage(.badges)`) : « Comprendre les médailles », puis les vingt axes par
- * famille — chacun sa ligne (médaille, nom, compteur, paliers, prochaine étape) et la SUITE de ses paliers. Une ligne
- * dont la médaille est gagnée se touche et s'ouvre en grand, en consultation, comme sur l'étagère.
+ * famille — chacun sa ligne (médaille, nom, compteur, paliers, prochaine étape) et la SUITE de ses paliers. Chaque ligne,
+ * médaille gagnée ou jamais gagnée, se touche et ouvre sa feuille de précisions (iOS `GameElementDetails.badge(for:)`).
  */
 @Composable
-internal fun BadgesSection(progress: EngagementProgress, game: GameBlock?, hidden: Boolean, onOpenGuide: () -> Unit) {
-    var shown by remember { mutableStateOf<ProgressionRevealRequest?>(null) }
+internal fun BadgesSection(progress: EngagementProgress, onOpenGuide: () -> Unit) {
+    var detail by remember { mutableStateOf<GameElementDetail?>(null) }
     val earned = remember(progress) { BadgeShelf.of(progress).flatMap { it.entries }.associateBy { it.axis } }
     BadgeGuideLink(onOpenGuide)
     progress.axesByFamily.forEach { group ->
@@ -170,13 +169,13 @@ internal fun BadgesSection(progress: EngagementProgress, game: GameBlock?, hidde
                 group.axes.forEachIndexed { index, axis ->
                     if (index > 0) RowDivider()
                     val entry = earned[axis.axis]
-                    AxisRow(axis, entry, onOpen = entry?.let { { shown = it.request } })
+                    AxisRow(axis, entry, onOpen = { detail = GameElementDetails.badge(axis) })
                     BadgeUpcomingView(remember(axis) { BadgeGuideResolver.resolve(axis) }, Modifier.padding(bottom = MeeshySpacing.xs))
                 }
             }
         }
     }
-    ProgressionConsultation(shown, game, hidden, onDismiss = { shown = null })
+    detail?.let { GameElementSheet(it, onDismiss = { detail = null }, onOpenBadgesGuide = onOpenGuide) }
 }
 
 @Composable
@@ -192,7 +191,7 @@ internal fun FamilyHeading(family: EngagementAxisFamily) {
 
 /** La ligne d'un axe (iOS `ProgressionAxisRow`) : sa médaille, son nom et son compteur, ses paliers, la prochaine étape. */
 @Composable
-private fun AxisRow(axis: EngagementAxisProgress, earned: BadgeShelfEntry?, onOpen: (() -> Unit)?) {
+private fun AxisRow(axis: EngagementAxisProgress, earned: BadgeShelfEntry?, onOpen: () -> Unit) {
     val res = LocalContext.current.resources
     val locale = LocalConfiguration.current.locales[0]
     val tokens = MeeshyTheme.tokens
@@ -235,7 +234,7 @@ private fun AxisRow(axis: EngagementAxisProgress, earned: BadgeShelfEntry?, onOp
             }
         }
     }
-    if (onOpen == null) row() else Box(Modifier.fillMaxWidth().bounceDoor(stringResource(R.string.progression_achievement_a11y_hint), onOpen)) { row() }
+    Box(Modifier.fillMaxWidth().bounceDoor(stringResource(R.string.game_detail_open, title), onOpen)) { row() }
 }
 
 @Composable
@@ -250,15 +249,16 @@ private fun TierDots(reached: List<Boolean>) {
 /**
  * LA PAGE DES DÉFIS (iOS `ProgressionGeneratedAchievements`) : section par section, son titre et son compte, puis ses
  * paliers en GRILLE qui passe à la ligne — aucune rangée ne défile de côté. La vue ne trie, ne filtre, ne tronque rien :
- * la loi partagée l'a fait. Un palier se touche et s'ouvre en consultation.
+ * la loi partagée l'a fait. Un palier se touche et ouvre sa feuille de précisions ; une famille sans gabarit ne s'ouvre
+ * pas, comme sur iOS (on ne montre pas une clé technique).
  */
 @Composable
-internal fun ChallengesSection(progress: EngagementProgress, game: GameBlock?, hidden: Boolean) {
-    var shown by remember { mutableStateOf<ProgressionRevealRequest?>(null) }
+internal fun ChallengesSection(progress: EngagementProgress) {
+    var detail by remember { mutableStateOf<GameElementDetail?>(null) }
     progress.achievementSections.forEach { section ->
-        ChallengeSectionView(section, onOpen = { shown = ChallengeRequest.of(it) })
+        ChallengeSectionView(section, onOpen = { detail = GameElementDetails.challenge(it) })
     }
-    ProgressionConsultation(shown, game, hidden, onDismiss = { shown = null })
+    detail?.let { GameElementSheet(it, onDismiss = { detail = null }) }
 }
 
 @Composable
@@ -281,7 +281,9 @@ private fun ChallengeSectionView(section: AchievementSectionView, onOpen: (Achie
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
                 section.entries.chunked(columns).forEach { line ->
                     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                        line.forEach { entry -> ChallengeChip(entry, Modifier.weight(1f), onOpen = { onOpen(entry) }) }
+                        line.forEach { entry ->
+                            ChallengeChip(entry, Modifier.weight(1f), onOpen = { onOpen(entry) }.takeIf { RevealCopy.knowsFamily(entry.family) })
+                        }
                         repeat(columns - line.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
@@ -291,13 +293,14 @@ private fun ChallengeSectionView(section: AchievementSectionView, onOpen: (Achie
 }
 
 @Composable
-private fun ChallengeChip(entry: AchievementEntry, modifier: Modifier, onOpen: () -> Unit) {
+private fun ChallengeChip(entry: AchievementEntry, modifier: Modifier, onOpen: (() -> Unit)?) {
     val res = LocalContext.current.resources
     val locale = LocalConfiguration.current.locales[0]
     val tokens = MeeshyTheme.tokens
     val label = remember(entry, res, locale) { RevealCopy.title(res, locale, RevealTitle.Composed(entry.family, entry.tier)) }
     val shape = RoundedCornerShape(MeeshyRadius.md)
-    Box(modifier.bounceDoor(stringResource(R.string.progression_achievement_a11y_hint), onOpen)) {
+    val hint = stringResource(R.string.game_detail_open, label)
+    Box(if (onOpen == null) modifier.semantics(mergeDescendants = true) {} else modifier.bounceDoor(hint, onOpen)) {
         Column(
             Modifier
                 .fillMaxWidth()

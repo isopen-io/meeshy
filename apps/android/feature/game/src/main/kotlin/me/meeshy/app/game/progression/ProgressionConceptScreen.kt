@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -162,7 +163,7 @@ private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.
                 }
             }
         }
-        card.gauge?.let { ConceptGauge(it.toFloat(), card.concept) }
+        card.gauge?.let { ConceptGauge(it.toFloat(), card.concept.tint()) }
     }
 }
 
@@ -171,7 +172,7 @@ private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.
  * glisse quand la valeur change. La fraction est lue À LA PEINTURE : aucune recomposition pendant l'animation.
  */
 @Composable
-private fun ConceptGauge(target: Float, concept: ProgressionConcept) {
+internal fun ConceptGauge(target: Float, tint: Color) {
     val reduce = LocalReduceMotion.current
     val tokens = MeeshyTheme.tokens
     val goal = target.coerceIn(0f, 1f)
@@ -179,7 +180,6 @@ private fun ConceptGauge(target: Float, concept: ProgressionConcept) {
     LaunchedEffect(goal, reduce) {
         if (reduce) fill.snapTo(goal) else fill.animateTo(goal, tween(GAUGE_MILLIS))
     }
-    val tint = concept.tint()
     val track = tokens.textMuted.copy(alpha = TRACK_ALPHA)
     Canvas(Modifier.fillMaxWidth().height(GAUGE_HEIGHT)) {
         val radius = CornerRadius(size.height / 2f)
