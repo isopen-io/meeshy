@@ -5,9 +5,10 @@ import UIKit
 
 /// **La sélection se VOIT, sur la scène, et nulle part ailleurs** (#13839, L5).
 ///
-/// La maquette du 2026-10-30 dessine l'élément sélectionné dans un cadre
-/// pointillé blanc de 2 pt, décalé de 3 pt, aux bornes réelles de son calque —
-/// rotation et échelle comprises. Le cadre est un chrome d'ÉDITION : il vit dans
+/// La maquette du 2026-10-30 dessine l'élément sélectionné dans un cadre de
+/// 2 pt, décalé de 3 pt, aux bornes réelles de son calque — rotation et échelle
+/// comprises. Le porteur l'a voulu PLEIN et blanc (#14043) : le pointillé reste
+/// aux guides (zone sûre, magnétiques, alignement), jamais à la sélection. Le cadre est un chrome d'ÉDITION : il vit dans
 /// `editOverlayLayer`, jamais parmi les objets (qui sont ce que l'export, la
 /// vignette et le lecteur reconstruisent).
 @MainActor
@@ -63,13 +64,13 @@ final class StoryCanvasSelectionFrameTests: XCTestCase {
 
     // MARK: - Le calque
 
-    func test_setSelectionMarker_selectedText_paintsDashedWhiteTwoPointFrameInTheEditOverlay() throws {
+    func test_setSelectionMarker_selectedText_paintsSolidWhiteTwoPointFrameInTheEditOverlay() throws {
         let vue = canvas()
         vue.setSelectionMarker(id: "t")
         let cadre = try XCTUnwrap(vue.selectionMarkerLayers.compactMap { $0 as? CAShapeLayer }.first,
                                   "le cadre doit être un tracé, pas une bordure de boîte")
         XCTAssertEqual(cadre.lineWidth, 2)
-        XCTAssertEqual(cadre.lineDashPattern?.isEmpty, false, "le cadre est POINTILLÉ")
+        XCTAssertNil(cadre.lineDashPattern, "le cadre est un trait PLEIN, jamais un pointillé")
         XCTAssertEqual(cadre.strokeColor, UIColor.white.cgColor)
         XCTAssertNil(cadre.fillColor)
         XCTAssertTrue(cadre.superlayer === vue.editOverlayLayer, "chrome d'édition, hors des objets")
