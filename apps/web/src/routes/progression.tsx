@@ -26,7 +26,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { ProgressionHeaderGroup } from '@/routes/progression-header-group';
 import { GameLead } from '@/routes/progression-lead';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
-import { OfflineNotice, ProgressionShell, pathOfTarget } from '@/routes/progression-shell';
+import { ProgressionOfflineNotice, ProgressionShell, pathOfTarget } from '@/routes/progression-shell';
 import { Link, navigate } from '@/routes/route-table';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -251,7 +251,7 @@ export default function ProgressionScreen() {
     <ProgressionShell
       title={gameText('game.progression.title')}
       trailing={query.data === undefined ? null : <ProgressionHeaderGroup progress={query.data} />}
-      notice={online ? null : <OfflineNotice>Hors ligne — progression telle qu’à la dernière ouverture</OfflineNotice>}
+      notice={online ? null : <ProgressionOfflineNotice scope="hub" />}
     >
       {query.data !== undefined ? (
         <>
