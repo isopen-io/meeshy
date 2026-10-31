@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { sendSuccess } from '../utils/response';
-import { getAppStoreUrl, getAppVersionFloor, getShellLatestVersion } from '../utils/appVersion';
+import { getAppStoreUrl, getAppVersionFloorFor, getShellLatestVersion } from '../utils/appVersion';
 
 /**
  * Bootstrap de la porte de version cliente (spec §C3) : le client lit le
@@ -9,8 +9,9 @@ import { getAppStoreUrl, getAppVersionFloor, getShellLatestVersion } from '../ut
  * doit se montrer AVANT tout login.
  */
 export async function appRoutes(fastify: FastifyInstance) {
-  fastify.get('/app/min-version', async (_request: FastifyRequest, reply: FastifyReply) => {
-    return sendSuccess(reply, { minVersion: getAppVersionFloor() });
+  fastify.get('/app/min-version', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { platform } = request.query as { readonly platform?: unknown };
+    return sendSuccess(reply, { minVersion: getAppVersionFloorFor(typeof platform === 'string' ? platform : undefined) });
   });
 
   /**

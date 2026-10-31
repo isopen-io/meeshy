@@ -57,7 +57,7 @@ const bearer = () => ({ authorization: `Bearer ${jwt.sign({ userId: USER_ID, sid
 
 const KEYS = ['MIN_APP_VERSION', 'MIN_APP_VERSION_IOS', 'MIN_APP_VERSION_ANDROID'] as const;
 
-async function authProbe(options: { requireAuth: boolean }): Promise<FastifyInstance> {
+async function authProbe(options: { requireAuth: boolean; allowAnonymous?: boolean }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.get(
     '/probe',
@@ -138,7 +138,7 @@ describe('plancher de version — admission de session REST et routes de cercles
     });
 
     it('une route à authentification facultative juge aussi le client connecté — il ne retombe pas en visiteur', async () => {
-      const app = await authProbe({ requireAuth: false });
+      const app = await authProbe({ requireAuth: false, allowAnonymous: true });
       const res = await app.inject({ method: 'GET', url: '/probe', headers: { ...bearer(), 'x-app-version': '1.1.4', 'x-app-platform': 'ios' } });
       const visitor = await app.inject({ method: 'GET', url: '/probe', headers: { 'x-app-version': '1.1.4', 'x-app-platform': 'ios' } });
       await app.close();

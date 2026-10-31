@@ -34,6 +34,7 @@ import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
 import { PresenceForeground } from '../presence-foreground';
+import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -262,6 +263,8 @@ export class AuthHandler {
 
     const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
+
+    if (refuseSocketBelowAppVersionFloor(socket)) return;
 
     // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
     // vivre. Inconnue, révoquée, échue ⇒ refus ; jeton sans `sid` ⇒ butoir

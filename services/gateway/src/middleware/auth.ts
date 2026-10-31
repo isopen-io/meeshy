@@ -19,6 +19,7 @@ import { ActivationBlockedError, resolveAccountActivation } from '../services/au
 import { AccountDeletedError, accountIsDeleted, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
+import { rejectBelowAppVersionFloor } from './app-version-floor';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -709,6 +710,10 @@ export function createUnifiedAuthMiddleware(
           code: 'REGISTERED_USER_REQUIRED'
         });
       }
+
+      // D-5 (#13954) — la session est admise : un client sous le plancher de
+      // sa plateforme n'ouvre pas la requête, même sur une route facultative.
+      if (authContext.isAuthenticated && isRegisteredUser(authContext) && rejectBelowAppVersionFloor(request, reply)) return reply;
 
       (request as UnifiedAuthRequest).authContext = authContext;
 

@@ -68,6 +68,7 @@
 - [2026-09-07 : Agent ✦ — le service et sa surface d'administration sont conservés (#3727)](decisions/2026-09-07-agent-le-service-et-sa-surface-d-administration-sont-conserves-3727.md)
 - [Sniffing MIME étendu à tout upload : rejeter le connu-faux, croire l'inconnu (2026-09-08, #5615)](decisions/sniffing-mime-etendu-a-tout-upload-rejeter-le-connu-faux-croire-l-inconnu-2026.md)
 - [« Vérifié sur staging » doit citer le SHA servi (2026-09-09, #4503)](decisions/verifie-sur-staging-doit-citer-le-sha-servi-2026-09-09-4503.md)
+- [Le plancher de version est par plateforme et s’applique à la session, au socket et aux cercles (2026-10-31, #13954)](decisions/le-plancher-de-version-est-par-plateforme-et-s-applique-partout-2026-10-31-13954.md)
 - [2026-09-12 : SSRF de l'illustration d'agent — le trou 1 se ferme par épinglage au connect, `undici` devient une dépendance directe (#6201)](decisions/2026-09-12-ssrf-de-l-illustration-d-agent-le-trou-1-se-ferme-par-epinglage-au.md)
 - [`postInclude` devient un `Prisma.PostSelect` — `storyViews` ne voyage plus vers tout lecteur d'un post (2026-09-12, #4791)](decisions/postinclude-devient-un-prisma-postselect-storyviews-ne-voyage-plus-vers-tout.md)
 - [Doubles de test partiels (#6296) — le risque réel est « classe exportée + `instanceof` externe », pas « classe exportée »](decisions/doubles-de-test-partiels-6296-le-risque-reel-est-classe-exportee-instanceof.md)
