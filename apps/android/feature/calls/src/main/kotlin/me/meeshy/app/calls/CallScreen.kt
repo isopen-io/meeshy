@@ -281,9 +281,9 @@ fun CallScreen(
                     },
                     onDecline = viewModel::decline,
                     modifier = content,
-                    onDeclineWithMessage = config.peerId.takeIf { it.isNotBlank() }?.let { peerId ->
+                    onDeclineWithMessage = CallDeclineReplyTarget.of(config)?.let { target ->
                         { text ->
-                            declineReply.send(peerId, config.conversationId, text)
+                            declineReply.send(target.peerId, target.conversationId, text)
                             viewModel.decline()
                         }
                     },
