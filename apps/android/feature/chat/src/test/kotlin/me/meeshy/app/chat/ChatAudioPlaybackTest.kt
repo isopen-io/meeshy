@@ -48,6 +48,13 @@ class ChatAudioPlaybackTest {
     }
 
     @Test
+    fun `the bubble knows where the voice note is, so its transcript lights the word being played`() {
+        val playing = ChatAudioPlayback.Idle.toggle(voice("a")).ready().tick(3.5, 12.0)
+
+        assertThat(playing.bubbleFor("a")?.currentSeconds).isWithin(0.001).of(3.5)
+    }
+
+    @Test
     fun `the bubble shows progress and elapsed over total`() {
         val playing = ChatAudioPlayback.Idle.toggle(voice("a")).ready().tick(3.0, 12.0)
 

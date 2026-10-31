@@ -40,7 +40,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.ui.R
@@ -62,6 +61,8 @@ public data class BubbleAudioPlayback(
     val progress: Float,
     /** `écoulé / total`, each `m:ss`. */
     val timeLabel: String,
+    /** Position du lecteur, en secondes : le karaoké de la transcription s'y aligne (#13878). */
+    val currentSeconds: Double = 0.0,
 )
 
 /**
@@ -69,7 +70,8 @@ public data class BubbleAudioPlayback(
  * context. Idle, it shows a play affordance, the `m:ss` duration (or the download size) and
  * the Prisme-resolved transcription. Once the host plays it ([playback] non-null) it shows
  * pause or loading, a progress bar and `elapsed / total`, so the voice note is listened to
- * IN the thread (iOS `AudioBubbleRouter` / `MediaConsumptionProgressBar`).
+ * IN the thread (iOS `AudioBubbleRouter` / `MediaConsumptionProgressBar`). While it plays, the transcription
+ * lights the segment being said (iOS `inlineFlowTranscription`, #13878) and a touch on a word seeks there ([onSeek]).
  */
 @Composable
 public fun AudioBubble(
@@ -79,7 +81,10 @@ public fun AudioBubble(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     autoRevealTranscription: Boolean = true,
+    onSeek: ((Double) -> Unit)? = null,
 ) {
+    val segments = remember(audio) { audio.karaokeSegments }
+    val frame = BubbleAudioKaraoke.frame(segments, playback)
     var revealed by remember(audio.attachmentId) { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
     val actionLabel = stringResource(
@@ -164,12 +169,11 @@ public fun AudioBubble(
                             revealed = true
                         },
                     )
-                    else -> Text(
-                        text = audio.transcriptionText.orEmpty(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = onColor.copy(alpha = 0.75f),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
+                    else -> KaraokeTranscript(
+                        segments = segments,
+                        frame = frame,
+                        onColor = onColor,
+                        onSeek = onSeek?.takeIf { playback != null },
                         modifier = Modifier.padding(top = MeeshySpacing.xs),
                     )
                 }
