@@ -81,8 +81,8 @@ nonisolated enum ComposerSelectionChrome {
 
 /// **Un niveau du rail d'édition.** Les lots suivants y empilent les leurs.
 nonisolated enum ComposerEditRailLevel: Equatable, Sendable {
-    /// Le premier : Modifier · Dupliquer · Temps · Retirer — pour une image ou
-    /// une vidéo posées, leurs outils à plat puis Dupliquer · Temps · Retirer.
+    /// Le premier : Modifier · Dupliquer · Temps · Retirer — pour une image,
+    /// une vidéo ou un son posés, leurs outils à plat puis Dupliquer · Temps · Retirer.
     case actions
     /// Le premier d'un fond image ou vidéo, « Fond » : ses outils à plat, puis
     /// Remplacer · Mettre sur la scène · Retirer (`ComposerBackgroundEdit`).
@@ -119,8 +119,8 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
     static let rest = ComposerEditRailStack(levels: [])
 
     /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond,
-    /// une image ou une vidéo posées n'ont PAS de niveau « Modifier »
-    /// (directive porteur, #14048) : leurs outils sont À PLAT dans le premier
+    /// une image, une vidéo ou un son posés n'ont PAS de niveau « Modifier »
+    /// (#14048) : leurs outils sont À PLAT dans le premier
     /// niveau, et seul le N2 que leur chemin pose (`ComposerBackgroundModify.levels`)
     /// se pose par-dessus.
     static func of(family: ComposerInlineFamily?, editing purpose: ComposerInlineEditPurpose?,
@@ -222,13 +222,14 @@ nonisolated enum ComposerEditRailItems {
                       extras: [ComposerSelectionMediaExtra],
                       keyframes: Bool,
                       backgroundEntries: [ComposerBackgroundModifyEntry] = [],
+                      sound: [ComposerMediaSoundEntry] = [],
                       adjustments: [AdjustmentKind] = []) -> [ComposerEditRailItem] {
         switch level {
         case .actions:
-            return flat(backgroundEntries) + actions.filter { backgroundEntries.isEmpty || $0 != .modify }
-                .map(ComposerEditRailItem.action)
+            let outils = flat(backgroundEntries, sound: sound)
+            return outils + actions.filter { outils.isEmpty || $0 != .modify }.map(ComposerEditRailItem.action)
         case .background:
-            return flat(backgroundEntries) + backgroundActions.filter { backgroundEntries.isEmpty || $0 != .modify }
+            return flat(backgroundEntries, sound: []) + backgroundActions.filter { backgroundEntries.isEmpty || $0 != .modify }
                 .map(ComposerEditRailItem.background)
         case .options:
             return [.back] + sections.map(ComposerEditRailItem.section)
@@ -240,13 +241,13 @@ nonisolated enum ComposerEditRailItems {
         }
     }
 
-    /// **Les outils d'un objet, à plat** (#14048) : chaque entrée de son
-    /// « Modifier », dans l'ordre de l'arbre ; Son se déplie en Volume · Muet,
-    /// les entrées de son niveau (`media.sound`), outils du rail eux aussi.
-    static func flat(_ tools: [ComposerBackgroundModifyEntry]) -> [ComposerEditRailItem] {
-        tools.flatMap { outil in
-            outil == .sound ? ComposerMediaSound.served().map(soundItem) : [.backgroundEntry(outil)]
-        }
+    /// **Les outils d'un objet, à plat** (#14048) : chacun dans l'ordre de
+    /// l'arbre. Son d'une vidéo reste UN outil, qui pose son niveau
+    /// (`media.sound`) ; un son posé n'a que ce niveau-là, ses entrées Volume ·
+    /// Muet vont donc directement dans son rail.
+    static func flat(_ tools: [ComposerBackgroundModifyEntry],
+                     sound: [ComposerMediaSoundEntry]) -> [ComposerEditRailItem] {
+        tools.map(ComposerEditRailItem.backgroundEntry) + sound.map(soundItem)
     }
 
     private static func soundItem(_ son: ComposerMediaSoundEntry) -> ComposerEditRailItem {

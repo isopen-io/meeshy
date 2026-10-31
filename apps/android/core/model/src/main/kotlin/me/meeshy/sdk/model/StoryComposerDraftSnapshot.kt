@@ -155,6 +155,9 @@ data class StoryDraftPlacedMediaSnapshot(
     /** Sa fenêtre d'apparition dans la slide (#13902), en secondes, 0 = dès le début / jusqu'à la fin ; un blob d'avant se lit « toute la slide ». */
     val startSeconds: Float = 0f,
     val durationSeconds: Float = 0f,
+    /** Le volume d'auteur d'une vidéo posée (#13973, A-E4) et le niveau que le muet a quitté ; un blob d'avant se lit « à plein, jamais coupé ». */
+    val volume: Float = 1f,
+    val mutedVolumeMemento: Float? = null,
 )
 
 /**

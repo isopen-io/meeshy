@@ -1,8 +1,11 @@
 package me.meeshy.sdk.model.composer.edit
 
-/** Les entrées du niveau « Fond » d'un fond image ou vidéo, chacune nommée par son identifiant dans l'arbre partagé. */
+/**
+ * Les actions qui suivent les outils dans le rail à plat d'un fond image ou vidéo (#14047), chacune nommée par son
+ * identifiant dans l'arbre partagé ; l'entrée « edit » de `background.media` n'en est pas une : ses outils sont posés à plat.
+ */
 enum class ComposerBackgroundAction(val entryId: String) {
-    EDIT("edit"), REPLACE("replace"), PUT_ON_SCENE("put-on-scene"), REMOVE("remove"),
+    REPLACE("replace"), PUT_ON_SCENE("put-on-scene"), REMOVE("remove"),
 }
 
 /** Les sources de « Remplacer » : la photothèque, l'appareil photo de la scène, les fichiers. */
@@ -11,16 +14,17 @@ enum class ComposerBackgroundSource(val entryId: String) {
 }
 
 /**
- * Le niveau N0 « Fond » d'un fond média (spec 2026-10-31, #13973) et la feuille de ses sources, lus dans
- * [ComposerEditTree] : l'ordre et la destruction viennent de l'arbre partagé, l'offre de ce que la surface a sous la main.
+ * Les actions du rail « Fond » d'un fond média (spec 2026-10-31, #13973, à plat depuis #14047 : elles suivent ses outils,
+ * [ComposerBackgroundEditLevel]) et la feuille de ses sources, lus dans [ComposerEditTree] : l'ordre et la destruction
+ * viennent de l'arbre partagé, l'offre de ce que la surface a sous la main.
  */
 object ComposerBackgroundLevel {
 
-    /** [editor] : le Modifier du fond est monté ; [mediaSource] : la photothèque et les fichiers s'ouvrent ; [camera] : la scène filme. */
-    data class Offers(val editor: Boolean, val mediaSource: Boolean, val camera: Boolean) {
+    /** [mediaSource] : la photothèque et les fichiers s'ouvrent ; [camera] : la scène filme. */
+    data class Offers(val mediaSource: Boolean, val camera: Boolean) {
         fun allow(offer: ComposerEditTree.Offer): Boolean = when (offer) {
             ComposerEditTree.Offer.ALWAYS -> true
-            ComposerEditTree.Offer.EDITOR -> editor
+            ComposerEditTree.Offer.EDITOR -> false
             ComposerEditTree.Offer.MEDIA_SOURCE -> mediaSource || camera
             ComposerEditTree.Offer.CAMERA -> camera
             ComposerEditTree.Offer.IMAGE, ComposerEditTree.Offer.VIDEO, ComposerEditTree.Offer.TRIMMABLE, ComposerEditTree.Offer.LOOK -> false

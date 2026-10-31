@@ -26,6 +26,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.LayoutDirection
@@ -51,6 +53,7 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
+import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
@@ -281,7 +284,7 @@ class ComposerLabeledRailsTest {
                             showsTools = true,
                             activeTool = null,
                             openEntry = null,
-                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
+                            moreEntries = listOf(ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
                             animated = false,
                             exportEnabled = true,
                         ),
@@ -298,6 +301,39 @@ class ComposerLabeledRailsTest {
         compose.onNodeWithText("More").performScrollTo().performClick()
         compose.onNodeWithText("Add slide").performClick()
         assertThat(picked).isEqualTo(ComposerMoreEntry.ADD_SLIDE)
+    }
+
+    @Test
+    fun `the background, the mention and the place are direct rows of the rail, and more never lists them`() {
+        var tool: ComposerSceneTool? = null
+        compose.setContent {
+            MeeshyTheme {
+                Box(Modifier.size(width = 112.dp, height = 1200.dp)) {
+                    StoryLeadingRail(
+                        rail = LeadingRailModel(
+                            showsClose = true,
+                            showsTools = true,
+                            activeTool = null,
+                            openEntry = null,
+                            moreEntries = listOf(ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.HASHTAGS),
+                            animated = false,
+                            exportEnabled = true,
+                        ),
+                        onClose = {},
+                        onTool = { tool = it },
+                        onEntry = {},
+                    )
+                }
+            }
+        }
+
+        listOf("Background" to ComposerSceneTool.BACKGROUND, "Mention" to ComposerSceneTool.MENTION, "Place" to ComposerSceneTool.PLACE)
+            .forEach { (label, expected) ->
+                compose.onNodeWithText(label).performScrollTo().performClick()
+                assertThat(tool).isEqualTo(expected)
+            }
+        compose.onNodeWithText("More").performScrollTo().performClick()
+        listOf("Background", "Mention", "Place").forEach { compose.onAllNodesWithText(it).assertCountEquals(1) }
     }
 
     @Test
@@ -324,7 +360,7 @@ class ComposerLabeledRailsTest {
                             showsTools = true,
                             activeTool = null,
                             openEntry = ComposerMoreEntry.SLIDE_DURATION,
-                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
+                            moreEntries = listOf(ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
                             animated = false,
                             exportEnabled = true,
                         ),

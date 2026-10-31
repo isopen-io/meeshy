@@ -65,6 +65,7 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,9 +73,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Le niveau « Modifier » du fond média (#13973, lot A-E2) : Modifier pose ses réglages en RAIL par-dessus le niveau « Fond »,
- * chaque réglage pose sa bande au bas de la scène et s'écrit à chaque valeur, Retour descend d'un niveau, la Boucle d'une
- * vidéo bascule dans le rail même et Décrire ouvre une feuille basse. Aucune feuille à pastilles, aucun menu.
+ * Le rail « Fond » du fond média (#13973, lot A-E2, à plat depuis #14047) : toucher ou tenir le fond pose À PLAT ses outils
+ * puis Remplacer · Mettre sur la scène · Retirer — plus de « Modifier » ; chaque réglage pose sa bande au bas de la scène et
+ * s'écrit à chaque valeur, Retour descend d'un niveau, la Boucle d'une vidéo bascule dans le rail même et Décrire ouvre une
+ * feuille basse. Aucune feuille à pastilles, aucun menu.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -159,10 +161,9 @@ class ComposerBackgroundEditComposeTest {
 
     private fun holdScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { longClick(Offset(width * 0.5f, height * 0.5f)) }
 
-    private fun modify() {
-        holdScene()
-        compose.onNodeWithText("Edit").performClick()
-    }
+    private fun modify() = holdScene()
+
+    private val actions = arrayOf("Replace", "Place on the scene", "Remove")
 
     private fun railShows(vararg words: String) {
         val shown = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
@@ -170,17 +171,22 @@ class ComposerBackgroundEditComposeTest {
         assertThat(shown).containsExactlyElementsIn(words.toList()).inOrder()
     }
 
+    /** Une entrée du rail, défilé jusqu'à elle : le rail à plat dépasse la hauteur et défile (#14047). */
+    private fun tapRail(text: String) {
+        compose.onNodeWithText(text).performScrollTo().performClick()
+    }
+
     @Test
-    fun `Edit lays the level Modifier over the level Fond, in the rail, without any sheet`() {
+    fun `holding the background lays its tools flat in the rail, then Replace, Put on the scene and Remove, without Edit nor sheet`() {
         val vm = viewModel()
         withBackgroundPhoto(vm)
         show(vm)
 
         modify()
 
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe")
-        compose.onNodeWithText("Back").assertExists()
-        compose.onNodeWithText("Replace").assertDoesNotExist()
+        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe", *actions)
+        compose.onNodeWithText("Edit").assertDoesNotExist()
+        compose.onNodeWithText("Back").assertDoesNotExist()
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
         listOf("Audience", "Publish story").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
     }
@@ -192,7 +198,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Adjust").performClick()
+        tapRail("Adjust")
 
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertExists()
         compose.onNodeWithText("Back").assertExists()
@@ -203,20 +209,22 @@ class ComposerBackgroundEditComposeTest {
     }
 
     @Test
-    fun `Back goes down one level at a time, the band leaving with its level`() {
+    fun `Back goes down one level, the band leaving with its level, the document untouched`() {
         val vm = viewModel()
         withBackgroundPhoto(vm)
         show(vm)
         modify()
-        compose.onNodeWithText("Framing").performClick()
+        tapRail("Framing")
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertExists()
+        val framed = vm.state.value.deck
 
         compose.onNodeWithText("Back").performClick()
+
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe")
-
-        compose.onNodeWithText("Back").performClick()
-        compose.onNodeWithText("Replace").assertExists()
+        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe", *actions)
+        compose.onNodeWithText("Back").assertDoesNotExist()
+        assertThat(vm.state.value.deck).isEqualTo(framed)
+        assertThat(vm.state.value.selectedSlideBackdropMediaId).isEqualTo("bg")
     }
 
     @Test
@@ -226,7 +234,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Framing").performClick()
+        tapRail("Framing")
         compose.onNodeWithContentDescription("Black").performClick()
 
         assertThat(vm.state.value.deck.selectedSlide.frame.backdrop).isEqualTo(me.meeshy.sdk.model.composer.scene.StoryBackdrop.BLACK.wire)
@@ -239,7 +247,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Filters").performClick()
+        tapRail("Filters")
 
         compose.onNodeWithText("Effects").assertDoesNotExist()
         compose.onNodeWithText("Frames").assertDoesNotExist()
@@ -252,7 +260,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Filters").performClick()
+        tapRail("Filters")
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertExists()
         assertThat(compose.onAllNodesWithText("None").fetchSemanticsNodes()).isNotEmpty()
     }
@@ -264,7 +272,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        railShows("Framing", "Trim", "Filters", "Adjust", "Loop", "Describe")
+        railShows("Framing", "Trim", "Filters", "Adjust", "Loop", "Describe", *actions)
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).assertIsOn()
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).performClick()
 
@@ -280,7 +288,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Trim").performClick()
+        tapRail("Trim")
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertExists()
         vm.onSceneGesture("trim-bg") { StoryComposerBackgroundReducer.trimmed(it, me.meeshy.sdk.model.media.MediaTrimBounds(2.0, 5.0)) }
 
@@ -294,7 +302,7 @@ class ComposerBackgroundEditComposeTest {
         show(vm)
         modify()
 
-        compose.onNodeWithText("Describe").performClick()
+        tapRail("Describe")
 
         compose.onNodeWithTag(BACKGROUND_DESCRIPTION_TAG).assertExists()
     }

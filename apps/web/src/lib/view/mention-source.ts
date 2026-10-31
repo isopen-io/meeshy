@@ -103,7 +103,8 @@ type MentionablePeople = Parameters<typeof peopleMentionCandidates>[0];
  * - une PUBLICATION existante ⇒ `contextType=post` : la passerelle classe son
  *   auteur et ses commentateurs, puis les amis, puis le reste ;
  * - rien encore (une publication en cours d'écriture, une humeur) ⇒
- *   l'ANNUAIRE (`/directory/people`, ≥ 2 caractères comme la règle).
+ *   l'ANNUAIRE (`/directory/people`), appelé selon la même loi
+ *   (`mentionLookupStage`, #14053).
  *
  * `null` pour un lecteur sans identité : les deux routes exigent un compte.
  */

@@ -47,6 +47,8 @@ const POST_ID = 'post-1';
 type PrismaDouble = {
   user: { findUnique: jest.Mock; findMany: jest.Mock };
   friendRequest: { findMany: jest.Mock };
+  userRelation: { findMany: jest.Mock };
+  userPreferences: { findUnique: jest.Mock };
   notification: { create: jest.Mock };
   conversation: { findUnique: jest.Mock };
   participant: { count: jest.Mock };
@@ -64,6 +66,22 @@ function makePrisma(): PrismaDouble {
         { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
         { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
       ]),
+    },
+    // Deux Proches (#13929) : l'entourage par défaut d'une publication.
+    userRelation: {
+      findMany: jest.fn().mockResolvedValue(
+        [FRIEND_1, FRIEND_2].map((id) => ({
+          id: `rel-${id}`,
+          userLowId: AUTHOR_ID,
+          userHighId: id,
+          grantedByLow: 'CLOSE',
+          grantedByHigh: 'CLOSE',
+          transitions: [],
+        }))
+      ),
+    },
+    userPreferences: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     notification: {
       create: jest.fn(),

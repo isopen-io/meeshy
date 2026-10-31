@@ -30,19 +30,20 @@ class ComposerSceneToolsTest {
     )
 
     @Test
-    fun `the column carries six round tools in the order of the mockup, the more button last`() {
+    fun `the column carries the background, the mention and the place as direct tools, the more button last`() {
         assertThat(ComposerSceneTools.column).containsExactly(
             ComposerSceneTool.TEXT, ComposerSceneTool.MEDIA, ComposerSceneTool.STICKER,
-            ComposerSceneTool.SOUND, ComposerSceneTool.DRAWING, ComposerSceneTool.MORE,
+            ComposerSceneTool.SOUND, ComposerSceneTool.DRAWING,
+            ComposerSceneTool.BACKGROUND, ComposerSceneTool.MENTION, ComposerSceneTool.PLACE,
+            ComposerSceneTool.MORE,
         ).inOrder()
     }
 
     @Test
     fun `a bare scene's more menu holds what every scene can do, then nothing to export`() {
         assertThat(more()).containsExactly(
-            ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
-            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE,
+            ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION,
+            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION, ComposerMoreEntry.HASHTAGS,
         ).inOrder()
     }
 
@@ -58,11 +59,11 @@ class ComposerSceneToolsTest {
             hasSomethingToErase = true,
         )
         assertThat(all).containsExactly(
-            ComposerMoreEntry.PREVIEW, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND,
+            ComposerMoreEntry.PREVIEW, ComposerMoreEntry.ADD_SLIDE,
             ComposerMoreEntry.PICK_BACKGROUND, ComposerMoreEntry.REMOVE_BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
             ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING,
             ComposerMoreEntry.OPENING_EFFECT, ComposerMoreEntry.VISUAL_EFFECT, ComposerMoreEntry.CAPTION,
-            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE,
+            ComposerMoreEntry.HASHTAGS,
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE, ComposerMoreEntry.CLEAR_ALL,
         ).inOrder()
     }

@@ -12,7 +12,7 @@ import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.TRIM
 import org.junit.Test
 
 /**
- * Le niveau N1 « Modifier » d'un fond média (spec 2026-10-31, #13973, lot A-E2), lu dans l'arbre partagé : une image offre
+ * Les outils du fond média, à plat dans son rail (spec 2026-10-31, #13973, #14047), lus dans l'arbre partagé : une image offre
  * Cadrage · Filtres · Cadres · Réglages · Effets · Description, une vidéo Cadrage · Couper · Filtres · Réglages · Boucle ·
  * Description — dans l'ordre de l'arbre, chacune ouvrant ce que l'arbre dit. Recadrer, Son et Pivoter restent dans l'arbre
  * (cible commune avec iOS) sans être servis ici tant que leur effet n'est pas câblé.
@@ -21,13 +21,6 @@ class ComposerBackgroundEditLevelTest {
 
     private val photo = ComposerBackgroundEditLevel.Media(video = false, trimmable = false, look = true)
     private val clip = ComposerBackgroundEditLevel.Media(video = true, trimmable = true, look = false)
-
-    @Test
-    fun `Edit of the level Fond lays the level Modifier`() {
-        val edit = ComposerBackgroundLevel.entryOf(ComposerBackgroundAction.EDIT)
-        assertThat(edit.opens).isEqualTo(ComposerEditTree.Opens.LEVEL)
-        assertThat(edit.next).isEqualTo(ComposerEditTree.BACKGROUND_MEDIA_EDIT)
-    }
 
     @Test
     fun `a background photo is framed, filtered, framed with a frame, adjusted, given effects and described, in that order`() {

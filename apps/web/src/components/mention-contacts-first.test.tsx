@@ -21,12 +21,16 @@ import { Composer } from './composer';
  * `['friends','requests','accepted']`, lu sur le cache de requêtes lui-même)
  * et la recherche distante de la source (bouchonnée, elle compte ses appels).
  *
+ * La loi de déclenchement est celle de `@meeshy/shared` (`mentionLookupStage`,
+ * #14053, directive porteur du 2026-10-31) :
+ *
  * | frappe            | ce qui se montre                          | réseau |
  * |-------------------|-------------------------------------------|--------|
  * | `@`               | contacts, puis participants               | 0      |
  * | `@c`              | filtré ET trié localement                 | 0      |
- * | `@cl`             | locaux en tête, puis les autres           | 1      |
- * | `@cla`,`@clai`…   | affinage immédiat, recherche débouncée    | +1     |
+ * | `@cl` (trouvé)    | filtré ET trié localement                 | 0      |
+ * | `@zz` (personne)  | la recherche part dès la 2ᵉ lettre        | 1      |
+ * | `@cla`,`@clau`…   | locaux en tête, puis les autres           | +1     |
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const CONTACTS_KEY = friendRequestsQueryKey('accepted');
@@ -204,41 +208,77 @@ describe('une lettre — filtre et tri locaux, sans réseau', () => {
   });
 });
 
-describe('deux lettres et plus — la recherche réseau, débouncée, sans clignotement', () => {
-  test('`@cl` : un appel, les locaux restent en tête, les autres suivent', async () => {
-    const fx = await mount({ cache: 'fresh', remote: () => [olga, { id: 'u-claire', username: 'claire', displayName: 'Claire Dubois' }] });
+describe('la loi de déclenchement — le cache d’abord, le réseau au 3ᵉ caractère (#14053)', () => {
+  test('une lettre : aucun appel', async () => {
+    const fx = await mount({ cache: 'fresh' });
+    typeText(fx.el, '@z');
+    await passDebounce();
+    expect(fx.network()).toBe(0);
+  });
+
+  test('deux lettres qui trouvent quelqu’un en local : aucun appel', async () => {
+    const fx = await mount({ cache: 'fresh' });
     typeText(fx.el, '@cl');
     expect(names(fx.el)).toEqual(['claire', 'marc', 'clovis']);
+    await passDebounce();
+    expect(fx.network()).toBe(0);
+    expect(names(fx.el)).toEqual(['claire', 'marc', 'clovis']);
+  });
+
+  test('deux lettres qui ne trouvent personne en local : l’appel part dès la 2ᵉ lettre', async () => {
+    const zora: MentionCandidate = { id: 'u-zora', username: 'zora', displayName: 'Zora Zidane', badge: 'other' };
+    const fx = await mount({ cache: 'fresh', remote: () => [zora] });
+    typeText(fx.el, '@zz');
+    await passDebounce();
+    expect(fx.searches).toEqual(['zz']);
+    expect(names(fx.el)).toEqual(['zora']);
+  });
+
+  test('trois caractères : l’appel part, même quand le local a trouvé', async () => {
+    const fx = await mount({ cache: 'fresh' });
+    typeText(fx.el, '@cla');
+    expect(names(fx.el)).toEqual(['claire', 'marc']);
+    await passDebounce();
+    expect(fx.searches).toEqual(['cla']);
+    expect(fx.network()).toBe(1);
+  });
+});
+
+describe('trois caractères et plus — la recherche réseau, débouncée, sans clignotement', () => {
+  test('`@cla` : un appel, les locaux restent en tête, puis le serveur dans son ordre', async () => {
+    const fx = await mount({ cache: 'fresh', remote: () => [olga, { id: 'u-claire', username: 'claire', displayName: 'Claire Dubois' }] });
+    typeText(fx.el, '@cla');
+    expect(names(fx.el)).toEqual(['claire', 'marc']);
     expect(fx.network()).toBe(0);
     await passDebounce();
-    expect(fx.searches).toEqual(['cl']);
+    expect(fx.searches).toEqual(['cla']);
     expect(fx.network()).toBe(1);
-    expect(names(fx.el)).toEqual(['claire', 'marc', 'clovis', 'claudine.o']);
+    expect(names(fx.el)).toEqual(['claire', 'marc', 'claudine.o']);
   });
 
   test('une frappe rapide ne part qu’une fois, pour la dernière requête', async () => {
     const fx = await mount({ cache: 'fresh' });
-    typeText(fx.el, '@cl');
-    await wait(80);
     typeText(fx.el, '@cla');
     await wait(80);
     typeText(fx.el, '@clau');
+    await wait(80);
+    typeText(fx.el, '@claud');
     await passDebounce();
-    expect(fx.searches).toEqual(['clau']);
+    expect(fx.searches).toEqual(['claud']);
     expect(fx.network()).toBe(1);
   });
 
   test('pendant la recherche suivante, les résultats connus restent affichés, affinés', async () => {
     const fx = await mount({ cache: 'fresh', remote: () => [olga] });
-    typeText(fx.el, '@cl');
-    await passDebounce();
-    expect(names(fx.el)).toContain('claudine.o');
-    typeText(fx.el, '@clau');
-    expect(names(fx.el)).toEqual(['claudine.o']);
     typeText(fx.el, '@cla');
-    expect(names(fx.el)).toEqual(['claire', 'marc', 'claudine.o']);
     await passDebounce();
-    expect(fx.searches).toEqual(['cl', 'cla']);
+    expect(names(fx.el)).toEqual(['claire', 'marc', 'claudine.o']);
+    typeText(fx.el, '@claudi');
+    expect(names(fx.el)).toEqual(['claudine.o']);
+    typeText(fx.el, '@claud');
+    expect(names(fx.el)).toEqual(['claudine.o']);
+    await passDebounce();
+    expect(fx.searches).toEqual(['cla', 'claud']);
     expect(fx.network()).toBe(2);
   });
 });

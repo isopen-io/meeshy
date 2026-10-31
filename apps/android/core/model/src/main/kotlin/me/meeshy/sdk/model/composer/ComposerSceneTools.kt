@@ -3,8 +3,11 @@ package me.meeshy.sdk.model.composer
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 
-/** Les six boutons ronds posés sur la scène de la story au repos (#13834), le « ⋯ » en dernier. */
-enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, MORE }
+/**
+ * Les boutons ronds posés sur la scène de la story au repos (#13834), le « ⋯ » en dernier : Fond, Mention et Lieu sont des
+ * entrées directes du rail, jamais rangées dans le « ⋯ » (directive porteur du 2026-10-31, #14049).
+ */
+enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, BACKGROUND, MENTION, PLACE, MORE }
 
 /**
  * Ce que l'appui long sur Média propose (#13845, iOS `ComposerRailDoorLongPress`) : le viseur de la scène (#13849, la
@@ -13,14 +16,13 @@ enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, MORE }
 enum class ComposerMediaSource { CAMERA, PHOTO_LIBRARY, FILES }
 
 /**
- * Ce que le « ⋯ » de la scène range (#13834) : l'aperçu, les réglages de la scène que la colonne ne porte pas, ce que la
- * publication nomme (mentionner, hashtags, lieu — #13846, les portes du rail iOS), l'export, puis « Tout effacer » (#13845, iOS `ComposerOverflowPolicy`). [export] relie une entrée d'export à la loi qui la sert
+ * Ce que le « ⋯ » de la scène range (#13834) : l'aperçu, les réglages de la scène que la colonne ne porte pas, les hashtags
+ * (#13846 ; Fond, Mention et Lieu sont des outils du rail depuis #14049), l'export, puis « Tout effacer » (#13845, iOS `ComposerOverflowPolicy`). [export] relie une entrée d'export à la loi qui la sert
  * ([me.meeshy.sdk.model.composer.scene.ComposerOverflowEntries]) ; [isDestructive] se peint en alerte et demande confirmation.
  */
 enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDestructive: Boolean = false) {
     PREVIEW,
     ADD_SLIDE,
-    BACKGROUND,
     PICK_BACKGROUND,
     REMOVE_BACKGROUND,
     SLIDE_DURATION,
@@ -29,9 +31,7 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
     OPENING_EFFECT,
     VISUAL_EFFECT,
     CAPTION,
-    MENTION,
     HASHTAGS,
-    PLACE,
     SAVE_TO_PHOTOS(ComposerOverflowEntry.SAVE_TO_PHOTOS),
     SHARE(ComposerOverflowEntry.SHARE),
     CLEAR_ALL(isDestructive = true),
@@ -73,9 +73,7 @@ object ComposerSceneTools {
             ComposerMoreEntry.OPENING_EFFECT -> ComposerSceneEffect.OPENING in input.sceneEffects
             ComposerMoreEntry.VISUAL_EFFECT -> ComposerSceneEffect.VISUAL in input.sceneEffects
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export in input.exports
-            ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION,
-            ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE -> true
+            ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.ANIMATION, ComposerMoreEntry.HASHTAGS -> true
             ComposerMoreEntry.CAPTION -> input.captionsSlides
             ComposerMoreEntry.PREVIEW -> input.hasContent
             ComposerMoreEntry.PICK_BACKGROUND -> input.canPickBackground

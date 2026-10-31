@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Taglio</string>
     <string name="composer_edit_frames">Cornici</string>
     <string name="composer_edit_loop">Ciclo</string>
+    <string name="composer_edit_mute">Muto</string>
+    <string name="composer_edit_rotate">Ruota</string>
     <string name="composer_edit_trim">Taglia</string>
+    <string name="composer_edit_volume">Volume</string>
     <string name="composer_family_text">Testo</string>
     <string name="composer_frise_earlier">Prima</string>
     <string name="composer_frise_empty">Aggiungi un testo o uno sticker: ogni oggetto diventa una traccia.</string>

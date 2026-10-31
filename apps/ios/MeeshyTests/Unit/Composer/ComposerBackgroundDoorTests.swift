@@ -55,19 +55,20 @@ final class ComposerBackgroundDoorTests: XCTestCase {
                                                   format: format, allowsCapture: true)
             let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
                                                             offeredDoors: portes, overflow: []))
-            XCTAssertTrue(plus.contains(.background),
-                          "#13839 : le fond s'ouvre par « ⋯ › Fond », sur tout format qui a une scène")
+            XCTAssertTrue(ComposerRestChrome.tools(offered: portes).contains(.background),
+                          "#14050 : « Fond » est une entrée directe du rail, sur tout format qui a une scène")
+            XCTAssertFalse(plus.compactMap(\.door).contains(.background), "et ⋯ ne le porte plus")
         }
     }
 
-    /// Et il n'est JAMAIS sur la ligne canonique — les deux rangées étant une
-    /// partition, ce témoin est la moitié qu'on oublie d'écrire.
-    func test_leFond_nEstJamaisSurLaLigneCanonique() {
+    /// Il est sur la ligne canonique, en entrée directe (porteur 2026-10-31,
+    /// #14050), sur tout format qui a une scène.
+    func test_leFond_estSurLaLigneCanonique() {
         for format in [ComposerFormat.story, .post, .reel] {
             let colonne = ComposerRestChrome.tools(
                 offered: ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                   format: format, allowsCapture: true))
-            XCTAssertFalse(colonne.compactMap(\.door).contains(.background), "format \(format)")
+            XCTAssertTrue(colonne.compactMap(\.door).contains(.background), "format \(format)")
         }
     }
 

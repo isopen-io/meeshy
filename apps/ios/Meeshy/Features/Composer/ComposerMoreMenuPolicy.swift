@@ -2,23 +2,20 @@ import Foundation
 
 /// **Une entrée du menu ⋯ de la scène** (#13839).
 ///
-/// Au repos, la scène ne porte que six boutons : Texte, Média, Sticker, Son,
-/// Dessin et ⋯. Tout ce que portaient le rail gauche, la colonne droite, la
-/// barre haute et le menu de débordement vit ici — rien n'a disparu, tout a
-/// déménagé. L'export et l'effacement restent décidés par
+/// Au repos, la scène porte Texte, Média, Sticker, Son, Dessin, Fond, Mention,
+/// Lieu (#14050) et ⋯. Le reste de ce que portaient le rail gauche, la colonne
+/// droite, la barre haute et le menu de débordement vit ici — rien n'a
+/// disparu, tout a déménagé. L'export et l'effacement restent décidés par
 /// `ComposerOverflowPolicy`, que ce menu LIT au lieu de la recopier.
 nonisolated enum ComposerMoreMenuEntry: String, CaseIterable, Equatable, Sendable {
     case addSlide
-    case background
     case transitions
     case visualEffect
     case backgroundFraming
     case animation
     case slideDuration
     case legend
-    case mention
     case hashtags
-    case place
     case preview
     case pickBackground
     case removeBackground
@@ -42,12 +39,7 @@ nonisolated enum ComposerMoreMenuEntry: String, CaseIterable, Equatable, Sendabl
     /// La porte que l'entrée ouvre, quand elle en ouvre une : la même que le
     /// rail ouvrait, par le même `handleRailDoor`.
     var door: ComposerRailDoor? {
-        switch self {
-        case .mention: return .mention
-        case .hashtags: return .hashtag
-        case .place: return .place
-        default: return nil
-        }
+        self == .hashtags ? .hashtag : nil
     }
 }
 
@@ -67,20 +59,17 @@ nonisolated enum ComposerMoreMenuPolicy {
     static func entries(_ context: Context) -> [ComposerMoreMenuEntry] {
         let doors = Set(context.offeredDoors)
         let scene: [ComposerMoreMenuEntry] = (context.addsSlides ? [.addSlide] : [])
-            + background(context.backgroundMedia, offersPalette: doors.contains(.background))
-            + [.animation, .slideDuration, .legend]
-        let publication = [ComposerMoreMenuEntry.mention, .hashtags, .place]
+            + background(context.backgroundMedia) + [.animation, .slideDuration, .legend]
+        let publication = [ComposerMoreMenuEntry.hashtags]
             .filter { entree in entree.door.map(doors.contains) ?? false }
         let export = context.overflow.map(ComposerMoreMenuEntry.init)
         return scene + publication + export
     }
 
-    /// Sans média de fond, « Fond » ouvre la palette (couleurs ET transitions
-    /// d'ouverture, que la bande sert déjà) ; avec un média, la palette n'a
-    /// plus de sens et ses effets prennent sa place.
-    private static func background(_ media: ComposerSceneEffects.Background?,
-                                   offersPalette: Bool) -> [ComposerMoreMenuEntry] {
-        guard let media else { return offersPalette ? [.background] : [] }
+    /// « Fond » est une entrée directe du rail (#14050) ; avec un média de
+    /// fond, ses effets et son cadrage restent ici.
+    private static func background(_ media: ComposerSceneEffects.Background?) -> [ComposerMoreMenuEntry] {
+        guard let media else { return [] }
         let effets = ComposerSceneEffects.served(background: media).map { effet -> ComposerMoreMenuEntry in
             effet == .opening ? .transitions : .visualEffect
         }
@@ -113,8 +102,6 @@ nonisolated enum ComposerMoreMenuCopy {
         switch entry {
         case .addSlide:
             return String(localized: "composer.more.addSlide", defaultValue: "Ajouter une diapo", bundle: .main)
-        case .background:
-            return String(localized: "composer.more.background", defaultValue: "Fond", bundle: .main)
         case .transitions:
             return String(localized: "composer.more.transitions", defaultValue: "Transitions", bundle: .main)
         case .visualEffect:
@@ -140,7 +127,7 @@ nonisolated enum ComposerMoreMenuCopy {
             return String(localized: "composer.more.pickBackground", defaultValue: "Choisir un fond", bundle: .main)
         case .preview, .clearAll:
             return ComposerOverflowCopy.label(entry == .preview ? .preview : .clearAll)
-        case .mention, .hashtags, .place:
+        case .hashtags:
             return ""
         }
     }
@@ -149,7 +136,6 @@ nonisolated enum ComposerMoreMenuCopy {
         if let door = entry.door { return door.symbolName }
         switch entry {
         case .addSlide: return "plus.rectangle.on.rectangle"
-        case .background: return "paintpalette"
         case .transitions: return ComposerSceneEffect.opening.symbol
         case .visualEffect: return ComposerSceneEffect.visual.symbol
         case .backgroundFraming: return "crop"
@@ -162,7 +148,7 @@ nonisolated enum ComposerMoreMenuCopy {
         case .saveToPhotos: return ComposerOverflowCopy.icon(.saveToPhotos)
         case .share: return ComposerOverflowCopy.icon(.share)
         case .clearAll: return ComposerOverflowCopy.icon(.clearAll)
-        case .mention, .hashtags, .place: return ""
+        case .hashtags: return ""
         }
     }
 
