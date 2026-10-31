@@ -55,7 +55,7 @@ Règles de passage :
 | Notifications de mes nouveaux posts, reels, stories, moods | non | oui | oui |
 | Qui commente mes posts | non | oui | oui |
 | Mes commentaires ailleurs | non | non | oui |
-| Bring | non | oui, si autorisé par l'autre | oui, si autorisé |
+| Bring (urgence extrême) | **1 par jour** | **3 par jour** | **30 par jour** (Atome : illimité, hors MVP) — sauf si l'autre a bloqué le Bring de cette personne |
 | Ce que j'écoute ou regarde | non | catégorie seule | titre + origine |
 | Talkie | non | oui | oui |
 | Position | partage ponctuel (existant) | partage temporaire (existant) | continue + historique 30 j + proximité, **flag** |
@@ -104,11 +104,12 @@ Au-dessous d'Ami :
     - Les **deux** chemins iOS sont livrés, avec et sans PushToTalk, et l'entitlement est demandé.
   - Garde-fous : coupé en appel, en Ne pas déranger et en heures calmes ; indicateur des deux côtés ; le blocage coupe ; débit limité ; refus serveur sous Proche.
   - **Hors E2EE au MVP**, l'interface le dit, avec une issue de suivi `crypto-e2ee`.
-- **Bring (CAL-04, RG-29).**
-  - C'est un son, pas une notification. Il est autorisé **par personne** côté destinataire, OFF par défaut.
-  - 3 Bring par heure au maximum par expéditeur. Arrêt d'un geste. Les heures calmes sont respectées sauf autorisation explicite. Jamais d'un non-Proche.
-  - iOS : time-sensitive (entitlement déjà présent). Passer outre le silencieux exige Critical Alerts (D-3).
-  - Android : `USAGE_ALARM`. Web : onglet ouvert.
+- **Bring (CAL-04, RG-29) — décision du porteur du 2026-10-31, troisième passage, qui remplace « Proche, OFF par défaut, 3 par heure »).**
+  - **Ce que c'est, et ce que l'interface en dit** : le Bring **force un son** sur le téléphone de l'autre, **pour les cas d'urgence extrême**. Il joue même en silencieux et passe Ne pas déranger et les heures calmes, jusqu'à ce que l'autre l'arrête d'un geste. Ce n'est pas une notification.
+  - **Ouvert dès Ami, avec un quota par jour selon le niveau effectif** : Ami 1, Proche 3, Sang 30, Atome illimité (hors MVP). Le quota court par jour calendaire du destinataire et par paire (expéditeur → destinataire). Il vient de la config (`bring.perDay`).
+  - **Disponible par défaut**, avec un **blocage par personne** côté destinataire. Quand j'ai bloqué le Bring de quelqu'un, il **ne peut plus m'en envoyer** : refus serveur `BRING_BLOCKED`, et son bouton disparaît. Le blocage ne lui est pas notifié, il voit seulement « Bring indisponible ».
+  - **iOS** : on demande l'entitlement **Critical Alerts** (D-3, tranchée), avec cette justification d'urgence extrême. En attendant qu'Apple l'accorde, on reste sur time-sensitive et l'interface dit que le silencieux de l'autre l'emporte. Une fois accordé, `criticalSoundNamed(withAudioVolume:)` est utilisé, derrière la permission `.criticalAlert` de l'utilisateur.
+  - **Android** : canal `USAGE_ALARM` (volume alarme, passe Ne pas déranger si les alarmes y sont permises), via un service au premier plan. **Web** : onglet ouvert.
 - **Position Sang (LOC-03/04/11, RG-12/13/14/16/27)**, **derrière un flag OFF**, sur liste blanche de comptes de test.
   - On étend `LocationHandler` ; il n'y a pas de second système.
   - Historique de 30 jours : index TTL et chiffrement au repos. Les périodes en fantôme ne sont jamais enregistrées, et chacun peut effacer le sien.
@@ -121,7 +122,8 @@ Au-dessous d'Ami :
 - **Loi unique** `resolveRelationAccess` (§ 3), avec ses miroirs Swift et Kotlin.
 - **Baisse, sortie et refus** sont silencieux (RG-07). Cool-down de 30 jours avant une nouvelle demande (RG-08).
 - **Consentement** feature par feature :
-  - à l'entrée en Proche : talkie, catégorie d'écoute, Bring ;
+  - à l'entrée en Ami : Bring (expliqué, bloquable par personne) ;
+  - à l'entrée en Proche : talkie, catégorie d'écoute ;
   - au rituel Sang : titre d'écoute, position, historique, proximité.
 - **Mineurs** — décision du porteur du 2026-10-31, qui **remplace** la règle « pas de Sang entre un mineur et un majeur hors famille vérifiée ».
   - L'âge **déclaré** fait foi (`User.birthDate`, `isDeclaredMinor`), sans vérification préalable.
@@ -184,7 +186,7 @@ model RelationFeatureSetting {             // consentement et réglages par pers
   ownerId String @db.ObjectId              // qui règle
   otherId String @db.ObjectId              // pour qui
   talkieDirect Boolean @default(true)      // ON à l'entrée en Proche (CAL-03), désactivable
-  bringAllowed Boolean @default(false)     // OFF par défaut (CAL-04)
+  bringBlockedAt DateTime?                 // non nul = j'ai bloqué le Bring de cette personne (disponible par défaut)
   listeningShared Boolean @default(true)
   locationShared Boolean @default(false)
   ghost DateTime?                          // fantôme ciblé : non nul = actif depuis
@@ -237,7 +239,7 @@ resolveRelationAccess({
 ```
 
 - **Niveau effectif** = `min(grantedByViewer, grantedByTarget)`, relevé à COMMUNITY si `sharesCommunity` et que le minimum est PUBLIC.
-- **Matrice** dans `packages/shared/config/relation-levels.ts` : feature → niveau minimal, avec les clés i18n des libellés, les icônes et les seuils (`acquaintance.minInteractions = 10`, `close.activeWeeks = 4`, `blood.activeWeeks = 12`, `bring.perHour = 3`, `cooldownDays = 30`, `proximity.cooldownHours = 2`). Une surcharge par environnement abaisse les seuils sur staging.
+- **Matrice** dans `packages/shared/config/relation-levels.ts` : feature → niveau minimal, avec les clés i18n des libellés, les icônes et les seuils (`acquaintance.minInteractions = 10`, `close.activeWeeks = 4`, `blood.activeWeeks = 12`, `bring.perDay = { FRIEND: 1, CLOSE: 3, BLOOD: 30, ATOM: null }` (null = illimité), `bring` ouvert dès `FRIEND`, `cooldownDays = 30`, `proximity.cooldownHours = 2`). Une surcharge par environnement abaisse les seuils sur staging.
 - **Mineurs** : `BLOOD`, `location.*` et `bring` rendent `requiresConsent: true` pour tous les âges. Il n'y a pas de refus d'âge (§ 1.8, décision du 2026-10-31) ; la Connaissance automatique ne naît pas entre un mineur et un majeur inconnu.
 - **Consentement** : la loi dit le **plafond**. `RelationFeatureSetting` dit si la personne l'active, et les deux sont requis.
 - **Miroirs** (mêmes cas de témoins) : Swift `MeeshySDK/.../Relations/RelationAccess.swift`, Kotlin `apps/android/core/model/.../relation/RelationAccess.kt`. Le client ne décide jamais d'un accès : le miroir sert à **ne pas proposer** une action que le serveur refusera.
@@ -257,7 +259,7 @@ Les routes sont préfixées `/api/v1`, et leurs réponses passent par `sendSucce
 | Répondre | `PATCH /directory/friend-requests/:id { action }` | **inchangé** (`accept|reject|cancel|dismiss`) |
 | Baisser, sortir | `POST /relations/:userId/level { level }` (≤ niveau accordé), silencieux | nouveau |
 | Rituel Sang | `POST /relations/:userId/ritual { phase: 'start'|'hold'|'confirm', consents }`, plus les événements `relation:ritual-started` / `relation:ritual-progress` / `relation:ritual-completed` | nouveau |
-| Réglages par personne | `PUT /relations/:userId/settings { talkieDirect, bringAllowed, listeningShared, locationShared, ghost }` | nouveau |
+| Réglages par personne | `PUT /relations/:userId/settings { talkieDirect, bringBlocked, listeningShared, locationShared, ghost }` | nouveau |
 | Lien monté | `relation:level-raised` (aux deux) ; **aucun** événement de baisse vers celui qui est baissé | nouveau |
 | Écoute | `now-playing:update` (c→s) → `now-playing:changed` (s→c, tronqué par destinataire), `now-playing:cleared` | nouveau, audience `user:<id>` comme `presence-audience.ts` |
 | Talkie | segment par `POST /attachments/upload` (pipeline vocal), puis `talkie:send { toUserId, attachmentId }` → `talkie:incoming` / `talkie:ended` ; push alert (NSE) ou pushtotalk | étend le pipeline vocal |
@@ -279,7 +281,7 @@ Ces écrans sont **iOS-référence** ; web et Android sont iso.
 | Sélecteur d'audience | dernier choix | — | — | choix local, envoyé à la reconnexion |
 | Écoute reçue | rien d'affiché | — | — | rien |
 | Talkie | bouton « maintenir pour parler » | indicateur d'envoi | « non reçu, envoyé en vocal » | mis en vocal |
-| Bring | « Bring » grisé si non autorisé, avec la raison | — | quota atteint : « réessaie dans N min » | indisponible |
+| Bring | « Bring » expliqué (« pour une urgence extrême — il sonne même en silencieux »), compteur « N restants aujourd'hui » ; absent si l'autre l'a bloqué | — | quota atteint : « plus de Bring aujourd'hui vers X » | indisponible |
 | Carte (flag) | « Aucun Sang ne partage sa position » | dernière position connue | — | dernière position, datée |
 
 ## 6. Lots et matrice cas × plateforme
@@ -308,7 +310,7 @@ Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acce
 |---|---|---|---|---|
 | `proche-sang-ecoute` | ● troncature | ● Meeshy, Apple Music, Spotify | reçoit | ● MediaSession |
 | `proche-talkie` | ● relais + limites | ● avec / sans PTT | ● onglet + repli | ● service au premier plan |
-| `proche-bring` | ● autorisation + quota | ● time-sensitive | ● onglet | ● USAGE_ALARM |
+| `proche-bring` | ● quota par jour et par niveau + blocage par personne | ● Critical Alerts (time-sensitive en attendant) | ● onglet | ● USAGE_ALARM |
 | `sang-position-historique` (flag) | ● | ● | ● lecture | ● |
 | `sang-recette-reelle` | recette sur deux téléphones, résultats rendus par le porteur | | | |
 | `conformite-cercles` | AIPD, **bloque la production** | | | |
@@ -355,7 +357,7 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 | Compteurs | `PostView`, `PostReaction`, `PostComment`, `PostEngagement`, reposts, `PostMention`, `Message` (senderId = Participant), `Reaction`, `Mention`, `CallParticipant` | lus par l'agrégat `PairInteractionWeek` |
 | Planification | `jobs/index.ts:100-205`, `utils/guarded-timer.ts`, patron `jobs/game-nightly.ts` | un job `relation-weekly`, rattrapage idempotent |
 | Rate limit | `utils/rate-limiter.ts` (`RedisStore.increment` :171, `createCustomRateLimiter` :474), `CacheStore.setnx` (:186) | Bring, talkie, demandes ; **pas** `socket-rate-limiter.ts` (en mémoire par process) |
-| DND | `notification-dnd.ts:53` `isWithinDnd`, `push-delivery-preferences.ts:62-74` | talkie et Bring les respectent |
+| DND | `notification-dnd.ts:53` `isWithinDnd`, `push-delivery-preferences.ts:62-74` (`bypassDnd`) | le talkie les respecte ; le **Bring les passe** (urgence), comme `call-incoming-push.ts` |
 | Push | `PushNotificationService.ts` (:545-556, :693-713 ; aucun `interruption-level`), `call-incoming-push.ts` | + `interruption-level` time-sensitive, push talkie |
 | NSE | `MeeshyNotificationExtension/NotificationService.swift`, App Group `group.me.meeshy.apps`, `NSEPreferencesGate.swift` | segment talkie écrit dans `Library/Sounds` |
 | Sonnerie | iOS `Ringtone.caf` (30 s), `RingbackTonePlayer.swift` ; Android `CallToneController.kt`, canal d'appel `IncomingCallNotificationPresenter.kt:50-71` | Bring : réutilisés ; Android : un canal `USAGE_ALARM` |
@@ -378,9 +380,6 @@ Tranchées par le porteur le 2026-10-31 (second passage) :
 | D-5 (#13947) | Compatibilité des anciens clients | **Aucune** : mise à jour forcée par le plancher de version (#13954) |
 | Mineurs (#13948) | Âge vérifié avant le Sang ? | **Non** : l'âge déclaré fait foi, et l'accès est ouvert à tous derrière un consentement refusable avec un dépliant |
 | Anciens clients | Risque d'affichage « Public » d'une audience nouvelle | **Accepté**, réglé par la mise à jour forcée |
+| D-3 (#13945) | Critical Alerts pour le Bring ? | **Oui, on le demande** : le Bring force un son pour l'urgence extrême. Quotas par jour : Ami 1, Proche 3, Sang 30, Atome illimité. Bring disponible par défaut, bloquable par personne |
 
-Encore ouverte :
-
-| # | Question | Défaut appliqué en attendant |
-|---|---|---|
-| D-3 (#13945) | Demander l'entitlement Critical Alerts pour le Bring ? | non : time-sensitive seulement, la limite du silencieux est dite |
+Aucune décision du chantier n'est encore ouverte.
