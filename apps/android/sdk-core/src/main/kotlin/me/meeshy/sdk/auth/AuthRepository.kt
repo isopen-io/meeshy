@@ -5,6 +5,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
@@ -23,7 +24,10 @@ import me.meeshy.sdk.model.auth.VerificationStatusRequest
 import me.meeshy.sdk.model.auth.VerifyPhoneData
 import me.meeshy.sdk.model.auth.VerifyPhoneRequest
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.NoSessionBackup
+import me.meeshy.sdk.net.SessionBackup
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
@@ -43,6 +47,8 @@ class AuthRepository @Inject constructor(
     private val sessionTeardown: SessionTeardown,
     private val syncSeqTracker: SyncSeqTracker,
     private val fence: AccountFence? = null,
+    private val sessionBackup: SessionBackup = NoSessionBackup,
+    private val keepSignedIn: KeepSignedInConsent? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -67,11 +73,13 @@ class AuthRepository @Inject constructor(
         username: String,
         password: String,
         rememberDevice: Boolean,
-    ): NetworkResult<LoginOutcome> =
-        when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
+    ): NetworkResult<LoginOutcome> {
+        keepSignedIn?.open(rememberDevice)
+        return when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> result.data.openIfAuthenticated(typedIdentifier = username)
         }
+    }
 
     /**
      * La porte de l'écran de connexion actuel : une session ou un échec. Toute autre
@@ -369,6 +377,34 @@ class AuthRepository @Inject constructor(
     suspend fun regenerateTwoFactorBackupCodes(code: String): NetworkResult<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo> =
         apiCall { authApi.regenerateTwoFactorBackupCodes(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
 
+    /**
+     * Réinstaller l'app garde la connexion (#14058) : au démarrage SANS session locale, la session sauvegardée
+     * hors de l'app ([SessionBackup], Block Store) est renouvelée auprès de la passerelle puis adoptée — l'identité
+     * ouverte, `null` quand l'app reste sur la connexion. Un refus de la passerelle (session révoquée, échue, compte fermé) efface la
+     * sauvegarde : l'écran de connexion s'affiche, sans message. Hors ligne ou en panne serveur, elle est gardée
+     * pour le lancement suivant. Une connexion faite pendant l'appel n'est jamais écrasée.
+     */
+    suspend fun restoreBackedUpSession(): MeeshyUser? {
+        if (tokenStore.isAuthenticated) return null
+        val saved = sessionBackup.read() ?: return null
+        val result = apiCall { authApi.refresh(RefreshTokenRequest(token = saved.jwt, sessionToken = saved.sessionToken)) }
+        if (tokenStore.isAuthenticated) return null
+        return when (result) {
+            is NetworkResult.Success -> {
+                val renewed = result.data
+                storeSession(renewed.copy(sessionToken = renewed.sessionToken ?: saved.sessionToken), SessionOrigin.RESTORED)
+                renewed.user
+            }
+            is NetworkResult.Failure -> {
+                if (result.error.refusesTheSession()) sessionBackup.erase()
+                null
+            }
+        }
+    }
+
+    private fun ApiError.refusesTheSession(): Boolean =
+        httpStatus?.let { it in CLIENT_ERRORS && it !in TRANSIENT_CLIENT_ERRORS } ?: false
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()
@@ -456,6 +492,7 @@ class AuthRepository @Inject constructor(
         // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
         // pendant une fenêtre où un push de A serait jugé destiné au compte connecté. Sans identité, le temps de
         // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B, puis les jetons s'écrivent sous B.
+        keepSignedIn?.bind(session.user.id)
         val replaced = sessionRepository.currentUserId ?: tokenStore.userId
         if (replaced != null && replaced != session.user.id) {
             fence?.revoke()
@@ -476,6 +513,12 @@ class AuthRepository @Inject constructor(
 
         /** Ce que la deconnexion attend la passerelle : au-dela, l'appareil est deja propre et rend la main. */
         const val SERVER_LOGOUT_TIMEOUT_MILLIS: Long = 3_000L
+
+        /** Un refus de la passerelle : la session sauvegardée ne s'ouvrira plus. */
+        val CLIENT_ERRORS: IntRange = 400..499
+
+        /** Délai dépassé, trop de requêtes : un refus passager, la sauvegarde est gardée. */
+        val TRANSIENT_CLIENT_ERRORS: Set<Int> = setOf(408, 429)
     }
 }
 

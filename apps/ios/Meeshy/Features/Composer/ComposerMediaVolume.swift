@@ -27,24 +27,39 @@ nonisolated enum ComposerMediaSound {
 
 /// **Le volume d'une vidéo, de 0 à 200 %** — la plage du `StoryVolume` que
 /// lisent la scène, le lecteur, l'export et la passerelle. 100 % est le niveau
-/// du fichier, 0 % vaut Muet.
+/// du fichier, 0 % vaut Muet. Un SON posé plafonne à 100 % (`setAudioVolume`).
 nonisolated enum ComposerMediaVolume {
 
     static let range: ClosedRange<Double> = 0...Double(StoryVolume.maxGain)
     static let neutral: Double = 1
 
+    @MainActor
+    static func range(viewModel: StoryComposerViewModel, id: String) -> ClosedRange<Double> {
+        sound(viewModel, id) == nil ? range : 0...1
+    }
+
     static func percent(_ volume: Double) -> Int {
         Int((volume * 100).rounded())
     }
 
-    /// **Le curseur écrit le modèle à chaque valeur** (`setMediaVolume`) : la
-    /// couche de la vidéo reprend ce niveau à sa configuration suivante, le
-    /// lecteur joue au fil du doigt.
+    /// **Le curseur écrit le modèle à chaque valeur** (`setMediaVolume`, ou
+    /// `setAudioVolume` pour un son posé) : la couche reprend ce niveau à sa
+    /// configuration suivante, le lecteur joue au fil du doigt.
     @MainActor
     static func sliderBinding(viewModel: StoryComposerViewModel, mediaId: String) -> Binding<Double> {
-        Binding(
-            get: { Double(viewModel.currentEffects.mediaObjects?.first { $0.id == mediaId }?.volume ?? 1) },
-            set: { viewModel.setMediaVolume(id: mediaId, volume: Float($0)) })
+        guard sound(viewModel, mediaId) != nil else {
+            return Binding(
+                get: { Double(viewModel.currentEffects.mediaObjects?.first { $0.id == mediaId }?.volume ?? 1) },
+                set: { viewModel.setMediaVolume(id: mediaId, volume: Float($0)) })
+        }
+        return Binding(
+            get: { Double(sound(viewModel, mediaId)?.volume ?? 1) },
+            set: { viewModel.setAudioVolume(audioId: mediaId, volume: Float($0)) })
+    }
+
+    @MainActor
+    private static func sound(_ viewModel: StoryComposerViewModel, _ id: String) -> StoryAudioPlayerObject? {
+        viewModel.currentEffects.audioPlayerObjects?.first { $0.id == id }
     }
 
     @MainActor
@@ -70,7 +85,7 @@ struct ComposerMediaVolumeDial: View {
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .accessibilityHidden(true)
-                Slider(value: curseur, in: ComposerMediaVolume.range)
+                Slider(value: curseur, in: ComposerMediaVolume.range(viewModel: viewModel, id: mediaId))
                     .tint(Color.white)
                     .frame(minHeight: 44)
                     .accessibilityLabel(Text(ComposerCaptureCopy.volume))
@@ -110,7 +125,7 @@ struct ComposerMediaVolumeDial: View {
     }
 
     private func reset() {
-        viewModel.setMediaVolume(id: mediaId, volume: Float(ComposerMediaVolume.neutral))
+        ComposerMediaVolume.sliderBinding(viewModel: viewModel, mediaId: mediaId).wrappedValue = ComposerMediaVolume.neutral
         HapticFeedback.light()
     }
 }
