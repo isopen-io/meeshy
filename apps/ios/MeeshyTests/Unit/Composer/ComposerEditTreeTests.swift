@@ -3,7 +3,7 @@ import XCTest
 
 /// **L'arbre UNIQUE des niveaux d'édition** (#13974, grammaire d'édition § 1,
 /// lot I-E1) : iOS rejoue `packages/shared/design/composer-edit-tree.json`, le
-/// fichier qu'Android décode aussi. Ce témoin DÉCODE le fichier partagé et
+/// fichier qu'Android a posé (#13973) et décode aussi. Ce témoin DÉCODE le fichier partagé et
 /// exige la valeur compilée, champ pour champ ; puis il interroge la loi du
 /// niveau « Fond » qui en est tirée.
 @MainActor
@@ -27,28 +27,24 @@ final class ComposerEditTreeTests: XCTestCase {
         XCTAssertEqual(try sharedTree(), ComposerEditTree.shared)
     }
 
-    func test_theSelectionLevel_isTheBarOfAPlacedObject_inItsOrder() {
-        let niveau = ComposerEditTree.shared.level(.selection)
-        XCTAssertEqual(niveau?.entries.map(\.id), ComposerSelectionAction.allCases.map(\.rawValue))
-        XCTAssertEqual(niveau?.entries.map(\.sfSymbol), ComposerSelectionAction.allCases.map(\.symbol))
-    }
-
-    /// Chaque mot de l'arbre existe au catalogue, en sept langues, et son
-    /// français est celui que le fichier partagé écrit.
+    /// Chaque mot de l'arbre existe au catalogue iOS, en sept langues — c'est
+    /// le catalogue qu'Android adopte par son manifeste.
     func test_everyWordOfTheTree_isInTheCatalog_inSevenLanguages() throws {
         let data = try Data(contentsOf: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/Localizable.xcstrings"))
         let catalogue = try XCTUnwrap(
             (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any])
-        let entrees = ComposerEditTree.shared.levels.flatMap { niveau in
-            niveau.entries.flatMap { [($0.labelKey, $0.label)] + $0.choices.map { ($0.labelKey, $0.label) } }
-                + [(niveau.titleKey, niveau.title)]
-        }
-        for (cle, francais) in entrees {
+        let cles = ComposerEditTree.shared.levels.flatMap { [$0.title] + $0.entries.map(\.label) }
+        XCTAssertEqual(cles.count, 9)
+        for cle in cles {
             let langues = (catalogue[cle] as? [String: Any])?["localizations"] as? [String: Any]
             XCTAssertEqual(langues?.count, 7, cle)
-            let fr = ((langues?["fr"] as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
-            XCTAssertEqual(fr, francais, cle)
         }
+    }
+
+    func test_replace_opensTheSheetLevelOfTheTree() {
+        XCTAssertEqual(ComposerBackgroundEdit.entry(.replace)?.next, ComposerEditTree.LevelID.backgroundMediaReplace.rawValue)
+        XCTAssertEqual(ComposerEditTree.shared.level(.backgroundMediaReplace)?.kind, .sheet)
+        XCTAssertEqual(ComposerEditTree.shared.level(.backgroundMedia)?.kind, .rail)
     }
 
     // MARK: - N0 « Fond »
@@ -57,6 +53,7 @@ final class ComposerEditTreeTests: XCTestCase {
         XCTAssertEqual(ComposerBackgroundEdit.served(isLocked: false, removable: true),
                        [.modify, .replace, .putOnScene, .remove])
         let ids = ComposerEditTree.shared.level(.backgroundMedia)?.entries.map(\.id) ?? []
+        XCTAssertEqual(ids, ["edit", "replace", "put-on-scene", "remove"], "les identifiants d'Android")
         XCTAssertFalse(ids.contains("duplicate"), "un fond dupliqué serait un second fond")
         XCTAssertFalse(ids.contains("time"), "le fond dure toute la diapo")
     }
@@ -84,8 +81,8 @@ final class ComposerEditTreeTests: XCTestCase {
     /// réordonné se sert réordonné.
     func test_theOrderIsReadFromTheTree_neverWrittenInTheLaw() throws {
         let fond = try XCTUnwrap(ComposerEditTree.shared.level(.backgroundMedia))
-        let inverse = ComposerEditTree(version: 1, levels: [
-            ComposerEditTree.Level(id: fond.id, titleKey: fond.titleKey, title: fond.title,
+        let inverse = ComposerEditTree(schemaVersion: 1, levels: [
+            ComposerEditTree.Level(id: fond.id, kind: fond.kind, title: fond.title,
                                    entries: fond.entries.reversed())])
         XCTAssertEqual(ComposerBackgroundEdit.served(isLocked: false, removable: true, tree: inverse),
                        [.remove, .putOnScene, .replace, .modify])

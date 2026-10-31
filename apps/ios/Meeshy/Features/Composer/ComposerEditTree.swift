@@ -1,62 +1,67 @@
 import Foundation
 
-/// **L'arbre UNIQUE des niveaux d'édition** (#13974, grammaire d'édition § 1).
+/// **L'arbre UNIQUE des niveaux d'édition** (#13973 Android, #13974 iOS,
+/// grammaire d'édition § 1).
 ///
 /// Il vit dans `packages/shared/design/composer-edit-tree.json`, que l'app
-/// Android décode aussi : identifiants, ordre, clé du mot, mot français de
-/// référence, glyphes SF Symbol et Material, ce que l'entrée ouvre, et sa
-/// condition d'offre. iOS en compile la valeur (`shared`) ; un témoin décode le
-/// fichier et exige la même, champ pour champ. Un mot, un ordre ou un glyphe
-/// changé d'un seul côté rougit — c'est la seule façon de tenir « mêmes mots,
-/// même ordre » entre les deux plateformes dans la durée.
+/// Android décode aussi (`:core:model` `ComposerEditTree.kt`) : niveaux et leur
+/// genre (rail ou feuille), entrées dans l'ordre servi, clé du mot au catalogue
+/// iOS, glyphes SF Symbol et Material, condition d'offre, ce que l'entrée ouvre.
+/// iOS en compile la valeur (`shared`) ; un témoin décode le fichier et exige la
+/// même, champ pour champ. Un mot, un ordre ou un glyphe changé d'un seul côté
+/// rougit — mêmes mots, même ordre sur les deux plateformes.
 nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
 
-    /// Ce qu'une entrée OUVRE : un rail posé par-dessus, une feuille basse, ou
-    /// un geste immédiat.
-    enum Opening: String, Codable, Equatable, Sendable {
-        case level
+    /// Un niveau se pose dans le rail (N0) ou par-dessus, ou bien en feuille
+    /// basse sans voile.
+    enum Kind: String, Codable, Equatable, Sendable {
+        case rail
         case sheet
-        case action
     }
 
     /// La condition sous laquelle une entrée est offerte — absente plutôt
     /// qu'inerte (loi 4).
     enum Offer: String, Codable, Equatable, Sendable {
         case always
-        case unlocked
-        case removable
-        case editable
-        case duplicable
-        case cameraTakesPhotos
+        case editor
+        case mediaSource = "media-source"
+        case camera
+    }
+
+    /// Ce qu'une entrée OUVRE : un geste immédiat, le niveau nommé par `next`,
+    /// la feuille nommée par `next`, ou une confirmation avant d'agir.
+    enum Opening: String, Codable, Equatable, Sendable {
+        case action
+        case level
+        case sheet
+        case confirmation
     }
 
     struct Entry: Codable, Equatable, Sendable {
         let id: String
-        let labelKey: String
         let label: String
         let sfSymbol: String
         let material: String
-        let opens: Opening
-        let destructive: Bool
-        let confirms: Bool
         let offer: Offer
-        let choices: [Entry]
+        let opens: Opening
+        var next: String? = nil
+        var destructive: Bool? = nil
     }
 
     struct Level: Codable, Equatable, Sendable {
         let id: String
-        let titleKey: String
+        let kind: Kind
         let title: String
         let entries: [Entry]
     }
 
     /// Les identifiants des niveaux que le fichier déclare.
     enum LevelID: String, Sendable {
-        case selection
         case backgroundMedia = "background.media"
+        case backgroundMediaReplace = "background.media.replace"
     }
 
-    let version: Int
+    let schemaVersion: Int
     let levels: [Level]
 
     func level(_ id: LevelID) -> Level? {
@@ -72,40 +77,24 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
 
 nonisolated extension ComposerEditTree {
 
-    private static func entry(_ id: String, key: String, label: String, sf: String, material: String,
-                              opens: Opening, destructive: Bool = false, confirms: Bool = false,
-                              offer: Offer, choices: [Entry] = []) -> Entry {
-        Entry(id: id, labelKey: key, label: label, sfSymbol: sf, material: material, opens: opens,
-              destructive: destructive, confirms: confirms, offer: offer, choices: choices)
-    }
-
-    static let shared = ComposerEditTree(version: 1, levels: [
-        Level(id: "selection", titleKey: "composer.selection.bar", title: "Actions de l'élément", entries: [
-            entry("modify", key: "composer.selection.modify", label: "Modifier", sf: "pencil", material: "Edit",
-                  opens: .level, offer: .editable),
-            entry("duplicate", key: "composer.selection.duplicate", label: "Dupliquer", sf: "plus.square.on.square",
-                  material: "ContentCopy", opens: .action, offer: .duplicable),
-            entry("time", key: "composer.selection.time", label: "Temps", sf: "clock", material: "Schedule",
-                  opens: .level, offer: .unlocked),
-            entry("remove", key: "composer.selection.remove", label: "Retirer", sf: "trash", material: "Delete",
-                  opens: .action, destructive: true, offer: .removable),
+    static let shared = ComposerEditTree(schemaVersion: 1, levels: [
+        Level(id: "background.media", kind: .rail, title: "composer.rail.title.background", entries: [
+            Entry(id: "edit", label: "composer.selection.modify", sfSymbol: "slider.horizontal.3",
+                  material: "Edit", offer: .editor, opens: .level),
+            Entry(id: "replace", label: "composer.edit.replace", sfSymbol: "arrow.triangle.2.circlepath",
+                  material: "SwapHorizontal", offer: .mediaSource, opens: .sheet, next: "background.media.replace"),
+            Entry(id: "put-on-scene", label: "composer.audio.promote.action", sfSymbol: "square.on.square",
+                  material: "FlipToFront", offer: .always, opens: .action),
+            Entry(id: "remove", label: "composer.selection.remove", sfSymbol: "trash",
+                  material: "Delete", offer: .always, opens: .confirmation, destructive: true),
         ]),
-        Level(id: "background.media", titleKey: "composer.rail.title.background", title: "Fond", entries: [
-            entry("modify", key: "composer.selection.modify", label: "Modifier", sf: "pencil", material: "Edit",
-                  opens: .level, offer: .unlocked),
-            entry("replace", key: "composer.edit.replace", label: "Remplacer", sf: "arrow.triangle.2.circlepath",
-                  material: "SwapHoriz", opens: .sheet, offer: .unlocked, choices: [
-                    entry("photoLibrary", key: "composer.edit.source.library", label: "Photothèque",
-                          sf: "photo.on.rectangle", material: "PhotoLibrary", opens: .action, offer: .always),
-                    entry("camera", key: "composer.rail.media.takePhoto", label: "Prendre une photo", sf: "camera",
-                          material: "PhotoCamera", opens: .action, offer: .cameraTakesPhotos),
-                    entry("files", key: "composer.edit.source.files", label: "Fichiers", sf: "folder",
-                          material: "Folder", opens: .action, offer: .always),
-                  ]),
-            entry("putOnScene", key: "composer.edit.putOnScene", label: "Mettre sur la scène",
-                  sf: "square.3.layers.3d.top.filled", material: "FlipToFront", opens: .action, offer: .unlocked),
-            entry("remove", key: "composer.selection.remove", label: "Retirer", sf: "trash", material: "Delete",
-                  opens: .action, destructive: true, confirms: true, offer: .removable),
+        Level(id: "background.media.replace", kind: .sheet, title: "composer.edit.replace", entries: [
+            Entry(id: "library", label: "composer.edit.source.library", sfSymbol: "photo.on.rectangle",
+                  material: "PhotoLibrary", offer: .mediaSource, opens: .action),
+            Entry(id: "camera", label: "composer.rail.media.takePhoto", sfSymbol: "camera",
+                  material: "Camera", offer: .camera, opens: .action),
+            Entry(id: "files", label: "composer.rail.media.fromFiles", sfSymbol: "folder",
+                  material: "Folder", offer: .mediaSource, opens: .action),
         ]),
     ])
 }
@@ -116,15 +105,15 @@ nonisolated extension ComposerEditTree {
 /// Remplacer · Mettre sur la scène · Retirer. Ni Dupliquer — il deviendrait un
 /// second fond —, ni Temps : le fond dure toute la diapo.
 nonisolated enum ComposerBackgroundEditAction: String, CaseIterable, Equatable, Sendable {
-    case modify
+    case modify = "edit"
     case replace
-    case putOnScene
+    case putOnScene = "put-on-scene"
     case remove
 }
 
 /// **Une source de « Remplacer »**, dans la feuille basse.
 nonisolated enum ComposerBackgroundSource: String, CaseIterable, Equatable, Sendable {
-    case photoLibrary
+    case photoLibrary = "library"
     case camera
     case files
 
@@ -139,7 +128,9 @@ nonisolated enum ComposerBackgroundSource: String, CaseIterable, Equatable, Send
 
 /// **La loi du niveau « Fond »** : ce que l'arbre déclare, dans SON ordre,
 /// filtré par ce que le fond admet. Rien n'est écrit en dur ici : un ordre
-/// changé dans le fichier partagé se lit à l'écran.
+/// changé dans le fichier partagé se lit à l'écran. Le verrou est la règle
+/// iOS de la scène : un fond verrouillé ne s'édite pas, il ne peut que partir
+/// — et seulement s'il admet le retrait.
 nonisolated enum ComposerBackgroundEdit {
 
     static func entry(_ action: ComposerBackgroundEditAction,
@@ -151,7 +142,8 @@ nonisolated enum ComposerBackgroundEdit {
                        tree: ComposerEditTree = .shared) -> [ComposerBackgroundEditAction] {
         (tree.level(.backgroundMedia)?.entries ?? []).compactMap { entree in
             guard let action = ComposerBackgroundEditAction(rawValue: entree.id),
-                  admits(entree.offer, isLocked: isLocked, removable: removable, cameraTakesPhotos: false) else {
+                  admits(entree.offer, cameraTakesPhotos: false),
+                  action == .remove ? removable : !isLocked else {
                 return nil
             }
             return action
@@ -159,9 +151,9 @@ nonisolated enum ComposerBackgroundEdit {
     }
 
     static func sources(cameraTakesPhotos: Bool, tree: ComposerEditTree = .shared) -> [ComposerBackgroundSource] {
-        (entry(.replace, tree: tree)?.choices ?? []).compactMap { choix in
+        (tree.level(.backgroundMediaReplace)?.entries ?? []).compactMap { choix in
             guard let source = ComposerBackgroundSource(rawValue: choix.id),
-                  admits(choix.offer, isLocked: false, removable: true, cameraTakesPhotos: cameraTakesPhotos) else {
+                  admits(choix.offer, cameraTakesPhotos: cameraTakesPhotos) else {
                 return nil
             }
             return source
@@ -170,25 +162,24 @@ nonisolated enum ComposerBackgroundEdit {
 
     static func source(_ source: ComposerBackgroundSource,
                        tree: ComposerEditTree = .shared) -> ComposerEditTree.Entry? {
-        entry(.replace, tree: tree)?.choices.first { $0.id == source.rawValue }
+        tree.entry(source.rawValue, in: .backgroundMediaReplace)
     }
 
     /// Retirer le fond se CONFIRME : l'arbre le dit.
     static func confirms(_ action: ComposerBackgroundEditAction, tree: ComposerEditTree = .shared) -> Bool {
-        entry(action, tree: tree)?.confirms == true
+        entry(action, tree: tree)?.opens == .confirmation
     }
 
     static func isDestructive(_ action: ComposerBackgroundEditAction) -> Bool {
         entry(action)?.destructive == true
     }
 
-    private static func admits(_ offer: ComposerEditTree.Offer, isLocked: Bool, removable: Bool,
-                               cameraTakesPhotos: Bool) -> Bool {
+    /// Sur iOS, un fond porte toujours son éditeur et les sources de médias
+    /// sont toujours ouvertes ; seul le viseur dépend du format.
+    private static func admits(_ offer: ComposerEditTree.Offer, cameraTakesPhotos: Bool) -> Bool {
         switch offer {
-        case .always:                       return true
-        case .unlocked, .editable, .duplicable: return !isLocked
-        case .removable:                    return removable
-        case .cameraTakesPhotos:            return cameraTakesPhotos
+        case .always, .editor, .mediaSource: return true
+        case .camera:                        return cameraTakesPhotos
         }
     }
 }
@@ -201,11 +192,11 @@ nonisolated enum ComposerBackgroundEdit {
 enum ComposerEditTreeCopy {
 
     static func label(_ entry: ComposerEditTree.Entry) -> String {
-        String(localized: String.LocalizationValue(entry.labelKey), bundle: .main)
+        String(localized: String.LocalizationValue(entry.label), bundle: .main)
     }
 
     static func title(_ level: ComposerEditTree.Level) -> String {
-        String(localized: String.LocalizationValue(level.titleKey), bundle: .main)
+        String(localized: String.LocalizationValue(level.title), bundle: .main)
     }
 
     static func label(_ action: ComposerBackgroundEditAction) -> String {
