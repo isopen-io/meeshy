@@ -18,7 +18,14 @@ struct ComposerSelectionColumn: View {
     let items: [ComposerEditRailItem]
     /// Le sous-outil dont les propriétés sont ouvertes en bas, surligné.
     var openSection: ComposerObjectEditorSection?
+    /// Les autres entrées allumées : l'entrée de N1 ouverte, le réglage dont le
+    /// curseur est ouvert, Muet quand le son est coupé.
+    var lit: Set<ComposerEditRailItem> = []
     let onItem: (ComposerEditRailItem) -> Void
+
+    func isOn(_ item: ComposerEditRailItem) -> Bool {
+        ComposerEditRailItems.isOn(item, openSection: openSection) || lit.contains(item)
+    }
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -44,7 +51,7 @@ struct ComposerSelectionColumn: View {
     }
 
     private func entry(_ item: ComposerEditRailItem) -> some View {
-        let ouverte = ComposerEditRailItems.isOn(item, openSection: openSection)
+        let ouverte = isOn(item)
         let teinte = ComposerSelectionPaint.tint(item)
         return Button { onItem(item) } label: {
             VStack(spacing: 2) {
@@ -96,6 +103,10 @@ enum ComposerEditRailCopy {
         case .section(let section): return ComposerObjectEditorCopy.entry(section)
         case .extra(let extra):     return ComposerSelectionCopy.label(extra)
         case .keyframes:            return ComposerSelectionCopy.keyframes
+        case .backgroundEntry(let entree):
+            return ComposerBackgroundModify.entry(entree).map(ComposerEditTreeCopy.label) ?? entree.rawValue
+        case .adjustment(let kind): return ComposerAdjustCopy.label(kind)
+        case .mute:                 return ComposerObjectEditorCopy.mute
         }
     }
 
@@ -107,6 +118,9 @@ enum ComposerEditRailCopy {
         case .section(let section): return ComposerObjectEditorRail.symbolName(section)
         case .extra(let extra):     return extra.symbol
         case .keyframes:            return "diamond"
+        case .backgroundEntry(let entree): return ComposerBackgroundModify.entry(entree)?.sfSymbol ?? "questionmark"
+        case .adjustment(let kind): return kind.icon
+        case .mute:                 return "speaker.slash"
         }
     }
 
@@ -118,6 +132,10 @@ enum ComposerEditRailCopy {
         case .background:       return ComposerEditTreeCopy.backgroundTitle
         case .options(.modify): return ComposerSelectionCopy.label(.modify)
         case .options(.time):   return ComposerSelectionCopy.label(.time)
+        case .backgroundAdjust(.tone):   return ComposerAdjustCopy.title
+        case .backgroundAdjust(.effect): return ComposerAdjustCopy.effectsTitle
+        case .backgroundSound:
+            return ComposerBackgroundModify.entry(.sound).map(ComposerEditTreeCopy.label) ?? ""
         }
     }
 

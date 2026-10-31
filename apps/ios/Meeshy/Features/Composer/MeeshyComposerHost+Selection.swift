@@ -39,7 +39,8 @@ struct ComposerSceneSelectionRelay {
     var stack: ComposerEditRailStack {
         guard let selection = current else { return .rest }
         return ComposerEditRailStack.of(family: selection.family, editing: host.activeInlineEdit?.purpose,
-                                        typing: host.sceneTypesInline)
+                                        typing: host.sceneTypesInline,
+                                        above: ComposerBackgroundModify.levels(backgroundModifyPath))
     }
 
     /// Ce que l'élément admet, par la même règle que le menu d'appui long.
@@ -73,10 +74,12 @@ struct ComposerSceneSelectionRelay {
                                                                                             family: $0.family)) } ?? [],
             extras: edition.map(mediaExtras(for:)) ?? [],
             keyframes: edition?.purpose == .time
-                && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated))
+                && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated),
+            backgroundEntries: backgroundEntries(edition),
+            adjustments: backgroundAdjustments(niveau))
         guard !entrees.isEmpty else { return nil }
         return ComposerSelectionColumn(level: niveau, items: entrees, openSection: edition?.openSection,
-                                       onItem: { performRailItem($0) })
+                                       lit: backgroundLit(edition), onItem: { performRailItem($0) })
     }
 
     // MARK: - Sélectionner, désélectionner
@@ -107,10 +110,15 @@ struct ComposerSceneSelectionRelay {
     func goBack(rail: Bool = false) {
         let pile = stack
         let feuille = host.activeInlineEdit?.openSection != nil || host.backgroundSourcesAreOpen
+            || ComposerBackgroundModify.propertiesAreOpen(backgroundModifyPath)
         let issue = rail ? pile.railBack() : pile.back(propertiesAreOpen: feuille)
         switch issue {
         case .closeProperties:
             closeProperties()
+        case .popLevel where !ComposerBackgroundModify.levels(backgroundModifyPath).isEmpty:
+            popBackgroundModifyLevel()
+            HapticFeedback.light()
+            UIAccessibility.post(notification: .announcement, argument: ComposerSelectionCopy.label(.modify))
         case .popLevel:
             host.inlineEdit = nil
             host.backgroundSourcesAreOpen = false
@@ -152,6 +160,13 @@ struct ComposerSceneSelectionRelay {
             performMediaExtra(extra, on: id)
         case .keyframes:
             host.toggleSceneFrise()
+        case .backgroundEntry(let entree):
+            performBackgroundModify(entree, on: id)
+        case .adjustment(let kind):
+            performBackgroundAdjustment(kind)
+        case .mute:
+            host.viewModel.toggleMediaMute(id: id)
+            HapticFeedback.light()
         }
     }
 
@@ -263,9 +278,10 @@ struct ComposerSceneSelectionRelay {
     /// frappe, où les options remplacent le CLAVIER (#13839, L4).
     var propertiesSheet: AnyView? {
         let sources = backgroundSourcesSheet
-        let panel = sources == nil ? inlineToolPanel : nil
-        guard sources != nil || panel != nil else { return nil }
-        return AnyView(ComposerPropertiesSheetBody(sources: sources, panel: panel))
+        let fond = sources == nil ? backgroundModifySheet : nil
+        let panel = sources == nil && fond == nil ? inlineToolPanel : nil
+        guard sources != nil || fond != nil || panel != nil else { return nil }
+        return AnyView(ComposerPropertiesSheetBody(sources: sources, background: fond, panel: panel))
     }
 
     private var inlineToolPanel: ComposerInlineToolPanel? {
@@ -300,6 +316,7 @@ struct ComposerSceneSelectionRelay {
             HapticFeedback.light()
             return
         }
+        guard !closeBackgroundModifyProperties() else { return }
         guard let edition = host.activeInlineEdit, edition.openSection != nil else { return }
         host.inlineEdit = ComposerInlineEdit(objectId: edition.objectId, family: edition.family,
                                              openSection: nil, purpose: edition.purpose)
