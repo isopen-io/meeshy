@@ -95,7 +95,7 @@ struct ThreadView: View {
                     moodEmoji: statusViewModel.statusForUser(userId: parentMessage.viewingKey)?.moodEmoji,
                     presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
                     ring: parentMessage.senderRing,
-                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.viewingKey)
+                    onMoodTap: statusViewModel.moodSpotlightHandler(for: parentMessage.viewingKey)
                 ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -165,7 +165,7 @@ struct ThreadView: View {
                 moodEmoji: statusViewModel.statusForUser(userId: message.viewingKey)?.moodEmoji,
                 presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
                 ring: message.senderRing,
-                onMoodTap: statusViewModel.moodTapHandler(for: message.viewingKey)
+                onMoodTap: statusViewModel.moodSpotlightHandler(for: message.viewingKey)
             ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

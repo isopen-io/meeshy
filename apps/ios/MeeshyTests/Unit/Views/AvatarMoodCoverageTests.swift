@@ -68,8 +68,8 @@ final class AvatarMoodCoverageTests: XCTestCase {
             "l'hôte remet à la bulle l'humeur de l'auteur, lue dans les statuts déjà en mémoire — aucune requête par cellule"
         )
         XCTAssertTrue(
-            code.contains("onSenderMoodTap: statuses.moodTapHandler(for: senderId)"),
-            "le toucher de l'humeur ouvre la bulle d'humeur (emoji + texte) par le gestionnaire de #10528"
+            code.contains("onSenderMoodTap: statuses.moodSpotlightHandler(for: senderId)"),
+            "en conversation, le toucher de l'humeur ouvre sa page plein écran, sans bulle ni pop-up (#13987)"
         )
     }
 

@@ -497,16 +497,25 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Mood Tap Handler
 
-    /// - Parameter repliesInline: vrai quand le mood est affiché dans la barre de
-    ///   la conversation directe de son auteur — toucher son contenu répond alors
-    ///   immédiatement (sans pop-up de confirmation).
-    func moodTapHandler(for userId: String, repliesInline: Bool = false) -> ((CGPoint) -> Void)? {
+    /// La bulle flottante de l'humeur (liste, contacts, story tray…).
+    func moodTapHandler(for userId: String) -> ((CGPoint) -> Void)? {
         guard statusForUser(userId: userId) != nil else { return nil }
         return { [weak self] point in
             guard let entry = self?.statusForUser(userId: userId) else { return }
             Task { @MainActor in
-                StatusBubbleController.shared.show(entry: entry, anchor: point, repliesInline: repliesInline)
+                StatusBubbleController.shared.show(entry: entry, anchor: point)
             }
+        }
+    }
+
+    /// En CONVERSATION (en-tête, bulles, fil), la boule de mood ouvre la page
+    /// plein écran de l'humeur, sans bulle ni pop-up de réponse (#13987).
+    func moodSpotlightHandler(for userId: String,
+                              controller: StatusBubbleController = .shared) -> ((CGPoint) -> Void)? {
+        guard statusForUser(userId: userId) != nil else { return nil }
+        return { [weak self, weak controller] _ in
+            guard let entry = self?.statusForUser(userId: userId) else { return }
+            controller?.openSpotlight(entry: entry)
         }
     }
 
