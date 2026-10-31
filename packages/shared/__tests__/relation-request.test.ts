@@ -89,3 +89,71 @@ describe('rel-demandes — les événements du lien', () => {
     expect(names.filter((name) => /lower|drop|down|exit|left/.test(name))).toEqual([]);
   });
 });
+
+describe('rel-demandes — rompre une demande acceptée', () => {
+  it('Proche et Sang retombent d’un cran, Ami et Connaissance quittent le cercle', async () => {
+    const { relationLevelBelow } = await import('../types/relation');
+    expect(relationLevelBelow('BLOOD')).toBe('CLOSE');
+    expect(relationLevelBelow('CLOSE')).toBe('FRIEND');
+    expect(relationLevelBelow('FRIEND')).toBe('PUBLIC');
+    expect(relationLevelBelow('ACQUAINTANCE')).toBe('PUBLIC');
+  });
+
+  it('une demande retient le lien si elle vise le même cran ou un cran au-dessus', async () => {
+    const { requestLevelSustains } = await import('../types/relation');
+    expect(requestLevelSustains('FRIEND', 'FRIEND')).toBe(true);
+    expect(requestLevelSustains('CLOSE', 'FRIEND')).toBe(true);
+    expect(requestLevelSustains('ACQUAINTANCE', 'FRIEND')).toBe(false);
+  });
+});
+
+describe('rel-demandes — depuis quand le lien est à son niveau', () => {
+  const at = (day: number) => new Date(Date.UTC(2026, 8, day));
+
+  it('lit la date de MONTÉE, jamais celle d’une baisse suivie d’une remontée', async () => {
+    const { relationEntryDate } = await import('../types/relation');
+    const transitions = [
+      { actorId: 'a', from: 'PUBLIC', to: 'FRIEND', at: at(1) },
+      { actorId: 'b', from: 'PUBLIC', to: 'FRIEND', at: at(2) },
+      { actorId: 'a', from: 'FRIEND', to: 'ACQUAINTANCE', at: at(10) },
+      { actorId: 'a', from: 'ACQUAINTANCE', to: 'FRIEND', at: at(20) },
+    ] as const;
+
+    expect(relationEntryDate(transitions.map((t) => ({ ...t })), 'FRIEND')).toEqual(at(2));
+  });
+
+  it('attend le plus tardif des deux : le niveau effectif n’est atteint que quand les deux y sont', async () => {
+    const { relationEntryDate } = await import('../types/relation');
+    const transitions = [
+      { actorId: 'a', from: 'PUBLIC' as const, to: 'CLOSE' as const, at: at(3) },
+      { actorId: 'b', from: 'PUBLIC' as const, to: 'CLOSE' as const, at: at(9) },
+    ];
+
+    expect(relationEntryDate(transitions, 'CLOSE')).toEqual(at(9));
+  });
+
+  it('ne dit rien quand l’historique ne dit rien', async () => {
+    const { relationEntryDate } = await import('../types/relation');
+    expect(relationEntryDate([], 'FRIEND')).toBeNull();
+  });
+});
+
+describe('rel-demandes — les cas partagés avec les miroirs Swift et Kotlin', () => {
+  it('rejoue packages/shared/fixtures/relation-request-cases.json à l’identique', async () => {
+    const cases = (await import('../fixtures/relation-request-cases.json')).default as Array<{
+      id: string;
+      input: { targetLevel: 'ACQUAINTANCE' | 'FRIEND' | 'CLOSE' | 'BLOOD'; currentLevel: Parameters<typeof relationRungAfter>[0]; eligibleFor: 'CLOSE' | 'BLOOD' | null; cooldownUntil: string | null; now: string };
+      expected: unknown;
+    }>;
+
+    expect(cases.length).toBeGreaterThanOrEqual(16);
+    cases.forEach(({ id, input, expected }) => {
+      const verdict = evaluateRelationRequest({
+        ...input,
+        cooldownUntil: input.cooldownUntil === null ? null : new Date(input.cooldownUntil),
+        now: new Date(input.now),
+      });
+      expect({ id, verdict }).toEqual({ id, verdict: expected });
+    });
+  });
+});

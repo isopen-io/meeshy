@@ -169,3 +169,21 @@ export const relationEntryDate = (transitions: ReadonlyArray<RelationTransition>
   const dates = [...firstByActor.values()].map((d) => d.getTime());
   return dates.length === 0 ? null : new Date(Math.max(...dates));
 };
+
+/**
+ * Un lien tel que `GET /relations`, `GET /relations/:userId` et
+ * `POST /relations/:userId/level` le servent (#13933). `userId` est l'AUTRE personne ;
+ * jamais un nom, une présence ni un cool-down.
+ */
+export type RelationLinkView = {
+  readonly userId: string;
+  readonly effectiveLevel: RelationLevel;
+  readonly grantedByMe: RelationLevel;
+  readonly since: string | null;
+  readonly progress: {
+    readonly activeWeeks: number;
+    readonly needed: number | null;
+    readonly missing: readonly string[];
+  };
+  readonly eligibleFor: 'CLOSE' | 'BLOOD' | null;
+};

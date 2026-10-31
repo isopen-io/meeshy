@@ -14,6 +14,7 @@ import {
   relationLevelIfAtLeast,
   relationPairKey,
   type RelationLevel,
+  type RelationLinkView,
   type RelationTransition,
 } from '@meeshy/shared/types/relation';
 import { amisAcceptes, niveauEffectif } from '../friendship';
@@ -21,14 +22,7 @@ import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { effectiveLevelOfRow, grantedByUser, type UserRelationRow } from './userRelationWriter';
 import { loadProgressByPartner, type RelationProgress, type RelationProgressTarget } from './relationProgress';
 
-export type RelationLinkView = {
-  readonly userId: string;
-  readonly effectiveLevel: RelationLevel;
-  readonly grantedByMe: RelationLevel;
-  readonly since: string | null;
-  readonly progress: { readonly activeWeeks: number; readonly needed: number | null; readonly missing: readonly string[] };
-  readonly eligibleFor: 'CLOSE' | 'BLOOD' | null;
-};
+export type { RelationLinkView };
 
 export type RelationLinksDb = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 'pairInteractionDay' | 'user'>;
 
