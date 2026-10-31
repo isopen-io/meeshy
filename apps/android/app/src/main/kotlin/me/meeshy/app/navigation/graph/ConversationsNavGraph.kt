@@ -36,6 +36,7 @@ import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.MeeshyStoryRail
+import me.meeshy.app.navigation.ProvideConversationMoods
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
@@ -193,37 +194,39 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
             .orEmpty()
         ReportsConversationViewing(conversationId)
-        ProvideConversationLinkCards {
-            ChatScreen(
-                onBack = { navController.popBackStack() },
-                onStartCall = { peerName, isVideo ->
-                    navController.navigate(Routes.call(conversationId, peerName, isVideo))
-                },
-                onRejoinCall = { call, peerName ->
-                    // Rejoin an existing, still-live call: reuse the incoming
-                    // deep-link with autoAnswer so the shared join path adopts
-                    // the server callId and connects straight away — never a
-                    // new outgoing call.
-                    navController.navigate(
-                        CallRoute.incoming(
-                            callId = call.id,
-                            conversationId = conversationId,
-                            callerName = peerName,
-                            isVideo = call.isVideo,
-                            autoAnswer = true,
-                        ),
-                    )
-                },
-                onCreateShareLink = {
-                    navController.navigate(Routes.createShareLink(conversationId))
-                },
-                // A live local call (minimised/floating) suppresses the rejoin
-                // pill — don't offer to rejoin the call this device is in.
-                hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
-                locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
-                onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
-                onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
-            )
+        ProvideConversationMoods(navController, entry) {
+            ProvideConversationLinkCards {
+                ChatScreen(
+                    onBack = { navController.popBackStack() },
+                    onStartCall = { peerName, isVideo ->
+                        navController.navigate(Routes.call(conversationId, peerName, isVideo))
+                    },
+                    onRejoinCall = { call, peerName ->
+                        // Rejoin an existing, still-live call: reuse the incoming
+                        // deep-link with autoAnswer so the shared join path adopts
+                        // the server callId and connects straight away — never a
+                        // new outgoing call.
+                        navController.navigate(
+                            CallRoute.incoming(
+                                callId = call.id,
+                                conversationId = conversationId,
+                                callerName = peerName,
+                                isVideo = call.isVideo,
+                                autoAnswer = true,
+                            ),
+                        )
+                    },
+                    onCreateShareLink = {
+                        navController.navigate(Routes.createShareLink(conversationId))
+                    },
+                    // A live local call (minimised/floating) suppresses the rejoin
+                    // pill — don't offer to rejoin the call this device is in.
+                    hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
+                    locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
+                    onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+                    onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
+                )
+            }
         }
     }
     composable(Routes.STARRED) {
