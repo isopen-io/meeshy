@@ -1,16 +1,20 @@
 import Foundation
 
-/// **Un bouton de la colonne posée sur la scène** (#13839).
+/// **Un bouton de la colonne posée sur la scène** (#13839, #14050).
 ///
-/// Six, dans l'ordre de la maquette : ce qu'on pose SUR la scène, puis ⋯ qui
-/// porte tout le reste. Chacun ouvre la même porte que le rail d'avant, par le
-/// même `handleRailDoor` — seule la géographie a changé.
+/// Dans l'ordre de la maquette : ce qu'on pose SUR la scène, puis Fond,
+/// Mention et Lieu en entrées directes (#14050), puis ⋯ qui porte
+/// le reste. Chacun ouvre la même porte que le rail d'avant, par le même
+/// `handleRailDoor` — seule la géographie a changé.
 nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
     case text
     case media
     case sticker
     case sound
     case drawing
+    case background
+    case mention
+    case place
     case more
 
     var door: ComposerRailDoor? {
@@ -20,6 +24,9 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
         case .sticker: return .sticker
         case .sound: return .sound
         case .drawing: return .drawing
+        case .background: return .background
+        case .mention: return .mention
+        case .place: return .place
         case .more: return nil
         }
     }
@@ -31,7 +38,7 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// dans les couloirs du plateau).
 ///
 /// Au repos : ✕ en haut à gauche, ↶ ↷ avec un historique, la rangée des diapos
-/// dès deux diapos, la colonne des six. Un outil ouvert, une frappe ou le
+/// dès deux diapos, la colonne des outils. Un outil ouvert, une frappe ou le
 /// viseur retirent tout ; un panneau du bas (fond, cadrage, effets, frise)
 /// retire la colonne et garde ✕. Un objet sélectionné retire ✕ et remplace la
 /// colonne, au même endroit, par ses options d'édition (#13957, R6).
@@ -58,10 +65,14 @@ nonisolated enum ComposerRestChrome {
         case editBackground
     }
 
-    private static let sceneTools: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing]
+    private static let sceneTools: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing,
+                                                         .background, .mention, .place]
 
-    static func tools(offered doors: [ComposerRailDoor]) -> [ComposerRestTool] {
-        let offertes = Set(doors)
+    /// Un fond MÉDIA retire la porte de la palette (`sceneDoors`), jamais
+    /// l'entrée « Fond » : elle SÉLECTIONNE alors le fond, dont les outils à
+    /// plat prennent le rail (#14048, `handleRestTool`).
+    static func tools(offered doors: [ComposerRailDoor], hasBackgroundMedia: Bool = false) -> [ComposerRestTool] {
+        let offertes = Set(doors).union(hasBackgroundMedia ? [.background] : [])
         return sceneTools.filter { outil in outil.door.map(offertes.contains) ?? false } + [.more]
     }
 
@@ -100,7 +111,12 @@ nonisolated enum ComposerRestChrome {
 
 nonisolated enum ComposerRestChromeCopy {
 
-    static func label(_ tool: ComposerRestTool) -> String {
+    /// Avec un média de fond, « Fond » ne choisit plus un fond, il le
+    /// sélectionne : VoiceOver dit la chose, plus le verbe.
+    static func label(_ tool: ComposerRestTool, backgroundIsMedia: Bool = false) -> String {
+        if tool == .background, backgroundIsMedia {
+            return String(localized: "composer.more.background", defaultValue: "Fond", bundle: .main)
+        }
         guard let door = tool.door else { return ComposerOverflowCopy.menu }
         return ComposerRailCopy.label(door)
     }

@@ -21,16 +21,16 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
                                        overflow: overflow)
     }
 
-    func test_entries_storyVideSansFond_ordreDeLaSpec() {
+    /// Fond, Mention et Lieu sont des entrées DIRECTES du rail (porteur
+    /// 2026-10-31, #14050) : ⋯ ne les porte plus, le hashtag y reste.
+    func test_entries_storyVideSansFond_ordreDeLaSpec_sansFondMentionNiLieu() {
         XCTAssertEqual(ComposerMoreMenuPolicy.entries(contexte()),
-                       [.addSlide, .background, .animation, .slideDuration, .legend,
-                        .mention, .hashtags, .place])
+                       [.addSlide, .animation, .slideDuration, .legend, .hashtags])
     }
 
     func test_entries_avecUnFondImage_transitionsEffetVisuelEtCadrage_remplacentLaPalette() {
         let entrees = ComposerMoreMenuPolicy.entries(contexte(backgroundMedia: .image,
                                                               doors: [.mention, .hashtag, .place]))
-        XCTAssertFalse(entrees.contains(.background), "la porte Fond tombe quand le fond est un média")
         XCTAssertEqual(Array(entrees.prefix(5)),
                        [.addSlide, .transitions, .visualEffect, .backgroundFraming, .animation])
     }
@@ -50,9 +50,7 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
 
     func test_entries_unePorteNonOfferte_nAPasDEntree() {
         let entrees = ComposerMoreMenuPolicy.entries(contexte(doors: [.background]))
-        XCTAssertFalse(entrees.contains(.mention))
         XCTAssertFalse(entrees.contains(.hashtags))
-        XCTAssertFalse(entrees.contains(.place))
     }
 
     /// Les entrées d'export et d'effacement restent celles de
