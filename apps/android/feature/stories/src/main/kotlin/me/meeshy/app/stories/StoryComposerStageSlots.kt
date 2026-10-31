@@ -162,7 +162,7 @@ internal fun StoryComposerBottomPanel(
 
 /** Le fond lisible d'un panneau posé sur la scène, quelle que soit la couleur de la scène. */
 @Composable
-private fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
+internal fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         color = MeeshyTheme.tokens.backgroundPrimary,
         shape = RoundedCornerShape(MeeshyRadius.lg),
@@ -203,7 +203,7 @@ private fun PanelDone(onDone: () -> Unit) {
     }
 }
 
-/** Les médias de la diapo — fond, posé, boucle, retrait — et leur description : dans le panneau Média, jamais au repos. */
+/** Les médias de la diapo — fond, posé, retrait — et leur description (la Boucle vit dans Fond › Modifier, #13973) : dans le panneau Média, jamais au repos. */
 @Composable
 internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     if (state.selectedSlideAttachments.isEmpty() && state.selectedSlidePending.isEmpty()) return
@@ -212,15 +212,12 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
         pending = state.selectedSlidePending,
         mediaBaseUrl = viewModel.mediaBaseUrl,
         backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-        backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-        backgroundLoop = state.selectedSlideBackgroundLoop,
         onRemove = viewModel::onRemoveMedia,
         selectedMediaId = state.selectedMedia,
         onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
         onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
         placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
         onTogglePlaced = viewModel::onTogglePlacedMedia,
-        onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
         pendingPhase = state::pendingPhase,
         onRetryPending = viewModel::onRetryPendingUpload,
     )

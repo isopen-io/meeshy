@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.backgroundFraming",
+          "androidName": "composer_edit_background_framing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.trim",
+          "androidName": "composer_edit_trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.rail.frames",
+          "androidName": "composer_edit_frames",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.timeline.inspector.loop",
+          "androidName": "composer_edit_loop",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

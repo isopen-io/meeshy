@@ -71,7 +71,6 @@ internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
     ComposerMoreEntry.SLIDE_DURATION -> MeeshyIcons.Timer
     ComposerMoreEntry.ANIMATION -> MeeshyIcons.Bolt
     ComposerMoreEntry.TIMING -> MeeshyIcons.ScheduleFilled
-    ComposerMoreEntry.FRAME -> MeeshyIcons.Crop
     ComposerMoreEntry.OPENING_EFFECT -> MeeshyIcons.Sparkles
     ComposerMoreEntry.VISUAL_EFFECT -> MeeshyIcons.PhotoFilter
     ComposerMoreEntry.CAPTION -> MeeshyIcons.Subtitles
@@ -92,7 +91,6 @@ internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
     ComposerMoreEntry.SLIDE_DURATION -> R.string.stories_composer_slide_duration
     ComposerMoreEntry.ANIMATION -> R.string.composer_scene_more_animation
     ComposerMoreEntry.TIMING -> R.string.composer_scene_more_timing
-    ComposerMoreEntry.FRAME -> R.string.stories_scene_frame_title
     ComposerMoreEntry.OPENING_EFFECT -> R.string.stories_scene_effect_opening
     ComposerMoreEntry.VISUAL_EFFECT -> R.string.stories_scene_effect_visual
     ComposerMoreEntry.CAPTION -> R.string.stories_composer_text_caption

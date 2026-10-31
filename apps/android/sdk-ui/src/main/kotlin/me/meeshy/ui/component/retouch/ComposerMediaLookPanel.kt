@@ -33,18 +33,26 @@ internal object ComposerMediaLookPanelRule {
 /**
  * **LA SECTION « FILTRES ET CADRES » D'UN MÉDIA DE LA SCÈNE** (#13841, miroir de `ComposerMediaLookPanel` iOS) : les
  * mêmes familles, les mêmes cases et les mêmes mots que la retouche ; mais toucher une case écrit un RÉGLAGE du média
- * ([onChoose]) — même identifiant, même fichier, annulable, relu à la réouverture —, jamais un fichier cuit.
+ * ([onChoose]) — même identifiant, même fichier, annulable, relu à la réouverture —, jamais un fichier cuit. [families] :
+ * celles que l'hôte sert ici — le fond sépare Filtres et Cadres (#13973) ; une seule famille ne montre pas son choix.
  */
 @Composable
-public fun ComposerMediaLookPanel(look: StoryMediaLook?, onChoose: (ComposerLookStripItem) -> Unit, modifier: Modifier = Modifier) {
-    var family by rememberSaveable { mutableStateOf(ComposerLookFamily.FILTERS) }
+public fun ComposerMediaLookPanel(
+    look: StoryMediaLook?,
+    onChoose: (ComposerLookStripItem) -> Unit,
+    modifier: Modifier = Modifier,
+    families: List<ComposerLookFamily> = ComposerMediaLookPanelRule.families,
+) {
+    val served = families.filter { it in ComposerMediaLookPanelRule.families }
+    var picked by rememberSaveable(served) { mutableStateOf(served.firstOrNull() ?: ComposerLookFamily.FILTERS) }
+    val family = picked.takeIf { it in served } ?: served.firstOrNull() ?: return
     val chosen = StoryMediaLookMapping.photoLook(look)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            ComposerMediaLookPanelRule.families.forEach { candidate ->
+        if (served.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            served.forEach { candidate ->
                 FilterChip(
                     selected = candidate == family,
-                    onClick = { family = candidate },
+                    onClick = { picked = candidate },
                     label = { Text(stringResource(ComposerRetouchCopy.family(candidate))) },
                     leadingIcon = { Icon(ComposerRetouchCopy.familyIcon(candidate), contentDescription = null) },
                 )

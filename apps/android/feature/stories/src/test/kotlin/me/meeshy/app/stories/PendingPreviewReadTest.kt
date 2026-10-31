@@ -48,11 +48,8 @@ class PendingPreviewReadTest {
                     pending = pending,
                     mediaBaseUrl = null,
                     backgroundMediaId = "bg-$tick",
-                    backgroundIsVideo = false,
-                    backgroundLoop = tick % 2 == 0,
                     onRemove = { tick },
                     onToggleBackground = {},
-                    onToggleBackgroundLoop = {},
                 )
             }
         }

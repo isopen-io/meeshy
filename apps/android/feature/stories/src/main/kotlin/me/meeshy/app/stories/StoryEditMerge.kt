@@ -177,7 +177,7 @@ internal object StoryEditMerge {
         }
         val backgroundKept = slide.backgroundMediaId == hydrated.backgroundMediaId &&
             slide.backgroundLoop == hydrated.backgroundLoop && slide.transform == hydrated.transform &&
-            slide.backgroundAdjustments == hydrated.backgroundAdjustments
+            slide.backgroundAdjustments == hydrated.backgroundAdjustments && slide.backgroundTrim == hydrated.backgroundTrim
         val nowBackground = built.firstOrNull { it.isBackground }
         val background = if (backgroundKept) opening.originalBackground else nowBackground?.let { fresh ->
             opening.originalBackground?.takeIf { it.postMediaId == fresh.postMediaId }?.let { served ->
@@ -195,6 +195,7 @@ internal object StoryEditMerge {
         { a: StorySlide, b: StorySlide -> a.transform != b.transform } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(x = w.x, y = w.y, scale = w.scale) },
         { a: StorySlide, b: StorySlide -> a.backgroundLoop != b.backgroundLoop } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(loop = w.loop) },
         { a: StorySlide, b: StorySlide -> a.backgroundAdjustments != b.backgroundAdjustments } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(adjustments = w.adjustments) },
+        { a: StorySlide, b: StorySlide -> a.backgroundTrim != b.backgroundTrim } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(sourceStart = w.sourceStart, sourceEnd = w.sourceEnd) },
     )
 
     /** Les médias que la slide tenait et qu'elle ne tient plus : seuls ceux-là sont retirés du post. */

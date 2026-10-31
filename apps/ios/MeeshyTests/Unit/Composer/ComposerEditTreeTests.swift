@@ -27,18 +27,33 @@ final class ComposerEditTreeTests: XCTestCase {
         XCTAssertEqual(try sharedTree(), ComposerEditTree.shared)
     }
 
-    /// Chaque mot de l'arbre existe au catalogue iOS, en sept langues — c'est
-    /// le catalogue qu'Android adopte par son manifeste.
+    /// Chaque mot de l'arbre existe à un catalogue iOS — celui de l'app ou
+    /// celui de MeeshyUI (la Boucle y vit) —, en sept langues : ce sont les
+    /// catalogues qu'Android adopte par son manifeste.
     func test_everyWordOfTheTree_isInTheCatalog_inSevenLanguages() throws {
-        let data = try Data(contentsOf: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/Localizable.xcstrings"))
-        let catalogue = try XCTUnwrap(
-            (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any])
+        let catalogues = try ["apps/ios/Meeshy/Localizable.xcstrings",
+                              "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"].map { chemin in
+            let data = try Data(contentsOf: Self.repoRoot.appendingPathComponent(chemin))
+            return try XCTUnwrap(
+                (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any])
+        }
         let cles = ComposerEditTree.shared.levels.flatMap { [$0.title] + $0.entries.map(\.label) }
-        XCTAssertEqual(cles.count, 9)
+        XCTAssertEqual(cles.count, 21)
         for cle in cles {
-            let langues = (catalogue[cle] as? [String: Any])?["localizations"] as? [String: Any]
+            let langues = catalogues.lazy.compactMap { ($0[cle] as? [String: Any])?["localizations"] as? [String: Any] }.first
             XCTAssertEqual(langues?.count, 7, cle)
         }
+    }
+
+    /// « Modifier » du fond pose le niveau des réglages que l'arbre déclare,
+    /// dans l'ordre d'Android et d'iOS.
+    func test_modify_opensTheRailOfTheBackgroundSettings() throws {
+        XCTAssertEqual(ComposerBackgroundEdit.entry(.modify)?.next, ComposerEditTree.LevelID.backgroundMediaEdit.rawValue)
+        let reglages = try XCTUnwrap(ComposerEditTree.shared.level(.backgroundMediaEdit))
+        XCTAssertEqual(reglages.kind, .rail)
+        XCTAssertEqual(reglages.entries.map(\.id), ["framing", "crop", "trim", "filters", "frames", "adjust",
+                                                    "effects", "sound", "loop", "rotate", "description"])
+        XCTAssertEqual(reglages.entries.first { $0.id == "loop" }?.opens, .toggle)
     }
 
     func test_replace_opensTheSheetLevelOfTheTree() {

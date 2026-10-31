@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.media.MediaTrimBounds
+
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
@@ -47,6 +49,8 @@ data class StorySlide(
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
     val backgroundLoop: Boolean = true,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (iOS `sourceStart`/`sourceEnd` de l'objet `isBackground`, #13973) ; `null` : entière. */
+    val backgroundTrim: MediaTrimBounds? = null,
     /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
@@ -216,6 +220,7 @@ data class StorySlideDeck(
                     placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
+                    backgroundTrim = slide.backgroundTrim.takeIf { !clearsBackground },
                     backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
                     mediaLooks = slide.mediaLooks - mediaId,
                 )
@@ -570,6 +575,7 @@ data class StorySlideDeck(
                 slide.copy(
                     backgroundMediaId = next,
                     backgroundLoop = true,
+                    backgroundTrim = null,
                     backgroundAdjustments = null,
                     placedMedia = when {
                         next == null -> slide.placedMedia
@@ -601,6 +607,27 @@ data class StorySlideDeck(
             if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
+    }
+
+    /**
+     * La fenêtre gardée de la vidéo de fond [mediaId] de la slide choisie (#13973) ; comme ses réglages, la couper la
+     * DÉSIGNE si le plateau la peignait sans désignation. Inerte si [mediaId] n'est ni le fond ni le candidat, ou si rien ne change.
+     */
+    fun setSelectedBackgroundTrim(mediaId: String, trim: MediaTrimBounds?): StorySlideDeck {
+        val selected = selectedSlide
+        val designated = selected.backgroundMediaId
+        if (mediaId !in selected.mediaIds || (designated != null && designated != mediaId)) return this
+        if (designated == mediaId && selected.backgroundTrim == trim) return this
+        val index = selectedIndex
+        return copy(slides = slides.mapIndexed { i, slide ->
+            if (i != index) slide
+            else slide.copy(
+                backgroundMediaId = mediaId,
+                backgroundLoop = if (designated == null) true else slide.backgroundLoop,
+                placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
+                backgroundTrim = trim,
+            )
+        })
     }
 
     /**

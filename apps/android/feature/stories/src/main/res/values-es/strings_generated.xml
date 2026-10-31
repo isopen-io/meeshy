@@ -44,6 +44,10 @@
     <string name="composer_column_text_frame">Marco de texto</string>
     <string name="composer_column_text_language">Idioma del texto</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_edit_background_framing">Encuadre</string>
+    <string name="composer_edit_frames">Marcos</string>
+    <string name="composer_edit_loop">Bucle</string>
+    <string name="composer_edit_trim">Recortar</string>
     <string name="composer_family_text">Texto</string>
     <string name="composer_frise_earlier">Antes</string>
     <string name="composer_frise_empty">Añade un texto o un sticker: cada objeto se convierte en una pista.</string>

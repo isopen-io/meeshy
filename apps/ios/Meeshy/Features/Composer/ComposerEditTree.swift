@@ -26,15 +26,22 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
         case editor
         case mediaSource = "media-source"
         case camera
+        case image
+        case video
+        case trimmable
+        case look
     }
 
     /// Ce qu'une entrée OUVRE : un geste immédiat, le niveau nommé par `next`,
-    /// la feuille nommée par `next`, ou une confirmation avant d'agir.
+    /// la feuille nommée par `next`, une confirmation avant d'agir, la bande
+    /// du réglage sous la scène, ou un interrupteur basculé dans le rail même.
     enum Opening: String, Codable, Equatable, Sendable {
         case action
         case level
         case sheet
         case confirmation
+        case band
+        case toggle
     }
 
     struct Entry: Codable, Equatable, Sendable {
@@ -59,6 +66,7 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
     enum LevelID: String, Sendable {
         case backgroundMedia = "background.media"
         case backgroundMediaReplace = "background.media.replace"
+        case backgroundMediaEdit = "background.media.edit"
     }
 
     let schemaVersion: Int
@@ -80,7 +88,7 @@ nonisolated extension ComposerEditTree {
     static let shared = ComposerEditTree(schemaVersion: 1, levels: [
         Level(id: "background.media", kind: .rail, title: "composer.rail.title.background", entries: [
             Entry(id: "edit", label: "composer.selection.modify", sfSymbol: "slider.horizontal.3",
-                  material: "Edit", offer: .editor, opens: .level),
+                  material: "Edit", offer: .editor, opens: .level, next: "background.media.edit"),
             Entry(id: "replace", label: "composer.edit.replace", sfSymbol: "arrow.triangle.2.circlepath",
                   material: "SwapHorizontal", offer: .mediaSource, opens: .sheet, next: "background.media.replace"),
             Entry(id: "put-on-scene", label: "composer.audio.promote.action", sfSymbol: "square.on.square",
@@ -95,6 +103,30 @@ nonisolated extension ComposerEditTree {
                   material: "Camera", offer: .camera, opens: .action),
             Entry(id: "files", label: "composer.rail.media.fromFiles", sfSymbol: "folder",
                   material: "Folder", offer: .mediaSource, opens: .action),
+        ]),
+        Level(id: "background.media.edit", kind: .rail, title: "composer.selection.modify", entries: [
+            Entry(id: "framing", label: "composer.rail.title.backgroundFraming", sfSymbol: "aspectratio",
+                  material: "Photo", offer: .always, opens: .band),
+            Entry(id: "crop", label: "composer.object.editor.crop", sfSymbol: "crop",
+                  material: "Crop", offer: .image, opens: .band),
+            Entry(id: "trim", label: "composer.capture.tool.trim", sfSymbol: "scissors",
+                  material: "Cut", offer: .trimmable, opens: .band),
+            Entry(id: "filters", label: "composer.object.editor.filter", sfSymbol: "camera.filters",
+                  material: "PhotoFilter", offer: .always, opens: .band),
+            Entry(id: "frames", label: "composer.capture.rail.frames", sfSymbol: "square.dashed",
+                  material: "CheckBoxBlank", offer: .look, opens: .band),
+            Entry(id: "adjust", label: "composer.object.editor.adjust", sfSymbol: "slider.horizontal.3",
+                  material: "Tune", offer: .always, opens: .band),
+            Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
+                  material: "Sparkles", offer: .image, opens: .band),
+            Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
+                  material: "VolumeUp", offer: .video, opens: .band),
+            Entry(id: "loop", label: "story.timeline.inspector.loop", sfSymbol: "repeat",
+                  material: "Repeat", offer: .video, opens: .toggle),
+            Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
+                  material: "RotateRight", offer: .always, opens: .action),
+            Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
+                  material: "TextFields", offer: .always, opens: .sheet),
         ]),
     ])
 }
@@ -180,6 +212,7 @@ nonisolated enum ComposerBackgroundEdit {
         switch offer {
         case .always, .editor, .mediaSource: return true
         case .camera:                        return cameraTakesPhotos
+        case .image, .video, .trimmable, .look: return false
         }
     }
 }

@@ -25,6 +25,7 @@ internal object StoryPublishBackground {
                 loop = slide.backgroundLoop,
                 framing = framing,
                 adjustments = slide.backgroundAdjustments,
+                window = slide.backgroundTrim,
             )
         }
         val pending = state.pendingUploads.firstOrNull { it.cmid == designated } ?: return null
@@ -36,6 +37,7 @@ internal object StoryPublishBackground {
             loop = slide.backgroundLoop,
             framing = framing,
             adjustments = slide.backgroundAdjustments,
+            window = slide.backgroundTrim,
         )
     }
 }

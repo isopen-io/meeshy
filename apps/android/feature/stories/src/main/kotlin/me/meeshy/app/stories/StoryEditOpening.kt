@@ -98,6 +98,7 @@ internal data class StoryEditOpening(
                 backgroundMediaId = backgroundId,
                 backgroundLoop = explicitBackground?.loop ?: true,
                 backgroundAdjustments = explicitBackground?.adjustments,
+                backgroundTrim = StoryBackgroundTrimWire.read(explicitBackground?.sourceStart, explicitBackground?.sourceEnd),
                 audio = effects.audioPlayerObjects.orEmpty(),
                 frame = SceneFrame(
                     fitMode = effects.backgroundTransform?.videoFitMode,
