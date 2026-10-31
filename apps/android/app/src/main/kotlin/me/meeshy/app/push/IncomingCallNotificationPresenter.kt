@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_AUTO_ANSWER
+import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_CALLER_ID
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_CALLER_NAME
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_CALL_ID
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_CONVERSATION_ID
@@ -78,6 +79,7 @@ class IncomingCallNotificationPresenter @Inject constructor(
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_CALL_ID, push.callId)
             push.conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            push.callerUserId?.let { putExtra(EXTRA_CALLER_ID, it) }
             putExtra(EXTRA_CALLER_NAME, push.displayName)
             putExtra(EXTRA_IS_VIDEO, push.isVideo)
         }

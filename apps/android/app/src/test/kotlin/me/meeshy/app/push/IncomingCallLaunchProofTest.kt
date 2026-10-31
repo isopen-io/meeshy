@@ -134,6 +134,43 @@ class IncomingCallLaunchProofTest {
         assertThat(routeOf(retargeted).orEmpty()).doesNotContain("call?")
     }
 
+    // #13875 — l'appelant voyage avec la sonnerie et le décroché, signé par la même preuve.
+    @Test
+    fun `the incoming-call notification carries its caller to the call route`() {
+        val withCaller = push.copy(callId = "call-with-caller", callerUserId = "u-ana")
+        IncomingCallNotificationPresenter(context, proof).show(withCaller)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = shadowOf(manager).getNotification(withCaller.callId.hashCode())
+
+        val ringing = routeOf(notification.fullScreenIntent.savedIntent())
+        val answered = routeOf(notification.answerIntent().savedIntent())
+
+        assertThat(ringing).isEqualTo(
+            CallRoute.incoming(withCaller.callId, withCaller.conversationId!!, withCaller.callerName!!, isVideo = true, callerId = "u-ana"),
+        )
+        assertThat(answered).isEqualTo(
+            CallRoute.incoming(withCaller.callId, withCaller.conversationId!!, withCaller.callerName!!, isVideo = true, autoAnswer = true, callerId = "u-ana"),
+        )
+    }
+
+    @Test
+    fun `a genuine proof never vouches for a caller it did not sign`() {
+        val ringing = postedNotification().fullScreenIntent.savedIntent()
+
+        val impersonated = Intent(ringing).putExtra(MeeshyFcmService.EXTRA_CALLER_ID, "u-mallory")
+
+        assertThat(routeOf(impersonated).orEmpty()).doesNotContain("call?")
+    }
+
+    @Test
+    fun `a forged caller id is stripped with the other call extras`() {
+        val intent = forged { putExtra(MeeshyFcmService.EXTRA_CALLER_ID, "u-mallory") }
+
+        InboundIntentGate.admit(intent, proof::admits)
+
+        assertThat(intent.hasExtra(MeeshyFcmService.EXTRA_CALLER_ID)).isFalse()
+    }
+
     // Rouvrir Meeshy depuis les RÉCENTS relance l'activité avec l'intent RACINE de la tâche — celui du bouton
     // « Répondre » quand c'est lui qui l'a ouverte. Sa preuve est authentique, mais le geste qu'elle atteste est passé :
     // rejoué, il redécrochait un appel de groupe encore en cours que l'utilisateur avait quitté.

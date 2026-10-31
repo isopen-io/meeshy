@@ -17,7 +17,7 @@ import javax.inject.Singleton
  * `MainActivity` est exportée : n'importe quelle app installée peut lui envoyer un intent EXPLICITE portant les extras
  * du push d'appel. Seul le processus Meeshy connaît le secret de cette installation (32 octets de [SecureRandom], en
  * stockage privé, hors sauvegarde : `allowBackup="false"`) : [stamp] pose dans [EXTRA_PROOF] un HMAC-SHA256 des extras
- * d'appel (identifiant, conversation, nom affiché, vidéo, décroché auto), [admits] le recalcule et le compare en temps
+ * d'appel (identifiant, conversation, nom affiché, vidéo, décroché auto, appelant), [admits] le recalcule et le compare en temps
  * constant. Le secret survit à la mort du processus, donc une notification posée avant reste valable ; une preuve ne
  * vaut que pour les valeurs qu'elle signe — elle ne transforme pas une sonnerie en décroché, ni un appel en un autre.
  */
@@ -67,13 +67,22 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
             ).joinToString(separator = FIELD_SEPARATOR)
     }
 
-    private fun canonical(intent: Intent): String = listOf(
-        intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID).field(),
-        intent.getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID).field(),
-        intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME).field(),
-        intent.getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false).toString(),
-        intent.getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false).toString(),
-    ).joinToString(separator = FIELD_SEPARATOR)
+    /**
+     * Les cinq champs historiques, puis l'appelant (#13875) QUAND l'intent en porte un : une sonnerie posée avant
+     * l'arrivée de cet extra garde sa preuve, et une preuve sans appelant ne vaut pour aucun appelant ajouté après.
+     */
+    private fun canonical(intent: Intent): String {
+        val callerId = intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_ID)
+        return (
+            listOf(
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID).field(),
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID).field(),
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME).field(),
+                intent.getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false).toString(),
+                intent.getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false).toString(),
+            ) + listOfNotNull(callerId?.let { "$CALLER_DOMAIN${it.field()}" })
+            ).joinToString(separator = FIELD_SEPARATOR)
+    }
 
     private fun String?.field(): String = this?.let { "+${it.length}:$it" } ?: "-"
 
@@ -96,6 +105,7 @@ class LaunchIntentProof @Inject constructor(@ApplicationContext private val cont
         private const val KEY_SECRET = "secret"
         private const val SECRET_BYTES = 32
         private const val ACTION_DOMAIN = "push-action"
+        private const val CALLER_DOMAIN = "caller"
         private val ACTION_TARGET_EXTRAS = listOf(
             PushActionReceiver.EXTRA_MESSAGE_ID,
             PushActionReceiver.EXTRA_POST_ID,

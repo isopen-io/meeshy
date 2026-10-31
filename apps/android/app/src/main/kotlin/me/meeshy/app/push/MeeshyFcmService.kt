@@ -69,6 +69,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
         const val EXTRA_CALL_ID = "callId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALLER_NAME = "callerName"
+        const val EXTRA_CALLER_ID = "callerUserId"
         const val EXTRA_IS_VIDEO = "isVideo"
         const val EXTRA_AUTO_ANSWER = "autoAnswer"
     }
