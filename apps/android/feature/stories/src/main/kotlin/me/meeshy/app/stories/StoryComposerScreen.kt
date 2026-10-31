@@ -123,8 +123,8 @@ fun StoryComposerScreen(
         },
     )
     var morePanel by rememberSaveable { mutableStateOf<StoryMorePanel?>(null) }
-    LaunchedEffect(raisePostText, state.variant.writesPostText) {
-        if (!raisePostText || !state.variant.writesPostText) return@LaunchedEffect
+    LaunchedEffect(raisePostText, state.writesPostText) {
+        if (!raisePostText || !state.writesPostText) return@LaunchedEffect
         morePanel = StoryMorePanel.POST_TEXT
         onPostTextRaised()
     }

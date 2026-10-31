@@ -90,7 +90,7 @@ fun ComposerFormatMenu(
         )
         if (hasMenu) Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = chevronInk)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FormatMenuItems(selected, verdicts, onChoose, emptyList(), null, {}) { open = false }
+            FormatMenuItems(listOf(selected), verdicts, onChoose, emptyList(), null, {}) { open = false }
         }
     }
 }
@@ -98,13 +98,14 @@ fun ComposerFormatMenu(
 /**
  * Le même choix, posé en CHEVRON au bout de « Publier ▾ » (#13834, #13863) : la story, le post et le réel ne nomment plus
  * leur format en haut, ils le choisissent là où ils publient — avec, en post de deux scènes ou plus, leur disposition. Une cible de 48 dp nommée « Publier comme » ; sans autre format ni disposition, le
- * chevron n'existe pas (loi 4, route autonome comprise).
+ * chevron n'existe pas (loi 4, route autonome comprise). Les formats s'y COCHENT (#13919) : chaque toucher ajoute ou retire
+ * un format, le menu reste ouvert pour en cocher un autre, et un seul geste de « Publier » les publie tous.
  */
 @Composable
 fun ComposerFormatChevron(
-    selected: ComposerFormat,
+    checked: List<ComposerFormat>,
     verdicts: List<FormatVerdict>,
-    onChoose: (ComposerFormat) -> Unit,
+    onToggle: (ComposerFormat) -> Unit,
     layouts: List<MosaicLayoutMode> = emptyList(),
     armedLayout: MosaicLayoutMode? = null,
     onChooseLayout: (MosaicLayoutMode) -> Unit = {},
@@ -133,7 +134,7 @@ fun ComposerFormatChevron(
             }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FormatMenuItems(selected, verdicts, onChoose, layouts, armedLayout, onChooseLayout) { open = false }
+            FormatMenuItems(checked, verdicts, onToggle, layouts, armedLayout, onChooseLayout, cumulative = true) { open = false }
         }
     }
 }
@@ -141,15 +142,19 @@ fun ComposerFormatChevron(
 private val CHEVRON_TARGET = 48.dp
 private val CHEVRON_DISC = 30.dp
 
-/** « Publier comme » : chaque format, grisé avec sa raison s'il est refusé, puis la disposition d'un post. */
+/**
+ * « Publier comme » : chaque format, grisé avec sa raison s'il est refusé, puis la disposition d'un post. [cumulative] : les
+ * formats se cochent sans fermer le menu (#13919) ; sinon un toucher choisit et ferme.
+ */
 @Composable
 private fun FormatMenuItems(
-    selected: ComposerFormat,
+    checked: List<ComposerFormat>,
     verdicts: List<FormatVerdict>,
     onChoose: (ComposerFormat) -> Unit,
     layouts: List<MosaicLayoutMode>,
     armedLayout: MosaicLayoutMode?,
     onChooseLayout: (MosaicLayoutMode) -> Unit,
+    cumulative: Boolean = false,
     close: () -> Unit,
 ) {
     val haptics = rememberMeeshyHaptics()
@@ -160,8 +165,8 @@ private fun FormatMenuItems(
         modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
     )
     verdicts.forEach { verdict ->
-        FormatEntry(verdict, isSelected = verdict.format == selected) {
-            close()
+        FormatEntry(verdict, isSelected = verdict.format in checked, cumulative = cumulative) {
+            if (cumulative) haptics.selection() else close()
             onChoose(verdict.format)
         }
     }
@@ -212,12 +217,18 @@ private fun LayoutSection(layouts: List<MosaicLayoutMode>, checked: MosaicLayout
 }
 
 @Composable
-private fun FormatEntry(verdict: FormatVerdict, isSelected: Boolean, onPick: () -> Unit) {
+private fun FormatEntry(verdict: FormatVerdict, isSelected: Boolean, cumulative: Boolean, onPick: () -> Unit) {
     val reason = verdict.denial?.let { stringResource(ComposerFormatCopy.reason(it)) }
     DropdownMenuItem(
         enabled = verdict.isChoosable,
         onClick = onPick,
-        modifier = Modifier.semantics { if (!verdict.isChoosable) disabled() },
+        modifier = Modifier.semantics {
+            if (!verdict.isChoosable) disabled()
+            if (cumulative) {
+                role = Role.Checkbox
+                selected = isSelected
+            }
+        },
         text = {
             Column {
                 Text(stringResource(ComposerFormatCopy.label(verdict.format)), style = MaterialTheme.typography.bodyLarge)

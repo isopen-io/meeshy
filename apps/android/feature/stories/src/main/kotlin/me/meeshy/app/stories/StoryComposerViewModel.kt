@@ -132,12 +132,17 @@ class StoryComposerViewModel @Inject constructor(
     /** « Composer » depuis une story vue (#13849) : la scène semée devient la composition, son historique repart d'elle. */
     internal fun onRecomposed(done: StoryRecomposed) { _state.update { StoryRecomposition.applied(it, done.plan, done.uploaded) }; resetHistory() }
 
-    /** L'hôte pose le format et la disposition armée (#13863) : la scène reste la même, seule la table des variantes change. */
-    fun onFormat(format: ComposerFormat, layout: MosaicLayoutMode?) = _state.update { StoryComposerFormatReducer.formatted(it, format, layout) }
+    /**
+     * L'hôte pose les formats cochés et la disposition armée (#13863, #13919) : la scène reste la même et suit le premier,
+     * la publication les prend tous.
+     */
+    fun onFormats(formats: List<ComposerFormat>, layout: MosaicLayoutMode?) = _state.update { StoryComposerFormatReducer.formatted(it, formats, layout) }
+
+    fun onFormat(format: ComposerFormat, layout: MosaicLayoutMode?) = onFormats(listOf(format), layout)
 
     fun onPostTextChange(text: String) = _state.update { StoryComposerFormatReducer.postTyped(it, text) }
 
-    fun onFormatRestoredApplied() = _state.update { it.copy(restoredFormat = null) }
+    fun onFormatRestoredApplied() = _state.update { it.copy(restoredFormats = null) }
 
     /**
      * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
@@ -666,18 +671,17 @@ class StoryComposerViewModel @Inject constructor(
         if (editMode != null) return
         val current = _state.updateAndGet { it.audiencePurged() }
         if (!current.canPublish) return
-        _state.update { it.copy(isPublishing = true, errorMessage = null) }
+        _state.update { it.copy(isPublishing = true, errorMessage = null, publishFailedFormats = emptyList()) }
         viewModelScope.launch {
             try {
                 val baked = lookOven?.queued(current) ?: current
-                val document = current.variant.channel == ComposerPublishChannel.DOCUMENT
-                val plans = if (document) publishPlans(baked, resolvePublishLanguage(), baked.postSceneSlides) else publishPlans(baked, resolvePublishLanguage())
-                val queued = if (document) {
-                    checkNotNull(publications).enqueueScene(baked, plans, resolvePublishLanguage()).let { emptyList<String>() }
-                } else plans.mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }
+                val sent = current.publishedFormats.map { format -> format to runCatchingPublish { enqueueAs(baked, format) } }
+                val failed = sent.filter { it.second.isFailure }.map { it.first }
+                if (failed.size == sent.size) throw sent.first().second.exceptionOrNull()!!
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (failed.isNotEmpty()) return@launch partlyPublished(failed)
                 releasedByDraft = releasedByDraft - current.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
-                keepDraftUntilConfirmed(current, queued)
+                keepDraftUntilConfirmed(current, sent.flatMap { it.second.getOrThrow() })
                 _state.update { it.blankKeepingFormat() }
                 resetHistory()
                 _published.tryEmit(Unit)
@@ -687,6 +691,29 @@ class StoryComposerViewModel @Inject constructor(
                 _state.update { it.copy(isPublishing = false, errorMessage = e.message ?: "Publish failed") }
             }
         }
+    }
+
+    /**
+     * Un envoi par format coché (#13919) : la story part par la file des stories, une par slide ; le post et le réel par la file
+     * des publications, un document pour toute la scène. Rend les stories mises en file, que le brouillon attend.
+     */
+    private suspend fun enqueueAs(baked: StoryComposerUiState, format: ComposerFormat): List<String> {
+        val alone = baked.copy(format = format, checkedFormats = emptyList())
+        val language = resolvePublishLanguage()
+        if (alone.variant.channel == ComposerPublishChannel.DOCUMENT) {
+            checkNotNull(publications).enqueueScene(alone, publishPlans(alone, language, alone.postSceneSlides), language)
+            return emptyList()
+        }
+        return publishPlans(alone, language).mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }
+    }
+
+    private suspend fun <T> runCatchingPublish(block: suspend () -> T): Result<T> =
+        try { Result.success(block()) } catch (e: CancellationException) { throw e } catch (e: Throwable) { Result.failure(e) }
+
+    /** Une partie seulement est partie : la composition reste, la scène dit quels formats n'ont pas suivi, et l'hôte ne garde qu'eux. */
+    private fun partlyPublished(failed: List<ComposerFormat>) = _state.update {
+        StoryComposerFormatReducer.formatted(it, failed, it.postLayout)
+            .copy(isPublishing = false, publishFailedFormats = failed, restoredFormats = failed)
     }
 
     /**

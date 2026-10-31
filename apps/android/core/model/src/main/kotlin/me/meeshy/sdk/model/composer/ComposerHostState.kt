@@ -23,6 +23,12 @@ data class ComposerHostState(
     val sceneCount: Int = 0,
     /** The layout of the scenes the author armed (iOS `ComposerPublishChoice.layout`); `null` until chosen. */
     val layout: MosaicLayoutMode? = null,
+    /**
+     * Les formats que l'auteur a COCHÉS au chevron (#13919, décision porteur du 2026-10-31) : un ensemble ordonné comme le
+     * menu, jamais vide une fois posé ; vide, le seul format qui gouverne part. L'offre filtre à la lecture : un format
+     * qu'elle retire cesse de partir, et revient coché si la composition le qualifie de nouveau.
+     */
+    val checked: List<ComposerFormat> = emptyList(),
 ) {
     val reelGate: Boolean get() = ReelComposition.qualifiesAsReel(media)
 
@@ -40,12 +46,49 @@ data class ComposerHostState(
 
     val offeredFormats: List<ComposerFormat> get() = profile.offeredFormats
 
-    /** The format that GOVERNS — the surface mounted and the type published — never one the offer withdrew. */
-    val selectedFormat: ComposerFormat
+    /** The single format the door or the author's last exclusive choice resolves to, never one the offer withdrew. */
+    private val soleFormat: ComposerFormat
         get() = ComposerFormatFanPolicy.resolvedSelection(
             current = chosen ?: intent.openingFormat(compositionQualifiesAsReel = reelGate),
             offered = offeredFormats,
         )
+
+    /**
+     * Ce qui PART d'un seul geste (#13919) : les formats cochés que l'offre sert encore, dans l'ordre du menu, sinon le seul
+     * format qui gouverne. Jamais vide. L'humeur ne se cumule pas : elle a sa feuille.
+     */
+    val publishedFormats: List<ComposerFormat>
+        get() = checked.filter { it in offeredFormats && it.cumulates }.ifEmpty { listOf(soleFormat) }
+
+    /** The format that GOVERNS — the surface mounted — is the FIRST published one: checking another never moves the scene. */
+    val selectedFormat: ComposerFormat get() = publishedFormats.first()
+
+    private val menuOrder: List<ComposerFormat> get() = profile(reel = true).offeredFormats
+
+    /** Une publication rouverte se modifie dans SON format : rien ne s'y cumule. */
+    private val cumulates: Boolean get() = intent.origin !is ComposerOrigin.Edit
+
+    /**
+     * Coche ou décoche [format] (#13919) : un format refusé ne se coche pas, le dernier coché ne se décoche pas, et
+     * l'humeur — ou une modification — reste un choix exclusif ([choose]).
+     */
+    fun toggle(format: ComposerFormat): ComposerHostState {
+        if (format !in offeredFormats) return this
+        val current = publishedFormats
+        if (!cumulates || !format.cumulates || current.any { !it.cumulates }) return choose(format)
+        val next = if (format in current) current - format else current + format
+        if (next.isEmpty()) return this
+        val ordered = menuOrder.filter { it in next }
+        return copy(chosen = ordered.first(), checked = ordered)
+    }
+
+    /** Un brouillon rouvert rend ses formats cochés ; ceux que la porte n'offre jamais sont oubliés. */
+    fun restore(formats: List<ComposerFormat>): ComposerHostState {
+        val ordered = menuOrder.filter { it in formats && it.cumulates }
+        if (ordered.isEmpty()) return formats.firstOrNull()?.let(::choose) ?: this
+        if (!cumulates) return choose(ordered.first())
+        return copy(chosen = ordered.first(), checked = ordered)
+    }
 
     /** The menu: the door's formats with the reel kept open, so a reel not yet qualified is greyed with its reason. */
     val verdicts: List<FormatVerdict>
@@ -85,7 +128,8 @@ data class ComposerHostState(
      * Only a choosable format can be chosen; anything else leaves the state untouched. Story, post and reel compose on the
      * SAME scene (#13863 R1): switching changes the format and nothing else — nothing to carry, nothing left behind.
      */
-    fun choose(format: ComposerFormat): ComposerHostState = if (format in offeredFormats) copy(chosen = format) else this
+    fun choose(format: ComposerFormat): ComposerHostState =
+        if (format in offeredFormats) copy(chosen = format, checked = emptyList()) else this
 
     fun withText(value: String) = copy(text = value)
     fun withMedia(value: List<ReelComposition.MediaKind>) = copy(media = value)
@@ -98,3 +142,6 @@ data class ComposerHostState(
         fun open(intent: ComposerIntent) = ComposerHostState(intent)
     }
 }
+
+/** Story, post et réel se cumulent ; l'humeur, qui n'a pas de scène, part seule. */
+private val ComposerFormat.cumulates: Boolean get() = this != ComposerFormat.STATUS

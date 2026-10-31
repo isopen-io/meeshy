@@ -402,7 +402,7 @@ private fun StoryPublish(
     formatChevron: (@Composable () -> Unit)?,
     onPostText: () -> Unit,
 ) {
-    if (state.variant.writesPostText) PostTextPill(state.postText, onPostText)
+    if (state.writesPostText) PostTextPill(state.postText, onPostText)
     val visibility = state.draft.visibility
     val count = state.draft.visibilityUserIds.size
     val label = stringResource(visibility.labelRes())

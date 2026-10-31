@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -247,7 +248,7 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
 /** Ce que l'éditeur dit de lui-même, au bas de la scène et seulement quand il a quelque chose à dire. */
 @Composable
 internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
-    null -> null
+    null -> publishFailedNotice(state.publishFailedFormats)
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
     StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
     StoryComposerViewModel.MEDIA_FAILED -> stringResource(R.string.story_composer_incoming_failed)
@@ -258,6 +259,16 @@ internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error
     StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
     else -> error
 }
+
+/** Les formats qu'un geste n'a pas fait partir (#13919), chacun nommé, dans l'ordre du menu. */
+@Composable
+private fun publishFailedNotice(failed: List<ComposerFormat>): String? = failed.map { format ->
+    when (format) {
+        ComposerFormat.POST -> stringResource(R.string.composer_publish_failed_post)
+        ComposerFormat.REEL -> stringResource(R.string.composer_publish_failed_reel)
+        else -> stringResource(R.string.composer_publish_failed_story)
+    }
+}.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 
 /** A place or a voice chip of the scene, at its rank in the stack: touched, it is selected; dragged, it moves. */
 @Composable
