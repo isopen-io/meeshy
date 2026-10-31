@@ -37,13 +37,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
-import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * The scene of the story composer: the canvas and the long-press menu of its background media. Blank and at rest
+ * The scene of the story composer: the canvas. Touched or held, a background media is selected and lays its « Fond » level
+ * in the rail (#13973) — no menu floats over the scene. Blank and at rest
  * ([captureOffered]), the scene arms [capture]'s viewfinder on a touch, and films on a hold (#13849); armed, the viewfinder
  * covers the scene alone.
  */
@@ -56,7 +56,6 @@ internal fun StoryComposerScene(
     capture: StorySceneCapture? = null,
     captureOffered: Boolean = false,
 ) {
-    var backgroundMenuOpen by remember { mutableStateOf(false) }
     val armsCapture = capture?.takeIf { captureOffered }
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
@@ -103,30 +102,17 @@ internal fun StoryComposerScene(
                         onTap = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                     )
                 },
-                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: viewModel::onSceneBackgroundTap,
+                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: { viewModel.onSceneTap() },
                 selectedMediaId = state.selectedMedia,
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier.fillMaxSize(),
                 fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
-                onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
-                    ?.let { { backgroundMenuOpen = true } }
+                onBackgroundLongPress = state.selectedSlideBackdropMediaId
+                    ?.let { { viewModel.onSelectBackground() } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
                 stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
                 pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
-            )
-            ComposerBackgroundMenu(
-                expanded = backgroundMenuOpen,
-                onDismiss = { backgroundMenuOpen = false },
-                onAction = { action ->
-                    backgroundMenuOpen = false
-                    val mediaId = state.deck.selectedSlideBackgroundMediaId ?: return@ComposerBackgroundMenu
-                    when (action) {
-                        ComposerBackgroundMenuAction.BRING_FORWARD -> viewModel.onToggleSlideBackgroundMedia(mediaId)
-                        ComposerBackgroundMenuAction.DELETE -> viewModel.onRemoveMedia(mediaId)
-                        ComposerBackgroundMenuAction.EDIT, ComposerBackgroundMenuAction.RETAKE_PHOTO -> Unit
-                    }
-                },
             )
             state.selectedSlideBackdropPendingPhase?.let { phase ->
                 IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))

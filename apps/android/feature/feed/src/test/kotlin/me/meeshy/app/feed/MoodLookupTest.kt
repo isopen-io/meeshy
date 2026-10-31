@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.ui.profile.PeerMood
 import org.junit.Test
 
 class MoodLookupTest {
@@ -15,6 +16,20 @@ class MoodLookupTest {
         assertThat(lookup.statusIdOf("u2")).isEqualTo("s2")
         assertThat(lookup.emojiOf("inconnu")).isNull()
         assertThat(lookup.statusIdOf("inconnu")).isNull()
+    }
+
+    @Test
+    fun `la boule de mood d une conversation porte l humeur vivante du pair et la porte vers sa page`() {
+        val lookup = MoodLookup.from(StatusesUiState(statuses = listOf(entry("s1", "u1", "🔥"))))
+        assertThat(lookup.peerMoodOf("u1")).isEqualTo(PeerMood(statusId = "s1", emoji = "🔥"))
+        assertThat(lookup.peerMoodOf("inconnu")).isNull()
+        assertThat(lookup.peerMoodOf(null)).isNull()
+    }
+
+    @Test
+    fun `une humeur sans emoji ne pose aucune boule sur l en-tete`() {
+        val lookup = MoodLookup.from(StatusesUiState(statuses = listOf(entry("s1", "u1", " "))))
+        assertThat(lookup.peerMoodOf("u1")).isNull()
     }
 
     @Test

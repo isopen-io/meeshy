@@ -31,16 +31,18 @@ internal class StoryComposerMediaPick(
     private val queue: MediaUploadQueue,
     private val record: () -> Unit,
 ) {
-    private class Pick(val items: List<MediaUploadItem>, val asBackground: Boolean)
+    private class Pick(val items: List<MediaUploadItem>, val asBackground: Boolean, val replacing: String? = null) {
+        fun with(items: List<MediaUploadItem>) = Pick(items, asBackground, replacing)
+    }
 
     private var job: Job? = null
     private var inFlight: List<MediaUploadItem> = emptyList()
     private var retained: Pick? = null
 
-    fun pick(items: List<MediaUploadItem>, asBackground: Boolean) {
+    fun pick(items: List<MediaUploadItem>, asBackground: Boolean, replacing: String? = null) {
         if (items.isEmpty() || state.value.isUploadingMedia) return
         giveUpRetry()
-        start(Pick(items, asBackground))
+        start(Pick(items, asBackground, replacing.takeIf { asBackground }))
     }
 
     fun retry() {
@@ -84,7 +86,7 @@ internal class StoryComposerMediaPick(
         pick.items.drop(landings.size).forEach(MediaIntake::release)
         state.update { StoryComposerUploadReducer.started(it, landings, refused = pick.items.size - accepted.size, items = accepted) }
         inFlight = accepted
-        job = scope.launch { send(Pick(accepted, pick.asBackground)) }
+        job = scope.launch { send(pick.with(accepted)) }
     }
 
     private suspend fun send(pick: Pick) {
@@ -99,7 +101,7 @@ internal class StoryComposerMediaPick(
             throw e
         } catch (_: Throwable) {
             val kept = pick.items.filter { item -> state.value.pendingUploads.none { it.item === item } }
-            retained = Pick(kept, pick.asBackground).takeIf { kept.isNotEmpty() }
+            retained = pick.with(kept).takeIf { kept.isNotEmpty() }
             state.update {
                 StoryComposerUploadReducer.settled(it).copy(errorMessage = StoryComposerViewModel.MEDIA_FAILED, canRetryMedia = kept.isNotEmpty())
             }
@@ -138,7 +140,16 @@ internal class StoryComposerMediaPick(
             }
         }
         state.update { settled -> StoryComposerUploadReducer.settled(settled).let { s -> said?.let { s.copy(errorMessage = it) } ?: s } }
-        if (changed) record()
+        if (changed) {
+            retire(pick)
+            record()
+        }
+    }
+
+    /** « Fond › Remplacer » (#13973) : le fond remplacé quitte la diapo, maintenant que le nouveau est peint. */
+    private fun retire(pick: Pick) {
+        val old = pick.replacing ?: return
+        state.update { StoryComposerBackgroundSelectionReducer.retired(it, old) }
     }
 
     /** A failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */

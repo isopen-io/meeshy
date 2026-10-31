@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.composer.capture.CameraResult
 import me.meeshy.sdk.model.composer.capture.SceneQuickCapture
 import org.junit.Test
 
@@ -55,5 +56,25 @@ class StorySceneCaptureTest {
         assertThat(capture.offeredOn(posed, somethingOpen = false)).isFalse()
         capture.arm()
         assertThat(capture.offeredOn(rest, somethingOpen = false)).isFalse()
+    }
+
+    @Test
+    fun `a shot armed by Replace goes to the background it replaces, an ordinary shot does not`() {
+        val ordinary = mutableListOf<CameraResult>()
+        val backgrounds = mutableListOf<String>()
+        val capture = StorySceneCapture(
+            offer = SceneQuickCapture.Offer(allowsPhoto = true, allowsVideo = true),
+            onCaptured = { ordinary += it },
+            onCapturedBackground = { _, replacing -> backgrounds += replacing },
+        )
+
+        capture.arm(replacingBackground = "bg")
+        capture.deliver(CameraResult.Photo("t1", "file:///shot.jpg", null))
+        capture.arm()
+        capture.deliver(CameraResult.Photo("t2", "file:///other.jpg", null))
+
+        assertThat(backgrounds).containsExactly("bg")
+        assertThat(ordinary).hasSize(1)
+        assertThat(capture.replacingBackground).isNull()
     }
 }

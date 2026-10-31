@@ -76,67 +76,11 @@ extension StoryItem {
         // le payload backend ne le réécrit pas — la durée vit dans
         // `FeedMedia` côté API). Fix user-reporté 2026-05-28 « il n'y a
         // plus le respect de la durée des média dynamique ».
-        if var medias = effects.mediaObjects, !medias.isEmpty {
-            for i in medias.indices {
-                let feed = self.media.first(where: { $0.id == medias[i].postMediaId })
-                if medias[i].duration == nil, let dur = feed?.duration, dur > 0 {
-                    medias[i].duration = Double(dur)
-                }
-                // Hydrate `aspectRatio` (≈1.0, sentinelle) depuis `FeedMedia
-                // .width/height`. Ce n'est PAS un simple repli legacy : le
-                // composer stampe TOUJOURS `aspectRatio: 1.0` à l'add-media
-                // (`StoryComposerViewModel` ~l.1101, TODO Phase 2/3 « compute
-                // real aspectRatio from asset »), donc cette hydratation
-                // read-time est la source de dimensionnement PRIMAIRE pour
-                // quasi toutes les stories actuelles — sans elle un média
-                // non-carré s'affiche squishé (carré) dans le reader alors que
-                // le canvas/snapshot le dimensionnent via `aspectRatio`. Les
-                // (rares) stories portant déjà un ratio réel ≠ 1.0 ne sont
-                // jamais touchées — parité avec l'hydratation de `duration`
-                // ci-dessus (fix proportions 2026-06-30).
-                // **La condition porte sur la MESURE, plus sur un seuil** (#5100).
-                //
-                // Elle testait `abs(aspectRatio - 1.0) < 0.05` — c'est-à-dire la
-                // SENTINELLE, pas une propriété du média. Une photo réellement
-                // carrée était donc réécrite comme si son ratio était inconnu ;
-                // le résultat coïncidait par chance (w/h ≈ 1), et la règle ne
-                // pouvait structurellement pas distinguer les deux cas.
-                //
-                // Depuis que « pas encore mesuré » est représentable, la question
-                // se pose telle qu'elle a toujours été voulue : *ce média a-t-il
-                // un ratio ?* Un carré mesuré traverse désormais intact.
-                if medias[i].measuredAspectRatio == nil,
-                   let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
-                    medias[i].aspectRatio = Double(w) / Double(h)
-                }
-                // Adresse de l'asset (#13972), comme pour les pistes audio plus
-                // bas : l'exporteur ne reçoit qu'un slide et rapatrie chaque
-                // `mediaURL` avant de composer. Sans elle, une photo ou une
-                // vidéo publiée — posée ou en fond — sortait NOIRE d'« Enregistrer »
-                // et d'« Imager ». Le lecteur n'en dépend pas : son resolver keyé
-                // sur `postMediaId` passe avant (`StoryMediaLayerRules`).
-                if medias[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
-                    medias[i].mediaURL = url
-                }
-            }
-            effects.mediaObjects = medias
+        if let medias = effects.mediaObjects, !medias.isEmpty {
+            effects.mediaObjects = hydratingFromFeedMedia(medias)
         }
-        if var audios = effects.audioPlayerObjects, !audios.isEmpty {
-            for i in audios.indices {
-                let feed = self.media.first(where: { $0.id == audios[i].postMediaId })
-                if audios[i].duration == nil, let dur = feed?.duration, dur > 0 {
-                    audios[i].duration = Float(dur)
-                }
-                // Adresse de l'asset : `postMediaId` n'est résolvable que par un
-                // consommateur qui porte l'index des médias. L'exporteur ne reçoit
-                // qu'un slide — sans cette URL, « Partager » et « Enregistrer dans
-                // Photos » bakaient un MP4 muet. Une URL déjà persistée par le
-                // composer gagne : elle est plus fraîche que le repli.
-                if audios[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
-                    audios[i].mediaURL = url
-                }
-            }
-            effects.audioPlayerObjects = audios
+        if let audios = effects.audioPlayerObjects, !audios.isEmpty {
+            effects.audioPlayerObjects = hydratingFromFeedMedia(audios)
         }
 
         // `slide.mediaURL` porte le fond IMAGE/VIDÉO statique (chemin BG legacy
@@ -180,5 +124,75 @@ extension StoryItem {
             content: resolvedContent,
             effects: effects
         )
+    }
+
+    /// Complète chaque média posé ou de fond depuis le `FeedMedia` qu'il
+    /// référence : durée, ratio mesuré et adresse de l'asset.
+    private func hydratingFromFeedMedia(_ objects: [StoryMediaObject]) -> [StoryMediaObject] {
+        var medias = objects
+        for i in medias.indices {
+            let feed = self.media.first(where: { $0.id == medias[i].postMediaId })
+            if medias[i].duration == nil, let dur = feed?.duration, dur > 0 {
+                medias[i].duration = Double(dur)
+            }
+            // Hydrate `aspectRatio` (≈1.0, sentinelle) depuis `FeedMedia
+            // .width/height`. Ce n'est PAS un simple repli legacy : le
+            // composer stampe TOUJOURS `aspectRatio: 1.0` à l'add-media
+            // (`StoryComposerViewModel` ~l.1101, TODO Phase 2/3 « compute
+            // real aspectRatio from asset »), donc cette hydratation
+            // read-time est la source de dimensionnement PRIMAIRE pour
+            // quasi toutes les stories actuelles — sans elle un média
+            // non-carré s'affiche squishé (carré) dans le reader alors que
+            // le canvas/snapshot le dimensionnent via `aspectRatio`. Les
+            // (rares) stories portant déjà un ratio réel ≠ 1.0 ne sont
+            // jamais touchées — parité avec l'hydratation de `duration`
+            // ci-dessus (fix proportions 2026-06-30).
+            // **La condition porte sur la MESURE, plus sur un seuil** (#5100).
+            //
+            // Elle testait `abs(aspectRatio - 1.0) < 0.05` — c'est-à-dire la
+            // SENTINELLE, pas une propriété du média. Une photo réellement
+            // carrée était donc réécrite comme si son ratio était inconnu ;
+            // le résultat coïncidait par chance (w/h ≈ 1), et la règle ne
+            // pouvait structurellement pas distinguer les deux cas.
+            //
+            // Depuis que « pas encore mesuré » est représentable, la question
+            // se pose telle qu'elle a toujours été voulue : *ce média a-t-il
+            // un ratio ?* Un carré mesuré traverse désormais intact.
+            if medias[i].measuredAspectRatio == nil,
+               let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
+                medias[i].aspectRatio = Double(w) / Double(h)
+            }
+            // Adresse de l'asset (#13972), comme pour les pistes audio plus
+            // bas : l'exporteur ne reçoit qu'un slide et rapatrie chaque
+            // `mediaURL` avant de composer. Sans elle, une photo ou une
+            // vidéo publiée — posée ou en fond — sortait NOIRE d'« Enregistrer »
+            // et d'« Imager ». Le lecteur n'en dépend pas : son resolver keyé
+            // sur `postMediaId` passe avant (`StoryMediaLayerRules`).
+            if medias[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
+                medias[i].mediaURL = url
+            }
+        }
+        return medias
+    }
+
+    /// Complète chaque piste audio depuis le `FeedMedia` qu'elle référence :
+    /// durée et adresse de l'asset.
+    private func hydratingFromFeedMedia(_ objects: [StoryAudioPlayerObject]) -> [StoryAudioPlayerObject] {
+        var audios = objects
+        for i in audios.indices {
+            let feed = self.media.first(where: { $0.id == audios[i].postMediaId })
+            if audios[i].duration == nil, let dur = feed?.duration, dur > 0 {
+                audios[i].duration = Float(dur)
+            }
+            // Adresse de l'asset : `postMediaId` n'est résolvable que par un
+            // consommateur qui porte l'index des médias. L'exporteur ne reçoit
+            // qu'un slide — sans cette URL, « Partager » et « Enregistrer dans
+            // Photos » bakaient un MP4 muet. Une URL déjà persistée par le
+            // composer gagne : elle est plus fraîche que le repli.
+            if audios[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
+                audios[i].mediaURL = url
+            }
+        }
+        return audios
     }
 }

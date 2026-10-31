@@ -128,8 +128,8 @@ class ContentExitLawTest {
 
     @Test
     fun `duration choices keep tiers up to the source and put an off-tier source first`() {
-        assertThat(ForwardVerdict.Allowed(300).durationChoices.map { it.seconds }).containsExactly(30, 60, 300).inOrder()
-        assertThat(ForwardVerdict.Allowed(100).durationChoices.map { it.seconds }).containsExactly(100, 30, 60).inOrder()
+        assertThat(ForwardVerdict.Allowed(300).durationChoices.map { it.seconds }).containsExactly(15, 30, 60, 300).inOrder()
+        assertThat(ForwardVerdict.Allowed(100).durationChoices.map { it.seconds }).containsExactly(100, 15, 30, 60).inOrder()
         assertThat(ForwardVerdict.Allowed(null).durationChoices).isEmpty()
         assertThat(ForwardVerdict.Refused(ContentExitLaw.ForwardRefusal.VIEW_ONCE).durationChoices).isEmpty()
         assertThat(ForwardDurationChoice(90).label).isEqualTo("1min 30s")

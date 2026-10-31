@@ -4,6 +4,7 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 
 import type { PreparedSceneExport } from './scene-export-assets';
+import { withBranding } from './scene-export-branding';
 import { planSceneExport } from './scene-export-plan';
 import { renderSceneExport, type RenderEnvironment } from './scene-export-render';
 
@@ -92,7 +93,8 @@ function fakeAudio() {
     },
     resume: async () => undefined,
     createMediaStreamDestination: () => ({ ...node(), stream: { getAudioTracks: () => [trackOf('audio')] } }),
-    createGain: () => ({ ...node(), gain: { setValueAtTime: () => undefined } }),
+    createGain: () => ({ ...node(), gain: { setValueAtTime: () => undefined, linearRampToValueAtTime: () => undefined } }),
+    createBuffer: (_channels: number, length: number) => ({ duration: length / 48_000, getChannelData: () => new Float32Array(length) }),
     createBufferSource: () => ({
       ...node(),
       buffer: null,
@@ -210,5 +212,35 @@ describe('rendre l’export — la composition filmée de bout en bout', () => {
   test('sans enregistreur vidéo, l’export dit qu’il ne peut pas', async () => {
     const { env } = environment({ recorder: undefined });
     expect(await run({ prepared: prepared(voiceStory, fourMinutes), document: voiceStory, lengthMs: 1000, env }).outcome).toEqual({ kind: 'unsupported' });
+  });
+
+  test('une story emballée sort en vidéo même si sa scène est statique et muette, avec les deux jingles dans la piste', async () => {
+    const still = documentOf([[{ id: 't', kind: 'text', payload: { text: 'Bonjour' } }]]);
+    const audio = fakeAudio();
+    const branded = withBranding(prepared(still, new Map()), {
+      identity: { displayName: 'Ana', username: 'ana', avatarSrc: null, bannerSrc: null, accentHex: '6366F1', moodEmoji: null, moodMessage: null, presenceDotHex: null, circleBadge: null },
+      images: { avatar: null, banner: null },
+      plan: { hasIntro: true, storyStartMs: 1_200, introFade: { startMs: 1_200, durationMs: 500 }, outroDurationMs: 3_500, outroJingleOffsetMs: 1_500 },
+    });
+    expect(branded.plan.totalMs).toBe(1_200 + 6_000 - 1_500 + 3_500);
+    const { env, captured } = environment({ audio });
+    const { outcome, progress } = run({ prepared: branded, document: still, lengthMs: branded.plan.totalMs, env });
+    expect(await outcome).toMatchObject({ kind: 'video', mimeType: 'video/mp4' });
+    expect(progress.at(-1)).toBe(1);
+    expect(captured.tracks.map((track) => track.kind)).toEqual(['video', 'audio']);
+    expect(audio.started.map((start) => start.when)).toEqual([10.15, 10.15 + (branded.branding?.timeline.outroJingle.whenMs ?? 0) / 1000]);
+  });
+
+  test('l’export d’une story sans identité résolue garde la carte de fin et son jingle, sans jingle d’ouverture', async () => {
+    const still = documentOf([[{ id: 't', kind: 'text', payload: { text: 'Bonjour' } }]]);
+    const audio = fakeAudio();
+    const branded = withBranding(prepared(still, new Map()), {
+      identity: null,
+      images: { avatar: null, banner: null },
+      plan: { hasIntro: false, storyStartMs: 0, introFade: { startMs: 0, durationMs: 0 }, outroDurationMs: 2_000, outroJingleOffsetMs: 0 },
+    });
+    const { env } = environment({ audio });
+    await run({ prepared: branded, document: still, lengthMs: branded.plan.totalMs, env }).outcome;
+    expect(audio.started).toHaveLength(1);
   });
 });

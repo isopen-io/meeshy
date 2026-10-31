@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_edit_replace">استبدال</string>
+    <string name="composer_edit_remove_background_title">إزالة الخلفية؟</string>
+    <string name="composer_edit_remove_background_message">تغادر صورة الخلفية أو الفيديو هذه الشريحة. ↶ يعيدها.</string>
+</resources>

@@ -52,8 +52,8 @@ extension StoryCanvasUIView {
     /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
     ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
     ///   ouvrirait plusieurs viseurs ;
-    /// - `hitTestItem(at:) == nil` — sur un objet, `UIContextMenuInteraction`
-    ///   possède déjà ce geste. Le lui disputer ferait clignoter le menu.
+    /// - `hitTestForegroundItem(at:) == nil` — le premier plan appartient au menu
+    ///   contextuel ; le FOND, que `hitTestItem` rend aussi, à ce geste (#13974).
     @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
         // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
         // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
@@ -79,7 +79,7 @@ extension StoryCanvasUIView {
             break
         }
         guard mode == .edit, recognizer.state == .began else { return }
-        guard hitTestItem(at: recognizer.location(in: self)) == nil else { return }
+        guard hitTestForegroundItem(at: recognizer.location(in: self)) == nil else { return }
         guard inlineEditingTextId == nil else { return }
         // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
         // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
@@ -89,17 +89,11 @@ extension StoryCanvasUIView {
         // on ne fait que router.
         switch StoryCanvasBackgroundLongPress.outcome(
             backgroundMediaObjectId: backgroundMediaObjectId,
-            hostServesBackgroundMenu: onBackgroundMediaLongPressed != nil) {
-        case .presentBackgroundMenu(let id):
-            // **Un menu, pas l'éditeur.** Sur un objet de premier plan, l'appui
-            // long ouvre déjà `UIContextMenuInteraction` — supprimer, dupliquer,
-            // modifier. Router le fond droit vers l'éditeur aurait donné au même
-            // geste deux effets selon que le média est devant ou derrière, et
-            // laissé « ramener en avant » — la seule action qui fait SORTIR un
-            // média du plan de fond — sans aucun chemin.
-            //
-            // Aucune prise n'est armée : ce geste-ci ouvre un menu, il ne tient
-            // pas un déclencheur.
+            hostSelectsBackground: onBackgroundMediaLongPressed != nil) {
+        case .selectBackground(let id):
+            // **La sélection, pas un menu** (#13974) : le même effet que le
+            // toucher, le niveau « Fond » prend le rail chez l'hôte. Aucune
+            // prise n'est armée : ce geste ne tient pas un déclencheur.
             onBackgroundMediaLongPressed?(id)
         case .openViewfinder:
             backgroundLongPressOrigin = recognizer.location(in: self)

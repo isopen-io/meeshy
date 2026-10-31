@@ -110,7 +110,7 @@ internal fun StoryComposerUiState.editingChrome(viewfinderArmed: Boolean, gestur
 
 /**
  * La colonne de la scène, à la même place quel que soit son rôle (#13956) : les six outils au repos ([tools]), les options
- * de l'objet sélectionné en édition ([options]). La bascule glisse depuis le bord et se fond ; sous « réduire les
+ * de l'objet sélectionné en édition ([options]), le niveau « Fond » du fond média sélectionné ([background], #13973). La bascule glisse depuis le bord et se fond ; sous « réduire les
  * animations », elle est immédiate.
  */
 @Composable
@@ -118,6 +118,7 @@ internal fun SceneRail(
     content: ComposerRailContent,
     tools: @Composable () -> Unit,
     options: @Composable () -> Unit,
+    background: @Composable () -> Unit = {},
 ) {
     val reduceMotion = LocalReduceMotion.current
     AnimatedContent(
@@ -137,6 +138,7 @@ internal fun SceneRail(
         when (shown) {
             ComposerRailContent.TOOLS -> tools()
             ComposerRailContent.OBJECT_OPTIONS -> options()
+            ComposerRailContent.BACKGROUND_OPTIONS -> background()
             ComposerRailContent.NONE -> Unit
         }
     }
@@ -193,8 +195,11 @@ internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, on
     }
 }
 
-/** Les niveaux de la colonne en édition (#13956) : le premier porte les options de l'objet ; les lots suivants (#13973) y ajoutent les leurs. */
-internal enum class StoryEditingLevel { OBJECT_OPTIONS }
+/**
+ * Les niveaux de la colonne en édition (#13956) : le premier porte les options de l'objet, ou le niveau « Fond » du fond
+ * média sélectionné (#13973) ; les lots suivants y ajoutent les leurs.
+ */
+internal enum class StoryEditingLevel { OBJECT_OPTIONS, BACKGROUND }
 
 /** La pile des niveaux de la colonne ([ComposerRailStack]) et ses deux gestes : poser un niveau plus fin, descendre d'un niveau. */
 internal class EditingLevels<L>(val stack: ComposerRailStack<L>, val onPush: (L) -> Unit, val onBack: () -> Unit)
@@ -273,16 +278,17 @@ internal fun EditingChromeVisibility(visible: Boolean, content: @Composable () -
 }
 
 /**
- * Ce que TalkBack dit quand la colonne change de rôle (#13956) : « Édition : Sticker » à la sélection, « Retour aux outils
+ * Ce que TalkBack dit quand la colonne change de rôle (#13956) : « Édition : Sticker » (« Édition : Fond » pour le fond,
+ * #13973) à la sélection, « Retour aux outils
  * de la scène » à la désélection, rien à l'ouverture ([ComposerEditingChrome.announcement]). Une région vivante polie,
  * posée hors des surimpressions pour qu'une feuille ouverte ne lui fasse rien oublier.
  */
 @Composable
-internal fun EditingAnnouncer(editing: SceneObjectFamily?) {
+internal fun EditingAnnouncer(editing: String?) {
     var spoken by remember { mutableStateOf<ComposerEditingAnnouncement?>(null) }
     LaunchedEffect(editing) { spoken = ComposerEditingChrome.announcement(spoken, editing != null) }
     val text = when (spoken) {
-        ComposerEditingAnnouncement.EDITING -> editing?.let { stringResource(R.string.composer_editing_announce, familyWord(it)) }
+        ComposerEditingAnnouncement.EDITING -> editing?.let { stringResource(R.string.composer_editing_announce, it) }
         ComposerEditingAnnouncement.TOOLS_BACK -> stringResource(R.string.composer_editing_done)
         null -> null
     }
@@ -292,4 +298,18 @@ internal fun EditingAnnouncer(editing: SceneObjectFamily?) {
             text?.let { contentDescription = it }
         },
     )
+}
+
+internal fun ComposerSelectionAction.glyph(): ImageVector = when (this) {
+    ComposerSelectionAction.EDIT -> MeeshyIcons.Edit
+    ComposerSelectionAction.DUPLICATE -> MeeshyIcons.Copy
+    ComposerSelectionAction.TIME -> MeeshyIcons.ScheduleFilled
+    ComposerSelectionAction.REMOVE -> MeeshyIcons.Delete
+}
+
+internal fun ComposerSelectionAction.labelRes(): Int = when (this) {
+    ComposerSelectionAction.EDIT -> R.string.story_canvas_action_edit
+    ComposerSelectionAction.DUPLICATE -> R.string.story_canvas_action_duplicate
+    ComposerSelectionAction.TIME -> R.string.composer_scene_more_timing
+    ComposerSelectionAction.REMOVE -> R.string.composer_selection_remove
 }

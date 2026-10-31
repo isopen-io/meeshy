@@ -9,21 +9,21 @@ class AppearanceCatalogLottieLayersTest {
     private val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
     @Test
-    fun `the embedded catalog references the nine animated layers and the twelve illustrated films, each once`() {
+    fun `the embedded catalog references the nine animated layers and the 72 illustrated films, each once`() {
         val layers = catalog.lottieLayers
-        assertThat(layers).hasSize(21)
-        assertThat(layers.map { it.sha256 }.toSet()).hasSize(21)
+        assertThat(layers).hasSize(81)
+        assertThat(layers.map { it.sha256 }.toSet()).hasSize(81)
     }
 
     @Test
-    fun `the layers are the animated packs' rings, banners and wallpapers, then both films of each illustrated frame`() {
+    fun `the layers are the animated packs' rings, banners and wallpapers, then both films of each illustrated frame, showcase and cultural families`() {
         val rings = listOf("halo-or", "prisme-vivant", "onde").map { catalog.ring("contours-animes", it)?.lottie }
         val banners = listOf("aurore-vive", "maree", "braises").map { catalog.bannerDesign("bannieres-animees", it)?.lottie }
         val wallpapers = listOf("brume-vivante", "bulles-legeres", "pluie-de-petales").map {
             (catalog.wallpaper("animes", it) as? WallpaperDesign.Designed)?.design?.lottie
         }
-        val films = catalog.ringPacks.first { it.slug == "cadres-illustres" }.rings.flatMap { listOf(it.decor?.back, it.decor?.front) }
-        assertThat(films).hasSize(12)
+        val films = catalog.ringPacks.filter { it.slug.startsWith("cadres-") }.flatMap { pack -> pack.rings.flatMap { listOf(it.decor?.back, it.decor?.front) } }
+        assertThat(films).hasSize(72)
         val expected = rings + banners + wallpapers + films
         assertThat(expected).doesNotContain(null)
         assertThat(catalog.lottieLayers).containsExactlyElementsIn(expected)

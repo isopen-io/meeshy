@@ -34,6 +34,8 @@ public class SceneExportCoordinator(
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    /** Ce qui arrête l'export, journalisé (#13986) : jamais un échec sans sa cause. */
+    private val report: (Throwable) -> Unit = SceneExportLog::failed,
 ) {
     private val mutableState = MutableStateFlow<SceneExportState>(SceneExportState.Idle)
     public val state: StateFlow<SceneExportState> = mutableState.asStateFlow()
@@ -71,6 +73,7 @@ public class SceneExportCoordinator(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
+            report(failure)
             mutableState.update(SceneExportReducer::failed)
         } finally {
             withContext(NonCancellable) {
@@ -96,8 +99,7 @@ public class SceneExportCoordinator(
             true
         }
         SceneExportDestination.GALLERY -> {
-            val saved = gallery.saveVideo(output, output.name)
-            mutableState.update { if (saved) SceneExportReducer.saved(it) else SceneExportReducer.failed(it) }
+            settle(gallery.saveVideo(output, output.name), output.name)
             false
         }
     }
@@ -110,10 +112,14 @@ public class SceneExportCoordinator(
             true
         }
         SceneExportDestination.GALLERY -> {
-            val saved = gallery.saveImage(still.readBytes(), image.name)
-            mutableState.update { if (saved) SceneExportReducer.saved(it) else SceneExportReducer.failed(it) }
+            settle(gallery.saveImage(still.readBytes(), image.name), image.name)
             false
         }
+    }
+
+    private fun settle(saved: Boolean, name: String) {
+        if (!saved) report(IllegalStateException("la galerie a refusé $name"))
+        mutableState.update { if (saved) SceneExportReducer.saved(it) else SceneExportReducer.failed(it) }
     }
 
     /** L'écran se ferme pendant un bake, ou l'auteur annule : le moteur s'arrête et ce qu'il avait écrit part. */

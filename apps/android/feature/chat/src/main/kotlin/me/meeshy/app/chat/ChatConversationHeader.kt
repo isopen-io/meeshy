@@ -70,6 +70,7 @@ import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.profile.PeerMood
 import me.meeshy.ui.theme.MeeshyTheme
 
 /** Les mesures de l'en-tête iOS (1 pt = 1 dp) : `ConversationView+Header`, `ThemedBackButton`. */
@@ -326,6 +327,8 @@ internal fun ChatHeaderAvatar(
     onOpenDetails: () -> Unit,
     onToggle: () -> Unit,
     context: AvatarContext = AvatarContext.ConversationHeaderCollapsed,
+    mood: PeerMood? = null,
+    onOpenMood: (PeerMood) -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -343,6 +346,13 @@ internal fun ChatHeaderAvatar(
     }
     val profileLabel = stringResource(R.string.chat_header_menu_profile)
     val conversationLabel = stringResource(R.string.chat_header_menu_conversation)
+    val moodLabel = stringResource(R.string.chat_header_view_mood, name)
+    val openMood: (() -> Unit)? = mood?.let { shown ->
+        {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onOpenMood(shown)
+        }
+    }
     Box {
         Box(
             modifier = Modifier
@@ -363,11 +373,17 @@ internal fun ChatHeaderAvatar(
                     contentDescription = label
                     role = Role.Button
                     onClick { open(); true }
-                    if (door.hasLongPressMenu) {
-                        customActions = listOf(
+                    val menuActions = if (door.hasLongPressMenu) {
+                        listOf(
                             CustomAccessibilityAction(profileLabel) { onOpenProfile(); true },
                             CustomAccessibilityAction(conversationLabel) { onOpenDetails(); true },
                         )
+                    } else {
+                        emptyList()
+                    }
+                    val moodActions = openMood?.let { listOf(CustomAccessibilityAction(moodLabel) { it(); true }) }.orEmpty()
+                    if (menuActions.isNotEmpty() || moodActions.isNotEmpty()) {
+                        customActions = moodActions + menuActions
                     }
                 },
         ) {
@@ -379,6 +395,8 @@ internal fun ChatHeaderAvatar(
                 here = here,
                 isUser = isUser,
                 imageUrl = imageUrl,
+                moodEmoji = mood?.emoji,
+                onMoodTap = openMood,
                 modifier = Modifier.shadow(ChatHeaderMetrics.AVATAR_SHADOW, CircleShape, clip = false),
             )
         }

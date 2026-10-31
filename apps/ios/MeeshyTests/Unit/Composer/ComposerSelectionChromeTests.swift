@@ -7,8 +7,8 @@ import SwiftUI
 /// du 2026-10-31) : tant qu'un objet de la scène est sélectionné, ni l'audience,
 /// ni Publier, ni Fermer ; le rail des outils cède sa place, au même endroit, aux
 /// options d'édition de l'objet ; toucher une option ouvre ses propriétés EN BAS,
-/// la scène se réduisant au-dessus ; désélectionner rend tout. Le fond n'entre
-/// jamais dans cette règle.
+/// la scène se réduisant au-dessus ; désélectionner rend tout. Le fond image ou
+/// vidéo y entre dès sa sélection, par son niveau « Fond » (#13974, I-E1).
 final class ComposerSelectionChromeTests: XCTestCase {
 
     private func etat(selected: Bool = false, tool: Bool = false,
@@ -30,21 +30,19 @@ final class ComposerSelectionChromeTests: XCTestCase {
 
     func test_ownsChrome_everyPlacedFamily_ownsItFromItsSelection() {
         for famille in [ComposerInlineFamily.text, .image, .video, .audio, .sticker, .place] {
-            XCTAssertTrue(ComposerSelectionChrome.ownsChrome(family: famille, isEditing: false, typing: false),
-                          "\(famille)")
+            XCTAssertTrue(ComposerSelectionChrome.ownsChrome(family: famille, typing: false), "\(famille)")
         }
     }
 
-    func test_ownsChrome_theBackground_onlyWhileItsEditionIsOpen() {
-        XCTAssertFalse(ComposerSelectionChrome.ownsChrome(family: .background(isVideo: false), isEditing: false,
-                                                          typing: false), "toucher le fond n'est pas l'éditer")
-        XCTAssertTrue(ComposerSelectionChrome.ownsChrome(family: .background(isVideo: true), isEditing: true,
-                                                         typing: false), "appui long › Modifier (#13974)")
+    func test_ownsChrome_theBackground_fromItsSelection() {
+        XCTAssertTrue(ComposerSelectionChrome.ownsChrome(family: .background(isVideo: false), typing: false),
+                      "toucher ou appui long sur le fond pose le niveau « Fond » (#13974)")
+        XCTAssertTrue(ComposerSelectionChrome.ownsChrome(family: .background(isVideo: true), typing: false))
     }
 
     func test_ownsChrome_nothingSelectedOrTyping_neverOwnsIt() {
-        XCTAssertFalse(ComposerSelectionChrome.ownsChrome(family: nil, isEditing: false, typing: false))
-        XCTAssertFalse(ComposerSelectionChrome.ownsChrome(family: .text, isEditing: true, typing: true),
+        XCTAssertFalse(ComposerSelectionChrome.ownsChrome(family: nil, typing: false))
+        XCTAssertFalse(ComposerSelectionChrome.ownsChrome(family: .text, typing: true),
                        "la frappe a sa barre collée au clavier (L4)")
     }
 
@@ -97,11 +95,11 @@ final class ComposerSelectionChromeTests: XCTestCase {
         XCTAssertEqual(ComposerEditRailStack.of(family: .text, editing: .time, typing: false).top, .options(.time))
     }
 
-    func test_stack_theBackground_entersDirectlyIntoItsEdition() {
-        XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false),
-                       .rest)
-        XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: false), editing: .modify,
-                                                typing: false).levels, [.options(.modify)])
+    func test_stack_theBackground_posesItsLevel_thenModifyOnTop() {
+        XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false)
+                        .levels, [.background])
+        XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: true), editing: .modify,
+                                                typing: false).levels, [.background, .options(.modify)])
     }
 
     func test_stack_nothingOrTyping_isTheRest() {
@@ -122,7 +120,9 @@ final class ComposerSelectionChromeTests: XCTestCase {
         let pile = ComposerEditRailStack.of(family: .image, editing: .modify, typing: false)
         XCTAssertEqual(pile.railBack(), .popLevel, "le ‹ du rail ne s'arrête pas à la feuille")
         let fond = ComposerEditRailStack.of(family: .background(isVideo: false), editing: .modify, typing: false)
-        XCTAssertEqual(fond.railBack(), .leaveEditing, "le seul niveau du fond rend la scène")
+        XCTAssertEqual(fond.railBack(), .popLevel, "‹ redescend au niveau « Fond »")
+        let n0 = ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false)
+        XCTAssertEqual(n0.railBack(), .leaveEditing, "le niveau « Fond » parti, la scène revient")
     }
 
     func test_items_firstLevel_isTheActions_anUpperLevelOpensWithBack() {
@@ -148,8 +148,9 @@ final class ComposerSelectionChromeTests: XCTestCase {
     }
 
     func test_levelKeys_areDistinct() {
-        let cles = [ComposerEditRailLevel.actions, .options(.modify), .options(.time)].map(ComposerEditRailStack.levelKey)
-        XCTAssertEqual(Set(cles).count, 3)
+        let cles = [ComposerEditRailLevel.actions, .background, .options(.modify), .options(.time)]
+            .map(ComposerEditRailStack.levelKey)
+        XCTAssertEqual(Set(cles).count, 4)
     }
 
     func test_lowZone_propertiesTakeTheBottom_andLiftTheScene() {

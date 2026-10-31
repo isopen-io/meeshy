@@ -1,0 +1,17 @@
+{
+  "_doc": "Le logo de cercle peint sur l'intro d'une story exportée (#13997). Entrée : le niveau EFFECTIF servi (chaîne brute, éventuellement absente ou inconnue). Sortie : l'emoji, ou null = rien. Loi : packages/shared/utils/relation-export-badge.ts ; miroirs Swift et Kotlin rejouent ce fichier.",
+  "minLevel": "CLOSE",
+  "vectors": [
+    { "_label": "aucun niveau servi", "input": null, "expected": null },
+    { "_label": "chaîne vide", "input": "", "expected": null },
+    { "_label": "valeur inconnue", "input": "BESTIE", "expected": null },
+    { "_label": "Atome réservé hors MVP", "input": "ATOM", "expected": null },
+    { "_label": "minuscules refusées", "input": "close", "expected": null },
+    { "_label": "Public", "input": "PUBLIC", "expected": null },
+    { "_label": "Communauté", "input": "COMMUNITY", "expected": null },
+    { "_label": "Connaissance", "input": "ACQUAINTANCE", "expected": null },
+    { "_label": "Ami", "input": "FRIEND", "expected": null },
+    { "_label": "Proche", "input": "CLOSE", "expected": "🔥" },
+    { "_label": "Sang", "input": "BLOOD", "expected": "🩸" }
+  ]
+}

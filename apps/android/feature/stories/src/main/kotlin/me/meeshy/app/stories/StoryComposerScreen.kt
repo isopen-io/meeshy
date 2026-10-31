@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.edit.ComposerBackgroundSource
 import me.meeshy.sdk.media.readMediaUploadItem
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -149,7 +150,8 @@ fun StoryComposerScreen(
             onPickMedia = pickers.library,
             onOpenSoundShelf = { sheet = StoryComposerSheet.SOUND },
             onPickFiles = pickers.files,
-            onPickBackground = pickers.background,
+            onPickBackground = { pickers.background(null) },
+            onReplaceBackground = { source, replacing -> pickers.replace(source, replacing) },
         ),
         morePanel = morePanel,
         onMorePanel = { morePanel = it },
@@ -207,7 +209,8 @@ private fun StoryComposerSheetBody(
         }
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
             StoryReferenceSheet(open, state, viewModel, onDone)
-        StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT -> Unit
+        StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT,
+        StoryComposerSheet.BACKGROUND_SOURCE -> Unit
     }
 }
 
@@ -245,8 +248,22 @@ private fun StoryComposerBackgroundSound(state: StoryComposerUiState, viewModel:
     }
 }
 
-/** Les sélecteurs du système : la photothèque, les fichiers (appui long sur Média), et un média choisi comme fond (#13845). */
-private class StoryMediaPickers(val library: () -> Unit, val files: () -> Unit, val background: () -> Unit)
+/**
+ * Les sélecteurs du système : la photothèque, les fichiers (appui long sur Média), un média choisi comme fond (#13845),
+ * et « Fond › Remplacer » depuis la photothèque ou les fichiers (#13973) — [background] et [backgroundFiles] reçoivent le
+ * fond qu'ils remplacent, `null` quand ils n'en remplacent aucun.
+ */
+private class StoryMediaPickers(
+    val library: () -> Unit,
+    val files: () -> Unit,
+    val background: (replacing: String?) -> Unit,
+    val backgroundFiles: (replacing: String) -> Unit,
+) {
+    fun replace(source: ComposerBackgroundSource, replacing: String) = when (source) {
+        ComposerBackgroundSource.FILES -> backgroundFiles(replacing)
+        ComposerBackgroundSource.LIBRARY, ComposerBackgroundSource.CAMERA -> background(replacing)
+    }
+}
 
 /**
  * Le sélecteur photo/vidéo du système, et l'importateur de fichiers filtré sur les images et les vidéos : ils lisent les
@@ -257,13 +274,16 @@ private class StoryMediaPickers(val library: () -> Unit, val files: () -> Unit, 
 private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): StoryMediaPickers {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var replacing by remember { mutableStateOf<String?>(null) }
     fun dispatchPicked(uris: List<Uri>, asBackground: Boolean = false) {
+        val replaced = replacing.takeIf { asBackground }
+        replacing = null
         if (uris.isEmpty()) return
         scope.launch {
             val items = withContext(Dispatchers.IO) {
                 uris.mapNotNull { context.readMediaUploadItem(it) }
             }
-            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground)
+            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground, replacing = replaced)
         }
     }
     val pickSingle = rememberLauncherForActivityResult(
@@ -278,6 +298,9 @@ private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: Story
     val pickBackground = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri), asBackground = true) }
+    val pickBackgroundFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri), asBackground = true) }
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
     return StoryMediaPickers(
         library = {
@@ -288,7 +311,18 @@ private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: Story
             }
         },
         files = { if (mode != StoryMediaPickMode.None) pickFiles.launch(MEDIA_FILE_TYPES) },
-        background = { if (mode != StoryMediaPickMode.None) pickBackground.launch(imageAndVideo) },
+        background = { replaced ->
+            if (mode != StoryMediaPickMode.None) {
+                replacing = replaced
+                pickBackground.launch(imageAndVideo)
+            }
+        },
+        backgroundFiles = { replaced ->
+            if (mode != StoryMediaPickMode.None) {
+                replacing = replaced
+                pickBackgroundFile.launch(MEDIA_FILE_TYPES)
+            }
+        },
     )
 }
 

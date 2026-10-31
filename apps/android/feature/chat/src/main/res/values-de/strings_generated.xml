@@ -25,11 +25,17 @@
         <item quantity="one">%1$d Nachricht löschen?</item>
         <item quantity="other">%1$d Nachrichten löschen?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Funken: %2$d · Heute: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d Tag</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d Tage</string>
     <string name="chat_engagement_a11y_total_one">%1$s Funke in dieser Unterhaltung gesammelt</string>
     <string name="chat_engagement_a11y_total_other">%1$s Funken in dieser Unterhaltung gesammelt</string>
+    <string name="chat_ephemeral_activate">Selbstlöschend aktivieren</string>
+    <string name="chat_ephemeral_active">Ephemerer Modus aktiv: %1$s</string>
+    <string name="chat_ephemeral_after_read">Nach dem Lesen</string>
+    <string name="chat_ephemeral_after_read_a11y">Nach dem Lesen, sobald der Leser die Unterhaltung verlässt</string>
+    <string name="chat_ephemeral_off">Aus</string>
     <string name="chat_exit_blocked_after_read">Sie verschwindet nach dem Lesen: Sie kann nicht weitergeleitet, gesichert oder geteilt werden.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Dieses Element gehört nicht mehr zur Nachricht.</string>
     <string name="chat_exit_blocked_encrypted_source">Dieser verschlüsselte Inhalt wird von diesem Gerät kopiert.</string>

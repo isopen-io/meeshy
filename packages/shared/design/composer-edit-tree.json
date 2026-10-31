@@ -1,0 +1,27 @@
+{
+  "$doc": "LA GRAMMAIRE D'ÉDITION DU COMPOSITEUR (spec docs/superpowers/specs/2026-10-31-grammaire-edition-compositeur.md, R6 de 2026-10-31-un-seul-compositeur-design.md, #13973 Android, #13974 iOS) — l'arbre UNIQUE des niveaux : chaque niveau nomme ses entrées dans l'ordre où elles se montrent, leur clé i18n (catalogue iOS), leur icône (SF Symbol et Material), ce qui les offre et ce qu'elles ouvrent. iOS le décode dans ComposerEditTree (apps/ios/Meeshy/Features/Composer/), Android dans :core:model composer/edit/ComposerEditTree.kt ; sur chaque plateforme un témoin exige que le fichier décodé soit égal à la valeur compilée. Un niveau « rail » se pose dans le rail des outils (N0) ou par-dessus (N1…N3) ; un niveau « sheet » est une feuille basse sans voile, la scène réduite au-dessus. offer : always (toujours), editor (un éditeur est monté pour cet objet), media-source (au moins une source de média est ouverte), camera (le viseur de la scène est disponible). opens : action (s'applique tout de suite), level (pose le niveau nommé par next), sheet (ouvre la feuille nommée par next), confirmation (demande confirmation avant d'agir). Chaque lot de la spec y ajoute ses niveaux.",
+  "schemaVersion": 1,
+  "levels": [
+    {
+      "id": "background.media",
+      "kind": "rail",
+      "title": "composer.rail.title.background",
+      "entries": [
+        { "id": "edit", "label": "composer.selection.modify", "sfSymbol": "slider.horizontal.3", "material": "Edit", "offer": "editor", "opens": "level" },
+        { "id": "replace", "label": "composer.edit.replace", "sfSymbol": "arrow.triangle.2.circlepath", "material": "SwapHorizontal", "offer": "media-source", "opens": "sheet", "next": "background.media.replace" },
+        { "id": "put-on-scene", "label": "composer.audio.promote.action", "sfSymbol": "square.on.square", "material": "FlipToFront", "offer": "always", "opens": "action" },
+        { "id": "remove", "label": "composer.selection.remove", "sfSymbol": "trash", "material": "Delete", "offer": "always", "opens": "confirmation", "destructive": true }
+      ]
+    },
+    {
+      "id": "background.media.replace",
+      "kind": "sheet",
+      "title": "composer.edit.replace",
+      "entries": [
+        { "id": "library", "label": "composer.edit.source.library", "sfSymbol": "photo.on.rectangle", "material": "PhotoLibrary", "offer": "media-source", "opens": "action" },
+        { "id": "camera", "label": "composer.rail.media.takePhoto", "sfSymbol": "camera", "material": "Camera", "offer": "camera", "opens": "action" },
+        { "id": "files", "label": "composer.rail.media.fromFiles", "sfSymbol": "folder", "material": "Folder", "offer": "media-source", "opens": "action" }
+      ]
+    }
+  ]
+}

@@ -91,6 +91,7 @@ enum ComposerEditRailCopy {
     static func label(_ item: ComposerEditRailItem) -> String {
         switch item {
         case .action(let action):   return ComposerSelectionCopy.label(action)
+        case .background(let action): return ComposerEditTreeCopy.label(action)
         case .back:                 return back
         case .section(let section): return ComposerObjectEditorCopy.entry(section)
         case .extra(let extra):     return ComposerSelectionCopy.label(extra)
@@ -101,6 +102,7 @@ enum ComposerEditRailCopy {
     static func symbol(_ item: ComposerEditRailItem) -> String {
         switch item {
         case .action(let action):   return action.symbol
+        case .background(let action): return ComposerEditTreeCopy.symbol(action)
         case .back:                 return "chevron.backward"
         case .section(let section): return ComposerObjectEditorRail.symbolName(section)
         case .extra(let extra):     return extra.symbol
@@ -113,6 +115,7 @@ enum ComposerEditRailCopy {
     static func railLabel(_ level: ComposerEditRailLevel) -> String {
         switch level {
         case .actions:          return ComposerSelectionCopy.bar
+        case .background:       return ComposerEditTreeCopy.backgroundTitle
         case .options(.modify): return ComposerSelectionCopy.label(.modify)
         case .options(.time):   return ComposerSelectionCopy.label(.time)
         }

@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
@@ -1492,6 +1493,47 @@ class ChatViewModelTest {
         // and the picker sheet closes.
         assertThat(vm.state.value.pendingEffects.hasAnyEffect).isFalse()
         assertThat(vm.state.value.isEffectsPickerOpen).isFalse()
+    }
+
+    @Test
+    fun send_afterReadChoice_shipsBothBitsAndNoDuration_likeIos() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.selectEphemeralChoice(EphemeralChoice.AfterRead)
+        vm.onDraftChange("vu puis parti")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL_AFTER_READ)).isTrue()
+        assertThat(captured.captured.ephemeralDuration).isNull()
+    }
+
+    @Test
+    fun send_fifteenSecondsChoice_shipsFifteenSeconds() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.selectEphemeralChoice(EphemeralChoice.AfterRead)
+        vm.selectEphemeralChoice(EphemeralChoice.Duration(EphemeralDuration.FIFTEEN_SECONDS))
+        vm.onDraftChange("quinze secondes")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL_AFTER_READ)).isFalse()
+        assertThat(captured.captured.ephemeralDuration).isEqualTo(15)
     }
 
     @Test

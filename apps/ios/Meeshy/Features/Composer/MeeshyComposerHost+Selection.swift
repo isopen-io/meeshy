@@ -30,8 +30,7 @@ struct ComposerSceneSelectionRelay {
     var current: (id: String, family: ComposerInlineFamily)? {
         guard host.mountedComposerView == .scene, !host.sceneTypesInline,
               let id = host.selectedSceneItemId, let famille = host.inlineFamily(of: id),
-              ComposerSelectionChrome.ownsChrome(family: famille, isEditing: host.activeInlineEdit != nil,
-                                                 typing: false) else { return nil }
+              ComposerSelectionChrome.ownsChrome(family: famille, typing: false) else { return nil }
         return (id, famille)
     }
 
@@ -68,6 +67,7 @@ struct ComposerSceneSelectionRelay {
             for: niveau,
             actions: ComposerSelectionActions.served(family: selection.family, offered: offered(selection.id),
                                                      isLocked: isLocked(selection.id)),
+            backgroundActions: backgroundActions(selection.id),
             sections: edition.map { ComposerInlineEditing.chips($0.purpose, family: $0.family,
                                                                 served: host.inlineSections(for: $0.objectId,
                                                                                             family: $0.family)) } ?? [],
@@ -106,12 +106,14 @@ struct ComposerSceneSelectionRelay {
     /// `rail` ⇒ le ‹ du rail, qui descend d'un niveau avec sa feuille.
     func goBack(rail: Bool = false) {
         let pile = stack
-        let issue = rail ? pile.railBack() : pile.back(propertiesAreOpen: host.activeInlineEdit?.openSection != nil)
+        let feuille = host.activeInlineEdit?.openSection != nil || host.backgroundSourcesAreOpen
+        let issue = rail ? pile.railBack() : pile.back(propertiesAreOpen: feuille)
         switch issue {
         case .closeProperties:
             closeProperties()
         case .popLevel:
             host.inlineEdit = nil
+            host.backgroundSourcesAreOpen = false
             host.comparingLookObjectId = nil
             HapticFeedback.light()
             UIAccessibility.post(notification: .announcement, argument: ComposerSelectionCopy.bar)
@@ -125,6 +127,8 @@ struct ComposerSceneSelectionRelay {
     func deselectSceneItem() {
         guard host.selectedSceneItemId != nil || host.inlineEdit != nil else { return }
         host.inlineEdit = nil
+        host.backgroundSourcesAreOpen = false
+        host.backgroundReplacementId = nil
         host.comparingLookObjectId = nil
         host.selectedSceneItemId = nil
         host.selectedSceneItemKind = nil
@@ -138,6 +142,8 @@ struct ComposerSceneSelectionRelay {
         switch item {
         case .action(let action):
             performSelectionAction(action, on: id)
+        case .background(let action):
+            performBackgroundAction(action, on: id)
         case .back:
             goBack(rail: true)
         case .section(let section):
@@ -256,6 +262,13 @@ struct ComposerSceneSelectionRelay {
     /// sous-outil n'est ouvert — le niveau du rail suffit — et pendant la
     /// frappe, où les options remplacent le CLAVIER (#13839, L4).
     var propertiesSheet: AnyView? {
+        let sources = backgroundSourcesSheet
+        let panel = sources == nil ? inlineToolPanel : nil
+        guard sources != nil || panel != nil else { return nil }
+        return AnyView(ComposerPropertiesSheetBody(sources: sources, panel: panel))
+    }
+
+    private var inlineToolPanel: ComposerInlineToolPanel? {
         guard !host.viewModel.isDrawingActive, !host.sceneTypesInline,
               let edition = host.activeInlineEdit, edition.openSection != nil else { return nil }
         let porteUnMedia: Bool
@@ -263,7 +276,7 @@ struct ComposerSceneSelectionRelay {
         case .image, .video, .background: porteUnMedia = true
         case .text, .audio, .sticker, .place: porteUnMedia = false
         }
-        return AnyView(ComposerInlineToolPanel(
+        return ComposerInlineToolPanel(
             viewModel: host.viewModel,
             edit: edition,
             section: edition.openSection,
@@ -271,7 +284,7 @@ struct ComposerSceneSelectionRelay {
             altText: porteUnMedia ? host.mediaAltBinding(for: edition.objectId) : nil,
             header: propertiesHeader(for: edition),
             onSelectObject: { host.beginInlineEdit($0, section: .plan, purpose: edition.purpose) },
-            onCompareLook: { host.comparingLookObjectId = $0 ? edition.objectId : nil }))
+            onCompareLook: { host.comparingLookObjectId = $0 ? edition.objectId : nil })
     }
 
     /// Audience et Publier, par la loi de la sélection : ni pendant un outil,
@@ -282,6 +295,11 @@ struct ComposerSceneSelectionRelay {
 
     /// La feuille se referme ; le niveau qui l'a ouverte reste posé.
     func closeProperties() {
+        if host.backgroundSourcesAreOpen {
+            host.backgroundSourcesAreOpen = false
+            HapticFeedback.light()
+            return
+        }
         guard let edition = host.activeInlineEdit, edition.openSection != nil else { return }
         host.inlineEdit = ComposerInlineEdit(objectId: edition.objectId, family: edition.family,
                                              openSection: nil, purpose: edition.purpose)
