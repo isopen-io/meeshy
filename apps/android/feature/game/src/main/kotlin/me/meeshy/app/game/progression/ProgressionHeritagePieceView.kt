@@ -35,9 +35,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import me.meeshy.app.game.gameString
+import me.meeshy.app.game.gestures.GameGesturesUiState
+import me.meeshy.app.game.gestures.MintGestures
+import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.MeeshCoinFace
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.TreasuryStanding
+import me.meeshy.sdk.model.game.ceremony.GameHeritageHold
 import me.meeshy.sdk.model.game.progression.HeritageCoin
 import me.meeshy.sdk.model.game.progression.ProgressionHeritagePiece
 import me.meeshy.sdk.model.game.progression.ProgressionPieceDetails
@@ -98,6 +102,24 @@ internal fun HeritagePiece(head: ProgressionHeritagePiece, treasury: TreasurySta
         }
     }
     opened?.let { detail -> GameElementSheet(detail, onDismiss = { opened = null }) }
+}
+
+/**
+ * L'HÉRITAGE PUIS LE CADRE DE LA FRAPPE, en tête de la fiche de la Meesh (iOS `ProgressionConceptPage.heritage`) : au
+ * toucher, la tête garde ce qu'elle montrait (`GameHeritageHold`) jusqu'à la fin de la cérémonie ET la réponse de la
+ * passerelle ; alors seulement le compte monte et la nouvelle pièce prend la tête — jamais avant la frappe qu'on voit.
+ */
+@Composable
+internal fun HeritageAndMint(served: ProgressionHeritagePiece, game: GameBlock, gestures: GameGesturesUiState, onMint: () -> Unit) {
+    var hold by remember { mutableStateOf<GameHeritageHold?>(null) }
+    HeritagePiece(GameHeritageHold.shown(served, hold, gestures.mintSettlement), game.treasury)
+    MintGestures(
+        game,
+        gestures,
+        onMint = onMint,
+        onCeremonyStarted = { hold = GameHeritageHold.of(served, gestures.mintSettlement) },
+        onCeremonyEnded = { hold = hold?.ended() },
+    )
 }
 
 /** La dernière pièce frappée, côté revers ; le flan d'argent quand rien n'a été frappé. Décorative : le chiffre dit tout. */
