@@ -128,7 +128,7 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
   });
 
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
-    const down = { findUnique: jest.fn(async () => { throw new Error('mongo down'); }) };
+    const down = { ...relationStore().prisma.userRelation, create: jest.fn(async () => { throw new Error('mongo down'); }) };
 
     const { status } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], userRelation: down });
 
@@ -174,7 +174,7 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' });
   });
 
-  it('ne notifie rien de plus que le retrait existant : aucune notification de baisse', async () => {
+  it('ne notifie rien de plus que le retrait de la notification d’origine : aucune notification, aucun événement de baisse (RG-07)', async () => {
     const { notificationService } = await repondre({
       action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], liens: [lien('FRIEND', 'FRIEND')],
     });
@@ -183,7 +183,7 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
       .filter(([, fn]) => (fn as jest.Mock).mock.calls.length > 0)
       .map(([nom]) => nom)
       .sort();
-    expect(appeles).toEqual(['emitFriendRequestCancelled', 'retractFriendRequestNotifications']);
+    expect(appeles).toEqual(['retractFriendRequestNotifications']);
   });
 });
 

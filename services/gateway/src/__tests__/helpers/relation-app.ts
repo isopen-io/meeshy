@@ -127,7 +127,7 @@ export async function buildRelationApp(
   app.decorate('notificationService', notifier as never);
   app.decorate('socialEvents', null as never);
   app.decorate('redis', null as never);
-  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io }) } as never);
+  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io, joinUserToConversationRoom: async () => undefined }) } as never);
   let acting = options.userId ?? MOI;
   app.decorate('authenticate', async (req: object) => {
     Object.assign(req, {

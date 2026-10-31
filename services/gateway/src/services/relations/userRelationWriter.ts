@@ -34,11 +34,13 @@
  * vérité de repli tant que la loi d'accès lit `FriendRequest` à défaut de ligne.
  */
 import {
+  compareRelationLevel,
   isRelationDrop,
   maxRelationLevel,
   minRelationLevel,
   parseRelationLevel,
   relationPairKey,
+  relationSideOf,
   type RelationLevel,
   type RelationPairKey,
   type RelationTransition,
@@ -52,6 +54,9 @@ export type UserRelationRow = {
   readonly userHighId: string;
   readonly grantedByLow?: string | null;
   readonly grantedByHigh?: string | null;
+  readonly levelSince?: Date | null;
+  readonly cooldownLowUntil?: Date | null;
+  readonly cooldownHighUntil?: Date | null;
   readonly transitions?: ReadonlyArray<{ readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
 };
 
@@ -61,6 +66,8 @@ type NewUserRelation = RelationPairKey & {
   readonly levelSince: Date;
   readonly origin: RelationOrigin;
   readonly transitions: RelationTransition[];
+  readonly cooldownLowUntil?: Date;
+  readonly cooldownHighUntil?: Date;
 };
 
 export interface UserRelationDb {
@@ -72,10 +79,12 @@ export interface UserRelationDb {
     updateMany(args: {
       where: { id: string; grantedByLow?: string | null; grantedByHigh?: string | null };
       data: {
-        grantedByLow: RelationLevel;
-        grantedByHigh: RelationLevel;
+        grantedByLow?: RelationLevel;
+        grantedByHigh?: RelationLevel;
         levelSince?: Date;
-        transitions: { push: RelationTransition[] };
+        cooldownLowUntil?: Date;
+        cooldownHighUntil?: Date;
+        transitions?: { push: RelationTransition[] };
       };
     }): PromiseLike<{ count: number }>;
   };
@@ -108,6 +117,24 @@ const isUniqueViolation = (error: unknown): boolean =>
 
 const pairOf = (userA: string, userB: string): RelationPairKey | null =>
   !userA || !userB || userA === userB ? null : relationPairKey(userA, userB);
+
+/** Le cool-down de 30 jours (RG-08) : `userId` ne peut plus demander de montée avant `until`. */
+type CooldownWrite = { readonly userId: string; readonly until: Date };
+
+const cooldownColumn = (
+  pair: RelationPairKey,
+  cooldown: CooldownWrite,
+): { cooldownLowUntil: Date } | { cooldownHighUntil: Date } =>
+  relationSideOf(pair, cooldown.userId) === 'low' ? { cooldownLowUntil: cooldown.until } : { cooldownHighUntil: cooldown.until };
+
+/** Jusqu'à quand `userId` est retenu de demander une montée à cette paire ; `null` = libre. */
+export const cooldownUntilOf = (row: UserRelationRow | null, userId: string): Date | null => {
+  if (!row) return null;
+  const until = row.userLowId === userId ? row.cooldownLowUntil : row.userHighId === userId ? row.cooldownHighUntil : null;
+  return until instanceof Date ? until : null;
+};
+
+export const cooldownEnd = (from: Date, days: number): Date => new Date(from.getTime() + days * 86_400_000);
 
 type Creation = 'created' | 'exists';
 
@@ -142,6 +169,7 @@ async function moveTo(
   pair: RelationPairKey,
   target: Grants,
   at: Date,
+  cooldown: CooldownWrite | null = null,
 ): Promise<boolean> {
   const current = grantsOf(row);
   const passages = passagesBetween(pair, current, target, at);
@@ -151,6 +179,7 @@ async function moveTo(
       grantedByLow: target.low,
       grantedByHigh: target.high,
       ...(effectiveLevel(current) === effectiveLevel(target) ? {} : { levelSince: at }),
+      ...(cooldown ? cooldownColumn(pair, cooldown) : {}),
       transitions: { push: passages },
     },
   });
@@ -249,9 +278,21 @@ export async function recordFriendship(
   db: UserRelationDb,
   params: { userA: string; userB: string; origin: RelationOrigin; at: Date },
 ): Promise<RelationWriteOutcome> {
+  return recordLevel(db, { ...params, level: 'FRIEND' });
+}
+
+/**
+ * Une demande de cran est ACCEPTÉE (#13933) : les deux accords valent `level` au
+ * moins. Monte, ne baisse jamais — accepter une vieille demande sur un lien déjà
+ * plus haut ne change rien.
+ */
+export async function recordLevel(
+  db: UserRelationDb,
+  params: { userA: string; userB: string; level: RelationLevel; origin: RelationOrigin; at: Date },
+): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseTo(db, pair, { origin: params.origin, at: params.at, level: 'FRIEND' });
+  return raiseTo(db, pair, { origin: params.origin, at: params.at, level: params.level });
 }
 
 /**
@@ -271,11 +312,14 @@ export async function recordAcquaintance(
 }
 
 /**
- * L'amitié est défaite : les deux accords reviennent à PUBLIC, sans bruit.
+ * Les DEUX accords redescendent à `level` au plus (#13933) — la rupture d'une
+ * demande acceptée : Proche retombe à Ami, Ami quitte le cercle. SILENCIEUX, et
+ * ne relève jamais un accord déjà plus bas. `cooldownFor` pose sur l'AUTRE le
+ * cool-down de 30 jours (RG-08), dans la même écriture.
  */
-export async function resetFriendship(
+export async function lowerPair(
   db: UserRelationDb,
-  params: { userA: string; userB: string; at: Date },
+  params: { userA: string; userB: string; level: RelationLevel; at: Date; cooldownFor?: CooldownWrite },
 ): Promise<RelationResetOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
@@ -284,10 +328,85 @@ export async function resetFriendship(
     const row = await readPair(db, pair);
     if (!row) return 'unchanged';
     const current = grantsOf(row);
-    if (current.low === 'PUBLIC' && current.high === 'PUBLIC') return 'unchanged';
-    if (await moveTo(db, row, pair, { low: 'PUBLIC', high: 'PUBLIC' }, params.at)) return 'reset';
+    const target: Grants = { low: minRelationLevel(current.low, params.level), high: minRelationLevel(current.high, params.level) };
+    if (target.low === current.low && target.high === current.high) return 'unchanged';
+    if (await moveTo(db, row, pair, target, params.at, params.cooldownFor ?? null)) return 'reset';
   }
-  throw new Error('resetFriendship: la paire change sans cesse, abandon après plusieurs reprises');
+  throw new Error('lowerPair: la paire change sans cesse, abandon après plusieurs reprises');
+}
+
+/**
+ * L'amitié est défaite : les deux accords reviennent à PUBLIC, sans bruit.
+ */
+export async function resetFriendship(
+  db: UserRelationDb,
+  params: { userA: string; userB: string; at: Date },
+): Promise<RelationResetOutcome> {
+  return lowerPair(db, { ...params, level: 'PUBLIC' });
+}
+
+export type RelationLowerOutcome = 'lowered' | 'unchanged' | 'not-a-drop' | 'ignored';
+
+/**
+ * UNE personne baisse SON accord (#13933) : sortie (`PUBLIC`) ou baisse. Silencieux
+ * (RG-07), gravé dans l'historique que rien ne sert, et le cool-down de 30 jours
+ * tombe sur l'AUTRE (RG-08 : « l'autre ne peut pas redemander de montée »).
+ * Monter par cette porte est refusé (`not-a-drop`) : une montée est une demande.
+ */
+export async function lowerGrant(
+  db: UserRelationDb,
+  params: { actorId: string; otherId: string; level: RelationLevel; at: Date; cooldownUntil: Date },
+): Promise<RelationLowerOutcome> {
+  const pair = pairOf(params.actorId, params.otherId);
+  if (!pair) return 'ignored';
+  const side = relationSideOf(pair, params.actorId);
+  if (!side) return 'ignored';
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const row = await readPair(db, pair);
+    const current: Grants = row ? grantsOf(row) : { low: 'PUBLIC', high: 'PUBLIC' };
+    const order = compareRelationLevel(params.level, current[side]);
+    if (order > 0) return 'not-a-drop';
+    if (order === 0 || !row) return 'unchanged';
+    const target: Grants = { ...current, [side]: params.level };
+    if (await moveTo(db, row, pair, target, params.at, { userId: params.otherId, until: params.cooldownUntil })) return 'lowered';
+  }
+  throw new Error('lowerGrant: la paire change sans cesse, abandon après plusieurs reprises');
+}
+
+/**
+ * Le refus (ou l'ignorance) d'une demande retient son ÉMETTEUR de redemander
+ * pendant `until` (RG-08). Écrit sur la ligne de la paire, créée à PUBLIC/PUBLIC si
+ * la paire n'en a pas encore ; n'écrit jamais d'historique de niveau.
+ */
+export async function startCooldown(
+  db: UserRelationDb,
+  params: { userId: string; otherId: string; until: Date; at: Date },
+): Promise<void> {
+  const pair = pairOf(params.userId, params.otherId);
+  if (!pair) return;
+  const cooldown = { userId: params.userId, until: params.until };
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const row = await readPair(db, pair);
+    if (row) {
+      const { count } = await db.userRelation.updateMany({ where: { id: row.id }, data: cooldownColumn(pair, cooldown) });
+      if (count > 0) return;
+      continue;
+    }
+    try {
+      await db.userRelation.create({
+        data: {
+          ...pair, grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC', levelSince: params.at, origin: 'request',
+          transitions: [], ...cooldownColumn(pair, cooldown),
+        },
+      });
+      return;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+  throw new Error('startCooldown: la paire change sans cesse, abandon après plusieurs reprises');
 }
 
 /**

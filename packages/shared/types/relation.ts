@@ -77,6 +77,21 @@ export const relationRungAfter = (level: RelationLevel): RelationRequestLevel | 
   return null;
 };
 
+/**
+ * Le niveau qu'une demande ACCEPTÉE puis défaite laisse derrière elle (#13933) :
+ * Proche et Sang retombent d'un cran, Ami et Connaissance quittent le cercle (le
+ * sens historique de « retirer l'ami »).
+ */
+export const relationLevelBelow = (level: RelationRequestLevel): RelationLevel => {
+  if (level === 'BLOOD') return 'CLOSE';
+  if (level === 'CLOSE') return 'FRIEND';
+  return 'PUBLIC';
+};
+
+/** `candidate` retient-il un lien que `removed` fondait ? Vrai quand il vise le même cran ou un cran au-dessus. */
+export const requestLevelSustains = (candidate: RelationRequestLevel, removed: RelationRequestLevel): boolean =>
+  RANK[candidate] >= RANK[removed];
+
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
 /**

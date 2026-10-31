@@ -206,8 +206,8 @@ describe('#13933 — ce qui reste de l’ancienne loi', () => {
   });
 
   it('une demande ACCEPTÉE d’un cran inférieur ne retient pas la suivante', async () => {
-    const acceptee = demande('eeeeeeeeeeeeeeeeeeeeeeee', 'accepted', MOI, AUTRE, { targetLevel: 'ACQUAINTANCE' });
-    const { status } = await envoyer({ targetLevel: 'FRIEND' }, { liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')], demandes: [acceptee] });
+    const acceptee = demande('eeeeeeeeeeeeeeeeeeeeeeee', 'accepted', MOI, AUTRE, { targetLevel: 'FRIEND' });
+    const { status } = await envoyer({ targetLevel: 'CLOSE' }, { liens: [lien('FRIEND', 'FRIEND')], demandes: [acceptee], jours: semaines(4) });
 
     expect(status).toBe(201);
   });
