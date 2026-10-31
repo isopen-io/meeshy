@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Là où l'écran montrait un pictogramme sur disque teinté, il pose l'emblème DESSINÉ d'iOS (marque, Flamme, coffre,
- * gemme, coupe, tampon). L'emblème reste décoratif : seul son repère de test le désigne.
+ * gemme, coupe, tampon, pièce de Meesh). L'emblème reste décoratif : seul son repère de test le désigne.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -41,4 +41,6 @@ class ProgressionConceptEmblemComposeTest {
     @Test fun `l atlas pose le tampon`() = assertDrawn(ProgressionConcept.Atlas, "stamp")
 
     @Test fun `le niveau sans jeu pose la Signature`() = assertDrawn(ProgressionConcept.Level, "signature")
+
+    @Test fun `la Meesh pose sa piece dessinee`() = assertDrawn(ProgressionConcept.Meesh, "coin")
 }
