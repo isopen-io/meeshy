@@ -17,6 +17,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { amitieAcceptee, amisAcceptes, amisAcceptesParmi, niveauEffectif, niveauxParmi } from '../../../services/friendship';
 import { relationStore } from '../../helpers/user-relation-store';
+import { backfillFriendship } from '../../../services/relations/userRelationWriter';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 import type { MongoDocument } from '../../helpers/mongo-where';
 
@@ -98,7 +99,8 @@ describe('amitieAcceptee', () => {
           { senderId: BOB, receiverId: ALICE },
         ],
       },
-      select: { id: true },
+      select: { senderId: true, receiverId: true, respondedAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
     });
   });
 });
@@ -155,12 +157,40 @@ describe('niveauEffectif', () => {
     await expect(niveauEffectif(prisma as never, LOW, HIGH)).resolves.toBe('PUBLIC');
   });
 
-  it('la ligne l\'emporte sur la demande : une baisse gravée n\'est pas relevée par une vieille demande acceptée', async () => {
+  it('une baisse gravée APRÈS l\'acceptation l\'emporte : une vieille demande acceptée ne la relève pas', async () => {
     const { prisma } = relationStore({
-      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' })],
+      relations: [
+        relationRow({
+          grantedByLow: 'ACQUAINTANCE',
+          grantedByHigh: 'FRIEND',
+          transitions: [{ actorId: LOW, from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date('2026-09-20T00:00:00.000Z') }],
+        }),
+      ],
       friendRequests: [acceptedRequest(LOW, HIGH)],
     });
     await expect(niveauEffectif(prisma as never, LOW, HIGH)).resolves.toBe('ACQUAINTANCE');
+  });
+
+  it('une ligne née plus bas SANS baisse (Connaissance avant le rattrapage) ne fait perdre aucun ami : la demande acceptée se lit FRIEND', async () => {
+    const { prisma } = relationStore({
+      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })],
+      friendRequests: [acceptedRequest(LOW, HIGH)],
+    });
+    await expect(niveauEffectif(prisma as never, LOW, HIGH)).resolves.toBe('FRIEND');
+  });
+
+  it('une baisse ANTÉRIEURE à l\'acceptation (amitié rompue puis renouée, écriture du lien ratée) ne retient rien', async () => {
+    const { prisma } = relationStore({
+      relations: [
+        relationRow({
+          grantedByLow: 'PUBLIC',
+          grantedByHigh: 'PUBLIC',
+          transitions: [{ actorId: LOW, from: 'FRIEND', to: 'PUBLIC', at: new Date('2026-08-01T00:00:00.000Z') }],
+        }),
+      ],
+      friendRequests: [acceptedRequest(HIGH, LOW, { respondedAt: new Date('2026-09-01T00:00:00.000Z') })],
+    });
+    await expect(niveauEffectif(prisma as never, LOW, HIGH)).resolves.toBe('FRIEND');
   });
 
   it('lit un niveau illisible comme PUBLIC et deux identifiants identiques ou vides comme PUBLIC', async () => {
@@ -222,12 +252,59 @@ describe('amitieAcceptee / amisAcceptesParmi — des PROJECTIONS du niveau (nive
   });
 });
 
+describe('le niveau lu AVANT le rattrapage est celui qu\'il laissera (aucun ami perdu ni gagné, spec § 2)', () => {
+  const drop = (at: string) => [{ actorId: LOW, from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date(at) }];
+  const scenarios = [
+    { name: 'aucune ligne', relations: [] },
+    { name: 'ligne Connaissance sans baisse', relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })] },
+    { name: 'ligne à sens unique', relations: [relationRow({ grantedByLow: 'CLOSE', grantedByHigh: 'PUBLIC' })] },
+    {
+      name: 'baisse après l\'acceptation',
+      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', transitions: drop('2026-09-20T00:00:00.000Z') })],
+    },
+    {
+      name: 'baisse avant l\'acceptation',
+      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', transitions: drop('2026-08-20T00:00:00.000Z') })],
+    },
+    { name: 'ligne Sang', relations: [relationRow({ grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD' })] },
+  ];
+
+  it.each(scenarios)('$name : niveauEffectif, niveauxParmi et amisAcceptes ne bougent pas quand le rattrapage passe', async ({ relations }) => {
+    const store = relationStore({ relations, friendRequests: [acceptedRequest(LOW, HIGH)] });
+    const read = async () => ({
+      pair: await niveauEffectif(store.prisma as never, LOW, HIGH),
+      among: (await niveauxParmi(store.prisma as never, LOW, [HIGH])).get(HIGH),
+      friends: await amisAcceptes(store.prisma as never, LOW),
+    });
+
+    const before = await read();
+    await backfillFriendship(store.prisma as never, {
+      userA: LOW,
+      userB: HIGH,
+      acceptedAt: new Date('2026-09-01T00:00:00.000Z'),
+      now: new Date('2026-10-31T00:00:00.000Z'),
+    });
+    const after = await read();
+
+    expect(before).toEqual(after);
+    expect(before.among).toBe(before.pair);
+    expect(before.friends.includes(HIGH)).toBe(['FRIEND', 'CLOSE', 'BLOOD'].includes(before.pair));
+  });
+});
+
 describe('amisAcceptes', () => {
-  it('rend les liens >= Ami (lignes ET repli sur les demandes acceptées), sans doublon, les plus récents d\'abord', async () => {
+  it('rend les liens >= Ami (lignes ET repli sur les demandes acceptées, sauf baisse postérieure), sans doublon, les plus récents d\'abord', async () => {
     const { prisma } = relationStore({
       relations: [
         relationRow({ updatedAt: new Date('2026-10-05T00:00:00.000Z') }),
-        relationRow({ id: 'rel-2', userLowId: LOW, userHighId: FAR, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' }),
+        relationRow({
+          id: 'rel-2',
+          userLowId: LOW,
+          userHighId: FAR,
+          grantedByLow: 'ACQUAINTANCE',
+          grantedByHigh: 'FRIEND',
+          transitions: [{ actorId: LOW, from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date('2026-09-20T00:00:00.000Z') }],
+        }),
       ],
       friendRequests: [
         acceptedRequest(LOW, HIGH),

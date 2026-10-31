@@ -991,6 +991,314 @@
         "reason": "level",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "friend-sees-game-basics",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "game.basic"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "acquaintance-sees-no-game",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "game.basic"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "close-sees-sparks-and-glory",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "game.sparksGlory"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "friend-sees-no-sparks",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "game.sparksGlory"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "close-is-told-who-comments-my-posts",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "relay.commentersOnMyPosts"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "friend-is-not-told-who-comments-my-posts",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "relay.commentersOnMyPosts"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "blood-proximity-needs-consent",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.proximity"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "close-has-no-proximity",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.proximity"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "public-cannot-read-acquaintance-audience",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "audience.acquaintances"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "close-reads-close-audience",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "audience.close"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "close-cannot-read-blood-audience",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "friend-has-no-listening-category",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "listening.category"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "blood-listening-title-needs-consent",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "listening.title"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "close-has-no-location-history",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.history"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
     }
   ]
 }

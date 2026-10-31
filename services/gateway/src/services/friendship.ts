@@ -6,6 +6,7 @@ import {
   relationPairKey,
   type RelationLevel,
 } from '@meeshy/shared/types/relation';
+import { friendshipBackfillProjection, type UserRelationRow } from './relations/userRelationWriter';
 
 /**
  * LE SITE UNIQUE DU NIVEAU EFFECTIF entre deux comptes (#13927, cercles).
@@ -20,14 +21,18 @@ import {
  *
  * ## D'où vient le niveau
  *
- * 1. la ligne `UserRelation` de la paire, si elle existe : le MINIMUM des deux
- *    accords (RG-01 : aucun accès à sens unique), toute valeur illisible lue
- *    PUBLIC. La ligne l'emporte, y compris quand elle est plus basse qu'une
- *    demande acceptée : c'est une baisse (RG-07), et une vieille demande ne la
- *    relève pas ;
- * 2. à défaut de ligne, une `FriendRequest` ACCEPTÉE se lit `FRIEND` — le
- *    rattrapage (`scripts/2026-10-31-backfill-user-relations.ts`) n'a pas encore
- *    écrit la paire, et rien n'est rétrogradé rétroactivement ;
+ * 1. la ligne `UserRelation` de la paire : le MINIMUM des deux accords (RG-01 :
+ *    aucun accès à sens unique), toute valeur illisible lue PUBLIC ;
+ * 2. une `FriendRequest` ACCEPTÉE entre les deux se lit comme le RATTRAPAGE la
+ *    laissera (`friendshipBackfillProjection`, `relations/userRelationWriter.ts`) :
+ *    sans ligne, ou sur une ligne née plus bas sans baisse postérieure à
+ *    l'acceptation (Connaissance née avant le rattrapage, écriture du lien
+ *    ratée après une amitié renouée), elle vaut `FRIEND` au moins. Une baisse
+ *    gravée À la date de l'acceptation ou APRÈS l'emporte (RG-07) : une vieille
+ *    demande ne la relève pas. Le niveau lu avant le rattrapage est donc celui
+ *    qu'il laissera — aucun ami perdu ni gagné entre le déploiement et le
+ *    rattrapage (spec § 2) ; une seconde règle de réconciliation, ici, aurait
+ *    divergé de celle de l'écrivain ;
  * 3. sinon `PUBLIC`.
  *
  * Le niveau rendu est celui des ACCORDS. Le relèvement à COMMUNITY (une
@@ -36,17 +41,31 @@ import {
  */
 export type RelationLevelDb = Pick<PrismaClient, 'friendRequest' | 'userRelation'>;
 
-type GrantRow = {
-  readonly userLowId: string;
-  readonly userHighId: string;
-  readonly grantedByLow?: string | null;
-  readonly grantedByHigh?: string | null;
-};
-
 const MIN_FRIEND: RelationLevel = 'FRIEND';
 const FRIEND_AND_ABOVE: readonly RelationLevel[] = ['FRIEND', 'CLOSE', 'BLOOD'];
 
-const grantedMinimum = (row: GrantRow): RelationLevel =>
+const LINK_SELECT = {
+  id: true,
+  userLowId: true,
+  userHighId: true,
+  grantedByLow: true,
+  grantedByHigh: true,
+  transitions: true,
+} as const;
+
+const ACCEPTANCE_SELECT = { senderId: true, receiverId: true, respondedAt: true, updatedAt: true } as const;
+
+type Acceptance = {
+  readonly senderId: string;
+  readonly receiverId: string;
+  readonly respondedAt?: Date | null;
+  readonly updatedAt?: Date | null;
+};
+
+/** `undefined` : aucune demande acceptée ; `null` : acceptée, sans date lisible. */
+type AcceptedAt = Date | null | undefined;
+
+const grantedMinimum = (row: Pick<UserRelationRow, 'grantedByLow' | 'grantedByHigh'>): RelationLevel =>
   minRelationLevel(parseRelationLevel(row.grantedByLow), parseRelationLevel(row.grantedByHigh));
 
 const isFriendLevel = (level: RelationLevel): boolean => compareRelationLevel(level, MIN_FRIEND) >= 0;
@@ -54,8 +73,30 @@ const isFriendLevel = (level: RelationLevel): boolean => compareRelationLevel(le
 const otherSide = (row: { userLowId: string; userHighId: string }, subject: string): string =>
   row.userLowId === subject ? row.userHighId : row.userLowId;
 
-/** La demande ACCEPTÉE entre deux comptes, dans un sens comme dans l'autre. `pending` et `rejected` ne valent rien. */
-async function demandeAcceptee(prisma: Pick<PrismaClient, 'friendRequest'>, a: string, b: string): Promise<boolean> {
+const otherParty = (request: Pick<Acceptance, 'senderId' | 'receiverId'>, subject: string): string =>
+  request.senderId === subject ? request.receiverId : request.senderId;
+
+/** La date d'acceptation, comme le rattrapage la lit (`respondedAt`, à défaut `updatedAt`). */
+const acceptedAtOf = (request: Acceptance): Date | null => request.respondedAt ?? request.updatedAt ?? null;
+
+/** La PLUS RÉCENTE des acceptations d'une paire (sans unique de paire, il peut y en avoir plusieurs). */
+const latestAcceptance = (current: AcceptedAt, next: Date | null): Date | null => {
+  if (!current) return next;
+  if (!next) return current;
+  return next.getTime() > current.getTime() ? next : current;
+};
+
+/** Le niveau servi : celui de la ligne telle que le rattrapage la laissera. */
+function servedLevel(row: UserRelationRow | null, a: string, b: string, acceptedAt: AcceptedAt): RelationLevel {
+  if (acceptedAt === undefined) return row ? grantedMinimum(row) : 'PUBLIC';
+  const projected = friendshipBackfillProjection(row, relationPairKey(a, b), acceptedAt);
+  return projected ? grantedMinimum(projected) : 'PUBLIC';
+}
+
+const needsAcceptance = (row: UserRelationRow | null | undefined): boolean => !row || !isFriendLevel(grantedMinimum(row));
+
+/** La demande ACCEPTÉE la plus récente entre deux comptes, dans un sens comme dans l'autre. `pending` et `rejected` ne valent rien. */
+async function acceptationEntre(prisma: Pick<PrismaClient, 'friendRequest'>, a: string, b: string): Promise<AcceptedAt> {
   const ligne = await prisma.friendRequest.findFirst({
     where: {
       status: 'accepted',
@@ -64,41 +105,49 @@ async function demandeAcceptee(prisma: Pick<PrismaClient, 'friendRequest'>, a: s
         { senderId: b, receiverId: a },
       ],
     },
-    select: { id: true },
+    select: ACCEPTANCE_SELECT,
+    orderBy: { updatedAt: 'desc' },
   });
 
-  return ligne !== null;
+  return ligne ? acceptedAtOf(ligne) : undefined;
 }
 
 export async function niveauEffectif(prisma: RelationLevelDb, a: string, b: string): Promise<RelationLevel> {
   if (!a || !b || a === b) return 'PUBLIC';
 
-  const ligne = await prisma.userRelation.findUnique({
+  const ligne: UserRelationRow | null = await prisma.userRelation.findUnique({
     where: { userLowId_userHighId: relationPairKey(a, b) },
-    select: { userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true },
+    select: LINK_SELECT,
   });
-  if (ligne) return grantedMinimum(ligne);
+  if (ligne && isFriendLevel(grantedMinimum(ligne))) return grantedMinimum(ligne);
 
-  return (await demandeAcceptee(prisma, a, b)) ? 'FRIEND' : 'PUBLIC';
+  return servedLevel(ligne, a, b, await acceptationEntre(prisma, a, b));
 }
 
 async function lignesParmi(
   prisma: Pick<PrismaClient, 'userRelation'>,
   sujet: string,
   autres: ReadonlyArray<string>
-): Promise<ReadonlyMap<string, RelationLevel>> {
-  const lignes = await prisma.userRelation.findMany({
+): Promise<ReadonlyMap<string, UserRelationRow>> {
+  if (autres.length === 0) return new Map();
+  const lignes: UserRelationRow[] = await prisma.userRelation.findMany({
     where: {
       OR: [
         { userLowId: sujet, userHighId: { in: [...autres] } },
         { userHighId: sujet, userLowId: { in: [...autres] } },
       ],
     },
-    select: { userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true },
+    select: LINK_SELECT,
   });
 
-  return new Map(lignes.map((ligne) => [otherSide(ligne, sujet), grantedMinimum(ligne)]));
+  return new Map(lignes.map((ligne) => [otherSide(ligne, sujet), ligne]));
 }
+
+const acceptationsParAutre = (sujet: string, demandes: ReadonlyArray<Acceptance>): ReadonlyMap<string, Date | null> =>
+  demandes.reduce((parAutre, demande) => {
+    const autre = otherParty(demande, sujet);
+    return parAutre.set(autre, latestAcceptance(parAutre.get(autre), acceptedAtOf(demande)));
+  }, new Map<string, Date | null>());
 
 /**
  * Le niveau de `sujet` avec CHACUN des `candidats` — la même loi que
@@ -114,23 +163,23 @@ export async function niveauxParmi(
   if (!sujet || autres.length === 0) return new Map();
 
   const lues = await lignesParmi(prisma, sujet, autres);
-  const sansLigne = autres.filter((id) => !lues.has(id));
-  const demandes =
-    sansLigne.length === 0
+  const aRapprocher = autres.filter((id) => needsAcceptance(lues.get(id)));
+  const demandes: Acceptance[] =
+    aRapprocher.length === 0
       ? []
       : await prisma.friendRequest.findMany({
           where: {
             status: 'accepted',
             OR: [
-              { senderId: sujet, receiverId: { in: sansLigne } },
-              { senderId: { in: sansLigne }, receiverId: sujet },
+              { senderId: sujet, receiverId: { in: aRapprocher } },
+              { senderId: { in: aRapprocher }, receiverId: sujet },
             ],
           },
-          select: { senderId: true, receiverId: true },
+          select: ACCEPTANCE_SELECT,
         });
-  const acceptees = new Set(demandes.map((d) => (d.senderId === sujet ? d.receiverId : d.senderId)));
+  const acceptations = acceptationsParAutre(sujet, demandes);
 
-  return new Map(autres.map((id) => [id, lues.get(id) ?? (acceptees.has(id) ? 'FRIEND' : 'PUBLIC')]));
+  return new Map(autres.map((id) => [id, servedLevel(lues.get(id) ?? null, sujet, id, acceptations.get(id))]));
 }
 
 /**
@@ -194,7 +243,7 @@ export async function amisAcceptes(
     }),
     prisma.friendRequest.findMany({
       where: { status: 'accepted', OR: [{ senderId: sujet }, { receiverId: sujet }] },
-      select: { senderId: true, receiverId: true, updatedAt: true },
+      select: ACCEPTANCE_SELECT,
       orderBy: { updatedAt: 'desc' },
       take: options.limit,
     }),
@@ -203,11 +252,15 @@ export async function amisAcceptes(
   const viaLignes: DatedFriend[] = lignes.map((l) => ({ id: otherSide(l, sujet), at: timeOf(l.updatedAt) }));
   const dejaAmis = new Set(viaLignes.map((f) => f.id));
   const viaDemandes: DatedFriend[] = demandes
-    .map((d) => ({ id: d.senderId === sujet ? d.receiverId : d.senderId, at: timeOf(d.updatedAt) }))
+    .map((d) => ({ id: otherParty(d, sujet), at: timeOf(d.updatedAt) }))
     .filter((f) => f.id && f.id !== sujet && !dejaAmis.has(f.id));
 
-  const niveaux = await lignesParmi(prisma, sujet, [...new Set(viaDemandes.map((f) => f.id))]);
-  const recuperes = viaDemandes.filter((f) => !niveaux.has(f.id) || isFriendLevel(niveaux.get(f.id) as RelationLevel));
+  const candidats = [...new Set(viaDemandes.map((f) => f.id))];
+  const lues = await lignesParmi(prisma, sujet, candidats);
+  const acceptations = acceptationsParAutre(sujet, demandes);
+  const recuperes = viaDemandes.filter((f) =>
+    isFriendLevel(servedLevel(lues.get(f.id) ?? null, sujet, f.id, acceptations.get(f.id)))
+  );
 
   const tous = lastSeenPerId([...viaLignes, ...recuperes]).sort(newestFirst);
   return tous.slice(0, options.limit).map((f) => f.id);

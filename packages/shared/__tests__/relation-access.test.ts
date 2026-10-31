@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import casesFile from '../fixtures/relation-access-cases.json';
 import { resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
 import {
+  RELATION_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_LEVEL_LABELS,
   RELATION_LEVEL_PRESENTATION,
@@ -46,6 +47,19 @@ describe('fixtures partagées — l\'oracle écrit à la main est rejoué contre
   it('porte assez de cas pour que les miroirs aient de quoi se mesurer', () => {
     expect(file.cases.length).toBeGreaterThanOrEqual(40);
     expect(new Set(file.cases.map((c) => c.id)).size).toBe(file.cases.length);
+  });
+
+  it('nomme CHAQUE feature de la matrice, autorisée à son seuil et refusée un cran dessous : un miroir ne peut diverger sur aucune', () => {
+    const verdictsByFeature = file.cases.reduce(
+      (byFeature, c) => byFeature.set(String(c.input.feature), [...(byFeature.get(String(c.input.feature)) ?? []), c]),
+      new Map<string, Array<(typeof file.cases)[number]>>(),
+    );
+    const uncovered = RELATION_FEATURES.filter((feature) => {
+      if (feature === 'acquaintance.auto') return !verdictsByFeature.has(feature);
+      const verdicts = (verdictsByFeature.get(feature) ?? []).map((c) => (c.expected as { allowed: boolean }).allowed);
+      return !(verdicts.includes(true) && verdicts.includes(false));
+    });
+    expect(uncovered).toEqual([]);
   });
 
   it.each(file.cases.map((c) => [c.id, c] as const))('cas %s', (_id, c) => {

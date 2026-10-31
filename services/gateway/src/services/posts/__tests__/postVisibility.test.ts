@@ -88,7 +88,8 @@ describe('canUserViewPost', () => {
             { senderId: 'viewer-1', receiverId: 'author-1' },
           ],
         },
-        select: { id: true },
+        select: { senderId: true, receiverId: true, respondedAt: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
       });
     });
 

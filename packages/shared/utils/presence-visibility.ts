@@ -8,7 +8,7 @@ export type PresenceVisibilityInput = {
   /**
    * Niveau EFFECTIF du lien viewer/cible (minimum des deux accords). Remplace le
    * booléen d'amitié : `niveau >= FRIEND` rend les verdicts de l'ancien
-   * l'ancien booléen d'amitié, au bit près (#13927).
+   * booléen, au bit près (#13927).
    */
   readonly relationLevel: RelationLevel;
   readonly targetShowOnlineStatus: boolean;

@@ -317,10 +317,19 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
   const FULL = { showOnline: true, showLastSeenTimestamp: true };
   const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
 
-  function serviceWithRelation(row: { grantedByLow: string; grantedByHigh: string } | null, request = false) {
+  const ACCEPTED_AT = new Date('2026-09-01T00:00:00.000Z');
+
+  function serviceWithRelation(
+    row: { grantedByLow: string; grantedByHigh: string; transitions?: ReadonlyArray<Record<string, unknown>> } | null,
+    request = false,
+  ) {
     const prisma = {
       user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
-      friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(request ? { id: 'fr' } : null) },
+      friendRequest: {
+        findFirst: jest.fn<any>().mockResolvedValue(
+          request ? { senderId: LOW_ID, receiverId: HIGH_ID, respondedAt: ACCEPTED_AT, updatedAt: ACCEPTED_AT } : null,
+        ),
+      },
       userRelation: {
         findUnique: jest.fn<any>().mockResolvedValue(row ? { userLowId: LOW_ID, userHighId: HIGH_ID, ...row } : null),
         findMany: jest.fn<any>().mockResolvedValue([]),
@@ -349,10 +358,17 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
     await expect(resolve(serviceWithRelation({ grantedByLow: low, grantedByHigh: high }))).resolves.toEqual(HIDDEN);
   });
 
-  it('une baisse gravée l\'emporte sur une vieille demande acceptée', async () => {
+  it('une baisse gravée après l\'acceptation l\'emporte sur la vieille demande acceptée', async () => {
+    const drop = { actorId: LOW_ID, from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date('2026-09-20T00:00:00.000Z') };
     await expect(
-      resolve(serviceWithRelation({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' }, true)),
+      resolve(serviceWithRelation({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND', transitions: [drop] }, true)),
     ).resolves.toEqual(HIDDEN);
+  });
+
+  it('une ligne née sous Ami SANS baisse ne cache pas la présence d\'un ami accepté avant le rattrapage', async () => {
+    await expect(
+      resolve(serviceWithRelation({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' }, true)),
+    ).resolves.toEqual(FULL);
   });
 
   it('sans ligne, la demande acceptée se lit toujours Ami (aucune rétrogradation rétroactive)', async () => {
