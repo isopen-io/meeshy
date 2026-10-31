@@ -205,6 +205,9 @@ ENV HOME=/workspace \
     PYTHONPATH=/workspace:/workspace/generated \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    # #13865 — un crash natif (segfault, abort) imprime la pile Python de
+    # chaque thread dans les journaux, au lieu d'un seul « exit 139 ».
+    PYTHONFAULTHANDLER=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # Application paths
