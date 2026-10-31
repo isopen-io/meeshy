@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13913 : le compositeur nomme le format qu'il compose — les variantes post et réel (ou story) des libellés qui le nomment. -->
+<resources>
+    <string name="stories_composer_canvas_post">Toile du post — pincez pour zoomer, glissez pour déplacer</string>
+    <string name="stories_composer_canvas_reel">Toile du réel — pincez pour zoomer, glissez pour déplacer</string>
+    <string name="story_sound_sheet_title_post">Son du post</string>
+    <string name="story_sound_sheet_title_reel">Son du réel</string>
+    <string name="story_sound_library_emptyMine_post">Vos sons apparaîtront ici dès que vous publierez un post avec un audio original.</string>
+    <string name="story_sound_library_emptyMine_reel">Vos sons apparaîtront ici dès que vous publierez un réel avec un audio original.</string>
+    <string name="story_media_soundExtraction_caption_story">D\'autres personnes pourront réutiliser la bande-son des vidéos de cette story.</string>
+    <string name="story_media_soundExtraction_caption_reel">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce réel.</string>
+    <string name="story_media_soundExtraction_a11yHint_story">D\'autres personnes pourront réutiliser la bande-son des vidéos de cette story dans leurs propres publications.</string>
+    <string name="story_media_soundExtraction_a11yHint_reel">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce réel dans leurs propres publications.</string>
+    <string name="composer_post_text_reel">Texte du réel</string>
+</resources>

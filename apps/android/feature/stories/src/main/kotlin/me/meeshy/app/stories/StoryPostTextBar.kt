@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.ComposerPostTextPolicy
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
@@ -38,7 +39,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  */
 @Composable
 internal fun PostTextPill(text: String, onClick: () -> Unit) {
-    val label = stringResource(R.string.composer_post_text)
+    val label = formatLabel(ComposerFormatLabel.POST_TEXT)
     Row(
         modifier = Modifier
             .fillMaxWidth()

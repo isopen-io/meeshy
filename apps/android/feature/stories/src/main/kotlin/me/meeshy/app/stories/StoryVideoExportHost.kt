@@ -68,7 +68,7 @@ import me.meeshy.ui.theme.hexColor
 
 /** L'export vidéo vu du lecteur : [start] lance Enregistrer, Partager ou Imager ; [busy] fige la lecture tant qu'il dure. */
 @Stable
-internal class StoryVideoExport(val busy: Boolean, private val launch: (StoryExportMode) -> Unit) {
+class StoryVideoExport internal constructor(val busy: Boolean, private val launch: (StoryExportMode) -> Unit) {
     fun start(mode: StoryExportMode) = launch(mode)
 }
 
@@ -78,6 +78,16 @@ internal class StoryVideoExport(val busy: Boolean, private val launch: (StoryExp
  */
 @Composable
 internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideView?): StoryVideoExport {
+    val currentSlide by rememberUpdatedState(slide)
+    return rememberSceneVideoExport { listOfNotNull(item()?.let { story -> currentSlide?.let { story to it } }) }
+}
+
+/**
+ * L'export d'une ou plusieurs scènes ([scenes], lues au moment du geste) : un post à scène ou un réel s'exporte entier, ses
+ * scènes bout à bout, par le même moteur que la story (#13896). Le choix de longueur, la peinture et le voile vivent ici.
+ */
+@Composable
+fun rememberSceneVideoExport(scenes: () -> List<Pair<StoryItem, StorySlideView>>): StoryVideoExport {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val viewModel: StoryVideoExportViewModel = hiltViewModel()
@@ -86,8 +96,7 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
     val failed = stringResource(R.string.stories_scene_export_failed)
     val saved = stringResource(R.string.stories_scene_export_saved)
     val shareTitle = stringResource(R.string.stories_viewer_export_share)
-    val currentItem by rememberUpdatedState(item)
-    val currentSlide by rememberUpdatedState(slide)
+    val currentScenes by rememberUpdatedState(scenes)
 
     LaunchedEffect(exportState) {
         when (val export = exportState) {
@@ -114,11 +123,10 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
 
     return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode ->
         scope.launch {
-            val story = currentItem() ?: return@launch
-            val shown = currentSlide ?: return@launch
+            val shown = currentScenes().takeIf { it.isNotEmpty() } ?: return@launch
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
-            viewModel.export(mode, story, shown)
+            viewModel.export(mode, shown)
         }
     }
 }
@@ -273,9 +281,9 @@ private fun shareVideo(context: Context, file: File, chooserTitle: String) {
     )
 }
 
-/** Les trois sorties vidéo du menu ⋮, offertes sur toute story comme iOS « Exporter en vidéo ». */
+/** Les trois sorties vidéo du menu ⋮, offertes sur toute story, tout post à scène et tout réel, comme iOS « Exporter en vidéo ». */
 @Composable
-internal fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit) {
+fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit) {
     DropdownMenuItem(
         text = { Text(stringResource(R.string.stories_viewer_export_save)) },
         leadingIcon = { Icon(MeeshyIcons.Download, contentDescription = null) },

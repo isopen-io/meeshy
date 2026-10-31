@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
@@ -51,6 +52,25 @@ internal fun StoryComposerSceneFirst(
     sheet: StorySheetSlot = StorySheetSlot(open = null, onDismiss = {}) {},
     keyboard: TypingKeyboard? = null,
     capture: StorySceneCapture? = null,
+) {
+    // La scène, ses feuilles et son socle nomment le format qu'elle compose (#13913) : posé ici, sous chaque porte.
+    CompositionLocalProvider(LocalComposerSceneNoun provides state.variant.noun) {
+        SceneFirstFrame(state, viewModel, sceneExport, doors, morePanel, onMorePanel, formatChevron, sheet, keyboard, capture)
+    }
+}
+
+@Composable
+private fun SceneFirstFrame(
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    sceneExport: SceneExportHost,
+    doors: StoryComposerDoors,
+    morePanel: StoryMorePanel?,
+    onMorePanel: (StoryMorePanel?) -> Unit,
+    formatChevron: (@Composable () -> Unit)?,
+    sheet: StorySheetSlot,
+    keyboard: TypingKeyboard?,
+    capture: StorySceneCapture?,
 ) {
     val comparison = remember { LookComparison() }
     val armed = capture?.armed == true

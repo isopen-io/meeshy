@@ -62,6 +62,7 @@ class StoryVideoExportPreparerTest {
         val fetched = mutableListOf<String>()
         var asked: List<ImagerLengthChoice>? = null
         var painted: StoryExportPaintRequest? = null
+        val paints = mutableListOf<StoryExportPaintRequest>()
     }
 
     private fun preparer(
@@ -81,6 +82,7 @@ class StoryVideoExportPreparerTest {
         chooseLength = { choices -> recorder.asked = choices; answer },
         paint = { request ->
             recorder.painted = request
+            recorder.paints += request
             if (!paints) null else request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } }
         },
     )
@@ -162,5 +164,48 @@ class StoryVideoExportPreparerTest {
         val legacy = StoryExportSubject.of(StoryItem(id = "x"), slide(withVideo = false).copy(backgroundAudioUrl = "$base/voix.m4a"), base)
         assertThat(legacy.source.legacyBackgroundTrack).isEqualTo("$base/voix.m4a")
         assertThat(legacy.downloads).containsExactly("$base/voix.m4a")
+    }
+
+    private fun scene(id: String, seconds: Float, text: String) = StoryExportScene.of(
+        item = StoryItem(
+            id = id,
+            media = listOf(FeedMedia(id = "m-$id", type = FeedMediaType.AUDIO, url = "/api/v1/attachments/file/$id.m4a")),
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "t-$id", text = text, startTime = 1.0, duration = 2.0)),
+                audioPlayerObjects = listOf(StoryAudioPlayerObject(id = "a-$id", postMediaId = "m-$id", isBackground = true, duration = seconds)),
+            ),
+        ),
+        slide = slide(withVideo = false).copy(id = id, text = text),
+        apiBaseUrl = base,
+    )
+
+    @Test fun `un post a deux scenes se rend entier, scene apres scene, chacune peinte a part et a sa place`() = runTest {
+        val recorder = Recorder()
+        val scenes = listOf(scene("s1", 30f, "Un"), scene("s2", 45f, "Deux"))
+        val job = preparer(recorder, durations = mapOf("s1.m4a" to 30_000L, "s2.m4a" to 45_000L))
+            .prepare(StoryExportMode.SAVE, scenes, folder.newFile("post.mp4"), folder.newFolder("wp"))
+
+        assertThat(job.plan.totalMillis).isEqualTo(75_000)
+        assertThat(job.plan.slides.map { it.startMillis }).containsExactly(0L, 30_000L).inOrder()
+        assertThat(job.fills).hasSize(2)
+        assertThat(recorder.paints.map { it.slide.text }).containsExactly("Un", "Deux").inOrder()
+        assertThat(recorder.paints.map { it.directory }.distinct()).hasSize(2)
+        assertThat(recorder.paints.map { it.durationMillis }).containsExactly(30_000L, 45_000L).inOrder()
+        assertThat(job.overlays.map { it.startMillis }).containsAtLeast(0L, 1_000L, 30_000L, 31_000L).inOrder()
+        assertThat(job.overlays.last().endMillis).isEqualTo(75_000)
+        assertThat(job.plan.sounds.map { it.startMillis }).containsExactly(0L, 30_000L).inOrder()
+        assertThat(recorder.asked).isNull()
+    }
+
+    @Test fun `imager un post de deux minutes en deux quarts ne rend que sa premiere scene`() = runTest {
+        val recorder = Recorder()
+        val scenes = listOf(scene("s1", 60f, "Un"), scene("s2", 60f, "Deux"))
+        val job = preparer(recorder, durations = mapOf("s1.m4a" to 60_000L, "s2.m4a" to 60_000L))
+            .prepare(StoryExportMode.IMAGER, scenes, folder.newFile("post.mp4"), folder.newFolder("wi"))
+
+        assertThat(recorder.asked!!.map { it.durationMillis }).containsExactly(30_000L, 60_000L, 90_000L, 120_000L).inOrder()
+        assertThat(job.plan.totalMillis).isEqualTo(60_000)
+        assertThat(job.fills).hasSize(1)
+        assertThat(recorder.paints.map { it.slide.text }).containsExactly("Un")
     }
 }

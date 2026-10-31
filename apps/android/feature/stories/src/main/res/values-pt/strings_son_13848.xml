@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="story_sound_sheet_title">Som da história</string>
+    <string name="story_sound_sheet_title">Som do story</string>
     <string name="story_sound_sheet_current">Neste slide</string>
     <string name="story_sound_sheet_role_background">Em segundo plano</string>
     <string name="story_sound_sheet_role_scene">Na cena</string>

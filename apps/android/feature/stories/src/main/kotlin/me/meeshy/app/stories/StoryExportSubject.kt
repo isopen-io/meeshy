@@ -10,6 +10,17 @@ import me.meeshy.sdk.model.scene.export.StoryExportTimeline
 import me.meeshy.sdk.util.resolveMediaUrl
 
 /**
+ * Une scène à exporter : ce qu'elle fait entendre ([subject]) et sa projection ([slide]), celle que le lecteur peint. Une story
+ * en est une ; un post à scène ou un réel en porte une par scène, rendues l'une après l'autre (#13896).
+ */
+data class StoryExportScene(val subject: StoryExportSubject, val slide: StorySlideView) {
+    companion object {
+        fun of(item: StoryItem, slide: StorySlideView, apiBaseUrl: String?): StoryExportScene =
+            StoryExportScene(StoryExportSubject.of(item, slide, apiBaseUrl), slide)
+    }
+}
+
+/**
  * Ce qu'une story exporte : ses objets sonores à l'adresse où le lecteur les joue, et sa vidéo de fond avec la fenêtre
  * que l'auteur a taillée. Une story héritée, qui ne nomme aucun objet sonore, exporte la piste et la vidéo que la
  * projection lui a résolues.

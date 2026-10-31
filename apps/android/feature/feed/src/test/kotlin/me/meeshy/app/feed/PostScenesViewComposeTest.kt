@@ -31,6 +31,8 @@ class PostScenesViewComposeTest {
 
     private val card: ReelSceneRenderer = { item, _, live, modifier -> painted += item.id to live; Box(modifier) }
     private val reader: PostSceneReaderRenderer = { item, _, playing, modifier -> read += item.id to playing; Box(modifier) }
+    private val exported = mutableListOf<List<String>>()
+    private val exporter: PostSceneExportRenderer = { scenes, _, modifier -> exported += scenes.map { it.id }; Box(modifier) }
 
     private fun scenePost(layout: MosaicLayoutMode, vararg ids: String) = feedPostPresentation(id = "p1").copy(
         scenes = FeedPostScenes(items = ids.map { StoryItem(id = it) }, layout = layout, accentHex = "6366F1"),
@@ -38,7 +40,11 @@ class PostScenesViewComposeTest {
 
     private fun show(post: FeedPostPresentation) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card, LocalPostSceneReaderRenderer provides reader) {
+            CompositionLocalProvider(
+                LocalReelSceneRenderer provides card,
+                LocalPostSceneReaderRenderer provides reader,
+                LocalPostSceneExportRenderer provides exporter,
+            ) {
                 FeedPostCardMediaSlot(post = post, onImageTap = {}, onOpenPost = {})
             }
         }
@@ -71,5 +77,16 @@ class PostScenesViewComposeTest {
         show(feedPostPresentation(id = "texte"))
 
         assertThat(painted).isEmpty()
+    }
+
+    @Test
+    fun `the full screen of a post offers to export the whole post, every scene, never the card alone`() {
+        show(scenePost(MosaicLayoutMode.CAROUSEL, "p1#scene-0", "p1#scene-1", "p1#scene-2"))
+
+        assertThat(exported).isEmpty()
+        compose.onNodeWithContentDescription("Scene 1").performClick()
+        compose.waitForIdle()
+
+        assertThat(exported.last()).containsExactly("p1#scene-0", "p1#scene-1", "p1#scene-2").inOrder()
     }
 }

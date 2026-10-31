@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.audio.ComposerVoiceCapture
 import me.meeshy.sdk.audio.MediaRecorderEngine
 import me.meeshy.sdk.media.MediaUploadItem
@@ -128,7 +129,7 @@ private fun StorySoundSheetHeader(onDone: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            stringResource(R.string.story_sound_sheet_title),
+            formatLabel(ComposerFormatLabel.SOUND_SHEET_TITLE),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f).semantics { heading() },
