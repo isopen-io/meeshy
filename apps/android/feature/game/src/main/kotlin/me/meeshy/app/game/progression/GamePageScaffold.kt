@@ -1,5 +1,6 @@
 package me.meeshy.app.game.progression
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -46,10 +47,10 @@ internal fun GamePageScaffold(
     onRefresh: (() -> Unit)?,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
+    scroll: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     MeeshyBackground {
-        val scroll = rememberScrollState()
         val density = LocalDensity.current.density
         val offsetDp by remember(scroll, density) {
             derivedStateOf { CollapsibleHeaderPageProgress.scrollOffsetDp(scroll.value, density) }
