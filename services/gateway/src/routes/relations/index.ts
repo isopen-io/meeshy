@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { registerRelationReads } from './read';
-import { registerRelationLevel } from './level';
+import { registerRelationLower } from './lower';
 import { registerRelationRitual } from './ritual';
 
 /**
@@ -9,6 +9,6 @@ import { registerRelationRitual } from './ritual';
  */
 export async function relationsRoutes(fastify: FastifyInstance): Promise<void> {
   registerRelationReads(fastify);
-  registerRelationLevel(fastify);
+  registerRelationLower(fastify);
   registerRelationRitual(fastify);
 }

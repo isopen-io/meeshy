@@ -61,7 +61,7 @@ internal fun StoryComposerScene(
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
-                backgroundModel = rememberStoryMediaLookModel(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl), state.backgroundMediaLook(comparison.mediaId)),
+                backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },

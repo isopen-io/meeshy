@@ -67,6 +67,8 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
         case backgroundMedia = "background.media"
         case backgroundMediaReplace = "background.media.replace"
         case backgroundMediaEdit = "background.media.edit"
+        case mediaPlacedEdit = "media.placed.edit"
+        case mediaSound = "media.sound"
     }
 
     let schemaVersion: Int
@@ -120,13 +122,45 @@ nonisolated extension ComposerEditTree {
             Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
                   material: "Sparkles", offer: .image, opens: .band),
             Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
-                  material: "VolumeUp", offer: .video, opens: .band),
+                  material: "VolumeUp", offer: .video, opens: .level, next: "media.sound"),
             Entry(id: "loop", label: "story.timeline.inspector.loop", sfSymbol: "repeat",
                   material: "Repeat", offer: .video, opens: .toggle),
             Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
                   material: "RotateRight", offer: .always, opens: .action),
             Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
                   material: "TextFields", offer: .always, opens: .sheet),
+        ]),
+        Level(id: "media.placed.edit", kind: .rail, title: "composer.selection.modify", entries: [
+            Entry(id: "crop", label: "composer.object.editor.crop", sfSymbol: "crop",
+                  material: "Crop", offer: .image, opens: .band),
+            Entry(id: "trim", label: "composer.capture.tool.trim", sfSymbol: "scissors",
+                  material: "Cut", offer: .trimmable, opens: .band),
+            Entry(id: "filters", label: "composer.object.editor.filter", sfSymbol: "camera.filters",
+                  material: "PhotoFilter", offer: .always, opens: .band),
+            Entry(id: "frames", label: "composer.capture.rail.frames", sfSymbol: "square.dashed",
+                  material: "CheckBoxBlank", offer: .look, opens: .band),
+            Entry(id: "adjust", label: "composer.object.editor.adjust", sfSymbol: "slider.horizontal.3",
+                  material: "Tune", offer: .always, opens: .band),
+            Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
+                  material: "Sparkles", offer: .image, opens: .band),
+            Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
+                  material: "VolumeUp", offer: .video, opens: .level, next: "media.sound"),
+            Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
+                  material: "RotateRight", offer: .always, opens: .action),
+            Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
+                  material: "TextFields", offer: .always, opens: .sheet),
+            Entry(id: "set-as-background", label: "story.canvas.action.setAsBackground", sfSymbol: "photo.on.rectangle",
+                  material: "Wallpaper", offer: .always, opens: .action),
+            Entry(id: "replace-background", label: "story.canvas.action.replaceBackground",
+                  sfSymbol: "photo.on.rectangle.angled", material: "SwapHorizontal", offer: .always, opens: .action),
+            Entry(id: "make-sticker", label: "composer.selection.makeSticker",
+                  sfSymbol: "person.crop.square.badge.camera", material: "Emoji", offer: .image, opens: .action),
+        ]),
+        Level(id: "media.sound", kind: .rail, title: "composer.rail.title.sound", entries: [
+            Entry(id: "volume", label: "composer.capture.sound.volume", sfSymbol: "speaker.wave.3",
+                  material: "VolumeUp", offer: .always, opens: .band),
+            Entry(id: "mute", label: "composer.object.editor.mute", sfSymbol: "speaker.slash",
+                  material: "VolumeOff", offer: .always, opens: .toggle),
         ]),
     ])
 }

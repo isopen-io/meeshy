@@ -40,11 +40,13 @@ import MeeshySDK
 /// y compris pour un objet tourné. C'est ce que `frame` rend d'un calque qui
 /// porte une transformation, et c'est ce qu'un auteur lit comme « la place que
 /// prend cet objet ». Un cadre tourné serait plus joli et dirait moins.
-/// ## Le cadre pointillé de la scène d'abord (#13839, L5)
+/// ## Le cadre plein de la scène d'abord (#13839, L5 ; #14043)
 ///
 /// La maquette validée le 2026-10-30 (état 3, « un élément sélectionné »)
-/// redessine le marqueur : un **pointillé blanc de 2 pt, décalé de 3 pt**, aux
+/// redessine le marqueur : un **trait blanc de 2 pt, décalé de 3 pt**, aux
 /// bornes RÉELLES du calque — rotation et échelle comprises —, sans poignées.
+/// Le porteur l'a voulu PLEIN (#14043) : le pointillé reste aux guides (zone
+/// sûre, magnétiques, alignement), il ne désigne jamais une sélection.
 /// Les poignées et le cadre violet de la vue `1c` sont partis avec elle. Le
 /// badge reste au contrat pour les hôtes qui le demandent ; la scène n'en
 /// demande pas.
@@ -54,12 +56,11 @@ import MeeshySDK
 /// — ils peignent la slide par `StoryRenderer`, jamais ce calque.
 extension StoryCanvasUIView {
 
-    /// Le trait, son décalage hors du calque et son pointillé, en points d'écran.
+    /// Le trait et son décalage hors du calque, en points d'écran.
     /// Le cadre vit dans `editOverlayLayer`, qui n'est PAS mis à l'échelle par la
     /// géométrie de rendu — ces valeurs sont donc lues telles quelles.
     static let selectionMarkerLineWidth: CGFloat = 2
     static let selectionMarkerOffset: CGFloat = 3
-    static let selectionMarkerDash: [NSNumber] = [6, 4]
     /// La hauteur du badge, et le creux qui le sépare du cadre.
     static let selectionMarkerBadgeHeight: CGFloat = 18
     static let selectionMarkerBadgeGap: CGFloat = 6
@@ -106,9 +107,9 @@ extension StoryCanvasUIView {
         cadre.fillColor = nil
         cadre.strokeColor = UIColor.white.cgColor
         cadre.lineWidth = Self.selectionMarkerLineWidth
-        cadre.lineDashPattern = Self.selectionMarkerDash
+        cadre.lineDashPattern = nil
         cadre.lineJoin = .round
-        // Une ombre douce garde le pointillé lisible sur un fond blanc.
+        // Une ombre douce garde le trait lisible sur un fond blanc.
         cadre.shadowColor = UIColor.black.cgColor
         cadre.shadowOpacity = 0.35
         cadre.shadowRadius = 1.5

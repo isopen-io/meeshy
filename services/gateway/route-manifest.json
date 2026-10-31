@@ -5227,7 +5227,7 @@
     {
       "method": "GET",
       "path": "/api/v1/relations/:userId",
-      "module": "relationsRoutes",
+      "module": "relationsLevelRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [

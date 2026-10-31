@@ -51,8 +51,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * La lecture en direct sur la scène (#13973, lot A-E3) : sélectionner une vidéo — le fond ou un média posé — la fait jouer
- * à sa place sur la scène, dans un lecteur vivant que le Couper pilote ; une image n'en a pas, et désélectionner le retire.
+ * La scène vit (#13863, directive porteur du 2026-10-31 : « la scène totalement dynamique et temps réel ») : la vidéo de fond
+ * et les vidéos posées jouent sur la scène sans qu'on les sélectionne ; sélectionner ne fait que désigner ce qu'on édite.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -125,18 +125,17 @@ class ComposerLiveSceneComposeTest {
         }
     }
 
-    private fun holdScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { longClick(Offset(width * 0.5f, height * 0.5f)) }
+    private val background = hasTestTag(COMPOSER_LIVE_VIDEO_TAG) and !hasAnyAncestor(hasTestTag("placed-media"))
+
+    private val placedVideo = hasTestTag(COMPOSER_LIVE_VIDEO_TAG) and hasAnyAncestor(hasTestTag("placed-media"))
 
     @Test
-    fun `holding the background video plays it live on the scene`() {
+    fun `the background video plays on the scene with nothing selected`() {
         val vm = viewModel()
         withMedia(vm, "video/mp4")
         show(vm)
-        compose.onNodeWithTag(COMPOSER_LIVE_VIDEO_TAG, useUnmergedTree = true).assertDoesNotExist()
 
-        holdScene()
-
-        compose.onNode(hasTestTag(COMPOSER_LIVE_VIDEO_TAG) and !hasAnyAncestor(hasTestTag("placed-media")), useUnmergedTree = true).assertExists()
+        compose.onNode(background, useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -145,33 +144,28 @@ class ComposerLiveSceneComposeTest {
         withMedia(vm, "image/jpeg")
         show(vm)
 
-        holdScene()
-
         compose.onNodeWithTag(COMPOSER_LIVE_VIDEO_TAG, useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
-    fun `deselecting stops the live player`() {
+    fun `selecting then deselecting the background never stops it`() {
         val vm = viewModel()
         withMedia(vm, "video/mp4")
         show(vm)
-        holdScene()
+        compose.onNodeWithContentDescription(canvas).performTouchInput { longClick(Offset(width * 0.5f, height * 0.5f)) }
 
         vm.onSceneReduce(StoryComposerSelectionReducer::cleared)
         compose.waitForIdle()
 
-        compose.onNodeWithTag(COMPOSER_LIVE_VIDEO_TAG, useUnmergedTree = true).assertDoesNotExist()
+        compose.onNode(background, useUnmergedTree = true).assertExists()
     }
 
     @Test
-    fun `a selected placed video plays live in its own frame`() {
+    fun `a placed video plays in its own frame with nothing selected`() {
         val vm = viewModel()
         withMedia(vm, "video/mp4", placed = true)
         show(vm)
 
-        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
-        compose.waitForIdle()
-
-        compose.onNode(hasTestTag(COMPOSER_LIVE_VIDEO_TAG) and hasAnyAncestor(hasTestTag("placed-media")), useUnmergedTree = true).assertExists()
+        compose.onNode(placedVideo, useUnmergedTree = true).assertExists()
     }
 }

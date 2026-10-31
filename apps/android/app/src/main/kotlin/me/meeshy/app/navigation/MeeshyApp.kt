@@ -209,7 +209,10 @@ fun MeeshyApp(
                                 .padding(vertical = MeeshySpacing.xs),
                         )
                     }
-                    Box(
+                    // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
+                    // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
+                    ActivationInviteBandHost(
+                        navController = navController,
                         modifier = Modifier
                             .weight(1f)
                             .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),

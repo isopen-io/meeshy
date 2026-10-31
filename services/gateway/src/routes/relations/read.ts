@@ -9,9 +9,9 @@ import { RELATION_LEVELS } from '@meeshy/shared/types/relation';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
-import { listRelationLinks, loadRelationLink } from '../../services/relations/relationLinks';
+import { listRelationLinks } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
-import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, userIdParams } from './shared';
+import { errorResponses, relationLimiter, relationLinkSchema } from './shared';
 
 const configView = () => ({
   levels: RELATION_LEVELS.map((level) => ({
@@ -45,8 +45,7 @@ const configSchema = {
 } as const;
 
 /**
- * La LECTURE des cercles (#13933) : `GET /relations`, `/relations/config`,
- * `/relations/:userId`. Aucune route ne lisait un lien, son niveau ni sa
+ * La LECTURE des cercles (#13933) : `GET /relations`, `/relations/config` ; `/relations/:userId` est servi par `level.ts` (#13998). Aucune route ne lisait un lien, son niveau ni sa
  * progression — les routes de demande n'exposent que l'état d'une DEMANDE.
  */
 export function registerRelationReads(fastify: FastifyInstance): void {
@@ -79,28 +78,6 @@ export function registerRelationReads(fastify: FastifyInstance): void {
       return sendSuccess(reply, await listRelationLinks(fastify.prisma, { viewerId: request.user!.userId, now: new Date() }));
     } catch (error) {
       logError(fastify.log, 'List relations error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
-
-  fastify.get<{ Params: { userId: string } }>('/:userId', {
-    onRequest: [fastify.authenticate],
-    preHandler: [appVersionFloorPreHandler, reads.middleware()],
-    schema: {
-      description: 'The link between me and one other person; Public when there is none.',
-      tags: ['relations'],
-      summary: 'One link',
-      params: userIdParams,
-      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: relationLinkSchema } }, ...errorResponses },
-      security: [{ bearerAuth: [] }],
-    },
-  }, async (request, reply) => {
-    try {
-      const otherId = otherUserOf(request, reply);
-      if (otherId === null) return reply;
-      return sendSuccess(reply, await loadRelationLink(fastify.prisma, { viewerId: request.user!.userId, otherId, now: new Date() }));
-    } catch (error) {
-      logError(fastify.log, 'Get relation error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

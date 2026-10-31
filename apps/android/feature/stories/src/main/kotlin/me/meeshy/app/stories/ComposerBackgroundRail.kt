@@ -65,6 +65,8 @@ internal fun composerEditIcon(material: String): ImageVector? = when (material) 
     "Repeat" -> MeeshyIcons.Repeat
     "RotateRight" -> MeeshyIcons.Refresh
     "TextFields" -> MeeshyIcons.TextFields
+    "Wallpaper" -> MeeshyIcons.Wallpaper
+    "Emoji" -> MeeshyIcons.Emoji
     else -> null
 }
 

@@ -3,10 +3,10 @@ package me.meeshy.sdk.model.composer.live
 import kotlin.math.roundToLong
 import me.meeshy.sdk.model.media.MediaTrimBounds
 
-/** Ce que la sélection fait jouer : une image animée (vidéo) ou un son seul. */
+/** Ce que la scène joue : une image animée (vidéo) ou un son seul. */
 enum class ComposerLiveKind { VIDEO, AUDIO }
 
-/** Le média que la sélection fait jouer : son identifiant, sa nature, et s'il est le fond de la diapo. */
+/** Un média que la scène joue : son identifiant, sa nature, et s'il est le fond de la diapo. */
 data class ComposerLiveSubject(val id: String, val kind: ComposerLiveKind, val background: Boolean)
 
 /** La fenêtre jouée DANS la source, en millisecondes ; [endMs] `null` : jusqu'au bout. */
@@ -17,11 +17,13 @@ data class ComposerLiveWindow(val startMs: Long, val endMs: Long?) {
 }
 
 /**
- * La lecture en direct du compositeur (grammaire d'édition, lot A-E3, #13973 ; R6 : chaque réglage se voit en temps réel).
- * UN lecteur, piloté par la sélection : il joue le média sélectionné dans sa fenêtre et à son volume, et chaque image du
- * geste de Couper déplace la tête là où l'auteur regarde — la poignée de début montre le nouveau début, celle de fin les
- * derniers instants avant la nouvelle fin. Le lecteur n'est jamais recréé pendant le geste : la fenêtre est tenue par
- * [rewindTo], pas par une nouvelle source.
+ * La lecture en direct du compositeur (#13863, loi 6 du modèle de lecture : le player est l'aperçu ; grammaire d'édition,
+ * lot A-E3, #13973). La scène joue en continu ce que la lecture de la story jouera : le fond vidéo, chaque vidéo posée et
+ * chaque son de la diapo, chacun dans sa fenêtre et à son volume, en boucle — comme la scène d'édition d'iOS
+ * (`StoryCanvasUIView.applyEditPlayback`). La sélection ne fait que désigner ce qu'on édite : chaque image du geste de
+ * Couper déplace la tête de SON lecteur là où l'auteur regarde — la poignée de début montre le nouveau début, celle de
+ * fin les derniers instants avant la nouvelle fin. Un lecteur n'est jamais recréé pendant le geste : la fenêtre est tenue
+ * par [rewindTo], pas par une nouvelle source.
  */
 object ComposerLivePlayback {
 
@@ -32,25 +34,26 @@ object ComposerLivePlayback {
     const val LOOP_SLACK_MS = 250L
 
     /**
-     * Ce que la scène sélectionne : le fond vidéo de la diapo, le média sélectionné (et s'il est une vidéo), le son
-     * sélectionné (et s'il a une adresse à jouer).
+     * Les vidéos qu'un appareil décode ensemble sans saccade : au-delà, une vidéo garde son image de début, immobile.
+     * Le plafond de la scène (50 objets) dépasse de loin ce que tient le décodeur matériel d'un téléphone.
      */
-    data class Selection(
-        val backgroundVideoId: String?,
-        val mediaId: String?,
-        val mediaIsVideo: Boolean,
-        val soundId: String?,
-        val soundPlayable: Boolean,
-    )
+    const val MAX_LIVE_VIDEOS = 3
 
-    fun subject(selection: Selection): ComposerLiveSubject? {
-        selection.soundId?.let { id -> return ComposerLiveSubject(id, ComposerLiveKind.AUDIO, background = false).takeIf { selection.soundPlayable } }
-        val media = selection.mediaId?.takeIf { selection.mediaIsVideo } ?: return null
-        return ComposerLiveSubject(media, ComposerLiveKind.VIDEO, background = media == selection.backgroundVideoId)
+    /**
+     * Ce qui joue, dans l'ordre de la diapo : tous les sons, et les vidéos dans la limite de [MAX_LIVE_VIDEOS] — la vidéo
+     * qu'on édite ([selectedId]) d'abord, puis le fond, puis l'ordre de pose.
+     */
+    fun playing(subjects: List<ComposerLiveSubject>, selectedId: String?): List<ComposerLiveSubject> {
+        val videos = subjects.filter { it.kind == ComposerLiveKind.VIDEO }
+        val kept = videos.sortedBy { video ->
+            when {
+                video.id == selectedId -> 0
+                video.background -> 1
+                else -> 2
+            }
+        }.take(MAX_LIVE_VIDEOS).toSet()
+        return subjects.filter { it.kind == ComposerLiveKind.AUDIO || it in kept }
     }
-
-    /** Une seule lecture à la fois : le son de fond se tait tant qu'un son sélectionné joue à sa place. */
-    fun backgroundSoundYields(subject: ComposerLiveSubject?): Boolean = subject?.kind == ComposerLiveKind.AUDIO
 
     fun window(bounds: MediaTrimBounds?): ComposerLiveWindow =
         bounds?.let { ComposerLiveWindow((it.start * MILLIS).roundToLong(), (it.end * MILLIS).roundToLong()) } ?: ComposerLiveWindow.WHOLE
@@ -80,9 +83,11 @@ object ComposerLivePlayback {
         else -> trackVolume.coerceIn(0f, 1f)
     }
 
-    /** Le lecteur joue tant qu'un média est sélectionné, l'écran au premier plan et l'étagère des sons fermée. */
-    fun plays(subject: ComposerLiveSubject?, screenResumed: Boolean, shelfOpen: Boolean): Boolean =
-        subject != null && screenResumed && !shelfOpen
+    /**
+     * La scène joue tant que l'écran est au premier plan et que l'étagère des sons, qui fait écouter les siens, est
+     * fermée — quoi qu'on ait sélectionné.
+     */
+    fun plays(screenResumed: Boolean, shelfOpen: Boolean): Boolean = screenResumed && !shelfOpen
 
     private const val MILLIS = 1_000.0
 }

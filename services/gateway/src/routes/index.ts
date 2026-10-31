@@ -158,6 +158,7 @@ import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
+import { relationsLevelRoutes } from './relations/level';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
@@ -394,6 +395,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
   { name: 'relations', prefix: `${API_PREFIX}/relations`, module: relationsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
+  // Le niveau EFFECTIF du lien avec une personne (#13998) — lecture seule, niveauEffectif pour seule loi.
+  { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },

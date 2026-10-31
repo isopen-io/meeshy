@@ -88,7 +88,7 @@ export async function startSceneExport(params: {
   readonly placeHere: string;
   readonly host: FileDeliveryHost;
   readonly gallerySaver: GallerySaver | null;
-  /** Le niveau de lien de l'auteur (#13997) — le port injecté du logo de cercle ; absent : aucun logo. */
+  /** Le niveau de lien de l'auteur (#13997) — le port injecté du logo de cercle (`relationLevelProvider`) ; absent : aucun logo. */
   readonly relationLevel?: RelationLevelProvider;
   readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
   /** « Partager » : le fichier prêt attend un toucher neuf — absent, il se livre sans attendre. */

@@ -1,71 +1,126 @@
-import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import { RELATION_LEVELS, type RelationLevel } from '@meeshy/shared/types/relation';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { RELATION_LEVELS } from '@meeshy/shared/types/relation';
+import type { RelationLevelResponse } from '@meeshy/shared/types/relation-level-response';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { sendBadRequest, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response.js';
+import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
+import { callerRateKey } from '../../utils/client-rate-key';
+import { isBlockedBetween } from '../../utils/blocking';
+import { niveauEffectifUniforme } from '../../services/friendship';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { logError } from '../../utils/logger.js';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
-import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
-import { logError } from '../../utils/logger';
-import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
-import { loadRelationLink } from '../../services/relations/relationLinks';
-import { thresholdsNow } from '../../services/relations/relationRequestGate';
-import { forgetFriends } from '../../services/relations/relationCaches';
-import { asseoirLienHerite, retirerDemandesAuDessus } from '../directory/friend-request-withdraw';
-import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, sendCoded, userIdParams } from './shared';
+import type { AuthenticatedRequest } from '../users/types';
 
-/** Les niveaux qu'un accord peut prendre : Communauté est calculée et Atome réservé, aucun ne s'accorde. */
-const GRANTABLE: readonly string[] = RELATION_LEVELS.filter((level) => level !== 'COMMUNITY');
-
-const corpsNiveau = z.object({ level: z.unknown() });
+/** Le lecteur INSCRIT, ou `null` : un invité de lien n'a pas de compte, donc pas de lien. */
+const lecteurInscrit = (request: FastifyRequest): string | null => {
+  const ctx = (request as AuthenticatedRequest).authContext;
+  return ctx?.isAuthenticated && ctx.registeredUser ? (ctx.userId ?? null) : null;
+};
 
 /**
- * BAISSER ou SORTIR (#13933) : `POST /relations/:userId/level { level }`. Je baisse MON
- * accord — jamais celui de l'autre —, vers un niveau plus bas que celui que j'accorde.
- *
- * SILENCIEUX (RG-07) : ni notification, ni événement, vers personne. L'autre n'en
- * apprend rien ; il se voit seulement retenir de redemander une montée pendant 30 jours
- * (RG-08), et ne l'apprend qu'en essayant. Monter par cette porte est refusé : une
- * montée est une demande, qui veut l'accord de l'autre.
+ * La forme servie par `GET /relations/:userId`, DÉCLARÉE : un champ produit et
+ * non déclaré est supprimé en silence par fast-json-stringify. Le contrat Zod
+ * est `relationLevelResponseSchema` (`@meeshy/shared/types/relation-level-response`).
  */
-export function registerRelationLevel(fastify: FastifyInstance): void {
-  const writes = relationLimiter(fastify, 'rel:level:u', 30);
+export const relationLevelJsonSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        userId: { type: 'string' },
+        effectiveLevel: { type: 'string', enum: [...RELATION_LEVELS] },
+      },
+    },
+  },
+} as const;
 
-  fastify.post<{ Params: { userId: string } }>('/:userId/level', {
+/**
+ * `GET /relations/:userId` — le niveau EFFECTIF du lien du lecteur avec une
+ * personne, et rien de plus (#13998, spec cercles § 4).
+ *
+ * ## Une seule loi
+ *
+ * Le niveau vient de `niveauEffectifUniforme` (`services/friendship.ts`), la
+ * loi de `niveauEffectif` lue sans que le lien décide des lectures ; cette
+ * route ne compare aucun niveau. La forme est MINIMALE et ADDITIVE :
+ * `grantedByMe`, `since`, `progress`, `eligibleFor` viendront avec #13938.
+ *
+ * ## `PUBLIC` dit « pas de lien », et c'est tout
+ *
+ * Bloqué dans un sens ou dans l'autre, utilisateur inconnu, aucun lien : la même
+ * réponse, par le même chemin de lecture : blocage, ligne de lien et demande
+ * acceptée sont lus TOUS LES TROIS, en parallèle, sans condition l'un de
+ * l'autre — un inconnu et un bloqué (même lié de près) ne se distinguent ni
+ * par le contenu ni par le nombre de requêtes. La route n'est pas un oracle
+ * d'existence ni de blocage. Soi-même est refusé (400) : il n'y a pas de lien
+ * avec soi, et le dire en `PUBLIC` serait faux.
+ *
+ * ## L'identifiant est CANONIQUE avant toute question
+ *
+ * Un ObjectId s'écrit en hexadécimal de casse libre, et Mongo lit `ABC…` et
+ * `abc…` comme le même document. La clé de paire (`relationPairKey`) ordonne
+ * pourtant des CHAÎNES : une casse hostile inverse l'ordre, manque la ligne et
+ * retombe sur la demande acceptée — un lien BAISSÉ après l'amitié (RG-07) se
+ * relisait `FRIEND`, et son propre identifiant en majuscules échappait au 400.
+ * L'identifiant est donc ramené en minuscules, et c'est lui qui est servi.
+ */
+export async function relationsLevelRoutes(fastify: FastifyInstance) {
+  const parAppelant = createCustomRateLimiter(
+    {
+      max: 120,
+      windowMs: 60 * 1000,
+      keyPrefix: 'rel:level:u',
+      message: 'Trop de lectures de lien. Veuillez patienter une minute.',
+      keyGenerator: callerRateKey,
+    },
+    fastify.redis ?? undefined
+  );
+
+  fastify.get<{ Params: { userId: string } }>('/:userId', {
     onRequest: [fastify.authenticate],
-    preHandler: [appVersionFloorPreHandler, writes.middleware()],
+    preHandler: [appVersionFloorPreHandler, parAppelant.middleware()],
     schema: {
-      description: 'Lower my grant towards one person, or leave their circle (PUBLIC). Silent: nobody is notified.',
+      description:
+        'Effective relation level between the caller and a person (minimum of both grants). PUBLIC when blocked in either direction, unknown, or unlinked.',
       tags: ['relations'],
-      summary: 'Lower or leave a circle',
-      params: userIdParams,
-      body: { type: 'object', required: ['level'], properties: { level: { type: 'string' } } },
-      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: relationLinkSchema } }, ...errorResponses },
+      summary: 'Read the effective relation level',
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: { userId: { type: 'string', description: 'ID of the person (MongoDB ObjectId)' } },
+      },
+      response: {
+        200: relationLevelJsonSchema,
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        429: errorResponseSchema,
+        500: errorResponseSchema,
+      },
       security: [{ bearerAuth: [] }],
     },
-  }, async (request, reply) => {
+  }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
+    const moi = lecteurInscrit(request);
+    if (!moi) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
+
+    const userId = request.params.userId.toLowerCase();
+    if (!isValidMongoId(userId)) return sendBadRequest(reply, 'Invalid user ID format');
+    if (userId === moi) return sendBadRequest(reply, 'A relation level needs another person');
+
     try {
-      const otherId = otherUserOf(request, reply);
-      if (otherId === null) return reply;
-      const viewerId = request.user!.userId;
+      const [bloque, niveau] = await Promise.all([
+        isBlockedBetween(fastify.prisma, moi, userId),
+        niveauEffectifUniforme(fastify.prisma, moi, userId),
+      ]);
 
-      const { level } = corpsNiveau.parse(request.body);
-      if (typeof level !== 'string' || !GRANTABLE.includes(level)) {
-        return sendCoded(reply, 400, 'Niveau illisible', 'RELATION_LEVEL_INVALID');
-      }
-
-      const now = new Date();
-      await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
-      const outcome = await lowerGrant(fastify.prisma, {
-        actorId: viewerId, otherId, level: level as RelationLevel, at: now, cooldownUntil: cooldownEnd(now, thresholdsNow().cooldownDays),
-      });
-      if (outcome === 'not-a-drop') return sendCoded(reply, 400, 'Une montée se demande', 'RELATION_NOT_A_DROP');
-
-      // Rejouée sans condition : une baisse écrite dont le retrait aurait échoué se solde au rejeu.
-      await retirerDemandesAuDessus(fastify.prisma, viewerId, otherId);
-      if (outcome === 'lowered') await forgetFriends(fastify, [viewerId, otherId]);
-      return sendSuccess(reply, await loadRelationLink(fastify.prisma, { viewerId, otherId, now }));
+      const servi: RelationLevelResponse = { userId, effectiveLevel: bloque ? 'PUBLIC' : niveau };
+      return sendSuccess(reply, servi);
     } catch (error) {
-      if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');
-      logError(fastify.log, 'Lower relation error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
+      logError(fastify.log, '[RELATIONS] Error reading relation level', error);
+      return sendInternalError(reply, 'Failed to read relation level');
     }
   });
 }

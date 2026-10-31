@@ -59,7 +59,6 @@ const TOLERATED: readonly string[] = [
   'services/gateway/src/services/posts/postAudience.ts',
   'services/gateway/src/services/posts/viewerAudience.ts',
   // dette de convergence, hors du périmètre du lot rel-loi-acces
-  'services/gateway/src/services/mentions/mentionSuggestions.ts',
   'services/gateway/src/services/posts/StoryTextObjectTranslationService.ts',
   'services/gateway/src/services/game/commentGameFacts.ts',
   'services/gateway/src/services/game/LeagueService.ts',

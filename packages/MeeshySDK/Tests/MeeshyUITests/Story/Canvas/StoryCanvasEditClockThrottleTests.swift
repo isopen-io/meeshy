@@ -134,7 +134,9 @@ final class StoryCanvasEditClockThrottleTests: XCTestCase {
 
     // MARK: - Suspending / resuming the ambient preview loop (no feature removed)
 
-    func test_idlingDown_suspendsTheBackgroundVideoLoop_andResumingRestoresIt() {
+    /// #13864 (directive porteur 2026-10-31) : la scène joue en continu, comme
+    /// le player. Le repos idle l'horloge des gestes, jamais la boucle vidéo.
+    func test_idlingDown_keepsTheBackgroundVideoLoopPlaying() {
         let canvas = Self.makeCanvas()
         canvas.playsVideoInEditMode = true
         XCTAssertTrue(canvas.backgroundLayer.isPlaybackActive,
@@ -142,12 +144,12 @@ final class StoryCanvasEditClockThrottleTests: XCTestCase {
 
         canvas._driveEditClockForTesting(now: CACurrentMediaTime() + EditClockThrottle.defaultIdleDelay + 5)
 
-        XCTAssertFalse(canvas.backgroundLayer.isPlaybackActive,
-                       "idling down must SUSPEND the loop, not just the clock — issue #3906 item 2")
+        XCTAssertTrue(canvas.isEditClockThrottled, "the gesture clock still idles down")
+        XCTAssertTrue(canvas.backgroundLayer.isPlaybackActive,
+                      "the scene keeps playing when nobody touches it — the player is the preview")
 
         _ = canvas.gestureRecognizerShouldBegin(UIPanGestureRecognizer())
 
-        XCTAssertTrue(canvas.backgroundLayer.isPlaybackActive,
-                     "an interaction must resume the preview loop — nothing is permanently removed")
+        XCTAssertTrue(canvas.backgroundLayer.isPlaybackActive)
     }
 }

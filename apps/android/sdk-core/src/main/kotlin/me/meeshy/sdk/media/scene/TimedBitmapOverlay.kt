@@ -11,15 +11,20 @@ import me.meeshy.sdk.model.scene.export.StoryExportOverlayTrack
  * Le calque des objets À L'INSTANT de chaque image rendue : celui dont l'intervalle couvre l'heure de l'image. Un calque sur
  * disque n'est décodé qu'à son entrée et libéré à sa sortie — une story de 4 min ne tient en mémoire qu'un calque à la fois.
  * Appelé sur le fil GL de Media3.
+ *
+ * Les calques de profondeur 0 couvrent toute la vidéo (le dernier tient au-delà). Ceux d'au-dessus d'une vidéo posée
+ * ([gaps], #13897) n'existent que sur les slides qui en ont : hors de leurs intervalles, rien ne se pose.
  */
-internal class TimedBitmapOverlay(private val overlays: List<SceneExportOverlay>) : BitmapOverlay() {
+internal class TimedBitmapOverlay(private val overlays: List<SceneExportOverlay>, private val gaps: Boolean = false) : BitmapOverlay() {
 
     private val track = StoryExportOverlayTrack(overlays.map { StoryExportOverlayFrame(it.startMillis, it.endMillis) })
     private var shownIndex = -1
     private var shown: Bitmap? = null
 
     override fun getBitmap(presentationTimeUs: Long): Bitmap {
-        val index = track.indexAt(presentationTimeUs / MICROS_PER_MILLI).coerceAtLeast(0)
+        val atMillis = presentationTimeUs / MICROS_PER_MILLI
+        val index = track.indexAt(atMillis).coerceAtLeast(0)
+        if (gaps && overlays.getOrNull(index)?.let { atMillis >= it.startMillis && atMillis < it.endMillis } != true) return SceneTransparent.pixel
         val current = shown
         if (index == shownIndex && current != null) return current
         val next = load(overlays[index])

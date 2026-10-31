@@ -18,6 +18,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
+import { relationsLevelRoutes } from '../../../../routes/relations/level';
 import {
   AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
   type AppOptions,
@@ -27,7 +28,7 @@ const LOW = MOI < AUTRE ? MOI : AUTRE;
 const HIGH = MOI < AUTRE ? AUTRE : MOI;
 const PREFIXE = '/api/v1/relations';
 
-const appli = (options: AppOptions = {}) => buildRelationApp(async (a) => { await a.register(relationsRoutes, { prefix: PREFIXE }); }, options);
+const appli = (options: AppOptions = {}) => buildRelationApp(async (a) => { await a.register(relationsRoutes, { prefix: PREFIXE }); await a.register(relationsLevelRoutes, { prefix: PREFIXE }); }, options);
 const cooldownOf = (row: Record<string, unknown> | undefined, userId: string): Date | undefined =>
   (userId === LOW ? row?.cooldownLowUntil : row?.cooldownHighUntil) as Date | undefined;
 
@@ -106,46 +107,6 @@ describe('#13933 — GET /relations', () => {
     await app.close();
 
     expect(new Date(res.body.data[0].since).getTime()).toBe(montee.getTime());
-  });
-});
-
-describe('#13933 — GET /relations/:userId', () => {
-  it('sert le lien de la paire ; une personne sans lien se lit Public', async () => {
-    const app = await appli({ liens: [lien('FRIEND', 'FRIEND')] });
-    const avec = await app.call('GET', `${PREFIXE}/${AUTRE}`);
-    const sans = await app.call('GET', `${PREFIXE}/${TIERS}`);
-    await app.close();
-
-    expect(avec.status).toBe(200);
-    expect(avec.body.data).toMatchObject({ userId: AUTRE, effectiveLevel: 'FRIEND' });
-    expect(sans.status).toBe(200);
-    expect(sans.body.data).toMatchObject({ userId: TIERS, effectiveLevel: 'PUBLIC' });
-  });
-
-  it('un blocage entre les deux sert Public, sans progression ni éligibilité : bloquer ne laisse rien lire du lien', async () => {
-    const app = await appli({
-      liens: [lien('CLOSE', 'CLOSE', { levelSince: new Date(NOW.getTime() - 200 * DAY) })],
-      jours: Array.from({ length: 13 }, (_, i) => semaineActive(i, LOW, HIGH)),
-      bloques: [MOI],
-    });
-    const res = await app.call('GET', `${PREFIXE}/${AUTRE}`);
-    await app.close();
-
-    expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({
-      userId: AUTRE, effectiveLevel: 'PUBLIC', grantedByMe: 'PUBLIC', since: null,
-      progress: { activeWeeks: 0, needed: null, missing: [] }, eligibleFor: null,
-    });
-  });
-
-  it('un identifiant mal formé est refusé 400, soi-même aussi', async () => {
-    const app = await appli();
-    const mal = await app.call('GET', `${PREFIXE}/pas-un-id`);
-    const moi = await app.call('GET', `${PREFIXE}/${MOI}`);
-    await app.close();
-
-    expect(mal.status).toBe(400);
-    expect(moi.status).toBe(400);
   });
 });
 

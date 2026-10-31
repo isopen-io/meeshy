@@ -16,9 +16,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Ce que le lecteur vivant du compositeur joue pour la sélection (#13973, lot A-E3) : la vidéo du fond dans la fenêtre de
- * son Couper, une vidéo posée dans la sienne, un son dans sa fenêtre propre et à son volume ; rien pour une image ou
- * quand rien n'est sélectionné.
+ * Ce que la scène du compositeur joue en continu (#13863, loi 6) : la vidéo du fond dans la fenêtre de son Couper, chaque
+ * vidéo posée dans la sienne, chaque son dans sa fenêtre propre et à son volume — sélectionnés ou non ; rien pour une image.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -44,54 +43,78 @@ class ComposerLiveCueTest {
         )
     }
 
-    private fun StoryComposerUiState.cue() = liveCue(mediaBaseUrl = null) { sound -> sound.mediaURL?.let { "https://audio/$it" } }
+    private fun StoryComposerUiState.cues() = liveCues(mediaBaseUrl = null) { sound -> sound.mediaURL?.let { "https://audio/$it" } }
+
+    private fun StoryComposerUiState.cue(id: String) = cues().single { it.subject.id == id }
 
     @Test
-    fun `nothing selected plays nothing`() {
-        assertThat(state().cue()).isNull()
+    fun `the scene plays its background video, its placed videos and its sounds with nothing selected`() {
+        val placed = StoryPlacedMedia(id = "p1", mediaId = "clip")
+        val sound = StoryAudioPlayerObject(id = "a1", volume = 0.4f, mediaURL = "voice.m4a")
+
+        val cues = state(placed = listOf(placed), audio = listOf(sound)).cues()
+
+        assertThat(cues.map { it.subject }).containsExactly(
+            ComposerLiveSubject("bg", ComposerLiveKind.VIDEO, background = true),
+            ComposerLiveSubject("p1", ComposerLiveKind.VIDEO, background = false),
+            ComposerLiveSubject("a1", ComposerLiveKind.AUDIO, background = false),
+        ).inOrder()
     }
 
     @Test
-    fun `the selected background video plays in the window of its cut`() {
-        val cue = state(trim = MediaTrimBounds(2.0, 5.0), selectedMediaId = "bg").cue()!!
+    fun `selecting a media changes nothing of what plays`() {
+        val placed = StoryPlacedMedia(id = "p1", mediaId = "clip")
 
-        assertThat(cue.subject).isEqualTo(ComposerLiveSubject("bg", ComposerLiveKind.VIDEO, background = true))
+        assertThat(state(placed = listOf(placed), selectedMediaId = "p1").cues()).isEqualTo(state(placed = listOf(placed)).cues())
+    }
+
+    @Test
+    fun `the background video plays in the window of its cut`() {
+        val cue = state(trim = MediaTrimBounds(2.0, 5.0)).cue("bg")
+
         assertThat(cue.url).isEqualTo("https://cdn/bg")
         assertThat(cue.window).isEqualTo(ComposerLiveWindow(2_000, 5_000))
     }
 
     @Test
     fun `an uncut background video plays its whole source`() {
-        assertThat(state(selectedMediaId = "bg").cue()!!.window).isEqualTo(ComposerLiveWindow(0, 8_000))
+        assertThat(state().cue("bg").window).isEqualTo(ComposerLiveWindow(0, 8_000))
     }
 
     @Test
-    fun `a selected background image has no player`() {
-        assertThat(state(backgroundMime = "image/jpeg", selectedMediaId = "bg").cue()).isNull()
+    fun `a background image has no player`() {
+        assertThat(state(backgroundMime = "image/jpeg").cues()).isEmpty()
     }
 
     @Test
-    fun `a selected placed video plays its own window, not the background's`() {
+    fun `a placed video plays its own window, not the background's`() {
         val placed = StoryPlacedMedia(id = "p1", mediaId = "clip", sourceStart = 1.0, sourceEnd = 3.0)
 
-        val cue = state(trim = MediaTrimBounds(2.0, 5.0), placed = listOf(placed), selectedMediaId = "p1").cue()!!
+        val cue = state(trim = MediaTrimBounds(2.0, 5.0), placed = listOf(placed)).cue("p1")
 
-        assertThat(cue.subject).isEqualTo(ComposerLiveSubject("p1", ComposerLiveKind.VIDEO, background = false))
         assertThat(cue.url).isEqualTo("https://cdn/clip")
         assertThat(cue.window).isEqualTo(ComposerLiveWindow(1_000, 3_000))
     }
 
     @Test
-    fun `a selected sound plays at its volume, silent when muted`() {
+    fun `every sound plays at its volume, silent when muted, and one without address does not play`() {
         val sound = StoryAudioPlayerObject(id = "a1", volume = 0.4f, mediaURL = "voice.m4a")
-        val muted = sound.copy(volume = 0f, mutedVolumeMemento = 0.4f)
+        val muted = StoryAudioPlayerObject(id = "a2", volume = 0f, mutedVolumeMemento = 0.4f, mediaURL = "rain.m4a")
+        val local = StoryAudioPlayerObject(id = "a3", volume = 1f, mediaURL = null)
 
-        val cue = state(audio = listOf(sound), selectedSoundId = "a1").cue()!!
+        val cues = state(audio = listOf(sound, muted, local)).cues()
 
-        assertThat(cue.subject).isEqualTo(ComposerLiveSubject("a1", ComposerLiveKind.AUDIO, background = false))
-        assertThat(cue.url).isEqualTo("https://audio/voice.m4a")
-        assertThat(cue.volume).isEqualTo(0.4f)
-        assertThat(state(audio = listOf(muted), selectedSoundId = "a1").cue()!!.volume).isEqualTo(0f)
+        assertThat(cues.single { it.subject.id == "a1" }.url).isEqualTo("https://audio/voice.m4a")
+        assertThat(cues.single { it.subject.id == "a1" }.volume).isEqualTo(0.4f)
+        assertThat(cues.single { it.subject.id == "a2" }.volume).isEqualTo(0f)
+        assertThat(cues.none { it.subject.id == "a3" }).isTrue()
+    }
+
+    @Test
+    fun `a recorded sound plays from its media`() {
+        val recorded = StoryAudioPlayerObject(id = "a4", postMediaId = "clip", volume = 1f)
+
+        assertThat(state(audio = listOf(recorded)).cue("a4").url).isEqualTo("https://cdn/clip")
     }
 
     @Test
@@ -99,13 +122,9 @@ class ComposerLiveCueTest {
         val file = File("/data/user/0/me.meeshy.app.debug/cache/clip.mp4")
         val item = MediaUploadItem(MediaUploadSource.OnDisk(file), "clip.mp4", "video/mp4", 8_000)
         val pending = state().let { s ->
-            s.copy(
-                attachments = s.attachments.filter { it.id != "bg" },
-                pendingUploads = listOf(PendingMediaUpload(cmid = "bg", item = item)),
-                selectedMediaId = "bg",
-            )
+            s.copy(attachments = s.attachments.filter { it.id != "bg" }, pendingUploads = listOf(PendingMediaUpload(cmid = "bg", item = item)))
         }
 
-        assertThat(pending.cue()!!.url).isEqualTo("file://${file.path}")
+        assertThat(pending.cue("bg").url).isEqualTo("file://${file.path}")
     }
 }

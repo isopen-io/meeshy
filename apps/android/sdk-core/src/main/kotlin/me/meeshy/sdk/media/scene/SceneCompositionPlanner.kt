@@ -91,10 +91,14 @@ internal object SceneCompositionPlanner {
 }
 
 /** Ce que le moteur reçoit, en une ligne de journal (#13986) : ce qu'une recette doit pouvoir lire de ce qui est parti au rendu. */
-internal fun SceneComposition.describe(overlays: Int): String {
+internal fun SceneComposition.describe(overlays: Int, placed: List<SceneExportPlacedVideo> = emptyList()): String {
     val items = video.joinToString(", ") { item ->
         item.clip?.let { "plage ${it.startMillis}–${it.endMillis} ms de ${item.file.name}" } ?: "image ${item.imageMillis} ms (${item.file.name})"
     }
-    return "composition de $durationMillis ms : vidéo [$items], ${audio.size} séquence(s) son, $overlays calque(s) d'objets, " +
+    val videos = placed.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = ", vidéo(s) posée(s) [", postfix = "]") { video ->
+        "${video.clock.startMillis}–${video.clock.endMillis} ms de ${video.file.name} (plage ${video.clock.window.startMillis}–" +
+            "${video.clock.window.endMillis} ms, profondeur ${video.depth})"
+    }.orEmpty()
+    return "composition de $durationMillis ms : vidéo [$items], ${audio.size} séquence(s) son, $overlays calque(s) d'objets$videos, " +
         "${brandLayers.size} carte(s) de marque"
 }

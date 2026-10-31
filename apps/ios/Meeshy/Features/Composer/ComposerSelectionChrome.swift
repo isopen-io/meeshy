@@ -81,10 +81,11 @@ nonisolated enum ComposerSelectionChrome {
 
 /// **Un niveau du rail d'édition.** Les lots suivants y empilent les leurs.
 nonisolated enum ComposerEditRailLevel: Equatable, Sendable {
-    /// Le premier : Modifier · Dupliquer · Temps · Retirer.
+    /// Le premier : Modifier · Dupliquer · Temps · Retirer — pour une image ou
+    /// une vidéo posées, leurs outils à plat puis Dupliquer · Temps · Retirer.
     case actions
-    /// Le premier d'un fond image ou vidéo, N0 « Fond » : Modifier · Remplacer
-    /// · Mettre sur la scène · Retirer (`ComposerBackgroundEdit`).
+    /// Le premier d'un fond image ou vidéo, « Fond » : ses outils à plat, puis
+    /// Remplacer · Mettre sur la scène · Retirer (`ComposerBackgroundEdit`).
     case background
     /// Posé par-dessus : les sous-outils de Modifier ou de Temps ; toucher l'un
     /// ouvre ses propriétés dans la feuille basse.
@@ -92,7 +93,7 @@ nonisolated enum ComposerEditRailLevel: Equatable, Sendable {
     /// N2 de Réglages ou d'Effets d'un fond : ses réglages ; toucher l'un
     /// ouvre son curseur seul en bas (N3).
     case backgroundAdjust(AdjustmentFamily)
-    /// N2 de Son d'un fond vidéo.
+    /// N2 « Son » d'une vidéo, posée ou de fond : Volume · Muet (`media.sound`).
     case backgroundSound
 }
 
@@ -117,15 +118,20 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
 
     static let rest = ComposerEditRailStack(levels: [])
 
-    /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond :
-    /// son niveau « Fond », puis celui de « Modifier », puis le N2 que son
-    /// chemin pose (`ComposerBackgroundModify.levels`).
+    /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond,
+    /// une image ou une vidéo posées n'ont PAS de niveau « Modifier »
+    /// (directive porteur, #14048) : leurs outils sont À PLAT dans le premier
+    /// niveau, et seul le N2 que leur chemin pose (`ComposerBackgroundModify.levels`)
+    /// se pose par-dessus.
     static func of(family: ComposerInlineFamily?, editing purpose: ComposerInlineEditPurpose?,
                    typing: Bool, above: [ComposerEditRailLevel] = []) -> ComposerEditRailStack {
         guard let family, !typing else { return .rest }
         let base: [ComposerEditRailLevel] = [family.isBackground ? .background : .actions]
-        let dessus = purpose.map { [ComposerEditRailLevel.options($0)] + above } ?? []
-        return ComposerEditRailStack(levels: base + dessus)
+        guard let purpose else { return ComposerEditRailStack(levels: base) }
+        guard family.modifiesInLevels, purpose == .modify else {
+            return ComposerEditRailStack(levels: base + [.options(purpose)] + above)
+        }
+        return ComposerEditRailStack(levels: base + above)
     }
 
     var top: ComposerEditRailLevel? { levels.last }
@@ -176,6 +182,8 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
     case backgroundEntry(ComposerBackgroundModifyEntry)
     /// Un réglage de N2 ; son curseur s'ouvre en bas.
     case adjustment(AdjustmentKind)
+    /// Volume, dans N2 « Son » : son curseur seul s'ouvre en bas (N3).
+    case volume
     /// Muet, l'interrupteur de N2 « Son ».
     case mute
 
@@ -189,6 +197,7 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
         case .keyframes:            return "keyframes"
         case .backgroundEntry(let entree): return "background.modify.\(entree.rawValue)"
         case .adjustment(let kind): return "adjust.\(kind.rawValue)"
+        case .volume:               return "volume"
         case .mute:                 return "mute"
         }
     }
@@ -197,7 +206,7 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
         switch self {
         case .action(let action):     return action.isDestructive
         case .background(let action): return ComposerBackgroundEdit.isDestructive(action)
-        case .back, .section, .extra, .keyframes, .backgroundEntry, .adjustment, .mute: return false
+        case .back, .section, .extra, .keyframes, .backgroundEntry, .adjustment, .volume, .mute: return false
         }
     }
 }
@@ -216,18 +225,34 @@ nonisolated enum ComposerEditRailItems {
                       adjustments: [AdjustmentKind] = []) -> [ComposerEditRailItem] {
         switch level {
         case .actions:
-            return actions.map(ComposerEditRailItem.action)
+            return flat(backgroundEntries) + actions.filter { backgroundEntries.isEmpty || $0 != .modify }
+                .map(ComposerEditRailItem.action)
         case .background:
-            return backgroundActions.map(ComposerEditRailItem.background)
-        case .options(.modify) where !backgroundEntries.isEmpty:
-            return [.back] + backgroundEntries.map(ComposerEditRailItem.backgroundEntry)
+            return flat(backgroundEntries) + backgroundActions.filter { backgroundEntries.isEmpty || $0 != .modify }
+                .map(ComposerEditRailItem.background)
         case .options:
             return [.back] + sections.map(ComposerEditRailItem.section)
                 + extras.map(ComposerEditRailItem.extra) + (keyframes ? [.keyframes] : [])
         case .backgroundAdjust:
             return [.back] + adjustments.map(ComposerEditRailItem.adjustment)
         case .backgroundSound:
-            return [.back, .mute]
+            return [.back] + ComposerMediaSound.served().map(soundItem)
+        }
+    }
+
+    /// **Les outils d'un objet, à plat** (#14048) : chaque entrée de son
+    /// « Modifier », dans l'ordre de l'arbre ; Son se déplie en Volume · Muet,
+    /// les entrées de son niveau (`media.sound`), outils du rail eux aussi.
+    static func flat(_ tools: [ComposerBackgroundModifyEntry]) -> [ComposerEditRailItem] {
+        tools.flatMap { outil in
+            outil == .sound ? ComposerMediaSound.served().map(soundItem) : [.backgroundEntry(outil)]
+        }
+    }
+
+    private static func soundItem(_ son: ComposerMediaSoundEntry) -> ComposerEditRailItem {
+        switch son {
+        case .volume: return .volume
+        case .mute:   return .mute
         }
     }
 
