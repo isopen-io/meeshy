@@ -7,7 +7,7 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementW
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
-import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
+import { ProgressionOfflineNotice, ProgressionShell } from '@/routes/progression-shell';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
@@ -65,7 +65,7 @@ export function ProgressionPage({
           </span>
         )
       }
-      notice={online ? null : <OfflineNotice>Hors ligne — tel qu’à la dernière ouverture</OfflineNotice>}
+      notice={online ? null : <ProgressionOfflineNotice scope="page" />}
     >
       {query.data !== undefined ? (
         <>

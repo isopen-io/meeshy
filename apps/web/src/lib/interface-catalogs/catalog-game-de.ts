@@ -248,6 +248,8 @@ const de = {
   'game.guide.step.rank.means': 'Prägen, deine Träume erfüllen, Heldentaten vollbringen: Alles lässt deinen Ruhm wachsen.',
   'game.guide.step.rank.next': 'Halten wir deinen Start in einem Foto fest.',
   'game.page.back': 'Zurück zum Fortschritt',
+  'game.page.offline_notice': 'Offline – Fortschritt wie beim letzten Öffnen',
+  'game.page.offline_notice_brief': 'Offline – wie beim letzten Öffnen',
   'game.door.rules': 'So funktioniert es',
   'game.door.notebook': 'Die Chronik',
   'game.mint.minted_line': 'Meesh Nr. {number} geprägt, {edition}.',

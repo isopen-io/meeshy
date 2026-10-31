@@ -248,6 +248,8 @@ const it = {
   'game.guide.step.rank.means': 'Coniare, compiere i tuoi sogni, realizzare imprese: tutto fa crescere la tua gloria.',
   'game.guide.step.rank.next': 'Immortaliamo la tua partenza con una foto.',
   'game.page.back': 'Torna ai progressi',
+  'game.page.offline_notice': 'Offline — progressi come all’ultima visita',
+  'game.page.offline_notice_brief': 'Offline — come all’ultima visita',
   'game.door.rules': 'Come funziona',
   'game.door.notebook': 'La Cronaca',
   'game.mint.minted_line': 'Meesh n. {number} coniata, {edition}.',

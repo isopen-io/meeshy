@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-1peq83` |
+| Branche de travail de la session courante | `claude/practical-fermat-95xnj5` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -40,7 +40,16 @@ normal.
 |---|---|---|---|---|
 | **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
 | **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
-| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ⏳ CI |
+| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ✅ mergé |
+| **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ⏳ ouverte |
+
+**77w** — i18n / Prisme UI : la bande « Hors ligne » de la zone Progression (hub +
+pages dédiées Badges/Défis/Succès) écrivait son texte EN DUR en français — la SEULE
+bande hors-ligne non traduite du produit (le primitif partagé `OfflineNotice` prend
+`children`, pas `language`). Site unique désormais : `ProgressionOfflineNotice({scope})`
+(`progression-shell.tsx`) + 2 clés `game.page.offline_notice[_brief]` en partie `core`
+×7 langues ; témoin `progression-offline-notice.test.tsx` (RED→GREEN). Housekeeping :
+76w confirmée mergée. Analyse : `docs/analyses/uiux/2026-10-31-iteration-77w.md`.
 
 **76w** — cohérence du thème : deux littéraux que le gate d'harmonie (#8879) prenait
 pour du chrome n'en sont pas — le code QR du lien de parrainage
@@ -69,6 +78,6 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **77w**
-Revue fraîche `apps/web` — voir les pistes 77w+ en pied de
-`docs/analyses/uiux/2026-10-25-iteration-76w.md`.
+## Prochaine itération : **78w**
+Revue fraîche `apps/web` — voir les pistes 78w+ en pied de
+`docs/analyses/uiux/2026-10-31-iteration-77w.md`.

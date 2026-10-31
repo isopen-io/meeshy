@@ -248,6 +248,8 @@ const pt = {
   'game.guide.step.rank.means': 'Cunhar, realizar seus sonhos, cumprir façanhas: tudo faz a sua glória crescer.',
   'game.guide.step.rank.next': 'Vamos eternizar a sua largada com uma foto.',
   'game.page.back': 'Voltar ao progresso',
+  'game.page.offline_notice': 'Offline — progresso como na última visita',
+  'game.page.offline_notice_brief': 'Offline — como na última visita',
   'game.door.rules': 'Como funciona',
   'game.door.notebook': 'A Crônica',
   'game.mint.minted_line': 'Meesh n.º {number} cunhada, {edition}.',
