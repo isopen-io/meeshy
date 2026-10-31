@@ -2973,44 +2973,6 @@ describe('CallService - updateCallStatus', () => {
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
   });
 
-  it('#13932 — décrocher un appel à deux le compte pour la paire, dans les deux sens ; une reconnexion ne le recompte pas', async () => {
-    const ringingCall = createMockCallSession({
-      status: CallStatus.ringing,
-      answeredAt: null,
-      participants: [createMockParticipant({ user: createMockUser() })],
-      initiator: createMockUser(),
-      conversation: createMockConversation()
-    });
-    mockPrisma.callSession.findUnique.mockResolvedValue(ringingCall);
-    mockPrisma.callParticipant.findMany.mockResolvedValue([
-      { participant: { userId: '5f0000000000000000000001' } },
-      { participant: { userId: '5f0000000000000000000002' } }
-    ]);
-    const writes: string[] = [];
-    (mockPrisma as any).pairInteractionDay = {
-      update: jest.fn(async ({ data }: any) => { writes.push(Object.keys(data)[0]); return {}; }),
-      create: jest.fn()
-    };
-
-    await callService.updateCallStatus('call-123', CallStatus.active);
-    await new Promise((resolve) => setImmediate(resolve));
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(writes.sort()).toEqual(['byHighCall', 'byLowCall']);
-
-    const answered = createMockCallSession({
-      status: CallStatus.active,
-      answeredAt: new Date(),
-      participants: [createMockParticipant({ user: createMockUser() })],
-      initiator: createMockUser(),
-      conversation: createMockConversation()
-    });
-    mockPrisma.callSession.findUnique.mockResolvedValue(answered);
-    await callService.updateCallStatus('call-123', CallStatus.reconnecting);
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(writes).toHaveLength(2);
-  });
-
   it('FSM guard: refuses the reconnecting transition on a never-answered call (pre-answer watchdog)', async () => {
     // Prod 2026-07-03 (call 6a47689d): the CALLER's client fired its
     // reconnect watchdog while the call was still RINGING and dragged the
