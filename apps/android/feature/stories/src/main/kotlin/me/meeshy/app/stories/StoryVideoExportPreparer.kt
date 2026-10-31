@@ -5,6 +5,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import me.meeshy.sdk.media.scene.SceneExportBranding
 import me.meeshy.sdk.media.scene.SceneExportHold
+import me.meeshy.sdk.media.scene.SceneExportLog
 import me.meeshy.sdk.media.scene.SceneExportJob
 import me.meeshy.sdk.media.scene.SceneExportOverlay
 import me.meeshy.sdk.media.scene.SceneExportSlideFill
@@ -53,6 +54,8 @@ class StoryVideoExportPreparer(
     private val format: StoryExportVideoFormat = StoryExportVideoFormat.of(),
     /** Peint les cartes de marque d'un export de story ; `null` : aucun emballage, même si une identité est remise. */
     paintBrand: (suspend (StoryExportBrandPaintRequest) -> StoryExportBrandCards?)? = null,
+    /** Ce que l'export laisse de côté sans s'arrêter (un son injoignable), journalisé (#13986). */
+    private val warn: (step: String, failure: Throwable) -> Unit = SceneExportLog::warn,
 ) {
 
     private val brand = paintBrand?.let { StoryExportBrandAssembler(fetch, it) }
@@ -81,7 +84,7 @@ class StoryVideoExportPreparer(
         val rendered = plan.slides.map { placed -> placed to scenes[placed.index] }
         val overlays = rendered.flatMap { (placed, scene) ->
             val backgroundFile = scene.subject.backgroundVideo?.let { files[it] }
-            paintedOverlays(scene, placed.durationMillis, backgroundFile == null, still, File(work, "scene-${placed.index}").apply { mkdirs() })
+            paintedOverlays(scene, placed.index, placed.durationMillis, backgroundFile == null, still, File(work, "scene-${placed.index}").apply { mkdirs() })
                 .map { it.shifted(placed.startMillis + delay) }
         }
         val sounds = plan.sounds.map { it.src }.distinct()
@@ -109,6 +112,7 @@ class StoryVideoExportPreparer(
 
     private suspend fun paintedOverlays(
         scene: StoryExportScene,
+        index: Int,
         duration: Long,
         withBackground: Boolean,
         still: Boolean,
@@ -118,7 +122,7 @@ class StoryVideoExportPreparer(
         val frames = StoryExportOverlayFrames.of(effects, duration)
         val layers = paint(StoryExportPaintRequest(scene.slide, effects, duration, frames, withBackground, directory, format, still))
             ?.takeIf { it.size == frames.size }
-            ?: error("les calques de la story ne se sont pas peints")
+            ?: error("les calques de la scène $index ne se sont pas peints (${frames.size} attendus)")
         return frames.zip(layers) { frame, file -> SceneExportOverlay.Stored(frame.startMillis, frame.endMillis, file) }
     }
 
@@ -133,6 +137,7 @@ class StoryVideoExportPreparer(
                 url to target
             } catch (failure: IOException) {
                 if (url in required) throw failure
+                warn("média non rapatrié, rendu sans lui (${pathOf(url)})", failure)
                 target.delete()
                 null
             }
@@ -148,7 +153,7 @@ class StoryVideoExportPreparer(
 
     private fun fill(subject: StoryExportSubject, file: File?, durations: Map<String, Long?>, duration: Long, work: File, index: Int): SceneExportSlideFill {
         if (file == null) return SceneExportSlideFill.Picture(File(work, "fond-$index.png").also(blankPicture))
-        val clip = durations[subject.backgroundVideo] ?: error("la vidéo de fond n'a pas de durée lisible")
+        val clip = durations[subject.backgroundVideo] ?: error("la vidéo de fond de la scène $index n'a pas de durée lisible")
         val window = subject.backgroundWindow
         val laps = StoryExportClipLoop.ranges(duration, window?.startMs ?: 0L, window?.endMs, clip, loop = subject.backgroundLoop)
         val rest = duration - laps.sumOf { it.durationMillis }
@@ -160,5 +165,8 @@ class StoryVideoExportPreparer(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1000.0
+
+        /** Le chemin seul d'une adresse, comme le journal des requêtes lentes : ni hôte, ni requête. */
+        fun pathOf(url: String): String = runCatching { java.net.URI(url).rawPath }.getOrNull() ?: url.substringBefore('?')
     }
 }
