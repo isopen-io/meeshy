@@ -274,7 +274,7 @@ internal fun StoryCanvasSurface(
                             )
                         }
                         ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
-                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId)
+                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId, marksPending = !capturing)
                         }
                         ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
                             StickerLayer(

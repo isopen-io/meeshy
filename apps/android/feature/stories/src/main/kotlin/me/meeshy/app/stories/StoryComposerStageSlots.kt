@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -126,6 +127,7 @@ internal fun StoryComposerScene(
                     }
                 },
             )
+            if (state.selectedSlideBackdropIsPending) IncomingWaitingBadge(Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
@@ -250,6 +252,7 @@ internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error
     null -> null
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
     StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
+    StoryComposerViewModel.MEDIA_FAILED -> stringResource(R.string.story_composer_incoming_failed)
     StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
@@ -329,6 +332,9 @@ internal fun StoryComposerPanel(
 }
 
 private val PANEL_MAX_HEIGHT = 320.dp
+
+/** Le badge « en attente » d'un fond hors ligne, sous la barre du haut et la rangée des diapos. */
+private val WAITING_BADGE_TOP = 112.dp
 
 /**
  * Le plan 2D de la scène (iOS `ComposerObjectPlanControls` → `Plan2DView`) : UN montage, deux portes — l'outil « temps »

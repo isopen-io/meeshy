@@ -1,21 +1,9 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
@@ -24,8 +12,6 @@ import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
-import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. [onPickFiles] : l'appui
@@ -129,6 +115,7 @@ internal fun StoryComposerSceneFirst(
         },
         typing = typing,
         rails = rails,
+        incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
     )
 }
 
@@ -241,7 +228,7 @@ private fun storySceneRails(
                 onRedo = viewModel::onRedo,
             )
         },
-        socle = { if (chrome) StorySocleNotice(state) },
+        socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
         below = { if (chrome) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
     )
 }
@@ -360,8 +347,6 @@ private fun rememberMoreEntryAction(
     }
 }
 
-private val NOTICE_VEIL = Color.Black.copy(alpha = 0.38f)
-
 /** Le bas de la scène : ce que l'éditeur a à dire (seulement s'il a quelque chose à dire), puis l'audience et Publier. */
 @Composable
 private fun StorySocle(
@@ -378,25 +363,16 @@ private fun StorySocle(
         onHashtags = { onOpenSheet(StoryComposerSheet.HASHTAGS) },
         onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
     )
-    StorySocleNotice(state)
+    StorySocleNotice(state, viewModel::onRetryMediaPick)
     StoryPublish(state, viewModel, doors, formatChevron, onPostText)
 }
 
 @Composable
-private fun StorySocleNotice(state: StoryComposerUiState) {
-    val notice = state.publishBlock?.let { stringResource(it.messageRes()) } ?: sceneNotice(state)
-    notice?.let {
-        Text(
-            text = it,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(NOTICE_VEIL, RoundedCornerShape(MeeshyRadius.sm))
-                .padding(horizontal = MeeshySpacing.sm, vertical = 6.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
-        )
-    }
+private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+    val block = state.publishBlock?.let { stringResource(it.messageRes()) }
+    val notice = block ?: sceneNotice(state) ?: return
+    val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
+    SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
 }
 
 /** « Texte du post » en post et en réel, puis la pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. */

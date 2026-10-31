@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -61,6 +62,8 @@ internal data class PlacedMediaFrame(
     val aspectRatio: Double? = null,
     val isVideo: Boolean = false,
     val pendingItem: MediaUploadItem? = null,
+    /** Hors ligne : le média attend sa file d'envoi, et la scène le dit (R5 de #13863). */
+    val isPending: Boolean = false,
     /** Son filtre, son effet et son cadre de l'appel (#13841), peints AVANT son filtre de story ; `null` : aucun. */
     val mediaLook: StoryMediaLook? = null,
 ) {
@@ -99,6 +102,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                     model = if (isVideo) null else pending.item.previewModel,
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
+                    isPending = true,
                     mediaLook = look,
                 )
             }
@@ -129,6 +133,7 @@ internal fun PlacedMediaLayer(
     canvasHeightPx: Float,
     gestures: PlacedMediaGestures,
     selected: Boolean = false,
+    marksPending: Boolean = true,
 ) {
     val placed = frame.placed
     val currentTap by rememberUpdatedState(gestures.onTap)
@@ -215,6 +220,7 @@ internal fun PlacedMediaLayer(
                 )
             }
         }
+        if (marksPending && frame.isPending) IncomingWaitingBadge(Modifier.align(Alignment.BottomStart).padding(WAITING_INSET))
     }
 }
 
@@ -237,6 +243,7 @@ private fun VideoFramePlaceholder(modifier: Modifier) {
 }
 
 private val PLACEHOLDER_ICON = 32.dp
+private val WAITING_INSET = 6.dp
 
 /** L'arrondi d'un média posé, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
 private const val CORNER_FRACTION = 0.06f

@@ -30,13 +30,23 @@ internal object StoryComposerUploadReducer {
     fun started(state: StoryComposerUiState, count: Int, asBackground: Boolean = false): StoryComposerUiState =
         started(state, landings(state, count, asBackground))
 
-    /** The pick is under way: one line per media, each knowing where it will land; [refused] media found no slide, and it is said. */
-    fun started(state: StoryComposerUiState, landings: List<ComposerMediaPlacement.Landing>, refused: Int = 0): StoryComposerUiState =
+    /**
+     * The pick is under way: one line per media, each knowing where it will land; [refused] media found no slide, and it is
+     * said. [items] are the media in flight, whose preview and weight the placeholder on the scene shows (R5 de #13863).
+     */
+    fun started(
+        state: StoryComposerUiState,
+        landings: List<ComposerMediaPlacement.Landing>,
+        refused: Int = 0,
+        items: List<MediaUploadItem> = emptyList(),
+    ): StoryComposerUiState =
         state.copy(
             isUploadingMedia = true,
             errorMessage = SLIDES_FULL.takeIf { refused > 0 },
             uploadingMedia = List(landings.size) { MediaUploadProgress.Idle },
             mediaLandings = landings,
+            incomingMedia = items,
+            canRetryMedia = false,
         )
 
     fun progressed(state: StoryComposerUiState, index: Int, sent: Long, total: Long): StoryComposerUiState {
@@ -90,7 +100,7 @@ internal object StoryComposerUploadReducer {
         if (mediaId == null || isSelectedBackgroundMedia(mediaId)) this else toggleSelectedBackgroundMedia(mediaId)
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
-        state.copy(isUploadingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList())
+        state.copy(isUploadingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList(), incomingMedia = emptyList())
 
     /**
      * A pick whose location cannot be removed (#13550) is NOT kept behind a placeholder: the same bytes would be refused on

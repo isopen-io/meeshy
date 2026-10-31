@@ -16,6 +16,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.component.composer.ComposerPullDismiss
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,6 +88,9 @@ import me.meeshy.ui.theme.PlateauTint
  * la scène prend toute la hauteur, Publier posé sous elle, entre le rail de ce qu'on ajoute et celui de la sélection
  * (inversés en arabe). Les rails se taisent pendant la frappe ou une feuille, sans libérer leur place. La bascule ne
  * touche que la disposition : la scène reste le même nœud, et rien de l'état ne se perd.
+ *
+ * Un ajout en cours ([incoming], R5 de #13863) voile le reste : outils, socle, rails et Publier s'estompent, ne prennent
+ * plus aucun toucher et sortent de TalkBack ; seul l'espace réservé du média, posé à l'échelle de la scène, reste vivant.
  */
 @Composable
 internal fun StorySceneFirstLayout(
@@ -102,6 +109,7 @@ internal fun StorySceneFirstLayout(
     sheetContent: @Composable (StoryComposerSheet) -> Unit = {},
     typing: StoryTypingSlot? = null,
     rails: StorySceneRails? = null,
+    incoming: (@Composable () -> Unit)? = null,
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -113,8 +121,9 @@ internal fun StorySceneFirstLayout(
         val arrangement = rememberSceneArrangement(maxWidth, maxHeight, offered = rails != null)
         val onRails = rails != null && arrangement == ComposerSceneArrangement.RAILS
         val railsServe = typing == null && sheet == null
+        val busy = incoming != null
         Row(Modifier.fillMaxSize()) {
-            if (onRails) LabeledRailSlot { if (railsServe) rails?.leading?.invoke(this) }
+            if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.leading?.invoke(this) }
             Box(Modifier.weight(1f).fillMaxHeight().padding(top = if (onRails) RAIL_MARGIN else 0.dp)) {
                 SceneFirstStage(
                     onDismiss = onDismiss,
@@ -133,9 +142,10 @@ internal fun StorySceneFirstLayout(
                     onSheetDismiss = onSheetDismiss,
                     sheetContent = sheetContent,
                     typing = typing,
+                    incoming = incoming,
                 )
             }
-            if (onRails) LabeledRailSlot { if (railsServe) rails?.trailing?.invoke(this) }
+            if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.trailing?.invoke(this) }
         }
     }
 }
@@ -177,16 +187,19 @@ private fun rememberSceneArrangement(width: Dp, height: Dp, offered: Boolean): C
 
 private class ArrangementMemory(var last: ComposerSceneArrangement? = null)
 
-/** Un rail libellé : sa largeur fixe et ses marges, quel que soit ce qu'il porte à cet instant. */
+/** Un rail libellé : sa largeur fixe et ses marges, quel que soit ce qu'il porte à cet instant ; voilé et inerte pendant un ajout ([busy]). */
 @Composable
-private fun LabeledRailSlot(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(ComposerSceneArrangement.RAIL_WIDTH.dp)
-            .fillMaxHeight()
-            .padding(vertical = RAIL_MARGIN, horizontal = MeeshySpacing.xs),
-        content = content,
-    )
+private fun LabeledRailSlot(busy: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.width(ComposerSceneArrangement.RAIL_WIDTH.dp).fillMaxHeight()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .veiledWhen(busy)
+                .padding(vertical = RAIL_MARGIN, horizontal = MeeshySpacing.xs),
+            content = content,
+        )
+        if (busy) TouchShield()
+    }
 }
 
 /**
@@ -206,7 +219,9 @@ private fun SceneFirstStage(
     onSheetDismiss: () -> Unit,
     sheetContent: @Composable (StoryComposerSheet) -> Unit,
     typing: StoryTypingSlot?,
+    incoming: (@Composable () -> Unit)? = null,
 ) {
+    val busy = incoming != null
     val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
     val windowKeyboard = rememberWindowTypingKeyboard()
     val measures = remember {
@@ -256,17 +271,27 @@ private fun SceneFirstStage(
                         scaleY = scale
                         translationY = offsetY
                     }
-                },
+                }.then(if (busy) Modifier.clearAndSetSemantics {} else Modifier),
             )
             if (typing != null) {
                 TypingKeyboardWatcher(typing, keyboard, measures)
             } else if (sheet != null) {
                 SheetDismissCatcher(onSheetDismiss)
             } else {
-                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it })
+                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it }, veiled = busy)
+            }
+            incoming?.let { placeholder ->
+                TouchShield()
+                Box(
+                    Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = offsetY
+                    },
+                ) { placeholder() }
             }
         }
-        below?.let { BelowScene(frameWidth, frameHeight, it) }
+        below?.let { content -> BelowScene(frameWidth, frameHeight) { Box(Modifier.veiledWhen(busy)) { content() }; if (busy) TouchShield() } }
         typing?.let { TypingDock(it, it.keyboard ?: windowKeyboard, measures, windowHeight) }
         AnchoredSheetHost(sheet.takeIf { typing == null }, maxHeight * SHEET_MAX_FRACTION, sheetHeights, sheetContent)
     }
@@ -274,7 +299,7 @@ private fun SceneFirstStage(
 
 /** Publier sous la scène (grand écran) : à la largeur de la scène, ou au moins à [BELOW_MIN_WIDTH]. */
 @Composable
-private fun BoxScope.BelowScene(frameWidthPx: Float, frameHeightPx: Float, content: @Composable () -> Unit) {
+private fun BoxScope.BelowScene(frameWidthPx: Float, frameHeightPx: Float, content: @Composable BoxScope.() -> Unit) {
     val frame = with(LocalDensity.current) { DpSize(frameWidthPx.toDp(), frameHeightPx.toDp()) }
     Box(
         modifier = Modifier
@@ -309,10 +334,13 @@ private fun BoxScope.AnchoredSheetHost(
     }
 }
 
-/** Les contrôles du geste en cours, posés sur la scène : la barre du haut (qui se tire pour fermer), la colonne, le panneau et le socle. */
+/**
+ * Les contrôles du geste en cours, posés sur la scène : la barre du haut (qui se tire pour fermer), la colonne, le panneau
+ * et le socle ; [veiled] pendant un ajout (R5 de #13863) — estompés et retirés de TalkBack, le bouclier prend leurs touchers.
+ */
 @Composable
-private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, onPanelTop: (Float) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(OVERLAY_INSET)) {
+private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, onPanelTop: (Float) -> Unit, veiled: Boolean = false) {
+    Column(modifier = Modifier.fillMaxSize().veiledWhen(veiled).padding(OVERLAY_INSET)) {
         Box(
             modifier = Modifier.fillMaxWidth().draggable(
                 orientation = Orientation.Vertical,
@@ -338,6 +366,28 @@ private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, o
         )
     }
 }
+
+/** Ce qu'un ajout en cours rend inerte (R5 de #13863) : estompé, et absent de TalkBack, qui n'y trouverait que des boutons sans effet. */
+private fun Modifier.veiledWhen(busy: Boolean): Modifier =
+    if (busy) graphicsLayer { alpha = VEILED_ALPHA }.clearAndSetSemantics {} else this
+
+/** Prend tous les touchers de ce qu'il couvre : le voile d'un ajout en cours ne laisse rien passer en dessous de lui. */
+@Composable
+private fun BoxScope.TouchShield() {
+    Box(
+        Modifier.matchParentSize().pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false).consume()
+                do {
+                    val event = awaitPointerEvent()
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
+        },
+    )
+}
+
+private const val VEILED_ALPHA = 0.4f
 
 /** Une feuille ouverte : toucher la scène, au-dessus d'elle, la referme — sans voile ni ondulation, la scène reste lisible. */
 @Composable

@@ -7,6 +7,38 @@
         {
           "androidName": "story_composer_scene_voice_a11y",
           "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_preparing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_sending",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_composer_incoming_waiting",
+          "status": "android-only"
         }
       ]
     }

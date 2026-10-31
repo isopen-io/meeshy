@@ -99,6 +99,10 @@ data class StoryComposerUiState(
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     /** Où chaque média de la sélection en cours d'envoi se posera (R4 de #13863), décidé au choix, dans l'ordre des lignes. */
     val mediaLandings: List<ComposerMediaPlacement.Landing> = emptyList(),
+    /** Les médias de la sélection en cours d'envoi, dans l'ordre des lignes : leur aperçu et leur poids (R5 de #13863). */
+    val incomingMedia: List<MediaUploadItem> = emptyList(),
+    /** Un envoi a échoué et ses octets sont gardés : la ligne d'erreur offre « Réessayer » (R5 de #13863). */
+    val canRetryMedia: Boolean = false,
     val isPublishing: Boolean = false,
     /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
     val editing: Boolean = false,
@@ -200,6 +204,10 @@ data class StoryComposerUiState(
                 ?: selectedSlideAttachments.firstOrNull { it.id !in posed }?.id
                 ?: selectedSlidePending.firstOrNull { it.cmid !in posed }?.cmid
         }
+
+    /** Le fond peint attend encore sa file d'envoi (hors ligne, R5 de #13863) : la scène le dit « en attente ». */
+    val selectedSlideBackdropIsPending: Boolean
+        get() = selectedSlideBackdropMediaId?.let { id -> selectedSlidePending.any { it.cmid == id } } == true
 
     fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
         val id = selectedSlideBackdropMediaId ?: return null

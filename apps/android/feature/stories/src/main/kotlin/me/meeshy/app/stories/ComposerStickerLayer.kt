@@ -119,6 +119,7 @@ internal fun StickerLayer(
         contentAlignment = Alignment.Center,
     ) {
         ComposerStickerArt(sticker)
+        if (showsSelection && sticker.isAwaitingImage) IncomingStickerRing(Modifier.align(Alignment.BottomEnd))
         SceneObjectMenuPopup(menu = menu, onAction = onMenuAction, onDismiss = onMenuDismiss)
     }
 }

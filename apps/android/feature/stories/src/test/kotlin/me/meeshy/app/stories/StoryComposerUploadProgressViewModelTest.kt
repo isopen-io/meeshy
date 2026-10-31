@@ -90,7 +90,7 @@ class StoryComposerUploadProgressViewModelTest {
 
         assertThat(vm.state.value.uploadingMedia).isEmpty()
         assertThat(vm.state.value.isUploadingMedia).isFalse()
-        assertThat(vm.state.value.errorMessage).isEqualTo("boom")
+        assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
     }
 
     private fun storedDraft(savedAt: Instant, vararg mediaIds: String) = StoryComposerDraftSnapshot(

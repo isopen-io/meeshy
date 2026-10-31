@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="story_composer_scene_voice_a11y">Son sur la scène</string>
+    <string name="story_composer_incoming_a11y">Média en cours d’ajout</string>
+    <string name="story_composer_incoming_preparing">Préparation…</string>
+    <string name="story_composer_incoming_sending">Envoi %1$d %%</string>
+    <string name="story_composer_incoming_more">+%1$d</string>
+    <string name="story_composer_incoming_cancel">Annuler l’ajout</string>
+    <string name="story_composer_incoming_failed">Le média n’a pas pu être ajouté.</string>
+    <string name="story_composer_incoming_retry">Réessayer</string>
+    <string name="story_composer_incoming_waiting">En attente</string>
 </resources>

@@ -28,7 +28,6 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
@@ -41,12 +40,10 @@ import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
-import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.net.MeeshyConfig
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -591,6 +588,7 @@ class StoryComposerViewModel @Inject constructor(
 
     private val buried = BuriedUploads()
     private val stickerImages = StickerImageUploads()
+    private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, mediaUploader, mediaUploadQueue) { record() }
 
     private fun restore(snapshot: ComposerSnapshot) {
         val before = _state.value.pendingUploads
@@ -636,51 +634,16 @@ class StoryComposerViewModel @Inject constructor(
 
     /**
      * Uploads freshly-picked media onto the selected slide (appended; [asBackground]: the first becomes its background, #13845).
-     * A failed or refused upload is queued **durably** ([queueDurably]) behind a [PendingMediaUpload] placeholder the outbox
+     * A failed or refused upload is queued **durably** ([StoryComposerMediaPick]) behind a [PendingMediaUpload] placeholder the outbox
      * grafts once online; a second pick while an upload is in flight is ignored, and nothing usable comes back as a said error.
      */
-    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) {
-        if (items.isEmpty() || _state.value.isUploadingMedia) return
-        val landings = StoryComposerUploadReducer.landings(_state.value, items.size, asBackground)
-        if (landings.any { !it.newSlide } && _state.value.deck.selectedRemainingMediaSlots <= 0) {
-            _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
-            return
-        }
-        val accepted = items.take(landings.size)
-        items.drop(landings.size).forEach(MediaIntake::release)
-        _state.update { StoryComposerUploadReducer.started(it, landings, refused = items.size - accepted.size) }
-        viewModelScope.launch {
-            try {
-                val onProgress = { index: Int, sent: Long, total: Long ->
-                    _state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
-                }
-                when (val result = mediaUploader.upload(accepted, onProgress)) {
-                    is NetworkResult.Success -> { applyUploaded(result.data, asBackground); accepted.forEach(MediaIntake::release) }
-                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) { accepted.forEach(MediaIntake::release); _state.update(StoryComposerUploadReducer::locationRefused) } else queueDurably(accepted, asBackground)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                accepted.filter { item -> _state.value.pendingUploads.none { it.item === item } }.forEach(MediaIntake::release)
-                _state.update { StoryComposerUploadReducer.settled(it).copy(errorMessage = e.message ?: MEDIA_FAILED) }
-            }
-        }
-    }
+    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) = mediaPick.pick(items, asBackground)
 
-    private fun applyUploaded(uploaded: List<UploadedMedia>, asBackground: Boolean) {
-        _state.update { StoryComposerUploadReducer.uploaded(it, uploaded, asBackground) }
-        if (uploaded.isNotEmpty()) record()
-    }
+    /** ✕ sur l'espace réservé (R5 de #13863) : l'ajout s'annule, et l'écran se libère dans la même image. */
+    fun onCancelMediaPick() = mediaPick.cancel()
 
-    /** Any failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
-    private suspend fun queueDurably(items: List<MediaUploadItem>, asBackground: Boolean) {
-        items.forEachIndexed { index, item ->
-            val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update { StoryComposerUploadReducer.queued(it, cmid, item, asBackground, index) }
-            record()
-        }
-        _state.update { StoryComposerUploadReducer.settled(it) }
-    }
+    /** « Réessayer » après un échec : les mêmes octets repartent, vers la place que la scène leur donne maintenant. */
+    fun onRetryMediaPick() = mediaPick.retry()
 
     /**
      * Removes an attached or pending media before publishing; the UI clears at once. An offline placeholder's durable
@@ -768,6 +731,7 @@ class StoryComposerViewModel @Inject constructor(
      * envoi durable est annulé, hors de [viewModelScope] déjà fermé, pour ne pas téléverser un média qu'aucune story n'utilisera.
      */
     override fun onCleared() {
+        mediaPick.cleared()
         val held = buried.held
         (_state.value.pendingUploads + held).forEach { MediaIntake.release(it.item) }
         val doomed = held.map(PendingMediaUpload::cmid) + releasedByDraft
