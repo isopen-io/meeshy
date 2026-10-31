@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">Salvando…</string>
     <string name="game_actions_one">%1$s ação</string>
     <string name="game_actions_other">%1$s ações</string>
+    <string name="game_atlas_coin_gold">Edição ouro · a cada centésima</string>
+    <string name="game_atlas_coin_line">Cada Meesh é numerada: uma moeda de ouro a cada cem, um prisma a cada mil.</string>
+    <string name="game_atlas_coin_obverse">Frente</string>
+    <string name="game_atlas_coin_prism">Edição prisma · a cada milésima</string>
+    <string name="game_atlas_coin_reverse">Verso</string>
+    <string name="game_atlas_coin_title">A Meesh: frente e verso</string>
+    <string name="game_atlas_flames_line">Mais um dia e sua Chama cresce: da brasa ao sol.</string>
+    <string name="game_atlas_flames_title">As cinco Chamas</string>
+    <string name="game_atlas_leagues_line">Toda semana, você entra no seu torneio: os sete primeiros sobem para o círculo seguinte.</string>
+    <string name="game_atlas_leagues_title">Os oito círculos do torneio</string>
+    <string name="game_atlas_medals_accumulation">Acúmulo · quantas vezes</string>
+    <string name="game_atlas_medals_collection">Coleção · a completar</string>
+    <string name="game_atlas_medals_imprint">Marca</string>
+    <string name="game_atlas_medals_line">Sete materiais, do cobre ao prisma: quanto mais você repete um gesto, mais a medalha brilha.</string>
+    <string name="game_atlas_medals_record">Auge · o melhor</string>
+    <string name="game_atlas_medals_title">As medalhas</string>
+    <string name="game_atlas_ranks_line">Sua glória faz seu título crescer. Ele nunca recua, nem quando você cunha.</string>
+    <string name="game_atlas_ranks_myth">Os 100 primeiros a alcançar 1.000.000 de glória</string>
+    <string name="game_atlas_ranks_title">Os brasões dos títulos</string>
+    <string name="game_atlas_rarities_line">Quanto mais rara é uma façanha, mais precioso é o seu contorno.</string>
+    <string name="game_atlas_rarities_title">As raridades</string>
+    <string name="game_atlas_rarity_common" formatted="false">mais de 40 % das contas</string>
+    <string name="game_atlas_rarity_epic" formatted="false">2 a 10 % das contas</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">0,2 a 2 % das contas</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">menos de 0,2 % das contas</string>
+    <string name="game_atlas_rarity_rare" formatted="false">10 a 40 % das contas</string>
+    <string name="game_atlas_tiers_cap_base">Até o nível %1$s abaixo da patente %2$s.</string>
+    <string name="game_atlas_tiers_cap_none">Sem limite a partir da patente %1$s.</string>
+    <string name="game_atlas_tiers_cap_one">Até o nível %1$s na patente %2$s.</string>
+    <string name="game_atlas_tiers_cap_ranks">Até o nível %1$s nas patentes %2$s e %3$s.</string>
+    <string name="game_atlas_tiers_glory">A glória da primeira passagem: %1$s por nível até o %2$s, depois %3$s a cada dez níveis.</string>
+    <string name="game_atlas_tiers_line">Vinte estados, da Faísca à Singularidade: seu anel muda a cada um.</string>
+    <string name="game_atlas_tiers_prestige">O renascimento se oferece no nível %1$s: é opcional, sua luz também pode continuar crescendo.</string>
+    <string name="game_atlas_tiers_title">Os 20 estados da sua luz</string>
+    <string name="game_atlas_treasury_line">Guarde suas Meeshes: sua Herança cresce, da Bolsa à Reserva real.</string>
+    <string name="game_atlas_treasury_title">Os recipientes da Herança</string>
+    <string name="game_atlas_trophies_line">Um troféu é recebido em um momento preciso e nunca se apaga.</string>
+    <string name="game_atlas_trophies_title">Os troféus</string>
+    <string name="game_atlas_trophy_flame">Troféu de Chama</string>
+    <string name="game_atlas_trophy_league">Taça do torneio</string>
+    <string name="game_atlas_trophy_prestige">Troféu de renascimento</string>
+    <string name="game_atlas_trophy_season">Taça da viagem</string>
     <string name="game_badge_a11y_imprint">Apagado, mais %1$s para reacendê-lo</string>
     <string name="game_badge_a11y_stars">Estrelas: %1$s de %2$s</string>
     <string name="game_badge_complete">As sete estrelas estão acesas: esta medalha está no Prisma.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">Cada ação útil rende faíscas: escrever, falar, publicar, reagir, convidar.</string>
     <string name="game_guide_step_welcome_next">Faça seu primeiro gesto: estou de olho nas suas primeiras faíscas.</string>
     <string name="game_guide_step_welcome_what">Oi, eu sou a Mee! Com o Meo, explicamos o jogo em sete cartões.</string>
+    <string name="game_hero_level">Nível %1$s</string>
     <string name="game_level_cap_reached">Nível %1$s: o mais alto que sua patente abre. A patente %2$s abre os próximos.</string>
     <string name="game_level_cap_short">abre na patente %1$s</string>
     <string name="game_level_held">Sua luz já abre o que vem depois: %1$s para passar o nível %2$s.</string>

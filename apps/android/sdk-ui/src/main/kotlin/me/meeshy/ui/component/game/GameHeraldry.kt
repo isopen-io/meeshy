@@ -12,7 +12,7 @@ private val CROWN_POINTS = listOf(
 )
 
 /** Pièces héraldiques communes (miroir de `GameHeraldry`) : une couronne d'or posée sur une tête, `head` est où elle repose. */
-internal fun DrawScope.drawGameCrown(head: Offset, scale: Float = 1f) {
+public fun DrawScope.drawGameCrown(head: Offset, scale: Float = 1f) {
     val crown = Path()
     CROWN_POINTS.forEachIndexed { index, (dx, dy) ->
         val x = head.x + dx * scale

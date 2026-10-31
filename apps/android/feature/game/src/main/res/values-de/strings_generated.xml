@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">Wird gespeichert…</string>
     <string name="game_actions_one">%1$s Aktion</string>
     <string name="game_actions_other">%1$s Aktionen</string>
+    <string name="game_atlas_coin_gold">Gold-Edition · jede hundertste</string>
+    <string name="game_atlas_coin_line">Jede Meesh ist nummeriert: alle hundert eine Goldmünze, alle tausend ein Prisma.</string>
+    <string name="game_atlas_coin_obverse">Vorderseite</string>
+    <string name="game_atlas_coin_prism">Prisma-Edition · jede tausendste</string>
+    <string name="game_atlas_coin_reverse">Rückseite</string>
+    <string name="game_atlas_coin_title">Die Meesh: Vorder- und Rückseite</string>
+    <string name="game_atlas_flames_line">Ein Tag mehr und Deine Flamme wächst: von der Glut bis zur Sonne.</string>
+    <string name="game_atlas_flames_title">Die fünf Flammen</string>
+    <string name="game_atlas_leagues_line">Jede Woche trittst du in dein Turnier: Die ersten sieben steigen in den nächsten Kreis auf.</string>
+    <string name="game_atlas_leagues_title">Die acht Kreise des Turniers</string>
+    <string name="game_atlas_medals_accumulation">Anhäufung · wie oft</string>
+    <string name="game_atlas_medals_collection">Sammlung · zu vervollständigen</string>
+    <string name="game_atlas_medals_imprint">Abdruck</string>
+    <string name="game_atlas_medals_line">Sieben Materialien, von Kupfer bis Prisma: Je öfter Du eine Geste wiederholst, desto heller glänzt die Medaille.</string>
+    <string name="game_atlas_medals_record">Gipfel · das Beste</string>
+    <string name="game_atlas_medals_title">Die Medaillen</string>
+    <string name="game_atlas_ranks_line">Dein Ruhm lässt deinen Rang wachsen. Er weicht nie zurück, auch nicht, wenn du prägst.</string>
+    <string name="game_atlas_ranks_myth">Die ersten 100, die 1.000.000 Ruhm erreichen</string>
+    <string name="game_atlas_ranks_title">Die Wappen der Ränge</string>
+    <string name="game_atlas_rarities_line">Je seltener eine Heldentat, desto kostbarer ihr Rand.</string>
+    <string name="game_atlas_rarities_title">Die Seltenheiten</string>
+    <string name="game_atlas_rarity_common" formatted="false">über 40 % der Konten</string>
+    <string name="game_atlas_rarity_epic" formatted="false">2 bis 10 % der Konten</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">0,2 bis 2 % der Konten</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">unter 0,2 % der Konten</string>
+    <string name="game_atlas_rarity_rare" formatted="false">10 bis 40 % der Konten</string>
+    <string name="game_atlas_tiers_cap_base">Bis Level %1$s unter dem Rang %2$s.</string>
+    <string name="game_atlas_tiers_cap_none">Ohne Grenze ab dem Rang %1$s.</string>
+    <string name="game_atlas_tiers_cap_one">Bis Level %1$s im Rang %2$s.</string>
+    <string name="game_atlas_tiers_cap_ranks">Bis Level %1$s in den Rängen %2$s und %3$s.</string>
+    <string name="game_atlas_tiers_glory">Ruhm beim ersten Erreichen: %1$s pro Level bis %2$s, danach %3$s alle zehn Level.</string>
+    <string name="game_atlas_tiers_line">Zwanzig Gestalten, vom Funken bis zur Singularität: Dein Ring ändert sich mit jeder.</string>
+    <string name="game_atlas_tiers_prestige">Die Wiedergeburt öffnet sich ab Level %1$s: Sie ist freiwillig, dein Licht kann auch weiter wachsen.</string>
+    <string name="game_atlas_tiers_title">Die 20 Gestalten deines Lichts</string>
+    <string name="game_atlas_treasury_line">Behalte deine Meeshes: Dein Erbe wächst, von der Börse bis zur königlichen Reserve.</string>
+    <string name="game_atlas_treasury_title">Die Behältnisse des Erbes</string>
+    <string name="game_atlas_trophies_line">Eine Trophäe erhält man in einem bestimmten Moment, und sie erlischt nie.</string>
+    <string name="game_atlas_trophies_title">Die Trophäen</string>
+    <string name="game_atlas_trophy_flame">Flammen-Trophäe</string>
+    <string name="game_atlas_trophy_league">Turnierpokal</string>
+    <string name="game_atlas_trophy_prestige">Trophäe der Wiedergeburt</string>
+    <string name="game_atlas_trophy_season">Reisepokal</string>
     <string name="game_badge_a11y_imprint">Erloschen, noch %1$s, um es neu zu entzünden</string>
     <string name="game_badge_a11y_stars">Sterne: %1$s von %2$s</string>
     <string name="game_badge_complete">Alle sieben Sterne leuchten: Diese Medaille ist Prisma.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">Jede nützliche Aktion bringt Funken: schreiben, sprechen, veröffentlichen, reagieren, einladen.</string>
     <string name="game_guide_step_welcome_next">Mach deine erste Aktion: Ich halte Ausschau nach deinen ersten Funken.</string>
     <string name="game_guide_step_welcome_what">Hallo, ich bin Mee! Mit Meo erklären wir dir das Spiel in sieben Karten.</string>
+    <string name="game_hero_level">Level %1$s</string>
     <string name="game_level_cap_reached">Level %1$s: das höchste, das dein Rang öffnet. Der Rang %2$s öffnet die nächsten.</string>
     <string name="game_level_cap_short">öffnet ab Rang %1$s</string>
     <string name="game_level_held">Dein Licht öffnet schon den Weg: %1$s, um Level %2$s zu erreichen.</string>

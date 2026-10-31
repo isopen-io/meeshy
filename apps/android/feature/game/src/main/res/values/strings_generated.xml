@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">Saving…</string>
     <string name="game_actions_one">%1$s action</string>
     <string name="game_actions_other">%1$s actions</string>
+    <string name="game_atlas_coin_gold">Gold edition · every hundredth</string>
+    <string name="game_atlas_coin_line">Every Meesh is numbered: a gold coin every hundred, a prism every thousand.</string>
+    <string name="game_atlas_coin_obverse">Front</string>
+    <string name="game_atlas_coin_prism">Prism edition · every thousandth</string>
+    <string name="game_atlas_coin_reverse">Back</string>
+    <string name="game_atlas_coin_title">The Meesh: front and back</string>
+    <string name="game_atlas_flames_line">One more day and your Flame grows: from ember to sun.</string>
+    <string name="game_atlas_flames_title">The five Flames</string>
+    <string name="game_atlas_leagues_line">Every week, you enter your joust: the top seven climb to the next circle.</string>
+    <string name="game_atlas_leagues_title">The joust’s eight circles</string>
+    <string name="game_atlas_medals_accumulation">Accumulation · how many times</string>
+    <string name="game_atlas_medals_collection">Collection · to complete</string>
+    <string name="game_atlas_medals_imprint">Imprint</string>
+    <string name="game_atlas_medals_line">Seven materials, from copper to prism: the more you repeat a gesture, the brighter the medal.</string>
+    <string name="game_atlas_medals_record">Summit · the best</string>
+    <string name="game_atlas_medals_title">The medals</string>
+    <string name="game_atlas_ranks_line">Your glory grows your rank. It never goes back, even when you mint.</string>
+    <string name="game_atlas_ranks_myth">The first 100 to reach 1,000,000 glory</string>
+    <string name="game_atlas_ranks_title">The rank crests</string>
+    <string name="game_atlas_rarities_line">The rarer a great deed, the more precious its border.</string>
+    <string name="game_atlas_rarities_title">The rarities</string>
+    <string name="game_atlas_rarity_common" formatted="false">over 40% of accounts</string>
+    <string name="game_atlas_rarity_epic" formatted="false">2 to 10% of accounts</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">0.2 to 2% of accounts</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">under 0.2% of accounts</string>
+    <string name="game_atlas_rarity_rare" formatted="false">10 to 40% of accounts</string>
+    <string name="game_atlas_tiers_cap_base">Up to level %1$s below the %2$s rank.</string>
+    <string name="game_atlas_tiers_cap_none">No limit from the %1$s rank on.</string>
+    <string name="game_atlas_tiers_cap_one">Up to level %1$s at the %2$s rank.</string>
+    <string name="game_atlas_tiers_cap_ranks">Up to level %1$s at the %2$s and %3$s ranks.</string>
+    <string name="game_atlas_tiers_glory">First-pass glory: %1$s per level up to %2$s, then %3$s every ten levels.</string>
+    <string name="game_atlas_tiers_line">Twenty phases, from Spark to Singularity: your ring changes with each one.</string>
+    <string name="game_atlas_tiers_prestige">Rebirth opens at level %1$s: it’s optional, your light can also keep growing.</string>
+    <string name="game_atlas_tiers_title">The 20 phases of your light</string>
+    <string name="game_atlas_treasury_line">Keep your Meeshes: your Legacy grows, from the Purse to the royal Reserve.</string>
+    <string name="game_atlas_treasury_title">The Legacy’s containers</string>
+    <string name="game_atlas_trophies_line">A trophy is given at a precise moment, and it never fades.</string>
+    <string name="game_atlas_trophies_title">The trophies</string>
+    <string name="game_atlas_trophy_flame">Flame trophy</string>
+    <string name="game_atlas_trophy_league">Joust cup</string>
+    <string name="game_atlas_trophy_prestige">Rebirth trophy</string>
+    <string name="game_atlas_trophy_season">Journey cup</string>
     <string name="game_badge_a11y_imprint">Dimmed, %1$s more to relight it</string>
     <string name="game_badge_a11y_stars">Stars: %1$s of %2$s</string>
     <string name="game_badge_complete">All seven stars are lit: this medal is Prism.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">Every useful action earns sparks: writing, talking, publishing, reacting, inviting.</string>
     <string name="game_guide_step_welcome_next">Make your first move: I’m watching for your first sparks.</string>
     <string name="game_guide_step_welcome_what">Hi, I am Mee! With Meo, we will explain the game in seven cards.</string>
+    <string name="game_hero_level">Level %1$s</string>
     <string name="game_level_cap_reached">Level %1$s: the highest your rank opens. The %2$s rank opens what comes next.</string>
     <string name="game_level_cap_short">opens at the %1$s rank</string>
     <string name="game_level_held">Your light already opens the way: %1$s to pass level %2$s.</string>

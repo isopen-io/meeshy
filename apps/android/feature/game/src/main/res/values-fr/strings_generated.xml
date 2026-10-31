@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">Enregistrement…</string>
     <string name="game_actions_one">%1$s action</string>
     <string name="game_actions_other">%1$s actions</string>
+    <string name="game_atlas_coin_gold">Édition or · chaque centième</string>
+    <string name="game_atlas_coin_line">Chaque Meesh est numérotée : une pièce d’or tous les cent, un prisme tous les mille.</string>
+    <string name="game_atlas_coin_obverse">Avers</string>
+    <string name="game_atlas_coin_prism">Édition prisme · chaque millième</string>
+    <string name="game_atlas_coin_reverse">Revers</string>
+    <string name="game_atlas_coin_title">La Meesh : avers et revers</string>
+    <string name="game_atlas_flames_line">Un jour de plus et ta Flamme grandit : de la braise jusqu’au soleil.</string>
+    <string name="game_atlas_flames_title">Les cinq Flammes</string>
+    <string name="game_atlas_leagues_line">Chaque semaine, tu entres dans ta joute : les sept premiers gravissent le cercle suivant.</string>
+    <string name="game_atlas_leagues_title">Les huit cercles de la joute</string>
+    <string name="game_atlas_medals_accumulation">Accumulation · combien de fois</string>
+    <string name="game_atlas_medals_collection">Collection · à réunir</string>
+    <string name="game_atlas_medals_imprint">Empreinte</string>
+    <string name="game_atlas_medals_line">Sept matières, du cuivre au prisme : plus tu répètes un geste, plus la médaille brille.</string>
+    <string name="game_atlas_medals_record">Sommet · le meilleur</string>
+    <string name="game_atlas_medals_title">Les médailles</string>
+    <string name="game_atlas_ranks_line">Ta gloire fait grandir ton rang. Il ne recule jamais, même quand tu frappes.</string>
+    <string name="game_atlas_ranks_myth">Les 100 premiers à atteindre 1 000 000 de gloire</string>
+    <string name="game_atlas_ranks_title">Les blasons des rangs</string>
+    <string name="game_atlas_rarities_line">Plus un haut fait est rare, plus son liseré est précieux.</string>
+    <string name="game_atlas_rarities_title">Les raretés</string>
+    <string name="game_atlas_rarity_common" formatted="false">plus de 40 % des comptes</string>
+    <string name="game_atlas_rarity_epic" formatted="false">2 à 10 % des comptes</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">0,2 à 2 % des comptes</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">moins de 0,2 % des comptes</string>
+    <string name="game_atlas_rarity_rare" formatted="false">10 à 40 % des comptes</string>
+    <string name="game_atlas_tiers_cap_base">Jusqu’au niveau %1$s sous le rang %2$s.</string>
+    <string name="game_atlas_tiers_cap_none">Sans limite à partir du rang %1$s.</string>
+    <string name="game_atlas_tiers_cap_one">Jusqu’au niveau %1$s au rang %2$s.</string>
+    <string name="game_atlas_tiers_cap_ranks">Jusqu’au niveau %1$s aux rangs %2$s et %3$s.</string>
+    <string name="game_atlas_tiers_glory">La gloire du premier passage : %1$s par niveau jusqu’au %2$s, puis %3$s tous les dix niveaux.</string>
+    <string name="game_atlas_tiers_line">Vingt états, de l’Étincelle à la Singularité : ton anneau change à chacun.</string>
+    <string name="game_atlas_tiers_prestige">La renaissance s’offre au niveau %1$s : elle est facultative, ta lumière peut aussi grandir encore.</string>
+    <string name="game_atlas_tiers_title">Les 20 états de ta lumière</string>
+    <string name="game_atlas_treasury_line">Garde tes Meeshes : ton Héritage grandit, de la Bourse à la Réserve royale.</string>
+    <string name="game_atlas_treasury_title">Les contenants de l’Héritage</string>
+    <string name="game_atlas_trophies_line">Un trophée se reçoit à un moment précis, et il ne s’éteint jamais.</string>
+    <string name="game_atlas_trophies_title">Les trophées</string>
+    <string name="game_atlas_trophy_flame">Trophée de Flamme</string>
+    <string name="game_atlas_trophy_league">Coupe de joute</string>
+    <string name="game_atlas_trophy_prestige">Trophée de renaissance</string>
+    <string name="game_atlas_trophy_season">Coupe du voyage</string>
     <string name="game_badge_a11y_imprint">Éteint, encore %1$s pour le rallumer</string>
     <string name="game_badge_a11y_stars">Étoiles : %1$s sur %2$s</string>
     <string name="game_badge_complete">Les sept étoiles sont allumées : cette médaille est au Prisme.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">Chaque geste utile rapporte des étincelles : écrire, parler, publier, réagir, inviter.</string>
     <string name="game_guide_step_welcome_next">Fais ton premier geste : je guette tes premières étincelles.</string>
     <string name="game_guide_step_welcome_what">Salut, c’est Mee ! Avec Meo, on t’explique le jeu en sept cartes.</string>
+    <string name="game_hero_level">Niveau %1$s</string>
     <string name="game_level_cap_reached">Niveau %1$s : le plus haut que ton rang ouvre. Le rang %2$s ouvre la suite.</string>
     <string name="game_level_cap_short">s’ouvre au rang %1$s</string>
     <string name="game_level_held">Ta lumière ouvre déjà la suite : %1$s pour passer le niveau %2$s.</string>

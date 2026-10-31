@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">Guardando…</string>
     <string name="game_actions_one">%1$s acción</string>
     <string name="game_actions_other">%1$s acciones</string>
+    <string name="game_atlas_coin_gold">Edición oro · cada centésima</string>
+    <string name="game_atlas_coin_line">Cada Meesh está numerada: una moneda de oro cada cien, un prisma cada mil.</string>
+    <string name="game_atlas_coin_obverse">Anverso</string>
+    <string name="game_atlas_coin_prism">Edición prisma · cada milésima</string>
+    <string name="game_atlas_coin_reverse">Reverso</string>
+    <string name="game_atlas_coin_title">La Meesh: anverso y reverso</string>
+    <string name="game_atlas_flames_line">Un día más y tu Llama crece: de la brasa al sol.</string>
+    <string name="game_atlas_flames_title">Las cinco Llamas</string>
+    <string name="game_atlas_leagues_line">Cada semana entras en tu justa: los siete primeros suben al círculo siguiente.</string>
+    <string name="game_atlas_leagues_title">Los ocho círculos de la justa</string>
+    <string name="game_atlas_medals_accumulation">Acumulación · cuántas veces</string>
+    <string name="game_atlas_medals_collection">Colección · por reunir</string>
+    <string name="game_atlas_medals_imprint">Huella</string>
+    <string name="game_atlas_medals_line">Siete materiales, del cobre al prisma: cuanto más repites un gesto, más brilla la medalla.</string>
+    <string name="game_atlas_medals_record">Cima · el mejor</string>
+    <string name="game_atlas_medals_title">Las medallas</string>
+    <string name="game_atlas_ranks_line">Tu gloria hace crecer tu rango. Nunca retrocede, ni siquiera cuando acuñas.</string>
+    <string name="game_atlas_ranks_myth">Los 100 primeros en alcanzar 1 000 000 de gloria</string>
+    <string name="game_atlas_ranks_title">Los blasones de los rangos</string>
+    <string name="game_atlas_rarities_line">Cuanto más rara es una hazaña, más valioso es su borde.</string>
+    <string name="game_atlas_rarities_title">Las rarezas</string>
+    <string name="game_atlas_rarity_common" formatted="false">más del 40 % de las cuentas</string>
+    <string name="game_atlas_rarity_epic" formatted="false">del 2 al 10 % de las cuentas</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">del 0,2 al 2 % de las cuentas</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">menos del 0,2 % de las cuentas</string>
+    <string name="game_atlas_rarity_rare" formatted="false">del 10 al 40 % de las cuentas</string>
+    <string name="game_atlas_tiers_cap_base">Hasta el nivel %1$s por debajo del rango %2$s.</string>
+    <string name="game_atlas_tiers_cap_none">Sin límite a partir del rango %1$s.</string>
+    <string name="game_atlas_tiers_cap_one">Hasta el nivel %1$s en el rango %2$s.</string>
+    <string name="game_atlas_tiers_cap_ranks">Hasta el nivel %1$s en los rangos %2$s y %3$s.</string>
+    <string name="game_atlas_tiers_glory">La gloria del primer paso: %1$s por nivel hasta el %2$s, luego %3$s cada diez niveles.</string>
+    <string name="game_atlas_tiers_line">Veinte estados, de la Chispa a la Singularidad: tu anillo cambia en cada uno.</string>
+    <string name="game_atlas_tiers_prestige">El renacimiento se ofrece en el nivel %1$s: es opcional, tu luz también puede seguir creciendo.</string>
+    <string name="game_atlas_tiers_title">Los 20 estados de tu luz</string>
+    <string name="game_atlas_treasury_line">Guarda tus Meeshes: tu Legado crece, del Monedero a la Reserva real.</string>
+    <string name="game_atlas_treasury_title">Los recipientes del Legado</string>
+    <string name="game_atlas_trophies_line">Un trofeo se recibe en un momento preciso y nunca se apaga.</string>
+    <string name="game_atlas_trophies_title">Los trofeos</string>
+    <string name="game_atlas_trophy_flame">Trofeo de Llama</string>
+    <string name="game_atlas_trophy_league">Copa de justa</string>
+    <string name="game_atlas_trophy_prestige">Trofeo de renacimiento</string>
+    <string name="game_atlas_trophy_season">Copa del viaje</string>
     <string name="game_badge_a11y_imprint">Apagado, faltan %1$s para reactivarlo</string>
     <string name="game_badge_a11y_stars">Estrellas: %1$s de %2$s</string>
     <string name="game_badge_complete">Las siete estrellas están encendidas: esta medalla está en Prisma.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">Cada gesto útil da chispas: escribir, hablar, publicar, reaccionar, invitar.</string>
     <string name="game_guide_step_welcome_next">Haz tu primer gesto: yo vigilo tus primeras chispas.</string>
     <string name="game_guide_step_welcome_what">¡Hola, soy Mee! Con Meo te explicamos el juego en siete tarjetas.</string>
+    <string name="game_hero_level">Nivel %1$s</string>
     <string name="game_level_cap_reached">Nivel %1$s: el más alto que abre tu rango. El rango %2$s abre lo que sigue.</string>
     <string name="game_level_cap_short">se abre con el rango %1$s</string>
     <string name="game_level_held">Tu luz ya abre el camino: %1$s para pasar el nivel %2$s.</string>

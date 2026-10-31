@@ -295,6 +295,48 @@
     <string name="game2_visibility_saving">جارٍ الحفظ…</string>
     <string name="game_actions_one">%1$s إجراء</string>
     <string name="game_actions_other">%1$s إجراءً</string>
+    <string name="game_atlas_coin_gold">إصدار ذهبي · كل مئة</string>
+    <string name="game_atlas_coin_line">كل Meesh مرقّمة: عملة ذهبية كل مئة، ومنشور كل ألف.</string>
+    <string name="game_atlas_coin_obverse">الوجه</string>
+    <string name="game_atlas_coin_prism">إصدار المنشور · كل ألف</string>
+    <string name="game_atlas_coin_reverse">الظهر</string>
+    <string name="game_atlas_coin_title">الـ Meesh: الوجه والظهر</string>
+    <string name="game_atlas_flames_line">يوم إضافي ويكبر لهبك: من الجمرة إلى الشمس.</string>
+    <string name="game_atlas_flames_title">اللهبات الخمسة</string>
+    <string name="game_atlas_leagues_line">كل أسبوع تدخل مبارزتك: يرتقي السبعة الأوائل إلى الحلقة التالية.</string>
+    <string name="game_atlas_leagues_title">حلقات المبارزة الثماني</string>
+    <string name="game_atlas_medals_accumulation">تراكم · كم مرة</string>
+    <string name="game_atlas_medals_collection">مجموعة · للإكمال</string>
+    <string name="game_atlas_medals_imprint">بصمة</string>
+    <string name="game_atlas_medals_line">سبع مواد، من النحاس إلى المنشور: كلما كرّرت حركة أكثر، لمعت الميدالية أكثر.</string>
+    <string name="game_atlas_medals_record">القمّة · الأفضل</string>
+    <string name="game_atlas_medals_title">الميداليات</string>
+    <string name="game_atlas_ranks_line">مجدك يُنمّي رتبتك. ولا تتراجع أبدًا، حتى عندما تسكّ.</string>
+    <string name="game_atlas_ranks_myth">أول 100 يبلغون 1٬000٬000 من المجد</string>
+    <string name="game_atlas_ranks_title">شعارات الرتب</string>
+    <string name="game_atlas_rarities_line">كلما ندرت المأثرة، كان إطارها أثمن.</string>
+    <string name="game_atlas_rarities_title">درجات الندرة</string>
+    <string name="game_atlas_rarity_common" formatted="false">أكثر من 40% من الحسابات</string>
+    <string name="game_atlas_rarity_epic" formatted="false">من 2 إلى 10% من الحسابات</string>
+    <string name="game_atlas_rarity_legendary" formatted="false">من 0.2 إلى 2% من الحسابات</string>
+    <string name="game_atlas_rarity_mythic" formatted="false">أقل من 0.2% من الحسابات</string>
+    <string name="game_atlas_rarity_rare" formatted="false">من 10 إلى 40% من الحسابات</string>
+    <string name="game_atlas_tiers_cap_base">حتى المستوى %1$s دون رتبة %2$s.</string>
+    <string name="game_atlas_tiers_cap_none">بلا حدّ ابتداءً من رتبة %1$s.</string>
+    <string name="game_atlas_tiers_cap_one">حتى المستوى %1$s في رتبة %2$s.</string>
+    <string name="game_atlas_tiers_cap_ranks">حتى المستوى %1$s في رتبتَي %2$s و%3$s.</string>
+    <string name="game_atlas_tiers_glory">مجد العبور الأول: %1$s لكل مستوى حتى %2$s، ثم %3$s كل عشرة مستويات.</string>
+    <string name="game_atlas_tiers_line">عشرون حالة، من الشرارة إلى التفرد: تتغيّر حلقتك مع كل حالة.</string>
+    <string name="game_atlas_tiers_prestige">يُتاح الانبعاث عند المستوى %1$s: وهو اختياري، ويمكن لنورك أن يواصل النمو.</string>
+    <string name="game_atlas_tiers_title">حالات نورك العشرون</string>
+    <string name="game_atlas_treasury_line">احتفظ بعملات Meesh: إرثك ينمو، من الكيس إلى الاحتياطي الملكي.</string>
+    <string name="game_atlas_treasury_title">أوعية الإرث</string>
+    <string name="game_atlas_trophies_line">تُمنح الكأس في لحظة محددة، ولا تنطفئ أبدًا.</string>
+    <string name="game_atlas_trophies_title">الكؤوس</string>
+    <string name="game_atlas_trophy_flame">كأس اللهب</string>
+    <string name="game_atlas_trophy_league">كأس المبارزة</string>
+    <string name="game_atlas_trophy_prestige">كأس الانبعاث</string>
+    <string name="game_atlas_trophy_season">كأس الرحلة</string>
     <string name="game_badge_a11y_imprint">مُطفأ، بقي %1$s لإعادة إشعاله</string>
     <string name="game_badge_a11y_stars">النجوم: %1$s من %2$s</string>
     <string name="game_badge_complete">النجوم السبع مضاءة: هذا الوسام في المنشور.</string>
@@ -690,6 +732,7 @@
     <string name="game_guide_step_welcome_means">كل إجراء مفيد يمنحك شرارات: الكتابة، والكلام، والنشر، والتفاعل، والدعوة.</string>
     <string name="game_guide_step_welcome_next">قم بأول إجراء: أنا أترقّب شراراتك الأولى.</string>
     <string name="game_guide_step_welcome_what">مرحبًا، أنا مي! مع ميو سنشرح لك اللعبة في سبع بطاقات.</string>
+    <string name="game_hero_level">المستوى %1$s</string>
     <string name="game_level_cap_reached">المستوى %1$s: أعلى ما تفتحه رتبتك. رتبة %2$s تفتح ما بعده.</string>
     <string name="game_level_cap_short">يُفتح برتبة %1$s</string>
     <string name="game_level_held">نورك يفتح الطريق بالفعل: %1$s لاجتياز المستوى %2$s.</string>

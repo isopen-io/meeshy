@@ -62,7 +62,8 @@ enum class GameRulesSection(val wire: String) {
 
 /**
  * « COMMENT ÇA MARCHE » (iOS `GameRulesPage`) — le carnet des règles : Mee et Meo, les huit règles, chaque concept en
- * clair, les médailles, puis les sept étapes de l'intégration. Une page qui EXPLIQUE, sans geste ni lecture réseau :
+ * clair, les médailles, l'atlas illustré (paliers, Meesh, trésor, blasons, Flammes, ligues, médailles, trophées, raretés),
+ * puis les sept étapes de l'intégration. Une page qui EXPLIQUE, sans geste ni lecture réseau :
  * elle s'ouvre instantanément, hors ligne comme en ligne, et ne se tire pas pour rafraîchir. Ouverte à une section
  * ([focused]), elle y défile ; sans section, elle s'ouvre en haut.
  */
@@ -97,6 +98,7 @@ fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null) {
         Box(Modifier.padding(top = MeeshySpacing.md).onGloballyPositioned { badgesY = it.positionInParent().y }) {
             RulesBadgesSection()
         }
+        RulesAtlas(Modifier.padding(top = MeeshySpacing.md))
         RulesSteps(Modifier.padding(top = MeeshySpacing.md))
     }
 }
