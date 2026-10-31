@@ -1,10 +1,16 @@
-import { isGlobalAdmin } from '../types/role-types.js';
+import type { RelationLevel } from '../types/relation.js';
 import type { GlobalUserRoleType } from '../types/role-types.js';
+import { resolveRelationAccess } from './relation-access.js';
 
 export type PresenceVisibilityInput = {
   readonly isSelf: boolean;
   readonly viewerRole: GlobalUserRoleType;
-  readonly areConnected: boolean;
+  /**
+   * Niveau EFFECTIF du lien viewer/cible (minimum des deux accords). Remplace le
+   * booléen d'amitié : `niveau >= FRIEND` rend les verdicts de l'ancien
+   * l'ancien booléen d'amitié, au bit près (#13927).
+   */
+  readonly relationLevel: RelationLevel;
   readonly targetShowOnlineStatus: boolean;
   readonly targetShowLastSeen: boolean;
   readonly targetIsDeactivated: boolean;
@@ -17,6 +23,17 @@ export type PresenceVisibility = {
 };
 
 const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: false };
+
+/**
+ * La politique de présence ne connaît pas d'identifiants : `isSelf` décide de
+ * l'identité, et ces deux étiquettes ne servent qu'à la dire à la loi d'accès.
+ * Les DEUX drapeaux (en ligne, dernière vue) se lisent sous `presence.online`
+ * (Ami) : la scission « en ligne dès Ami, détail dès Proche » est le lot
+ * `presence-ami-binaire`, et à ce lot-ci aucun verdict ne change.
+ */
+const VIEWER = 'viewer';
+const TARGET = 'target';
+const PRESENCE_FEATURE = 'presence.online';
 
 /**
  * Politique pure de visibilité de la présence (lastActiveAt/isOnline).
@@ -36,7 +53,8 @@ const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: f
  * ANALYST, USER, AGENT côté non-privilégié (revirement du 2026-08-25 :
  * jusque-là le bypass suivait `isGlobalModerator`).
  *
- * Autorisé = privilégié OU amitié acceptée (`areConnected`). Le partage
+ * Autorisé = privilégié OU niveau effectif >= Ami (`relationLevel`, loi
+ * `resolveRelationAccess`). Le partage
  * d'une conversation N'EST PLUS un critère d'autorisation (`sharesConversation`
  * retiré du type ce même jour) : une conversation n'est pas une relation, et
  * deux inconnus qui échangent dans un salon ne se doivent aucune présence
@@ -48,13 +66,23 @@ const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: f
  * @see services/gateway/decisions.md (entrée 2026-08-25 « Visibilité de la présence »)
  */
 export const resolvePresenceVisibility = (input: PresenceVisibilityInput): PresenceVisibility => {
-  if (input.targetIsDeactivated || input.isBlockedEitherWay) return HIDDEN;
+  if (input.targetIsDeactivated) return HIDDEN;
 
-  const privileged = input.isSelf || isGlobalAdmin(input.viewerRole);
-  const allowed = privileged || input.areConnected;
-  if (!allowed) return HIDDEN;
+  const access = resolveRelationAccess({
+    viewerId: VIEWER,
+    targetId: input.isSelf ? VIEWER : TARGET,
+    grantedByViewer: input.relationLevel,
+    grantedByTarget: input.relationLevel,
+    sharesCommunity: false,
+    blockedEitherWay: input.isBlockedEitherWay,
+    viewerMinor: 'unknown',
+    targetMinor: 'unknown',
+    viewerRole: input.viewerRole,
+    feature: PRESENCE_FEATURE,
+  });
+  if (!access.allowed) return HIDDEN;
 
-  if (privileged) return { showOnline: true, showLastSeenTimestamp: true };
+  if (access.reason === 'self' || access.reason === 'role') return { showOnline: true, showLastSeenTimestamp: true };
   if (!input.targetShowOnlineStatus) return HIDDEN;
   return { showOnline: true, showLastSeenTimestamp: input.targetShowLastSeen };
 };
