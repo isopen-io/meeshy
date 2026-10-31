@@ -18,6 +18,7 @@ import java.io.File
 import me.meeshy.sdk.model.scene.export.StoryExportIdentity
 import me.meeshy.sdk.model.scene.export.StoryExportIdentityLayout
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
+import me.meeshy.ui.component.avatarInitials
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
 
@@ -121,7 +122,7 @@ internal object StoryExportBrandCardPainter {
 
     private fun backdrop(canvas: Canvas, banner: Bitmap?, accentHex: String, width: Int, height: Int) {
         if (banner == null) {
-            val accent = hexColor(accentHex).toArgb()
+            val accent = accentArgb(accentHex)
             val paint = Paint().apply { shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(), accent, Color.BLACK, Shader.TileMode.CLAMP) }
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             return
@@ -195,7 +196,7 @@ internal object StoryExportBrandCardPainter {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textSize = layout.nameTextSize
         }
-        val suffix = identity.badge?.let { " $it" }.orEmpty()
+        val suffix = layout.nameSuffix
         val room = width * NAME_ROOM_FRACTION - paint.measureText(suffix)
         val name = TextUtils.ellipsize(identity.displayName, paint, room.coerceAtLeast(0f), TextUtils.TruncateAt.END)
         centred(canvas, "$name$suffix", paint, width, layout.nameTop)
@@ -208,7 +209,7 @@ internal object StoryExportBrandCardPainter {
         if (avatar != null) {
             canvas.drawBitmap(avatar, Rect(0, 0, avatar.width, avatar.height), disc, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
         } else {
-            canvas.drawRect(disc, Paint().apply { color = hexColor(identity.accentHex).toArgb() })
+            canvas.drawRect(disc, Paint().apply { color = accentArgb(identity.accentHex) })
         }
         canvas.restoreToCount(saved)
         if (avatar != null) return
@@ -218,18 +219,20 @@ internal object StoryExportBrandCardPainter {
             textSize = side * INITIALS_FRACTION
         }
         val baseline = disc.centerY() - (initials.ascent() + initials.descent()) / 2f
-        canvas.drawText(initialsOf(identity.displayName), disc.centerX() - initials.measureText(initialsOf(identity.displayName)) / 2f, baseline, initials)
+        val letters = avatarInitials(identity.displayName)
+        canvas.drawText(letters, disc.centerX() - initials.measureText(letters) / 2f, baseline, initials)
     }
 
     private fun mood(canvas: Canvas, identity: StoryExportIdentity, layout: StoryExportIdentityLayout, width: Int, centerY: Float) {
         val emoji = identity.moodEmoji ?: return
         val emojiPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = layout.moodEmojiSize }
         val messagePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; alpha = MOOD_MESSAGE_ALPHA; textSize = layout.moodMessageSize }
-        val message = identity.moodMessage
-        val gap = if (message != null) width * MOOD_GAP_FRACTION else 0f
+        val padH = width * MOOD_PAD_H_FRACTION
+        val gap = if (identity.moodMessage != null) width * MOOD_GAP_FRACTION else 0f
+        val room = width * NAME_ROOM_FRACTION - padH * 2f - emojiPaint.measureText(emoji) - gap
+        val message = identity.moodMessage?.let { TextUtils.ellipsize(it, messagePaint, room.coerceAtLeast(0f), TextUtils.TruncateAt.END).toString() }
         val messageWidth = message?.let { messagePaint.measureText(it) } ?: 0f
         val content = emojiPaint.measureText(emoji) + gap + messageWidth
-        val padH = width * MOOD_PAD_H_FRACTION
         val padV = width * MOOD_PAD_V_FRACTION
         val height = maxOf(emojiPaint.descent() - emojiPaint.ascent(), messagePaint.descent() - messagePaint.ascent()) + padV * 2f
         val capsule = RectF((width - content - padH * 2f) / 2f, centerY - height / 2f, (width + content + padH * 2f) / 2f, centerY + height / 2f)
@@ -243,9 +246,9 @@ internal object StoryExportBrandCardPainter {
         canvas.drawText(text, (width - paint.measureText(text)) / 2f, top - paint.ascent(), paint)
     }
 
-    /** Première lettre d'au plus deux mots, en capitales — comme `MeeshyAvatar`. */
-    internal fun initialsOf(name: String): String =
-        name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase()
+    /** L'accent de l'auteur ; une teinte illisible retombe sur l'indigo de la marque, jamais sur un aplat transparent. */
+    private fun accentArgb(accentHex: String): Int =
+        hexColor(accentHex, androidx.compose.ui.graphics.Color(INDIGO_500)).toArgb()
 
     private const val MAX_IMAGE_SIDE = 2048
     private const val PNG_QUALITY = 100

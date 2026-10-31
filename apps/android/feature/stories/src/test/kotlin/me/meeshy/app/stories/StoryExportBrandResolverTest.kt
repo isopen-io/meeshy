@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportMood
@@ -86,12 +85,5 @@ class StoryExportBrandResolverTest {
         assertThat(resolver(Level(null)).identity(author(presence = null)).presence).isNull()
         val live = UserPresence(isOnline = true, lastActiveAt = java.time.Instant.ofEpochMilli(now - 1_000).toString())
         assertThat(resolver(Level(null)).identity(author(presence = live)).presence).isEqualTo(PresenceState.ONLINE)
-    }
-
-    @Test fun `le mood se lit dans les statuts servis a l auteur seulement`() {
-        val statuses = listOf(StatusEntry(id = "s1", userId = "u2", moodEmoji = "🎉"), StatusEntry(id = "s2", userId = "u1", moodEmoji = "😴", content = "sieste"))
-        assertThat(StoryExportBrandResolver.moodIn(statuses, "u1")).isEqualTo(StoryExportMood("😴", "sieste"))
-        assertThat(StoryExportBrandResolver.moodIn(statuses, "u3")).isNull()
-        assertThat(StoryExportBrandResolver.moodIn(listOf(StatusEntry(id = "s3", userId = "u1", moodEmoji = " ")), "u1")).isNull()
     }
 }

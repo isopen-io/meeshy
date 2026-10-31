@@ -1,7 +1,9 @@
 package me.meeshy.sdk.model.scene.export
 
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.relation.RelationExportBadge
 
 /** Ce que l'écran sait de l'auteur d'une story qu'on exporte (miroir de `StoryExportIntroContent` iOS, avant résolution des images). */
@@ -19,7 +21,21 @@ public data class StoryExportAuthorFacts(
 )
 
 /** Le mood éphémère de l'auteur : l'emoji et, s'il y en a un, son message. */
-public data class StoryExportMood(val emoji: String, val message: String?)
+public data class StoryExportMood(val emoji: String, val message: String?) {
+    public companion object {
+        /**
+         * Le mood que [userId] porte ENCORE dans [statuses] (miroir de `StoryExportIntroFactory.resolveMood` iOS) : sa première
+         * entrée non expirée à [nowMillis] — une entrée sans échéance lisible vaut vivante —, à emoji non vide ; sinon `null`.
+         */
+        public fun liveIn(statuses: List<StatusEntry>, userId: String, nowMillis: Long): StoryExportMood? =
+            statuses.firstOrNull { it.userId == userId && isLive(it, nowMillis) }
+                ?.takeIf { it.moodEmoji.isNotBlank() }
+                ?.let { StoryExportMood(it.moodEmoji, it.content) }
+
+        private fun isLive(entry: StatusEntry, nowMillis: Long): Boolean =
+            isoToEpochMillisOrNull(entry.expiresAt)?.let { it > nowMillis } ?: true
+    }
+}
 
 /**
  * **LE CONTENU OPAQUE DE L'INTRO ET DE LA CARTE D'AUTEUR D'UN EXPORT DE STORY** (#13997 ; miroir de `StoryExportIntroContent`

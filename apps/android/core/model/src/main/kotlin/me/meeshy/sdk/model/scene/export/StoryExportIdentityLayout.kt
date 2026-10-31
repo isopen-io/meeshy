@@ -19,6 +19,8 @@ public data class StoryExportIdentityLayout(
     val avatarTop: Float,
     val avatarSide: Float,
     val presenceDot: StoryExportPresenceDot?,
+    /** Ce qui suit le nom sur sa ligne : ` 🔥`, ` 🩸`, ou rien — la peinture abrège le nom, jamais ce suffixe. */
+    val nameSuffix: String,
     /** La ligne du nom : `Nom` ou `Nom 🔥` — le logo est collé à droite du nom, même police, même taille. */
     val nameLine: String,
     val nameTextSize: Float,
@@ -50,12 +52,14 @@ public data class StoryExportIdentityLayout(
             val handleSize = width * HANDLE_FRACTION
             val nameTop = top + side + nameSize * AVATAR_TOP_OF_CENTER
             val handleTop = nameTop + nameSize * 1.4f
+            val suffix = identity.badge?.let { " $it" }.orEmpty()
             return StoryExportIdentityLayout(
                 avatarLeft = left,
                 avatarTop = top,
                 avatarSide = side,
                 presenceDot = identity.presence?.let { dot(it, left, top, side) },
-                nameLine = identity.badge?.let { "${identity.displayName} $it" } ?: identity.displayName,
+                nameSuffix = suffix,
+                nameLine = identity.displayName + suffix,
                 nameTextSize = nameSize,
                 nameTop = nameTop,
                 handleText = "@${identity.username}".takeUnless { identity.username.isBlank() || identity.username.equals(identity.displayName, ignoreCase = true) },

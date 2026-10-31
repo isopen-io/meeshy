@@ -12,16 +12,20 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.media.scene.SceneExportCoordinatorFactory
 import me.meeshy.sdk.media.scene.SceneMediaProbe
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.ImagerQuarter
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.sdk.model.scene.export.StoryExportMood
 import me.meeshy.sdk.net.MeeshyConfig
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.relation.RelationLevelProvider
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
 
 /**
@@ -32,7 +36,8 @@ import me.meeshy.sdk.status.StatusRepository
 class StoryVideoExportViewModel @Inject constructor(
     factory: SceneExportCoordinatorFactory,
     private val config: MeeshyConfig,
-    statusRepository: StatusRepository,
+    private val statusRepository: StatusRepository,
+    private val statusBarCache: StatusBarCache,
     relationLevel: RelationLevelProvider,
 ) : ViewModel() {
 
@@ -55,13 +60,16 @@ class StoryVideoExportViewModel @Inject constructor(
     /** Le mood de l'auteur et le niveau de son lien sont lus à l'export, bornés : ce qui n'arrive pas à temps manque. */
     private val brandResolver = StoryExportBrandResolver(
         relationLevel = relationLevel,
-        moodOf = { userId ->
-            when (val result = statusRepository.list()) {
-                is NetworkResult.Success -> StoryExportBrandResolver.moodIn(result.data.statuses, userId)
-                is NetworkResult.Failure -> null
-            }
-        },
+        moodOf = { userId -> StoryExportMood.liveIn(friendStatuses(), userId, System.currentTimeMillis()) },
     )
+
+    /**
+     * Les statuts « amis », cache d'abord (iOS `resolveMood` lit le cache `statuses_friends`) : le réseau n'est appelé que
+     * lorsque la barre des moods n'a encore rien servi — le serveur y place le statut du lecteur lui-même en tête.
+     */
+    private suspend fun friendStatuses(): List<StatusEntry> =
+        statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull
+            ?: statusRepository.list(StatusFeedMode.FRIENDS).getOrNull()?.statuses.orEmpty()
 
     fun export(mode: StoryExportMode, item: StoryItem, slide: StorySlideView) = export(mode, listOf(item to slide))
 

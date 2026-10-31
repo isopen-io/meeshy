@@ -4,12 +4,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
-import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportIdentity
 import me.meeshy.sdk.model.scene.export.StoryExportMood
 import me.meeshy.sdk.relation.RelationLevelProvider
-import me.meeshy.sdk.status.statusForUser
 
 /**
  * **Résout ce que l'intro d'un export doit dire de l'auteur** (#13997) : son mood et le niveau de son lien avec le lecteur, puis
@@ -39,9 +37,5 @@ class StoryExportBrandResolver(
 
     companion object {
         const val RESOLVE_BUDGET_MILLIS = 2_000L
-
-        /** Le mood vivant de [userId] dans les statuts servis, ou `null`. */
-        fun moodIn(statuses: List<StatusEntry>, userId: String): StoryExportMood? =
-            statuses.statusForUser(userId)?.takeIf { it.moodEmoji.isNotBlank() }?.let { StoryExportMood(it.moodEmoji, it.content) }
     }
 }
