@@ -70,7 +70,7 @@ extension MeeshyComposerHost {
                     // La feuille ancrée vit HORS du présentateur des portails :
                     // elle reçoit les mêmes fournisseurs, par la même fonction.
                     portalView(portail)
-                        .composerPortalProviders()
+                        .composerPortalProviders(format: selectedFormat)
                 }
                 .id(portail)
             }

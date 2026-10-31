@@ -604,7 +604,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
-        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 3
+        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 2
+        // #13913 — le refus d'un document et le plafond de durée ont quitté le
+        // collage et la limite pour la table des variantes, avec leurs clés.
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatVariant.swift",
         "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2

@@ -22,6 +22,7 @@ public struct SoundLibraryPicker: View {
 
     @StateObject private var model: SoundLibraryPickerModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.composerFormatWording) private var formatWording
     @FocusState private var searchFocused: Bool
     @State private var renameDraft: String = ""
     /// Son dont on regarde la page. `nil` = aucune page ouverte.
@@ -252,7 +253,7 @@ public struct SoundLibraryPicker: View {
             Image(systemName: "waveform")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(.secondary)
-            Text(model.emptyMessage)
+            Text(model.emptyMessage(for: formatWording))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

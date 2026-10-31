@@ -957,11 +957,11 @@ struct MeeshyComposerHost: View {
         // n'aurait jamais sa slide (loi 9 — le contenu est PRÉSERVÉ).
         .adaptiveOnChange(of: selectedFormat, initial: true) { _, _ in
             syncPostMediaIntoSlides()
-            // La première unité d'histoire naît AVEC le format, jamais au
-            // premier geste : le canvas d'une story se montre vide, et un rail
-            // sans aucune unité n'aurait pas de voisine à côté de qui poser la
-            // suivante. `initial: true` couvre les portes qui ouvrent DÉJÀ en
-            // story (reprise d'un brouillon de story, tiroir des stories).
+            ComposerLimitFeedback.board.format = selectedFormat
+            // La première unité d'histoire naît AVEC le format, jamais au premier
+            // geste : le canvas d'une story se montre vide, et un rail sans unité
+            // n'aurait pas de voisine à côté de qui poser la suivante. `initial:
+            // true` couvre les portes qui ouvrent DÉJÀ en story (brouillon, tiroir).
             seedStoryCanvasIfNeeded()
         }
         // Une vidéo de fond, ou un son sur une image de fond, arme la

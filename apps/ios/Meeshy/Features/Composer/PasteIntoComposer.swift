@@ -159,9 +159,9 @@ extension PasteIntoComposer {
     /// Point d'entrée de la SCÈNE du composer de story : lit, annonce ce que la
     /// scène ne sait pas héberger, et rend ce qu'elle sait poser.
     @MainActor
-    static func storyScene(_ providers: [NSItemProvider]) async -> [StoryPastedItem] {
+    static func storyScene(_ providers: [NSItemProvider], format: ComposerFormat = .story) async -> [StoryPastedItem] {
         let resolved = await resolve(providers, surface: .scene)
-        announceWhatTheStorySceneCannotHost(resolved)
+        announceWhatTheStorySceneCannotHost(resolved, format: format)
         // **Le texte n'est plus annoncé, il est POSÉ** (#4378). Il l'était
         // « appartenant à l'outil texte » — une destination qu'aucun geste
         // n'ouvrait depuis le collage : l'annonce était donc un refus poli pour
@@ -198,21 +198,18 @@ extension PasteIntoComposer {
     /// savoir ce qu'il en est advenu ET où le porter. Le silence est le pire
     /// comportement possible ici ; un refus sans issue est le deuxième pire.
     @MainActor
-    static func announceWhatTheStorySceneCannotHost(_ batch: ComposerPasteBatch) {
-        exclusions(in: batch).forEach { announce($0) }
+    static func announceWhatTheStorySceneCannotHost(_ batch: ComposerPasteBatch, format: ComposerFormat = .story) {
+        exclusions(in: batch).forEach { announce($0, format: format) }
     }
 
     @MainActor
-    private static func announce(_ exclusion: ComposerPasteExclusion) {
+    private static func announce(_ exclusion: ComposerPasteExclusion, format: ComposerFormat) {
         switch exclusion {
         case .unreadable(let names):
             ComposerIngestFeedback.showFailure(names: names)
         case .documentBelongsToAPost(let names):
-            let joined = names.joined(separator: ", ")
             FeedbackToastManager.shared.showError(
-                String(localized: "composer.paste.documentGoesToAPost",
-                       defaultValue: "Un document se joint à un post, pas au canevas d'une story : \(joined)",
-                       bundle: .main)
+                ComposerFormatVariant.of(format).documentRefusal(names: names.joined(separator: ", "))
             )
         case .textBelongsToTheTextTool:
             FeedbackToastManager.shared.showError(
@@ -299,10 +296,20 @@ extension View {
     /// résolution d'un `NSItemProvider` (représentation fichier vs données,
     /// autorisation sandbox, nom d'origine) est de l'orchestration app-side, et
     /// elle existe déjà. Sans cet appel, la capsule « Coller » n'est pas rendue
-    /// — une amorce qui ouvre le vide est pire que pas d'amorce.
+    /// — une amorce qui ouvre le vide est pire que pas d'amorce. Le refus d'un
+    /// document nomme le format lu dans `\.composerFormatWording` (#13913).
     func storyPasteProvided() -> some View {
-        environment(\.storyPaste, StoryPasteProvider { providers in
-            await PasteIntoComposer.storyScene(providers)
+        modifier(StoryPasteInjection())
+    }
+}
+
+private struct StoryPasteInjection: ViewModifier {
+    @Environment(\.composerFormatWording) private var wording
+
+    func body(content: Content) -> some View {
+        let format = ComposerFormat(noun: wording.noun)
+        return content.environment(\.storyPaste, StoryPasteProvider { providers in
+            await PasteIntoComposer.storyScene(providers, format: format)
         })
     }
 }

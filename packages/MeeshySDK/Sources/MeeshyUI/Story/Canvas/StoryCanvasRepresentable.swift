@@ -383,6 +383,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
+        uiView.formatWording = context.environment.composerFormatWording
         // **Le cadre de sélection** (#4073). `setSelectionMarker` se garde
         // lui-même contre la réassignation identique : `updateUIView` est
         // appelée à chaque évaluation du corps SwiftUI, et reposer le cadre à
