@@ -95,6 +95,42 @@
     "cadres-illustres": {
       "name": "Marcos ilustrados",
       "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
+    },
+    "cadres-asiatiques": {
+      "name": "Marcos de Asia",
+      "description": "Tres marcos inspirados en Asia: un dragón de jade que ondula alrededor de tu avatar, nubes de seda a la deriva y farolillos de papel que se mecen."
+    },
+    "cadres-africains": {
+      "name": "Marcos de África",
+      "description": "Tres marcos inspirados en África: una máscara de ébano cuyos ojos se iluminan ante un sol de sabana, bandas tejidas que ondulan y un collar de cuentas que gira."
+    },
+    "cadres-celtes": {
+      "name": "Marcos celtas",
+      "description": "Tres marcos inspirados en los entrelazados celtas: un nudo que se borra y se vuelve a trazar, una espiral triple que gira y una hiedra esmeralda de hojas que tiemblan."
+    },
+    "cadres-nordiques": {
+      "name": "Marcos nórdicos",
+      "description": "Cuatro marcos del gran Norte: cuervos que giran, una aurora boreal que ondula, un anillo de piedra grabada que se ilumina y una proa tallada sobre las olas."
+    },
+    "cadres-egyptiens": {
+      "name": "Marcos egipcios",
+      "description": "Cuatro marcos de oro y lapislázuli: una cobra que se yergue, un escarabajo que abre sus alas, un sol del desierto con gran collar y lotos del Nilo que se abren."
+    },
+    "cadres-mayas": {
+      "name": "Marcos mayas",
+      "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
+    },
+    "cadres-indiens": {
+      "name": "Marcos indios",
+      "description": "Tres marcos inspirados en los motivos de la India: un mandala floral que se abre, un pavo real que despliega la cola y una guirnalda de caléndulas y jazmín que se balancea."
+    },
+    "cadres-amerindiens": {
+      "name": "Marcos amerindios",
+      "description": "Tres marcos inspirados en el tejido y el abalorio: un aro tejido con plumas estilizadas que se mecen, una banda de rombos de cuentas que gira y un sol escalonado sobre montañas y su río."
+    },
+    "cadres-australs": {
+      "name": "Marcos australes",
+      "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
     }
   },
   "designs": {
@@ -148,7 +184,37 @@
     "ailes-ange": "Alas de ángel",
     "cercle-runique": "Círculo rúnico",
     "griffes-os": "Garras de hueso",
-    "ailes-demon": "Alas de demonio"
+    "ailes-demon": "Alas de demonio",
+    "dragon-jade": "Dragón de jade",
+    "nuages-soie": "Nubes de seda",
+    "lanternes-papier": "Farolillos de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Bandas tejidas",
+    "collier-perles": "Collar de cuentas",
+    "noeud-entrelace": "Nudo entrelazado",
+    "spirale-triple": "Espiral triple",
+    "lierre-emeraude": "Hiedra esmeralda",
+    "corbeaux-tournoyants": "Cuervos en círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anillo de piedra grabada",
+    "proue-sculptee": "Proa tallada",
+    "cobra-dore": "Cobra dorada",
+    "scarabee-aile": "Escarabajo alado",
+    "soleil-du-desert": "Sol del desierto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpiente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso escalonado",
+    "jaguar-de-jungle": "Jaguar de la selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavo real en abanico",
+    "guirlande-soucis": "Guirnalda de caléndulas",
+    "cercle-tisse": "Aro tejido con plumas",
+    "perlage-losanges": "Rombos de cuentas",
+    "soleil-montagnes": "Sol sobre las montañas",
+    "cercles-points": "Círculos de puntos",
+    "tortue-marine": "Tortuga marina",
+    "croix-du-sud": "Cruz del Sur"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

@@ -95,6 +95,42 @@
     "cadres-illustres": {
       "name": "Cornici illustrate",
       "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
+    },
+    "cadres-asiatiques": {
+      "name": "Cornici d’Asia",
+      "description": "Tre cornici ispirate all’Asia: un drago di giada che si snoda attorno al tuo avatar, nuvole di seta alla deriva e lanterne di carta che dondolano."
+    },
+    "cadres-africains": {
+      "name": "Cornici d’Africa",
+      "description": "Tre cornici ispirate all’Africa: una maschera d’ebano dagli occhi che si accendono davanti a un sole di savana, bande tessute che ondeggiano e una collana di perle che ruota."
+    },
+    "cadres-celtes": {
+      "name": "Cornici celtiche",
+      "description": "Tre cornici ispirate agli intrecci celtici: un nodo che svanisce e si ridisegna, una spirale tripla che gira e un’edera smeraldo dalle foglie che fremono."
+    },
+    "cadres-nordiques": {
+      "name": "Cornici nordiche",
+      "description": "Quattro cornici dal grande Nord: corvi che volteggiano, un’aurora boreale che ondeggia, un anello di pietra incisa che si illumina e una prua scolpita sulle onde."
+    },
+    "cadres-egyptiens": {
+      "name": "Cornici egizie",
+      "description": "Quattro cornici d’oro e lapislazzuli: un cobra che si erge, uno scarabeo che apre le ali, un sole del deserto dal grande collare e loti del Nilo che sbocciano."
+    },
+    "cadres-mayas": {
+      "name": "Cornici maya",
+      "description": "Quattro cornici di pietra e giada: un serpente di giada dalla cresta piumata, cartigli di glifi che si illuminano, un fregio a gradoni sotto il sole nascente e un giaguaro nascosto nella giungla."
+    },
+    "cadres-indiens": {
+      "name": "Cornici indiane",
+      "description": "Tre cornici ispirate ai motivi dell’India: un mandala floreale che si apre, un pavone che fa la ruota e una ghirlanda di calendule e gelsomino che ondeggia."
+    },
+    "cadres-amerindiens": {
+      "name": "Cornici amerindie",
+      "description": "Tre cornici ispirate alla tessitura e alle perline: un cerchio intrecciato con piume stilizzate che ondeggiano, una fascia di rombi di perline che gira e un sole a gradini sopra montagne e il loro fiume."
+    },
+    "cadres-australs": {
+      "name": "Cornici australi",
+      "description": "Tre cornici ispirate alla pittura a punti e al cielo australe: cerchi di punti che scintillano, una tartaruga marina che nuota intorno all’avatar e la Croce del Sud che brilla."
     }
   },
   "designs": {
@@ -148,7 +184,37 @@
     "ailes-ange": "Ali d’angelo",
     "cercle-runique": "Cerchio runico",
     "griffes-os": "Artigli d’osso",
-    "ailes-demon": "Ali di demone"
+    "ailes-demon": "Ali di demone",
+    "dragon-jade": "Drago di giada",
+    "nuages-soie": "Nuvole di seta",
+    "lanternes-papier": "Lanterne di carta",
+    "masque-ebene": "Maschera d’ebano",
+    "bandes-tissees": "Bande tessute",
+    "collier-perles": "Collana di perle",
+    "noeud-entrelace": "Nodo intrecciato",
+    "spirale-triple": "Spirale tripla",
+    "lierre-emeraude": "Edera smeraldo",
+    "corbeaux-tournoyants": "Corvi in volo",
+    "aurore-boreale": "Aurora boreale",
+    "anneau-pierre-gravee": "Anello di pietra incisa",
+    "proue-sculptee": "Prua scolpita",
+    "cobra-dore": "Cobra d’oro",
+    "scarabee-aile": "Scarabeo alato",
+    "soleil-du-desert": "Sole del deserto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpente di giada",
+    "cartouches-de-glyphes": "Cartigli di glifi",
+    "frise-a-gradins": "Fregio a gradoni",
+    "jaguar-de-jungle": "Giaguaro della giungla",
+    "mandala-floral": "Mandala floreale",
+    "paon-roue": "Pavone che fa la ruota",
+    "guirlande-soucis": "Ghirlanda di calendule",
+    "cercle-tisse": "Cerchio intrecciato con piume",
+    "perlage-losanges": "Rombi di perline",
+    "soleil-montagnes": "Sole sulle montagne",
+    "cercles-points": "Cerchi di punti",
+    "tortue-marine": "Tartaruga marina",
+    "croix-du-sud": "Croce del Sud"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",
