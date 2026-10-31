@@ -42,6 +42,17 @@ export const minRelationLevel = (a: RelationLevel, b: RelationLevel): RelationLe
 export const maxRelationLevel = (a: RelationLevel, b: RelationLevel): RelationLevel =>
   compareRelationLevel(a, b) >= 0 ? a : b;
 
+/**
+ * Parse une valeur servie et rend son niveau si elle atteint `min`, sinon `null`.
+ * Le seul moyen, pour un consommateur hors de la loi d'accès, de tester un
+ * seuil sans réimporter `parseRelationLevel`/`compareRelationLevel` (garde
+ * `relation-access-single-site-guard.test.ts`, clause 2).
+ */
+export const relationLevelIfAtLeast = (value: unknown, min: RelationLevel): RelationLevel | null => {
+  const level = parseRelationLevel(value);
+  return compareRelationLevel(level, min) >= 0 ? level : null;
+};
+
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
 /**

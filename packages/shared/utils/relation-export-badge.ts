@@ -14,7 +14,7 @@
  * `fixtures/relation-export-badge.vectors.json`.
  */
 
-import { compareRelationLevel, parseRelationLevel, type RelationLevel } from '../types/relation.js';
+import { relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
 
 export const RELATION_EXPORT_BADGE_MIN_LEVEL: RelationLevel = 'CLOSE';
 
@@ -24,7 +24,6 @@ const RELATION_EXPORT_BADGES: Readonly<Partial<Record<RelationLevel, string>>> =
 };
 
 export const relationExportBadge = (served: unknown): string | null => {
-  const level = parseRelationLevel(served);
-  if (compareRelationLevel(level, RELATION_EXPORT_BADGE_MIN_LEVEL) < 0) return null;
-  return RELATION_EXPORT_BADGES[level] ?? null;
+  const level = relationLevelIfAtLeast(served, RELATION_EXPORT_BADGE_MIN_LEVEL);
+  return level ? RELATION_EXPORT_BADGES[level] ?? null : null;
 };
