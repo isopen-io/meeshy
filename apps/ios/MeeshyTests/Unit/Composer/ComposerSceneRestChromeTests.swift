@@ -155,4 +155,11 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertEqual(ComposerRestChrome.soundAction(hasBackgroundSound: true, canEditBackgroundSound: false),
                        .openDoor)
     }
+
+    /// La colonne s'alignait sur le bord de la scène : sans la pastille
+    /// « Coller », plus large, qui la décalait, ses boutons touchaient ce bord
+    /// sur l'iPhone et le débordaient sur le petit écran.
+    func test_toolColumnInnerMargin_keepsTheButtonsInsideTheScene() {
+        XCTAssertGreaterThanOrEqual(ComposerRestChrome.toolColumnInnerMargin, 8)
+    }
 }

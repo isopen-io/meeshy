@@ -1462,6 +1462,7 @@
 		C649FA0F55F5A8D27B3391AC /* ComposerKeyboardStyleBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80D978A78A751C175BA6EBE /* ComposerKeyboardStyleBar.swift */; };
 		311DA6FF67644EE03BE239D0 /* ComposerKeyboardOrOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0D651370BCE019821E7295 /* ComposerKeyboardOrOptions.swift */; };
 		547F9642D22BAE9D6EBE8999 /* ComposerAnchoredSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88959A38F2B0B8C7AAC7992F /* ComposerAnchoredSheet.swift */; };
+		5E36E619C1BA708985B206B4 /* ComposerPasteEntryGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B09E97425AC340D0752A28 /* ComposerPasteEntryGate.swift */; };
 		ED1C7CADAAD94C18F011B437 /* ComposerCloseGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91CE9D2BF02D704259DE306D /* ComposerCloseGuard.swift */; };
 		9D5881753E26C93F1F4882B5 /* ComposerSceneFraming.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D6156A8188D32F3475481C /* ComposerSceneFraming.swift */; };
 		0F00E23C6052508327AB7F17 /* ComposerRestChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 023290008CE9D191BE1387B8 /* ComposerRestChrome.swift */; };
@@ -1660,6 +1661,7 @@
 		AF2247C22350ADBED31EE77C /* ComposerAudienceTapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4894F5E83CB72C128EF4753D /* ComposerAudienceTapTests.swift */; };
 		9F084EC1A30AD18C8A558DE6 /* ComposerCloseGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C233D627A904CA03FF4E1C /* ComposerCloseGuardTests.swift */; };
 		35E17012AC2F97C5F6838190 /* ComposerAnchoredSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4445D4B98FFB8E52397D35B6 /* ComposerAnchoredSheetTests.swift */; };
+		D99BC70D25965C17B55A4D89 /* ComposerPasteEntryGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38B189FF88310E0081312B5 /* ComposerPasteEntryGateTests.swift */; };
 		E555736FE948B4F5EC18C81F /* ComposerSceneFramingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C69F437BEE0AEA93A1B53C5 /* ComposerSceneFramingTests.swift */; };
 		9264F3A4FF06F71A36B2D6C9 /* ComposerSceneRestChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E468EA16A906518BB505ECA /* ComposerSceneRestChromeTests.swift */; };
 		B94400DCAA711C34E55D89BB /* ComposerMoreMenuPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDFA53F0212EE814B85423B8 /* ComposerMoreMenuPolicyTests.swift */; };
@@ -6401,6 +6403,7 @@
 		4894F5E83CB72C128EF4753D /* ComposerAudienceTapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAudienceTapTests.swift; sourceTree = "<group>"; };
 		E9C233D627A904CA03FF4E1C /* ComposerCloseGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCloseGuardTests.swift; sourceTree = "<group>"; };
 		4445D4B98FFB8E52397D35B6 /* ComposerAnchoredSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAnchoredSheetTests.swift; sourceTree = "<group>"; };
+		D38B189FF88310E0081312B5 /* ComposerPasteEntryGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPasteEntryGateTests.swift; sourceTree = "<group>"; };
 		5C69F437BEE0AEA93A1B53C5 /* ComposerSceneFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFramingTests.swift; sourceTree = "<group>"; };
 		5E468EA16A906518BB505ECA /* ComposerSceneRestChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneRestChromeTests.swift; sourceTree = "<group>"; };
 		FDFA53F0212EE814B85423B8 /* ComposerMoreMenuPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMoreMenuPolicyTests.swift; sourceTree = "<group>"; };
@@ -7735,6 +7738,7 @@
 		D80D978A78A751C175BA6EBE /* ComposerKeyboardStyleBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerKeyboardStyleBar.swift; sourceTree = "<group>"; };
 		CC0D651370BCE019821E7295 /* ComposerKeyboardOrOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerKeyboardOrOptions.swift; sourceTree = "<group>"; };
 		88959A38F2B0B8C7AAC7992F /* ComposerAnchoredSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAnchoredSheet.swift; sourceTree = "<group>"; };
+		02B09E97425AC340D0752A28 /* ComposerPasteEntryGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPasteEntryGate.swift; sourceTree = "<group>"; };
 		91CE9D2BF02D704259DE306D /* ComposerCloseGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCloseGuard.swift; sourceTree = "<group>"; };
 		B2D6156A8188D32F3475481C /* ComposerSceneFraming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFraming.swift; sourceTree = "<group>"; };
 		023290008CE9D191BE1387B8 /* ComposerRestChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRestChrome.swift; sourceTree = "<group>"; };
@@ -10519,6 +10523,7 @@
 				4894F5E83CB72C128EF4753D /* ComposerAudienceTapTests.swift */,
 				E9C233D627A904CA03FF4E1C /* ComposerCloseGuardTests.swift */,
 				4445D4B98FFB8E52397D35B6 /* ComposerAnchoredSheetTests.swift */,
+				D38B189FF88310E0081312B5 /* ComposerPasteEntryGateTests.swift */,
 				5C69F437BEE0AEA93A1B53C5 /* ComposerSceneFramingTests.swift */,
 				5E468EA16A906518BB505ECA /* ComposerSceneRestChromeTests.swift */,
 				FDFA53F0212EE814B85423B8 /* ComposerMoreMenuPolicyTests.swift */,
@@ -12001,6 +12006,7 @@
 				D80D978A78A751C175BA6EBE /* ComposerKeyboardStyleBar.swift */,
 				CC0D651370BCE019821E7295 /* ComposerKeyboardOrOptions.swift */,
 				88959A38F2B0B8C7AAC7992F /* ComposerAnchoredSheet.swift */,
+				02B09E97425AC340D0752A28 /* ComposerPasteEntryGate.swift */,
 				91CE9D2BF02D704259DE306D /* ComposerCloseGuard.swift */,
 				B2D6156A8188D32F3475481C /* ComposerSceneFraming.swift */,
 				023290008CE9D191BE1387B8 /* ComposerRestChrome.swift */,
@@ -14948,6 +14954,7 @@
 				C649FA0F55F5A8D27B3391AC /* ComposerKeyboardStyleBar.swift in Sources */,
 				311DA6FF67644EE03BE239D0 /* ComposerKeyboardOrOptions.swift in Sources */,
 				547F9642D22BAE9D6EBE8999 /* ComposerAnchoredSheet.swift in Sources */,
+				5E36E619C1BA708985B206B4 /* ComposerPasteEntryGate.swift in Sources */,
 				ED1C7CADAAD94C18F011B437 /* ComposerCloseGuard.swift in Sources */,
 				9D5881753E26C93F1F4882B5 /* ComposerSceneFraming.swift in Sources */,
 				0F00E23C6052508327AB7F17 /* ComposerRestChrome.swift in Sources */,
@@ -16971,6 +16978,7 @@
 				AF2247C22350ADBED31EE77C /* ComposerAudienceTapTests.swift in Sources */,
 				9F084EC1A30AD18C8A558DE6 /* ComposerCloseGuardTests.swift in Sources */,
 				35E17012AC2F97C5F6838190 /* ComposerAnchoredSheetTests.swift in Sources */,
+				D99BC70D25965C17B55A4D89 /* ComposerPasteEntryGateTests.swift in Sources */,
 				E555736FE948B4F5EC18C81F /* ComposerSceneFramingTests.swift in Sources */,
 				9264F3A4FF06F71A36B2D6C9 /* ComposerSceneRestChromeTests.swift in Sources */,
 				B94400DCAA711C34E55D89BB /* ComposerMoreMenuPolicyTests.swift in Sources */,

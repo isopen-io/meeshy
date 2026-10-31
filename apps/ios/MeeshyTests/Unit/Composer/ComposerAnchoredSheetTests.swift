@@ -7,10 +7,35 @@ import XCTest
 final class ComposerAnchoredSheetTests: XCTestCase {
 
     func test_presentation_composerSheets_areAnchoredInThePile() {
-        let ancrees: [ComposerPortal] = [.sticker, .sound, .soundLibrary, .reference, .hashtag,
-                                         .location, .audience, .background, .slideDuration]
+        let ancrees: [ComposerPortal] = [.sticker, .reference, .hashtag,
+                                         .audience, .background, .slideDuration]
         for portail in ancrees {
             XCTAssertEqual(portail.presentation, .anchored, "\(portail) doit réduire la scène, pas la couvrir")
+            XCTAssertTrue(portail.reducesScene)
+            XCTAssertNil(portail.sheetDetentFraction)
+        }
+    }
+
+    /// **Une vue qui monte sa propre `NavigationStack` ne s'ancre pas** (recette
+    /// simulateur du 2026-10-31) : posée dans la pile, elle ne recevait AUCUN
+    /// toucher — « Enregistrer », « Bibliothèque », « Fichiers », la recherche
+    /// d'un lieu traversaient la feuille jusqu'à la scène, qui la refermait.
+    /// Elle redevient une feuille système de hauteur fixe, et la scène se
+    /// réduit toujours au-dessus d'elle.
+    func test_presentation_portalsWithTheirOwnNavigation_areFixedHeightSheets_thatStillReduceTheScene() {
+        for portail in [ComposerPortal.sound, .soundLibrary, .location] {
+            XCTAssertEqual(portail.presentation, .sheet, "\(portail) doit rester touchable")
+            XCTAssertEqual(portail.sheetDetentFraction,
+                           ComposerAnchoredSheetMetrics.fraction(portail.anchoredSize),
+                           "\(portail) garde la hauteur de sa feuille ancrée")
+            XCTAssertTrue(portail.reducesScene, "\(portail) doit réduire la scène, pas la couvrir")
+        }
+    }
+
+    func test_reducesScene_cameraAndDocumentPickers_doNotReduceTheScene() {
+        for portail in [ComposerPortal.camera, .emoji, .language] {
+            XCTAssertFalse(portail.reducesScene)
+            XCTAssertNil(portail.sheetDetentFraction)
         }
     }
 

@@ -98,7 +98,10 @@ struct ComposerHostPortal: View {
     var observation: ComposerHostObservation
     let portal: ComposerPortal
 
-    var body: some View { host.portalContent(portal) }
+    var body: some View {
+        host.portalContent(portal)
+            .modifier(ComposerFixedHeightSheet(fraction: portal.sheetDetentFraction))
+    }
 }
 
 /// Ce que la racine pose PAR-DESSUS la scène : la zone d'écriture, la feuille

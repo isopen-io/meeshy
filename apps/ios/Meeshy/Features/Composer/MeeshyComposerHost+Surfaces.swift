@@ -384,13 +384,9 @@ extension MeeshyComposerHost {
             // s'éteint quand le presse-papier n'a rien d'acceptable : c'est le
             // système qui tient la loi 4 ici, pas nous.
             railSystemEntry: AnyView(
-                BlankCanvasPasteStarter(canAddMedia: viewModel.canAddMedia) { items in
+                ComposerPasteEntry(canAddMedia: viewModel.canAddMedia) { items in
                     handlePastedItems(items)
                 }
-                .labelStyle(.iconOnly)
-                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le plancher de l'app
-                // est iOS 16. Sur une cible de 44 pt, la capsule EST un cercle.
-                .buttonBorderShape(.capsule)
             ),
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //

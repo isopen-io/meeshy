@@ -120,8 +120,8 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
         switch self {
         case .camera: return .fullScreen
         case .emoji, .language: return .sheet
-        case .location, .sticker, .sound, .soundLibrary, .reference, .hashtag,
-             .audience, .background, .slideDuration:
+        case .sound, .soundLibrary, .location: return .sheet
+        case .sticker, .reference, .hashtag, .audience, .background, .slideDuration:
             return .anchored
         }
     }
@@ -151,4 +151,26 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     /// Le son garde le thème de l'app : sa vue, partagée avec le fil, lit le
     /// thème global et le resynchronise quand le schéma change.
     var anchoredForcesDark: Bool { self != .sound }
+
+    /// **La hauteur fixe d'une feuille SYSTÈME qui réduit la scène** —
+    /// `nil` pour toute autre présentation.
+    ///
+    /// Le son, sa bibliothèque et le lieu montent leur propre
+    /// `NavigationStack` : posés dans la pile comme une feuille ancrée, ils ne
+    /// recevaient aucun toucher (recette au simulateur — « Enregistrer »,
+    /// « Bibliothèque », « Fichiers » et la recherche d'un lieu traversaient la
+    /// feuille jusqu'à la scène, qui la refermait). Ils restent donc des
+    /// feuilles système, à la hauteur de leur feuille ancrée, et la scène se
+    /// réduit au-dessus d'eux comme au-dessus des autres.
+    var sheetDetentFraction: CGFloat? {
+        switch self {
+        case .sound, .soundLibrary, .location:
+            return ComposerAnchoredSheetMetrics.fraction(anchoredSize)
+        default:
+            return nil
+        }
+    }
+
+    /// La scène se réduit au-dessus de cette feuille au lieu d'être couverte.
+    var reducesScene: Bool { presentation == .anchored || sheetDetentFraction != nil }
 }

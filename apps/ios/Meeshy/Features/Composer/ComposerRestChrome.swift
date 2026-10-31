@@ -37,6 +37,9 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// barre d'actions (L5).
 nonisolated enum ComposerRestChrome {
 
+    /// La marge entre la colonne d'outils et le bord droit de la scène.
+    static let toolColumnInnerMargin: CGFloat = 12
+
     struct State: Equatable, Sendable {
         var toolIsOpen: Bool
         var writesText: Bool

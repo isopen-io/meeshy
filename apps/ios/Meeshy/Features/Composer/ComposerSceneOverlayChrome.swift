@@ -41,6 +41,7 @@ struct ComposerSceneOverlayChrome: View {
             if ComposerRestChrome.topRowIsShown(state) { topRow.transition(.opacity) }
             if ComposerRestChrome.toolColumnIsShown(state) {
                 toolColumn
+                    .padding(.trailing, ComposerRestChrome.toolColumnInnerMargin)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .transition(.opacity)
             }

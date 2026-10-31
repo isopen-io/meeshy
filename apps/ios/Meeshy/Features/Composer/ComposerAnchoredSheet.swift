@@ -163,6 +163,39 @@ struct ComposerAnchoredSheet<Content: View>: View {
 
 /// Le thème sombre de la feuille, sans `preferredColorScheme` : posé dans la
 /// pile, celui-ci remonterait jusqu'à la fenêtre et assombrirait tout le reste.
+/// La place qu'occupe une feuille SYSTÈME de hauteur fixe, publiée comme celle
+/// d'une feuille ancrée : rien ne s'y dessine et rien ne s'y touche.
+struct ComposerAnchoredSheetFootprint: View {
+    let size: ComposerAnchoredSheetMetrics.Size
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .preference(key: ComposerAnchoredSheetTopKey.self,
+                            value: ComposerAnchoredSheetMetrics.restingTop(
+                                containerMaxY: geo.frame(in: .global).maxY,
+                                height: ComposerAnchoredSheetMetrics.height(size, available: geo.size.height)))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// La feuille système de hauteur fixe : un seul cran, sa poignée visible.
+struct ComposerFixedHeightSheet: ViewModifier {
+    let fraction: CGFloat?
+
+    func body(content: Content) -> some View {
+        if let fraction {
+            content
+                .presentationDetents([.fraction(fraction)])
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+        }
+    }
+}
+
 private struct ComposerSheetScheme: ViewModifier {
     let forcesDark: Bool
     func body(content: Content) -> some View {

@@ -23,12 +23,13 @@ extension MeeshyComposerHost {
     /// attente. Une feuille ancrée se ferme sans présentateur à libérer — la
     /// reprise suit donc le changement d'état lui-même.
     func anchoredPortalDidChange(from ancien: ComposerPortal?, to nouveau: ComposerPortal?) {
-        guard ancien?.presentation == .anchored, ancien != nouveau else { return }
-        forgetEditedSound()
+        guard ancien != nouveau else { return }
         // Refermer la feuille Sticker ou Lieu sans choisir n'arme rien pour
-        // la prochaine pose (#13839, L5).
+        // la prochaine pose (#13839, L5) — quelle que soit sa présentation.
         if ancien == .sticker { stickerReplacementId = nil }
         if ancien == .location { placeRepointId = nil }
+        guard ancien?.presentation == .anchored else { return }
+        forgetEditedSound()
         if nouveau == nil { resumePendingPresentation() }
     }
 
@@ -37,7 +38,7 @@ extension MeeshyComposerHost {
         content
             .overlay { ComposerHostAnchoredSheetLayer(host: self, observation: observation) }
             .onPreferenceChange(ComposerAnchoredSheetTopKey.self) { anchoredSheetTop = $0 }
-            .environment(\.composerAnchoredSheetTop, anchoredPortal == nil ? nil : anchoredSheetTop)
+            .environment(\.composerAnchoredSheetTop, presentedPortal?.reducesScene == true ? anchoredSheetTop : nil)
             .adaptiveOnChange(of: presentedPortal) { ancien, nouveau in
                 anchoredPortalDidChange(from: ancien, to: nouveau)
             }
@@ -74,6 +75,8 @@ extension MeeshyComposerHost {
                 .id(portail)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else if let portail = presentedPortal, portail.sheetDetentFraction != nil {
+            ComposerAnchoredSheetFootprint(size: portail.anchoredSize)
         }
     }
 
