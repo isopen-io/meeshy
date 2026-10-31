@@ -1,6 +1,8 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MessagesApiResponse
@@ -21,6 +23,10 @@ import retrofit2.http.Query
 
 @Serializable
 data class EditMessageRequest(val content: String)
+
+/** Corps de `POST /conversations/:id/messages/after-read/consume` (#8302) : 1 à 200 ids. */
+@Serializable
+data class ConsumeAfterReadRequest(val messageIds: List<String>)
 
 interface MessageApi {
     @GET("conversations/{cid}/messages")
@@ -150,6 +156,24 @@ interface MessageApi {
         @Path("cid") conversationId: String,
         @Path("mid") messageId: String,
     ): ApiResponse<Unit>
+
+    /**
+     * La flamme-œil (#8302) : à la sortie de la conversation, les messages « après lecture » vus
+     * disparaissent chez l'appelant seul (iOS `MessageService.consumeAfterRead`).
+     */
+    @POST("conversations/{cid}/messages/after-read/consume")
+    suspend fun consumeAfterRead(
+        @Path("cid") conversationId: String,
+        @Body body: ConsumeAfterReadRequest,
+    ): ApiResponse<JsonElement>
+
+    /** La vue unique lue et refermée consomme son compteur serveur (iOS `MessageService.consumeViewOnce`). */
+    @POST("conversations/{cid}/messages/{mid}/consume")
+    suspend fun consumeViewOnce(
+        @Path("cid") conversationId: String,
+        @Path("mid") messageId: String,
+        @Body body: JsonObject = JsonObject(emptyMap()),
+    ): ApiResponse<JsonElement>
 }
 
 /**

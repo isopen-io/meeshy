@@ -205,6 +205,7 @@ public object BubbleContentBuilder {
             // `isViewOnceOpened` (#7579): never the global `viewOnceCount`, which another
             // member's opening raises. A deleted tombstone takes precedence (its own path).
             isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
+            isAfterRead = !isDeleted && message.effects.has(MessageEffectFlags.EPHEMERAL_AFTER_READ),
             isViewOnceOpenedByMe = !isDeleted && message.isViewOnceOpenedByMe,
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.

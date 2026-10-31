@@ -39,6 +39,7 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.MentionCandidate
@@ -631,6 +632,9 @@ class ChatViewModel @Inject constructor(
 
     /** Flip an effect chip in the armed selection. */
     fun toggleEffect(flag: Long) = composer.toggleEffect(flag)
+
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) = composer.selectEphemeralChoice(choice)
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
     fun selectEphemeralDuration(duration: EphemeralDuration) = composer.selectEphemeralDuration(duration)

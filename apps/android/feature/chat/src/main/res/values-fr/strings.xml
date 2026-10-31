@@ -50,6 +50,7 @@
     <string name="chat_effect_pulse">Pulsation</string>
     <string name="chat_effect_rainbow">Arc-en-ciel</string>
     <string name="chat_effect_sparkle">Scintillant</string>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_30s">30 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
     <string name="chat_effect_duration_5m">5 min</string>

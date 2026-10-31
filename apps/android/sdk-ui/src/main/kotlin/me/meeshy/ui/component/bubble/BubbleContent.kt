@@ -100,6 +100,8 @@ public data class BubbleContent(
     val effects: MessageEffects = MessageEffects(),
     /** True when this message is a view-once ("open once, then burn") message. */
     val isViewOnce: Boolean = false,
+    /** #13995 — la flamme-œil : le message disparaît chez le lecteur quand il l'a vu puis a quitté. */
+    val isAfterRead: Boolean = false,
     /**
      * True once THIS reader has opened the view-once message (`consumedByMe`). A view-once
      * is consumed per person (iOS #7579): what other members open never burns it for me.

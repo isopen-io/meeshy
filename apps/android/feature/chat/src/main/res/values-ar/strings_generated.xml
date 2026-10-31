@@ -34,6 +34,11 @@
     <string name="chat_engagement_a11y_streak_days_other">%1$d أيام</string>
     <string name="chat_engagement_a11y_total_one">%1$s شرارة مكتسبة في هذه المحادثة</string>
     <string name="chat_engagement_a11y_total_other">%1$s شرارات مكتسبة في هذه المحادثة</string>
+    <string name="chat_ephemeral_activate">تفعيل الوضع المؤقّت</string>
+    <string name="chat_ephemeral_active">الوضع المؤقت مفعّل: %1$s</string>
+    <string name="chat_ephemeral_after_read">بعد القراءة</string>
+    <string name="chat_ephemeral_after_read_a11y">بعد القراءة، عندما يغادر القارئ المحادثة</string>
+    <string name="chat_ephemeral_off">مُعطَّل</string>
     <string name="chat_exit_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">لم يعد هذا العنصر جزءًا من الرسالة.</string>
     <string name="chat_exit_blocked_encrypted_source">يُنسخ هذا المحتوى المشفّر من هذا الجهاز.</string>

@@ -41,6 +41,7 @@
     <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">On Meeshy</string>
     <string name="bubble_contact_card_shared">Shared contact</string>
+    <string name="bubble_protection_after_read">Disappears after reading</string>
     <string name="bubble_story_citation_answer">reply to their story</string>
     <string name="bubble_story_citation_open_hint">Opens the quoted story</string>
     <string name="bubble_story_citation_unavailable">Story unavailable</string>

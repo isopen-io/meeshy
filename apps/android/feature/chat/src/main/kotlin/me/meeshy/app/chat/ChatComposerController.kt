@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
@@ -576,6 +577,14 @@ internal class ChatComposerController(
      */
     fun toggleEffect(flag: Long) {
         state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) {
+        state.update {
+            it.copy(pendingEffects = MessageEffectsEditor.withEphemeralChoice(it.pendingEffects, choice))
+        }
         persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
