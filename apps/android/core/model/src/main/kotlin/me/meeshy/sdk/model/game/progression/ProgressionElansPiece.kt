@@ -39,16 +39,3 @@ public data class ProgressionElansPiece(
         }
     }
 }
-
-/**
- * LES PIÈCES DE JEU QUI TIENNENT LA TÊTE d'une fiche (miroir de `ProgressionConceptGestures.isHero`, iOS) : quand le
- * concept a la sienne, elle REMPLACE le héros générique et la fiche ne redit pas ce qu'elle montre. Seules les pièces
- * MONTÉES sur Android y figurent — un concept dont la pièce n'existe pas encore garde son héros générique plutôt que de
- * perdre ses faits.
- */
-public object ProgressionConceptPieces {
-    public fun isHero(concept: ProgressionConcept): Boolean = when (concept) {
-        ProgressionConcept.Elans -> true
-        else -> false
-    }
-}

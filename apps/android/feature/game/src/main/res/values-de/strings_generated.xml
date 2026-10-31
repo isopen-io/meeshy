@@ -784,6 +784,7 @@
     <string name="game_guide_step_welcome_next">Mach deine erste Aktion: Ich halte Ausschau nach deinen ersten Funken.</string>
     <string name="game_guide_step_welcome_what">Hallo, ich bin Mee! Mit Meo erklären wir dir das Spiel in sieben Karten.</string>
     <string name="game_hero_level">Level %1$s</string>
+    <string name="game_league_detail_week">%1$s diese Woche</string>
     <string name="game_level_cap_reached">Level %1$s: das höchste, das dein Rang öffnet. Der Rang %2$s öffnet die nächsten.</string>
     <string name="game_level_cap_short">öffnet ab Rang %1$s</string>
     <string name="game_level_held">Dein Licht öffnet schon den Weg: %1$s, um Level %2$s zu erreichen.</string>

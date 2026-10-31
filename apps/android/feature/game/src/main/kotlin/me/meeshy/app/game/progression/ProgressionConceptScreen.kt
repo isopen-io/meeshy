@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.progression.FicheHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
+import me.meeshy.sdk.model.game.progression.ProgressionLeaguePiece
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -102,6 +103,8 @@ fun ProgressionConceptScreen(
                 sparks != null -> GameSparksHeadView(sparks, snapshot.game)
                 // UNE pièce, UN héros (iOS `ProgressionConceptPage.hero`, `.piece`) : elle REMPLACE le héros générique.
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.League ->
+                    ProgressionLeaguePiece.of(snapshot.game?.league)?.let { LeaguePiece(it, onOpen = { onOpenPage(GamePage.League) }) }
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
             }

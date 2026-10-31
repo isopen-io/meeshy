@@ -784,6 +784,7 @@
     <string name="game_guide_step_welcome_next">Faça seu primeiro gesto: estou de olho nas suas primeiras faíscas.</string>
     <string name="game_guide_step_welcome_what">Oi, eu sou a Mee! Com o Meo, explicamos o jogo em sete cartões.</string>
     <string name="game_hero_level">Nível %1$s</string>
+    <string name="game_league_detail_week">%1$s esta semana</string>
     <string name="game_level_cap_reached">Nível %1$s: o mais alto que sua patente abre. A patente %2$s abre os próximos.</string>
     <string name="game_level_cap_short">abre na patente %1$s</string>
     <string name="game_level_held">Sua luz já abre o que vem depois: %1$s para passar o nível %2$s.</string>

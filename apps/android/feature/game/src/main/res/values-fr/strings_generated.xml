@@ -784,6 +784,7 @@
     <string name="game_guide_step_welcome_next">Fais ton premier geste : je guette tes premières étincelles.</string>
     <string name="game_guide_step_welcome_what">Salut, c’est Mee ! Avec Meo, on t’explique le jeu en sept cartes.</string>
     <string name="game_hero_level">Niveau %1$s</string>
+    <string name="game_league_detail_week">%1$s cette semaine</string>
     <string name="game_level_cap_reached">Niveau %1$s : le plus haut que ton rang ouvre. Le rang %2$s ouvre la suite.</string>
     <string name="game_level_cap_short">s’ouvre au rang %1$s</string>
     <string name="game_level_held">Ta lumière ouvre déjà la suite : %1$s pour passer le niveau %2$s.</string>

@@ -784,6 +784,7 @@
     <string name="game_guide_step_welcome_next">قم بأول إجراء: أنا أترقّب شراراتك الأولى.</string>
     <string name="game_guide_step_welcome_what">مرحبًا، أنا مي! مع ميو سنشرح لك اللعبة في سبع بطاقات.</string>
     <string name="game_hero_level">المستوى %1$s</string>
+    <string name="game_league_detail_week">%1$s هذا الأسبوع</string>
     <string name="game_level_cap_reached">المستوى %1$s: أعلى ما تفتحه رتبتك. رتبة %2$s تفتح ما بعده.</string>
     <string name="game_level_cap_short">يُفتح برتبة %1$s</string>
     <string name="game_level_held">نورك يفتح الطريق بالفعل: %1$s لاجتياز المستوى %2$s.</string>

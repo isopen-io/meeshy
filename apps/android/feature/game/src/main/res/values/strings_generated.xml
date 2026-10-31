@@ -784,6 +784,7 @@
     <string name="game_guide_step_welcome_next">Make your first move: I’m watching for your first sparks.</string>
     <string name="game_guide_step_welcome_what">Hi, I am Mee! With Meo, we will explain the game in seven cards.</string>
     <string name="game_hero_level">Level %1$s</string>
+    <string name="game_league_detail_week">%1$s this week</string>
     <string name="game_level_cap_reached">Level %1$s: the highest your rank opens. The %2$s rank opens what comes next.</string>
     <string name="game_level_cap_short">opens at the %1$s rank</string>
     <string name="game_level_held">Your light already opens the way: %1$s to pass level %2$s.</string>

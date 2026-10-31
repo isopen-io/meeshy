@@ -59,10 +59,10 @@ class ProgressionElansPieceTest {
         val block = game()
         val progress: EngagementProgress = EngagementProgressResolver.resolve(ApiEngagementProgress.empty.copy(game = block))
         val concept = ProgressionConcept.Elans
-        assertThat(ProgressionConceptPieces.isHero(concept)).isTrue()
-        assertThat(ProgressionConceptPieces.isHero(ProgressionConcept.Glory)).isFalse()
+        assertThat(ProgressionConceptPieces.isHero(concept, progress, block)).isTrue()
+        assertThat(ProgressionConceptPieces.isHero(ProgressionConcept.Glory, progress, block)).isFalse()
         val fiche = ProgressionConceptFiches.make(
-            concept, progress, block, 0L, SeasonMoment("2026-10-20", 600), pieceIsHero = ProgressionConceptPieces.isHero(concept),
+            concept, progress, block, 0L, SeasonMoment("2026-10-20", 600), pieceIsHero = ProgressionConceptPieces.isHero(concept, progress, block),
         )
         assertThat(fiche.head).isEqualTo(FicheHead.Piece)
         assertThat(fiche.heroLine).isNull()

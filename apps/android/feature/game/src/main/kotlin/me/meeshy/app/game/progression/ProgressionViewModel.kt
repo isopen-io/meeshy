@@ -166,7 +166,7 @@ class ProgressionViewModel @Inject constructor(
             fiches = cards.associate { card ->
                 val concept = card.concept
                 concept to ProgressionConceptFiches.make(
-                    concept, progress, game, nowMillis, moment, pieceIsHero = ProgressionConceptPieces.isHero(concept),
+                    concept, progress, game, nowMillis, moment, pieceIsHero = ProgressionConceptPieces.isHero(concept, progress, game),
                 )
             },
         )
