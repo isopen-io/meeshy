@@ -16,7 +16,9 @@
  * 4. ADMIN/BIGBOSS ⇒ la PRÉSENCE seulement (loi du 2026-08-25), sans lien ;
  * 5. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
  *    ne l'est pas (majeur ou âge inconnu : fail-closed) ;
- * 6. sinon, le niveau effectif atteint-il le minimum de la feature ?
+ * 6. sinon, le niveau effectif atteint-il le minimum de la feature — ou, pour
+ *    une feature d'entourage, le cran choisi par le propriétaire du contenu
+ *    (`ownerAudience`, #13929 ; `NOBODY` ferme) ?
  * 7. une feature à consentement ne s'ouvre que si `consent` vaut `'granted'` :
  *    refusé, inconnu, absent ou illisible ⇒ `allowed: false, reason: 'consent'`.
  *
@@ -52,6 +54,9 @@ import {
   RELATION_DIRECTED_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_PRESENCE_FEATURES,
+  RELATION_TUNABLE_FEATURES,
+  isRelationAudienceChoice,
+  type RelationAudienceChoice,
   type RelationFeature,
 } from './relation-levels.js';
 
@@ -75,6 +80,13 @@ export type RelationAccessInput = {
   readonly feature: RelationFeature;
   /** Consentement résolu pour une feature qui en exige un ; absent = `'unknown'` (fermé). */
   readonly consent?: RelationConsent;
+  /**
+   * Le cran choisi par le PROPRIÉTAIRE du contenu pour une feature d'entourage
+   * (`RELATION_TUNABLE_FEATURES`, #13929). Absent ou illisible = le niveau de la
+   * matrice (le défaut) ; `NOBODY` ferme. Il remplace le minimum de la matrice
+   * et n'ouvre jamais plus que le niveau effectif. Ignoré pour toute autre feature.
+   */
+  readonly ownerAudience?: RelationAudienceChoice | string | null;
 };
 
 export type RelationAccessReason = 'level' | 'blocked' | 'minor' | 'self' | 'role' | 'consent';
@@ -103,6 +115,14 @@ export const effectiveRelationLevel = (input: {
   return granted === 'PUBLIC' && input.sharesCommunity ? 'COMMUNITY' : granted;
 };
 
+/** Le niveau à atteindre, ou `null` quand le propriétaire a fermé la feature (`NOBODY`). */
+const minimumFor = (feature: RelationFeature, ownerAudience: unknown): RelationLevel | null => {
+  if (!RELATION_TUNABLE_FEATURES.has(feature) || !isRelationAudienceChoice(ownerAudience)) {
+    return RELATION_FEATURE_MIN_LEVEL[feature];
+  }
+  return ownerAudience === 'NOBODY' ? null : ownerAudience;
+};
+
 const declaresMinorApart = (a: RelationAgeClass, b: RelationAgeClass): boolean =>
   (a === 'minor') !== (b === 'minor');
 
@@ -126,7 +146,8 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
     return verdict(false, level, 'minor');
   }
 
-  const reached = compareRelationLevel(level, RELATION_FEATURE_MIN_LEVEL[feature]) >= 0;
+  const minimum = minimumFor(feature, input.ownerAudience);
+  const reached = minimum !== null && compareRelationLevel(level, minimum) >= 0;
   if (!reached || !RELATION_CONSENT_FEATURES.has(feature)) return verdict(reached, level, 'level');
 
   return input.consent === 'granted' ? verdict(true, level, 'level', true) : verdict(false, level, 'consent', true);
