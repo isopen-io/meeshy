@@ -4,8 +4,8 @@ import MeeshySDK
 // MARK: - Fond › Modifier, image posée › Modifier : N1, N2, N3 dans le bas
 // (#13974, lots I-E2, I-E3 et I-E4)
 
-/// **Une entrée de N1 « Modifier » d'un fond ou d'une image posée**,
-/// identifiée comme dans l'arbre partagé (`background.media.edit`,
+/// **Un outil d'un fond ou d'un média posé, à plat dans son rail** (#14048),
+/// identifié comme dans l'arbre partagé (`background.media.edit`,
 /// `media.placed.edit`) : Cadrage · Recadrer · Couper · Filtres · Cadres ·
 /// Réglages · Effets · Son · Boucle · Pivoter · Description, et pour un média
 /// posé Mettre en fond (ou Remplacer le fond) · Faire un sticker.
@@ -56,8 +56,8 @@ nonisolated struct ComposerBackgroundModifyPath: Equatable, Sendable {
     static let closed = ComposerBackgroundModifyPath(entry: nil, adjustment: nil)
 }
 
-/// **La loi de « Modifier » du fond.** N1 est ce que l'arbre déclare, dans SON
-/// ordre, filtré par ce que le fond admet et par ce qu'iOS câble : une entrée
+/// **La loi des outils du fond**, posés à plat dans son rail (#14048) : ce que
+/// l'arbre déclare, dans SON ordre, filtré par ce que le fond admet et par ce qu'iOS câble : une entrée
 /// sans effet ici reste dans l'arbre, cible commune, mais ne se sert pas
 /// (loi 4). Boucle en est une : le lecteur boucle toujours un fond vidéo
 /// (`StoryRenderer`), l'interrupteur serait inerte.
@@ -90,6 +90,14 @@ nonisolated enum ComposerBackgroundModify {
         })
         return served(in: .mediaPlacedEdit, wired: cables, isVideo: isVideo,
                       hasTrimmableSource: hasTrimmableSource, tree: tree)
+    }
+
+    /// **Les outils d'un SON posé** (#14048) : Couper, quand sa source est
+    /// connue — le mot et le glyphe de l'arbre. Volume et Muet suivent, ceux
+    /// du niveau `media.sound` (`ComposerMediaSound`).
+    static func servedSound(hasTrimmableSource: Bool,
+                            tree: ComposerEditTree = .shared) -> [ComposerBackgroundModifyEntry] {
+        hasTrimmableSource && entry(.trim, tree: tree) != nil ? [.trim] : []
     }
 
     /// L'entrée de l'arbre : celle du fond, ou celle du média posé pour ce
