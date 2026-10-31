@@ -61,6 +61,7 @@ import * as packAssetsGroup from './endpoints/pack-assets.js';
 import * as packsGroup from './endpoints/packs.js';
 import * as postsGroup from './endpoints/posts.js';
 import * as reactionsGroup from './endpoints/reactions.js';
+import * as relationsGroup from './endpoints/relations.js';
 import * as reportsGroup from './endpoints/reports.js';
 import * as rootLegacyAttachmentsGroup from './endpoints/root-legacy-attachments.js';
 import * as rootLegacyVoiceGroup from './endpoints/root-legacy-voice.js';
@@ -122,6 +123,7 @@ export const API_ENDPOINTS = {
   packs: packsGroup,
   posts: postsGroup,
   reactions: reactionsGroup,
+  relations: relationsGroup,
   reports: reportsGroup,
   rootLegacyAttachments: rootLegacyAttachmentsGroup,
   rootLegacyVoice: rootLegacyVoiceGroup,
@@ -661,6 +663,11 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/reactions/:messageId',
   '/api/v1/reactions/:messageId/:emoji',
   '/api/v1/reactions/user/:userId',
+  '/api/v1/relations',
+  '/api/v1/relations/:userId',
+  '/api/v1/relations/:userId/level',
+  '/api/v1/relations/:userId/ritual',
+  '/api/v1/relations/config',
   '/api/v1/reports',
   '/api/v1/signal/keys',
   '/api/v1/signal/keys/:userId',
@@ -1289,6 +1296,11 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/reactions/:messageId': ['GET'],
   '/api/v1/reactions/:messageId/:emoji': ['DELETE'],
   '/api/v1/reactions/user/:userId': ['GET'],
+  '/api/v1/relations': ['GET'],
+  '/api/v1/relations/:userId': ['GET'],
+  '/api/v1/relations/:userId/level': ['POST'],
+  '/api/v1/relations/:userId/ritual': ['POST'],
+  '/api/v1/relations/config': ['GET'],
   '/api/v1/reports': ['POST'],
   '/api/v1/signal/keys': ['POST'],
   '/api/v1/signal/keys/:userId': ['GET'],

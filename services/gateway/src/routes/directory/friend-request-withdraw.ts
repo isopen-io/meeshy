@@ -39,6 +39,8 @@ async function rompreLien(
       ],
     },
     select: { id: true, targetLevel: true },
+    // Une paire n'a jamais plus d'une demande par cran : la borne est large et ne retient rien.
+    take: 20,
   });
   if (restantes.some((restante) => requestLevelSustains(niveauDe(restante), niveau))) return;
 

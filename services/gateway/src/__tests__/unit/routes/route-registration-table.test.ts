@@ -261,7 +261,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
     // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
     // exactement cette route.
-    expect(ROUTE_TABLE.length).toBe(94);
+    // 95 : #13933 ajoute `relations` — les cercles (`/api/v1/relations` : lecture, baisse
+    // silencieuse, rituel du Sang). Aucun alias, aucune route retirée ni renommée ; le
+    // manifeste gagne exactement les cinq routes de ce montage.
+    expect(ROUTE_TABLE.length).toBe(95);
   });
 });
 
