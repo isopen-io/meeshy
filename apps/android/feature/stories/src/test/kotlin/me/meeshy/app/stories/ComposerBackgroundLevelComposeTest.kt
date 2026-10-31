@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -60,6 +59,9 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,7 +70,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Le FOND média suit la grammaire d'édition (#13973, spec R6) : tenu ou touché, il est sélectionné et pose son niveau
- * « Fond » à la place des outils — Modifier · Remplacer · Mettre sur la scène · Retirer —, l'audience, Publier et Fermer
+ * « Fond » à la place des outils — ses outils à plat, puis Remplacer · Mettre sur la scène · Retirer (#14047) —, l'audience, Publier et Fermer
  * se retirent, aucun menu ne flotte sur la scène ; Retirer se confirme, Remplacer ouvre la feuille de ses sources.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -97,7 +99,7 @@ class ComposerBackgroundLevelComposeTest {
     }
 
     private val canvas = "Story canvas — pinch to zoom, drag to pan"
-    private val level = listOf("Edit", "Replace", "Place on the scene", "Remove")
+    private val actions = listOf("Replace", "Place on the scene", "Remove")
 
     private fun viewModel(): StoryComposerViewModel {
         val session: SessionRepository = mockk(relaxed = true)
@@ -154,11 +156,17 @@ class ComposerBackgroundLevelComposeTest {
     private fun tapScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
 
     private fun assertLevelShown() {
-        val rail = compose.onNodeWithTag(EDITING_RAIL_TAG)
-        rail.onChildren().assertCountEquals(level.size)
-        level.forEach { compose.onNodeWithText(it).assertExists() }
-        listOf("Duplicate", "Timing").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        val shown = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
+            .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
+        assertThat(shown.first()).isEqualTo("Framing")
+        assertThat(shown.takeLast(actions.size)).containsExactlyElementsIn(actions).inOrder()
+        listOf("Edit", "Duplicate", "Timing").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
         listOf("Audience", "Publish story", "Close", "Text").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
+    }
+
+    /** Une entrée du rail, défilé jusqu'à elle : le rail à plat dépasse la hauteur et défile (#14047). */
+    private fun tapRail(text: String) {
+        compose.onNodeWithText(text).performScrollTo().performClick()
     }
 
     @Test
@@ -195,13 +203,13 @@ class ComposerBackgroundLevelComposeTest {
         show(vm)
         holdScene()
 
-        compose.onNodeWithText("Remove").performClick()
+        tapRail("Remove")
         compose.onNodeWithText("Remove the background?").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("bg")
         assertThat(vm.state.value.selectionSubject).isEqualTo(ComposerSelectionSubject.BACKGROUND)
 
-        compose.onNodeWithText("Remove").performClick()
+        tapRail("Remove")
         compose.onAllNodesWithText("Remove").fetchSemanticsNodes().let { nodes ->
             compose.onAllNodesWithText("Remove")[nodes.lastIndex].performClick()
         }
@@ -218,7 +226,7 @@ class ComposerBackgroundLevelComposeTest {
         show(vm)
         holdScene()
 
-        compose.onNodeWithText("Place on the scene").performClick()
+        tapRail("Place on the scene")
 
         assertThat(vm.state.value.deck.selectedSlide.placedMedia.map { it.mediaId }).containsExactly("bg")
         assertThat(vm.state.value.selectionSubject).isEqualTo(ComposerSelectionSubject.OBJECT)
@@ -233,7 +241,7 @@ class ComposerBackgroundLevelComposeTest {
         show(vm)
         holdScene()
 
-        compose.onNodeWithText("Replace").performClick()
+        tapRail("Replace")
 
         compose.onNodeWithTag(BACKGROUND_SOURCES_TAG).assertExists()
         compose.onNodeWithText("Photo library").assertExists()

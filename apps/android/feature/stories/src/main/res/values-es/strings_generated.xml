@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Encuadre</string>
     <string name="composer_edit_frames">Marcos</string>
     <string name="composer_edit_loop">Bucle</string>
+    <string name="composer_edit_mute">Silencio</string>
+    <string name="composer_edit_rotate">Girar</string>
     <string name="composer_edit_trim">Recortar</string>
+    <string name="composer_edit_volume">Volumen</string>
     <string name="composer_family_text">Texto</string>
     <string name="composer_frise_earlier">Antes</string>
     <string name="composer_frise_empty">Añade un texto o un sticker: cada objeto se convierte en una pista.</string>

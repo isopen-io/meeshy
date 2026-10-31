@@ -16,8 +16,8 @@ import { Composer } from './composer';
  * après le choix, et ce qui n'est PAS envoyé pendant qu'on choisit.
  *
  * La source est PUBLIÉE comme le fil la publie (`publishMentionSource`), avec
- * une recherche distante bouchonnée qui COMPTE ses appels : le seuil de deux
- * caractères et le débounce se mesurent sur ce compte, jamais supposés.
+ * une recherche distante bouchonnée qui COMPTE ses appels : le seuil de la loi
+ * de déclenchement et le débounce se mesurent sur ce compte, jamais supposés.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -214,16 +214,18 @@ describe('toucher une personne l’insère', () => {
 });
 
 describe('la passerelle complète la liste', () => {
-  test('à partir de deux caractères, après le débounce : locaux d’abord, puis les distants absents', async () => {
+  test('à partir de trois caractères, après le débounce : locaux d’abord, puis les distants absents', async () => {
     const { el, searches } = await mountComposer({ remote: [alice, alina] });
     typeAt(el, '@a');
-    expect(searches).toEqual([]);
     typeAt(el, '@al');
-    expect(names(el)).toEqual(['alice', 'albert']);
     await passDebounce();
-    expect(searches).toEqual(['al']);
-    expect(names(el)).toEqual(['alice', 'albert', 'alina']);
-    expect(options(el)[2]?.textContent).toContain('Contact');
+    expect(searches).toEqual([]);
+    typeAt(el, '@ali');
+    expect(names(el)).toEqual(['alice']);
+    await passDebounce();
+    expect(searches).toEqual(['ali']);
+    expect(names(el)).toEqual(['alice', 'alina']);
+    expect(options(el)[1]?.textContent).toContain('Contact');
   });
 
   test('une réponse de la passerelle est servie telle quelle, même trouvée sur un champ que le client ne voit pas', async () => {

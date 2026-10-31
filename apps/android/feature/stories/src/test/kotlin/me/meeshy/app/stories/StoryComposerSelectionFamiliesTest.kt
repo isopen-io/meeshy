@@ -90,8 +90,8 @@ class StoryComposerSelectionFamiliesTest {
             assertThat(state.sceneIsAnimated).isFalse()
             assertThat(state.selectionBar!!.actions).containsAtLeast(DUPLICATE, TIME, REMOVE).inOrder()
         }
-        assertThat(media.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
-        assertThat(voice.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
+        assertThat(media.selectionBar!!.actions).containsExactly(DUPLICATE, TIME, REMOVE).inOrder()
+        assertThat(voice.selectionBar!!.actions).containsExactly(DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
@@ -102,7 +102,7 @@ class StoryComposerSelectionFamiliesTest {
             "l1",
         )
 
-        assertThat(alone.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
+        assertThat(alone.selectionBar!!.actions).containsExactly(DUPLICATE, TIME, REMOVE).inOrder()
         assertThat(shared.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 

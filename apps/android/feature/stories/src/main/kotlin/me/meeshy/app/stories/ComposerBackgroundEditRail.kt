@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.AdjustmentFamily
+import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundEditLevel
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool
@@ -68,14 +67,14 @@ internal fun ComposerBackgroundTool.labelRes(): Int = when (this) {
 }
 
 /**
- * Le niveau « Modifier » du fond média, vu de l'hôte (#13973, lot A-E2) : ses entrées ([tools], l'ordre de l'arbre
+ * Les outils du fond média, vus de l'hôte (#13973, à plat depuis #14047) : ses entrées ([tools], l'ordre de l'arbre
  * partagé), la boucle d'une vidéo ([looping]) et ce que fait chacune ([onTool]) — poser sa bande, basculer la boucle, ouvrir
  * la feuille de la description.
  */
 internal class BackgroundTools(val tools: List<ComposerBackgroundTool>, val looping: Boolean, val onTool: (ComposerBackgroundTool) -> Unit)
 
 /**
- * Ce que touche une entrée du niveau « Modifier » : Boucle bascule aussitôt, Décrire ouvre sa feuille basse, toute autre
+ * Ce que touche un outil du fond : Boucle bascule aussitôt, Décrire ouvre sa feuille basse, toute autre
  * pose sa bande au-dessus du niveau ([onBand]) — ce que l'arbre dit qu'elle ouvre.
  */
 internal fun backgroundTools(
@@ -95,20 +94,22 @@ internal fun backgroundTools(
     },
 )
 
-/** Le niveau « Modifier » dans la colonne de la scène : un disque et son mot par entrée, la Boucle en interrupteur. */
+/**
+ * Les outils du fond, À PLAT dans son rail avant ses actions (#14047) : un disque et son mot par outil, ou une rangée
+ * libellée au grand écran ([wide]) ; la Boucle en interrupteur.
+ */
 @Composable
-internal fun SceneBackgroundEditColumn(tools: BackgroundTools) {
-    Column(
-        modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        tools.tools.forEach { tool ->
-            if (tool == ComposerBackgroundTool.LOOP) {
-                LoopSwitch(tools.looping) { tools.onTool(tool) }
-            } else {
-                SceneOptionButton(tool.glyph(), stringResource(tool.labelRes()), Color.White) { tools.onTool(tool) }
-            }
+internal fun BackgroundToolItems(tools: BackgroundTools, wide: Boolean) {
+    tools.tools.forEach { tool ->
+        when {
+            wide -> LabeledRailItem(
+                icon = tool.glyph(),
+                label = stringResource(tool.labelRes()),
+                onClick = { tools.onTool(tool) },
+                active = tool == ComposerBackgroundTool.LOOP && tools.looping,
+            )
+            tool == ComposerBackgroundTool.LOOP -> LoopSwitch(tools.looping) { tools.onTool(tool) }
+            else -> SceneOptionButton(tool.glyph(), stringResource(tool.labelRes()), Color.White) { tools.onTool(tool) }
         }
     }
 }
@@ -145,35 +146,21 @@ private fun OptionWord(text: String) {
     )
 }
 
-/** Grand écran : le niveau « Modifier » dans le rail gauche, chaque entrée une rangée libellée, la Boucle allumée tant qu'elle reboucle. */
-@Composable
-internal fun StoryBackgroundEditRail(tools: BackgroundTools) {
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        tools.tools.forEach { tool ->
-            LabeledRailItem(
-                icon = tool.glyph(),
-                label = stringResource(tool.labelRes()),
-                onClick = { tools.onTool(tool) },
-                active = tool == ComposerBackgroundTool.LOOP && tools.looping,
-            )
-        }
-    }
-}
-
 /** Le niveau d'un réglage posé en bande : son mot, en titre de la colonne, sous le Retour qui le referme. */
 @Composable
-internal fun SceneBackgroundBandTitle(tool: ComposerBackgroundTool) {
+internal fun SceneBackgroundBandTitle(tool: ComposerBackgroundTool) = SceneLevelTitle(tool.glyph(), stringResource(tool.labelRes()))
+
+/** Le titre d'un niveau dont la bande est posée, fond ou objet : son disque allumé et son mot. */
+@Composable
+internal fun SceneLevelTitle(icon: ImageVector, label: String) {
     Column(
         modifier = Modifier.width(OPTION_WIDTH).semantics(mergeDescendants = true) { heading() },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.size(OPTION_DISC).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(tool.glyph(), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
-        OptionWord(stringResource(tool.labelRes()))
+        OptionWord(label)
     }
 }
 
@@ -246,10 +233,18 @@ private fun BackgroundTrimStrip(state: StoryComposerUiState, id: String, viewMod
     )
 }
 
-/** Décrire le fond : une feuille basse, sans voile, la scène réduite au-dessus ; la description s'écrit à chaque lettre. */
+/**
+ * Le fichier que « Décrire » décrit : celui du fond sélectionné, ou celui du média posé sélectionné (#13973, A-E4) — une
+ * copie posée décrit le même fichier que sa source.
+ */
+internal val StoryComposerUiState.describedMediaFile: String?
+    get() = if (selectionSubject == ComposerSelectionSubject.BACKGROUND) selectedSlideBackdropMediaId
+    else selectedMedia?.takeIf { id -> deck.selectedSlide.placedMedia.any { it.id == id } }?.let(deck.selectedSlide::mediaFileOf)
+
+/** Décrire le fond ou le média posé : une feuille basse, sans voile, la scène réduite au-dessus ; la description s'écrit à chaque lettre. */
 @Composable
 internal fun BackgroundDescriptionSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
-    val id = state.selectedSlideBackdropMediaId ?: return
+    val id = state.describedMediaFile ?: return
     ComposerAnchoredSheet(fill = false) {
         Column(
             modifier = Modifier.fillMaxWidth().testTag(BACKGROUND_DESCRIPTION_TAG).padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
@@ -274,16 +269,15 @@ internal fun BackgroundDescriptionSheet(state: StoryComposerUiState, viewModel: 
 }
 
 /**
- * Le niveau du fond en haut de la pile, à la place des outils : « Fond », « Modifier » ou le titre du réglage dont la bande
- * est posée. [wide] : le rail libellé du grand écran.
+ * Le niveau du fond en haut de la pile, à la place des outils : le rail « Fond » à plat, ou le titre du réglage dont la
+ * bande est posée. [wide] : le rail libellé du grand écran.
  */
 @Composable
 internal fun BackgroundLevelContent(level: StoryEditingLevel, background: BackgroundEditing, tools: BackgroundTools, wide: Boolean) {
     when (level) {
-        StoryEditingLevel.Background -> if (wide) StoryBackgroundRail(background) else SceneBackgroundColumn(background)
-        StoryEditingLevel.BackgroundEdit -> if (wide) StoryBackgroundEditRail(tools) else SceneBackgroundEditColumn(tools)
+        StoryEditingLevel.Background -> if (wide) StoryBackgroundRail(background, tools) else SceneBackgroundColumn(background, tools)
         is StoryEditingLevel.BackgroundBand -> SceneBackgroundBandTitle(level.tool)
-        StoryEditingLevel.ObjectOptions -> Unit
+        else -> Unit
     }
 }
 

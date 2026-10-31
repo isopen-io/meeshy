@@ -30,8 +30,8 @@ internal fun StoryComposerViewModel.onTapTextElement(id: String) = onSceneReduce
 internal fun StoryComposerViewModel.onSceneBackgroundTap() = onSceneReduce(StoryComposerSelectionReducer::cleared)
 
 /**
- * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un média ou d'un
- * son, l'échange d'un sticker ou le lieu d'une pastille ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
+ * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un son, l'échange
+ * d'un sticker ou le lieu d'une pastille — une image, une vidéo ou un son posés n'en ont plus : leurs outils sont à plat dans le rail (#14047) ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
  */
 internal fun StoryComposerViewModel.onSelectionAction(
     ref: SceneObjectRef,
@@ -42,7 +42,7 @@ internal fun StoryComposerViewModel.onSelectionAction(
         ComposerObjectKind.TEXT -> onSelectTextElement(ref.id)
         ComposerObjectKind.STICKER -> openSheet(StoryComposerSheet.STICKER_SWAP)
         ComposerObjectKind.PLACE -> openSheet(StoryComposerSheet.PLACE_REPOINT)
-        else -> openSheet(StoryComposerSheet.OBJECT_EDIT)
+        ComposerObjectKind.AUDIO, ComposerObjectKind.MEDIA -> Unit
     }
     ComposerSelectionAction.TIME -> openSheet(StoryComposerSheet.OBJECT_TIME)
     ComposerSelectionAction.DUPLICATE -> onObjectController(ref, Action.DUPLICATE)
