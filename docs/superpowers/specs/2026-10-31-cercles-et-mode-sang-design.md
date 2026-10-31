@@ -20,7 +20,7 @@ Chaque lot commence par l'**inventaire de l'existant** (à étendre · à modifi
 | 2 | `ACQUAINTANCE` | Connaissance | 👋 | **automatique** (§ 1.2) ou demande de connexion acceptée |
 | 3 | `FRIEND` | Ami | 🤝 | demande acceptée, **depuis Connaissance** |
 | 4 | `CLOSE` | Proche | 🔥 | demande acceptée, depuis Ami, après 4 semaines actives d'affilée |
-| 5 | `BLOOD` | Sang | 🩸 | demande + rituel synchronisé, depuis Proche, après 52 semaines actives d'affilée |
+| 5 | `BLOOD` | Sang | 🩸 | demande + rituel synchronisé, depuis Proche, après **12** semaines actives d'affilée (décision du 2026-10-31 ; le classeur disait 1 an) |
 | 6 | `ATOM` | Atome | ⚛️ | lien parent/tuteur vérifié — **hors MVP** (modèle prêt, aucune route) |
 
 Règles de passage :
@@ -38,12 +38,13 @@ Règles de passage :
   - Il n'y a pas de création automatique entre un mineur et un majeur inconnu.
 - **Interactions qualifiantes (RG-04)** : commentaire, like ou réaction, message privé, message audio, partage d'un post, réponse à une story ou à un mood, mention, appel.
 - **Semaine active.** C'est une semaine ISO, en UTC, où chacun a interagi avec l'autre au moins une fois.
-  - **Proche** = 4 semaines actives d'affilée. **Sang** = 52 semaines actives d'affilée.
+  - **Proche** = 4 semaines actives d'affilée. **Sang** = **12** semaines actives d'affilée depuis Proche (décision du 2026-10-31, qui remplace « 1 an » du classeur). La continuité sur plusieurs semaines est le garde-fou : une nouvelle connaissance ne peut pas entrer ainsi, et c'est ce qui permet d'ouvrir le Sang à tous les âges (§ 1.8).
   - Une semaine manquée remet la série à zéro. **Le niveau atteint est conservé.**
   - L'éligibilité **permet** la demande ; elle n'élève jamais.
 - **Ami** : il suffit d'être Connaissance.
 - **Calcul côté serveur**, avec un rattrapage idempotent et rejouable.
-- **E2EE.** On compte le fait qu'un message est passé, jamais le clair. Le type « audio » d'un message chiffré n'est connu que par `Message.messageType`, une **déclaration** du client (`e2eePlaintextAdmission.ts:28`) : son usage est en décision ouverte (§ 8, D-2).
+- **Fenêtre de la Connaissance automatique : une semaine glissante** (D-1, tranchée le 2026-10-31).
+- **E2EE.** On compte le fait qu'un message est passé, jamais le clair. Le type « audio » d'un message chiffré n'est connu que par `Message.messageType`, une **déclaration** du client (`e2eePlaintextAdmission.ts:28`) : **on le compte** (D-2, tranchée le 2026-10-31), en le signalant comme déclaratif.
 
 ### 1.3 Ce que chaque cercle voit (RG-25)
 
@@ -84,7 +85,7 @@ Au-dessous d'Ami :
   - Le repartage ne vise jamais une audience plus large que l'origine. Un contenu `BLOOD` ne se repartage pas (RG-18).
 - **Amitié.**
   - Toute `FriendRequest` acceptée se lit `FRIEND`, sans rétrogradation rétroactive.
-  - **Exception de compatibilité** : une demande envoyée par un ancien client à quelqu'un qui n'est pas Connaissance reste acceptée. Elle est comptée par télémétrie et retirée à zéro usage ou après une version minimale (§ 8, D-5).
+  - **Pas de compatibilité pour les cercles** (D-5, tranchée le 2026-10-31 : quelques centaines d'utilisateurs). Un client sous le plancher de version reçoit `426 UPGRADE_REQUIRED` et l'invitation à se mettre à jour, via le plancher existant `MIN_APP_VERSION` (`utils/appVersion.ts`) appliqué partout (lot `version-minimale`, #13954). Il n'y a donc **aucune** exception à « aucun saut de phase ». Le risque qu'un ancien appareil affiche « Public » une audience nouvelle est **accepté** par le porteur et réglé par la mise à jour forcée.
 
 ### 1.5 – 1.7 Jalon 2
 
@@ -97,6 +98,10 @@ Au-dessous d'Ami :
   - App ouverte : lecture par socket.
   - iOS en arrière-plan : PushToTalk si l'entitlement est accordé (D-4). Sinon, la NSE écrit le segment dans `Library/Sounds` de l'App Group `group.me.meeshy.apps` et le joue comme son de la notification. Dernier recours : message vocal.
   - Android : FCM haute priorité et service au premier plan. Web : onglet ouvert, sinon repli vocal.
+  - **Le son se lit dès sa réception** (D-4, tranchée le 2026-10-31).
+    - Le serveur relaie chaque fragment audio (~200 à 500 ms, même encodage que le vocal) **à l'instant où il le reçoit**, par la socket ou le canal PushToTalk. Il n'attend ni la fin de l'enregistrement, ni un upload, ni une normalisation, ni une transcription.
+    - La copie en message vocal (pipeline existant) se fait après, hors du chemin critique, et sert de repli.
+    - Les **deux** chemins iOS sont livrés, avec et sans PushToTalk, et l'entitlement est demandé.
   - Garde-fous : coupé en appel, en Ne pas déranger et en heures calmes ; indicateur des deux côtés ; le blocage coupe ; débit limité ; refus serveur sous Proche.
   - **Hors E2EE au MVP**, l'interface le dit, avec une issue de suivi `crypto-e2ee`.
 - **Bring (CAL-04, RG-29).**
@@ -118,10 +123,11 @@ Au-dessous d'Ami :
 - **Consentement** feature par feature :
   - à l'entrée en Proche : talkie, catégorie d'écoute, Bring ;
   - au rituel Sang : titre d'écoute, position, historique, proximité.
-- **Mineurs.** Pas de Sang entre un mineur et un majeur hors famille vérifiée.
-  - L'âge n'est aujourd'hui que **déclaré** (`User.birthDate`, `isDeclaredMinor`).
-  - Tant qu'une vérification n'existe pas, le Sang et la position continue sont **fermés** à tout compte mineur déclaré ou d'âge inconnu (fail-closed).
-  - La vérification fait l'objet d'une issue qui précède l'ouverture.
+- **Mineurs** — décision du porteur du 2026-10-31, qui **remplace** la règle « pas de Sang entre un mineur et un majeur hors famille vérifiée ».
+  - L'âge **déclaré** fait foi (`User.birthDate`, `isDeclaredMinor`), sans vérification préalable.
+  - Le Sang, la position continue et le Bring sont **ouverts à tous, mineurs compris**, derrière un **écran de consentement** feature par feature. Il est **refusable**, avec un **dépliant** qui détaille ce que chaque partage montre, à qui et combien de temps. Les rappels de consentement restent.
+  - Seule la Connaissance **automatique** reste désactivée entre un mineur et un majeur inconnu.
+  - L'analyse `conformite-juridique` (RGPD art. 8, géolocalisation des mineurs, Age Appropriate Design Code) est d'autant plus requise avant la production.
 - **Conformité AVANT la production.** L'agent `conformite-juridique` produit l'AIPD, les durées, les consentements et la politique de confidentialité, et dit ce qui exige un avis signé. **Aucune promotion sans elle.**
 
 ## 2. Modèles
@@ -231,8 +237,8 @@ resolveRelationAccess({
 ```
 
 - **Niveau effectif** = `min(grantedByViewer, grantedByTarget)`, relevé à COMMUNITY si `sharesCommunity` et que le minimum est PUBLIC.
-- **Matrice** dans `packages/shared/config/relation-levels.ts` : feature → niveau minimal, avec les clés i18n des libellés, les icônes et les seuils (`acquaintance.minInteractions = 10`, `close.activeWeeks = 4`, `blood.activeWeeks = 52`, `bring.perHour = 3`, `cooldownDays = 30`, `proximity.cooldownHours = 2`). Une surcharge par environnement abaisse les seuils sur staging.
-- **Mineurs** : `BLOOD`, `location.*` et `bring` sont refusés si l'un est mineur ou d'âge inconnu (fail-closed, § 1.8).
+- **Matrice** dans `packages/shared/config/relation-levels.ts` : feature → niveau minimal, avec les clés i18n des libellés, les icônes et les seuils (`acquaintance.minInteractions = 10`, `close.activeWeeks = 4`, `blood.activeWeeks = 12`, `bring.perHour = 3`, `cooldownDays = 30`, `proximity.cooldownHours = 2`). Une surcharge par environnement abaisse les seuils sur staging.
+- **Mineurs** : `BLOOD`, `location.*` et `bring` rendent `requiresConsent: true` pour tous les âges. Il n'y a pas de refus d'âge (§ 1.8, décision du 2026-10-31) ; la Connaissance automatique ne naît pas entre un mineur et un majeur inconnu.
 - **Consentement** : la loi dit le **plafond**. `RelationFeatureSetting` dit si la personne l'active, et les deux sont requis.
 - **Miroirs** (mêmes cas de témoins) : Swift `MeeshySDK/.../Relations/RelationAccess.swift`, Kotlin `apps/android/core/model/.../relation/RelationAccess.kt`. Le client ne décide jamais d'un accès : le miroir sert à **ne pas proposer** une action que le serveur refusera.
 - **Projections.** `resolvePresenceVisibility` devient une projection de la loi (`areConnected: boolean` → niveau effectif). `services/friendship.ts` devient le site unique du niveau effectif, et ses six copies locales le consomment (§ 7).
@@ -317,11 +323,11 @@ Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acce
 | Demande Proche sans 4 semaines actives | refus serveur, code `RELATION_NOT_ELIGIBLE` |
 | Demande Connaissance → Proche | refus, `RELATION_PHASE_SKIP` |
 | Refus d'une demande | aucune notification ; nouvelle demande refusée 30 j (`RELATION_COOLDOWN`) |
-| Ancien client : demande d'ami hors Connaissance | acceptée, comptée (télémétrie `relation.legacyFriendRequest`) |
+| Client sous le plancher de version | `426 UPGRADE_REQUIRED` + écran « Mettre à jour Meeshy » ; le web n'est jamais bloqué |
 | Blocage pendant un talkie / un Bring / un partage | coupure immédiate, sockets et pushes en vol compris |
-| Mineur déclaré ou âge inconnu vers Sang | refus, `RELATION_MINOR_GATE` |
+| Sang, position ou Bring sans consentement (tout âge) | refus, `RELATION_CONSENT_REQUIRED` ; le dépliant détaille chaque partage |
 | Post `CLOSE` lu par un Ami | invisible (fil, détail, recherche, notification, repartage) |
-| Ancien client édite un post `CLOSE` en Public | élargissement refusé ou ignoré, audience stockée inchangée |
+| Ancien client (sous le plancher) | bloqué par la mise à jour forcée — risque d'affichage « Public » accepté |
 | Proche reçoit l'écoute | `category` seule, aucun `title` ni `source`, ni dans un champ voisin |
 | Flag position OFF | aucune route ni événement Sang ne répond |
 
@@ -336,7 +342,8 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 | Routes de demande | `routes/directory/friend-requests.ts` (:222/289/358), `friend-requests-core.ts` (`ACTIONS` :160, `envoyerDemande` :179, `repondreDemande` :308) | étendre : niveau visé, cran par cran, cool-down, éligibilité |
 | Blocage | `User.blockedUserIds` (:180), `utils/blocking.ts` `isBlockedBetween` (:21) | lu par la loi |
 | Communauté | `communityVisibility.ts` `doUsersShareCommunity` (:57) | lu par la loi ; index `CommunityMember` à justifier |
-| Âge | `User.birthDate` (:426), `ageVerifiedAt` (:469), `utils/age.ts` `isDeclaredMinor` (:64) | lu par la loi, fail-closed |
+| Âge | `User.birthDate` (:426), `ageVerifiedAt` (:469), `utils/age.ts` `isDeclaredMinor` (:64) | l'âge déclaré fait foi ; il ne sert qu'à la Connaissance automatique |
+| Plancher de version | `utils/appVersion.ts` (`MIN_APP_VERSION`, `isBelowFloor`), `utils/response.ts:213` (426), iOS `UpgradeGateController.swift`, Android `MeeshyError.kt:92` | appliqué à la session, au socket et aux routes de cercles (lot `version-minimale`) |
 | Présence | `presence-visibility.ts:50/59`, `PresenceVisibilityService.ts` (:37/:64/:152/:178), `presence-gate.ts` (:39/:96/:154/:166), `participants-presence.ts` (:42-62), `presence-audience.ts` (:62, :113-120) | niveau au lieu de booléen ; Ami binaire ; la projection socket appelle la loi |
 | Garde présence | `presence-visibility-viewer-aware-guard.test.ts` | + une clause interdisant `areConnected` brut hors de la loi |
 | Miroirs présence | iOS `PresenceModels.swift` (:50/:64), `PresenceStyle.swift` (:68) ; Android `Presence.kt` (:57), `MeeshyAvatar.kt` (:95) | témoins de non-régression (un `lastActiveAt` nul rend déjà en ligne ou rien) |
@@ -359,14 +366,21 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 | Flags | aucun système serveur ; locaux `MeeshyFeatureFlags.swift`, `LentilleFeatureFlagsStore.kt` | `GET /me/features` (env + liste blanche), justifié |
 | Nom « Cercles » | `CerclesAchievements.ts` (#5759) | le code dit `relation` ; l'interface peut dire « Mes cercles » |
 
-## 8. Décisions encore ouvertes (`décision-produit`, assignées au porteur)
+## 8. Décisions
 
-Chacune a son issue dans le milestone #215. Liées : vérification d'âge #13948, talkie chiffré #13949. Issue chapeau : #13925. Le défaut ci-dessous s'applique tant qu'elle n'est pas tranchée.
+Tranchées par le porteur le 2026-10-31 (second passage) :
+
+| # | Question | Décision |
+|---|---|---|
+| D-1 (#13943) | Seuils de la Connaissance automatique | ≥ 10 interactions par sens sur **une semaine glissante**, dont ≥ 1 message, ≥ 1 like ou réaction, ≥ 1 vue de post et ≥ 1 audio |
+| D-2 (#13944) | En E2EE, compter l'audio par le `messageType` déclaré ? | **Oui**, signalé comme déclaratif ; jamais le clair |
+| D-4 (#13946) | Entitlement PushToTalk ? | **Les deux chemins**, avec et sans PushToTalk, et **le son se lit dès sa réception** : relais fragment par fragment, la copie vocale après |
+| D-5 (#13947) | Compatibilité des anciens clients | **Aucune** : mise à jour forcée par le plancher de version (#13954) |
+| Mineurs (#13948) | Âge vérifié avant le Sang ? | **Non** : l'âge déclaré fait foi, et l'accès est ouvert à tous derrière un consentement refusable avec un dépliant |
+| Anciens clients | Risque d'affichage « Public » d'une audience nouvelle | **Accepté**, réglé par la mise à jour forcée |
+
+Encore ouverte :
 
 | # | Question | Défaut appliqué en attendant |
 |---|---|---|
-| D-1 (#13943) | Seuils exacts de la Connaissance automatique (nombre, pondération, fenêtre) | 10 interactions par sens sur 90 jours glissants, dont ≥ 1 message, ≥ 1 like ou réaction, ≥ 1 vue de post et ≥ 1 audio |
-| D-2 (#13944) | En E2EE, compter l'audio par le `messageType` déclaré par le client ? | on le compte (métadonnée déjà visible, jamais le clair), signalé comme déclaratif |
 | D-3 (#13945) | Demander l'entitlement Critical Alerts pour le Bring ? | non : time-sensitive seulement, la limite du silencieux est dite |
-| D-4 (#13946) | Demander l'entitlement PushToTalk ? | le chemin sans PTT (NSE + son) est livré d'abord ; PTT branché quand l'entitlement est accordé |
-| D-5 (#13947) | Durée de l'exception de compatibilité des anciens clients (demande d'ami hors Connaissance) | jusqu'à zéro usage mesuré sur 30 jours, ou une version minimale |
