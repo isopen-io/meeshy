@@ -13,8 +13,8 @@ import me.meeshy.sdk.model.game.engagement.EngagementProgress
 /**
  * LA PHRASE D'ÉTAT D'UN CONCEPT et les faits qu'elle enchâsse — miroir de `ProgressionConceptModel.stateLine` (iOS) et
  * des clés `game.state.*` du web. La loi choisit la phrase et ses nombres servis ; l'écran l'habille. Les Étincelles
- * n'en ont pas sur la fiche : la poche y est toujours dans la tête, qui l'écarterait. Niveau, Héritage, Ligue, Voyage,
- * Renaissance et Élans attendent leur port (#13909).
+ * n'en ont pas sur la fiche : la poche y est toujours dans la tête, qui l'écarterait — leur phrase est portée pour la
+ * parité de la loi (#13909).
  */
 public object ProgressionConceptStates {
 
@@ -32,9 +32,13 @@ public object ProgressionConceptStates {
             ProgressionConcept.Succes -> countedState(concept, progress.unlockedAchievementCount, progress.achievements.size)
             ProgressionConcept.Showcase -> showcaseState(game)
             ProgressionConcept.Atlas -> atlasState(game)
-            ProgressionConcept.Points, ProgressionConcept.Meesh, ProgressionConcept.Level, ProgressionConcept.League,
-            ProgressionConcept.Season, ProgressionConcept.Prestige, ProgressionConcept.Elans,
-            -> null
+            ProgressionConcept.Level -> ProgressionConceptStatesMore.levelState(progress, game)
+            ProgressionConcept.Points -> ProgressionConceptStatesMore.pointsState(progress, game)
+            ProgressionConcept.Meesh -> ProgressionConceptStatesMore.meeshState(progress, game)
+            ProgressionConcept.League -> ProgressionConceptStatesMore.leagueState(game)
+            ProgressionConcept.Season -> ProgressionConceptStatesMore.seasonState(game)
+            ProgressionConcept.Prestige -> ProgressionConceptStatesMore.prestigeState(game)
+            ProgressionConcept.Elans -> ProgressionConceptStatesMore.elansState(progress)
         }
 
     /** L'état de la Flamme en mots (iOS `ProgressionConceptModel.flameStatus`) ; allumée, rien à dire. */

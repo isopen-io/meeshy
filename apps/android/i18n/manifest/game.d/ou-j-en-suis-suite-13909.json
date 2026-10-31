@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.state.level.progress",
+          "androidName": "game_state_level_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.level.simple",
+          "androidName": "game_state_level_simple",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.top",
+          "androidName": "game_level_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.cap.reached",
+          "androidName": "game_level_cap_reached",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.held",
+          "androidName": "game_level_held",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.mint_one",
+          "androidName": "game_level_step_mint_first",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.mint_many",
+          "androidName": "game_level_step_mint_many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.missions_one",
+          "androidName": "game_level_step_missions_first",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.missions_many",
+          "androidName": "game_level_step_missions_many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.flame",
+          "androidName": "game_level_step_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.rank",
+          "androidName": "game_level_step_rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.points.missing",
+          "androidName": "game_state_points_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.points.ready",
+          "androidName": "game_state_points_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.points.missing_plain",
+          "androidName": "game_state_points_missing_plain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.points.ready_plain",
+          "androidName": "game_state_points_ready_plain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.meesh.kept",
+          "androidName": "game_state_meesh_kept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.meesh.kept_none",
+          "androidName": "game_state_meesh_kept_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.meesh.next_missing",
+          "androidName": "game_state_meesh_next_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.meesh.next_ready",
+          "androidName": "game_state_meesh_next_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.league.unplaced",
+          "androidName": "game_state_league_unplaced",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.league.place",
+          "androidName": "game_state_league_place",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.league.zone.promotion",
+          "androidName": "game_state_league_zone_promotion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.league.zone.safe",
+          "androidName": "game_state_league_zone_safe",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.league.zone.relegation",
+          "androidName": "game_state_league_zone_relegation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.season.progress",
+          "androidName": "game_state_season_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.season.done",
+          "androidName": "game_state_season_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.elans.active",
+          "androidName": "game_state_elans_active",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.state.elans.idle",
+          "androidName": "game_state_elans_idle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.tier",
+          "androidName": "game_concept_fact_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.next_level",
+          "androidName": "game_concept_fact_next_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fact.missing_for.level",
+          "androidName": "game_fact_missing_for_level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.week_points",
+          "androidName": "game_concept_fact_week_points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.zone",
+          "androidName": "game_concept_fact_zone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.closes",
+          "androidName": "game_concept_fact_closes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.friends",
+          "androidName": "game_concept_fact_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fact.missing_for.promotion",
+          "androidName": "game_fact_missing_for_promotion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.week",
+          "androidName": "game_concept_fact_week",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fact.strides",
+          "androidName": "game_fact_strides",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.seal",
+          "androidName": "game_concept_fact_seal",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.yes",
+          "androidName": "game_concept_fact_yes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.no",
+          "androidName": "game_concept_fact_no",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.glory_on_pass",
+          "androidName": "game_concept_fact_glory_on_pass",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.prism_hour",
+          "androidName": "game_concept_fact_prism_hour",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
