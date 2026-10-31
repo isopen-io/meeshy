@@ -30,6 +30,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -274,9 +275,10 @@ describe('purgeAccountIsolatedData — liens de proximité', () => {
       { id: 'd3', userLowId: THIRD, userHighId: OTHER },
     ]);
 
-    await purgeAccountIsolatedData(fakePrisma({ pairInteractionDay }), USER_ID, NO_FILES);
+    const summary = await purgeAccountIsolatedData(fakePrisma({ pairInteractionDay }), USER_ID, NO_FILES);
 
     expect(pairInteractionDay.rows.map((row) => row.id)).toEqual(['d3']);
+    expect(summary.pairInteractionDaysDeleted).toBe(2);
   });
 });
 
