@@ -20,7 +20,7 @@ const cacheDouble = (seed: Record<string, string> = {}) => {
   const store = new Map(Object.entries(seed));
   const cache = {
     get: jest.fn(async (key: string) => store.get(key) ?? null),
-    set: jest.fn(async (key: string, value: string) => void store.set(key, value)),
+    set: jest.fn(async (key: string, value: string, _ttl?: number) => void store.set(key, value)),
     del: jest.fn(async (key: string) => void store.delete(key)),
   };
   return { cache: cache as unknown as CacheStore, store, spies: cache };

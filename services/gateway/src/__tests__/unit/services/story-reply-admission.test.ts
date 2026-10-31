@@ -61,7 +61,7 @@ const fauxPrisma = (post: PostRow, auteurMembre: ParticipantRow, monde: Monde = 
       },
       findMany: async () => [],
     },
-    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    userRelation: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
     friendRequest: {
       findFirst: async () => (monde.amis ? { id: '507f1f77bcf86cd799439f01' } : null),
     },

@@ -156,7 +156,7 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
         findFirst: jest.fn(),
         findMany: jest.fn().mockResolvedValue([])
       },
-      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      userRelation: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
       friendRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       postMention: { findUnique: jest.fn().mockResolvedValue(null) },
       post: {
