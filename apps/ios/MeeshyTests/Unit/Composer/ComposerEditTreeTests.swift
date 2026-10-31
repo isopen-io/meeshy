@@ -38,7 +38,7 @@ final class ComposerEditTreeTests: XCTestCase {
                 (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any])
         }
         let cles = ComposerEditTree.shared.levels.flatMap { [$0.title] + $0.entries.map(\.label) }
-        XCTAssertEqual(cles.count, 34)
+        XCTAssertEqual(cles.count, 37)
         for cle in cles {
             let langues = catalogues.lazy.compactMap { ($0[cle] as? [String: Any])?["localizations"] as? [String: Any] }.first
             XCTAssertEqual(langues?.count, 7, cle)
