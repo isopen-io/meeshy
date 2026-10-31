@@ -3,6 +3,7 @@ import { PostVisibility } from '@meeshy/shared/prisma/client';
 import { canUserViewPost, type PostVisibilityRecord } from '../postVisibility';
 
 const makePrisma = (friendResult: { id: string } | null = null) => ({
+  userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
   friendRequest: {
     findFirst: jest.fn().mockResolvedValue(friendResult),
   },
@@ -121,6 +122,7 @@ describe('canUserViewPost', () => {
   describe('COMMUNITY visibility (shared community)', () => {
     it('returns true when viewer shares a community with the author', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: { findFirst: jest.fn() },
         communityMember: {
           findMany: jest.fn().mockResolvedValue([{ communityId: 'c1' }]),
@@ -134,6 +136,7 @@ describe('canUserViewPost', () => {
 
     it('returns false when viewer shares no community with the author', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: { findFirst: jest.fn() },
         communityMember: {
           findMany: jest.fn().mockResolvedValue([{ communityId: 'c1' }]),

@@ -54,6 +54,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     post: { findFirst: jest.fn(), findUnique: jest.fn() },
     postComment: { findFirst: jest.fn(), findUnique: jest.fn() },
     postMedia: { findFirst: jest.fn() },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findMany: jest.fn(), findFirst: jest.fn() },
     communityMember: { findMany: jest.fn(), findFirst: jest.fn() },
     participant: { findMany: jest.fn(), findFirst: jest.fn() },

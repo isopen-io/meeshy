@@ -31,6 +31,7 @@ function createMockIO() {
 
 function createMockPrisma() {
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(),
     },
@@ -752,15 +753,11 @@ describe('SocialEventsHandler', () => {
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
       expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledWith({
-        where: {
-          OR: [
-            { senderId: AUTHOR_ID, status: 'accepted' },
-            { receiverId: AUTHOR_ID, status: 'accepted' },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
+      expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'accepted', OR: [{ senderId: AUTHOR_ID }, { receiverId: AUTHOR_ID }] },
+        }),
+      );
     });
 
     it('should use cached results on second call within TTL', async () => {

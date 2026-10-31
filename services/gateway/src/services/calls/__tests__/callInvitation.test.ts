@@ -43,6 +43,7 @@ const USERS: Record<string, { id: string; username: string; displayName: string 
 };
 
 const fakePrisma = (world: World) => ({
+  userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
   friendRequest: {
     findFirst: jest.fn(async ({ where }: { where: { OR: Array<{ senderId: string; receiverId: string }> } }) => {
       const [{ senderId, receiverId }] = where.OR;
