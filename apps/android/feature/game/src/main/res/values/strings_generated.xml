@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">Saving…</string>
     <string name="game_actions_one">%1$s action</string>
     <string name="game_actions_other">%1$s actions</string>
+    <string name="game_badge_a11y_imprint">Dimmed, %1$s more to relight it</string>
+    <string name="game_badge_a11y_stars">Stars: %1$s of %2$s</string>
     <string name="game_chest_claimed">A new Offering awaits you at the end of the next dream.</string>
     <string name="game_chest_locked">Complete the dream’s three acts to make it appear.</string>
     <string name="game_chest_open">Open the Offering</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">Rebirth page</string>
     <string name="game_concept_link_season">The journey’s path</string>
     <string name="game_concept_link_showcase">Arrange my trophies</string>
+    <string name="game_concept_link_succes">All great deeds</string>
     <string name="game_concept_meesh_how">Minting a Meesh binds part of your light into a coin.</string>
     <string name="game_concept_meesh_name">The Legacy</string>
     <string name="game_concept_meesh_tip_1">Keep your Meeshes: your legacy moves from one container to the next.</string>
@@ -667,6 +670,7 @@
     <string name="game_treasury_next">%1$s to the %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Treasure</string>
+    <string name="progression_achievement_a11y_hint">Tap to see this great deed in full.</string>
     <string name="progression_achievement_all_content_types_condition">A voice message, a text message, a post, a story and a reel</string>
     <string name="progression_achievement_all_content_types_title">Jack of all trades</string>
     <string name="progression_achievement_editor_condition">A first in-app edit before publishing</string>
@@ -697,13 +701,25 @@
     <string name="progression_axis_tool_in_app_edit">In-app edits</string>
     <string name="progression_axis_tool_reaction">Reactions</string>
     <string name="progression_axis_tool_sticker">Stickers placed</string>
+    <string name="progression_family_comment">Comments</string>
+    <string name="progression_family_content">Content created</string>
+    <string name="progression_family_conversation">Conversations</string>
+    <string name="progression_family_social">Bonds woven</string>
+    <string name="progression_family_tool">Tools</string>
+    <string name="progression_hero_first">First great deed</string>
+    <string name="progression_hero_first_hint">Send a message: the first one is done right away.</string>
+    <string name="progression_hero_last">Latest great deed</string>
+    <string name="progression_hero_next">Next great deed</string>
+    <string name="progression_hero_reveal_hint">Replay the sign from the ancestors for this great deed</string>
     <string name="progression_level">Level %1$d</string>
     <string name="progression_meesh_mint_error">Minting failed — try again</string>
     <string name="progression_obtained">Earned on %1$s</string>
+    <string name="progression_section_achievements">Great Deeds</string>
     <plurals name="progression_streak_days">
         <item quantity="one">%1$d day in a row</item>
         <item quantity="other">%1$d days in a row</item>
     </plurals>
+    <string name="progression_unlocked">Unlocked</string>
     <string name="reveal_achievement_photo">Make it a card</string>
     <string name="reveal_badge_achievement">Achievement unlocked</string>
     <string name="reveal_badge_axis_subtitle">One more tier on this axis. The next one unlocks as you keep going.</string>

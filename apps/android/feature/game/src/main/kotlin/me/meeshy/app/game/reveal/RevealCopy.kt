@@ -98,6 +98,13 @@ internal object RevealCopy {
         return (if (RevealRim.isBelowTenth(share)) "< " else "") + format(rounded, digits) + " %"
     }
 
+    /** Le nom d'un axe, tel que la ligne d'un badge le dit (« Messages texte »). */
+    fun axisTitle(res: Resources, axis: EngagementAxisKey): String = res.getString(axisName(axis))
+
+    /** « Obtenu le 3 octobre 2026 », ou `null` quand aucune date lisible ne date le palier. */
+    fun obtained(res: Resources, locale: Locale, reachedAt: String?): String? =
+        reachedAt?.let { obtainedOn(it, locale) }?.let { res.getString(R.string.progression_obtained, it) }
+
     private fun obtainedOn(reachedAt: String, locale: Locale): String? = runCatching {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
             .format(Instant.parse(reachedAt).atZone(ZoneId.systemDefault()))

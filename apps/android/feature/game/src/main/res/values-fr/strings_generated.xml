@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">Enregistrement…</string>
     <string name="game_actions_one">%1$s action</string>
     <string name="game_actions_other">%1$s actions</string>
+    <string name="game_badge_a11y_imprint">Éteint, encore %1$s pour le rallumer</string>
+    <string name="game_badge_a11y_stars">Étoiles : %1$s sur %2$s</string>
     <string name="game_chest_claimed">Une nouvelle Offrande t’attend au bout du prochain rêve.</string>
     <string name="game_chest_locked">Réalise les trois actes du rêve pour la faire apparaître.</string>
     <string name="game_chest_open">Ouvrir l’Offrande</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">Page de la renaissance</string>
     <string name="game_concept_link_season">Le chemin du voyage</string>
     <string name="game_concept_link_showcase">Ranger mes trophées</string>
+    <string name="game_concept_link_succes">Tous les hauts faits</string>
     <string name="game_concept_meesh_how">Frapper une Meesh fige une part de ta lumière dans une pièce.</string>
     <string name="game_concept_meesh_name">L’Héritage</string>
     <string name="game_concept_meesh_tip_1">Garde tes Meeshes : ton héritage passe d’un contenant au suivant.</string>
@@ -670,6 +673,7 @@
     <string name="game_treasury_next">%1$s jusqu’au %2$s</string>
     <string name="game_treasury_reserve">Réserve</string>
     <string name="game_treasury_tresor">Trésor</string>
+    <string name="progression_achievement_a11y_hint">Touche pour voir ce haut fait en grand.</string>
     <string name="progression_achievement_all_content_types_condition">Un message vocal, un message texte, une publication, une story et un réel</string>
     <string name="progression_achievement_all_content_types_title">Touche-à-tout</string>
     <string name="progression_achievement_editor_condition">Un premier montage dans l’app avant de publier</string>
@@ -700,14 +704,26 @@
     <string name="progression_axis_tool_in_app_edit">Montages dans l’app</string>
     <string name="progression_axis_tool_reaction">Réactions</string>
     <string name="progression_axis_tool_sticker">Stickers posés</string>
+    <string name="progression_family_comment">Commentaires</string>
+    <string name="progression_family_content">Contenu produit</string>
+    <string name="progression_family_conversation">Conversations</string>
+    <string name="progression_family_social">Liens tissés</string>
+    <string name="progression_family_tool">Outils</string>
+    <string name="progression_hero_first">Premier haut fait</string>
+    <string name="progression_hero_first_hint">Envoie un message : le premier s’accomplit tout de suite.</string>
+    <string name="progression_hero_last">Dernier haut fait</string>
+    <string name="progression_hero_next">Prochain haut fait</string>
+    <string name="progression_hero_reveal_hint">Revoir le signe des aïeux de ce haut fait</string>
     <string name="progression_level">Niveau %1$d</string>
     <string name="progression_meesh_mint_error">La frappe n\'a pas abouti — réessayez</string>
     <string name="progression_obtained">Obtenu le %1$s</string>
+    <string name="progression_section_achievements">Hauts faits</string>
     <plurals name="progression_streak_days">
         <item quantity="one">%1$d jour d’affilée</item>
         <item quantity="many">%1$d jours d’affilée</item>
         <item quantity="other">%1$d jours d’affilée</item>
     </plurals>
+    <string name="progression_unlocked">Débloqué</string>
     <string name="reveal_achievement_photo">En faire une carte</string>
     <string name="reveal_badge_achievement">Succès débloqué</string>
     <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe. Le suivant se débloque en continuant.</string>

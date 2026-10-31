@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">Salvataggio…</string>
     <string name="game_actions_one">%1$s azione</string>
     <string name="game_actions_other">%1$s azioni</string>
+    <string name="game_badge_a11y_imprint">Spento, ancora %1$s per riaccenderlo</string>
+    <string name="game_badge_a11y_stars">Stelle: %1$s su %2$s</string>
     <string name="game_chest_claimed">Una nuova Offerta ti aspetta alla fine del prossimo sogno.</string>
     <string name="game_chest_locked">Compi i tre atti del sogno per farla apparire.</string>
     <string name="game_chest_open">Apri l’Offerta</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">Pagina della rinascita</string>
     <string name="game_concept_link_season">Il cammino del viaggio</string>
     <string name="game_concept_link_showcase">Sistemare i miei trofei</string>
+    <string name="game_concept_link_succes">Tutte le imprese</string>
     <string name="game_concept_meesh_how">Coniare una Meesh fissa una parte della tua luce in una moneta.</string>
     <string name="game_concept_meesh_name">L’Eredità</string>
     <string name="game_concept_meesh_tip_1">Custodisci le tue Meesh: la tua eredità passa da una custodia alla successiva.</string>
@@ -670,6 +673,7 @@
     <string name="game_treasury_next">%1$s fino a %2$s</string>
     <string name="game_treasury_reserve">Riserva</string>
     <string name="game_treasury_tresor">Tesoro</string>
+    <string name="progression_achievement_a11y_hint">Tocca per vedere questa impresa in grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un messaggio vocale, uno di testo, una pubblicazione, una storia e un reel</string>
     <string name="progression_achievement_all_content_types_title">Tuttofare</string>
     <string name="progression_achievement_editor_condition">Un primo montaggio nell’app prima di pubblicare</string>
@@ -700,14 +704,26 @@
     <string name="progression_axis_tool_in_app_edit">Montaggi nell’app</string>
     <string name="progression_axis_tool_reaction">Reazioni</string>
     <string name="progression_axis_tool_sticker">Sticker inseriti</string>
+    <string name="progression_family_comment">Commenti</string>
+    <string name="progression_family_content">Contenuti creati</string>
+    <string name="progression_family_conversation">Conversazioni</string>
+    <string name="progression_family_social">Legami tessuti</string>
+    <string name="progression_family_tool">Strumenti</string>
+    <string name="progression_hero_first">Prima impresa</string>
+    <string name="progression_hero_first_hint">Invia un messaggio: la prima si compie subito.</string>
+    <string name="progression_hero_last">Ultima impresa</string>
+    <string name="progression_hero_next">Prossima impresa</string>
+    <string name="progression_hero_reveal_hint">Rivedi il segno degli antenati di questa impresa</string>
     <string name="progression_level">Livello %1$d</string>
     <string name="progression_meesh_mint_error">Il conio non è riuscito — riprova</string>
     <string name="progression_obtained">Ottenuto il %1$s</string>
+    <string name="progression_section_achievements">Imprese</string>
     <plurals name="progression_streak_days">
         <item quantity="one">%1$d giorno di fila</item>
         <item quantity="many">%1$d giorni di fila</item>
         <item quantity="other">%1$d giorni di fila</item>
     </plurals>
+    <string name="progression_unlocked">Sbloccato</string>
     <string name="reveal_achievement_photo">Fanne una carta</string>
     <string name="reveal_badge_achievement">Traguardo sbloccato</string>
     <string name="reveal_badge_axis_subtitle">Un livello in più su questo asse. Il prossimo si sblocca continuando.</string>

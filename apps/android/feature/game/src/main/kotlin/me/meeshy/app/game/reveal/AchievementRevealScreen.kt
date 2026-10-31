@@ -379,7 +379,7 @@ private fun RevealSymbol.icon() = when (this) {
     RevealSymbol.StarCircle -> MeeshyIcons.StarFilled
 }
 
-private fun BadgeMaterialKey.toGameMaterial(): GameMaterial = when (this) {
+internal fun BadgeMaterialKey.toGameMaterial(): GameMaterial = when (this) {
     BadgeMaterialKey.CUIVRE -> GameMaterial.COPPER
     BadgeMaterialKey.BRONZE -> GameMaterial.BRONZE
     BadgeMaterialKey.ARGENT -> GameMaterial.SILVER

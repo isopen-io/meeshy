@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">جارٍ الحفظ…</string>
     <string name="game_actions_one">%1$s إجراء</string>
     <string name="game_actions_other">%1$s إجراءً</string>
+    <string name="game_badge_a11y_imprint">مُطفأ، بقي %1$s لإعادة إشعاله</string>
+    <string name="game_badge_a11y_stars">النجوم: %1$s من %2$s</string>
     <string name="game_chest_claimed">عطيّة جديدة تنتظرك في نهاية الحلم القادم.</string>
     <string name="game_chest_locked">حقّق فصول الحلم الثلاثة لتظهر.</string>
     <string name="game_chest_open">افتح العطيّة</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">صفحة الانبعاث</string>
     <string name="game_concept_link_season">طريق الرحلة</string>
     <string name="game_concept_link_showcase">رتّب كؤوسي</string>
+    <string name="game_concept_link_succes">كل المآثر</string>
     <string name="game_concept_meesh_how">سكّ Meesh يصوغ جزءًا من نورك في قطعة.</string>
     <string name="game_concept_meesh_name">الإرث</string>
     <string name="game_concept_meesh_tip_1">احتفظ بعملات Meesh: ينتقل إرثك من وعاء إلى الذي يليه.</string>
@@ -679,6 +682,7 @@
     <string name="game_treasury_next">%1$s حتى %2$s</string>
     <string name="game_treasury_reserve">احتياطي</string>
     <string name="game_treasury_tresor">كنز</string>
+    <string name="progression_achievement_a11y_hint">المس لترى هذه المأثرة بالحجم الكامل.</string>
     <string name="progression_achievement_all_content_types_condition">رسالة صوتية ورسالة نصية ومنشور وقصة وريل</string>
     <string name="progression_achievement_all_content_types_title">متعدّد المواهب</string>
     <string name="progression_achievement_editor_condition">أول تعديل داخل التطبيق قبل النشر</string>
@@ -709,9 +713,20 @@
     <string name="progression_axis_tool_in_app_edit">تعديلات داخل التطبيق</string>
     <string name="progression_axis_tool_reaction">التفاعلات</string>
     <string name="progression_axis_tool_sticker">ملصقات موضوعة</string>
+    <string name="progression_family_comment">التعليقات</string>
+    <string name="progression_family_content">المحتوى المنتَج</string>
+    <string name="progression_family_conversation">المحادثات</string>
+    <string name="progression_family_social">روابط منسوجة</string>
+    <string name="progression_family_tool">الأدوات</string>
+    <string name="progression_hero_first">أول مأثرة</string>
+    <string name="progression_hero_first_hint">أرسل رسالة: تتحقّق المأثرة الأولى فورًا.</string>
+    <string name="progression_hero_last">آخر مأثرة</string>
+    <string name="progression_hero_next">المأثرة التالية</string>
+    <string name="progression_hero_reveal_hint">إعادة مشاهدة علامة الأجداد لهذه المأثرة</string>
     <string name="progression_level">المستوى %1$d</string>
     <string name="progression_meesh_mint_error">فشلت عملية السك — أعد المحاولة</string>
     <string name="progression_obtained">تم الحصول عليه في %1$s</string>
+    <string name="progression_section_achievements">المآثر</string>
     <plurals name="progression_streak_days">
         <item quantity="zero">%1$d يوم متتالٍ</item>
         <item quantity="one">يوم واحد متتالٍ</item>
@@ -720,6 +735,7 @@
         <item quantity="many">%1$d يومًا متتاليًا</item>
         <item quantity="other">%1$d يوم متتالٍ</item>
     </plurals>
+    <string name="progression_unlocked">مفتوح</string>
     <string name="reveal_achievement_photo">حوّله إلى بطاقة</string>
     <string name="reveal_badge_achievement">تم فتح الإنجاز</string>
     <string name="reveal_badge_axis_subtitle">مستوى إضافي على هذا المحور. يُفتح المستوى التالي بالمتابعة.</string>
