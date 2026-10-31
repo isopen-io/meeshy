@@ -601,6 +601,31 @@ ${candidats.map(ligneDeLot).join('\n')}`,
   log(`cadrage : ${aFaire.length} à faire (${aFaire.map((l) => l.cle).join(', ') || '—'}), ${enPr.length} en PR, ${bloques.length} bloqués par une décision (${bloques.map((l) => l.cle).join(', ') || '—'})`)
   if (cadrage && cadrage.collisions && cadrage.collisions.length) log(`collisions : ${cadrage.collisions.join(' ; ')}`)
 
+  // Les PR ouvertes d'un tour précédent (CI pas finie dans le délai) se FUSIONNENT au vert — sans quoi elles restent orphelines.
+  const FUSION = {
+    type: 'object', additionalProperties: false, required: ['fusionnee', 'rapport'],
+    properties: { fusionnee: { type: 'boolean' }, sha: { type: 'string' }, checks: { type: 'string' }, rouge_preexistant: { type: 'string' }, rapport: { type: 'string' } },
+  }
+  const fusions = AUTO_MERGE && enPr.length ? await parallel(enPr.map((l) => async () => {
+    const n = verdicts.get(l.cle).pr_numero
+    const num = numeros[cleIssue(l)] || 0
+    const freres = LOTS_PAR_DEFAUT.filter((x) => x.cle !== l.cle && cleIssue(x) === cleIssue(l)).map((x) => x.cle)
+    const f = await agent(`${socle(l.chaine)}
+
+TA MISSION — FUSIONNER LA PR #${n} DU LOT ${l.cle} DANS \`${BASE}\`, AU VERT, ET SEULEMENT ALORS. Tu es l'agent de livraison de cette PR.
+1. \`gh api repos/${GH}/pulls/${n} --jq '{state,merged_at,mergeable_state,head:.head.ref,sha:.head.sha}'\` — déjà fusionnée ⇒ rends fusionnee=true, rien d'autre.
+   Conflit ou retard (dirty/behind) ⇒ \`cd ${REPO[l.chaine]} && git fetch origin && git checkout <head> && git merge origin/${BASE}\` (jamais rebase), gates rapides, push.
+2. Verdict CI (voir GITHUB), jusqu'à 45 min.${l.chaine === 'ios' ? ' iOS : la tête porte « run test » et les tranches MeeshyTests ont TOURNÉ.' : ''}${l.chaine === 'android' ? ' Android : android.yml vert exigé.' : ''}
+3. Un rouge : lis le job (\`gh api repos/${GH}/actions/jobs/<id>/logs | grep -E "error|FAIL" | tail -60\`). Il est PRÉEXISTANT si aucun des tests rouges ne touche un fichier du
+   diff de la PR (\`gh api repos/${GH}/pulls/${n}/files --jq '.[].filename'\`) et que \`${BASE}\` porte la même cause — pour MeeshyTests, l'issue #14056 recense les 28 rouges hérités de ${BASE}
+   au 2026-10-31 : un rouge de cette liste est préexistant. Préexistant ⇒ commente la PR (le job, pourquoi il n'est pas celui du lot, #14056) puis fusionne. Causé par le lot ⇒ corrige en TDD sur la
+   branche, pousse, reprends l'étape 2 une fois ; sinon laisse ouverte et dis pourquoi.
+4. Vert ⇒ \`gh api -X PUT repos/${GH}/pulls/${n}/merge -f merge_method=merge\`. Commentaire sur l'issue #${num || 'n'} (la PR, la preuve)${freres.length ? ` ; ferme-la (\`gh api -X PATCH repos/${GH}/issues/${num} -f state=closed -f state_reason=completed\`) seulement si les PR de ${freres.join(', ')} sont fusionnées` : ''}.`,
+      { label: `fusionner:${l.cle}`, phase: 'Livrer', schema: FUSION, model: MODELE.livrer, effort: 'medium' })
+    if (f) log(`${l.cle} : PR #${n} ${f.fusionnee ? 'fusionnée' : 'NON fusionnée'}`)
+    return { cle: l.cle, issue: num, livraison: { pousse: !!(f && f.fusionnee), pr_numero: n, pr_url: `https://github.com/${GH}/pull/${n}`, fusionnee: !!(f && f.fusionnee), rapport: f && f.rapport } }
+  })) : []
+
   // -------------------------------------------------------------------------
   phase('Ouvrir')
   // -------------------------------------------------------------------------
@@ -780,7 +805,7 @@ ${restants.length ? `RESTANTS (dits dans la PR) :\n${court(restants, 2000)}` : '
 5. LA PR (REST, voir GITHUB) : corps = ce qui était absent ; l'INVENTAIRE (étendu / modifié / non touché / créé et pourquoi) ; ce qui est livré fichier par
    fichier ; routes et événements (fichier:ligne) ; témoins ; gates et chiffres ; rouge préexistant ; le même \`Closes\`/\`Refs\` que le commit ;
    dimensions mûres / restantes ; puis la ligne d'attribution des PR.
-   ${AUTO_MERGE && !bloquantRestant ? `Puis ATTENDS LE VERT (verdict CI, voir GITHUB) et fusionne par \`gh api -X PUT repos/${GH}/pulls/<n>/merge -f merge_method=merge\` ; un rouge causé par le lot se corrige puis on recommence (une fois) ; un rouge préexistant se dit et n'empêche pas ; pas de vert dans le délai ⇒ PR ouverte, dis-le.` : 'NE FUSIONNE PAS.'}
+   ${AUTO_MERGE && !bloquantRestant ? `Puis ATTENDS LE VERT (verdict CI, voir GITHUB) et fusionne par \`gh api -X PUT repos/${GH}/pulls/<n>/merge -f merge_method=merge\` ; un rouge causé par le lot se corrige puis on recommence (une fois) ; un rouge préexistant (aucun test rouge ne touche le diff de la PR ; pour MeeshyTests, la liste de #14056) se dit dans la PR et n'empêche pas ; pas de vert dans le délai ⇒ PR ouverte, dis-le.` : 'NE FUSIONNE PAS.'}
 ${l.chaine === 'android' ? "   Android : le vert d'android.yml (assembleDebug + testDebugUnitTest) est EXIGÉ — sans lui, pas de fusion, même si les autres checks sont verts." : ''}
 ${l.chaine === 'ios' ? '   iOS : un vert ne compte que si la tête porte « run test » et que le job de tests MeeshyTests a tourné.' : ''}
 6. Commentaire sur l'issue #${num || 'n'} : PR, preuves, inventaire retenu, dimensions MÛRES / RESTANTES, et UNE issue par dimension non mûre (milestone ${MILESTONE})
@@ -820,8 +845,8 @@ ${l.chaine === 'ios' ? '   iOS : un vert ne compte que si la tête porte « run 
     }
     return faits
   }))
-  const livres = parChaine.filter(Boolean).flat().filter(Boolean)
-  log(`tour ${tour} : ${livres.filter((r) => r.livraison && r.livraison.pousse).length}/${aFaire.length} lots livrés (PR ouvertes ou fusionnées)${enPr.length ? ` ; ${enPr.length} PR d'un tour précédent : ${enPr.map((l) => `#${verdicts.get(l.cle).pr_numero}`).join(', ')}` : ''}`)
+  const livres = [...parChaine.filter(Boolean).flat().filter(Boolean), ...fusions.filter(Boolean)]
+  log(`tour ${tour} : ${livres.filter((r) => r.livraison && r.livraison.pousse).length}/${aFaire.length + enPr.length} lots livrés (PR ouvertes ou fusionnées)${enPr.length ? ` ; ${enPr.length} PR d'un tour précédent : ${enPr.map((l) => `#${verdicts.get(l.cle).pr_numero}`).join(', ')}` : ''}`)
 
   // -------------------------------------------------------------------------
   phase('Valider')
@@ -857,7 +882,7 @@ D. Rends acceptable (true seulement si TOUT ce qui est jouable passe et que la r
 
   resultats.push({ tour, synchro: { sha_dev: synchro.sha_dev, ci_dev: synchro.ci_dev, tenus: TENUS }, cadrage: { a_faire: aFaire.map((l) => l.cle), en_pr: enPr.map((l) => l.cle), bloques: bloques.map((l) => l.cle), collisions: cadrage && cadrage.collisions, inventaires: Object.fromEntries([...verdicts.entries()].map(([k, v]) => [k, v.inventaire])) }, issues: { ...numeros }, lots: livres, validation })
 
-  const nonLivres = aFaire.filter((l) => { const r = livres.find((x) => x.cle === l.cle); return !r || !r.livraison || !r.livraison.fusionnee })
+  const nonLivres = [...aFaire, ...enPr].filter((l) => { const r = livres.find((x) => x.cle === l.cle); return !r || !r.livraison || !r.livraison.fusionnee })
   const defauts = validation && Array.isArray(validation.defauts) ? validation.defauts.map((d) => ({ ...d, depend: d.depend || [] })) : []
   lotsDuTour = [...nonLivres, ...defauts]
   if (validation && validation.acceptable && !nonLivres.length) { log('=== ÉTAT ACCEPTABLE ATTEINT ==='); break }
