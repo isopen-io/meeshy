@@ -57,7 +57,8 @@ internal fun StorySelectionSheet(
         }
         StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
-        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE, StoryComposerSheet.BACKGROUND_SOURCE -> Unit
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE, StoryComposerSheet.BACKGROUND_SOURCE,
+        StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
     }
 }
 
@@ -70,7 +71,7 @@ internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = w
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
     StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
-    StoryComposerSheet.BACKGROUND_SOURCE -> selectionSubject == ComposerSelectionSubject.BACKGROUND
+    StoryComposerSheet.BACKGROUND_SOURCE, StoryComposerSheet.BACKGROUND_DESCRIPTION -> selectionSubject == ComposerSelectionSubject.BACKGROUND
     StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
     StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }

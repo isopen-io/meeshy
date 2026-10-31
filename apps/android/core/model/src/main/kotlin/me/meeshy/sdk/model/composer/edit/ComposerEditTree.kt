@@ -41,6 +41,10 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
         @SerialName("editor") EDITOR,
         @SerialName("media-source") MEDIA_SOURCE,
         @SerialName("camera") CAMERA,
+        @SerialName("image") IMAGE,
+        @SerialName("video") VIDEO,
+        @SerialName("trimmable") TRIMMABLE,
+        @SerialName("look") LOOK,
     }
 
     @Serializable
@@ -49,6 +53,8 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
         @SerialName("level") LEVEL,
         @SerialName("sheet") SHEET,
         @SerialName("confirmation") CONFIRMATION,
+        @SerialName("band") BAND,
+        @SerialName("toggle") TOGGLE,
     }
 
     fun level(id: String): Level? = levels.firstOrNull { it.id == id }
@@ -56,6 +62,7 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
     companion object {
         const val BACKGROUND_MEDIA = "background.media"
         const val BACKGROUND_MEDIA_REPLACE = "background.media.replace"
+        const val BACKGROUND_MEDIA_EDIT = "background.media.edit"
 
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -70,7 +77,7 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
                     kind = Kind.RAIL,
                     title = "composer.rail.title.background",
                     entries = listOf(
-                        Entry("edit", "composer.selection.modify", "slider.horizontal.3", "Edit", Offer.EDITOR, Opens.LEVEL),
+                        Entry("edit", "composer.selection.modify", "slider.horizontal.3", "Edit", Offer.EDITOR, Opens.LEVEL, next = BACKGROUND_MEDIA_EDIT),
                         Entry(
                             "replace", "composer.edit.replace", "arrow.triangle.2.circlepath", "SwapHorizontal", Offer.MEDIA_SOURCE,
                             Opens.SHEET, next = BACKGROUND_MEDIA_REPLACE,
@@ -87,6 +94,24 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
                         Entry("library", "composer.edit.source.library", "photo.on.rectangle", "PhotoLibrary", Offer.MEDIA_SOURCE, Opens.ACTION),
                         Entry("camera", "composer.rail.media.takePhoto", "camera", "Camera", Offer.CAMERA, Opens.ACTION),
                         Entry("files", "composer.rail.media.fromFiles", "folder", "Folder", Offer.MEDIA_SOURCE, Opens.ACTION),
+                    ),
+                ),
+                Level(
+                    id = BACKGROUND_MEDIA_EDIT,
+                    kind = Kind.RAIL,
+                    title = "composer.selection.modify",
+                    entries = listOf(
+                        Entry("framing", "composer.rail.title.backgroundFraming", "aspectratio", "Photo", Offer.ALWAYS, Opens.BAND),
+                        Entry("crop", "composer.object.editor.crop", "crop", "Crop", Offer.IMAGE, Opens.BAND),
+                        Entry("trim", "composer.capture.tool.trim", "scissors", "Cut", Offer.TRIMMABLE, Opens.BAND),
+                        Entry("filters", "composer.object.editor.filter", "camera.filters", "PhotoFilter", Offer.ALWAYS, Opens.BAND),
+                        Entry("frames", "composer.capture.rail.frames", "square.dashed", "CheckBoxBlank", Offer.LOOK, Opens.BAND),
+                        Entry("adjust", "composer.object.editor.adjust", "slider.horizontal.3", "Tune", Offer.ALWAYS, Opens.BAND),
+                        Entry("effects", "composer.object.editor.effects", "sparkles", "Sparkles", Offer.IMAGE, Opens.BAND),
+                        Entry("sound", "composer.rail.title.sound", "speaker.wave.2", "VolumeUp", Offer.VIDEO, Opens.BAND),
+                        Entry("loop", "story.timeline.inspector.loop", "repeat", "Repeat", Offer.VIDEO, Opens.TOGGLE),
+                        Entry("rotate", "composer.object.editor.rotate", "rotate.right", "RotateRight", Offer.ALWAYS, Opens.ACTION),
+                        Entry("description", "composer.object.editor.altText", "text.below.photo", "TextFields", Offer.ALWAYS, Opens.SHEET),
                     ),
                 ),
             ),

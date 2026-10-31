@@ -44,6 +44,10 @@
     <string name="composer_column_text_frame">Moldura do texto</string>
     <string name="composer_column_text_language">Idioma do texto</string>
     <string name="composer_column_text_plan">LINHA DO TEMPO</string>
+    <string name="composer_edit_background_framing">Enquadrar</string>
+    <string name="composer_edit_frames">Molduras</string>
+    <string name="composer_edit_loop">Loop</string>
+    <string name="composer_edit_trim">Cortar</string>
     <string name="composer_family_text">Texto</string>
     <string name="composer_frise_earlier">Mais cedo</string>
     <string name="composer_frise_empty">Adicione um texto ou um sticker: cada objeto vira uma faixa.</string>

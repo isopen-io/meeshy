@@ -130,7 +130,6 @@ data class StoryComposerUiState(
     /** La famille d'effets de scène dont le carrousel est ouvert au pied du plateau. */
     val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
     /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
-    val isFrameOpen: Boolean = false,
     /** La pastille de lieu touchée sur la scène (#13846). */
     val selectedPlaceId: String? = null,
     /** Le format que l'hôte compose sur cette scène (#13863) : la story, le post ou le réel. */

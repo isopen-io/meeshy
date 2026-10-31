@@ -154,13 +154,15 @@ struct ComposerBackgroundSourcesSheet: View {
     }
 }
 
-/// La feuille basse servie : les sources de « Remplacer » priment sur le
-/// panneau du sous-outil, sous UN SEUL effacement de type.
+/// La feuille basse servie : les sources de « Remplacer », puis ce que
+/// « Modifier » du fond ouvre, puis le panneau du sous-outil, sous UN SEUL
+/// effacement de type.
 struct ComposerPropertiesSheetBody: View {
     let sources: ComposerBackgroundSourcesSheet?
+    var background: ComposerBackgroundModifySheet?
     let panel: ComposerInlineToolPanel?
 
     var body: some View {
-        if let sources { sources } else if let panel { panel }
+        if let sources { sources } else if let background { background } else if let panel { panel }
     }
 }

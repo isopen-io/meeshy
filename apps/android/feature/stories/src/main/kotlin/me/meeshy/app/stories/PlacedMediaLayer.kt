@@ -137,6 +137,7 @@ internal fun PlacedMediaLayer(
     canvasHeightPx: Float,
     gestures: PlacedMediaGestures,
     selected: Boolean = false,
+    live: ComposerLiveSlot? = null,
 ) {
     val placed = frame.placed
     val currentTap by rememberUpdatedState(gestures.onTap)
@@ -223,6 +224,8 @@ internal fun PlacedMediaLayer(
                 )
             }
         }
+        // La vidéo posée sélectionnée joue dans son cadre, sous son look (#13973, A-E3).
+        live?.let { slot -> Box(frameModifier) { slot.Picture(fit = false, modifier = Modifier.matchParentSize().sceneLook(frame.look)) } }
         frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET)) }
     }
 }

@@ -206,6 +206,9 @@ data class StoryDraftSlideSnapshot(
     val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
     /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
     val backgroundAdjustments: ImageAdjustments? = null,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (#13973) ; un blob d'avant se lit « entière ». */
+    val backgroundSourceStart: Double? = null,
+    val backgroundSourceEnd: Double? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
     /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */

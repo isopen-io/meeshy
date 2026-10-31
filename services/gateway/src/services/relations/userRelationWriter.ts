@@ -114,18 +114,18 @@ type Creation = 'created' | 'exists';
 async function createRow(
   db: UserRelationDb,
   pair: RelationPairKey,
-  params: { origin: RelationOrigin; at: Date },
+  params: { origin: RelationOrigin; at: Date; level: RelationLevel },
 ): Promise<Creation> {
-  const friend: Grants = { low: 'FRIEND', high: 'FRIEND' };
+  const granted: Grants = { low: params.level, high: params.level };
   try {
     await db.userRelation.create({
       data: {
         ...pair,
-        grantedByLow: friend.low,
-        grantedByHigh: friend.high,
+        grantedByLow: granted.low,
+        grantedByHigh: granted.high,
         levelSince: params.at,
         origin: params.origin,
-        transitions: passagesBetween(pair, { low: 'PUBLIC', high: 'PUBLIC' }, friend, params.at),
+        transitions: passagesBetween(pair, { low: 'PUBLIC', high: 'PUBLIC' }, granted, params.at),
       },
     });
     return 'created';
@@ -167,10 +167,15 @@ const dropOutlivesAcceptance = (row: UserRelationRow, acceptedAt: Date | null): 
       (acceptedAt === null || !(t.at instanceof Date) || t.at.getTime() >= acceptedAt.getTime()),
   );
 
-const atLeastFriend = (grants: Grants): Grants => ({
-  low: maxRelationLevel(grants.low, 'FRIEND'),
-  high: maxRelationLevel(grants.high, 'FRIEND'),
+const atLeast = (grants: Grants, level: RelationLevel): Grants => ({
+  low: maxRelationLevel(grants.low, level),
+  high: maxRelationLevel(grants.high, level),
 });
+
+const atLeastFriend = (grants: Grants): Grants => atLeast(grants, 'FRIEND');
+
+const hasRecordedDrop = (row: UserRelationRow): boolean =>
+  (row.transitions ?? []).some((t) => isRelationDrop({ from: parseRelationLevel(t.from), to: parseRelationLevel(t.to) }));
 
 export type FriendshipBackfillPlan = 'create' | 'raise' | 'keep';
 
@@ -180,6 +185,20 @@ export function friendshipBackfillPlan(row: UserRelationRow | null, acceptedAt: 
   if (dropOutlivesAcceptance(row, acceptedAt)) return 'keep';
   const current = grantsOf(row);
   const target = atLeastFriend(current);
+  return target.low === current.low && target.high === current.high ? 'keep' : 'raise';
+}
+
+/**
+ * Ce que `recordAcquaintance` ferait d'une paire, sans rien écrire (#13932) : le
+ * rattrapage saute une paire `keep` plutôt que de l'évaluer pour rendre
+ * « inchangé ». `keep` = déjà au moins Connaissance des deux côtés, ou une baisse
+ * gravée que la Connaissance automatique respecte sans condition.
+ */
+export function acquaintancePlan(row: UserRelationRow | null): FriendshipBackfillPlan {
+  if (!row) return 'create';
+  if (hasRecordedDrop(row)) return 'keep';
+  const current = grantsOf(row);
+  const target = atLeast(current, 'ACQUAINTANCE');
   return target.low === current.low && target.high === current.high ? 'keep' : 'raise';
 }
 
@@ -196,10 +215,16 @@ export function friendshipBackfillProjection(
   return { ...row, grantedByLow: target.low, grantedByHigh: target.high };
 }
 
-async function raiseToFriend(
+async function raiseTo(
   db: UserRelationDb,
   pair: RelationPairKey,
-  params: { origin: RelationOrigin; at: Date; respectDropsSince?: { acceptedAt: Date | null } },
+  params: {
+    origin: RelationOrigin;
+    at: Date;
+    level: RelationLevel;
+    respectDropsSince?: { acceptedAt: Date | null };
+    refuseAfterAnyDrop?: boolean;
+  },
 ): Promise<RelationWriteOutcome> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const row = await readPair(db, pair);
@@ -207,9 +232,10 @@ async function raiseToFriend(
       if ((await createRow(db, pair, params)) === 'created') return 'created';
       continue;
     }
+    if (params.refuseAfterAnyDrop && hasRecordedDrop(row)) return 'unchanged';
     if (params.respectDropsSince && dropOutlivesAcceptance(row, params.respectDropsSince.acceptedAt)) return 'unchanged';
     const current = grantsOf(row);
-    const target = atLeastFriend(current);
+    const target = atLeast(current, params.level);
     if (target.low === current.low && target.high === current.high) return 'unchanged';
     if (await moveTo(db, row, pair, target, params.at)) return 'raised';
   }
@@ -225,7 +251,23 @@ export async function recordFriendship(
 ): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseToFriend(db, pair, { origin: params.origin, at: params.at });
+  return raiseTo(db, pair, { origin: params.origin, at: params.at, level: 'FRIEND' });
+}
+
+/**
+ * La Connaissance AUTOMATIQUE (#13932) : les deux accords valent ACQUAINTANCE au
+ * moins. Monte, ne baisse jamais : une paire déjà Ami, Proche ou Sang n'est pas
+ * touchée. Une baisse gravée dans l'historique (sortie volontaire, RG-07) est
+ * RESPECTÉE sans condition de date — un lien que l'une des personnes a défait ne
+ * renaît pas parce que les échanges continuent.
+ */
+export async function recordAcquaintance(
+  db: UserRelationDb,
+  params: { userA: string; userB: string; at: Date },
+): Promise<RelationWriteOutcome> {
+  const pair = pairOf(params.userA, params.userB);
+  if (!pair) return 'ignored';
+  return raiseTo(db, pair, { origin: 'auto-acquaintance', at: params.at, level: 'ACQUAINTANCE', refuseAfterAnyDrop: true });
 }
 
 /**
@@ -259,9 +301,10 @@ export async function backfillFriendship(
 ): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseToFriend(db, pair, {
+  return raiseTo(db, pair, {
     origin: 'backfill-friend',
     at: params.acceptedAt ?? params.now,
+    level: 'FRIEND',
     respectDropsSince: { acceptedAt: params.acceptedAt },
   });
 }

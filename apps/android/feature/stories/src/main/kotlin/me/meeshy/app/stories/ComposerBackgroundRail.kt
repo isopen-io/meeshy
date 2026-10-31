@@ -54,6 +54,17 @@ internal fun composerEditIcon(material: String): ImageVector? = when (material) 
     "PhotoLibrary" -> MeeshyIcons.PhotoLibrary
     "Camera" -> MeeshyIcons.Camera
     "Folder" -> MeeshyIcons.Folder
+    "Photo" -> MeeshyIcons.Photo
+    "Crop" -> MeeshyIcons.Crop
+    "Cut" -> MeeshyIcons.Cut
+    "PhotoFilter" -> MeeshyIcons.PhotoFilter
+    "CheckBoxBlank" -> MeeshyIcons.CheckBoxBlank
+    "Tune" -> MeeshyIcons.Tune
+    "Sparkles" -> MeeshyIcons.Sparkles
+    "VolumeUp" -> MeeshyIcons.VolumeUp
+    "Repeat" -> MeeshyIcons.Repeat
+    "RotateRight" -> MeeshyIcons.Refresh
+    "TextFields" -> MeeshyIcons.TextFields
     else -> null
 }
 
@@ -91,8 +102,8 @@ internal class BackgroundEditing(
 )
 
 /**
- * Le niveau « Fond » du fond média sélectionné, ou `null` quand le fond n'est pas la sélection. Modifier ouvre ses
- * réglages en feuille basse, Remplacer la feuille de ses sources, Mettre sur la scène agit aussitôt, Retirer demande
+ * Le niveau « Fond » du fond média sélectionné, ou `null` quand le fond n'est pas la sélection. Modifier pose son niveau
+ * de réglages par-dessus ([onEdit], lot A-E2), Remplacer la feuille de ses sources, Mettre sur la scène agit aussitôt, Retirer demande
  * d'abord. [cameraServed] : la scène sait filmer ; [onReplace] ouvre la photothèque ou les fichiers pour le fond [replacing].
  */
 @Composable
@@ -101,6 +112,7 @@ internal fun rememberBackgroundEditing(
     viewModel: StoryComposerViewModel,
     openSheet: (StoryComposerSheet) -> Unit,
     cameraServed: Boolean,
+    onEdit: () -> Unit,
     onReplace: (source: ComposerBackgroundSource, replacing: String) -> Unit,
 ): BackgroundEditing? {
     var confirming by remember { mutableStateOf(false) }
@@ -116,7 +128,7 @@ internal fun rememberBackgroundEditing(
         sources = ComposerBackgroundLevel.sources(offers),
         onAction = { action ->
             when (action) {
-                ComposerBackgroundAction.EDIT -> openSheet(StoryComposerSheet.OBJECT_EDIT)
+                ComposerBackgroundAction.EDIT -> onEdit()
                 ComposerBackgroundAction.REPLACE -> openSheet(StoryComposerSheet.BACKGROUND_SOURCE)
                 ComposerBackgroundAction.PUT_ON_SCENE -> viewModel.onPutBackgroundOnScene()
                 ComposerBackgroundAction.REMOVE -> confirming = true

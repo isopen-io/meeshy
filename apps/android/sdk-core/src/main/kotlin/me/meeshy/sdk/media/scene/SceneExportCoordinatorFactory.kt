@@ -51,6 +51,7 @@ public class SceneExportCoordinatorFactory @Inject constructor(
         gallery = gallery,
         tempDirectory = File(context.cacheDir, EXPORT_DIRECTORY),
         scope = scope,
+        proof = RenderedContentProof(),
     )
 
     private companion object {

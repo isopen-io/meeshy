@@ -44,6 +44,10 @@
     <string name="composer_column_text_frame">Text frame</string>
     <string name="composer_column_text_language">Text language</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_edit_background_framing">Framing</string>
+    <string name="composer_edit_frames">Frames</string>
+    <string name="composer_edit_loop">Loop</string>
+    <string name="composer_edit_trim">Trim</string>
     <string name="composer_family_text">Text</string>
     <string name="composer_frise_earlier">Earlier</string>
     <string name="composer_frise_empty">Add a text or a sticker: each object becomes a track.</string>

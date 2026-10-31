@@ -37,4 +37,14 @@ class ComposerEditGrammarGuardTest {
             assertWithMessage("${entry.id} : ${entry.material}").that(composerEditIcon(entry.material)).isNotNull()
         }
     }
+
+    @Test
+    fun `the Edit of the background lays rails, never the sheet of chips, and its settings have left the overflow and the media row`() {
+        val rail = sources.getValue("ComposerBackgroundRail.kt")
+        assertWithMessage("Fond › Modifier ouvre encore la feuille à pastilles").that(rail.contains("OBJECT_EDIT")).isFalse()
+        assertWithMessage("le Cadre est encore une entrée du ⋯").that(sources.getValue("ComposerMoreMenu.kt").contains("MoreEntry.FRAME")).isFalse()
+        assertWithMessage("la Boucle est encore dans la rangée des médias").that(sources.getValue("ComposerMediaRows.kt").contains("Loop")).isFalse()
+        val framed = sources.filter { (_, text) -> text.contains("ComposerFramePanel(") }.keys
+        assertWithMessage("le panneau Cadre n'a qu'un hôte, la bande du Cadrage").that(framed).containsExactly("ComposerSceneFrameUi.kt", "ComposerBackgroundEditRail.kt")
+    }
 }

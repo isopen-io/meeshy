@@ -68,6 +68,9 @@ nonisolated struct ComposerInlineEdit: Equatable, Sendable {
     var openSection: ComposerObjectEditorSection?
     /// La feuille ouverte depuis la barre de la sélection (#13839, L5).
     var purpose: ComposerInlineEditPurpose = .modify
+    /// Sous « Modifier » d'un fond : l'entrée de N1 ouverte et le réglage de
+    /// N3 (#13974, I-E2). Un fond ne passe pas par `openSection`.
+    var background: ComposerBackgroundModifyPath = .closed
 }
 
 /// **Quelle feuille de la sélection** : « Modifier » règle l'objet, « Temps »
@@ -143,15 +146,24 @@ nonisolated enum ComposerInlineEditing {
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
                       hasTrimmableSource: Bool,
-                      purpose: ComposerInlineEditPurpose = .modify) -> ComposerInlineEdit? {
+                      purpose: ComposerInlineEditPurpose = .modify,
+                      kept: ComposerInlineEdit? = nil) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
         let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
-        let ouverte = requested.flatMap { servies.contains($0) ? $0 : nil }
+        let ouverte = (requested ?? kept?.openSection).flatMap { servies.contains($0) ? $0 : nil }
         let parDefaut = purpose == .time ? chips(.time, family: family, served: servies).first : nil
-        return ComposerInlineEdit(objectId: objectId,
-                                  family: family,
-                                  openSection: ouverte ?? parDefaut,
-                                  purpose: purpose)
+        guard family.isBackground else {
+            return ComposerInlineEdit(objectId: objectId, family: family, openSection: ouverte ?? parDefaut,
+                                      purpose: purpose)
+        }
+        // Un fond tient son CHEMIN, jamais une section (#13974, I-E2) : la porte
+        // qui en nomme une ouvre l'entrée de N1 qui lui répond ; rouvrir le
+        // même fond garde où l'on était.
+        let demandee = ComposerBackgroundModify.entry(for: ouverte).map {
+            ComposerBackgroundModifyPath(entry: $0, adjustment: nil)
+        }
+        return ComposerInlineEdit(objectId: objectId, family: family, openSection: nil, purpose: purpose,
+                                  background: demandee ?? kept?.background ?? .closed)
     }
 
     /// **Les puces LIBELLÉES d'une feuille** (#13839, L5) : Modifier sert les

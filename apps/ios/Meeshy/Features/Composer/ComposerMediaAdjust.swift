@@ -175,6 +175,9 @@ struct ComposerMediaAdjustPanel: View {
     /// l'original dans la scène (`ComposerLookComparison`). `nil` ⇒ la surface
     /// ne sait pas montrer l'original, et le contrôle ne se peint pas (loi 4).
     var onCompare: ((Bool) -> Void)?
+    /// N3 du fond (#13974, I-E2) : le curseur SEUL de ce réglage, avec
+    /// Comparer et Réinitialiser — la rangée des réglages est le rail N2.
+    var only: AdjustmentKind?
 
     @State private var comparing = false
     @State private var chosen: AdjustmentKind?
@@ -204,6 +207,15 @@ struct ComposerMediaAdjustPanel: View {
         return chosen
     }
 
+    /// **Le curseur écrit le modèle à chaque valeur** : aucune mémoire tampon,
+    /// la scène peint ce que l'objet porte au fil du geste.
+    static func sliderBinding(viewModel: StoryComposerViewModel, mediaId: String,
+                              kind: AdjustmentKind) -> Binding<Double> {
+        Binding(
+            get: { Double(viewModel.mediaObjectAdjustments(id: mediaId)[kind]) },
+            set: { viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: Float($0)) })
+    }
+
     private var mediaKind: StoryMediaKind? {
         viewModel.currentEffects.mediaObjects?.first { $0.id == mediaId }?.kind
     }
@@ -211,15 +223,16 @@ struct ComposerMediaAdjustPanel: View {
     var body: some View {
         let reglages = viewModel.mediaObjectAdjustments(id: mediaId)
         let porteUnRendu = ComposerLookComparison.carriesLook(viewModel.currentEffects, id: mediaId)
-        let offerts = Self.kinds(for: mediaKind, family: family)
+        let offerts = only.map { [$0] } ?? Self.kinds(for: mediaKind, family: family)
+        let remettable = only.map(reglages.isActive) ?? Self.canReset(reglages, family: family)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            if porteUnRendu {
-                actions(canReset: Self.canReset(reglages, family: family))
+            if porteUnRendu || (only != nil && remettable) {
+                actions(canReset: remettable)
             }
             if let kind = Self.shown(chosen, among: offerts) {
                 slider(kind, value: reglages[kind])
             }
-            kindStrip(offerts, adjustments: reglages)
+            if only == nil { kindStrip(offerts, adjustments: reglages) }
         }
         .onDisappear { release() }
     }
@@ -259,6 +272,7 @@ struct ComposerMediaAdjustPanel: View {
 
     private func resetControl(titled: Bool) -> some View {
         Button {
+            if let only { return resetOne(only) }
             viewModel.applyMediaObjectAdjustments(id: mediaId,
                                                   Self.reset(viewModel.mediaObjectAdjustments(id: mediaId), family: family))
             HapticFeedback.light()
@@ -297,10 +311,8 @@ struct ComposerMediaAdjustPanel: View {
         let ecart = ComposerAdjustCopy.displayValue(kind, value)
         let lue = ComposerAdjustCopy.signed(ecart)
         return HStack(spacing: MeeshySpacing.sm) {
-            Slider(value: Binding(
-                get: { Double(value) },
-                set: { viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: Float($0)) }
-            ), in: Double(kind.range.lowerBound)...Double(kind.range.upperBound))
+            Slider(value: Self.sliderBinding(viewModel: viewModel, mediaId: mediaId, kind: kind),
+                   in: Double(kind.range.lowerBound)...Double(kind.range.upperBound))
             .tint(Color.white)
             .frame(minHeight: 44)
             .accessibilityLabel(Text(ComposerAdjustCopy.label(kind)))

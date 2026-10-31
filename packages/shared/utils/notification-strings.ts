@@ -27,6 +27,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
   'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
+  'contact.acquaintanceAction', 'contact.acquaintanceBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
@@ -585,6 +586,10 @@ export function buildNotificationDisplay(
     // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
     case 'contact_recently_active':
       return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
+
+    // ── La Connaissance est née toute seule (#13932) : « Marie est maintenant une Connaissance » ──
+    case 'relation_acquaintance':
+      return framed(notificationString(L, 'contact.acquaintanceAction'), null);
 
     // ── Le jeu (#9490) : un duo se joue entre amis, on nomme l'ami. La ligue et la saison
     //    n'ont pas d'acteur : le titre reste au client, la phrase est dans le corps. ──

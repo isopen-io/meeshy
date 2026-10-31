@@ -8,7 +8,7 @@ internal enum class StoryScenePanel { DRAWING, TEXT, TOOL, DURATION, CAPTION, SC
 
 /**
  * Le panneau du geste en cours, par ordre de préséance : le pinceau, le texte qu'on écrit, l'outil ouvert, ce que le « ⋯ »
- * a ouvert, puis le cadre ou le carrousel d'effets du fond. Au repos : aucun. Un objet SÉLECTIONNÉ n'en monte aucun : ses
+ * a ouvert, puis le carrousel d'effets du fond (le Cadrage vit dans Fond › Modifier, #13973). Au repos : aucun. Un objet SÉLECTIONNÉ n'en monte aucun : ses
  * actions sont sur sa barre, et son Modifier ou son Temps font monter une feuille (#13836).
  */
 internal fun StoryComposerUiState.scenePanel(local: StoryMorePanel?): StoryScenePanel? = when {
@@ -17,6 +17,6 @@ internal fun StoryComposerUiState.scenePanel(local: StoryMorePanel?): StoryScene
     band.activeTool != null -> StoryScenePanel.TOOL
     local == StoryMorePanel.DURATION -> StoryScenePanel.DURATION
     local == StoryMorePanel.CAPTION || local == StoryMorePanel.POST_TEXT -> StoryScenePanel.CAPTION
-    frameOpen || sceneEffectCarousel != null -> StoryScenePanel.SCENE_EFFECTS
+    sceneEffectCarousel != null -> StoryScenePanel.SCENE_EFFECTS
     else -> null
 }
