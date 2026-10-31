@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -59,6 +60,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * « À toi de jouer » range les GESTES du concept (changer un acte, ouvrir l'Offrande, frapper, protéger ou rallumer la
  * Flamme), pilotés par `GameGesturesViewModel` : une intention, la réponse de la passerelle, jamais un solde calculé ici.
+ * [onOpenBadgesGuide] ouvre le carnet des règles à ses médailles ; nul, l'étagère ne montre pas le lien.
  */
 @Composable
 fun ProgressionConceptScreen(
@@ -67,6 +69,7 @@ fun ProgressionConceptScreen(
     onOpenConcept: (ProgressionConcept) -> Unit,
     onOpenPage: (GamePage) -> Unit = {},
     onOpenSection: (ProgressionSection) -> Unit = {},
+    onOpenBadgesGuide: (() -> Unit)? = null,
     viewModel: ProgressionViewModel = hiltViewModel(),
     gestures: GameGesturesViewModel = hiltViewModel(),
 ) {
@@ -108,7 +111,7 @@ fun ProgressionConceptScreen(
                 FicheSection(stringResource(R.string.game_concept_section_act)) {
                     if (acts && game != null) ConceptGestures(concept, game, gestures)
                     // Les médailles et le dernier haut fait se TOUCHENT : ils s'ouvrent en grand, en consultation.
-                    ConceptRevealPiece(concept, snapshot.progress, game, hidden.hidden)
+                    ConceptRevealPiece(concept, snapshot.progress, game, hidden.hidden, onOpenBadgesGuide)
                 }
             }
             if (concept == ProgressionConcept.Points) {
@@ -210,9 +213,12 @@ private fun Sentence(text: String, strong: Boolean = false) {
     )
 }
 
-/** Une ligne simple vers une autre fiche : un titre, un chevron, 44 dp au moins, et le rebond du jeu. */
+/**
+ * Une ligne simple vers une autre page : un pictogramme facultatif, un titre, un chevron, 44 dp au moins, et le rebond
+ * du jeu (iOS `ProgressionConceptRow`).
+ */
 @Composable
-private fun ConceptLink(title: String, onClick: () -> Unit) {
+internal fun ConceptLink(title: String, leading: ImageVector? = null, onClick: () -> Unit) {
     GameBounceButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -224,6 +230,7 @@ private fun ConceptLink(title: String, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            leading?.let { Icon(it, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp)) }
             Text(
                 title,
                 Modifier.weight(1f),

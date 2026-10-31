@@ -1,7 +1,6 @@
 package me.meeshy.app.game.progression
 
 import android.content.res.Resources
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +35,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -78,10 +76,16 @@ internal fun conceptHasRevealPiece(concept: ProgressionConcept): Boolean =
  * célébration n'a nulle part où « mener ».
  */
 @Composable
-internal fun ConceptRevealPiece(concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?, hidden: Boolean) {
+internal fun ConceptRevealPiece(
+    concept: ProgressionConcept,
+    progress: EngagementProgress,
+    game: GameBlock?,
+    hidden: Boolean,
+    onOpenBadgesGuide: (() -> Unit)? = null,
+) {
     var shown by remember { mutableStateOf<ProgressionRevealRequest?>(null) }
     when (concept) {
-        ProgressionConcept.Badges -> BadgeShelfView(remember(progress) { BadgeShelf.of(progress) }, onOpen = { shown = it })
+        ProgressionConcept.Badges -> BadgeShelfView(remember(progress) { BadgeShelf.of(progress) }, onOpen = { shown = it }, onOpenGuide = onOpenBadgesGuide)
         ProgressionConcept.Succes -> AchievementHeroCard(remember(progress) { AchievementHero.of(progress) }, onOpen = { shown = it })
         else -> Unit
     }
@@ -212,27 +216,27 @@ private fun AchievementListRow(row: AchievementRow, onOpen: () -> Unit) {
     }
 }
 
-/** L'ÉTAGÈRE (iOS `GameBadgeShelfView`) : par famille, la médaille de chaque axe gagné, son nom, ses étoiles. */
+/**
+ * L'ÉTAGÈRE (iOS `GameBadgeShelfView`) : par famille, la médaille de chaque axe gagné, son nom, ses étoiles et la SUITE
+ * de ses paliers à venir — puis « Comprendre les médailles » quand un carnet peut s'ouvrir. Avant le premier badge,
+ * seul le lien.
+ */
 @Composable
-private fun BadgeShelfView(groups: List<BadgeShelfGroup>, onOpen: (ProgressionRevealRequest) -> Unit) {
+private fun BadgeShelfView(groups: List<BadgeShelfGroup>, onOpen: (ProgressionRevealRequest) -> Unit, onOpenGuide: (() -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
         groups.forEach { group ->
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                Text(
-                    stringResource(familyTitle(group.family)).uppercase(LocalConfiguration.current.locales[0]),
-                    Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
+                FamilyHeading(group.family)
                 ProgressionCardFrame {
                     group.entries.forEachIndexed { index, entry ->
                         if (index > 0) RowDivider()
                         BadgeShelfRow(entry, onOpen = { onOpen(entry.request) })
+                        BadgeUpcomingView(entry.guide)
                     }
                 }
             }
         }
+        onOpenGuide?.let { BadgeGuideLink(it) }
     }
 }
 
@@ -303,28 +307,8 @@ internal fun ProgressionCardFrame(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     HorizontalDivider(color = MeeshyTheme.tokens.textMuted.copy(alpha = DIVIDER_ALPHA))
-}
-
-@StringRes
-private fun familyTitle(family: EngagementAxisFamily): Int = when (family) {
-    EngagementAxisFamily.CONTENT -> R.string.progression_family_content
-    EngagementAxisFamily.COMMENT -> R.string.progression_family_comment
-    EngagementAxisFamily.CONVERSATION -> R.string.progression_family_conversation
-    EngagementAxisFamily.TOOL -> R.string.progression_family_tool
-    EngagementAxisFamily.SOCIAL -> R.string.progression_family_social
-}
-
-@StringRes
-private fun materialName(material: BadgeMaterialKey): Int = when (material) {
-    BadgeMaterialKey.CUIVRE -> R.string.game_material_copper
-    BadgeMaterialKey.BRONZE -> R.string.game_material_bronze
-    BadgeMaterialKey.ARGENT -> R.string.game_material_silver
-    BadgeMaterialKey.OR -> R.string.game_material_gold
-    BadgeMaterialKey.PLATINE -> R.string.game_material_platinum
-    BadgeMaterialKey.OBSIDIENNE -> R.string.game_material_obsidian
-    BadgeMaterialKey.PRISME -> R.string.game_material_prism
 }
 
 private val MEDAL_WIDTH = 64.dp
@@ -337,7 +321,7 @@ private const val STAR_OFF_ALPHA = 0.25f
 private const val DIVIDER_ALPHA = 0.2f
 
 /** Une porte du jeu : elle rebondit au toucher, tape légèrement, et dit au lecteur d'écran ce qu'elle ouvre. */
-private fun Modifier.bounceDoor(label: String?, onOpen: () -> Unit): Modifier = composed {
+internal fun Modifier.bounceDoor(label: String?, onOpen: () -> Unit): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val haptics = rememberMeeshyHaptics()
     gameBounce(source).clickable(interactionSource = source, indication = null, onClickLabel = label, role = Role.Button) {

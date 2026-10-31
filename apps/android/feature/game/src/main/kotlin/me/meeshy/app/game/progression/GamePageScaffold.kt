@@ -43,7 +43,7 @@ internal fun GamePageScaffold(
     title: String,
     onBack: () -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit,
+    onRefresh: (() -> Unit)?,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
@@ -55,7 +55,7 @@ internal fun GamePageScaffold(
             derivedStateOf { CollapsibleHeaderPageProgress.scrollOffsetDp(scroll.value, density) }
         }
         Box(modifier.fillMaxSize()) {
-            PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+            val column: @Composable () -> Unit = {
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -72,6 +72,12 @@ internal fun GamePageScaffold(
                     content()
                     Spacer(Modifier.height(MeeshySpacing.xxxl))
                 }
+            }
+            // Une page qui ne lit rien (le carnet des règles) ne se tire pas : sans [onRefresh], aucun rafraîchissement.
+            if (onRefresh == null) {
+                column()
+            } else {
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) { column() }
             }
             CollapsibleHeader(
                 title = title,
