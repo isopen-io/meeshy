@@ -9,7 +9,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { amitieAcceptee } from '../friendship';
 
-type KeyAccessPrisma = Pick<PrismaClient, 'participant' | 'friendRequest'>;
+type KeyAccessPrisma = Pick<PrismaClient, 'participant' | 'friendRequest' | 'userRelation'>;
 
 export async function mayReadKeysOf(prisma: KeyAccessPrisma, requesterUserId: string, targetUserId: string): Promise<boolean> {
   if (requesterUserId === targetUserId) return true;

@@ -39,7 +39,7 @@ const GUEST_PERMISSIONS = Object.freeze({
   canViewHistory: false,
 });
 
-type InvitationPrisma = Pick<PrismaClient, 'friendRequest' | 'user' | 'participant' | 'callSession'>;
+type InvitationPrisma = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 'user' | 'participant' | 'callSession'>;
 
 type InvitableSession = Awaited<ReturnType<CallService['getCallSession']>>;
 

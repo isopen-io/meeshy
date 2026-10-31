@@ -58,6 +58,7 @@ function recuPar(emissions: readonly Emission[], sallesDuSocket: readonly string
 
 function monter() {
   const prisma = {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(async () => [
         { senderId: AUTEUR, receiverId: AMI },

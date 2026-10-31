@@ -26,6 +26,7 @@ type UserFindMany = { where: { id?: { in: string[] }; blockedUserIds: { has: str
 function fakePrisma(blocks: () => BlockLists, friends: string[] = [AMI, BLOQUE]) {
   const blockedOf = (id: string): string[] => blocks()[id] ?? [];
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(async () => friends.map((id) => ({ senderId: AUTEUR, receiverId: id }))),
     },

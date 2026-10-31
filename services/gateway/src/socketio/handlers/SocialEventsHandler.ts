@@ -12,6 +12,7 @@ import { getCommunityCoMemberIds } from '../../services/posts/communityVisibilit
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
+import { amisAcceptes } from '../../services/friendship';
 import type {
   Post,
   PostLikedEventData,
@@ -119,19 +120,7 @@ export class SocialEventsHandler {
     }
 
     try {
-      const friendships = await this.prisma.friendRequest.findMany({
-        where: {
-          OR: [
-            { senderId: userId, status: 'accepted' },
-            { receiverId: userId, status: 'accepted' },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-
-      const ids = friendships.map(f =>
-        f.senderId === userId ? f.receiverId : f.senderId
-      );
+      const ids = await amisAcceptes(this.prisma, userId);
 
       if (this.friendsCache.size >= 500) {
         const now = Date.now();

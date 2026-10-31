@@ -81,6 +81,7 @@ function base() {
   const prisma = {
     userSession: table([]),
     userVoiceModel: table([]),
+    userRelation: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
