@@ -78,26 +78,40 @@ final class ComposerBackgroundModifyTests: XCTestCase {
         XCTAssertEqual(ComposerBackgroundModify.back(n2), .closed)
     }
 
-    func test_theStack_carriesN2AboveModify_andTheRailBackPopsIt() {
+    func test_theStack_carriesN2AboveTheFlatBackground_andTheRailBackPopsIt() {
         let pile = ComposerEditRailStack.of(family: .background(isVideo: false), editing: .modify, typing: false,
                                             above: [.backgroundAdjust(.tone)])
-        XCTAssertEqual(pile.levels, [.background, .options(.modify), .backgroundAdjust(.tone)])
+        XCTAssertEqual(pile.levels, [.background, .backgroundAdjust(.tone)], "aucun niveau « Modifier » (#14048)")
         XCTAssertEqual(pile.railBack(), .popLevel)
         XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false,
                                                 above: [.backgroundSound]).levels, [.background],
-                       "sans Modifier, aucun N2")
+                       "sans édition en place, aucun N2")
+    }
+
+    /// **Toucher le fond pose TOUS ses outils à plat**, puis Remplacer ·
+    /// Mettre sur la scène · Retirer (porteur 2026-10-31, #14048).
+    func test_theBackgroundRail_isAllItsTools_thenReplacePutOnSceneRemove() {
+        let outils = ComposerBackgroundModify.served(isVideo: true, hasTrimmableSource: true)
+        let rail = ComposerEditRailItems.items(for: .background, actions: [],
+                                               backgroundActions: [.modify, .replace, .putOnScene, .remove],
+                                               sections: [], extras: [], keyframes: false, backgroundEntries: outils)
+        XCTAssertEqual(rail, [.backgroundEntry(.framing), .backgroundEntry(.trim), .backgroundEntry(.filters),
+                              .backgroundEntry(.frames), .backgroundEntry(.adjust), .volume, .mute,
+                              .backgroundEntry(.rotate), .backgroundEntry(.description),
+                              .background(.replace), .background(.putOnScene), .background(.remove)])
+        XCTAssertFalse(rail.contains(.background(.modify)), "plus de niveau « Modifier »")
     }
 
     func test_railItems_ofEachLevel_openWithBack() {
-        XCTAssertEqual(ComposerEditRailItems.items(for: .options(.modify), actions: [], sections: [], extras: [],
+        XCTAssertEqual(ComposerEditRailItems.items(for: .background, actions: [], sections: [], extras: [],
                                                    keyframes: false, backgroundEntries: [.framing, .rotate]),
-                       [.back, .backgroundEntry(.framing), .backgroundEntry(.rotate)])
+                       [.backgroundEntry(.framing), .backgroundEntry(.rotate)])
         XCTAssertEqual(ComposerEditRailItems.items(for: .backgroundAdjust(.effect), actions: [], sections: [],
                                                    extras: [], keyframes: false, adjustments: [.bloom, .grain]),
                        [.back, .adjustment(.bloom), .adjustment(.grain)])
         XCTAssertEqual(ComposerEditRailItems.items(for: .backgroundSound, actions: [], sections: [], extras: [],
                                                    keyframes: false),
-                       [.back, .mute])
+                       [.back, .volume, .mute])
         let cles = [ComposerEditRailLevel.backgroundAdjust(.tone), .backgroundAdjust(.effect), .backgroundSound,
                     .options(.modify)].map(ComposerEditRailStack.levelKey)
         XCTAssertEqual(Set(cles).count, 4)

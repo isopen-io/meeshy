@@ -1,6 +1,7 @@
 import { currentCredential } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
+import { relationLevelProvider } from '@/lib/api/relation-level';
 import { storyExportUrl } from '@/lib/api/story-export';
 import type { SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
 import type { SceneExportResult } from '@/lib/export/scene/scene-export-run';
@@ -119,6 +120,7 @@ export const browserStorySceneExporter: StorySceneExporter = async (input) => {
     placeHere: input.placeHere,
     host: input.host,
     gallerySaver: input.gallerySaver === undefined ? currentGallerySaver() : input.gallerySaver,
+    relationLevel: relationLevelProvider(apiDeps),
     chooseLength: async () => 4,
     signal: input.job.signal,
     onProgress: input.job.report,

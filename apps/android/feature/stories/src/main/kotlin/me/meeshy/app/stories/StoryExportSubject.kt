@@ -15,6 +15,8 @@ import me.meeshy.sdk.util.resolveMediaUrl
  */
 data class StoryExportScene(val subject: StoryExportSubject, val slide: StorySlideView) {
     companion object {
+        private const val VIDEO = "video"
+
         fun of(item: StoryItem, slide: StorySlideView, apiBaseUrl: String?): StoryExportScene =
             StoryExportScene(StoryExportSubject.of(item, slide, apiBaseUrl), slide)
     }
@@ -32,11 +34,22 @@ data class StoryExportSubject(
     /** La vidéo de fond tourne-t-elle, comme le lecteur la projette ? Sinon elle se lit une fois puis tient sa dernière image. */
     val backgroundLoop: Boolean = true,
 ) {
+    /**
+     * Les adresses des vidéos POSÉES (#13897) : leurs images entrent dans la vidéo rendue, pas seulement leur son — elles se
+     * rapatrient donc comme la vidéo de fond, et un échec arrête l'export plutôt que de rendre une scène qui n'est pas la sienne.
+     */
+    val placedVideos: List<String>
+        get() = source.effects?.mediaObjects.orEmpty()
+            .filter { it.mediaType.equals(VIDEO, ignoreCase = true) && !it.isBackground }
+            .mapNotNull { source.soundSources[it.id] }
+
     val downloads: List<String>
         get() = (listOfNotNull(backgroundVideo) + source.soundSources.values + listOfNotNull(source.legacyBackgroundTrack, source.legacyBackgroundVideo))
             .distinct()
 
     companion object {
+        private const val VIDEO = "video"
+
         fun of(item: StoryItem, slide: StorySlideView, apiBaseUrl: String?): StoryExportSubject {
             val effects = item.storyEffects
             val objects = effects?.let(StoryExportTimeline::soundObjects).orEmpty()

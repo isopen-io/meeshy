@@ -261,7 +261,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
     // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
     // exactement cette route.
-    expect(ROUTE_TABLE.length).toBe(94);
+    // 95 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
+    // personne (`GET /api/v1/relations/:userId`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement cette route.
+    expect(ROUTE_TABLE.length).toBe(95);
   });
 });
 

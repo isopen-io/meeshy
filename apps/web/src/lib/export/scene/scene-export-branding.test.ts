@@ -4,6 +4,8 @@ import type { PreparedSceneExport } from './scene-export-assets';
 import { brandPreparedScene, prepareBranding, withBranding, type BrandingDeps } from './scene-export-branding';
 import type { BrandingAuthor } from './scene-export-branding-identity';
 import { noRelationLevel } from './scene-export-branding-level';
+import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import { relationLevelProvider } from '@/lib/api/relation-level';
 
 const NOW = Date.parse('2026-10-31T12:00:00Z');
 const signal = new AbortController().signal;
@@ -28,6 +30,46 @@ const depsWith = (overrides: Partial<BrandingDeps> = {}): BrandingDeps => ({
   now: () => NOW,
   budgetMs: 50,
   ...overrides,
+});
+
+function servedLevels(level: unknown) {
+  const requests: HttpRequest[] = [];
+  const transport = (async () => ({ ok: true, data: { userId: 'u-author', effectiveLevel: level } })) as unknown as HttpTransport;
+  transport.request = (async (req: HttpRequest) => {
+    requests.push(req);
+    return { ok: true, data: { userId: 'u-author', effectiveLevel: level } } satisfies ApiResult<unknown>;
+  }) as HttpTransport['request'];
+  return { transport, requests };
+}
+
+describe('le niveau de lien servi par GET /relations/:userId peint le logo de cercle', () => {
+  const cases: readonly (readonly [string, string | null])[] = [
+    ['CLOSE', '🔥'],
+    ['BLOOD', '🩸'],
+    ['FRIEND', null],
+    ['PUBLIC', null],
+  ];
+  for (const [level, badge] of cases) {
+    test(`niveau effectif ${level} : logo ${badge ?? 'aucun'}`, async () => {
+      const { transport } = servedLevels(level);
+      const prepared = await prepareBranding({ author: author(), deps: depsWith({ relationLevel: relationLevelProvider({ source: 'gateway', transport }) }), signal });
+      expect(prepared.identity?.circleBadge).toBe(badge);
+    });
+  }
+
+  test("sa propre story : la route n'est jamais appelée, aucun logo", async () => {
+    const { transport, requests } = servedLevels('BLOOD');
+    const prepared = await prepareBranding({ author: author({ self: true }), deps: depsWith({ relationLevel: relationLevelProvider({ source: 'gateway', transport }) }), signal });
+    expect(prepared.identity?.circleBadge).toBeNull();
+    expect(requests).toHaveLength(0);
+  });
+
+  test('sous fixtures : aucun appel, aucun logo', async () => {
+    const { transport, requests } = servedLevels('BLOOD');
+    const prepared = await prepareBranding({ author: author(), deps: depsWith({ relationLevel: relationLevelProvider({ source: 'fixtures', transport }) }), signal });
+    expect(prepared.identity?.circleBadge).toBeNull();
+    expect(requests).toHaveLength(0);
+  });
 });
 
 describe("la préparation de l'emballage de marque", () => {

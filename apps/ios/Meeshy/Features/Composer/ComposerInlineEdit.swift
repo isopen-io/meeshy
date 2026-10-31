@@ -59,10 +59,11 @@ nonisolated enum ComposerInlineFamily: Equatable, Sendable {
     }
 
     /// **« Modifier » se règle en rails superposés** (#13974) — N1, N2, N3 et
-    /// la feuille basse : le fond (I-E2) et l'image posée (I-E3). Les autres
-    /// familles gardent leurs sections jusqu'à leur lot.
+    /// la feuille basse : le fond (I-E2), l'image posée (I-E3) et la vidéo
+    /// posée (I-E4). Les autres familles gardent leurs sections jusqu'à leur
+    /// lot.
     var modifiesInLevels: Bool {
-        isBackground || self == .image
+        isBackground || self == .image || self == .video
     }
 }
 

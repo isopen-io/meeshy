@@ -67,19 +67,47 @@ nonisolated struct StoryExportAuthor: Equatable, Sendable {
 /// **Le niveau EFFECTIF du lien entre le lecteur et l'auteur, tel que le serveur le SERT**
 /// (#13997) — la source du logo de cercle de l'intro. `nil` ⇒ rien n'est servi, donc aucun logo.
 ///
-/// Le point d'accès serveur (`GET /relations/:userId`, #13998) n'existe pas encore : le défaut
-/// `.shared` rend `nil` et aucun appel réseau n'est fait ici. Quand la route sera livrée,
-/// seule une implémentation de ce protocole changera — le rendu et le câblage sont prêts.
+/// Le point d'accès serveur est `GET /relations/:userId` (#13998) ; `RelationLevelProvider`
+/// l'interroge. Le rendu et le câblage ne dépendent que de ce protocole.
 nonisolated protocol RelationLevelProviding: Sendable {
     /// Le niveau servi (chaîne brute : `"CLOSE"`, `"BLOOD"`…) du lien avec `userId`.
     func servedLevel(withUserId userId: String) async -> String?
 }
 
-/// L'implémentation par défaut : aucun niveau n'est encore servi.
+/// Le corps `data` de `GET /relations/:userId` (`relationLevelResponseSchema`). `PUBLIC` vaut
+/// aussi pour un bloqué ou un inconnu : le serveur ne distingue pas, le client non plus.
+nonisolated struct ServedRelationLevel: Decodable, Sendable, Equatable {
+    let userId: String
+    let effectiveLevel: String
+}
+
+/// L'implémentation réelle : une lecture du niveau EFFECTIF servi, par l'`APIClient`. Toute
+/// erreur (réseau, 400, 401, 429, 500) rend `nil` — l'intro part alors sans logo, jamais avec
+/// un niveau deviné. Le budget de temps reste celui de l'appelant
+/// (`StoryExportAuthorIdentity.levelTimeout`).
 nonisolated final class RelationLevelProvider: RelationLevelProviding {
     static let shared = RelationLevelProvider()
 
-    func servedLevel(withUserId userId: String) async -> String? { nil }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
+
+    func servedLevel(withUserId userId: String) async -> String? {
+        do {
+            let response: APIResponse<ServedRelationLevel> = try await api.request(
+                RelationsEndpoint.byUserId(userId: userId),
+                method: "GET",
+                body: nil,
+                queryItems: nil
+            )
+            guard response.success else { return nil }
+            return response.data.effectiveLevel
+        } catch {
+            return nil
+        }
+    }
 }
 
 /// Celui qui regarde, tel que la décision en a besoin.

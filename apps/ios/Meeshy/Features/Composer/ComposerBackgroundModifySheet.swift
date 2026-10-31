@@ -7,7 +7,7 @@ import MeeshyUI
 /// existante), ou la feuille basse de
 /// Recadrer, Couper, Filtres, Cadres, Description — et, sous Réglages ou
 /// Effets, le curseur SEUL du réglage touché (N3), avec Comparer et
-/// Réinitialiser. Chaque contenu est celui que l'édition en place montait
+/// Réinitialiser — et, sous Son, le curseur seul du Volume (I-E4). Chaque contenu est celui que l'édition en place montait
 /// déjà : chaque geste écrit le modèle, la scène se repeint au fil du doigt.
 struct ComposerBackgroundModifySheet: View {
     @ObservedObject var viewModel: StoryComposerViewModel
@@ -29,7 +29,7 @@ struct ComposerBackgroundModifySheet: View {
     }
 
     var body: some View {
-        if path.adjustment == nil, path.entry == .framing, isBackground {
+        if path.adjustment == nil, !path.volume, path.entry == .framing, isBackground {
             ComposerFrameBand(fitMode: framing.fitMode, backdrop: framing.backdrop, plateauTint: plateauTint,
                               onPickFitMode: framing.onPickFitMode, onPickBackdrop: framing.onPickBackdrop)
                 .accessibilityIdentifier("composer.background.modify.framing")
@@ -50,6 +50,8 @@ struct ComposerBackgroundModifySheet: View {
     private var content: some View {
         if let kind = path.adjustment {
             ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: mediaId, onCompare: onCompare, only: kind)
+        } else if false {
+            ComposerMediaVolumeDial(viewModel: viewModel, mediaId: mediaId)
         } else {
             entryContent
         }
