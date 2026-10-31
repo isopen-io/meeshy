@@ -167,11 +167,13 @@ async function accepterAuNiveau(
   });
   const ecrit = await ecriture.catch((error: unknown) => {
     // La demande ACCEPTÉE reste la vérité de repli pour Ami (#13926) : le lien se
-    // rattrape. Au-dessus d'Ami, rien ne le rattrape — on défait l'acceptation.
+    // rattrape. Ailleurs, rien ne le rattrape — au-dessus d'Ami le rattrapage ne relève
+    // qu'à Ami, et une Connaissance acceptée perd sa demande plus bas : on défait
+    // l'acceptation, sans quoi elle disparaîtrait en silence.
     logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
     return null;
   });
-  if (ecrit === null && niveau !== 'FRIEND' && niveau !== 'ACQUAINTANCE') {
+  if (ecrit === null && niveau !== 'FRIEND') {
     await fastify.prisma.friendRequest.update({ where: { id: demande.id }, data: { status: 'pending', respondedAt: null } }).catch(() => undefined);
     throw new Error('relation write failed');
   }

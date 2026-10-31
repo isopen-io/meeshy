@@ -8,6 +8,7 @@ import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWr
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
+import { asseoirLienHerite, retirerDemandesAuDessus } from '../directory/friend-request-withdraw';
 import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, sendCoded, userIdParams } from './shared';
 
 /** Les niveaux qu'un accord peut prendre : Communauté est calculée et Atome réservé, aucun ne s'accorde. */
@@ -51,11 +52,14 @@ export function registerRelationLevel(fastify: FastifyInstance): void {
       }
 
       const now = new Date();
+      await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
       const outcome = await lowerGrant(fastify.prisma, {
         actorId: viewerId, otherId, level: level as RelationLevel, at: now, cooldownUntil: cooldownEnd(now, thresholdsNow().cooldownDays),
       });
       if (outcome === 'not-a-drop') return sendCoded(reply, 400, 'Une montée se demande', 'RELATION_NOT_A_DROP');
 
+      // Rejouée sans condition : une baisse écrite dont le retrait aurait échoué se solde au rejeu.
+      await retirerDemandesAuDessus(fastify.prisma, viewerId, otherId);
       if (outcome === 'lowered') await forgetFriends(fastify, [viewerId, otherId]);
       return sendSuccess(reply, await loadRelationLink(fastify.prisma, { viewerId, otherId, now }));
     } catch (error) {

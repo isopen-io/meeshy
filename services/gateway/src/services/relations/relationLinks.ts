@@ -18,7 +18,7 @@ import {
   type RelationTransition,
 } from '@meeshy/shared/types/relation';
 import { amisAcceptes, niveauEffectif } from '../friendship';
-import { getBlockRelatedUserIds } from '../../utils/blocking';
+import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking';
 import { effectiveLevelOfRow, grantedByUser, type UserRelationRow } from './userRelationWriter';
 import { loadProgressByPartner, type RelationProgress, type RelationProgressTarget } from './relationProgress';
 
@@ -68,11 +68,22 @@ function viewOf(params: {
   };
 }
 
+/** Ce qu'un lien sous blocage laisse lire : rien (la loi d'accès rend PUBLIC, raison `blocked`). */
+const blockedView = (otherId: string): RelationLinkView => ({
+  userId: otherId,
+  effectiveLevel: 'PUBLIC',
+  grantedByMe: 'PUBLIC',
+  since: null,
+  progress: { activeWeeks: 0, needed: null, missing: [] },
+  eligibleFor: null,
+});
+
 export async function loadRelationLink(
   prisma: RelationLinksDb,
   params: { viewerId: string; otherId: string; now: Date },
 ): Promise<RelationLinkView> {
   const { viewerId, otherId, now } = params;
+  if (await isBlockedBetween(prisma, viewerId, otherId)) return blockedView(otherId);
   const [level, row] = await Promise.all([
     niveauEffectif(prisma, viewerId, otherId),
     prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(viewerId, otherId) }, select: LINK_SELECT }),

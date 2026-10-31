@@ -126,6 +126,21 @@ describe('#13933 — accepter relève au niveau visé, et seulement s’il tient
     expect(store.relations()[0]).toMatchObject({ grantedByLow: attendu, grantedByHigh: attendu });
   });
 
+  it('une Connaissance dont le lien ne s’écrit pas n’est pas acceptée : la demande revient en attente, rien n’est annoncé', async () => {
+    const app = await buildRelationApp(async (a) => { await a.register(directoryFriendRequestsRoutes, { prefix: PREFIXE }); }, {
+      demandes: [demande(FR, 'pending', MOI, AUTRE, { targetLevel: 'ACQUAINTANCE' })],
+    });
+    jest.spyOn(app.prisma.userRelation as { create: (args: unknown) => Promise<unknown> }, 'create').mockRejectedValue(new Error('écriture refusée'));
+    const res = await app.call('PATCH', `${PREFIXE}/friend-requests/${FR}`, { action: 'accept' }, AUTRE);
+    await app.close();
+
+    expect(res.status).toBe(500);
+    expect(app.store.friendRequests()).toEqual([expect.objectContaining({ id: FR, status: 'pending', respondedAt: null })]);
+    expect(app.store.relations()).toEqual([]);
+    expect(app.notifier.createFriendAcceptedNotification).not.toHaveBeenCalled();
+    expect(app.emissions).toEqual([]);
+  });
+
   it('Ami -> Proche accepté avec la série toujours tenue : les deux accords valent CLOSE', async () => {
     const { status, store } = await agir(AUTRE, 'accept', {
       demandes: [demande(FR, 'pending', MOI, AUTRE, { targetLevel: 'CLOSE' })], liens: [lien('FRIEND', 'FRIEND')], jours: jours(4),

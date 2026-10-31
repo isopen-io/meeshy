@@ -80,6 +80,10 @@ export function registerRelationRitual(fastify: FastifyInstance): void {
           io: relationIoOf(fastify),
           now: () => new Date(),
           forgetFriends: (ids) => forgetFriends(fastify, ids),
+          settleRequestNotification: async (receiverId, requestId) => {
+            await fastify.notificationService?.markFriendRequestNotificationsAsRead(receiverId, requestId);
+          },
+          reportAfterSeal: (error) => logError(fastify.log, 'Blood ritual follow-up failed:', error),
         },
         { phase: body.phase, actorId: request.user!.userId, otherId, token: body.token, consents: body.consents },
       );

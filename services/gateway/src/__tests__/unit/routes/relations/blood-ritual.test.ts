@@ -330,6 +330,31 @@ describe('#13933 — la double confirmation et le consentement feature par featu
     expect(encore.body.code).toBe('RELATION_RITUAL_INVALID');
   });
 
+  it('la demande qui ne s’accepte plus à l’achèvement (course) n’enregistre RIEN : ni Sang, ni consentement', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    jest.spyOn(app.prisma.friendRequest as { update: (args: unknown) => Promise<unknown> }, 'update')
+      .mockRejectedValueOnce(Object.assign(new Error('déjà tranchée'), { code: 'P2025' }));
+    const fin = await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(fin.status).toBe(409);
+    expect(fin.body.code).toBe('RELATION_RITUAL_NO_REQUEST');
+    expect(app.consents).toEqual([]);
+    expect(app.store.relations()[0]).toMatchObject({ grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE' });
+  });
+
+  it('solde la notification de demande du RECEVEUR : elle ne propose plus d’accepter un Sang déjà scellé', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(app.notifier.markFriendRequestNotificationsAsRead).toHaveBeenCalledWith(AUTRE, REQUETE);
+  });
+
   it('ne notifie personne par une notification persistée : le rituel parle par ses événements', async () => {
     const app = await appli();
     const { token } = await jusquAuxDeuxHolds(app);

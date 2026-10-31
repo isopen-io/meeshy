@@ -62,6 +62,8 @@ export type TestApp = {
   readonly emissions: Emission[];
   readonly notifier: Record<string, jest.Mock>;
   readonly consents: Record<string, unknown>[];
+  /** Le double Prisma, pour qu'un témoin fasse ÉCHOUER une écriture précise. */
+  readonly prisma: Readonly<Record<'friendRequest' | 'userRelation', Record<string, unknown>>>;
   readonly call: (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, body?: unknown, as?: string) => Promise<{ status: number; body: any }>;
   readonly close: () => Promise<void>;
 };
@@ -143,7 +145,7 @@ export async function buildRelationApp(
   await app.ready();
   void CACHE;
   return {
-    store, emissions, notifier, consents,
+    store, emissions, notifier, consents, prisma,
     call: async (method, url, body, as) => {
       acting = as ?? options.userId ?? MOI;
       const res = await app.inject({

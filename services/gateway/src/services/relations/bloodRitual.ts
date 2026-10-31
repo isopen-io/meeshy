@@ -79,6 +79,10 @@ export type RitualDeps = {
   readonly io: RelationIo | undefined;
   readonly now: () => Date;
   readonly forgetFriends: (ids: ReadonlyArray<string>) => Promise<void>;
+  /** La notification « X vous a envoyé une demande » du RECEVEUR, soldée quand le Sang est scellé. */
+  readonly settleRequestNotification: (receiverId: string, requestId: string) => Promise<void>;
+  /** Ce qui suit le Sang scellé (consentements, notification) ne défait pas le Sang : un échec s'y journalise. */
+  readonly reportAfterSeal: (error: unknown) => void;
 };
 
 type RitualState = {
@@ -151,7 +155,7 @@ type Preconditions =
 
 /** Ce qui doit tenir à l'ouverture ET à l'achèvement : demande, absence de blocage, cran, série. */
 async function checkPreconditions(deps: RitualDeps, actorId: string, otherId: string): Promise<Preconditions> {
-  if (await isBlockedBetween(deps.prisma as unknown as PrismaClient, actorId, otherId)) return { ok: false, outcome: NO_REQUEST };
+  if (await isBlockedBetween(deps.prisma, actorId, otherId)) return { ok: false, outcome: NO_REQUEST };
   const request = await pendingBloodRequest(deps.prisma, actorId, otherId);
   if (!request) return { ok: false, outcome: NO_REQUEST };
 
@@ -262,9 +266,6 @@ async function complete(deps: RitualDeps, key: string, state: RitualState, actor
   }
 
   const at = deps.now();
-  await writeConsents(deps, actorId, otherId, state.confirms[actorId], at);
-  await writeConsents(deps, otherId, actorId, state.confirms[otherId], at);
-
   const accepted = await deps.prisma.friendRequest.update({
     where: { id: checked.request.id, status: 'pending' },
     data: { status: 'accepted', respondedAt: at },
@@ -280,6 +281,17 @@ async function complete(deps: RitualDeps, key: string, state: RitualState, actor
     await deps.prisma.friendRequest.update({ where: { id: checked.request.id }, data: { status: 'pending', respondedAt: null } }).catch(() => undefined);
     throw error;
   }
+
+  // Les consentements s'écrivent une fois le Sang SCELLÉ, jamais avant : un rituel qui
+  // échoue n'enregistre rien. Leur échec laisse les partages à faux (fail-closed).
+  const afterSeal = await Promise.allSettled([
+    writeConsents(deps, actorId, otherId, state.confirms[actorId], at),
+    writeConsents(deps, otherId, actorId, state.confirms[otherId], at),
+    deps.settleRequestNotification(checked.request.receiverId, checked.request.id),
+  ]);
+  afterSeal.forEach((result) => {
+    if (result.status === 'rejected') deps.reportAfterSeal(result.reason);
+  });
 
   await deps.cache.del(key);
   await deps.forgetFriends([actorId, otherId]);

@@ -1,7 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { logError } from '../../utils/logger';
-import { parseRequestLevel, relationLevelBelow, requestLevelSustains, type RelationRequestLevel } from '@meeshy/shared/types/relation';
-import { cooldownEnd, lowerPair } from '../../services/relations/userRelationWriter';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import {
+  parseRequestLevel,
+  relationLevelBelow,
+  relationLevelIfAtLeast,
+  requestLevelSustains,
+  type RelationRequestLevel,
+} from '@meeshy/shared/types/relation';
+import { backfillFriendship, cooldownEnd, lowerPair } from '../../services/relations/userRelationWriter';
+import { niveauEffectif } from '../../services/friendship';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { refuserEnSilence, type DemandeARepondre } from './friend-request-answer';
@@ -54,6 +62,53 @@ async function rompreLien(
     cooldownFor: { userId: autre, until: cooldownEnd(now, thresholdsNow().cooldownDays) },
   });
   await forgetFriends(fastify, [demande.senderId, demande.receiverId]);
+}
+
+type DemandesDb = Pick<PrismaClient, 'friendRequest' | 'userRelation'>;
+
+const entreLesDeux = (a: string, b: string) => ({
+  status: 'accepted',
+  OR: [
+    { senderId: a, receiverId: b },
+    { senderId: b, receiverId: a },
+  ],
+});
+
+/**
+ * Un ami d'AVANT les cercles n'a pas encore de ligne de lien : la loi le lit Ami par
+ * sa demande acceptée (`friendship.ts`), et l'écrivain ne baisse qu'une ligne qui
+ * existe. Avant une baisse, la ligne est donc ÉCRITE telle que le rattrapage la
+ * laissera — la même règle (`backfillFriendship`), pour cette seule paire, sur le
+ * geste de l'une des deux personnes. Sans demande acceptée, rien ne s'écrit.
+ */
+export async function asseoirLienHerite(prisma: DemandesDb, a: string, b: string, now: Date): Promise<void> {
+  const acceptee = await prisma.friendRequest.findFirst({
+    where: entreLesDeux(a, b),
+    select: { respondedAt: true, updatedAt: true },
+    orderBy: { updatedAt: 'desc' },
+  });
+  if (!acceptee) return;
+  await backfillFriendship(prisma, { userA: a, userB: b, acceptedAt: acceptee.respondedAt ?? acceptee.updatedAt ?? null, now });
+}
+
+/**
+ * Après une baisse, aucune demande ACCEPTÉE ne vise plus haut que le niveau effectif :
+ * les lecteurs historiques de `FriendRequest` (audience des publications, fan-outs,
+ * jeu, suggestions de mention) lisent toute demande acceptée comme une amitié, et un
+ * lien baissé sous Ami ne doit plus rien leur ouvrir. La rupture d'une demande
+ * (`rompreLien`) lit de même les demandes restantes : une demande de Sang qui
+ * survivrait à une baisse retiendrait un lien que plus rien ne fonde.
+ */
+export async function retirerDemandesAuDessus(prisma: DemandesDb, a: string, b: string): Promise<void> {
+  const niveau = await niveauEffectif(prisma, a, b);
+  const acceptees = await prisma.friendRequest.findMany({
+    where: entreLesDeux(a, b),
+    select: { id: true, targetLevel: true },
+    take: 20,
+  });
+  const auDessus = acceptees.filter((d) => relationLevelIfAtLeast(niveau, niveauDe(d)) === null).map((d) => d.id);
+  if (auDessus.length === 0) return;
+  await prisma.friendRequest.deleteMany({ where: { id: { in: auDessus }, status: 'accepted' } });
 }
 
 type StatutSupprime = 'pending' | 'rejected' | 'accepted';

@@ -19,7 +19,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 
 import { relationsRoutes } from '../../../../routes/relations';
 import {
-  AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, freezeClock, lien, semaineActive, thawClock,
+  AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
   type AppOptions,
 } from '../../../helpers/relation-app';
 
@@ -122,6 +122,22 @@ describe('#13933 — GET /relations/:userId', () => {
     expect(sans.body.data).toMatchObject({ userId: TIERS, effectiveLevel: 'PUBLIC' });
   });
 
+  it('un blocage entre les deux sert Public, sans progression ni éligibilité : bloquer ne laisse rien lire du lien', async () => {
+    const app = await appli({
+      liens: [lien('CLOSE', 'CLOSE', { levelSince: new Date(NOW.getTime() - 200 * DAY) })],
+      jours: Array.from({ length: 13 }, (_, i) => semaineActive(i, LOW, HIGH)),
+      bloques: [MOI],
+    });
+    const res = await app.call('GET', `${PREFIXE}/${AUTRE}`);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      userId: AUTRE, effectiveLevel: 'PUBLIC', grantedByMe: 'PUBLIC', since: null,
+      progress: { activeWeeks: 0, needed: null, missing: [] }, eligibleFor: null,
+    });
+  });
+
   it('un identifiant mal formé est refusé 400, soi-même aussi', async () => {
     const app = await appli();
     const mal = await app.call('GET', `${PREFIXE}/pas-un-id`);
@@ -201,6 +217,50 @@ describe('#13933 — POST /relations/:userId/level — baisser ou sortir', () =>
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('RELATION_LEVEL_INVALID');
+  });
+
+  it('une baisse sous Ami retire les demandes acceptées de la paire : aucun lecteur historique de FriendRequest ne la lit encore comme une amitié', async () => {
+    const app = await appli({
+      liens: [lien('FRIEND', 'FRIEND')],
+      demandes: [
+        demande('cc0000000000000000000001', 'accepted', MOI, AUTRE),
+        demande('cc0000000000000000000002', 'accepted', AUTRE, MOI, { targetLevel: 'FRIEND' }),
+        demande('cc0000000000000000000003', 'accepted', MOI, TIERS),
+      ],
+    });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'ACQUAINTANCE' });
+    await app.close();
+
+    expect(app.store.friendRequests().map((d) => d.id)).toEqual(['cc0000000000000000000003']);
+  });
+
+  it('un ami d’avant les cercles (demande acceptée, aucune ligne de lien encore) peut baisser : le lien naît à Ami puis baisse', async () => {
+    const app = await appli({ demandes: [demande('cc0000000000000000000001', 'accepted', AUTRE, MOI)] });
+    const res = await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'ACQUAINTANCE' });
+    const lu = await app.call('GET', `${PREFIXE}/${AUTRE}`);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' });
+    expect(lu.body.data.effectiveLevel).toBe('ACQUAINTANCE');
+    expect(cooldownOf(app.store.relations()[0], AUTRE)?.getTime()).toBe(NOW.getTime() + 30 * DAY);
+    expect(app.store.friendRequests()).toEqual([]);
+  });
+
+  it('une baisse de Sang à Ami retire les demandes de Proche et de Sang, garde celle d’Ami', async () => {
+    const app = await appli({
+      liens: [lien('BLOOD', 'BLOOD')],
+      demandes: [
+        demande('cc0000000000000000000001', 'accepted', MOI, AUTRE, { targetLevel: 'FRIEND' }),
+        demande('cc0000000000000000000002', 'accepted', AUTRE, MOI, { targetLevel: 'CLOSE' }),
+        demande('cc0000000000000000000003', 'accepted', MOI, AUTRE, { targetLevel: 'BLOOD' }),
+      ],
+    });
+    const res = await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'FRIEND' });
+    await app.close();
+
+    expect(res.body.data.effectiveLevel).toBe('FRIEND');
+    expect(app.store.friendRequests().map((d) => d.id)).toEqual(['cc0000000000000000000001']);
   });
 
   it('la demande acceptée qui fondait le lien ne le relève pas : le lien baissé reste baissé au prochain GET', async () => {
