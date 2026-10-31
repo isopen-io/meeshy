@@ -58,9 +58,8 @@ public enum StoryEditPlaybackCover {
         guard avant > 0 else { return }
         guard avant == 1 else { return counts.setObject(NSNumber(value: avant - 1), forKey: canvas) }
         counts.removeObject(forKey: canvas)
-        // Une scène au repos (#3906) retrouve son son, pas sa boucle vidéo : la prochaine touche la relance.
-        guard canvas.isEditClockThrottled else { return canvas.resumeEditModeMediaFromIdle() }
-        canvas.startEditAudioPlayback()
+        // La scène joue en continu, au repos comme sous le doigt (#13864) : vidéo et son repartent.
+        canvas.resumeEditModeMediaFromIdle()
     }
 }
 

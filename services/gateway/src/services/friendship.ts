@@ -124,6 +124,25 @@ export async function niveauEffectif(prisma: RelationLevelDb, a: string, b: stri
   return servedLevel(ligne, a, b, await acceptationEntre(prisma, a, b));
 }
 
+/**
+ * {@link niveauEffectif}, lu de façon UNIFORME : la ligne et la demande acceptée
+ * sont lues ensemble, quel que soit le lien. Pour une porte dont le LECTEUR
+ * choisit la cible (`GET /relations/:userId`) : le nombre de lectures ne dit
+ * rien du lien, et un bloqué ne se distingue pas d'un inconnu par le temps.
+ * Même loi (`servedLevel` rend le minimum d'une ligne déjà ≥ Ami), une lecture
+ * de plus pour un ami — en parallèle, donc sans attente de plus.
+ */
+export async function niveauEffectifUniforme(prisma: RelationLevelDb, a: string, b: string): Promise<RelationLevel> {
+  if (!a || !b || a === b) return 'PUBLIC';
+
+  const [ligne, acceptee]: [UserRelationRow | null, AcceptedAt] = await Promise.all([
+    prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(a, b) }, select: LINK_SELECT }),
+    acceptationEntre(prisma, a, b),
+  ]);
+
+  return servedLevel(ligne, a, b, acceptee);
+}
+
 async function lignesParmi(
   prisma: Pick<PrismaClient, 'userRelation'>,
   sujet: string,
