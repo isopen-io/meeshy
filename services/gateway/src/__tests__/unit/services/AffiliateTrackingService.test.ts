@@ -41,6 +41,8 @@ function makePrisma(overrides: {
   sessionPreference?: any;
   deleteCount?: number;
   existingFriendRequest?: any;
+  blockedBetween?: boolean;
+  referredCreatedAt?: Date | null;
 } = {}) {
   const {
     affiliateToken = ACTIVE_TOKEN,
@@ -52,9 +54,17 @@ function makePrisma(overrides: {
     sessionPreference = null,
     deleteCount = 0,
     existingFriendRequest = null,
+    blockedBetween = false,
+    referredCreatedAt = new Date(),
   } = overrides;
 
   return {
+    // Le filleul : un compte qui vient de naître (`createdAt`), que ni lui ni le
+    // parrain n'ont bloqué (`isBlockedBetween` lit `user.findFirst`).
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue(referredCreatedAt ? { id: 'user-new', createdAt: referredCreatedAt } : null),
+      findFirst: jest.fn<any>().mockResolvedValue(blockedBetween ? { id: 'user-affiliate' } : null),
+    },
     affiliateToken: {
       findUnique: jest.fn<any>().mockResolvedValue(affiliateToken),
       update: jest.fn<any>().mockResolvedValue({}),
@@ -264,7 +274,7 @@ describe('convertAffiliateVisit', () => {
     expect(prisma.friendRequest.create).not.toHaveBeenCalled();
     expect(prisma.friendRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'fr-1' },
+        where: { id: 'fr-1', status: 'pending' },
         data: expect.objectContaining({ status: 'accepted' }),
       })
     );
@@ -525,5 +535,35 @@ describe('[audit #13926] un lien d’invitation n’efface ni un refus ni un blo
 
     expect(store.relations()).toHaveLength(0);
     expect(prisma.friendRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('un blocage entre le parrain et le filleul refuse la conversion : ni relation, ni amitié', async () => {
+    const { prisma, store } = withRelations({ blockedBetween: true });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+    expect(store.relations()).toHaveLength(0);
+  });
+
+  it('un compte inscrit depuis plus longtemps que la fenêtre de parrainage ne se fait pas parrainer', async () => {
+    const { prisma, store } = withRelations({ referredCreatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(store.relations()).toHaveLength(0);
+  });
+
+  it('un compte introuvable ne se fait pas parrainer', async () => {
+    const { prisma } = withRelations({ referredCreatedAt: null });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
   });
 });
