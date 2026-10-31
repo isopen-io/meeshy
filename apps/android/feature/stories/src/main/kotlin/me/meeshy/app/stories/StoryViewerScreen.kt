@@ -195,7 +195,11 @@ fun StoryViewerScreen(
     // pendant le geste ; seule la prise du doigt fige la lecture.
     val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
-    val videoExport = rememberStoryVideoExport(item = { state.currentStoryId?.let(viewModel::rawItem) }, slide = slide)
+    val videoExport = rememberStoryVideoExport(
+        item = { state.currentStoryId?.let(viewModel::rawItem) },
+        slide = slide,
+        author = { state.exportAuthor(accent) },
+    )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
