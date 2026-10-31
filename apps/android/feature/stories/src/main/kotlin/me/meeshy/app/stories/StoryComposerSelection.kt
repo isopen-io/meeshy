@@ -216,14 +216,20 @@ internal val StoryComposerUiState.frameOpen: Boolean
 /** Réducteurs de la sélection d'un média ou d'un son, et des panneaux de scène du pied du plateau. */
 internal object StoryComposerSelectionReducer {
 
-    /** Un média choisi — dans la rangée du panneau Média, ou touché sur la scène — prend l'état de sélection (#13836) : le panneau se retire pour sa barre. */
+    /**
+     * Un média choisi — dans la rangée du panneau Média, ou touché sur la scène — prend l'état de sélection (#13836) : le
+     * panneau se retire pour sa barre. Posé, il passe au premier plan ([SceneFrontPromotion], #13917) ; un fond reste le fond.
+     */
     fun mediaSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (!state.deck.selectedSlide.holdsMediaObject(id)) state
-        else state.withoutObjectSelection().copy(selectedMediaId = id, band = state.band.closeAnyPanel())
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.MEDIA, id))
+            .withoutObjectSelection().copy(selectedMediaId = id, band = state.band.closeAnyPanel())
 
+    /** Une pastille de son touchée passe au premier plan ([SceneFrontPromotion]) ; le son d'ambiance n'est pas sur la scène. */
     fun soundSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.audio.none { it.id == id }) state
-        else state.withoutObjectSelection().copy(selectedSoundId = id, band = state.band.closeAnyPanel())
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.AUDIO, id))
+            .withoutObjectSelection().copy(selectedSoundId = id, band = state.band.closeAnyPanel())
 
     /** Toucher la scène à vide (#13836) : plus aucun objet n'est touché, de quelque famille qu'il soit, et les outils reviennent. */
     fun cleared(state: StoryComposerUiState): StoryComposerUiState = state.withoutObjectSelection()

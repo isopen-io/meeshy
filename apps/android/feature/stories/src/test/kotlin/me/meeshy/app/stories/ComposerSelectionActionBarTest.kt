@@ -187,18 +187,16 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `order opens bring forward and send backward, and moves the sticker`() {
+    fun `the bar serves no Order, touching the sticker below brings it to the front`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onAddSticker("🎉")
         show(vm)
 
-        compose.onNodeWithText("Order").performClick()
-        compose.onNodeWithText("Bring forward").assertExists()
-        compose.onNodeWithText("Send backward").performClick()
+        compose.onNodeWithText("Order").assertDoesNotExist()
+        vm.onSelectSticker(vm.state.value.deck.selectedSlide.stickers.first().id)
 
-        assertThat(vm.state.value.deck.selectedSlide.stickers.first().emoji).isEqualTo("🎉")
-        compose.onNodeWithText("Send backward").assertDoesNotExist()
+        assertThat(vm.state.value.deck.selectedSlide.stickers.last().emoji).isEqualTo("😀")
     }
 
     @Test

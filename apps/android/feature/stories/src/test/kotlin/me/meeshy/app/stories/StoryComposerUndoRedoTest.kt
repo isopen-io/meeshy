@@ -179,6 +179,37 @@ class StoryComposerUndoRedoTest {
     }
 
     @Test
+    fun `touching an object below brings it to the front in one undo step`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        vm.onAddSticker("🌙")
+        val (low, high) = vm.state.value.selectedSlideStickers.map { it.id }
+
+        vm.onSelectSticker(low)
+        assertThat(vm.state.value.selectedSlideStickers.maxBy { it.zIndex }.id).isEqualTo(low)
+
+        vm.onUndo()
+        assertThat(vm.state.value.selectedSlideStickers.maxBy { it.zIndex }.id).isEqualTo(high)
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(2)
+
+        vm.onRedo()
+        assertThat(vm.state.value.selectedSlideStickers.maxBy { it.zIndex }.id).isEqualTo(low)
+    }
+
+    @Test
+    fun `touching the object already on top is no undo step`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("🔥")
+        vm.onAddSticker("🌙")
+        val high = vm.state.value.selectedSlideStickers.maxBy { it.zIndex }.id
+
+        vm.onSelectSticker(high)
+        vm.onUndo()
+
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(1)
+    }
+
+    @Test
     fun `undo and redo on empty stacks are inert`() = runTest {
         val vm = viewModel()
         val before = vm.state.value

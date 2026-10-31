@@ -6,7 +6,6 @@ import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 
 /** Applies a controller of the selected object — its bar, its sheet — to the object it targets; an action the law does not serve does nothing. */
 internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, action: Action) {
-    orderOf(action)?.let { return reorder(ref, it) }
     if (action == Action.DUPLICATE && (ref.kind == ComposerObjectKind.MEDIA || ref.kind == ComposerObjectKind.AUDIO || ref.kind == ComposerObjectKind.PLACE)) {
         return onDuplicateSceneObject(ref)
     }
@@ -24,15 +23,6 @@ internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, acti
     }
 }
 
-/** Le geste de pile qu'une action de l'Ordre porte, `null` pour toute autre action. */
-private fun orderOf(action: Action): StoryZOrder? = when (action) {
-    Action.BRING_TO_FRONT -> StoryZOrder.TO_FRONT
-    Action.BRING_FORWARD -> StoryZOrder.FORWARD
-    Action.SEND_BACKWARD -> StoryZOrder.BACKWARD
-    Action.SEND_TO_BACK -> StoryZOrder.TO_BACK
-    else -> null
-}
-
 /** A text touched on the scene is framed; touched again, written (#13836). */
 internal fun StoryComposerViewModel.onTapTextElement(id: String) = onSceneReduce { StoryComposerTextReducer.tapped(it, id) }
 
@@ -42,7 +32,6 @@ internal fun StoryComposerViewModel.onSceneBackgroundTap() = onSceneReduce(Story
 /**
  * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un média ou d'un
  * son, l'échange d'un sticker ou le lieu d'une pastille ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
- * L'Ordre ouvre son propre menu, dont chaque choix arrive ici par [onObjectController].
  */
 internal fun StoryComposerViewModel.onSelectionAction(
     ref: SceneObjectRef,
@@ -58,12 +47,7 @@ internal fun StoryComposerViewModel.onSelectionAction(
     ComposerSelectionAction.TIME -> openSheet(StoryComposerSheet.OBJECT_TIME)
     ComposerSelectionAction.DUPLICATE -> onObjectController(ref, Action.DUPLICATE)
     ComposerSelectionAction.REMOVE -> onObjectController(ref, Action.DELETE)
-    ComposerSelectionAction.ORDER -> Unit
 }
-
-private fun StoryComposerViewModel.reorder(ref: SceneObjectRef, op: StoryZOrder) =
-    if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-    else onSceneReduce { StoryComposerSceneReducer.restacked(it, ref, op) }
 
 /**
  * Un média fait fond ou le remplace (la désignation est exclusive et porte sur son FICHIER ; seul l'objet choisi quitte la

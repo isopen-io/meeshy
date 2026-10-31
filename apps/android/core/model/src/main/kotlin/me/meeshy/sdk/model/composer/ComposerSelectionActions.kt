@@ -2,9 +2,12 @@ package me.meeshy.sdk.model.composer
 
 import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 
-/** Les actions libellées d'un élément sélectionné (#13836), dans l'ordre de la maquette : Modifier · Ordre · Dupliquer · Temps · Retirer. */
+/**
+ * Les actions libellées d'un élément sélectionné (#13836), dans l'ordre de la maquette : Modifier · Dupliquer · Temps ·
+ * Retirer. Aucun Ordre (#13917) : toucher l'objet le fait passer au premier plan.
+ */
 enum class ComposerSelectionAction {
-    EDIT, ORDER, DUPLICATE, TIME, REMOVE;
+    EDIT, DUPLICATE, TIME, REMOVE;
 
     /** La seule qui DÉTRUIT : en couleur d'alerte, rangée en dernier ; l'historique la défait. */
     val isDestructive: Boolean get() = this == REMOVE
@@ -44,17 +47,12 @@ object ComposerSelectionActions {
         }
     }
 
-    /** L'action de la barre qui porte [action] du menu : l'empilement est l'Ordre, rogner ou faire le fond se règlent dans Modifier. */
+    /** L'action de la barre qui porte [action] du menu : rogner ou faire le fond se règlent dans Modifier. */
     fun of(action: Action): ComposerSelectionAction = when (action) {
         Action.EDIT, Action.TRIM, Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> ComposerSelectionAction.EDIT
         Action.DUPLICATE -> ComposerSelectionAction.DUPLICATE
-        Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK -> ComposerSelectionAction.ORDER
         Action.LEAVE_SCENE, Action.DELETE -> ComposerSelectionAction.REMOVE
     }
-
-    /** Ce que l'Ordre ouvre : tout devant, un cran devant, un cran derrière, tout derrière, tels que l'objet les offre. */
-    fun orderChoices(offered: List<Action>): List<Action> =
-        offered.filter { of(it) == ComposerSelectionAction.ORDER }
 
     /** Les actions du menu qui se rangent DANS la feuille de Modifier plutôt qu'en sixième bouton : faire le fond, le remplacer. */
     fun editSheetActions(offered: List<Action>): List<Action> =

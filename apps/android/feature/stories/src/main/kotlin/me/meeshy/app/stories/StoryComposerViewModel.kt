@@ -281,10 +281,6 @@ class StoryComposerViewModel @Inject constructor(
                 SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
                 SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
                 SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
-                SceneObjectMenu.Action.BRING_TO_FRONT -> onReorderScene(menu.ref, StoryZOrder.TO_FRONT)
-                SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.FORWARD)
-                SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.BACKWARD)
-                SceneObjectMenu.Action.SEND_TO_BACK -> onReorderScene(menu.ref, StoryZOrder.TO_BACK)
                 SceneObjectMenu.Action.TRIM,
                 SceneObjectMenu.Action.LEAVE_SCENE,
                 SceneObjectMenu.Action.SET_AS_BACKGROUND,
@@ -294,10 +290,6 @@ class StoryComposerViewModel @Inject constructor(
         }
         onDismissElementMenu()
     }
-
-    private fun onReorderScene(ref: SceneObjectRef, op: StoryZOrder) =
-        if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-        else reduce { StoryComposerSceneReducer.restacked(it, ref, op) }
 
     fun onDuplicateSticker(id: String) {
         val newId = newStickerId()
@@ -346,8 +338,6 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
         reduce(transformGesture(id)) { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
-
-    fun onReorderTextElement(id: String, op: StoryZOrder) = reduce { StoryComposerTextReducer.reordered(it, id, op) }
 
     fun onDuplicateTextElement(id: String) {
         val newId = newTextElementId()

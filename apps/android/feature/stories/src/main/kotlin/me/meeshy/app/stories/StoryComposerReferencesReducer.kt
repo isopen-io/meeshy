@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.model.scene.StoryTextBackground
 
@@ -119,9 +120,10 @@ internal object StoryComposerReferencesReducer {
         return selected(state.copy(deck = state.deck.addPlaceToSelected(pastille)), id)
     }
 
+    /** Toucher une pastille de lieu la sélectionne et la fait passer au premier plan ([SceneFrontPromotion], #13917). */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.places.none { it.id == id }) state
-        else state.copy(
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.PLACE, id)).copy(
             selectedPlaceId = id, selectedTextElementId = null, framedTextElementId = null, selectedStickerId = null,
             selectedMediaId = null, selectedSoundId = null,
         )
