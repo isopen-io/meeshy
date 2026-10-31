@@ -559,7 +559,7 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // EFFECTIF du lien avec une personne, `niveauEffectif`). La passerelle le sert ; iOS le lira dans #13997 (intro
 // des stories exportées) puis #13938 (écrans de cercles). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur
 // MESURÉE le 2026-10-31 en local : exactement cette entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 330;
+const BASELINE_DEAD_ENTRIES = 329;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
