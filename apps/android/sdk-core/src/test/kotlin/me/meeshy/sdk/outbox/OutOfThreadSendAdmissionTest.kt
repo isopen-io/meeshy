@@ -20,6 +20,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /**
  * #13820 — un envoi né HORS DU FIL (partage, réponse à une humeur, transfert) ne se fie jamais au mode en cache : la
@@ -33,11 +35,17 @@ class OutOfThreadSendAdmissionTest {
     private lateinit var db: MeeshyDatabase
     private lateinit var outbox: OutboxRepository
     private val ledger = InMemoryEndToEndRegimeLedger()
+    private val transactions = Executors.newSingleThreadExecutor()
 
     @Before
     fun setUp() {
+        // #13859 — les lectures Room s'exécutent sur le fil du test : sur l'exécuteur d'E/S réel, une lecture lente (machine
+        // chargée) laissait runTest, inactif, avancer l'horloge virtuelle jusqu'au délai d'une autre conversation, et la borne
+        // d'un geste se mesurait sur l'ordonnanceur au lieu du code.
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), MeeshyDatabase::class.java)
             .allowMainThreadQueries()
+            .setQueryExecutor(Executor(Runnable::run))
+            .setTransactionExecutor(transactions)
             .build()
         outbox = OutboxRepository(db, db.outboxDao())
     }
@@ -45,6 +53,7 @@ class OutOfThreadSendAdmissionTest {
     @After
     fun tearDown() {
         db.close()
+        transactions.shutdown()
     }
 
     private val reads = mutableListOf<String>()
