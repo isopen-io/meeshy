@@ -39,6 +39,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.io.File
@@ -59,16 +61,34 @@ private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
 private val MediaSize = 120.dp
 
-/** Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. */
+/**
+ * Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. Toucher une pièce
+ * l'ouvre en plein écran (#13915) quand un [CommentMediaFullscreen] l'entoure.
+ */
 @Composable
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
+    val open = LocalCommentMediaOpener.current
+    val photoLabel = stringResource(R.string.post_comments_media_image)
+    val videoLabel = stringResource(R.string.post_comments_media_video)
+    val enlarge = stringResource(R.string.post_comments_media_open)
+    val play = stringResource(R.string.post_comments_media_play)
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        media.forEach { item ->
-            Box(Modifier.size(MediaSize).clip(PieceShape).background(MeeshyTheme.tokens.backgroundTertiary), contentAlignment = Alignment.Center) {
+        media.forEachIndexed { index, item ->
+            val touch = if (open != null && item.url != null) {
+                Modifier.clickable(onClickLabel = if (item.isVideo) play else enlarge, role = Role.Button) { open(media, index) }
+            } else {
+                Modifier
+            }
+            Box(
+                Modifier.size(MediaSize).clip(PieceShape).background(MeeshyTheme.tokens.backgroundTertiary)
+                    .then(touch)
+                    .semantics(mergeDescendants = true) { contentDescription = if (item.isVideo) videoLabel else photoLabel },
+                contentAlignment = Alignment.Center,
+            ) {
                 item.thumbnailUrl?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 if (item.isVideo) Icon(MeeshyIcons.PlayCircleFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
             }

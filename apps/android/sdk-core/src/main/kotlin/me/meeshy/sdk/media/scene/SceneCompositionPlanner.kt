@@ -32,7 +32,8 @@ internal object SceneCompositionPlanner {
         val video = job.plan.slides.zip(job.fills).flatMap { (slide, fill) ->
             when (fill) {
                 is SceneExportSlideFill.Picture -> listOf(SceneVideoItem(fill.file, clip = null, imageMillis = slide.durationMillis))
-                is SceneExportSlideFill.Video -> fill.laps.map { SceneVideoItem(fill.file, it, imageMillis = null) }
+                is SceneExportSlideFill.Video -> fill.laps.map { SceneVideoItem(fill.file, it, imageMillis = null) } +
+                    listOfNotNull(fill.hold?.let { SceneVideoItem(it.file, clip = null, imageMillis = it.millis) })
             }
         }
         val audio = job.plan.sounds.mapNotNull { sound ->

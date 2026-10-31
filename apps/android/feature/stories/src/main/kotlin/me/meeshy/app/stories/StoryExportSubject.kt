@@ -29,6 +29,8 @@ data class StoryExportSubject(
     val source: StoryExportSlideSource,
     val backgroundVideo: String?,
     val backgroundWindow: StorySourceWindowMs?,
+    /** La vidéo de fond tourne-t-elle, comme le lecteur la projette ? Sinon elle se lit une fois puis tient sa dernière image. */
+    val backgroundLoop: Boolean = true,
 ) {
     val downloads: List<String>
         get() = (listOfNotNull(backgroundVideo) + source.soundSources.values + listOfNotNull(source.legacyBackgroundTrack, source.legacyBackgroundVideo))
@@ -49,6 +51,7 @@ data class StoryExportSubject(
                 ),
                 backgroundVideo = slide.backgroundVideoUrl,
                 backgroundWindow = slide.backgroundVideoWindow,
+                backgroundLoop = slide.backgroundLoop,
             )
         }
 

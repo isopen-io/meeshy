@@ -158,7 +158,7 @@ public object StoryExportTimeline {
                 duration = if (background) null else media.duration,
                 trimStart = media.sourceStart,
                 trimEnd = media.sourceEnd,
-                loop = background || media.loop,
+                loop = media.loop,
                 fadeIn = media.fadeIn,
                 fadeOut = media.fadeOut,
                 baseVolume = media.volume,

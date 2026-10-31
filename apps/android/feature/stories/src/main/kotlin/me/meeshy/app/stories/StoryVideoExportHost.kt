@@ -2,17 +2,11 @@ package me.meeshy.app.stories
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.widget.Toast
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -23,38 +17,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.scene.export.ImagerLengthChoice
 import me.meeshy.sdk.model.scene.export.ImagerQuarter
@@ -64,12 +41,18 @@ import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.hexColor
 
 /** L'export vidéo vu du lecteur : [start] lance Enregistrer, Partager ou Imager ; [busy] fige la lecture tant qu'il dure. */
 @Stable
-class StoryVideoExport internal constructor(val busy: Boolean, private val launch: (StoryExportMode) -> Unit) {
-    fun start(mode: StoryExportMode) = launch(mode)
+class StoryVideoExport internal constructor(
+    val busy: Boolean,
+    private val launch: (StoryExportMode, List<Pair<StoryItem, StorySlideView>>?) -> Unit,
+) {
+    /** Rend les scènes que l'hôte lit au moment du geste. */
+    fun start(mode: StoryExportMode) = launch(mode, null)
+
+    /** Rend [scenes], choisies par le geste lui-même (le média d'une visionneuse). */
+    fun start(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>) = launch(mode, scenes)
 }
 
 /**
@@ -85,12 +68,13 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
 /**
  * L'export d'une ou plusieurs scènes ([scenes], lues au moment du geste) : un post à scène ou un réel s'exporte entier, ses
  * scènes bout à bout, par le même moteur que la story (#13896). Le choix de longueur, la peinture et le voile vivent ici.
+ * [key] sépare la course de cet hôte de celle d'un autre hôte du même écran : chacun remet ce qu'il a lancé, une fois.
  */
 @Composable
-fun rememberSceneVideoExport(scenes: () -> List<Pair<StoryItem, StorySlideView>>): StoryVideoExport {
+fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryItem, StorySlideView>>): StoryVideoExport {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val viewModel: StoryVideoExportViewModel = hiltViewModel()
+    val viewModel: StoryVideoExportViewModel = hiltViewModel(key = key)
     val exportState by viewModel.state.collectAsStateWithLifecycle()
     val stage by viewModel.stage.collectAsStateWithLifecycle()
     val failed = stringResource(R.string.stories_scene_export_failed)
@@ -111,19 +95,21 @@ fun rememberSceneVideoExport(scenes: () -> List<Pair<StoryItem, StorySlideView>>
     }
     when (val current = stage) {
         is StoryVideoExportStage.ChoosingLength -> ImagerLengthDialog(current.choices, onChoose = viewModel::chooseLength)
-        else -> StoryVideoExportVeil(
-            fraction = exportState.veilFraction,
-            painting = (current as? StoryVideoExportStage.Painting)?.request,
-            onPainted = viewModel::painted,
-            onCancel = viewModel::cancel,
-        )
+        else -> {
+            val painting = (current as? StoryVideoExportStage.Painting)?.request
+            SceneExportBand(
+                fraction = exportState.veilFraction,
+                onCancel = viewModel::cancel,
+                painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
+            )
+        }
     }
     val permissions = rememberPermissionFlow()
     PermissionFlowHost(permissions)
 
-    return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode ->
+    return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen ->
         scope.launch {
-            val shown = currentScenes().takeIf { it.isNotEmpty() } ?: return@launch
+            val shown = (chosen ?: currentScenes()).takeIf { it.isNotEmpty() } ?: return@launch
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
             viewModel.export(mode, shown)
@@ -168,111 +154,15 @@ internal fun ImagerLengthDialog(choices: List<ImagerLengthChoice>, onChoose: (Im
     )
 }
 
-/** Le voile du bake : il prend le geste et le retour système (annuler), et porte, invisible dessous, la scène qu'on peint. */
-@Composable
-private fun StoryVideoExportVeil(
-    fraction: Float?,
-    painting: StoryExportPaintRequest?,
-    onPainted: (List<File>?) -> Unit,
-    onCancel: () -> Unit,
-) {
-    if (fraction == null) return
-    Dialog(
-        onDismissRequest = onCancel,
-        properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false),
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            if (painting != null) StoryExportPainter(painting, onPainted)
-            ComposerExportProgressVeil(fraction = fraction, onCancel = onCancel, modifier = Modifier.fillMaxSize())
-        }
-    }
-}
-
-/**
- * Peint la slide à chaque instant demandé, à la taille de la vidéo : le contenu s'enregistre dans un calque graphique
- * sans jamais se dessiner à l'écran. Le fond n'y entre que lorsqu'aucune vidéo ne le porte ; les vidéos posées s'y
- * montrent à leur affiche.
- */
-@Composable
-private fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (List<File>?) -> Unit) {
-    val density = LocalDensity.current
-    val layer = rememberGraphicsLayer()
-    val progress = remember(request) { Animatable(0f) }
-    var imageReady by remember(request) { mutableStateOf(!request.withBackground || request.slide.imageUrl == null) }
-    val durationMs = request.durationMillis.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-    val width = with(density) { request.format.width.toDp() }
-    val height = with(density) { request.format.height.toDp() }
-
-    Box(
-        Modifier
-            .requiredSize(width, height)
-            .drawWithContent { layer.record { this@drawWithContent.drawContent() } },
-    ) {
-        if (request.withBackground) {
-            Box(Modifier.fillMaxSize().background(hexColor(request.slide.accentHex)))
-            StorySceneBackground(
-                slide = request.slide,
-                playing = false,
-                muted = true,
-                stillFrame = true,
-                onImageResolved = { imageReady = true },
-            )
-        }
-        StorySceneOverlays(
-            slide = request.slide,
-            progress = progress,
-            slideDurationMs = durationMs,
-            playing = false,
-            muted = true,
-            players = false,
-        )
-    }
-    LaunchedEffect(request) {
-        val files = try {
-            withTimeoutOrNull(IMAGE_WAIT_MILLIS) { snapshotFlow { imageReady }.first { it } }
-            delay(WARM_UP_MILLIS)
-            request.frames.mapIndexed { index, frame ->
-                progress.snapTo((frame.startMillis.toFloat() / durationMs).coerceIn(0f, 1f))
-                repeat(SETTLE_FRAMES) { withFrameNanos { } }
-                writeLayer(layer, request, File(request.directory, "calque-$index.png"))
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            null
-        }
-        onPainted(files)
-    }
-}
-
-private suspend fun writeLayer(layer: GraphicsLayer, request: StoryExportPaintRequest, target: File): File {
-    val captured = layer.toImageBitmap().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
-    return withContext(Dispatchers.IO) {
-        val sized = if (captured.width == request.format.width && captured.height == request.format.height) captured
-        else Bitmap.createScaledBitmap(captured, request.format.width, request.format.height, true)
-        try {
-            target.outputStream().use { sized.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
-        } finally {
-            if (sized !== captured) sized.recycle()
-            captured.recycle()
-        }
-        target
-    }
-}
-
-private const val IMAGE_WAIT_MILLIS = 5_000L
-private const val WARM_UP_MILLIS = 600L
-private const val SETTLE_FRAMES = 3
-private const val PNG_QUALITY = 100
 private const val SUBTITLE_ALPHA = 0.7f
 
 private fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
-/** Remet le MP4 à la feuille de partage système, par le `FileProvider` de l'application. */
+/** Remet la vidéo, ou l'image d'une scène fixe, à la feuille de partage système, par le `FileProvider` de l'application. */
 private fun shareVideo(context: Context, file: File, chooserTitle: String) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val send = Intent(Intent.ACTION_SEND)
-        .setType("video/mp4")
+        .setType(SceneExportPlan.mimeType(file.path))
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     context.startActivity(

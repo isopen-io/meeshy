@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import me.meeshy.sdk.media.scene.SceneExportHold
 import me.meeshy.sdk.media.scene.SceneExportJob
 import me.meeshy.sdk.media.scene.SceneExportOverlay
 import me.meeshy.sdk.media.scene.SceneExportSlideFill
@@ -21,7 +22,8 @@ import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 
 /**
  * Ce que l'écran doit peindre : la slide à chacun des [frames] (un calque par fenêtre où rien ne change), avec son fond
- * quand aucune vidéo ne le porte. Il rend un PNG par image, dans l'ordre, ou `null` s'il n'a pas pu peindre.
+ * quand aucune vidéo ne le porte. Il rend un PNG par image, dans l'ordre, ou `null` s'il n'a pas pu peindre. [still] : la
+ * scène fixe et muette, peinte une fois avec son fond, sort telle quelle en image (JPEG).
  */
 data class StoryExportPaintRequest(
     val slide: StorySlideView,
@@ -31,6 +33,7 @@ data class StoryExportPaintRequest(
     val withBackground: Boolean,
     val directory: File,
     val format: StoryExportVideoFormat,
+    val still: Boolean = false,
 )
 
 /**
@@ -42,6 +45,7 @@ class StoryVideoExportPreparer(
     private val fetch: suspend (url: String, target: File) -> Unit,
     private val probeMillis: (File) -> Long?,
     private val blankPicture: (File) -> Unit,
+    private val lastFrame: (video: File, atMillis: Long, target: File) -> Boolean = { _, _, _ -> false },
     private val chooseLength: suspend (List<ImagerLengthChoice>) -> ImagerQuarter?,
     private val paint: suspend (StoryExportPaintRequest) -> List<File>?,
     private val format: StoryExportVideoFormat = StoryExportVideoFormat.of(),
@@ -61,10 +65,11 @@ class StoryVideoExportPreparer(
             mediaDurationsSeconds = durations.mapNotNull { (src, millis) -> millis?.let { src to it / MILLIS_PER_SECOND } }.toMap(),
         )
         val plan = whole.cut(length(mode, whole.totalMillis))
+        val still = plan.still && scenes.all { it.subject.backgroundVideo == null }
         val rendered = plan.slides.map { placed -> placed to scenes[placed.index] }
         val overlays = rendered.flatMap { (placed, scene) ->
             val backgroundFile = scene.subject.backgroundVideo?.let { files[it] }
-            paintedOverlays(scene, placed.durationMillis, backgroundFile == null, File(work, "scene-${placed.index}").apply { mkdirs() })
+            paintedOverlays(scene, placed.durationMillis, backgroundFile == null, still, File(work, "scene-${placed.index}").apply { mkdirs() })
                 .map { it.shifted(placed.startMillis) }
         }
         val sounds = plan.sounds.map { it.src }.distinct()
@@ -79,6 +84,7 @@ class StoryVideoExportPreparer(
             overlays = overlays,
             sounds = sounds,
             output = output,
+            still = overlays.singleOrNull()?.file?.takeIf { still },
         )
     }
 
@@ -88,10 +94,16 @@ class StoryVideoExportPreparer(
         legacyBackgroundVideo = source.legacyBackgroundVideo?.takeIf { it in files },
     )
 
-    private suspend fun paintedOverlays(scene: StoryExportScene, duration: Long, withBackground: Boolean, directory: File): List<SceneExportOverlay.Stored> {
+    private suspend fun paintedOverlays(
+        scene: StoryExportScene,
+        duration: Long,
+        withBackground: Boolean,
+        still: Boolean,
+        directory: File,
+    ): List<SceneExportOverlay.Stored> {
         val effects = scene.subject.source.effects
         val frames = StoryExportOverlayFrames.of(effects, duration)
-        val layers = paint(StoryExportPaintRequest(scene.slide, effects, duration, frames, withBackground, directory, format))
+        val layers = paint(StoryExportPaintRequest(scene.slide, effects, duration, frames, withBackground, directory, format, still))
             ?.takeIf { it.size == frames.size }
             ?: error("les calques de la story ne se sont pas peints")
         return frames.zip(layers) { frame, file -> SceneExportOverlay.Stored(frame.startMillis, frame.endMillis, file) }
@@ -125,8 +137,12 @@ class StoryVideoExportPreparer(
         if (file == null) return SceneExportSlideFill.Picture(File(work, "fond-$index.png").also(blankPicture))
         val clip = durations[subject.backgroundVideo] ?: error("la vidéo de fond n'a pas de durée lisible")
         val window = subject.backgroundWindow
-        val laps = StoryExportClipLoop.ranges(duration, window?.startMs ?: 0L, window?.endMs, clip, loop = true)
-        return SceneExportSlideFill.Video(file, laps)
+        val laps = StoryExportClipLoop.ranges(duration, window?.startMs ?: 0L, window?.endMs, clip, loop = subject.backgroundLoop)
+        val rest = duration - laps.sumOf { it.durationMillis }
+        if (rest <= 0L) return SceneExportSlideFill.Video(file, laps)
+        val held = File(work, "fin-$index.png")
+        if (laps.isEmpty() || !lastFrame(file, laps.last().endMillis, held)) blankPicture(held)
+        return SceneExportSlideFill.Video(file, laps, SceneExportHold(held, rest))
     }
 
     private companion object {

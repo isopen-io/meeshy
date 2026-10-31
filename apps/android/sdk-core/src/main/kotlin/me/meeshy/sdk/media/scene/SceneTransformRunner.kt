@@ -6,12 +6,18 @@ import me.meeshy.sdk.model.scene.export.StoryExportClipRange
 import me.meeshy.sdk.model.scene.export.StoryExportTimelinePlan
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 
-/** Ce qui remplit l'image d'une slide sous ses objets : une vidéo de fond lue en tours ([laps]), ou une image fixe. */
+/**
+ * Ce qui remplit l'image d'une slide sous ses objets : une vidéo de fond lue en tours ([laps]) — une vidéo qui ne boucle pas
+ * se lit une fois puis tient son image ([hold]) jusqu'à la fin de la slide —, ou une image fixe.
+ */
 public sealed interface SceneExportSlideFill {
-    public data class Video(val file: File, val laps: List<StoryExportClipRange>) : SceneExportSlideFill
+    public data class Video(val file: File, val laps: List<StoryExportClipRange>, val hold: SceneExportHold? = null) : SceneExportSlideFill
 
     public data class Picture(val file: File) : SceneExportSlideFill
 }
+
+/** Une image tenue [millis] : la dernière image d'une vidéo de fond qui ne boucle pas. */
+public data class SceneExportHold(val file: File, val millis: Long)
 
 /** Un calque des objets, posé sur la timeline commune de [startMillis] à [endMillis]. */
 public sealed interface SceneExportOverlay {
@@ -41,6 +47,8 @@ public class SceneExportJob(
     public val output: File,
     /** Libère ce que le job tient (les calques peints) : appelé une fois le moteur arrêté, réussi, échoué ou annulé. */
     public val release: () -> Unit = {},
+    /** Une scène fixe et muette : son image, déjà peinte avec son fond, remise telle quelle — aucun rendu vidéo. */
+    public val still: File? = null,
 )
 
 /** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction rendue à mesure. */

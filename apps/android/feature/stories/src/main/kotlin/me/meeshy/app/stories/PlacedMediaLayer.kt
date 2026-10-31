@@ -135,7 +135,6 @@ internal fun PlacedMediaLayer(
     canvasHeightPx: Float,
     gestures: PlacedMediaGestures,
     selected: Boolean = false,
-    marksPending: Boolean = true,
 ) {
     val placed = frame.placed
     val currentTap by rememberUpdatedState(gestures.onTap)
@@ -222,7 +221,7 @@ internal fun PlacedMediaLayer(
                 )
             }
         }
-        if (marksPending && frame.isPending) IncomingWaitingBadge(Modifier.align(Alignment.BottomStart).padding(WAITING_INSET))
+        if (frame.isPending) IncomingWaitingBadge(Modifier.align(Alignment.BottomStart).padding(WAITING_INSET))
     }
 }
 

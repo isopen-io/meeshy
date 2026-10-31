@@ -57,4 +57,14 @@ class SceneCompositionPlannerTest {
         val plan = StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0, 6_000)), listOf(sound("vocal", 0, 6_000)), still = false)
         assertThat(SceneCompositionPlanner.of(job(plan, listOf(SceneExportSlideFill.Picture(picture)))).audio).isEmpty()
     }
+
+    @Test fun `une video de fond qui ne boucle pas se lit une fois puis tient sa derniere image jusqu a la fin de la slide`() {
+        val still = File("derniere.png")
+        val plan = StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0, 10_000)), emptyList(), still = false)
+        val fill = SceneExportSlideFill.Video(video, listOf(StoryExportClipRange(1_000, 4_000)), hold = SceneExportHold(still, 7_000))
+        assertThat(SceneCompositionPlanner.of(job(plan, listOf(fill))).video).containsExactly(
+            SceneVideoItem(video, StoryExportClipRange(1_000, 4_000), null),
+            SceneVideoItem(still, clip = null, imageMillis = 7_000),
+        ).inOrder()
+    }
 }

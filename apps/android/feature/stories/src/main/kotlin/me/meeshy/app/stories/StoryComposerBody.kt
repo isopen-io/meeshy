@@ -91,7 +91,7 @@ private fun SceneFirstFrame(
     StorySceneFirstLayout(
         onDismiss = doors.onClose,
         reduced = panel != null && typing == null,
-        scene = { modifier -> StoryComposerScene(state, viewModel, sceneExport, comparison, modifier, capture, captureOffered) },
+        scene = { modifier -> StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered) },
         top = {
             SceneTopBar(
                 onClose = doors.onClose,

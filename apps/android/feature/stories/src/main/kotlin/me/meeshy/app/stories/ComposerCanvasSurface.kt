@@ -24,10 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -64,12 +60,13 @@ import me.meeshy.ui.theme.hexColor
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on an object selects it — framed by [sceneSelectionFrame], never in a capture —, a tap on the
+ * declarative glue. A tap on an object selects it — framed by [sceneSelectionFrame] —, a tap on the
  * empty canvas deselects ([onBackgroundTap], #13836).
  *
  * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by
  * [StorySceneFirstLayout] (#13834, which replaces the « nothing on the canvas » geography of #4561/#4633 for the story):
- * that chrome is a sibling, never a child, so [capture] records the scene alone and the published render never shows it.
+ * that chrome is a sibling, never a child, so the published render never shows it. The export does not read this
+ * surface: it renders every slide from the publish projection, by the stories engine (#13897).
  */
 @Composable
 internal fun StoryCanvasSurface(
@@ -109,20 +106,17 @@ internal fun StoryCanvasSurface(
     modifier: Modifier = Modifier,
     fitMode: String = StoryFitMode.FILL,
     backdrop: StoryBackdrop = StoryBackdrop.BLUR,
-    capture: SceneCapture? = null,
     onBackgroundLongPress: (() -> Unit)? = null,
     selectedMediaId: String? = null,
     stack: List<SceneObjectRef>,
-    pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _, _ -> },
+    pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
     val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
-    val capturing = capture != null && capture.pass != SceneCapturePass.NONE
-    val overlayOnly = capture?.pass == SceneCapturePass.OVERLAY_ONLY
-    val frameShape = if (capturing) RectangleShape else RoundedCornerShape(16.dp)
+    val frameShape = RoundedCornerShape(16.dp)
     val guideColor = MaterialTheme.colorScheme.primary
-    val warnBorder = if (!capturing && snapFeedback?.withinSafeZone == false) {
+    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
         BorderStroke(2.dp, MaterialTheme.colorScheme.error)
     } else {
         null
@@ -137,9 +131,8 @@ internal fun StoryCanvasSurface(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(9f / 16f)
-                .then(if (capturing) Modifier.recordInto(capture!!.layer) else Modifier)
                 .clip(frameShape)
-                .then(if (overlayOnly) Modifier else Modifier.background(sceneBrush))
+                .background(sceneBrush)
                 .then(
                     if (warnBorder != null) {
                         Modifier.border(warnBorder, RoundedCornerShape(16.dp))
@@ -174,7 +167,7 @@ internal fun StoryCanvasSurface(
                     },
                 ),
         ) {
-            if (backgroundModel != null && !overlayOnly) {
+            if (backgroundModel != null) {
                 val filled = StoryFitMode.rendersFilled(fitMode)
                 if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
@@ -192,7 +185,7 @@ internal fun StoryCanvasSurface(
                         .sceneLook(look),
                 )
             }
-            if (snapFeedback != null && !capturing) {
+            if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
                     // element is being dragged, draw the viewer-chrome safe rectangle and the
@@ -271,11 +264,10 @@ internal fun StoryCanvasSurface(
                                 onDragEnd = onElementDragEnd,
                                 onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                                 onTextChange = onElementTextChange,
-                                showsSelection = !capturing,
                             )
                         }
                         ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
-                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId, marksPending = !capturing)
+                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = frame.key == selectedMediaId)
                         }
                         ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
                             StickerLayer(
@@ -295,10 +287,9 @@ internal fun StoryCanvasSurface(
                                 },
                                 onDragEnd = onStickerDragEnd,
                                 onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                                showsSelection = !capturing,
                             )
                         }
-                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx, capturing)
+                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx)
                     }
                 }
             }
@@ -315,17 +306,6 @@ internal fun StoryCanvasSurface(
             )
         }
     }
-}
-
-/** Où en est la capture de la scène pour son export : rien, la scène entière, ou ses objets seuls (fond vidéo). */
-internal enum class SceneCapturePass { NONE, FULL, OVERLAY_ONLY }
-
-internal class SceneCapture(val layer: GraphicsLayer, val pass: SceneCapturePass)
-
-/** Enregistre ce que la scène PEINT dans [layer], puis le rejoue : la capture est exactement ce que l'auteur voit. */
-private fun Modifier.recordInto(layer: GraphicsLayer): Modifier = drawWithContent {
-    layer.record { this@drawWithContent.drawContent() }
-    drawLayer(layer)
 }
 
 /**

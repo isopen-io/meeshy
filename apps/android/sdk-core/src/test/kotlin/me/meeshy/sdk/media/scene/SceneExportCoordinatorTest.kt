@@ -44,7 +44,11 @@ class SceneExportCoordinatorTest {
 
     private class FakeGallery(private val accepts: Boolean = true) : CaptureGallery {
         val videos = mutableListOf<String>()
-        override suspend fun saveImage(jpeg: ByteArray, displayName: String): Boolean = true
+        val images = mutableListOf<Pair<String, String>>()
+        override suspend fun saveImage(jpeg: ByteArray, displayName: String): Boolean {
+            images += displayName to String(jpeg)
+            return accepts
+        }
         override suspend fun saveVideo(file: File, displayName: String): Boolean {
             videos += displayName
             return accepts
@@ -61,7 +65,7 @@ class SceneExportCoordinatorTest {
             nowMillis = { 1_700_000_000_000L },
         )
 
-    private fun job(output: File, release: () -> Unit = {}) = SceneExportJob(
+    private fun job(output: File, still: File? = null, release: () -> Unit = {}) = SceneExportJob(
         plan = StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0, 3_000)), emptyList(), still = false),
         format = StoryExportVideoFormat.of(),
         fills = emptyList(),
@@ -69,6 +73,7 @@ class SceneExportCoordinatorTest {
         sounds = emptyMap(),
         output = output,
         release = release,
+        still = still,
     )
 
     @Test
@@ -189,9 +194,39 @@ class SceneExportCoordinatorTest {
         var released = 0
         val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
         c.export(SceneExportDestination.SHARE) { out, _ ->
-            job(out) { released++ }
+            job(out, release = { released++ })
         }
         advanceUntilIdle()
         assertThat(released).isEqualTo(1)
+    }
+
+    @Test
+    fun `une scene fixe sort en image dans la galerie, sans passer par le moteur video`() = runTest {
+        val gallery = FakeGallery()
+        val runner = FakeRunner()
+        val c = coordinator(runner, gallery)
+        c.export(SceneExportDestination.GALLERY) { out, work ->
+            work.mkdirs()
+            job(out, still = File(work, "scene.jpg").apply { writeText("jpeg") })
+        }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Saved)
+        assertThat(runner.jobs).isEmpty()
+        assertThat(gallery.images).containsExactly("meeshy-scene-1700000000000.jpg" to "jpeg")
+        assertThat(gallery.videos).isEmpty()
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `partager une scene fixe remet son image`() = runTest {
+        val c = coordinator(FakeRunner())
+        c.export(SceneExportDestination.SHARE) { out, work ->
+            work.mkdirs()
+            job(out, still = File(work, "scene.jpg").apply { writeText("jpeg") })
+        }
+        advanceUntilIdle()
+        val ready = c.state.value as SceneExportState.Ready
+        assertThat(ready.path).endsWith(".jpg")
+        assertThat(File(ready.path).readText()).isEqualTo("jpeg")
     }
 }

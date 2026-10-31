@@ -50,7 +50,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun StoryComposerScene(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    sceneExport: SceneExportHost,
     comparison: LookComparison,
     modifier: Modifier = Modifier,
     capture: StorySceneCapture? = null,
@@ -107,12 +106,11 @@ internal fun StoryComposerScene(
                 modifier = Modifier.fillMaxSize(),
                 fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
-                capture = sceneExport.capture,
                 onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
                     ?.let { { backgroundMenuOpen = true } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
                 stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
-                pins = { ref, width, height, capturing -> ScenePin(state, viewModel, ref, width, height, capturing) },
+                pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
             )
             ComposerBackgroundMenu(
                 expanded = backgroundMenuOpen,
@@ -263,13 +261,13 @@ internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error
 
 /** A place or a voice chip of the scene, at its rank in the stack: touched, it is selected; dragged, it moves. */
 @Composable
-private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewModel, ref: SceneObjectRef, width: Float, height: Float, capturing: Boolean) {
+private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewModel, ref: SceneObjectRef, width: Float, height: Float) {
     val slide = state.deck.selectedSlide
     when (ref.kind) {
         ComposerObjectKind.PLACE -> slide.places.firstOrNull { it.id == ref.id }?.let { place ->
             ComposerPlaceLayer(
                 place = place,
-                selected = !capturing && place.id == state.selectedPlaceId,
+                selected = place.id == state.selectedPlaceId,
                 canvasWidthPx = width,
                 canvasHeightPx = height,
                 onTap = { viewModel.onSelectPlace(place.id) },
@@ -280,7 +278,7 @@ private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewMo
         ComposerObjectKind.AUDIO -> slide.audio.firstOrNull { it.id == ref.id }?.let { track ->
             ComposerAudioChipLayer(
                 track = track,
-                selected = !capturing && track.id == state.selectedSoundId,
+                selected = track.id == state.selectedSoundId,
                 canvasWidthPx = width,
                 canvasHeightPx = height,
                 onTap = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, track.id) } },

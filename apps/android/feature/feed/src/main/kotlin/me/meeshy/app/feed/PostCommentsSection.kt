@@ -93,6 +93,11 @@ internal fun PostCommentsSection(
         }
     }
 
+    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier) }
+}
+
+@Composable
+private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.post_comments_title),

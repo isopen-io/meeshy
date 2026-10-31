@@ -15,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
+import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.icon
 
@@ -51,3 +52,17 @@ fun PostSceneExportMenu(
 }
 
 private const val EXPORT_FALLBACK_ACCENT = "6366F1"
+
+/**
+ * L'export d'une scène qu'un geste choisit (#13915) — le média d'une visionneuse de commentaire : la scène est projetée au
+ * geste par la projection du lecteur, puis rendue par le moteur de la story sous [key].
+ */
+@Composable
+fun rememberStoryItemExport(key: String, accentHex: String? = null): (StoryItem, StoryExportMode) -> Unit {
+    val projector: RepostSceneViewModel = hiltViewModel()
+    val accent = accentHex ?: EXPORT_FALLBACK_ACCENT
+    val export = rememberSceneVideoExport(key) { emptyList() }
+    val current by rememberUpdatedState(export)
+    return remember(projector, accent) { { item, mode -> current.start(mode, listOf(item to projector.slideOf(item, accentHex = accent))) } }
+}
+

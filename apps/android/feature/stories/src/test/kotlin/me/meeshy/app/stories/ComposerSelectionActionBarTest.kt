@@ -9,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -119,7 +118,7 @@ class ComposerSelectionActionBarTest {
                     StoryComposerSceneFirst(
                         state = state,
                         viewModel = vm,
-                        sceneExport = SceneExportHost(SceneCapture(rememberGraphicsLayer(), SceneCapturePass.NONE), emptyList(), false) {},
+                        sceneExport = SceneExportHost(emptyList(), false) {},
                         doors = StoryComposerDoors(onClose = {}, onOpenAudience = {}, onOpenStickers = {}, onPickMedia = {}, onOpenSoundShelf = {}),
                         morePanel = null,
                         onMorePanel = {},

@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.MediaMetadataRetriever
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +37,7 @@ class StoryVideoExportViewModel @Inject constructor(
         fetch = factory.fetcher::fetch,
         probeMillis = SceneMediaProbe::durationMillis,
         blankPicture = ::writeBlankPicture,
+        lastFrame = ::writeLastFrame,
         chooseLength = stages::askLength,
         paint = stages::askPaint,
     )
@@ -73,6 +75,25 @@ class StoryVideoExportViewModel @Inject constructor(
         const val BLANK_WIDTH = 108
         const val BLANK_HEIGHT = 192
         const val PNG_QUALITY = 100
+        const val MICROS_PER_MILLI = 1_000L
+
+        /** La dernière image d'une vidéo de fond qui ne boucle pas : elle tient l'écran jusqu'à la fin de la slide. */
+        fun writeLastFrame(video: File, atMillis: Long, target: File): Boolean {
+            val retriever = MediaMetadataRetriever()
+            return try {
+                retriever.setDataSource(video.path)
+                val frame = retriever.getFrameAtTime(atMillis * MICROS_PER_MILLI, MediaMetadataRetriever.OPTION_CLOSEST) ?: return false
+                try {
+                    target.outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
+                } finally {
+                    frame.recycle()
+                }
+            } catch (failure: Exception) {
+                false
+            } finally {
+                retriever.release()
+            }
+        }
 
         /** Le support d'un fond fixe : le calque peint porte déjà le fond, l'image ne sert qu'à tenir la durée. */
         fun writeBlankPicture(target: File) {

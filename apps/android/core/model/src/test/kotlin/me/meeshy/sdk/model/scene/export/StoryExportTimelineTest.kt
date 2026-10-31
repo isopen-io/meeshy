@@ -172,4 +172,24 @@ class StoryExportTimelineTest {
         val modern = fullStory().copy(legacyBackgroundTrack = "voix.m4a", legacyBackgroundVideo = "fond.mp4")
         assertThat(StoryExportTimeline.plan(listOf(modern)).sounds.map { it.src }).containsNoneOf("voix.m4a", "fond.mp4")
     }
+
+    @Test fun `une video de fond qui ne boucle pas se joue une fois, celle qui boucle tourne`() {
+        val once = StoryExportSlideSource(StoryEffects(mediaObjects = listOf(backgroundVideo())), mapOf("bgv" to "v.mp4"))
+        assertThat(StoryExportTimeline.plan(listOf(once)).sounds.single().loop).isFalse()
+        val looping = StoryExportSlideSource(StoryEffects(mediaObjects = listOf(backgroundVideo().copy(loop = true))), mapOf("bgv" to "v.mp4"))
+        assertThat(StoryExportTimeline.plan(listOf(looping)).sounds.single().loop).isTrue()
+    }
+
+    @Test fun `une video, meme muette, n est jamais une scene fixe`() {
+        val mutedBackground = StoryExportSlideSource(StoryEffects(mediaObjects = listOf(backgroundVideo(volume = 0f))), mapOf("bgv" to "v.mp4"))
+        assertThat(StoryExportTimeline.plan(listOf(mutedBackground)).still).isFalse()
+        val mutedClip = StoryExportSlideSource(
+            StoryEffects(mediaObjects = listOf(StoryMediaObject(id = "c", postMediaId = "pc", mediaType = "video", volume = 0f))),
+            mapOf("c" to "c.mp4"),
+        )
+        assertThat(StoryExportTimeline.plan(listOf(mutedClip)).still).isFalse()
+        val photo = StoryExportSlideSource(StoryEffects(mediaObjects = listOf(foregroundImage())))
+        assertThat(StoryExportTimeline.plan(listOf(photo)).still).isTrue()
+        assertThat(StoryExportTimeline.plan(listOf(StoryExportSlideSource(null))).still).isTrue()
+    }
 }

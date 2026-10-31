@@ -33,6 +33,7 @@ class StoryVideoExportPreparerTest {
         audio: List<StoryAudioPlayerObject> = listOf(StoryAudioPlayerObject(id = "voc", postMediaId = "m-voc", startTime = 2f)),
         withVideo: Boolean = true,
         texts: List<StoryTextObject> = listOf(StoryTextObject(id = "t", text = "Salut", startTime = 1.0, duration = 3.0)),
+        loop: Boolean = true,
     ) = StoryItem(
         id = "story-1",
         media = listOfNotNull(
@@ -42,7 +43,7 @@ class StoryVideoExportPreparerTest {
         storyEffects = StoryEffects(
             textObjects = texts,
             mediaObjects = listOfNotNull(
-                StoryMediaObject(id = "bg", postMediaId = "m-bg", mediaType = "video", isBackground = true, sourceStart = 1.0, sourceEnd = 4.0).takeIf { withVideo },
+                StoryMediaObject(id = "bg", postMediaId = "m-bg", mediaType = "video", isBackground = true, sourceStart = 1.0, sourceEnd = 4.0, loop = loop).takeIf { withVideo },
             ),
             audioPlayerObjects = audio,
         ),
@@ -63,6 +64,7 @@ class StoryVideoExportPreparerTest {
         var asked: List<ImagerLengthChoice>? = null
         var painted: StoryExportPaintRequest? = null
         val paints = mutableListOf<StoryExportPaintRequest>()
+        val frames = mutableListOf<Pair<String, Long>>()
     }
 
     private fun preparer(
@@ -79,6 +81,7 @@ class StoryVideoExportPreparerTest {
         },
         probeMillis = { file -> durations[file.readText()] },
         blankPicture = { it.writeText("noir") },
+        lastFrame = { video, at, target -> recorder.frames += video.readText() to at; target.writeText("derniere"); true },
         chooseLength = { choices -> recorder.asked = choices; answer },
         paint = { request ->
             recorder.painted = request
@@ -207,5 +210,45 @@ class StoryVideoExportPreparerTest {
         assertThat(job.plan.totalMillis).isEqualTo(60_000)
         assertThat(job.fills).hasSize(1)
         assertThat(recorder.paints.map { it.slide.text }).containsExactly("Un")
+    }
+
+    @Test fun `une video de fond qui ne boucle pas se lit une fois puis tient sa derniere image jusqu a la fin`() = runTest {
+        val recorder = Recorder()
+        val once = StoryExportSubject.of(story(loop = false), slide().copy(backgroundLoop = false), base)
+        val job = preparer(recorder).prepare(StoryExportMode.SAVE, once, slide().copy(backgroundLoop = false), folder.newFile("o.mp4"), folder.newFolder("w"))
+
+        val fill = job.fills.single() as SceneExportSlideFill.Video
+        assertThat(fill.laps).containsExactly(StoryExportClipRange(1_000, 4_000))
+        assertThat(fill.hold!!.millis).isEqualTo(19_000)
+        assertThat(fill.hold!!.file.readText()).isEqualTo("derniere")
+        assertThat(recorder.frames).containsExactly("bg.mp4" to 4_000L)
+        assertThat(job.plan.sounds.single { it.role == StoryExportSoundRole.BACKGROUND_VIDEO }.loop).isFalse()
+    }
+
+    @Test fun `une video de fond qui boucle tourne jusqu a la fin, sans image tenue`() = runTest {
+        val job = preparer(Recorder()).prepare(StoryExportMode.SAVE, subject(), slide(), folder.newFile("o.mp4"), folder.newFolder("w"))
+        val fill = job.fills.single() as SceneExportSlideFill.Video
+        assertThat(fill.hold).isNull()
+        assertThat(fill.laps.sumOf { it.durationMillis }).isEqualTo(22_000)
+    }
+
+    @Test fun `une scene fixe et muette sort en image, peinte une fois avec son fond`() = runTest {
+        val recorder = Recorder()
+        val still = StoryExportSubject.of(story(audio = emptyList(), withVideo = false, texts = listOf(StoryTextObject(id = "t", text = "Salut"))), slide(false), base)
+        val job = preparer(recorder).prepare(StoryExportMode.SAVE, still, slide(false), folder.newFile("o.mp4"), folder.newFolder("w"))
+
+        val request = recorder.paints.single()
+        assertThat(request.still).isTrue()
+        assertThat(request.withBackground).isTrue()
+        assertThat(request.frames).hasSize(1)
+        assertThat(job.still).isNotNull()
+        assertThat(job.still!!.readText()).isEqualTo("png")
+    }
+
+    @Test fun `une scene qui fait du son reste une video`() = runTest {
+        val recorder = Recorder()
+        val job = preparer(recorder).prepare(StoryExportMode.SAVE, subject(withVideo = false), slide(false), folder.newFile("o.mp4"), folder.newFolder("w"))
+        assertThat(job.still).isNull()
+        assertThat(recorder.paints.single().still).isFalse()
     }
 }

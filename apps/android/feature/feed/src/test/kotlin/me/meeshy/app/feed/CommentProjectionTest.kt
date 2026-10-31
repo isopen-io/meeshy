@@ -238,4 +238,22 @@ class CommentProjectionTest {
         assertThat(media.last().isVideo).isTrue()
         assertThat(media.last().thumbnailUrl).isNull()
     }
+
+    @Test
+    fun `the media of a comment carry their full file, size and length for the full screen`() {
+        val withMedia = comment().copy(
+            media = listOf(
+                me.meeshy.sdk.model.ApiPostMedia(
+                    id = "v", mimeType = "video/mp4", fileUrl = "/u/v.mp4", thumbnailUrl = "/u/v.jpg",
+                    width = 720, height = 1280, duration = 12_500,
+                ),
+            ),
+        )
+        val piece = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media.single()
+        assertThat(piece.url).endsWith("/u/v.mp4")
+        assertThat(piece.url).startsWith("https://")
+        assertThat(piece.width).isEqualTo(720)
+        assertThat(piece.height).isEqualTo(1280)
+        assertThat(piece.durationMillis).isEqualTo(12_500)
+    }
 }

@@ -1,9 +1,5 @@
 package me.meeshy.sdk.model.composer.scene
 
-import me.meeshy.sdk.model.scene.export.StoryExportFrameRate
-import me.meeshy.sdk.model.scene.export.StoryExportSize
-import me.meeshy.sdk.model.scene.export.StoryExportVideoSettings
-
 /** Où va le fichier baké : la galerie de l'appareil, ou une feuille de partage (miroir de `Destination` iOS). */
 public enum class SceneExportDestination { GALLERY, SHARE }
 
@@ -56,33 +52,20 @@ public object SceneExportReducer {
     public fun leftoverFile(state: SceneExportState): String? = (state as? SceneExportState.Ready)?.path
 }
 
-/** Ce que le bake produit : taille, cadence, durée, débit — repris des réglages uniques de l'export de story. */
-public data class SceneExportPlan(
-    val width: Int,
-    val height: Int,
-    val fps: Int,
-    val durationMillis: Long,
-    val bitRate: Int,
-) {
-    public val size: StoryExportSize get() = StoryExportSize(width, height)
+/** Le nom et le type des fichiers que l'export remet (galerie, partage). */
+public object SceneExportPlan {
 
-    public companion object {
-        public const val MIN_DURATION_MILLIS: Long = 1_000L
-        public const val MAX_DURATION_MILLIS: Long = 60_000L
+    /** Un nom neutre : ni auteur, ni lieu, ni titre de la scène. */
+    public fun fileName(epochMillis: Long): String = "meeshy-scene-$epochMillis.mp4"
 
-        public fun of(durationSeconds: Double, landscape: Boolean = false): SceneExportPlan {
-            val size = StoryExportVideoSettings.outputSize(landscape)
-            val millis = if (durationSeconds.isFinite()) Math.round(durationSeconds * 1000) else 0L
-            return SceneExportPlan(
-                width = size.width,
-                height = size.height,
-                fps = StoryExportFrameRate.FPS,
-                durationMillis = millis.coerceIn(MIN_DURATION_MILLIS, MAX_DURATION_MILLIS),
-                bitRate = StoryExportVideoSettings.averageBitRate(size),
-            )
-        }
+    /** Une scène fixe et muette sort en IMAGE (#13897, web « scène statique et muette ») : même nom neutre, en JPEG. */
+    public fun stillFileName(epochMillis: Long): String = "meeshy-scene-$epochMillis$STILL_EXTENSION"
 
-        /** Un nom neutre : ni auteur, ni lieu, ni titre de la scène. */
-        public fun fileName(epochMillis: Long): String = "meeshy-scene-$epochMillis.mp4"
-    }
+    /** Le type sous lequel un fichier d'export se remet à la feuille de partage : une image fixe, sinon la vidéo. */
+    public fun mimeType(path: String): String =
+        if (path.endsWith(STILL_EXTENSION, ignoreCase = true)) STILL_MIME_TYPE else VIDEO_MIME_TYPE
+
+    private const val STILL_EXTENSION = ".jpg"
+    private const val STILL_MIME_TYPE = "image/jpeg"
+    private const val VIDEO_MIME_TYPE = "video/mp4"
 }

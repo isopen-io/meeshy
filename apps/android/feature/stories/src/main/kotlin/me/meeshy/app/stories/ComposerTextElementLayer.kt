@@ -71,7 +71,6 @@ internal fun TextElementLayer(
     onTransform: (Float, Float) -> Unit,
     onMeasured: (IntSize) -> Unit = {},
     onTextChange: (String) -> Unit = {},
-    showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val haptics = rememberMeeshyHaptics()
@@ -128,7 +127,7 @@ internal fun TextElementLayer(
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
-            .sceneSelectionFrame(selected && showsSelection && !(menu == null && inlineEditEnabled), element.scale)
+            .sceneSelectionFrame(selected && !(menu == null && inlineEditEnabled), element.scale)
             .background(
                 color = if (selected && menu == null && inlineEditEnabled) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
                 shape = RoundedCornerShape(8.dp),
