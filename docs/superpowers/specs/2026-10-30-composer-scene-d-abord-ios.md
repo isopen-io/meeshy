@@ -106,6 +106,24 @@ La règle porteur vaut « tant qu'on n'a pas envoyé ». Une pièce en attente g
 - **Le compositeur de story Android n'aplatit pas.** « Modifier » d'un média ouvre les sections en place : filtre, réglages, effets, découpe, rognage d'image, texte alternatif (`ComposerSelectionSections.kt`, `ComposerObjectEditorSection.kt`, `PlacedMediaLayer.kt` : `SceneLookRecipe.forStory(filter, adjustments)`). Le brouillon les garde (`StoryComposerAutosave.kt`). Il n'offre cependant **ni les filtres, ni les cadres, ni les effets de l'appel**, ni le recadrage avec proportions de la retouche.
 - **La retouche Android du chat et du fil cuit**, comme iOS. `ComposerRetouchBake` (`core/model/.../composer/look`), `RetouchTextPainter` et `RetouchGlassPainter` (`sdk-ui/.../retouch`) peignent les textes, et `ComposerRetouchDelivery.RENDERED` rend un rendu. Rouvrir une pièce rouvre le rendu. C'est l'objet de #13841 pour les pièces, et du lot de parité pour le look en story.
 
+### 3.6 Format du look, v1 (livré par L2, à reproduire à l'identique sur Android, #13841)
+
+Le look d'un média est le champ optionnel `look` de l'objet média de la scène (`StoryMediaObject.look`, `packages/MeeshySDK/Sources/MeeshySDK/Models/Story/StoryMediaLook.swift`). Il est absent quand il ne peint rien.
+
+| champ | type | valeur | défaut (absent) |
+|---|---|---|---|
+| `filterPreset` | chaîne | identifiant brut du filtre de l'appel (`VideoFilterPreset.rawValue` : `warm`, `cool`, `vivid`…) ; `natural` ne s'écrit pas | aucun filtre |
+| `frameId` | chaîne | `classic:<CallMontageStyle.rawValue>` ou `frame:<id du catalogue de cadres>` (`ComposerLookSceneKey.token`) | aucun cadre |
+| `faceEffect` | chaîne | identifiant brut de l'effet de visage (`CallFaceEffect.rawValue`) ; `none` ne s'écrit pas | aucun effet |
+| `framing` | objet `{centerX, centerY, scale}` (nombres) | centre en fractions 0…1 (y vers le haut), échelle 1 = remplissage exact ; l'identité (0,5 · 0,5 · 1) ne s'écrit pas | identité |
+
+Règles :
+- **Lecture tolérante.** Un champ illisible se lit absent. Un look entièrement neutre se lit `nil`. Un identifiant inconnu est GARDÉ par le SDK, et se peint « aucun » par l'app : un client plus récent ne casse pas un plus ancien.
+- **Où il vit.** Le look est dans le brouillon et dans l'historique d'annulation (JSON v1 et document canvas v3 de l'auteur : clé `look` du `payload` de l'objet média). **Il ne part jamais au serveur** : la publication encode `StoryEffects.withoutMediaLooks`.
+- **Ordre de peinture.** D'abord le look (filtre de l'appel, effet de visage, cadrage, cadre), dans l'étendue du média, sans changer ses proportions. Ensuite le `StoryFilter` du média, puis ses réglages. C'est l'ordre de la publication, qui cuit le look dans les octets ; le lecteur applique ensuite filtre et réglages comme métadonnées.
+- **Cuisson.** Elle a lieu à la publication et à la mise à jour d'une story (`StoryPublicationLookBake`), et à la remise d'un post, d'un réel ou d'une publication à plusieurs scènes au canal document (`ComposerDocumentLookBake` : la pièce cuite remplace l'original, légendes, alternatives et adoptions suivent sa nouvelle adresse), toujours sur une copie dérivée. Le filet du fil `StoryEffects.sanitizedForServerPublish()` retire tout look restant, scènes suivantes du document v3 comprises. Un média réglé repart cuit, même s'il a été pré-téléversé, et sa pré-montée brute est balayée à 24 h. L'export ⋯ et l'enregistrement dans Photos passent par le moteur de rendu du SDK, qui peint le look par le peintre enregistré (`StoryMediaLookPainterRegistry`). Aucun témoin d'export ne le mesure encore.
+- **Peintre.** Le SDK ne connaît que le protocole `StoryMediaLookPainting`. L'app enregistre `ComposerLookPainterAdapter` au lancement, qui utilise le même graphe que le viseur et la retouche (`ComposerLookPainter`). Sans peintre, un look se lit neutre.
+
 ## 4. Table de placement
 
 La table complète, ligne par ligne avec les fichiers, est l'inventaire (`docs/product/composer-scene-d-abord/inventaire-options.md`). En résumé :

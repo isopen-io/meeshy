@@ -843,7 +843,7 @@ extension MeeshyComposerHost {
         }
         isPublishingDocument = true
         Task {
-            let accepted = await onPublishDocument(draft)
+            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft))
             isPublishingDocument = false
             if accepted { handOverAutosavedDraft(); onDismiss() }
         }

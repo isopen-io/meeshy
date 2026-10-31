@@ -99,40 +99,40 @@ Android : **P** présent, **A** absent, **≈** partiel (la cellule dit ce qui m
 | D2 | Verrou de l'enregistrement, zoom vertical | `ComposerCaptureHold.swift`, `ComposerCaptureLockTrack.swift`, `ComposerCaptureMotion.swift` | viseur | inchangé | A | A | — |
 | D3 | Flash + intensité, bascule d'objectif, mise au point | `ComposerCameraFlash.swift`, `ComposerFlashIntensitySlider.swift`, `ComposerCameraSwitchVeil*.swift`, `ComposerCaptureFocus*.swift` | rangée haute du viseur | inchangé | A | A | — |
 | D4 | Segments de prise (retirer le dernier) | `ComposerCaptureSegments.swift`, `ComposerSceneCameraBar.swift` | bande des segments | inchangé | A | A | — |
-| D5 | Look en direct (filtres, cadres, effets de l'appel) | `ComposerLiveLook*.swift`, `ComposerLookStrip*.swift`, `ComposerFaceEffects.swift` | bande du viseur | inchangé ; le look choisi **voyage avec la prise** comme réglage (L2) | A | A | L2 |
+| D5 | Look en direct (filtres, cadres, effets de l'appel) | `ComposerLiveLook*.swift`, `ComposerLookStrip*.swift`, `ComposerFaceEffects.swift` | bande du viseur | inchangé ; le look choisi **voyage avec la prise** comme réglage (L2) | A | A | L2 ◐ (reste : la prise ne pose pas encore l'original + son look) |
 | D6 | Budget thermique, orientation, accès refusé | `ComposerThermalBudget.swift`, `ComposerCaptureOrientation.swift`, `ComposerCaptureRefusedChrome.swift` | — | inchangé | A | A | — |
-| D7 | Enregistrer la prise dans Photos (⬇︎) | `ComposerCaptureSession+Edit.swift` (`saveTakeToPhotos`), `ComposerGallery.swift`, `CaptureSavePolicy` | retouche | inchangé — **seul aplatissement permis hors publication** (demandé) | ≈ (chat/feed) | ≈ | L2 |
+| D7 | Enregistrer la prise dans Photos (⬇︎) | `ComposerCaptureSession+Edit.swift` (`saveTakeToPhotos`), `ComposerGallery.swift`, `CaptureSavePolicy` | retouche | inchangé — **seul aplatissement permis hors publication** (demandé) | ≈ (chat/feed) | ≈ | L2 ✓ |
 | D8 | Reprendre la photo du fond | `ComposerBackgroundMenuAction.retakePhoto` | menu du fond | **S›M** du fond « Reprendre la photo » + menu d'appui long | P (`RETAKE_PHOTO`) | P | L5 |
 
 ## E. Retouche d'un média — l'atelier de la caméra (aujourd'hui DESTRUCTIF)
 
 | # | Élément | Fichiers iOS | Aujourd'hui | Nouvelle place | Android dev | wcompo | Lot |
 |---|---|---|---|---|---|---|---|
-| E1 | Ouverture de la retouche d'un média de scène | `ComposerSceneMediaRetouch.swift`, `MeeshyComposerHost+MediaRetouch.swift`, `MeeshyComposerHost+SceneColumns.swift:230`, `+BackgroundMenu.swift:49` | double toucher / Modifier / menu du fond ⇒ `ConversationPieceRetouch` plein écran | **S › Modifier** ⇒ **S›M** média (feuille qui réduit la scène, sections ci-dessous), non destructive | A en story (la retouche n'existe qu'en chat/feed) | A | L2, L5 |
-| E2 | Filtres de l'appel (`VideoFilterPreset`) | `ComposerPhotoLook.swift`, `ComposerLookStripRule.swift`, `ComposerLookPainter.swift` | cuits au « Terminé » | **S›M › Filtre** : réglage `look.filter` persisté sur l'objet, peint en direct | A en story (`StoryFilter` seulement) | A | L2 |
-| E3 | Cadres du Montage (`CallMontageChoice`) | `ComposerPhotoLook.swift` (`ComposerPhotoFrame`), `ComposerLookSceneCache.swift` | cuits | **S›M › Cadres** : `look.frame` persisté | A en story | A | L2 |
-| E4 | Effets de visage de l'appel | `ComposerFaceEffects.swift` (`CallFaceEffect`) | cuits | **S›M › Effets** : `look.effect` persisté | A | A | L2 |
-| E5 | Recadrage (équerres) + proportions | `ComposerCropBrackets.swift`, `ComposerFraming.swift`, `ComposerEditScene.swift`, `ComposerCropPreset` | cuit | **S›M › Recadrer** : `crop` (`MediaCropRect`, existe) + `framing` persistés | P (image : `MediaEditTool.CROP`) | P | L2 |
-| E6 | Texte dans la retouche | `ComposerRetouchTextBoard.swift`, `ComposerEditTextLayer.swift` | **cuit dans l'image** (« texte cuit ») | **— fusionné** : les textes deviennent des `StoryTextObject` de la scène (sélectionnables, ordre, temps) | A | A | L2 |
-| E7 | Découpe d'une vidéo | `ComposerTrimTrack.swift`, `ComposerTrimRule.swift` | cuite (export) | **S›M › Découper** : `sourceStart/sourceEnd` (existent) | P (`TRIM`) | P | L2 |
-| E8 | Son de la prise : gain, muet | `ComposerEditTools.swift` (`ComposerTakeSound`), `ComposerSoundTrack.swift` | cuit | **S›M › Son** : `volume` (existe) + muet (`mutedVolumeMemento`) | P (muet) | P | L2 |
-| E9 | Lecture / position de lecture | `ComposerEditSources.swift`, `offersEditPlayback` | retouche | dans **S›M** (lecture de l'aperçu) | P | P | L2 |
-| E10 | Comparer à l'original (appui maintenu) | `ComposerMediaAdjust.swift` (`ComposerLookComparison`) | éditeur en place | **S›M** (appui maintenu sur la scène réduite) | P (`LookComparison`) | P | L2 |
-| E11 | Terminé / Abandonner / (x) | `ConversationPieceRetouch.swift`, `ComposerCaptureCoverLife` | rend un fichier neuf, remplace l'objet (`ComposerMediaSwapRun`) | **OK** ferme la feuille ; rien n'est rendu, rien n'est remplacé ; l'annulation couvre chaque réglage | — | — | L2 |
+| E1 | Ouverture de la retouche d'un média de scène | `ComposerSceneMediaRetouch.swift`, `MeeshyComposerHost+MediaRetouch.swift`, `MeeshyComposerHost+SceneColumns.swift:230`, `+BackgroundMenu.swift:49` | double toucher / Modifier / menu du fond ⇒ `ConversationPieceRetouch` plein écran | **S › Modifier** ⇒ **S›M** média (feuille qui réduit la scène, sections ci-dessous), non destructive | A en story (la retouche n'existe qu'en chat/feed) | A | L2, L5 ✓ |
+| E2 | Filtres de l'appel (`VideoFilterPreset`) | `ComposerPhotoLook.swift`, `ComposerLookStripRule.swift`, `ComposerLookPainter.swift` | cuits au « Terminé » | **S›M › Filtre** : réglage `look.filter` persisté sur l'objet, peint en direct | A en story (`StoryFilter` seulement) | A | L2 ✓ |
+| E3 | Cadres du Montage (`CallMontageChoice`) | `ComposerPhotoLook.swift` (`ComposerPhotoFrame`), `ComposerLookSceneCache.swift` | cuits | **S›M › Cadres** : `look.frame` persisté | A en story | A | L2 ✓ |
+| E4 | Effets de visage de l'appel | `ComposerFaceEffects.swift` (`CallFaceEffect`) | cuits | **S›M › Effets** : `look.effect` persisté | A | A | L2 ✓ |
+| E5 | Recadrage (équerres) + proportions | `ComposerCropBrackets.swift`, `ComposerFraming.swift`, `ComposerEditScene.swift`, `ComposerCropPreset` | cuit | **S›M › Recadrer** : `crop` (`MediaCropRect`, existe) + `framing` persistés | P (image : `MediaEditTool.CROP`) | P | L2 ◐ (reste : proportions et cadrage d'une vidéo) |
+| E6 | Texte dans la retouche | `ComposerRetouchTextBoard.swift`, `ComposerEditTextLayer.swift` | **cuit dans l'image** (« texte cuit ») | **— fusionné** : les textes deviennent des `StoryTextObject` de la scène (sélectionnables, ordre, temps) | A | A | L2 ✓ |
+| E7 | Découpe d'une vidéo | `ComposerTrimTrack.swift`, `ComposerTrimRule.swift` | cuite (export) | **S›M › Découper** : `sourceStart/sourceEnd` (existent) | P (`TRIM`) | P | L2 ✓ |
+| E8 | Son de la prise : gain, muet | `ComposerEditTools.swift` (`ComposerTakeSound`), `ComposerSoundTrack.swift` | cuit | **S›M › Son** : `volume` (existe) + muet (`mutedVolumeMemento`) | P (muet) | P | L2 ✓ |
+| E9 | Lecture / position de lecture | `ComposerEditSources.swift`, `offersEditPlayback` | retouche | dans **S›M** (lecture de l'aperçu) | P | P | L2 ◐ (reste : lecture de l'aperçu dans la feuille) |
+| E10 | Comparer à l'original (appui maintenu) | `ComposerMediaAdjust.swift` (`ComposerLookComparison`) | éditeur en place | **S›M** (appui maintenu sur la scène réduite) | P (`LookComparison`) | P | L2 ✓ |
+| E11 | Terminé / Abandonner / (x) | `ConversationPieceRetouch.swift`, `ComposerCaptureCoverLife` | rend un fichier neuf, remplace l'objet (`ComposerMediaSwapRun`) | **OK** ferme la feuille ; rien n'est rendu, rien n'est remplacé ; l'annulation couvre chaque réglage | — | — | L2 ✓ |
 
 ## F. Éditeur de média EN PLACE (non destructif, aujourd'hui masqué pour tout média local)
 
 | # | Élément | Fichiers iOS | Aujourd'hui | Nouvelle place | Android dev | wcompo | Lot |
 |---|---|---|---|---|---|---|---|
-| F1 | Filtre `StoryFilter` (portée SLIDE) | `ComposerObjectEditorRail.swift` (`MediaEditTool.filter`), `StoryFilterGridView`, `applyFilter` | servi seulement aux médias SANS source locale | **S›M › Filtre**, une seule grille : filtres de l'appel + `StoryFilter` ; portée = l'objet | P | P | L2, L5 |
-| F2 | Réglages (11 : exposition, luminosité, contraste, saturation, vibrance, température, netteté, flou, vignette, bloom, grain) | `ComposerMediaAdjust.swift`, `ImageAdjustments` | idem | **S›M › Réglages** | P (`ComposerImageAdjustmentsPanel`) | P | L2 |
-| F3 | Effets (bloom, grain) | `MediaEditTool.effects` | idem | **S›M › Réglages › Effets** (sous-section) | P | P | L2 |
-| F4 | Bornes de lecture | `MediaEditTool.trim`, `ComposerMediaControls.swift` | idem | **S›M › Découper** (fusion avec E7) | P | P | L2 |
-| F5 | Actions : muet, quart de tour | `MediaEditTool.actions`, `ComposerMediaActionRow` | idem | **S›M › Son** (muet) et **S›M › Recadrer** (quart de tour) | P | P | L2 |
-| F6 | Texte alternatif | `MediaEditTool.altText`, `MediaAltTextField` | idem | **S›M › Description** | P | P | L2 |
-| F7 | Recadrer (image posée) | `MediaEditTool.crop`, `ComposerMediaCropPads` | idem | **S›M › Recadrer** (fusion avec E5) | P | P | L2 |
+| F1 | Filtre `StoryFilter` (portée SLIDE) | `ComposerObjectEditorRail.swift` (`MediaEditTool.filter`), `StoryFilterGridView`, `applyFilter` | servi seulement aux médias SANS source locale | **S›M › Filtre**, une seule grille : filtres de l'appel + `StoryFilter` ; portée = l'objet | P | P | L2, L5 ✓ |
+| F2 | Réglages (11 : exposition, luminosité, contraste, saturation, vibrance, température, netteté, flou, vignette, bloom, grain) | `ComposerMediaAdjust.swift`, `ImageAdjustments` | idem | **S›M › Réglages** | P (`ComposerImageAdjustmentsPanel`) | P | L2 ✓ |
+| F3 | Effets (bloom, grain) | `MediaEditTool.effects` | idem | **S›M › Réglages › Effets** (sous-section) | P | P | L2 ✓ |
+| F4 | Bornes de lecture | `MediaEditTool.trim`, `ComposerMediaControls.swift` | idem | **S›M › Découper** (fusion avec E7) | P | P | L2 ✓ |
+| F5 | Actions : muet, quart de tour | `MediaEditTool.actions`, `ComposerMediaActionRow` | idem | **S›M › Son** (muet) et **S›M › Recadrer** (quart de tour) | P | P | L2 ✓ |
+| F6 | Texte alternatif | `MediaEditTool.altText`, `MediaAltTextField` | idem | **S›M › Description** | P | P | L2 ✓ |
+| F7 | Recadrer (image posée) | `MediaEditTool.crop`, `ComposerMediaCropPads` | idem | **S›M › Recadrer** (fusion avec E5) | P | P | L2 ✓ |
 | F8 | Couper (split) | `MediaEditTool.split` | **non servi** (hors contrat) | reste non servi ; suivi à part | A | A | — |
-| F9 | Réinitialiser une famille | `ComposerMediaAdjustPanel.reset` | idem | **S›M** (« Réinitialiser » par section) | P | P | L2 |
+| F9 | Réinitialiser une famille | `ComposerMediaAdjustPanel.reset` | idem | **S›M** (« Réinitialiser » par section) | P | P | L2 ✓ |
 
 ## G. Texte
 
@@ -176,11 +176,11 @@ Android : **P** présent, **A** absent, **≈** partiel (la cellule dit ce qui m
 | I1 | « Création audio » : micro, Fichiers, Bibliothèque | `MeeshyComposerHost+Sound.swift` (`openSoundSheet`), `AudioPostComposerView` | feuille plein écran CLAIRE, « Annuler » sans « OK » | **R › Son** ⇒ **F** (thème sombre, réduit la scène) : son actuel puis Enregistrer · Fichiers · Bibliothèque ; titre « Son de la story » ; « OK » | ≈ (étagère `SoundShelfSheet` ; ni micro ni langue) | ≈ | L3 |
 | I2 | Langue du son (Prisme) | idem (FR/PT/EN/DE/ES/Plus) | feuille | **F Son › Langue du son** | A | A | L3 |
 | I3 | Rôle du son : fond ou contenu | `ComposerSoundDisposition.swift`, `ComposerAudioRole`, `ComposerSoundPromotion.swift` | feuille + menu | **F Son** (choix « En fond » / « Sur la scène ») ; menu d'appui long « Poser sur la scène » | ≈ (`ComposerSoundPlacement`) | ≈ | L3 |
-| I4 | Rogner le son | feuille (fichier neuf, `survivingTranscription`) | **cuit dans un nouveau fichier** | **F Son › Rogner** : bornes `backgroundAudioStart/End` (existent) — non destructif | P (`SoundTrimLaw`) | P | L2 |
+| I4 | Rogner le son | feuille (fichier neuf, `survivingTranscription`) | **cuit dans un nouveau fichier** | **F Son › Rogner** : bornes `backgroundAudioStart/End` (existent) — non destructif | P (`SoundTrimLaw`) | P | L2 ◐ (reste : rognage par bornes) |
 | I5 | Transcription du son | `documentTranscriptions`, `voiceTranscriptions` | feuille | **F Son** | A | A | L3 |
 | I6 | Menu d'un son : poser sur la scène, supprimer | `ComposerSoundActionsMenu.swift` | appui long | inchangé ; sur un son de scène sélectionné ⇒ **S** | ≈ | ≈ | L5 |
 | I7 | Volume, atténuation (ducking) | `StoryMediaObject.volume`, `isDuckingDisabled`, `backgroundAudioVolume` | éditeur | **F Son** / **S›M › Son** | ≈ | ≈ | L3 |
-| I8 | Son sur une image ou une vidéo RETOUCHÉE | — | **impossible après retouche** (#13840 : la retouche remplace l'objet par un fichier cuit) | possible à tout moment : le média reste un objet réglable | P | P | L2 |
+| I8 | Son sur une image ou une vidéo RETOUCHÉE | — | **impossible après retouche** (#13840 : la retouche remplace l'objet par un fichier cuit) | possible à tout moment : le média reste un objet réglable | P | P | L2 ✓ |
 
 ## J. Dessin (D)
 
@@ -211,7 +211,7 @@ Android : **P** présent, **A** absent, **≈** partiel (la cellule dit ce qui m
 | # | Élément | Fichiers iOS | Aujourd'hui | Nouvelle place | Android dev | wcompo | Lot |
 |---|---|---|---|---|---|---|---|
 | L1x | Frise de la scène animée (▶, pistes par objet) | `ComposerSceneFrise.swift`, `MeeshyComposerHost+Animated.swift` | collée sous la scène, non exposée à VoiceOver | **⋯ › Animation** ⇒ **F** frise ; pistes accessibles | P (`SceneFrise`) | P | L1 ✓, L3 |
-| L2x | Mode animé conservé au brouillon | autosave | **perdu à la réouverture** | conservé | P | P | L2 |
+| L2x | Mode animé conservé au brouillon | autosave | **perdu à la réouverture** | conservé | P | P | L2 ◐ (reste : mode animé au brouillon) |
 | L3x | Temps d'un objet (début/fin, images clés) | `ComposerObjectTiming*.swift`, `StoryKeyframe` | rail de sélection | **S › Temps** | P | P | L5 |
 | L4x | Durée de la diapo | `slideDuration` | panneau | **⋯ › Durée de la diapo** ⇒ **F** courte | P | P | L1 ✓ (la coche dit la durée réelle, relecture L1) |
 | L5x | Importer plusieurs médias, une diapo par média | `MeeshyComposerHost+ScenePicking.swift` | Photos | **R › Média** (sélection multiple) | P | P | L1 ✓ |
@@ -227,7 +227,7 @@ Android : **P** présent, **A** absent, **≈** partiel (la cellule dit ce qui m
 | M4 | « Publier en réel ? » / bascule auto en réel | `MeeshyComposerHost+ReelOffer.swift`, `+ReelAutoSwitch.swift` | dialogue | inchangé | P (`ReelOffer`) | P | — |
 | M5 | Document (post/réel sans scène) | `ComposerDocumentSurface*.swift`, `ComposerDocumentRules.swift`, `ComposerDocumentDurablePublisher.swift` | surface | **P▾ › Post** sans scène ⇒ surface document inchangée | P (`ComposerDocumentTool`) | P | — |
 | M6 | Pré-montée (état des envois) | `ComposerPreUpload*.swift`, `MeeshyComposerHost+PreUpload.swift` | sous la scène | état discret sur le média ; message seulement en échec | P | P | L3 |
-| M7 | Voile de progression de l'export | `ComposerExportProgressVeil.swift` | voile | inchangé — **c'est là que la cuisson a lieu** | P | P | L2 |
+| M7 | Voile de progression de l'export | `ComposerExportProgressVeil.swift` | voile | inchangé — **c'est là que la cuisson a lieu** : story par `StoryPublicationLookBake`, post, réel et publication à plusieurs scènes par `ComposerDocumentLookBake` (canal document) ; le filet du fil (`sanitizedForServerPublish`) retire tout look restant | P | P | L2 ✓ |
 | M8 | Blocage de publication motivé | `publishBlock` | sous la pastille | message bref au-dessus de Publier, seulement s'il existe | P | P | L3 |
 | M9 | Plafonds (texte 1000, 50 objets/scène, 2 h) | `StoryComposerLimits`, `ComposerLimitFeedback.swift` | refus dits ; compteurs visibles | aucun compteur au repos ; message à la limite (annonce VoiceOver + haptique) | P | P | L3 |
 
@@ -247,9 +247,9 @@ Android : **P** présent, **A** absent, **≈** partiel (la cellule dit ce qui m
 
 | # | Élément | Fichiers iOS | Aujourd'hui | Nouvelle place | Android dev | wcompo | Lot |
 |---|---|---|---|---|---|---|---|
-| O1 | Sauvegarde automatique | `ComposerAutosave*.swift`, `MeeshyComposerHost+Autosave.swift` | silencieuse | inchangée ; **porte les réglages non destructifs** (L2) | P | P | L2 |
+| O1 | Sauvegarde automatique | `ComposerAutosave*.swift`, `MeeshyComposerHost+Autosave.swift` | silencieuse | inchangée ; **porte les réglages non destructifs** (L2) | P | P | L2 ✓ |
 | O2 | Fermer un brouillon non vide | B1 | sans question | confirmation « Fermer le brouillon ? » · « Garder le brouillon » · « Abandonner » | A | P | L3 |
-| O3 | Brouillons durables du post (scène emportée) | `ComposerSceneAssetCarriage.swift` | — | **porte les réglages** (L2) | P | P | L2 |
+| O3 | Brouillons durables du post (scène emportée) | `ComposerSceneAssetCarriage.swift` | — | **porte les réglages** (L2) | P | P | L2 ◐ (reste : témoin du brouillon durable du post) |
 
 ---
 

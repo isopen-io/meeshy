@@ -182,9 +182,11 @@ extension MeeshyComposerHost {
             // deux autres surfaces qui portent un son.
             editSceneSound(id)
         case .media, .sticker, .place:
-            // **Une image ou une vidéo s'ouvre dans LA retouche** (#12590) ; le reste, et un média
-            // sans source locale, gardent l'édition EN PLACE (#9138).
-            if kind != .media || !requestSceneMediaRetouch(id) { beginInlineEdit(id) }
+            // **Tout objet s'édite EN PLACE** (#9138) — une image ou une vidéo comprise
+            // (#13840) : ses filtres, effets et cadres sont des RÉGLAGES de l'objet,
+            // jamais un fichier cuit qui le remplace ; textes, stickers et sons
+            // posés par-dessus restent mobiles jusqu'à la publication.
+            beginInlineEdit(id)
             HapticFeedback.medium()
         }
     }

@@ -35,7 +35,6 @@ extension MeeshyComposerHost {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.86), value: presentedSceneMenu)
         }
-        .modifier(ComposerSceneMediaRetouchCover(request: $sceneMediaRetouch) { completeSceneMediaRetouch($0, $1) })
     }
 
     /// **L'identifiant se lit AVANT d'agir, puis se remet à `nil`** : SwiftUI referme la feuille et
@@ -45,8 +44,8 @@ extension MeeshyComposerHost {
         backgroundMenuObjectId = nil
         switch action {
         case .edit:
-            // Le MÊME éditeur que le double-tap et le rail, la retouche unique pour une image ou une vidéo.
-            if !requestSceneMediaRetouch(id) { openObjectEditor(id) }
+            // Le MÊME éditeur que le double-tap et le rail : l'édition en place, non destructive (#13840).
+            openObjectEditor(id)
         case .bringForward:
             // `toggleBackground` et NON `bringForward` : un fond se rend depuis `backgroundLayer` quel que soit son z.
             viewModel.toggleBackground(id: id)

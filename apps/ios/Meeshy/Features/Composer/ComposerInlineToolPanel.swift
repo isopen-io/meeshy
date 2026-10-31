@@ -64,6 +64,8 @@ struct ComposerInlineToolPanel: View {
                                        objectId: edit.objectId,
                                        onSelectObject: onSelectObject,
                                        holdsGesture: $planHoldsGesture)
+        case .media(.look):
+            ComposerMediaLookPanel(viewModel: viewModel, mediaId: edit.objectId)
         case .media(.filter):
             if let media {
                 ComposerMediaFilterGrid(viewModel: viewModel, media: media,

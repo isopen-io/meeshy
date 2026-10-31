@@ -115,6 +115,9 @@ nonisolated enum ComposerObjectEditorCopy {
     /// jour où le contrat les porte, seule `MediaEditTool.served` change.
     static func media(_ tool: MediaEditTool) -> String {
         switch tool {
+        case .look:
+            return String(localized: "composer.object.editor.look",
+                          defaultValue: "Filtres et cadres", bundle: .main)
         case .trim:    return trim
         case .actions: return mediaActions
         case .altText:

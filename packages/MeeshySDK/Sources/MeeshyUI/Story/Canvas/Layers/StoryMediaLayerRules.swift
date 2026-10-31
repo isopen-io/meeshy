@@ -116,7 +116,7 @@ enum StoryMediaLayerRules {
     /// sur place ou hors du fil principal.
     static func lookRequest(_ image: UIImage, for media: StoryMediaObject) -> StoryLookBakeRequest {
         StoryLookBakeRequest(image: image, filter: media.parsedFilter, intensity: 1,
-                             adjustments: media.adjustments, imageId: media.id)
+                             adjustments: media.adjustments, imageId: media.id, look: media.look)
     }
 
     // MARK: - URL resolution

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #5086 (vue `4c`) — **la montée commence à la POSE, pas au publish.**
@@ -107,8 +108,11 @@ final class ComposerPreUploadTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("wheremediaObjects[i].postMediaId.isEmpty"),
+        XCTAssertTrue(code.contains("whereStoryPublicationLookBake.needsUpload(mediaObjects[i])"),
                       "c'est cette clause, et elle seule, qui rend le repli automatique")
+        XCTAssertFalse(StoryPublicationLookBake.needsUpload(
+            StoryMediaObject(id: "m", postMediaId: "pre-monte", kind: .image, aspectRatio: 1)),
+                       "un média pré-monté sans look ne repart pas (#13840 : seul un look le fait repartir cuit)")
     }
 
     // MARK: - Le balayage du document

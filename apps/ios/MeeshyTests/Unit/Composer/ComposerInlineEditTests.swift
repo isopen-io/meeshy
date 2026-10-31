@@ -52,13 +52,14 @@ final class ComposerInlineEditTests: XCTestCase {
     /// pose un look.
     func test_sections_image_recadrageFiltreReglagesEffetsActionsDescription_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.crop), .media(.filter), .media(.adjust), .media(.effects), .media(.actions),
-                        .media(.altText), .timing, .plan])
+                       [.media(.crop), .media(.look), .media(.filter), .media(.adjust), .media(.effects),
+                        .media(.actions), .media(.altText), .timing, .plan])
     }
 
     func test_sections_video_reglagesRognageActionsDescription_sansFiltre_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true),
-                       [.media(.adjust), .media(.trim), .media(.actions), .media(.altText), .timing, .plan],
+                       [.media(.look), .media(.adjust), .media(.trim), .media(.actions), .media(.altText),
+                        .timing, .plan],
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
@@ -602,6 +603,7 @@ final class ComposerInlineEditTests: XCTestCase {
             selection: (sections: sections, open: .media(.actions), actions: []))
         XCTAssertEqual(focus, .object(sections: sections, open: .media(.actions), actions: []))
         XCTAssertEqual(ComposerTrailingColumn.options(for: focus), [
+            .editorSection(.media(.look), isOpen: false),
             .editorSection(.media(.filter), isOpen: false),
             .editorSection(.media(.adjust), isOpen: false),
             .editorSection(.media(.effects), isOpen: false),
