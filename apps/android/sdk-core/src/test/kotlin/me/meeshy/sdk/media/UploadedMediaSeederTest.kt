@@ -42,10 +42,30 @@ class UploadedMediaSeederTest {
     }
 
     @Test
-    fun `une image ou un document n entre pas aux caches Media3`() = runTest {
+    fun `une image envoyee entre au cache d images sous l adresse que la bulle lira`() = runTest {
         val cache = RecordingUploadedMediaCache()
 
-        seeder(cache).seed(sent(mime = "image/jpeg"), uploaded(mime = "image/jpeg"))
+        seeder(cache).seed(sent(mime = "image/jpeg"), uploaded(url = "2026/10/a1/photo.jpg", mime = "image/jpeg"))
+
+        val adoption = cache.adoptions.single()
+        assertThat(adoption.category).isEqualTo(MediaCacheCategory.IMAGES)
+        assertThat(adoption.url).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/a1/photo.jpg")
+        assertThat(adoption.bytes).isEqualTo(byteArrayOf(1, 2, 3, 4))
+    }
+
+    @Test
+    fun `une image que le serveur a reecrite n est pas adoptee a la place de la sienne`() = runTest {
+        val cache = RecordingUploadedMediaCache()
+
+        seeder(cache).seed(sent(mime = "image/jpeg"), uploaded(mime = "image/jpeg", size = 5L))
+
+        assertThat(cache.adoptions).isEmpty()
+    }
+
+    @Test
+    fun `un document n entre a aucun cache`() = runTest {
+        val cache = RecordingUploadedMediaCache()
+
         seeder(cache).seed(sent(mime = "application/pdf"), uploaded(mime = "application/pdf"))
 
         assertThat(cache.adoptions).isEmpty()
