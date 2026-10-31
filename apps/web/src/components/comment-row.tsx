@@ -642,7 +642,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                     {...(lu.marque ? { lang: lu.language } : {})}
                   />
                 ) : null}
-                {media.length > 0 ? <CommentMedia media={media} /> : null}
+                {media.length > 0 ? <CommentMedia media={media} commentId={comment.id} authorUsername={comment.author.username} /> : null}
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (

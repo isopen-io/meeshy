@@ -10,15 +10,16 @@ import type { RenderOutcome } from './scene-export-render';
  * rendre, livrer. Chaque étape est injectée : le navigateur les fournit
  * (`scene-export-browser.ts`), les témoins les simulent.
  *
- * « Enregistrer » rend TOUTE la composition ; « Imager » rend la même, et
+ * « Enregistrer » et « Partager » (#13881) rendent TOUTE la composition — le
+ * premier la range, le second la remet à la feuille de partage ; « Imager » rend la même, et
  * propose 1/4 · 2/4 · 3/4 · 4/4 quand elle dépasse une minute — la longueur
  * rendue DEPUIS LE DÉBUT. La progression va de 0 à 1 : la préparation en
  * occupe le premier vingtième, le rendu le reste.
  */
 
-export type SceneExportMode = 'save' | 'imager';
+export type SceneExportMode = 'save' | 'imager' | 'share';
 
-export type SceneExportResult = 'saved' | 'cancelled' | 'failed' | 'retry' | 'unsupported';
+export type SceneExportResult = 'saved' | 'shared' | 'cancelled' | 'failed' | 'retry' | 'unsupported';
 
 export type SceneDelivery = 'delivered' | 'cancelled' | 'failed' | 'retry';
 
@@ -71,7 +72,8 @@ export async function runSceneExport(params: {
     params.onDelivering?.();
     const mimeType = outcome.kind === 'video' ? outcome.mimeType : outcome.blob.type || 'image/png';
     const delivered = await deps.deliver(outcome.blob, `meeshy-${params.fileStem}.${extensionOfType(mimeType)}`, mimeType);
-    return delivered === 'delivered' ? 'saved' : delivered;
+    if (delivered !== 'delivered') return delivered;
+    return params.mode === 'share' ? 'shared' : 'saved';
   } catch {
     return signal.aborted ? 'cancelled' : 'failed';
   } finally {

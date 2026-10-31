@@ -26,10 +26,22 @@ function render(plays: readonly ScheduledPlay[], clips: ReadonlyMap<string, Floa
         ? play.loopStartS + ((play.offsetS - play.loopStartS + elapsed) % (play.loopEndS - play.loopStartS))
         : play.offsetS + elapsed;
       const sample = clip[Math.floor(local * RATE)] ?? 0;
-      out[first + i] = (out[first + i] ?? 0) + play.gain * sample;
+      out[first + i] = (out[first + i] ?? 0) + gainAt(play, play.whenS + elapsed) * sample;
     }
   }
   return out;
+}
+
+/** Le gain du graphe à l'instant : la courbe programmée (paliers puis rampes linéaires), sinon le gain fixe. */
+function gainAt(play: ScheduledPlay, atS: number): number {
+  const points = play.envelope;
+  const first = points[0];
+  if (first === undefined || atS < first.atS) return play.gain;
+  const next = points.findIndex((point) => point.atS > atS);
+  if (next === -1) return points[points.length - 1]?.gain ?? play.gain;
+  const lo = points[next - 1] ?? first;
+  const hi = points[next] ?? lo;
+  return lo.gain + ((hi.gain - lo.gain) * (atS - lo.atS)) / Math.max(1e-9, hi.atS - lo.atS);
 }
 
 const rms = (pcm: Float32Array, fromS: number, toS: number): number => {
@@ -79,7 +91,7 @@ describe('la piste son mixée — elle JOUE, à sa place et à son niveau', () =
 
   test('un son sans boucle se tait à la fin de sa coupe', () => {
     const plays = soundSchedule({ sounds: [sound({ src: 'music', trimStartMs: 1_000, trimEndMs: 2_000 })], clipDurationsS: durations, lengthMs: 10_000 });
-    expect(plays).toEqual([{ src: 'music', whenS: 0, offsetS: 1, durationS: 1, loop: false, loopStartS: 1, loopEndS: 2, gain: 1 }]);
+    expect(plays).toEqual([{ src: 'music', whenS: 0, offsetS: 1, durationS: 1, loop: false, loopStartS: 1, loopEndS: 2, gain: 1, envelope: [] }]);
     const pcm = render(plays, clips, 4);
     expect(rms(pcm, 0, 1)).toBeGreaterThan(0.1);
     expect(rms(pcm, 1.1, 4)).toBe(0);
@@ -93,6 +105,29 @@ describe('la piste son mixée — elle JOUE, à sa place et à son niveau', () =
     });
     expect(plays).toHaveLength(1);
     expect(plays[0]?.durationS).toBe(120);
+  });
+
+  test('la courbe de volume de l’auteur (#13880) : un son qui monte de 0 à 1 sur ses deux secondes se mesure qui monte', () => {
+    const plays = soundSchedule({
+      sounds: [sound({ src: 'voice', startMs: 1_000, endMs: 3_000, gain: 0, envelope: [{ atMs: 1_000, gain: 0 }, { atMs: 3_000, gain: 1 }] })],
+      clipDurationsS: durations,
+      lengthMs: 3_000,
+    });
+    expect(plays[0]?.envelope).toEqual([{ atS: 1, gain: 0 }, { atS: 3, gain: 1 }]);
+    const pcm = render(plays, clips, 3);
+    expect(rms(pcm, 1, 1.4)).toBeLessThan(0.1);
+    expect(rms(pcm, 2.6, 3)).toBeGreaterThan(rms(pcm, 1.8, 2.2));
+  });
+
+  test('la courbe se coupe à la longueur rendue ; un son muet sans courbe n’est pas programmé', () => {
+    const plays = soundSchedule({
+      sounds: [sound({ src: 'music', envelope: [{ atMs: 0, gain: 1 }, { atMs: 1_000, gain: 0.5 }, { atMs: 9_000, gain: 0.1 }] })],
+      clipDurationsS: durations,
+      lengthMs: 2_000,
+    });
+    expect(plays[0]?.envelope.map((point) => point.atS)).toEqual([0, 1, 2]);
+    expect(plays[0]?.envelope[2]?.gain).toBeCloseTo(0.5 - (0.4 * 1) / 8);
+    expect(soundSchedule({ sounds: [sound({ src: 'music', gain: 0 })], clipDurationsS: durations, lengthMs: 2_000 })).toEqual([]);
   });
 
   test('un son dont le fichier n’a pas pu se décoder n’est pas programmé', () => {
@@ -122,12 +157,35 @@ describe('le programme branché sur le graphe Web Audio', () => {
     const stop = playSoundSchedule({
       context: context as unknown as BaseAudioContext,
       destination: { name: 'out' } as unknown as AudioNode,
-      plays: [{ src: 'music', whenS: 0, offsetS: 0, durationS: 10, loop: true, loopStartS: 0, loopEndS: 4, gain: 0.4 }],
+      plays: [{ src: 'music', whenS: 0, offsetS: 0, durationS: 10, loop: true, loopStartS: 0, loopEndS: 4, gain: 0.4, envelope: [] }],
       buffers: new Map([['music', {} as AudioBuffer]]),
       startAt: 2,
     });
     expect(events).toEqual(['gain:0.4', 'gain->out', 'source->gain', 'start:2:0:10:true']);
     stop();
     expect(events.at(-1)).toBe('stop');
+  });
+});
+
+describe('la courbe de volume posée sur le gain du graphe (#13880)', () => {
+  test('le premier point est un palier, les suivants des rampes linéaires, à l’horloge du contexte', () => {
+    const events: string[] = [];
+    const param = {
+      value: 1,
+      setValueAtTime: (value: number, at: number) => events.push(`set:${value}@${at}`),
+      linearRampToValueAtTime: (value: number, at: number) => events.push(`ramp:${value}@${at}`),
+    };
+    const context = {
+      createBufferSource: () => ({ connect: () => undefined, start: () => undefined, stop: () => undefined, buffer: null, loop: false, loopStart: 0, loopEnd: 0 }),
+      createGain: () => ({ connect: () => undefined, gain: param }),
+    };
+    playSoundSchedule({
+      context: context as unknown as BaseAudioContext,
+      destination: {} as AudioNode,
+      plays: [{ src: 'voice', whenS: 1, offsetS: 0, durationS: 2, loop: false, loopStartS: 0, loopEndS: 2, gain: 0, envelope: [{ atS: 1, gain: 0 }, { atS: 3, gain: 1 }] }],
+      buffers: new Map([['voice', {} as AudioBuffer]]),
+      startAt: 10,
+    });
+    expect(events).toEqual(['set:0@0', 'set:0@11', 'ramp:1@13']);
   });
 });

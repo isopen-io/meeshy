@@ -1,6 +1,8 @@
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
 
+import { decodeAnimatedImage, frameAt, type AnimatedImage } from './scene-export-animated';
+import { grainTiles } from './scene-export-media';
 import type { ExportAssets } from './scene-export-paint';
 import { planSceneExport, sceneExportSources, type SceneExportPlan } from './scene-export-plan';
 
@@ -25,6 +27,8 @@ export type SceneAssetDeps = {
   readonly decodeImage?: ((blob: Blob) => Promise<CanvasImageSource | null>) | undefined;
   /** `null` : pas de Web Audio — l'export sort muet plutôt que pas du tout. */
   readonly decodeAudio: ((data: ArrayBuffer) => Promise<AudioBuffer>) | null;
+  /** WebCodecs — le décodeur des images animées (#13880) ; absent, elles restent fixes. */
+  readonly imageDecoder?: typeof ImageDecoder | undefined;
   readonly timeoutMs?: number;
 };
 
@@ -103,10 +107,15 @@ export async function prepareSceneExport(params: {
     for (const url of urls.splice(0)) deps.revokeObjectURL(url);
   };
 
+  const animations = new Map<string, AnimatedImage>();
   const loadImage = async (src: string): Promise<readonly [string, CanvasImageSource | null]> => {
     const blob = await blobOf(src);
     if (blob === null) return [src, null];
-    const decoded = deps.decodeImage === undefined ? await imageFrom(urlOf(blob), deps.doc, timeoutMs) : await deps.decodeImage(blob).catch(() => null);
+    const [decoded, animated] = await Promise.all([
+      deps.decodeImage === undefined ? imageFrom(urlOf(blob), deps.doc, timeoutMs) : deps.decodeImage(blob).catch(() => null),
+      decodeAnimatedImage(blob, deps.imageDecoder),
+    ]);
+    if (animated !== null) animations.set(src, animated);
     return [src, decoded];
   };
   const loadVideo = async (src: string): Promise<readonly [string, HTMLVideoElement | null]> => {
@@ -153,9 +162,18 @@ export async function prepareSceneExport(params: {
     ...images.filter(([, image]) => image === null).map(([src]) => src),
     ...videos.filter(([, video]) => video === null).map(([src]) => src),
   ];
+  const plan = planSceneExport({ document, carrier, durations });
   return {
-    plan: planSceneExport({ document, carrier, durations }),
-    assets: { image: (src) => imageMap.get(src) ?? null, video: (src) => videoMap.get(src) ?? null },
+    plan: animations.size > 0 && plan.still ? { ...plan, still: false } : plan,
+    assets: {
+      image: (src) => imageMap.get(src) ?? null,
+      imageAt: (src, tMs) => {
+        const animation = animations.get(src);
+        return animation === undefined ? null : frameAt(animation, tMs);
+      },
+      video: (src) => videoMap.get(src) ?? null,
+      grainTile: grainTiles(deps.doc),
+    },
     videos: videoMap,
     buffers: bufferMap,
     missing,
@@ -164,6 +182,7 @@ export async function prepareSceneExport(params: {
         video.pause();
         video.removeAttribute('src');
       }
+      for (const animation of animations.values()) animation.close();
       dispose();
     },
   };

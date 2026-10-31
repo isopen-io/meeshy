@@ -89,6 +89,7 @@ function paintAt(params: RenderParams, stage: Stage, tMs: number): ExportSlide |
     palette: params.env.palette,
     labels: params.env.labels,
     watermark: params.watermark,
+    slideDurationMs: slide.durationMs,
   });
   return slide;
 }

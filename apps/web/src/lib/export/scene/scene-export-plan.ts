@@ -2,6 +2,7 @@ import { electBackgroundTrack, sceneHasAudibleBackgroundVideo } from '@/lib/canv
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundAudioOf, isBackgroundAudio, type CanvasDocument, type CanvasObject, type CanvasScene } from '@/lib/canvas/document';
 import { backgroundMediaTimeline, objectMediaTimeline, trackMediaTimeline, type MediaTimeline } from '@/lib/canvas/media-seek';
+import { fadeFactor, keyframeOverrides } from '@/lib/canvas/pose';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia, isBackground } from '@/lib/feed/scene-framing';
 import { isVideoObject } from '@/lib/feed/scene-motion';
@@ -35,7 +36,11 @@ export type ExportSound = {
   readonly trimEndMs: number | null;
   readonly loop: boolean;
   readonly gain: number;
+  /** La courbe de volume (#13880), en millisecondes de la timeline ; absente : le gain fixe. */
+  readonly envelope?: readonly VolumePoint[];
 };
+
+export type VolumePoint = { readonly atMs: number; readonly gain: number };
 
 export type SceneExportPlan = {
   readonly slides: readonly ExportSlide[];
@@ -46,9 +51,45 @@ export type SceneExportPlan = {
 
 export type MediaDurations = ReadonlyMap<string, number>;
 
-type SceneSound = Omit<ExportSound, 'startMs' | 'endMs'> & { readonly timeline: MediaTimeline };
+type Level = (tSeconds: number) => number;
+
+type SceneSound = Omit<ExportSound, 'startMs' | 'endMs'> & { readonly timeline: MediaTimeline; readonly level: Level | null };
 
 const clampGain = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1);
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+/**
+ * LE VOLUME D'UN SON POSÉ À L'INSTANT (#13880) — ses keyframes de volume
+ * l'emportent sur son gain de base (l'automation iOS remplace le volume), et
+ * ses fondus d'entrée et de sortie le portent à zéro aux bords de sa fenêtre
+ * (`fadeFactor`, la même loi que l'opacité de sa pastille). `null` : rien ne
+ * varie, le gain reste fixe.
+ */
+function levelOf(object: CanvasObject | undefined, base: number): Level | null {
+  if (object === undefined) return null;
+  const keyframes = object.timing?.keyframes ?? [];
+  const automated = keyframes.some((keyframe) => typeof keyframe.volume === 'number');
+  const faded = [object.payload.fadeIn, object.payload.fadeOut].some((fade) => typeof fade === 'number' && fade > 0);
+  if (!automated && !faded) return null;
+  const start = object.timing?.start ?? 0;
+  return (t) => clamp01((keyframeOverrides(keyframes, t, start).volume ?? base) * (fadeFactor(object, t) ?? 1));
+}
+
+const ENVELOPE_STEP_MS = 50;
+const ENVELOPE_MAX_POINTS = 600;
+
+function envelopeOf(level: Level, slide: ExportSlide, fromMs: number, toMs: number): readonly VolumePoint[] {
+  const span = Math.max(0, toMs - fromMs);
+  const step = Math.max(ENVELOPE_STEP_MS, span / ENVELOPE_MAX_POINTS);
+  const count = Math.max(1, Math.ceil(span / step));
+  /* Le dernier point juste avant la fin : à la fin même, la fenêtre est close et le fondu ne se lit plus. */
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const atMs = Math.min(fromMs + index * step, toMs);
+    const sampledMs = Math.max(fromMs, Math.min(atMs, toMs - 1));
+    return { atMs: slide.startMs + atMs, gain: level(sampledMs / 1000) };
+  });
+}
 
 const secondsToMs = (seconds: number | undefined): number | null => (seconds === undefined ? null : Math.round(seconds * 1000));
 
@@ -58,6 +99,7 @@ function soundOf(params: {
   readonly objectId: string | null;
   readonly timeline: MediaTimeline;
   readonly gain: number;
+  readonly object?: CanvasObject;
 }): SceneSound | null {
   if (params.src === undefined || params.src === '') return null;
   return {
@@ -69,6 +111,7 @@ function soundOf(params: {
     loop: params.timeline.loop,
     gain: params.gain,
     timeline: params.timeline,
+    level: levelOf(params.object, params.gain),
   };
 }
 
@@ -86,6 +129,7 @@ function foregroundSounds(scene: CanvasScene, carrier: SceneCarrier, background:
       objectId: object.id,
       timeline: objectMediaTimeline(object),
       gain: clampGain(object.payload.volume),
+      object,
     });
     return sound === null ? [] : [sound];
   });
@@ -114,6 +158,7 @@ function sceneSounds(document: CanvasDocument, sceneIndex: number, carrier: Scen
           objectId: background.id,
           timeline: backgroundMediaTimeline(background),
           gain: clampGain(background.payload.volume),
+          object: background,
         })
       : null;
   return [trackSound, videoSound, ...foregroundSounds(scene, carrier, background)].filter((sound): sound is SceneSound => sound !== null);
@@ -155,8 +200,9 @@ function placed(sound: SceneSound, slide: ExportSlide): ExportSound | null {
   const windowStartMs = sound.timeline.windowStart * 1000;
   if (windowStartMs >= slide.durationMs) return null;
   const windowEndMs = Math.min(sound.timeline.windowEnd * 1000, slide.durationMs);
-  const { timeline: _timeline, ...rest } = sound;
-  return { ...rest, startMs: slide.startMs + windowStartMs, endMs: slide.startMs + windowEndMs };
+  const { timeline: _timeline, level, ...rest } = sound;
+  const envelope = level === null ? undefined : envelopeOf(level, slide, windowStartMs, windowEndMs);
+  return { ...rest, startMs: slide.startMs + windowStartMs, endMs: slide.startMs + windowEndMs, ...(envelope === undefined ? {} : { envelope }) };
 }
 
 const isStill = (document: CanvasDocument, sounds: readonly ExportSound[]): boolean =>

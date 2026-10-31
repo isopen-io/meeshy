@@ -129,3 +129,40 @@ describe('les sources à charger avant le rendu', () => {
     });
   });
 });
+
+describe('la courbe de volume de l’auteur suit le son (#13880, miroir des rampes de volume iOS)', () => {
+  const voiceWith = (timing: Record<string, unknown>, payload: Record<string, unknown> = {}) =>
+    planSceneExport({
+      document: documentOf([[{ id: 'voice', kind: 'audio', timing, payload: { mediaURL: 'https://cdn/voice.m4a', volume: 0.9, ...payload } }]]),
+      carrier: NO_CARRIER,
+      durations,
+    }).sounds[0];
+  const gainAt = (envelope: readonly { atMs: number; gain: number }[] | undefined, atMs: number) => {
+    const points = envelope ?? [];
+    const next = points.findIndex((point) => point.atMs >= atMs);
+    const hi = points[next];
+    const lo = points[next - 1] ?? hi;
+    if (hi === undefined || lo === undefined) return points.at(-1)?.gain;
+    return hi.atMs === lo.atMs ? hi.gain : lo.gain + ((hi.gain - lo.gain) * (atMs - lo.atMs)) / (hi.atMs - lo.atMs);
+  };
+
+  test('des keyframes de volume remplacent le gain de base, à leur heure dans la fenêtre du son', () => {
+    const voice = voiceWith({ start: 2, keyframes: [{ time: 0, volume: 0 }, { time: 2, volume: 1 }] });
+    expect(voice?.envelope?.[0]).toEqual({ atMs: 2_000, gain: 0 });
+    expect(gainAt(voice?.envelope, 3_000)).toBeCloseTo(0.5, 1);
+    expect(gainAt(voice?.envelope, 5_000)).toBeCloseTo(1, 5);
+  });
+
+  test('le fondu d’entrée et de sortie d’un son posé portent sur son volume', () => {
+    const voice = voiceWith({ start: 0 }, { duration: 4, fadeIn: 1, fadeOut: 1 });
+    expect(gainAt(voice?.envelope, 0)).toBeCloseTo(0, 5);
+    expect(gainAt(voice?.envelope, 500)).toBeCloseTo(0.45, 1);
+    expect(gainAt(voice?.envelope, 2_000)).toBeCloseTo(0.9, 5);
+    expect(gainAt(voice?.envelope, 3_500)).toBeCloseTo(0.45, 1);
+  });
+
+  test('sans keyframe de volume ni fondu, le gain reste fixe : aucune courbe', () => {
+    expect(voiceWith({ start: 0 })?.envelope).toBeUndefined();
+    expect(voiceWith({ start: 0, keyframes: [{ time: 0, opacity: 0.5 }] })?.envelope).toBeUndefined();
+  });
+});

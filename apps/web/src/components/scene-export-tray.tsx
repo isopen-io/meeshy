@@ -13,12 +13,17 @@ import { formatMediaTime } from '@/lib/view/seek-track';
  * quel écran, « Imager » y propose ses parts (1/4 · 2/4 · 3/4 · 4/4, chacune
  * avec sa durée, la longueur rendue DEPUIS LE DÉBUT), et l'issue s'y dit une
  * fois. Rien ne se peint tant qu'aucun export n'a été lancé.
+ *
+ * « Partager » (#13881) y attend son toucher quand le rendu a fait expirer
+ * l'activation du geste : le fichier est prêt, et le bouton « Partager » du
+ * bandeau ouvre la feuille du système DANS son propre clic (`deliverNow`).
  */
 
 const NOTICE_MS = 4000;
 
 const NOTICE_KEY = {
   saved: 'sceneExport.notice.saved',
+  shared: 'sceneExport.notice.shared',
   cancelled: 'sceneExport.notice.cancelled',
   failed: 'sceneExport.notice.failed',
   retry: 'sceneExport.notice.retry',
@@ -70,6 +75,27 @@ function LengthChoice({ jobKey, choices, language }: { readonly jobKey: string; 
       </div>
       <button type="button" onClick={() => exportJobs.choose(jobKey, null)} className="mt-2 min-h-11 w-full rounded-chip text-body focus-visible:outline-2" style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}>
         {translateSceneExport(language, 'sceneExport.length.cancel')}
+      </button>
+    </div>
+  );
+}
+
+function ReadyRow({ job, language }: { readonly job: exportJobs.SceneExportJobView; readonly language: InterfaceLanguage }) {
+  return (
+    <div data-scene-export-ready={job.key} className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-full py-1 pl-4 pr-1 shadow-cast" style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' }}>
+      <p className="min-w-0 flex-1 truncate text-caption" style={{ color: 'var(--color-ios-ink)' }}>
+        {translateSceneExport(language, 'sceneExport.tray.ready')}
+      </p>
+      <button type="button" onClick={() => exportJobs.cancel(job.key)} className="min-h-11 shrink-0 rounded-full px-3 text-caption focus-visible:outline-2" style={{ color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}>
+        {translateSceneExport(language, 'sceneExport.tray.cancel')}
+      </button>
+      <button
+        type="button"
+        onClick={() => exportJobs.deliverNow(job.key)}
+        className="min-h-11 shrink-0 rounded-full px-4 text-caption font-semibold focus-visible:outline-2"
+        style={{ backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-on-media)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {translateSceneExport(language, 'sceneExport.tray.share')}
       </button>
     </div>
   );
@@ -127,7 +153,13 @@ export function SceneExportTray() {
   return (
     <div className="pointer-events-none fixed inset-x-0 z-[140] flex flex-col items-center gap-2 px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' }} data-scene-export-tray>
       {state.jobs.map((job) =>
-        job.choosing === null ? <JobRow key={job.key} job={job} language={language} /> : <LengthChoice key={job.key} jobKey={job.key} choices={job.choosing} language={language} />,
+        job.choosing !== null ? (
+          <LengthChoice key={job.key} jobKey={job.key} choices={job.choosing} language={language} />
+        ) : job.ready ? (
+          <ReadyRow key={job.key} job={job} language={language} />
+        ) : (
+          <JobRow key={job.key} job={job} language={language} />
+        ),
       )}
       <p role="status" className="rounded-full px-4 py-2 text-caption empty:hidden" style={{ backgroundColor: 'var(--color-scrim)', color: 'var(--color-on-media)' }}>
         {state.notice === null ? '' : translateSceneExport(language, NOTICE_KEY[state.notice.notice])}

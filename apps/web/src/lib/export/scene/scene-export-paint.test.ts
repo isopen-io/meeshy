@@ -5,12 +5,12 @@ import { parseCanvasDocument, type CanvasScene } from '@/lib/canvas/document';
 
 import { paintSceneFrame, type ExportAssets, type ScenePaintable } from './scene-export-paint';
 
-type Op = { readonly op: string; readonly detail: string; readonly alpha: number };
+type Op = { readonly op: string; readonly detail: string; readonly alpha: number; readonly filter: string; readonly composite: string };
 
 /** Un contexte 2D qui ENREGISTRE ce qu'on lui peint, dans l'ordre. */
 function recordingContext() {
   const ops: Op[] = [];
-  const stack: number[] = [];
+  const stack: { alpha: number; filter: string; composite: string }[] = [];
   const ctx = {
     fillStyle: '' as string | CanvasGradient | CanvasPattern,
     strokeStyle: '' as string | CanvasGradient | CanvasPattern,
@@ -23,12 +23,13 @@ function recordingContext() {
     textBaseline: 'alphabetic' as CanvasTextBaseline,
     direction: 'ltr' as CanvasDirection,
     globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
     shadowColor: 'transparent',
     shadowBlur: 0,
     shadowOffsetX: 0,
     shadowOffsetY: 0,
     record(op: string, detail = '') {
-      ops.push({ op, detail, alpha: this.globalAlpha });
+      ops.push({ op, detail, alpha: this.globalAlpha, filter: this.filter, composite: this.globalCompositeOperation });
     },
     fillRect(x: number, y: number, w: number, h: number) {
       this.record('fillRect', `${String(this.fillStyle)}:${x},${y},${w},${h}`);
@@ -43,7 +44,9 @@ function recordingContext() {
     beginPath: () => undefined,
     moveTo: () => undefined,
     lineTo: () => undefined,
-    arc: () => undefined,
+    arc(_x: number, _y: number, radius: number) {
+      this.record('arc', String(Math.round(radius)));
+    },
     closePath: () => undefined,
     roundRect: () => undefined,
     rect: () => undefined,
@@ -57,16 +60,25 @@ function recordingContext() {
       this.record('stroke', String(this.strokeStyle));
     },
     save() {
-      stack.push(this.globalAlpha);
+      stack.push({ alpha: this.globalAlpha, filter: this.filter, composite: this.globalCompositeOperation });
     },
     restore() {
-      this.globalAlpha = stack.pop() ?? 1;
+      const top = stack.pop();
+      this.globalAlpha = top?.alpha ?? 1;
+      this.filter = top?.filter ?? 'none';
+      this.globalCompositeOperation = top?.composite ?? 'source-over';
     },
-    translate: () => undefined,
+    translate(x: number, y: number) {
+      this.record('translate', `${Math.round(x)},${Math.round(y)}`);
+    },
     rotate: () => undefined,
-    scale: () => undefined,
+    scale(x: number) {
+      this.record('scale', String(Math.round(x * 1000) / 1000));
+    },
     setTransform: () => undefined,
     createLinearGradient: () => ({ addColorStop: () => undefined }) as unknown as CanvasGradient,
+    createRadialGradient: () => ({ addColorStop: () => undefined }) as unknown as CanvasGradient,
+    createPattern: () => null,
     drawImage(source: { readonly name?: string }) {
       this.record('drawImage', source.name ?? '?');
     },
@@ -92,7 +104,7 @@ const assets: ExportAssets = {
 
 const carrier: SceneCarrier = { postId: 'p', media: [] };
 
-const paint = (scene: CanvasScene, tSeconds: number, watermark: string | null = null) => {
+const paint = (scene: CanvasScene, tSeconds: number, watermark: string | null = null, slideDurationMs?: number) => {
   const { ctx, ops } = recordingContext();
   paintSceneFrame({
     ctx,
@@ -106,6 +118,7 @@ const paint = (scene: CanvasScene, tSeconds: number, watermark: string | null = 
     palette: { card: '#101010', scrim: 'rgba(0,0,0,0.4)', onMedia: '#FFFFFF', placeFill: '#EEF', placeInk: '#223', pin: '#F00', mediaBackdrop: '#000000', fontFamily: 'Inter' },
     labels: { placeHere: 'Ici' },
     watermark,
+    ...(slideDurationMs === undefined ? {} : { slideDurationMs }),
   });
   return ops;
 };
@@ -160,5 +173,79 @@ describe('une image de l’export — tous les calques, dans l’ordre de la sc�
 
   test('le filigrane nomme l’auteur', () => {
     expect(paint(story, 1, '@ana').some((op) => op.op === 'fillText' && op.detail === '@ana')).toBe(true);
+  });
+});
+
+function transitionScene(extra: Record<string, unknown>, objects: readonly Record<string, unknown>[]): CanvasScene {
+  const scene = parseCanvasDocument({ v: 3, scenes: [{ id: 's', objects: objects.map(object), ...extra }] })?.scenes[0];
+  if (scene === undefined) throw new Error('scène de témoin invalide');
+  return scene;
+}
+
+describe('l’export peint les transitions de la scène (#13880)', () => {
+  const titled = (extra: Record<string, unknown>) => transitionScene(extra, [{ id: 't', kind: 'text', payload: { text: 'Titre' } }]);
+
+  test('ouverture en fondu : à mi-course, toute la scène est peinte à moitié, sur le fond noir du lecteur', () => {
+    const ops = paint(titled({ opening: { type: 'fade' } }), 0.6, null, 6000);
+    expect(ops[0]).toMatchObject({ op: 'fillRect', detail: '#000000:0,0,720,1280' });
+    expect(ops.find((op) => op.detail === 'Titre')?.alpha).toBeCloseTo(0.5);
+  });
+
+  test('fermeture en zoom : la scène grossit vers 1,08 sur la dernière 1,2 s', () => {
+    const ops = paint(titled({ closing: { type: 'zoom' } }), 6, null, 6000);
+    expect(ops.some((op) => op.op === 'scale' && op.detail === '1.08')).toBe(true);
+  });
+
+  test('ouverture en révélation : un cercle au centre masque la scène', () => {
+    const ops = paint(titled({ opening: { type: 'reveal' } }), 0.6, null, 6000);
+    const radius = Math.round((0.5 * Math.hypot(720, 1280)) / 2);
+    expect(ops.some((op) => op.op === 'arc' && op.detail === String(radius))).toBe(true);
+    expect(ops.findIndex((op) => op.op === 'clip')).toBeLessThan(ops.findIndex((op) => op.detail === 'Titre'));
+  });
+
+  test('le filigrane reste hors de la transition : il ne s’efface pas avec la scène', () => {
+    const ops = paint(titled({ opening: { type: 'fade' } }), 0, '@ana', 6000);
+    expect(ops.find((op) => op.detail === '@ana')?.alpha).toBeCloseTo(0.85);
+  });
+
+  test('sans durée de slide connue, rien ne transite', () => {
+    const ops = paint(titled({ opening: { type: 'fade' } }), 0);
+    expect(ops.find((op) => op.detail === 'Titre')?.alpha).toBe(1);
+  });
+
+  test('un fondu enchaîné entre deux clips porte l’opacité des deux pendant la transition', () => {
+    const scene = transitionScene({ clipTransitions: [{ id: 'x', fromClipId: 'a', toClipId: 'b', kind: 'crossfade', duration: 1 }] }, [
+      { id: 'a', kind: 'text', timing: { start: 0, end: 4 }, payload: { text: 'Avant' } },
+      { id: 'b', kind: 'text', timing: { start: 3, end: 8 }, payload: { text: 'Après' } },
+    ]);
+    const ops = paint(scene, 3.5, null, 8000);
+    expect(ops.find((op) => op.detail === 'Avant')?.alpha).toBeCloseTo(0.5);
+    expect(ops.find((op) => op.detail === 'Après')?.alpha).toBeCloseTo(0.5);
+  });
+});
+
+describe('l’export peint l’aspect d’un média comme le lecteur (#13880)', () => {
+  const posed = (payload: Record<string, unknown>) =>
+    sceneOf([{ id: 'img', kind: 'media', z: 2, payload: { mediaType: 'image/jpeg', mediaURL: 'https://cdn/photo.jpg', aspectRatio: 1, ...payload } }]);
+
+  test('le filtre de l’auteur puis ses réglages, sur le média seul', () => {
+    const ops = paint(posed({ filter: 'bw', adjustments: { saturation: 0.5 } }), 0);
+    expect(ops.find((op) => op.op === 'drawImage' && op.detail === 'photo')?.filter).toBe('grayscale(1) contrast(1.1) saturate(0.5)');
+  });
+
+  test('le bloom repeint le média en halo, fondu en « screen »', () => {
+    const draws = paint(posed({ adjustments: { bloom: 0.6 } }), 0).filter((op) => op.op === 'drawImage' && op.detail === 'photo');
+    expect(draws.map((op) => op.composite)).toEqual(['source-over', 'screen']);
+    expect(draws[1]?.filter).toContain('brightness(0.6)');
+  });
+
+  test('la teinte se pose dans la boîte du média, en lumière douce', () => {
+    const tint = paint(posed({ adjustments: { temperature: 1 } }), 0).find((op) => op.op === 'fillRect' && op.detail.startsWith('rgba(255, 138, 0'));
+    expect(tint?.composite).toBe('soft-light');
+  });
+
+  test('le fond aussi reçoit ses réglages', () => {
+    const scene = sceneOf([{ id: 'bg', kind: 'media', plane: 'bg', z: 0, payload: { mediaType: 'video/mp4', mediaURL: 'https://cdn/bg.mp4', isBackground: true, adjustments: { contrast: 1.3 } } }]);
+    expect(paint(scene, 0).find((op) => op.detail === 'bg-video')?.filter).toBe('contrast(1.3)');
   });
 });

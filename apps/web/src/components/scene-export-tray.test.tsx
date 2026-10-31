@@ -84,6 +84,33 @@ describe('le bandeau des exports — suivre, choisir, annuler, de n’importe qu
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  test('un fichier prêt à partager attend le toucher « Partager », qui ouvre la feuille dans son propre clic', async () => {
+    const container = mount();
+    const shared: string[] = [];
+    let handle: exportJobs.SceneExportJobHandle | null = null;
+    let answer: Promise<unknown> = Promise.resolve();
+    act(() => {
+      handle = exportJobs.start('story:s1');
+      answer =
+        handle?.awaitDeliveryTap(() => {
+          shared.push('feuille');
+          return Promise.resolve('delivered');
+        }) ?? answer;
+    });
+    expect(container.querySelector('[data-scene-export-ready="story:s1"]')?.textContent).toContain('Fichier prêt à partager');
+    expect(shared).toEqual([]);
+    act(() => buttonNamed(container, 'Partager')?.click());
+    expect(shared).toEqual(['feuille']);
+    expect(await answer).toBe('delivered');
+    act(() => (handle as exportJobs.SceneExportJobHandle | null)?.finish());
+  });
+
+  test('« Partager » réussi se dit « Fichier partagé »', () => {
+    const container = mount();
+    act(() => exportJobs.announce('shared'));
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Fichier partagé');
+  });
+
   test('l’issue se dit dans la région d’annonce', () => {
     const container = mount();
     act(() => exportJobs.announce('saved'));

@@ -1,4 +1,5 @@
 import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
+import type { SceneDelivery } from './scene-export-run';
 
 /**
  * **LES EXPORTS EN COURS, HORS DE REACT** (#13873) — l'état que le bandeau
@@ -11,9 +12,15 @@ import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
  * publication est refusé tant que le premier tourne. Le choix de longueur
  * d'« Imager » (1/4 · 2/4 · 3/4 · 4/4) vit ici aussi : le job ATTEND la
  * réponse du bandeau.
+ *
+ * « Partager » (#13881) peut attendre lui aussi : le rendu dure au moins la
+ * longueur de la composition, et l'activation du geste qui l'a lancé a expiré
+ * bien avant — le navigateur refuse alors `navigator.share`. Le fichier est
+ * PRÊT, le bandeau offre « Partager », et c'est CE toucher, neuf, qui ouvre la
+ * feuille du système : `deliverNow` appelle la livraison sans rien attendre.
  */
 
-export type SceneExportNotice = 'saved' | 'cancelled' | 'failed' | 'retry' | 'unsupported' | 'offline' | 'busy';
+export type SceneExportNotice = 'saved' | 'shared' | 'cancelled' | 'failed' | 'retry' | 'unsupported' | 'offline' | 'busy';
 
 export type SceneExportJobView = {
   readonly key: string;
@@ -22,6 +29,8 @@ export type SceneExportJobView = {
   readonly cancellable: boolean;
   /** Les parts offertes par « Imager », en attente d'une réponse — `null` sinon. */
   readonly choosing: readonly ImagerLengthChoice[] | null;
+  /** Le fichier est rendu et attend le toucher « Partager » du bandeau. */
+  readonly ready: boolean;
 };
 
 export type SceneExportJobsState = {
@@ -34,10 +43,19 @@ export type SceneExportJobHandle = {
   readonly report: (progress: number | null) => void;
   readonly lockDelivery: () => void;
   readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
+  /** Le fichier attend un toucher neuf : `deliver` part DANS ce toucher (`deliverNow`). */
+  readonly awaitDeliveryTap: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
   readonly finish: () => void;
 };
 
-type Job = { readonly view: SceneExportJobView; readonly controller: AbortController; readonly answer: ((quarter: ImagerQuarter | null) => void) | null };
+type PendingTap = { readonly deliver: () => Promise<SceneDelivery>; readonly resolve: (delivery: SceneDelivery) => void };
+
+type Job = {
+  readonly view: SceneExportJobView;
+  readonly controller: AbortController;
+  readonly answer: ((quarter: ImagerQuarter | null) => void) | null;
+  readonly tap: PendingTap | null;
+};
 
 const jobs = new Map<string, Job>();
 const listeners = new Set<() => void>();
@@ -65,7 +83,10 @@ function update(key: string, controller: AbortController, next: (job: Job) => Jo
   if (job === undefined || job.controller !== controller) return;
   const updated = next(job);
   const same =
-    updated.view.cancellable === job.view.cancellable && updated.view.choosing === job.view.choosing && percent(updated.view.progress) === percent(job.view.progress);
+    updated.view.cancellable === job.view.cancellable &&
+    updated.view.choosing === job.view.choosing &&
+    updated.view.ready === job.view.ready &&
+    percent(updated.view.progress) === percent(job.view.progress);
   jobs.set(key, updated);
   if (!same) publish();
 }
@@ -73,7 +94,7 @@ function update(key: string, controller: AbortController, next: (job: Job) => Jo
 export function start(key: string): SceneExportJobHandle | null {
   if (jobs.has(key)) return null;
   const controller = new AbortController();
-  jobs.set(key, { view: { key, progress: null, cancellable: true, choosing: null }, controller, answer: null });
+  jobs.set(key, { view: { key, progress: null, cancellable: true, choosing: null, ready: false }, controller, answer: null, tap: null });
   publish();
   return {
     signal: controller.signal,
@@ -86,6 +107,14 @@ export function start(key: string): SceneExportJobHandle | null {
           return;
         }
         update(key, controller, (job) => ({ ...job, view: { ...job.view, choosing: choices }, answer: resolve }));
+      }),
+    awaitDeliveryTap: (deliver) =>
+      new Promise((resolve) => {
+        if (controller.signal.aborted || jobs.get(key)?.controller !== controller) {
+          resolve('cancelled');
+          return;
+        }
+        update(key, controller, (job) => ({ ...job, view: { ...job.view, ready: true, cancellable: true }, tap: { deliver, resolve } }));
       }),
     finish: () => {
       if (jobs.get(key)?.controller !== controller) return;
@@ -105,12 +134,27 @@ export function choose(key: string, quarter: ImagerQuarter | null): void {
   answer(quarter);
 }
 
+/**
+ * Le toucher « Partager » du bandeau : la livraison part SANS rien attendre,
+ * dans l'activation de ce geste — un `await` avant elle la perdrait.
+ */
+export function deliverNow(key: string): void {
+  const job = jobs.get(key);
+  if (job === undefined || job.tap === null) return;
+  const { deliver, resolve } = job.tap;
+  jobs.set(key, { ...job, view: { ...job.view, ready: false, cancellable: false }, tap: null });
+  const delivery = deliver();
+  publish();
+  void delivery.then(resolve, () => resolve('failed'));
+}
+
 /** Annule — sans effet une fois la livraison commencée. */
 export function cancel(key: string): void {
   const job = jobs.get(key);
   if (job === undefined || !job.view.cancellable) return;
   job.controller.abort();
   job.answer?.(null);
+  job.tap?.resolve('cancelled');
   jobs.delete(key);
   publish();
 }

@@ -848,6 +848,8 @@ export default function StoryScreen() {
             language={interfaceLanguage}
             onClose={dismissByUser}
             onSave={ownerRail.handlers.save}
+            onShare={ownerRail.handlers.share}
+            onImager={ownerRail.imager}
             onRemove={removal.onRemove}
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle

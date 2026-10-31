@@ -67,6 +67,14 @@ describe('un export, du geste au fichier', () => {
     expect(run.rendered).toEqual([120_000]);
   });
 
+  test('« Partager » rend toute la composition, sans rien demander, et dit « partagé »', async () => {
+    const run = scenario({ totalMs: 240_000, mode: 'share' });
+    expect(await run.result).toBe('shared');
+    expect(run.offered).toHaveLength(0);
+    expect(run.rendered).toEqual([240_000]);
+    expect(run.delivered).toEqual([{ fileName: 'meeshy-story-1.mp4', mimeType: 'video/mp4' }]);
+  });
+
   test('« Imager » sous une minute ne propose aucun choix', async () => {
     const run = scenario({ totalMs: 45_000, mode: 'imager' });
     await run.result;

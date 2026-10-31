@@ -176,6 +176,30 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     expect(sendSheetStore.getState().request).toBe(forward);
   });
 
+  test('« Imager » d’un média nu (#13881) : une entrée du menu « … », après Partager, qui lance la composition de l’hôte', async () => {
+    const items = photos(['a']);
+    const share: SendSheetRequest = { intent: 'share', payload: { kind: 'media', url: '/uploads/a.jpg', mime: 'image/jpeg', name: 'a.jpg', preview: { kind: 'image', thumbUrl: '/uploads/a.jpg' } } };
+    const imaged: string[] = [];
+    mount({ items, startIndex: 0, actionsAt: () => ({ ...pageOf(items[0]!, { ...NO_MEDIA_OFFERS, share: true }, undefined, share), imager: () => imaged.push('a') }) });
+    await settle();
+    openMenu();
+    const keys = Array.from(dialog().querySelectorAll('[role="menuitem"]')).map((el) => el.getAttribute('data-viewer-menu-item'));
+    expect(keys).toEqual(['share', 'imager']);
+    const item = dialog().querySelector<HTMLElement>('[data-viewer-menu-item="imager"]')!;
+    expect(item.textContent).toContain('Imager');
+    act(() => {
+      item.click();
+    });
+    expect(imaged).toEqual(['a']);
+  });
+
+  test('« Imager » seul suffit à porter le menu « … » (loi 4 : un contrôle qui a un effet existe)', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => ({ ...pageOf(items[0]!, NO_MEDIA_OFFERS), imager: () => {} }) });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-menu-button]')).not.toBeNull();
+  });
+
   test('« Enregistrer » du rail enregistre la pièce, comme celui du menu', async () => {
     const items = photos(['a']);
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...NO_MEDIA_OFFERS, save: true }) });

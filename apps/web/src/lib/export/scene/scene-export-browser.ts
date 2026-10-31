@@ -9,12 +9,18 @@ import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
 import type { ExportPalette } from './scene-export-paint';
 import { renderSceneExport, type RenderEnvironment } from './scene-export-render';
 import { runSceneExport, type SceneDelivery, type SceneExportMode, type SceneExportResult } from './scene-export-run';
+import { sceneDeliveryOf, shareSceneFile } from './scene-export-share';
 import type { SceneExportSubject } from './scene-export-subject';
 
 /**
  * **L'EXPORT DANS LE NAVIGATEUR** (#13873) — le seul module qui touche au DOM,
  * au réseau et à Web Audio. Chargé à la demande, au premier « Enregistrer » ou
  * « Imager » : aucun lecteur qui ne tape jamais ces gestes ne le paie.
+ *
+ * « Enregistrer » range le fichier (galerie de la coque, sinon la porte de
+ * fichier) ; « Partager » le remet à la feuille de partage (#13881,
+ * `shareSceneFile`), un toucher neuf du bandeau la rouvrant quand le rendu a
+ * fait expirer l'activation du geste.
  *
  * La palette est celle du lecteur, relue sur les jetons CSS de la page : le
  * fichier rendu porte les couleurs que l'utilisateur voit (loi 6).
@@ -63,9 +69,7 @@ async function deliverFile(params: {
   const gallery = await saveToGallery({ saver: params.gallerySaver, blob: params.blob, fileName: params.fileName, mimeType: params.mimeType });
   if (gallery !== null) return gallery === 'media.viewer.saved' ? 'delivered' : 'failed';
   const portal = fileDeliveryPortal(params.host);
-  const outcome = portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType);
-  if (outcome === 'delivered' || outcome === 'cancelled') return outcome;
-  return outcome === 'expired' ? 'retry' : 'failed';
+  return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));
 }
 
 export async function startSceneExport(params: {
@@ -77,6 +81,8 @@ export async function startSceneExport(params: {
   readonly host: FileDeliveryHost;
   readonly gallerySaver: GallerySaver | null;
   readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
+  /** « Partager » : le fichier prêt attend un toucher neuf — absent, il se livre sans attendre. */
+  readonly awaitDeliveryTap?: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
   readonly signal: AbortSignal;
   readonly onProgress: (fraction: number) => void;
   readonly onDelivering?: () => void;
@@ -111,6 +117,7 @@ export async function startSceneExport(params: {
               createObjectURL: (blob) => URL.createObjectURL(blob),
               revokeObjectURL: (url) => URL.revokeObjectURL(url),
               decodeImage: typeof createImageBitmap === 'function' ? (blob) => createImageBitmap(blob) : undefined,
+              imageDecoder: typeof ImageDecoder === 'function' ? ImageDecoder : undefined,
               decodeAudio: audioContext === null ? null : (data) => audioContext.decodeAudioData(data),
             },
           }),
@@ -126,7 +133,10 @@ export async function startSceneExport(params: {
             signal,
             onProgress,
           }),
-        deliver: (blob, fileName, mimeType) => deliverFile({ blob, fileName, mimeType, host: params.host, gallerySaver: params.gallerySaver }),
+        deliver: (blob, fileName, mimeType) =>
+          params.mode === 'share'
+            ? shareSceneFile({ blob, fileName, mimeType, host: params.host, awaitTap: params.awaitDeliveryTap ?? ((deliver) => deliver()) })
+            : deliverFile({ blob, fileName, mimeType, host: params.host, gallerySaver: params.gallerySaver }),
         chooseLength: params.chooseLength,
       },
     });

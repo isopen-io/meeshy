@@ -3,9 +3,9 @@ import { readMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-cr
 import { backgroundBackdrop, backgroundFraming, hexColorCss } from '@/lib/canvas/background';
 import { SCENE_BACKDROP_TINT } from '@/lib/canvas/backdrop';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
+import { clipTransitionOpacity, readClipTransitions } from '@/lib/canvas/clip-transition';
 import { sceneAudioChipForm, sceneAudioPresence, type CanvasObject, type CanvasScene } from '@/lib/canvas/document';
 import { MARKER_ALPHA, paintableStrokes, strokeWidth } from '@/lib/canvas/drawing';
-import { mediaFilterCss } from '@/lib/canvas/media-filter';
 import { MEDIA_CORNER_FRACTION, placedMediaDesignSize } from '@/lib/canvas/media-size';
 import { parsePlace, placeLabel, PLACE_FONT_SIZE, PLACE_H_PAD, PLACE_ICON_EM, PLACE_ICON_GAP, PLACE_V_PAD } from '@/lib/canvas/place';
 import { objectPose } from '@/lib/canvas/pose';
@@ -14,7 +14,9 @@ import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isVideoObject } from '@/lib/feed/scene-motion';
 import { LETTERBOX_FILL_OPACITY } from '@/lib/stories/letterbox';
 
+import { drawPlacement, mediaLookOf, paintWithLook, placementOf, sourceSize, type GrainTile, type Placement, type Rect } from './scene-export-media';
 import { layoutSceneText } from './scene-export-text';
+import { slideTransitionPose, withSceneTransition } from './scene-export-transition';
 
 /**
  * **UNE IMAGE DE L'EXPORT** (#13873) — la scène au temps `t`, peinte sur un
@@ -62,11 +64,18 @@ export type ScenePaintable = Pick<
   | 'scale'
   | 'createLinearGradient'
   | 'drawImage'
+  | 'globalCompositeOperation'
+  | 'createRadialGradient'
+  | 'createPattern'
 > & { direction: CanvasDirection; lineCap: CanvasLineCap; lineJoin: CanvasLineJoin };
 
 export type ExportAssets = {
   readonly image: (src: string) => CanvasImageSource | null;
+  /** L'image d'une animation (GIF, WebP animé) à `tMs` de la slide (#13880) ; `null` : l'image fixe. */
+  readonly imageAt?: (src: string, tMs: number) => CanvasImageSource | null;
   readonly video: (src: string) => HTMLVideoElement | null;
+  /** La tuile du grain d'un média (#13880) — absente ou `null` : le grain se tait. */
+  readonly grainTile?: GrainTile;
 };
 
 /** Les couleurs du thème, résolues depuis les jetons CSS : un canvas ne lit pas `var(--…)`. */
@@ -94,67 +103,50 @@ export type PaintSceneParams = {
   readonly labels: { readonly placeHere: string };
   /** `@auteur` — le filigrane nomme l'auteur de l'œuvre, jamais celui qui l'enregistre. */
   readonly watermark: string | null;
+  /** La durée de la slide — connue, l'ouverture et la fermeture de la scène se peignent (#13880). */
+  readonly slideDurationMs?: number;
 };
 
 const DESIGN_WIDTH = 1080;
 const DESIGN_HEIGHT = 1920;
 
 type Size = { readonly width: number; readonly height: number };
-type Rect = Size & { readonly x: number; readonly y: number };
-
-function sourceSize(source: CanvasImageSource): Size | null {
-  const record = source as unknown as Record<string, unknown>;
-  const pick = (...keys: readonly string[]): number => {
-    const value = keys.map((key) => record[key]).find((candidate): candidate is number => typeof candidate === 'number' && candidate > 0);
-    return value ?? 0;
-  };
-  const width = pick('videoWidth', 'naturalWidth', 'width');
-  const height = pick('videoHeight', 'naturalHeight', 'height');
-  return width > 0 && height > 0 ? { width, height } : null;
-}
-
-const cropRectOf = (size: Size, crop: MediaCropRect | null): Rect =>
-  crop === null ? { x: 0, y: 0, ...size } : { x: crop.x * size.width, y: crop.y * size.height, width: crop.width * size.width, height: crop.height * size.height };
-
-/** `object-cover` (rempli) ou `object-contain` (ajusté) d'une source dans une boîte. */
-function fitted(source: Rect, box: Rect, mode: 'cover' | 'contain'): { readonly from: Rect; readonly to: Rect } {
-  const scale = mode === 'cover' ? Math.max(box.width / source.width, box.height / source.height) : Math.min(box.width / source.width, box.height / source.height);
-  if (mode === 'contain') {
-    const width = source.width * scale;
-    const height = source.height * scale;
-    return { from: source, to: { x: box.x + (box.width - width) / 2, y: box.y + (box.height - height) / 2, width, height } };
-  }
-  const width = box.width / scale;
-  const height = box.height / scale;
-  return { from: { x: source.x + (source.width - width) / 2, y: source.y + (source.height - height) / 2, width, height }, to: box };
-}
 
 function drawFitted(ctx: ScenePaintable, source: CanvasImageSource, box: Rect, mode: 'cover' | 'contain', crop: MediaCropRect | null): void {
-  const size = sourceSize(source);
-  if (size === null) return;
-  const { from, to } = fitted(cropRectOf(size, crop), box, mode);
-  ctx.drawImage(source, from.x, from.y, from.width, from.height, to.x, to.y, to.width, to.height);
+  const placement = placementOf(source, box, mode, crop);
+  if (placement !== null) drawPlacement(ctx, source, placement);
 }
+
+const NO_GRAIN: GrainTile = () => null;
+
+/** Le média à sa place, avec son filtre, ses réglages, son halo et ses calques — la loi du lecteur. */
+function paintLooked(
+  object: CanvasObject,
+  params: PaintSceneParams,
+  pixels: CanvasImageSource,
+  placement: Placement,
+  frame: { readonly glowWidth: number; readonly overlayBox: Rect },
+): void {
+  const k = params.width / DESIGN_WIDTH;
+  const look = mediaLookOf(object.payload, {
+    target: isVideoObject(object) ? 'video' : 'image',
+    designPixelsPerSourcePixel: placement.to.width / k / placement.from.width,
+    pixelsPerDesignPixel: k,
+  });
+  paintWithLook(params.ctx, look, { ...frame, grainTile: params.assets.grainTile ?? NO_GRAIN }, () => drawPlacement(params.ctx, pixels, placement));
+}
+
+const imageOf = (src: string, params: PaintSceneParams): CanvasImageSource | null =>
+  params.assets.imageAt?.(src, params.tSeconds * 1000) ?? params.assets.image(src);
 
 const isReady = (video: HTMLVideoElement): boolean => video.readyState >= 2;
 
 function pixelsOf(object: CanvasObject, params: PaintSceneParams): CanvasImageSource | null {
   const src = objectMediaSrc(object, params.carrier);
   if (src === undefined) return null;
-  if (!isVideoObject(object)) return params.assets.image(src);
+  if (!isVideoObject(object)) return imageOf(src, params);
   const video = params.assets.video(src);
   return video !== null && isReady(video) ? video : null;
-}
-
-function withFilter(ctx: ScenePaintable, filter: string | undefined, paint: () => void): void {
-  if (filter === undefined) {
-    paint();
-    return;
-  }
-  ctx.save();
-  ctx.filter = filter;
-  paint();
-  ctx.restore();
 }
 
 function paintSolid(ctx: ScenePaintable, value: unknown, fallback: string, size: Size): void {
@@ -185,7 +177,6 @@ function paintBackground(params: PaintSceneParams, background: CanvasObject | un
     return;
   }
   const crop = readMediaCrop(background.payload);
-  const filter = mediaFilterCss(background.payload);
   const framing = backgroundFraming(scene);
   if (framing === 'fit') {
     const backdrop = backgroundBackdrop(scene);
@@ -193,7 +184,7 @@ function paintBackground(params: PaintSceneParams, background: CanvasObject | un
       ctx.fillStyle = palette.mediaBackdrop;
       ctx.fillRect(0, 0, width, height);
       ctx.save();
-      ctx.globalAlpha = LETTERBOX_FILL_OPACITY;
+      ctx.globalAlpha = ctx.globalAlpha * LETTERBOX_FILL_OPACITY;
       ctx.filter = 'blur(20px)';
       drawFitted(ctx, pixels, { x: -width * 0.175, y: -height * 0.175, width: width * 1.35, height: height * 1.35 }, 'cover', crop);
       ctx.restore();
@@ -202,7 +193,8 @@ function paintBackground(params: PaintSceneParams, background: CanvasObject | un
       ctx.fillRect(0, 0, width, height);
     }
   }
-  withFilter(ctx, filter, () => drawFitted(ctx, pixels, frame, framing === 'fit' ? 'contain' : 'cover', crop));
+  const placement = placementOf(pixels, frame, framing === 'fit' ? 'contain' : 'cover', crop);
+  if (placement !== null) paintLooked(background, params, pixels, placement, { glowWidth: width, overlayBox: placement.to });
 }
 
 function roundedRect(ctx: ScenePaintable, box: Rect, radius: number): void {
@@ -229,7 +221,8 @@ function paintMedia(object: CanvasObject, params: PaintSceneParams): void {
   ctx.save();
   roundedRect(ctx, box, MEDIA_CORNER_FRACTION * Math.min(box.width, box.height));
   ctx.clip();
-  withFilter(ctx, mediaFilterCss(payload), () => drawFitted(ctx, pixels, box, 'cover', crop));
+  const placement = placementOf(pixels, box, 'cover', crop);
+  if (placement !== null) paintLooked(object, params, pixels, placement, { glowWidth: box.width, overlayBox: box });
   ctx.restore();
 }
 
@@ -290,7 +283,7 @@ function paintSticker(object: CanvasObject, params: PaintSceneParams): void {
   const size = Math.max(STICKER_MIN_PX, stickerWidthFraction(baseSize, object.transform.scale) * params.width);
   const emoji = typeof payload.emoji === 'string' && payload.emoji !== '' ? payload.emoji : undefined;
   const src = emoji === undefined ? objectMediaSrc(object, params.carrier) : undefined;
-  const image = src === undefined ? null : params.assets.image(src);
+  const image = src === undefined ? null : imageOf(src, params);
   const { ctx } = params;
   if (image !== null) {
     drawFitted(ctx, image, { x: -size / 2, y: -size / 2, width: size, height: size }, 'contain', null);
@@ -429,20 +422,25 @@ function paintWatermark(params: PaintSceneParams, handle: string): void {
 export function paintSceneFrame(params: PaintSceneParams): void {
   const { ctx, scene, tSeconds } = params;
   const background = backgroundMedia(scene);
-  paintBackground(params, background);
+  const clips = readClipTransitions(scene);
   const layers = scene.objects.filter((object) => object.id !== background?.id && sceneAudioPresence(object) !== 'offstage').slice().sort((a, b) => a.z - b.z);
-  for (const object of layers) {
-    const pose = objectPose(object, tSeconds);
-    if (!pose.visible || pose.opacity <= 0) continue;
-    ctx.save();
-    ctx.globalAlpha = pose.opacity;
-    if (object.kind !== 'drawing') {
-      ctx.translate(pose.x * params.width, pose.y * params.height);
-      ctx.rotate((pose.rotation * Math.PI) / 180);
-      ctx.scale(pose.scale, pose.scale);
+  const transition = slideTransitionPose(scene, tSeconds * 1000, params.slideDurationMs);
+  withSceneTransition(ctx, { width: params.width, height: params.height, backdrop: params.palette.mediaBackdrop }, transition, () => {
+    paintBackground(params, background);
+    for (const object of layers) {
+      const pose = objectPose(object, tSeconds);
+      const opacity = pose.opacity * clipTransitionOpacity(object, clips, tSeconds);
+      if (!pose.visible || opacity <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = ctx.globalAlpha * opacity;
+      if (object.kind !== 'drawing') {
+        ctx.translate(pose.x * params.width, pose.y * params.height);
+        ctx.rotate((pose.rotation * Math.PI) / 180);
+        ctx.scale(pose.scale, pose.scale);
+      }
+      paintObject(object, params);
+      ctx.restore();
     }
-    paintObject(object, params);
-    ctx.restore();
-  }
+  });
   if (params.watermark !== null && params.watermark !== '') paintWatermark(params, params.watermark);
 }

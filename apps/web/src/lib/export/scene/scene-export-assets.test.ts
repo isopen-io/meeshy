@@ -99,3 +99,45 @@ describe('préparer l’export — les vraies durées des médias fixent le plan
     expect(await prepareSceneExport({ document: doc, carrier, deps: depsOf({}), signal: controller.signal })).toBe('cancelled');
   });
 });
+
+describe('préparer l’export — une image animée s’anime (#13880)', () => {
+  function twoFrameDecoder(closed: string[]) {
+    class Decoder {
+      static isTypeSupported = async (type: string) => type === 'image/gif';
+      readonly tracks = { ready: Promise.resolve(), selectedTrack: { frameCount: 2 } };
+      async decode({ frameIndex }: { frameIndex: number }) {
+        return { image: { name: `frame-${frameIndex}`, duration: 100_000, close: () => closed.push(`frame-${frameIndex}`) } };
+      }
+      close() {}
+    }
+    return Decoder as unknown as typeof ImageDecoder;
+  }
+
+  const stickerDoc = () => documentOf([{ id: 'stk', kind: 'sticker', payload: { mediaURL: 'https://cdn/party.gif' } }]);
+
+  test('un sticker GIF : la scène n’est plus une image fixe, et chaque instant a son image', async () => {
+    const closed: string[] = [];
+    const deps: SceneAssetDeps = {
+      ...depsOf({}),
+      fetchBlob: async () => new Blob([new Uint8Array([1])], { type: 'image/gif' }),
+      imageDecoder: twoFrameDecoder(closed),
+    };
+    const prepared = await prepareSceneExport({ document: stickerDoc(), carrier, deps, signal: new AbortController().signal });
+    if (prepared === 'cancelled') throw new Error('annulé');
+    expect(prepared.plan.still).toBe(false);
+    const nameAt = (ms: number) => (prepared.assets.imageAt?.('https://cdn/party.gif', ms) as unknown as { name?: string } | null)?.name;
+    expect(nameAt(50)).toBe('frame-0');
+    expect(nameAt(150)).toBe('frame-1');
+    expect(nameAt(250)).toBe('frame-0');
+    prepared.dispose();
+    expect(closed.sort()).toEqual(['frame-0', 'frame-1']);
+  });
+
+  test('sans décodeur, le même sticker reste une image fixe', async () => {
+    const deps: SceneAssetDeps = { ...depsOf({}), fetchBlob: async () => new Blob([new Uint8Array([1])], { type: 'image/gif' }) };
+    const prepared = await prepareSceneExport({ document: stickerDoc(), carrier, deps, signal: new AbortController().signal });
+    if (prepared === 'cancelled') throw new Error('annulé');
+    expect(prepared.plan.still).toBe(true);
+    expect(prepared.assets.imageAt?.('https://cdn/party.gif', 150) ?? null).toBeNull();
+  });
+});

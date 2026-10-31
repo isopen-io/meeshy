@@ -47,6 +47,33 @@ describe('« Sauvegarder » d’une publication, au geste', () => {
     expect(exportJobs.getSnapshot().notice?.notice).toBe('saved');
   });
 
+  test('« Partager » tourne en mode partage et annonce « partagé »', async () => {
+    const modes: string[] = [];
+    const deps = depsOf({
+      run: async (input) => {
+        modes.push(input.mode);
+        return 'shared';
+      },
+    });
+    expect(await launchSceneExport({ subject, mode: 'share', deps })).toBe('shared');
+    expect(modes).toEqual(['share']);
+    expect(exportJobs.getSnapshot().notice?.notice).toBe('shared');
+  });
+
+  test('un contexte audio né dans le geste de l’hôte est celui de l’export', async () => {
+    const handed = { closed: 0 } as unknown as AudioContext & { closed: number };
+    const seen: (AudioContext | null)[] = [];
+    const deps = depsOf({
+      run: async (input) => {
+        seen.push(input.audioContext);
+        return 'saved';
+      },
+    });
+    await launchSceneExport({ subject, mode: 'imager', audioContext: handed, deps });
+    expect(seen).toEqual([handed]);
+    expect(deps.contexts.count).toBe(0);
+  });
+
   test('hors ligne, rien ne part et l’export le dit', async () => {
     const deps = depsOf({ online: false, run: async () => 'saved' });
     expect(await launchSceneExport({ subject, mode: 'save', deps })).toBe('offline');

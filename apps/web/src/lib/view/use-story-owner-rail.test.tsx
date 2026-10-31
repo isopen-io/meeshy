@@ -7,11 +7,11 @@ import type { GallerySaveInput, GallerySaveOutcome, GallerySaver } from '@/lib/g
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
-import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
+import { closeSendSheet } from '@/lib/send/send-sheet-store';
 import * as storySaveStore from '@/lib/stories/save-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { useStoryOwnerRail, type StoryOwnerRail, type StorySceneExporter } from './use-story-owner-rail';
+import { useStoryOwnerRail, type StoryExportLauncher, type StoryOwnerRail, type StorySceneExporter } from './use-story-owner-rail';
 
 /**
  * `useStoryOwnerRail` (#7116) — l'hôte du plan AUTEUR, mesuré par son API
@@ -46,6 +46,8 @@ afterAll(async () => {
 
 const MEDIA_URL = 'https://cdn.example/story-m4.jpg';
 
+const SCENE = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
+
 function storyOf(id: string, withMedia = true): StoryPlaybackStory {
   return {
     id,
@@ -77,7 +79,7 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
   };
 }
 
-function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null, sceneExporter?: StorySceneExporter): Probe {
+function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null, sceneExporter?: StorySceneExporter, exportLauncher?: StoryExportLauncher): Probe {
   const announced: string[] = [];
   const delivered: string[] = [];
   const deliveryHost = host ?? anchorHost(delivered);
@@ -85,7 +87,7 @@ function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null =
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver, preferredLanguages: ['es', 'fr'], ...(sceneExporter !== undefined ? { sceneExporter } : {}) }));
+    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver, preferredLanguages: ['es', 'fr'], ...(sceneExporter !== undefined ? { sceneExporter } : {}), ...(exportLauncher !== undefined ? { exportLauncher } : {}) }));
     return null;
   }
 
@@ -150,18 +152,29 @@ describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
     expect(Object.keys(probe.rail().handlers)).toEqual(['views']);
   });
 
-  test('un hôte SANS porte de livraison DE FICHIER (coque Android) ⇒ Vues + Partager, jamais Enregistrer (revue #7116, défaut 2)', () => {
-    /* `share` ne lit jamais `host` — il ouvre la feuille d'envoi, dont « Plus
-       d'options… » porte `MeeshySharePlugin` (#7710) même sans porte de
-       fichier. Le retirer avec `save` aurait caché un bouton qui, lui, aurait
-       un effet — loi 4 lue à l'envers. */
+  test('un hôte SANS porte de livraison DE FICHIER ⇒ « Vues » seule : Partager livre désormais un FICHIER (#13881)', () => {
+    /* « Envoyer » (le rail `forward`, `use-story-send.ts`) garde la feuille
+       d'envoi Meeshy, distincte : elle ne lit aucune porte de fichier. */
     probe = mountProbe({});
     probe.render(storyOf('st-a'));
-    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['share', 'views']);
+    expect(Object.keys(probe.rail().handlers)).toEqual(['views']);
+    expect(probe.rail().imager).toBeUndefined();
   });
 });
 
-describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « Partager » ouvre la feuille d’envoi (#8884)', () => {
+type Launched = { readonly key: string; readonly fileStem: string; readonly mode: string; readonly media: readonly string[]; readonly gestureContext: boolean };
+
+function launcherSpy(): { readonly launcher: StoryExportLauncher; readonly launched: Launched[] } {
+  const launched: Launched[] = [];
+  return {
+    launched,
+    launcher: async ({ subject, mode, audioContext }) => {
+      launched.push({ key: subject.key, fileStem: subject.fileStem, mode, media: subject.carrier.media.map((m) => m.src), gestureContext: audioContext !== undefined });
+    },
+  };
+}
+
+describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « Partager » livre le FICHIER composé (#13881)', () => {
   /* La story BOUCLE sous la feuille (#9821) : c'est le lecteur qui le décide
      (`resolveStoryPlaybackHold`), le rail ne la fige plus. */
   test('ouvrir « Vues » ouvre la feuille de CETTE story ; fermer la referme', () => {
@@ -173,16 +186,37 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     expect(probe.rail().viewers.postId).toBeNull();
   });
 
-  test('« Partager » ouvre la feuille d’envoi COMMUNE avec la story, publiée en STORY, et son lien pour « Plus d’options… »', async () => {
-    probe = mountProbe();
+  test('« Partager » d’une story à scène lance l’export composé en mode PARTAGE, jamais la feuille d’envoi', async () => {
+    const spy = launcherSpy();
+    probe = mountProbe(undefined, null, undefined, spy.launcher);
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
+    act(() => probe?.rail().handlers.share?.());
+    await settle(0);
+    expect(spy.launched).toEqual([{ key: 'story:st-a', fileStem: 'story-st-a', mode: 'share', media: [MEDIA_URL], gestureContext: true }]);
+  });
+
+  test('« Partager » d’une story v1 compose son média seul, filigrané, et le partage', async () => {
+    const spy = launcherSpy();
+    probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render(storyOf('st-a'));
-    await act(async () => {
-      probe?.rail().handlers.share?.();
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    });
-    const request = sendSheetStore.getState().request;
-    expect(request?.payload).toMatchObject({ kind: 'publication', postId: 'st-a', postType: 'STORY' });
-    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/st-a' });
+    act(() => probe?.rail().handlers.share?.());
+    await settle(0);
+    expect(spy.launched).toEqual([{ key: 'story:st-a', fileStem: 'story-st-a', mode: 'share', media: [MEDIA_URL], gestureContext: true }]);
+  });
+
+  test('« Imager » s’offre sur une story et rend la même composition, au choix de longueur du bandeau', async () => {
+    const spy = launcherSpy();
+    probe = mountProbe(undefined, null, undefined, spy.launcher);
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
+    act(() => probe?.rail().imager?.());
+    await settle(0);
+    expect(spy.launched.map(({ mode, key }) => ({ mode, key }))).toEqual([{ mode: 'imager', key: 'story:st-a' }]);
+  });
+
+  test('une story sans rien à composer n’offre pas « Imager »', () => {
+    probe = mountProbe();
+    probe.render(storyOf('st-texte', false));
+    expect(probe.rail().imager).toBeUndefined();
   });
 });
 
@@ -334,7 +368,6 @@ describe('useStoryOwnerRail — « Enregistrer » dans la coque Android range la
   });
 });
 
-const SCENE = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
 
 describe('useStoryOwnerRail — une story à SCÈNE s’enregistre composée, telle qu’on la voit (#13873)', () => {
   test('une story de TEXTE seul offre « Enregistrer » : sa scène se compose', () => {
