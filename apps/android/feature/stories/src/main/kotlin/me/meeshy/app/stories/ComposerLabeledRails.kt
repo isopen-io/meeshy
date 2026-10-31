@@ -17,7 +17,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,7 +50,7 @@ private val RAIL_GAP = ComposerLabeledRail.GAP.dp
 /**
  * Ce que le rail gauche du grand écran montre (#13837), en valeurs primitives : [showsClose] et [showsTools] se taisent
  * le pinceau en main ; [activeTool] et [openEntry] surlignent l'outil ouvert, ou « Plus » quand il range l'entrée ouverte ; [moreEntries] sont celles du « ⋯ »
- * de la scène, que le rail range derrière « Plus », Fond excepté.
+ * de la scène, que le rail range derrière « Plus » (Fond, Mention et Lieu sont des outils du rail, #14049).
  */
 internal data class LeadingRailModel(
     val showsClose: Boolean,
@@ -65,8 +64,8 @@ internal data class LeadingRailModel(
 )
 
 /**
- * Le rail de ce qu'on AJOUTE (#13837, maquette du 2026-10-30) : Fermer, Texte, Média, Sticker, Son, Dessin, Fond, et
- * « Plus » pour le reste du « ⋯ » ([ComposerLabeledRail]). Une icône et un mot par rangée, une cible de 48 dp ; trop
+ * Le rail de ce qu'on AJOUTE (#13837, maquette du 2026-10-30) : Fermer, Texte, Média, Sticker, Son, Dessin, Fond, Mention,
+ * Lieu (#14049), et « Plus » pour le « ⋯ » ([ComposerLabeledRail]). Une icône et un mot par rangée, une cible de 48 dp ; trop
  * court, le rail défile au lieu d'écraser ses cibles.
  */
 @Composable
@@ -77,20 +76,18 @@ internal fun StoryLeadingRail(
     onEntry: (ComposerMoreEntry) -> Unit,
     onMediaSource: (ComposerMediaSource) -> Unit = {},
 ) {
-    val overflow = remember(rail.moreEntries) { ComposerLabeledRail.overflow(rail.moreEntries) }
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
         if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
-        if (rail.showsTools) LeadingRailTools(rail, overflow, onTool, onEntry, onMediaSource)
+        if (rail.showsTools) LeadingRailTools(rail, onTool, onEntry, onMediaSource)
     }
 }
 
 @Composable
 private fun LeadingRailTools(
     rail: LeadingRailModel,
-    overflow: List<ComposerMoreEntry>,
     onTool: (ComposerSceneTool) -> Unit,
     onEntry: (ComposerMoreEntry) -> Unit,
     onMediaSource: (ComposerMediaSource) -> Unit,
@@ -100,14 +97,7 @@ private fun LeadingRailTools(
             LabeledRailItem(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == rail.activeTool, press = press)
         }
     }
-    if (ComposerMoreEntry.BACKGROUND in rail.moreEntries) {
-        LabeledRailItem(
-            ComposerMoreEntry.BACKGROUND.glyph(),
-            stringResource(ComposerMoreEntry.BACKGROUND.labelRes()),
-            { onEntry(ComposerMoreEntry.BACKGROUND) },
-            active = rail.openEntry == ComposerMoreEntry.BACKGROUND,
-        )
-    }
+    val overflow = rail.moreEntries
     if (overflow.isNotEmpty()) {
         ComposerMoreMenu(
             entries = overflow,

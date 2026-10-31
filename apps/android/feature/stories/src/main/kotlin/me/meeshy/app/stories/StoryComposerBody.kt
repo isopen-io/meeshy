@@ -359,7 +359,7 @@ private class StoryMoreHost(
     val cameraServed: Boolean get() = capture?.offer != null && !capture.armed
 }
 
-/** Les six outils posés sur la scène ; le « ⋯ » range le reste, l'appui long sur Média propose ses sources. */
+/** Les outils posés sur la scène, Fond, Mention et Lieu compris (#14049) ; le « ⋯ » range le reste, l'appui long sur Média propose ses sources. */
 @Composable
 private fun StorySceneTools(
     state: StoryComposerUiState,
@@ -367,7 +367,7 @@ private fun StorySceneTools(
     more: StoryMoreHost,
     tools: List<ComposerSceneTool>,
 ) {
-    val onTool = rememberSceneToolAction(state, viewModel, more.doors, more.onMorePanel)
+    val onTool = rememberSceneToolAction(state, viewModel, more)
     val onEntry = rememberMoreEntryAction(state, viewModel, more)
     SceneToolColumn(
         tools = tools,
@@ -408,7 +408,7 @@ private fun storySceneRails(
     val tools = scene.tools
     val doors = more.doors
     val sceneExport = more.sceneExport
-    val onTool = rememberSceneToolAction(state, viewModel, doors, more.onMorePanel)
+    val onTool = rememberSceneToolAction(state, viewModel, more)
     val onEntry = rememberMoreEntryAction(state, viewModel, more)
     val onMediaSource = rememberMediaSourceAction(state, doors, more.onMorePanel, more.capture)
     val model = LeadingRailModel(
@@ -446,9 +446,8 @@ private fun storySceneRails(
     )
 }
 
-/** L'entrée du « ⋯ » dont le panneau est ouvert : Fond, Temps, ou la durée de la diapo. */
+/** L'entrée du « ⋯ » dont le panneau est ouvert : Temps, ou la durée de la diapo. */
 private fun StoryComposerUiState.openMoreEntry(morePanel: StoryMorePanel?): ComposerMoreEntry? = when {
-    band.activeTool == StoryToolMode.TEXTURE -> ComposerMoreEntry.BACKGROUND
     band.activeTool == StoryToolMode.TIMELINE -> ComposerMoreEntry.TIMING
     morePanel == StoryMorePanel.DURATION -> ComposerMoreEntry.SLIDE_DURATION
     else -> null
@@ -457,29 +456,36 @@ private fun StoryComposerUiState.openMoreEntry(morePanel: StoryMorePanel?): Comp
 private fun StoryComposerUiState.activeSceneTool(): ComposerSceneTool? = when (band.activeTool) {
     StoryToolMode.MEDIA -> ComposerSceneTool.MEDIA
     StoryToolMode.AUDIO -> ComposerSceneTool.SOUND
+    StoryToolMode.TEXTURE -> ComposerSceneTool.BACKGROUND
     else -> null
 }
 
-/** Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau. */
+/**
+ * Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau,
+ * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049).
+ */
 @Composable
 private fun rememberSceneToolAction(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    doors: StoryComposerDoors,
-    onMorePanel: (StoryMorePanel?) -> Unit,
+    more: StoryMoreHost,
 ): (ComposerSceneTool) -> Unit {
+    val doors = more.doors
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
     val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
     return { tool ->
-        onMorePanel(null)
+        more.onMorePanel(null)
         when (tool) {
             ComposerSceneTool.TEXT -> addText()
             ComposerSceneTool.MEDIA -> if (hasMedia) viewModel.onBandToolTap(StoryToolMode.MEDIA) else pickMedia()
             ComposerSceneTool.STICKER -> openStickers()
             ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
+            ComposerSceneTool.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
+            ComposerSceneTool.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
+            ComposerSceneTool.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerSceneTool.MORE -> Unit
         }
     }
@@ -540,7 +546,6 @@ private fun rememberMoreEntryAction(
         onMorePanel(local)
         when (entry) {
             ComposerMoreEntry.ADD_SLIDE -> addSlide()
-            ComposerMoreEntry.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
             ComposerMoreEntry.ANIMATION -> viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled)
             ComposerMoreEntry.TIMING -> viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE)
             ComposerMoreEntry.OPENING_EFFECT -> viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, ComposerSceneEffect.OPENING) }
@@ -550,9 +555,7 @@ private fun rememberMoreEntryAction(
             ComposerMoreEntry.PICK_BACKGROUND -> more.doors.onPickBackground()
             ComposerMoreEntry.REMOVE_BACKGROUND -> viewModel.onRemoveSceneBackground()
             ComposerMoreEntry.CLEAR_ALL -> more.dialogs.clearAll()
-            ComposerMoreEntry.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
             ComposerMoreEntry.HASHTAGS -> more.onOpenSheet(StoryComposerSheet.HASHTAGS)
-            ComposerMoreEntry.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION -> Unit
         }
     }
