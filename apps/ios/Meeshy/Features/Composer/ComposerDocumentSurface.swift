@@ -547,6 +547,7 @@ struct ComposerDocumentSurface: View {
                 .padding(.top, MeeshySpacing.xs)
                 .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
         }
+        .modifier(PostTextCap(text: $text))
     }
 
     /// La description repliable sous la scène incrustée (Phase 2). Champ
@@ -570,6 +571,7 @@ struct ComposerDocumentSurface: View {
                 .padding(.horizontal, MeeshySpacing.md)
                 .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
         }
+        .modifier(PostTextCap(text: $text))
     }
 
     /// Une seule teinte pour les six outils, là où la feuille historique en
@@ -879,3 +881,35 @@ extension View {
 /// AUCUN menu ne se monte — un `.contextMenu` vide s'ouvrirait quand même, sur
 /// rien, et un appui long qui répond par un cadre vide se lit comme une panne.
 
+
+/// #13824 — la saisie du texte d'une publication tient dans le plafond du
+/// serveur (`ComposerPostTextPolicy`) : tronquée pour que l'auteur le VOIE,
+/// avec un compteur à l'approche de la limite.
+private struct PostTextCap: ViewModifier {
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        content
+            .adaptiveOnChange(of: text, initial: true) { _, newValue in
+                let capped = ComposerPostTextPolicy.truncate(newValue)
+                if capped != newValue { text = capped }
+            }
+            .overlay(alignment: .bottomTrailing) { counter }
+    }
+
+    @ViewBuilder
+    private var counter: some View {
+        let length = ComposerPostTextPolicy.length(of: text)
+        if length >= ComposerPostTextPolicy.counterThreshold {
+            CharacterCountLabel(
+                count: length,
+                limit: ComposerPostTextPolicy.contentLimit,
+                warningThreshold: ComposerPostTextPolicy.warningThreshold,
+                font: MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium),
+                mutedColor: MeeshyColors.textSecondary(isDark: true)
+            )
+            .padding(.trailing, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.xs)
+        }
+    }
+}

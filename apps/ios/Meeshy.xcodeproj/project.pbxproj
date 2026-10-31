@@ -470,6 +470,7 @@
 		1BB62BEA127086CDA3BE0E70 /* ComposerSceneCameraBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30BAB37DC71A54C03422EEA3 /* ComposerSceneCameraBar.swift */; };
 		1BC3D01F6400D2FC1F8F237D /* ComposerCallbackWiringGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBECE7FB7206EE2340ED013 /* ComposerCallbackWiringGuardTests.swift */; };
 		1BCF02F4404EB88D91228008 /* CallModeCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3AE8B4C94DC0048851822A9 /* CallModeCarousel.swift */; };
+		1BEF65A904965115B080F29A /* ComposerPostTextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20C58A457E5ADCDA1FA1A11D /* ComposerPostTextPolicy.swift */; };
 		1C3854DFFD59F773385454A7 /* ConversationWindowFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5FFA8DE083D622E589D79A7 /* ConversationWindowFetcher.swift */; };
 		1C49195DB89EFC52B0DB6359 /* FeedPostCardCarouselGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375D3E4FCF1C69ED9BE1117 /* FeedPostCardCarouselGuardTests.swift */; };
 		1C4B828BF934D98865FE1BEB /* ComposerTrimRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1033997B3725132BF5A0D7DB /* ComposerTrimRuleTests.swift */; };
@@ -3501,6 +3502,7 @@
 		D7E72F06D12417854F72ADBC /* OutboxDispatcherUpdateProfileEncodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5891E84396D3C823F97F449 /* OutboxDispatcherUpdateProfileEncodingTests.swift */; };
 		D7FA9168829BED16496A7F07 /* PostDetailReachAndVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6088E04C440652CC1D61E16 /* PostDetailReachAndVisibilityTests.swift */; };
 		D800D4B158791ACB2FD3D113 /* CallFrameLayoutGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788DA855FEB19D055411317B /* CallFrameLayoutGeometry.swift */; };
+		D80864628117A54987B44A7D /* ComposerPostTextPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D2CD6A774A107569CF6472 /* ComposerPostTextPolicyTests.swift */; };
 		D809EEC9A5B11C874CA42AB4 /* NotificationGapResyncCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD6C98020A9082236A692C7 /* NotificationGapResyncCoordinatorTests.swift */; };
 		D80C5E90A3DEBBFBEF2F263F /* iPadRootView+Panels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B5CE18821DAE4B722179516 /* iPadRootView+Panels.swift */; };
 		D818816A7E17E01725EB78EC /* MessageAuthorRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B60F78ABC83D2FA7A7E35C /* MessageAuthorRingTests.swift */; };
@@ -4502,6 +4504,7 @@
 		10B7BCC1A954699D39D71C79 /* ComposerMediaAdjust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMediaAdjust.swift; sourceTree = "<group>"; };
 		10BB2F87FAC9A3F27EE0FC72 /* EphemeralExpiryLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EphemeralExpiryLaw.swift; sourceTree = "<group>"; };
 		10C48D305E38C39E08995939 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+		10D2CD6A774A107569CF6472 /* ComposerPostTextPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPostTextPolicyTests.swift; sourceTree = "<group>"; };
 		10D8A1E8DDAC1B260048759A /* LentilleStickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleStickerTests.swift; sourceTree = "<group>"; };
 		10E465DF8BC7086542044200 /* CallFrameMoodChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameMoodChips.swift; sourceTree = "<group>"; };
 		10EE5D440347D8A495A3D227 /* CallPillRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPillRow.swift; sourceTree = "<group>"; };
@@ -4772,6 +4775,7 @@
 		20B59D559D16BA9C86E0B7F7 /* StoryViewerView+PlaybackHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+PlaybackHold.swift"; sourceTree = "<group>"; };
 		20B6B1E8CA65208BA513D97E /* VideoDegradationPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDegradationPreference.swift; sourceTree = "<group>"; };
 		20BA18D6D81524E33F3069EB /* ConversationListPaginationCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListPaginationCursor.swift; sourceTree = "<group>"; };
+		20C58A457E5ADCDA1FA1A11D /* ComposerPostTextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPostTextPolicy.swift; sourceTree = "<group>"; };
 		20FF9695C0C2F706C08F5425 /* morbide_memento_back.webp */ = {isa = PBXFileReference; path = morbide_memento_back.webp; sourceTree = "<group>"; };
 		2107900075492A122AC739A5 /* ComposerCameraFlash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCameraFlash.swift; sourceTree = "<group>"; };
 		2133DDAC52909F00928DA02A /* MyStoryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoryCard.swift; sourceTree = "<group>"; };
@@ -10379,6 +10383,7 @@
 				D6922D1453D203DCB9BCCA38 /* ComposerPanelHeaderInGlassTests.swift */,
 				2CB421C4770BA4299A4CE573 /* ComposerPhotoEncodingTests.swift */,
 				75F433864046E55A3E03F9C5 /* ComposerPlateauTests.swift */,
+				10D2CD6A774A107569CF6472 /* ComposerPostTextPolicyTests.swift */,
 				EE31338D9DA9CB55FCB90E5C /* ComposerPreUploadCopyTests.swift */,
 				A405FE7C85272E8D99637BF3 /* ComposerPreUploadRegistryTests.swift */,
 				45E72019C5BD9F6C6A581FF6 /* ComposerPreUploadTests.swift */,
@@ -11833,6 +11838,7 @@
 				72EFE9B85D669F042EACD8A9 /* ComposerPhotoLook.swift */,
 				5C6AEEBF8E897A3B1D0E58CD /* ComposerPlateau.swift */,
 				0BCC1778B8573C7A86485705 /* ComposerPortal.swift */,
+				20C58A457E5ADCDA1FA1A11D /* ComposerPostTextPolicy.swift */,
 				657D7E1CA51BBDE544D13728 /* ComposerPreUpload.swift */,
 				3413DF0F0E731455A9203125 /* ComposerPreUploadCopy.swift */,
 				3D9FB2327424051C03070853 /* ComposerPreUploadRegistry.swift */,
@@ -14750,6 +14756,7 @@
 				6123397143B5903469E74933 /* ComposerPhotoLook.swift in Sources */,
 				4DE79DE79655AEC146EA5802 /* ComposerPlateau.swift in Sources */,
 				E8BB2BFA4D6A5222A98ADB10 /* ComposerPortal.swift in Sources */,
+				1BEF65A904965115B080F29A /* ComposerPostTextPolicy.swift in Sources */,
 				ACA9D1DEBEF83960276CF564 /* ComposerPreUpload.swift in Sources */,
 				968D86C91B46390C0B4A3489 /* ComposerPreUploadCopy.swift in Sources */,
 				4B80D9FABB2DBECF1A8BC95C /* ComposerPreUploadRegistry.swift in Sources */,
@@ -16763,6 +16770,7 @@
 				F81EA113CF6C9E4A1535143E /* ComposerPasteInterceptorInstallTests.swift in Sources */,
 				D618C11326E4F8084BDE0A98 /* ComposerPhotoEncodingTests.swift in Sources */,
 				5BBC9BD68AEAD4C430D38BFD /* ComposerPlateauTests.swift in Sources */,
+				D80864628117A54987B44A7D /* ComposerPostTextPolicyTests.swift in Sources */,
 				E499C72CCE59ABAD99E35ED1 /* ComposerPreUploadCopyTests.swift in Sources */,
 				5E2F5C573501E4C2D81EEA5A /* ComposerPreUploadRegistryTests.swift in Sources */,
 				AE4715758A4F530DC091A818 /* ComposerPreUploadTests.swift in Sources */,
