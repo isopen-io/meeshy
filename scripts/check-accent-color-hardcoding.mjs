@@ -417,7 +417,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 483 -> 479 (2026-10-24, le contour de l'avatar sur l'interlude et la carte de fin d'un export de story) : le dessin
 // fixe d'un contour quitte le `Canvas` de `AvatarRingView.swift` (-5) pour `AvatarRingRenderer.swift` (+1), Core Graphics,
 // partagé par la vue et l'export — ses autres couleurs passent par `FramePaint.cgColor`. Valeur MESURÉE le 2026-10-24 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
+// 479 -> 480 (2026-10-31, #13839, la refonte « scène d'abord » du compositeur iOS, 37520d9db0) :
+// `ComposerSharedPalette.swift` (1) peint la pastille d'une couleur de TEXTE de la palette d'édition (`TextEditPalette.colors`),
+// la DONNÉE que l'auteur pose sur son texte, à l'identique des pastilles de `TextEditToolOptions.swift` (déjà comptées) :
+// l'accent de conversation l'effacerait. Valeur MESURÉE le 2026-10-31 en local sur 37520d9db0 et 46a0f00c16.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 480;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
