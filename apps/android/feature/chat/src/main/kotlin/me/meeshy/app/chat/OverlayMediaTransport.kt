@@ -18,10 +18,10 @@ package me.meeshy.app.chat
  * tap-to-cycle chip instead of iOS's context menu — while keeping the exact same
  * `0.5 … 2.0×` grid.
  *
- * The actual `MediaPlayer` (audio) / video-surface plumbing is Android-runtime
- * glue that lives app-side; it maps player callbacks onto [ready] / [failed] /
- * [tick] / [onEnded] and applies [progress] / [playbackRate] / [isPlaying] back
- * onto the platform player.
+ * The actual player (audio: the Media3 [VoiceNoteEngine] through
+ * [OverlayAudioPreview]) / video-surface plumbing is Android-runtime glue; it
+ * maps player callbacks onto [ready] / [failed] / [tick] / [onEnded] and applies
+ * [progress] / [playbackRate] / [isPlaying] back onto the platform player.
  */
 class OverlayMediaTransport private constructor(
     val currentUrl: String?,

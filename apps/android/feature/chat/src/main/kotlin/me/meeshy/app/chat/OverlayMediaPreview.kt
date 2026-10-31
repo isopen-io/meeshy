@@ -1,6 +1,5 @@
 package me.meeshy.app.chat
 
-import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,14 +25,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,10 +52,11 @@ import kotlin.math.roundToInt
  *
  * The *decision* logic (what each control does to the playhead, how loading /
  * ready / end reconcile, the rate grid) is the pure, JVM-covered
- * [OverlayMediaTransport]; this composable is the exempt glue that mirrors that
- * state onto a real [MediaPlayer] and back. A faithful port of iOS
- * `PreviewAudioPlayer` (`MessageOverlayMenu.swift`), which Android surpasses with
- * the single-tap speed chip instead of a context menu.
+ * [OverlayMediaTransport], reconciled onto the thread's Media3 [VoiceNoteEngine]
+ * by [OverlayAudioPreview] (#13862: `MediaPlayer` skipped the Ogg Opus of a
+ * translated voice note below Android 10); this composable is the glue. A
+ * faithful port of iOS `PreviewAudioPlayer` (`MessageOverlayMenu.swift`), which
+ * Android surpasses with the single-tap speed chip instead of a context menu.
  *
  * Video interactive preview is a tracked follow-up: `BubbleContent` does not yet
  * carry a playable video attachment, so there is nothing to drive here.
@@ -69,59 +68,16 @@ internal fun OverlayMediaPreview(
     modifier: Modifier = Modifier,
 ) {
     val url = audio.url ?: return
-    var transport by remember(url) { mutableStateOf(OverlayMediaTransport.idle()) }
-    val player = remember { MediaPlayer() }
+    val context = LocalContext.current
+    val state = remember(url) { mutableStateOf(OverlayMediaTransport.idle()) }
+    val preview = remember(url) { OverlayAudioPreview(ExoVoiceNoteEngine(context)) { state.value = it } }
+    val transport = state.value
 
-    // Reconcile a transport transition onto the platform player, then commit it as
-    // the new state. Every user action flows through here so the player never drifts
-    // from the pure state. Runtime side-effects are guarded — a failed seek/rate on a
-    // torn-down player degrades to a no-op rather than crashing the overlay.
-    fun apply(next: OverlayMediaTransport) {
-        val prev = transport
-        when {
-            next.isLoading && next.currentUrl != null && next.currentUrl != prev.currentUrl ->
-                runCatching {
-                    player.reset()
-                    player.setDataSource(url)
-                    player.prepareAsync()
-                }
-            next.isPlaying && !prev.isPlaying ->
-                runCatching {
-                    player.playbackParams = player.playbackParams.setSpeed(next.playbackRate)
-                    player.start()
-                }
-            !next.isPlaying && prev.isPlaying -> runCatching { player.pause() }
-        }
-        if (!next.isLoading && next.currentSeconds != prev.currentSeconds) {
-            runCatching { player.seekTo((next.currentSeconds * 1000).roundToInt()) }
-        }
-        if (next.playbackRate != prev.playbackRate && next.isPlaying) {
-            runCatching { player.playbackParams = player.playbackParams.setSpeed(next.playbackRate) }
-        }
-        transport = next
-    }
+    DisposableEffect(preview) { onDispose { preview.release() } }
 
-    DisposableEffect(url) {
-        player.setOnPreparedListener {
-            runCatching { it.playbackParams = it.playbackParams.setSpeed(transport.playbackRate) }
-            runCatching { it.start() }
-            transport = transport.ready()
-        }
-        player.setOnCompletionListener { transport = transport.onEnded() }
-        player.setOnErrorListener { _, _, _ ->
-            transport = transport.failed()
-            true
-        }
-        onDispose { runCatching { player.release() } }
-    }
-
-    // Poll the real playhead while playing to advance the scrubber (iOS periodic
-    // time observer). tick reads position/duration off the player; it never writes
-    // back to it, so there is no seek feedback loop with the user's own scrub.
-    LaunchedEffect(transport.isPlaying) {
-        while (transport.isPlaying) {
-            val durationSeconds = player.duration.takeIf { it > 0 }?.div(1000.0) ?: 0.0
-            transport = transport.tick(player.currentPosition / 1000.0, durationSeconds)
+    LaunchedEffect(preview, transport.isPlaying) {
+        while (preview.transport.isPlaying) {
+            preview.tick()
             delay(100)
         }
     }
@@ -143,7 +99,7 @@ internal fun OverlayMediaPreview(
                     isPlaying = transport.isPlaying,
                     isLoading = transport.isLoading,
                     accentColor = accentColor,
-                    onClick = { apply(transport.toggle(url)) },
+                    onClick = { preview.toggle(url) },
                 )
                 Text(
                     text = transport.timeLabel(audio.durationSeconds),
@@ -155,14 +111,14 @@ internal fun OverlayMediaPreview(
                 SpeedChip(
                     rate = transport.playbackRate,
                     accentColor = accentColor,
-                    onClick = { apply(transport.cycleRate()) },
+                    onClick = { preview.cycleRate() },
                 )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                IconButton(onClick = { apply(transport.skip(-OverlayMediaTransport.SKIP_SECONDS)) }) {
+                IconButton(onClick = { preview.skip(-OverlayMediaTransport.SKIP_SECONDS) }) {
                     Icon(
                         imageVector = Icons.Filled.Replay5,
                         contentDescription = stringResource(R.string.chat_media_skip_back),
@@ -171,7 +127,7 @@ internal fun OverlayMediaPreview(
                 }
                 Slider(
                     value = transport.progress.toFloat(),
-                    onValueChange = { apply(transport.seek(it.toDouble())) },
+                    onValueChange = { preview.seek(it.toDouble()) },
                     valueRange = 0f..1f,
                     colors = SliderDefaults.colors(
                         thumbColor = accentColor,
@@ -186,7 +142,7 @@ internal fun OverlayMediaPreview(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                 )
-                IconButton(onClick = { apply(transport.skip(OverlayMediaTransport.SKIP_SECONDS)) }) {
+                IconButton(onClick = { preview.skip(OverlayMediaTransport.SKIP_SECONDS) }) {
                     Icon(
                         imageVector = Icons.Filled.Forward5,
                         contentDescription = stringResource(R.string.chat_media_skip_forward),

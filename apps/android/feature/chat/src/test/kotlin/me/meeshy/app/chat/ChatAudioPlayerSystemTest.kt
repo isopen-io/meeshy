@@ -71,6 +71,7 @@ class ChatAudioPlayerSystemTest {
         }
 
         override fun seekTo(positionMs: Long) = Unit
+        override fun setSpeed(rate: Float) = Unit
         override fun reset() {
             playing = false
         }
