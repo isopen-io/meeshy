@@ -1,15 +1,17 @@
 package me.meeshy.sdk.model.composer.edit
 
-/** Les entrées du niveau « Modifier » d'un fond média que l'application sert, chacune nommée par son identifiant dans l'arbre partagé. */
+/** Les outils du rail à plat d'un fond média que l'application sert, chacun nommé par son identifiant dans l'arbre partagé. */
 enum class ComposerBackgroundTool(val entryId: String) {
     FRAMING("framing"), TRIM("trim"), FILTERS("filters"), FRAMES("frames"), ADJUST("adjust"), EFFECTS("effects"),
     LOOP("loop"), DESCRIPTION("description"),
 }
 
 /**
- * Le niveau N1 « Modifier » d'un fond média (spec 2026-10-31, #13973, lot A-E2), lu dans [ComposerEditTree] : l'ordre, le
- * mot et ce qu'ouvre chaque entrée viennent de l'arbre partagé, l'offre de ce que le fond EST. Les entrées de l'arbre que
- * cette application ne câble pas encore ([unserved]) ne sont pas offertes (loi 4).
+ * Les outils du fond média (spec 2026-10-31, #13973), posés À PLAT dans son rail avant ses actions — plus de niveau
+ * « Modifier » à toucher (#14047, comme iOS #14048) —, lus dans [ComposerEditTree] (`background.media.edit`, que le rail sert
+ * à la place de l'entrée « edit » de `background.media`) : l'ordre, le mot et ce qu'ouvre chaque entrée
+ * viennent de l'arbre partagé, l'offre de ce que le fond EST. Les outils de l'arbre que cette application ne câble pas
+ * encore ([unserved]) ne sont pas offerts (loi 4).
  */
 object ComposerBackgroundEditLevel {
 
@@ -31,11 +33,12 @@ object ComposerBackgroundEditLevel {
     fun entryOf(tool: ComposerBackgroundTool, tree: ComposerEditTree = ComposerEditTree.shared): ComposerEditTree.Entry =
         entries(tree).single { it.id == tool.entryId }
 
-    /** Les entrées de l'arbre qu'Android ne sert pas encore : la cible commune, que les lots suivants câbleront. */
+    /** Les outils de l'arbre qu'Android ne sert pas encore : la cible commune, que les lots suivants câbleront. */
     fun unserved(tree: ComposerEditTree = ComposerEditTree.shared): List<String> =
         entries(tree).filter { toolOf(it) == null }.map { it.id }
 
-    private fun entries(tree: ComposerEditTree): List<ComposerEditTree.Entry> = tree.level(ComposerEditTree.BACKGROUND_MEDIA_EDIT)?.entries.orEmpty()
+    private fun entries(tree: ComposerEditTree): List<ComposerEditTree.Entry> =
+        tree.level(ComposerEditTree.BACKGROUND_MEDIA_EDIT)?.entries.orEmpty()
 
     private fun toolOf(entry: ComposerEditTree.Entry): ComposerBackgroundTool? = ComposerBackgroundTool.entries.firstOrNull { it.entryId == entry.id }
 }

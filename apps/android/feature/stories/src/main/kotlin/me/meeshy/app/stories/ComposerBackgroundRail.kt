@@ -62,6 +62,7 @@ internal fun composerEditIcon(material: String): ImageVector? = when (material) 
     "Tune" -> MeeshyIcons.Tune
     "Sparkles" -> MeeshyIcons.Sparkles
     "VolumeUp" -> MeeshyIcons.VolumeUp
+    "VolumeOff" -> MeeshyIcons.VolumeOff
     "Repeat" -> MeeshyIcons.Repeat
     "RotateRight" -> MeeshyIcons.Refresh
     "TextFields" -> MeeshyIcons.TextFields
@@ -77,7 +78,6 @@ internal fun ComposerBackgroundSource.glyph(): ImageVector = composerEditIcon(Co
 internal val ComposerBackgroundAction.isDestructive: Boolean get() = ComposerBackgroundLevel.entryOf(this).destructive
 
 internal fun ComposerBackgroundAction.labelRes(): Int = when (this) {
-    ComposerBackgroundAction.EDIT -> R.string.story_canvas_action_edit
     ComposerBackgroundAction.REPLACE -> R.string.composer_edit_replace
     ComposerBackgroundAction.PUT_ON_SCENE -> R.string.composer_audio_promote_action
     ComposerBackgroundAction.REMOVE -> R.string.composer_selection_remove
@@ -104,8 +104,8 @@ internal class BackgroundEditing(
 )
 
 /**
- * Le niveau « Fond » du fond média sélectionné, ou `null` quand le fond n'est pas la sélection. Modifier pose son niveau
- * de réglages par-dessus ([onEdit], lot A-E2), Remplacer la feuille de ses sources, Mettre sur la scène agit aussitôt, Retirer demande
+ * Les actions du rail « Fond » du fond média sélectionné, ou `null` quand le fond n'est pas la sélection ; elles suivent ses
+ * outils posés à plat (#14047). Remplacer ouvre la feuille de ses sources, Mettre sur la scène agit aussitôt, Retirer demande
  * d'abord. [cameraServed] : la scène sait filmer ; [onReplace] ouvre la photothèque ou les fichiers pour le fond [replacing].
  */
 @Composable
@@ -114,14 +114,12 @@ internal fun rememberBackgroundEditing(
     viewModel: StoryComposerViewModel,
     openSheet: (StoryComposerSheet) -> Unit,
     cameraServed: Boolean,
-    onEdit: () -> Unit,
     onReplace: (source: ComposerBackgroundSource, replacing: String) -> Unit,
 ): BackgroundEditing? {
     var confirming by remember { mutableStateOf(false) }
     val replacing = state.selectedSlideBackdropMediaId
     if (state.selectionSubject != ComposerSelectionSubject.BACKGROUND || replacing == null) return null
     val offers = ComposerBackgroundLevel.Offers(
-        editor = true,
         mediaSource = state.mediaPickMode != StoryMediaPickMode.None,
         camera = cameraServed && state.mediaPickMode != StoryMediaPickMode.None,
     )
@@ -130,7 +128,6 @@ internal fun rememberBackgroundEditing(
         sources = ComposerBackgroundLevel.sources(offers),
         onAction = { action ->
             when (action) {
-                ComposerBackgroundAction.EDIT -> onEdit()
                 ComposerBackgroundAction.REPLACE -> openSheet(StoryComposerSheet.BACKGROUND_SOURCE)
                 ComposerBackgroundAction.PUT_ON_SCENE -> viewModel.onPutBackgroundOnScene()
                 ComposerBackgroundAction.REMOVE -> confirming = true
@@ -146,14 +143,18 @@ internal fun rememberBackgroundEditing(
     )
 }
 
-/** Le niveau « Fond » dans la colonne des outils, à la place des outils : un disque et son mot par entrée, Retirer en alerte. */
+/**
+ * Le rail « Fond » dans la colonne des outils, à la place des outils : ses outils à plat puis ses actions (#14047), un disque
+ * et son mot par entrée, Retirer en alerte ; trop long, il défile.
+ */
 @Composable
-internal fun SceneBackgroundColumn(background: BackgroundEditing) {
+internal fun SceneBackgroundColumn(background: BackgroundEditing, tools: BackgroundTools) {
     Column(
         modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        BackgroundToolItems(tools, wide = false)
         background.actions.forEach { action ->
             SceneOptionButton(
                 icon = action.glyph(),
@@ -165,9 +166,9 @@ internal fun SceneBackgroundColumn(background: BackgroundEditing) {
     }
 }
 
-/** Grand écran : le niveau « Fond » dans le rail gauche, sous son titre, à la place de ce qu'on ajoute. */
+/** Grand écran : le rail « Fond » à gauche, sous son titre, à la place de ce qu'on ajoute — ses outils puis ses actions. */
 @Composable
-internal fun StoryBackgroundRail(background: BackgroundEditing) {
+internal fun StoryBackgroundRail(background: BackgroundEditing, tools: BackgroundTools) {
     Column(
         modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -181,6 +182,7 @@ internal fun StoryBackgroundRail(background: BackgroundEditing) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(MeeshySpacing.xs).semantics { heading() },
         )
+        BackgroundToolItems(tools, wide = true)
         background.actions.forEach { action ->
             LabeledRailItem(
                 icon = action.glyph(),

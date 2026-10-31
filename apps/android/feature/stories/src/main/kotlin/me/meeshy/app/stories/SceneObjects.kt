@@ -167,10 +167,13 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
 /**
  * La barre d'actions de l'objet SÉLECTIONNÉ — ni écrit, ni sous le pinceau (#13836). Elle part de ce que la loi
  * [SceneObjectMenu] sert à l'objet : le MÊME menu que son appui long pour un texte ou un sticker, les contrôleurs d'un
- * média, d'un lieu ou d'un son ; chaque famille y câble son Modifier — écrire le texte, la feuille du média ou du son,
- * l'échange du sticker, le lieu d'une pastille. Le Temps est celui de tout objet POSÉ sur la scène (#13902, comme iOS) — texte, sticker, média
+ * média, d'un lieu ou d'un son ; le texte, le sticker et le lieu y câblent leur Modifier — écrire le texte, l'échange du
+ * sticker, le lieu d'une pastille ; une image, une vidéo ou un son posés n'en ont pas, leurs outils sont à plat dans le rail (#14047). Le Temps est celui de tout objet POSÉ sur la scène (#13902, comme iOS) — texte, sticker, média
  * posé, lieu, pastille de son —, la scène animée ou non ; un fond dure la slide entière.
  */
+/** Les familles dont les outils sont à plat dans le rail (#14047) : leur barre n'a pas de Modifier. */
+private val FlatToolKinds = setOf(ComposerObjectKind.MEDIA, ComposerObjectKind.AUDIO)
+
 val StoryComposerUiState.selectionBar: SceneSelectionBar?
     get() {
         if (isEditingTextElement || isDrawingActive) return null
@@ -188,7 +191,7 @@ val StoryComposerUiState.selectionBar: SceneSelectionBar?
                     editable = true,
                     timed = controllers.ref in StorySceneStack.order(deck.selectedSlide),
                 ),
-            ),
+            ).filterNot { it == ComposerSelectionAction.EDIT && controllers.ref.kind in FlatToolKinds },
             sheetActions = ComposerSelectionActions.editSheetActions(offered),
         )
     }

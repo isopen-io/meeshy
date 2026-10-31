@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Framing</string>
     <string name="composer_edit_frames">Frames</string>
     <string name="composer_edit_loop">Loop</string>
+    <string name="composer_edit_mute">Mute</string>
+    <string name="composer_edit_rotate">Rotate</string>
     <string name="composer_edit_trim">Trim</string>
+    <string name="composer_edit_volume">Volume</string>
     <string name="composer_family_text">Text</string>
     <string name="composer_frise_earlier">Earlier</string>
     <string name="composer_frise_empty">Add a text or a sticker: each object becomes a track.</string>

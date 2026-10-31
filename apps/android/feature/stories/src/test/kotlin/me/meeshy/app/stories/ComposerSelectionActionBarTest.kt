@@ -60,6 +60,9 @@ import me.meeshy.ui.component.media.MEDIA_TRIM_START_HANDLE_TAG
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
+import androidx.compose.ui.test.onChildren
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -232,7 +235,7 @@ class ComposerSelectionActionBarTest {
         vm.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, SceneObjectRef(ComposerObjectKind.MEDIA, "p"), ComposerObjectTiming(1.0, 3.0)) }
         show(vm)
 
-        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithText("Timing").performScrollTo().performClick()
 
         compose.onNodeWithText("From 1.0 s to 3.0 s").assertExists()
         compose.onNodeWithContentDescription("Start").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1.0 s"))
@@ -261,6 +264,26 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
         compose.onNodeWithTag(MEDIA_TRIM_END_HANDLE_TAG).assertExists()
         compose.onNodeWithContentDescription("Start").assertExists()
+    }
+
+    @Test
+    fun `a selected sound lays Trim flat in the rail before Duplicate, Timing and Remove, its band under the scene, without Edit nor sheet`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        val rail = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
+            .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
+        assertThat(rail).containsExactly("Trim", "Duplicate", "Timing", "Remove").inOrder()
+        compose.onNodeWithText("Edit").assertDoesNotExist()
+
+        compose.onNodeWithText("Trim").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
+
+        compose.onNodeWithText("Back").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+        compose.onNodeWithText("Duplicate").assertExists()
     }
 
     @Test
@@ -306,7 +329,8 @@ class ComposerSelectionActionBarTest {
 
         assertThat(vm.state.value.selectedMedia).isEqualTo("p")
         compose.onNodeWithContentDescription("Media on the scene").assertIsSelected()
-        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("Filters", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Edit").assertDoesNotExist()
     }
 
     private fun assertBarOffersDuplicateAndTiming(select: (StoryComposerViewModel) -> Unit) {
@@ -360,7 +384,7 @@ class ComposerSelectionActionBarTest {
         assertThat(slide.placedMedia.map { it.mediaId }).containsExactly("p", "p")
         assertThat(vm.state.value.selectedMediaId).isEqualTo(slide.placedMedia.last().id)
         assertThat(slide.mediaIds).containsExactly("p")
-        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithText("Timing").performScrollTo().performClick()
         compose.onNodeWithText("From 0.0 s to the end").assertExists()
     }
 
@@ -372,7 +396,7 @@ class ComposerSelectionActionBarTest {
         withPlacedClip(vm)
         vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
         show(vm)
-        compose.onNodeWithText("Edit").performClick()
+        compose.onNodeWithText("Describe").performScrollTo().performClick()
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
 
         val text = vm.state.value.deck.selectedSlide.elements.single().id
@@ -384,7 +408,7 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `Modifier on a placed photo offers filters and frames, and a touched filter and frame become its look`() {
+    fun `the Frames of a placed photo lie flat in its rail, and a touched frame becomes its look`() {
         val vm = viewModel()
         val photo = PendingMediaUpload("p", MediaUploadItem(ByteArray(4), "p.jpg", "image/jpeg"))
         vm.onSceneReduce { state ->
@@ -396,14 +420,11 @@ class ComposerSelectionActionBarTest {
         }
         vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
         show(vm)
-        compose.onNodeWithText("Edit").performClick()
 
-        tapInSheet("Filters & frames")
-        tapInSheet("Warm")
-        tapInSheet("Frames")
+        compose.onNodeWithText("Frames").performScrollTo().performClick()
         tapInSheet("Polaroid")
 
-        assertThat(vm.state.value.mediaLookOf("p")).isEqualTo(me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm", frameId = "classic:polaroid"))
+        assertThat(vm.state.value.mediaLookOf("p")?.frameId).isEqualTo("classic:polaroid")
         assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("p")
     }
 

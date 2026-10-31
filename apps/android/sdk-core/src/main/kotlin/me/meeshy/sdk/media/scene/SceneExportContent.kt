@@ -52,7 +52,7 @@ internal object SceneExportContent {
 
     /** Ce que la vidéo rendue doit montrer à [atMillis] de son horloge commune, comme le moteur le pose. */
     fun expectedAt(job: SceneExportJob, planned: SceneComposition, atMillis: Long): List<SceneContentProbe> =
-        listOfNotNull(fillAt(planned.video, atMillis), layerAt(job.overlays, atMillis)) +
+        listOfNotNull(fillAt(planned.video, atMillis), layerAt(job.overlays.filter { it.depth == 0 }, atMillis)) +
             planned.brandLayers.mapNotNull { layer -> layer.alphaAt(atMillis).takeIf { it > 0f }?.let { SceneContentProbe.Card(layer.file, it) } }
 
     /** Le pixel le plus lumineux, son opacité comprise (un calque transparent ne promet rien). */
@@ -81,7 +81,8 @@ internal object SceneExportContent {
             "(luminance ${first.expected}), le rendu n'y montre rien"
     }
 
-    private fun fillAt(items: List<SceneVideoItem>, atMillis: Long): SceneContentProbe? {
+    /** Ce qui remplit l'image à [atMillis] sous tous les calques : le fond tenu ou l'image de la vidéo de fond. */
+    fun fillAt(items: List<SceneVideoItem>, atMillis: Long): SceneContentProbe? {
         val starts = items.runningFold(0L) { start, item -> start + spanOf(item) }
         val index = items.indices.lastOrNull { starts[it] <= atMillis } ?: return null
         val item = items[index]
@@ -92,7 +93,7 @@ internal object SceneExportContent {
     private fun spanOf(item: SceneVideoItem): Long = item.clip?.durationMillis ?: item.imageMillis ?: 0L
 
     /** Le calque que [TimedBitmapOverlay] sert à cet instant : celui qui le couvre, le dernier au-delà, le premier avant. */
-    private fun layerAt(overlays: List<SceneExportOverlay>, atMillis: Long): SceneContentProbe? {
+    fun layerAt(overlays: List<SceneExportOverlay>, atMillis: Long): SceneContentProbe? {
         if (overlays.isEmpty()) return null
         val index = StoryExportOverlayTrack(overlays.map { StoryExportOverlayFrame(it.startMillis, it.endMillis) }).indexAt(atMillis)
         return SceneContentProbe.Layer(overlays[index.coerceAtLeast(0)])
