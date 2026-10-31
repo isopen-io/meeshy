@@ -211,6 +211,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        guard onBackgroundMediaLongPressed == nil || hitTestForegroundItem(at: location) != nil else { return nil }
         // Le menu n'est jamais la fin d'un glissé (#13839, L5).
         guard StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
                                                 lastManipulationEnd: lastManipulationEndedAt,

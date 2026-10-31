@@ -27,32 +27,23 @@ import Foundation
 /// > ne porte de fond — c'est-à-dire tant qu'on teste le cas que la garde
 /// > décrit, et jamais celui que le nom promet.
 ///
-/// ## Un MENU, pas l'éditeur — et la raison n'est pas seulement la directive
+/// ## La SÉLECTION, ni un menu ni l'éditeur (#13974, grammaire d'édition)
 ///
-/// > Directive porteur : « Lorsqu'on a une image, vidéo de fond le longpress sur
-/// > le fond doit mettre le menu permettant de **supprimer, ramener en front ou
-/// > encore d'editer** l'image ».
+/// > Décision porteur 2026-10-31 : une option d'édition n'a que trois places —
+/// > le rail du bas remplacé, des rails superposés par niveaux, une feuille
+/// > basse —, jamais un menu flottant.
 ///
-/// La première écriture de cette règle rendait « ouvre l'éditeur ». Elle
-/// corrigeait le viseur et introduisait l'incohérence exactement inverse : sur un
-/// objet de PREMIER PLAN, l'appui long ouvre déjà le menu contextuel (Supprimer /
-/// Dupliquer / Modifier). Le même geste aurait donc eu deux effets selon que le
-/// média est devant ou derrière — la dimension 6 prise à revers par un correctif
-/// qui la réclamait.
-///
-/// « Ramener en avant » mérite d'être nommée : c'est l'action qui fait SORTIR un
-/// média du plan de fond, et elle n'a d'équivalent nulle part ailleurs. La servir
-/// n'est pas un confort, c'est le seul chemin.
-///
-/// Le DOUBLE-TAP, lui, continue d'aller droit à l'éditeur : c'est son sens, et
-/// rien ici ne le change.
+/// L'appui long sur le fond fait donc ce que fait le toucher : il le
+/// SÉLECTIONNE, et l'hôte pose le niveau « Fond » (Modifier · Remplacer ·
+/// Mettre sur la scène · Retirer). Le menu flottant de #5041 et #8717 est
+/// parti ; « Mettre sur la scène » y garde le seul chemin qui fait SORTIR un
+/// média du plan de fond.
 ///
 /// ## Pourquoi l'hôte est un FAIT de la règle
 ///
-/// Router vers un menu que personne ne monte rendrait l'appui long **muet** —
-/// strictement pire que le défaut corrigé, puisqu'il ouvrait au moins le viseur.
-/// La règle prend donc ce fait et retombe sur le viseur tant que l'hôte ne sert
-/// pas le menu. C'est le motif que le canvas emploie déjà à côté :
+/// Router vers une sélection que personne ne reçoit rendrait l'appui long
+/// **muet** — strictement pire que le viseur. La règle prend donc ce fait et
+/// retombe sur le viseur tant que l'hôte ne sélectionne pas le fond. C'est le motif que le canvas emploie déjà à côté :
 /// `canEditItem` teste `onItemDoubleTapped != nil` pour répondre à « l'hôte a-t-il
 /// câblé un éditeur ? ».
 ///
@@ -68,9 +59,9 @@ import Foundation
 /// définition.
 nonisolated enum StoryCanvasBackgroundLongPress: Equatable, Sendable {
 
-    /// La scène porte un fond et l'hôte sait le présenter : supprimer, ramener
-    /// en avant, éditer.
-    case presentBackgroundMenu(String)
+    /// La scène porte un fond et l'hôte sait le sélectionner : son niveau
+    /// « Fond » prend le rail.
+    case selectBackground(String)
 
     /// Rien à éditer — ou personne pour l'offrir. Le geste appartient au viseur
     /// (#4036).
@@ -78,15 +69,26 @@ nonisolated enum StoryCanvasBackgroundLongPress: Equatable, Sendable {
 
     /// - `backgroundMediaObjectId` : l'identifiant du média de fond, ou `nil`
     ///   quand la slide n'en porte pas (couleur, dégradé, scène neuve).
-    /// - `hostServesBackgroundMenu` : l'hôte a-t-il câblé le menu ? Tant qu'il ne
-    ///   l'a pas, le geste retourne au viseur plutôt que de ne rien faire.
+    /// - `hostSelectsBackground` : l'hôte a-t-il câblé la sélection du fond ?
+    ///   Tant qu'il ne l'a pas, le geste retourne au viseur plutôt que de ne
+    ///   rien faire.
     static func outcome(backgroundMediaObjectId: String?,
-                        hostServesBackgroundMenu: Bool) -> StoryCanvasBackgroundLongPress {
-        guard hostServesBackgroundMenu,
+                        hostSelectsBackground: Bool) -> StoryCanvasBackgroundLongPress {
+        guard hostSelectsBackground,
               let backgroundMediaObjectId,
               !backgroundMediaObjectId.isEmpty else {
             return .openViewfinder
         }
-        return .presentBackgroundMenu(backgroundMediaObjectId)
+        return .selectBackground(backgroundMediaObjectId)
+    }
+
+    /// **Le toucher et l'appui long du fond s'excluent** (#13974) : un appui
+    /// long reconnu fait échouer le toucher du même geste, un toucher reconnu
+    /// empêche l'appui long. Sans cette règle, le toucher partait au
+    /// relâchement et désélectionnait le fond que l'appui long venait de
+    /// sélectionner.
+    static func excludesEachOther(_ a: AnyObject, _ b: AnyObject, tap: AnyObject?, longPress: AnyObject?) -> Bool {
+        guard let tap, let longPress else { return false }
+        return (a === tap && b === longPress) || (a === longPress && b === tap)
     }
 }

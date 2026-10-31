@@ -27,8 +27,8 @@ extension MeeshyComposerHost {
     /// **Le point d'entrée UNIQUE du retrait d'un média.**
     ///
     /// Les gestes de suppression y arrivent : le rail trailing de la scène
-    /// (`handleTrailingRailAction(.delete)`), le menu d'appui long sur un fond
-    /// (`applyBackgroundMenu(.delete)`, #5041), la corbeille du rail de scènes
+    /// (`handleTrailingRailAction(.delete)`), le niveau « Fond » du rail
+    /// (« Fond › Retirer », #13974), la corbeille du rail de scènes
     /// (`retractScene(at:)`) et la porte du SON (`deleteEditedSound()`). Cinq sites qui retirent seraient cinq
     /// inventaires à tenir d'accord, donc un oubli à venir — c'est exactement la
     /// forme du défaut qu'on ferme ici, et deux des cinq gestes ne figuraient
