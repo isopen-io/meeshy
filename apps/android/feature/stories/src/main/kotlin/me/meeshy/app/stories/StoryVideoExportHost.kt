@@ -87,7 +87,6 @@ fun rememberSceneVideoExport(
     val shareTitle = stringResource(R.string.stories_viewer_export_share)
     val currentScenes by rememberUpdatedState(scenes)
     val currentAuthor by rememberUpdatedState(author)
-    var outcome by remember { mutableStateOf<SceneExportOutcome?>(null) }
     var lastRun by remember { mutableStateOf<SceneExportRun?>(null) }
     val permissions = rememberPermissionFlow()
 
@@ -95,35 +94,25 @@ fun rememberSceneVideoExport(
         scope.launch {
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
-            outcome = null
             lastRun = SceneExportRun(mode, shown, storyAuthor)
             viewModel.export(mode, shown, storyAuthor)
         }
     }
 
-    LaunchedEffect(exportState) {
-        val export = exportState
-        SceneExportOutcome.of(export)?.let { outcome = it }
-        when (export) {
-            SceneExportState.Saved, SceneExportState.Failed -> viewModel.acknowledge()
-            is SceneExportState.Ready -> {
-                shareVideo(context, File(export.path), shareTitle)
-                viewModel.handedOver()
-            }
-            else -> Unit
-        }
-    }
     when (val current = stage) {
         is StoryVideoExportStage.ChoosingLength -> ImagerLengthDialog(current.choices, onChoose = viewModel::chooseLength)
         else -> {
             val painting = (current as? StoryVideoExportStage.Painting)?.request
-            SceneExportBand(
-                fraction = exportState.veilFraction,
-                onCancel = viewModel::cancel,
-                outcome = outcome,
-                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes, previous.author) } },
-                onOutcomeShown = { outcome = null },
+            SceneExportStatus(
+                exportState = exportState,
                 painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
+                onCancel = viewModel::cancel,
+                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes, previous.author) } },
+                onAcknowledge = viewModel::acknowledge,
+                onReady = { ready ->
+                    shareVideo(context, File(ready.path), shareTitle)
+                    viewModel.handedOver()
+                },
             )
         }
     }
@@ -132,6 +121,42 @@ fun rememberSceneVideoExport(
     return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen ->
         (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }?.let { shown -> run(mode, shown, if (chosen == null) currentAuthor() else null) }
     }
+}
+
+/**
+ * L'export vu de l'écran (#13897) : la progression tant qu'il tourne, puis son ISSUE, retenue avant que l'état ne soit
+ * acquitté ([onAcknowledge] le ramène au repos) — un échec se dit toujours, jamais une bande qui disparaît sans un mot.
+ * [onReady] remet le fichier prêt (feuille de partage).
+ */
+@Composable
+internal fun SceneExportStatus(
+    exportState: SceneExportState,
+    painting: (@Composable () -> Unit)?,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onAcknowledge: () -> Unit,
+    onReady: (SceneExportState.Ready) -> Unit,
+) {
+    var outcome by remember { mutableStateOf<SceneExportOutcome?>(null) }
+    val shown = SceneExportOutcome.of(exportState) ?: outcome
+    LaunchedEffect(exportState) {
+        val export = exportState
+        if (export is SceneExportState.Running) outcome = null
+        SceneExportOutcome.of(export)?.let { outcome = it }
+        when (export) {
+            SceneExportState.Saved, SceneExportState.Failed -> onAcknowledge()
+            is SceneExportState.Ready -> onReady(export)
+            else -> Unit
+        }
+    }
+    SceneExportBand(
+        fraction = exportState.veilFraction,
+        onCancel = onCancel,
+        outcome = shown,
+        onRetry = onRetry,
+        onOutcomeShown = { outcome = null },
+        painting = painting,
+    )
 }
 
 /** Le dernier export lancé, que « Réessayer » relance tel quel : même sortie, mêmes scènes. */
