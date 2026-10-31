@@ -20,11 +20,11 @@
  * paire active est donc relue en au plus ⌈paires / plafond⌉ passes. Un redémarrage
  * repart du début : rien n'est perdu, la rotation recommence.
  *
- * Une paire déjà au moins Connaissance par un lien que l'évaluation ne peut pas
- * défaire (une demande acceptée, un niveau relevé à la main) est SAUTÉE : elle ne
+ * Une paire que l'évaluation ne peut pas changer — déjà au moins Connaissance par
+ * un lien qu'elle ne défait pas (une demande acceptée, un niveau relevé), ou une
+ * baisse gravée qu'elle respecte (`acquaintancePlan`) — est SAUTÉE : elle ne
  * coûterait que des lectures pour rendre « inchangé ».
  */
-import { compareRelationLevel, parseRelationLevel } from '@meeshy/shared/types/relation';
 import { addUtcDays, utcDayStart } from '@meeshy/shared/utils/iso-week';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
@@ -33,6 +33,7 @@ import {
   isOwnAcquaintance,
   type AutoAcquaintanceDeps,
 } from './autoAcquaintance.js';
+import { acquaintancePlan } from './userRelationWriter.js';
 
 const logger = enhancedLogger.child({ module: 'RelationCatchUp' });
 
@@ -75,10 +76,17 @@ async function activePairs(
   }
 }
 
-const isSettled = (row: { grantedByLow?: string | null; grantedByHigh?: string | null; origin?: string | null }): boolean =>
-  !isOwnAcquaintance(row) &&
-  compareRelationLevel(parseRelationLevel(row.grantedByLow), 'ACQUAINTANCE') >= 0 &&
-  compareRelationLevel(parseRelationLevel(row.grantedByHigh), 'ACQUAINTANCE') >= 0;
+type RelationRowSeen = {
+  readonly id: string;
+  readonly userLowId: string;
+  readonly userHighId: string;
+  readonly grantedByLow: string | null;
+  readonly grantedByHigh: string | null;
+  readonly origin: string | null;
+  readonly transitions: ReadonlyArray<{ readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
+};
+
+const isSettled = (row: RelationRowSeen): boolean => !isOwnAcquaintance(row) && acquaintancePlan(row) === 'keep';
 
 async function settledPairs(deps: AutoAcquaintanceDeps, pairs: ReadonlyArray<Pair>): Promise<ReadonlySet<string>> {
   const chunks = Array.from({ length: Math.ceil(pairs.length / PAGE_SIZE) }, (_, i) => pairs.slice(i * PAGE_SIZE, (i + 1) * PAGE_SIZE));
@@ -86,7 +94,7 @@ async function settledPairs(deps: AutoAcquaintanceDeps, pairs: ReadonlyArray<Pai
   for (const chunk of chunks) {
     const rows = await deps.prisma.userRelation.findMany({
       where: { OR: chunk.map(([userLowId, userHighId]) => ({ userLowId, userHighId })) },
-      select: { userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true, origin: true },
+      select: { id: true, userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true, origin: true, transitions: true },
       take: chunk.length,
     });
     rows.filter(isSettled).forEach((row) => settled.add(`${row.userLowId}:${row.userHighId}`));

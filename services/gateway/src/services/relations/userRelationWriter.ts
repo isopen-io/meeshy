@@ -188,6 +188,20 @@ export function friendshipBackfillPlan(row: UserRelationRow | null, acceptedAt: 
   return target.low === current.low && target.high === current.high ? 'keep' : 'raise';
 }
 
+/**
+ * Ce que `recordAcquaintance` ferait d'une paire, sans rien écrire (#13932) : le
+ * rattrapage saute une paire `keep` plutôt que de l'évaluer pour rendre
+ * « inchangé ». `keep` = déjà au moins Connaissance des deux côtés, ou une baisse
+ * gravée que la Connaissance automatique respecte sans condition.
+ */
+export function acquaintancePlan(row: UserRelationRow | null): FriendshipBackfillPlan {
+  if (!row) return 'create';
+  if (hasRecordedDrop(row)) return 'keep';
+  const current = grantsOf(row);
+  const target = atLeast(current, 'ACQUAINTANCE');
+  return target.low === current.low && target.high === current.high ? 'keep' : 'raise';
+}
+
 /** La ligne telle que le rattrapage la laisserait : le `dryRun` enchaîne les demandes d'une même paire dessus. */
 export function friendshipBackfillProjection(
   row: UserRelationRow | null,

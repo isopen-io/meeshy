@@ -115,4 +115,18 @@ describe('runRelationCatchUp — toutes les paires actives de la semaine glissan
       [C, 'ACQUAINTANCE', 'ACQUAINTANCE'],
     ]);
   });
+
+  it('saute aussi une paire dont la baisse est gravée : la Connaissance automatique ne la relève jamais', async () => {
+    const dropped = {
+      id: 'aa0000000000000000000097', userLowId: A, userHighId: B, grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC',
+      levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'auto-acquaintance',
+      transitions: [{ from: 'ACQUAINTANCE', to: 'PUBLIC', at: new Date('2026-10-25T00:00:00Z') }],
+    };
+    const store = pairInteractionStore({ days: [qualifyingRow(A, B)], users, relations: [dropped] });
+
+    const report = await runRelationCatchUp({ prisma: store.prisma, now: () => NOW });
+
+    expect(report).toMatchObject({ pairs: 1, skipped: 1, created: 0, raised: 0 });
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
 });
