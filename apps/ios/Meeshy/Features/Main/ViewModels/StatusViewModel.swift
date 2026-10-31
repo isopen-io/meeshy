@@ -503,7 +503,7 @@ class StatusViewModel: ObservableObject {
         return { [weak self] point in
             guard let entry = self?.statusForUser(userId: userId) else { return }
             Task { @MainActor in
-                StatusBubbleController.shared.show(entry: entry, anchor: point)
+                Self.bubbleController.show(entry: entry, anchor: point)
             }
         }
     }
@@ -511,13 +511,17 @@ class StatusViewModel: ObservableObject {
     /// En CONVERSATION (en-tête, bulles, fil), la boule de mood ouvre la page
     /// plein écran de l'humeur, sans bulle ni pop-up de réponse (#13987).
     func moodSpotlightHandler(for userId: String,
-                              controller: StatusBubbleController = .shared) -> ((CGPoint) -> Void)? {
+                              controller: StatusBubbleController? = nil) -> ((CGPoint) -> Void)? {
         guard statusForUser(userId: userId) != nil else { return nil }
-        return { [weak self, weak controller] _ in
+        let target = controller ?? Self.bubbleController
+        return { [weak self, weak target] _ in
             guard let entry = self?.statusForUser(userId: userId) else { return }
-            controller?.openSpotlight(entry: entry)
+            target?.openSpotlight(entry: entry)
         }
     }
+
+    /// L'hôte unique de la bulle d'humeur et de la page plein écran.
+    private static var bubbleController: StatusBubbleController { StatusBubbleController.shared }
 
     // MARK: - Socket.IO Real-Time Updates
 
