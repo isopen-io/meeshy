@@ -8,6 +8,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import me.meeshy.sdk.model.composer.live.ComposerLivePlayback
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
@@ -112,6 +114,7 @@ fun StoryComposerScreen(
     val pickers = rememberStoryMediaPickers(state.mediaPickMode, viewModel)
 
     var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
+    val live = rememberComposerLive(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
     StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
 
     val close = rememberConfirmedComposerClose(
@@ -139,6 +142,7 @@ fun StoryComposerScreen(
         }.takeIf { !capture.armed },
         onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
+    CompositionLocalProvider(LocalComposerLive provides live) {
     StoryComposerSceneFirst(
         state = state,
         viewModel = viewModel,
@@ -161,6 +165,7 @@ fun StoryComposerScreen(
         },
         capture = capture,
     )
+    }
 }
 
 /** La feuille ouverte, dans sa coque ancrée ; celles qui se lisent sur la scène sont sombres comme elle. */
@@ -210,7 +215,7 @@ private fun StoryComposerSheetBody(
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
             StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT,
-        StoryComposerSheet.BACKGROUND_SOURCE -> Unit
+        StoryComposerSheet.BACKGROUND_SOURCE, StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
     }
 }
 
@@ -219,11 +224,12 @@ private fun StoryComposerSheetBody(
 private fun StoryComposerBackgroundSound(state: StoryComposerUiState, viewModel: StoryComposerViewModel, shelfOpen: Boolean) {
     val screenState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val backgroundSound = state.selectedSlideBackgroundSound
+    // Une seule lecture à la fois : un son sélectionné joue dans le lecteur vivant (#13973, lot A-E3), le fond se tait.
     val soundPlays = ComposerSoundPlacement.playsWhileComposing(
         track = backgroundSound,
         screenResumed = screenState.isAtLeast(Lifecycle.State.RESUMED),
         shelfOpen = shelfOpen,
-    )
+    ) && !ComposerLivePlayback.backgroundSoundYields(state.liveSubject)
     // La fenêtre propre du son (#13601) se joue aussi en composant ; pendant le geste d'une poignée elle n'est reprise qu'une
     // fois posée (un lecteur neuf par image du geste coûterait cher).
     val liveWindow = StorySourceWindow.clippingMs(backgroundSound?.sourceStart, backgroundSound?.sourceEnd)

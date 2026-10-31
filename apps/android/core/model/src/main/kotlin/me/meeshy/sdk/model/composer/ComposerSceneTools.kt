@@ -26,7 +26,6 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
     SLIDE_DURATION,
     ANIMATION,
     TIMING,
-    FRAME,
     OPENING_EFFECT,
     VISUAL_EFFECT,
     CAPTION,
@@ -56,7 +55,6 @@ object ComposerSceneTools {
      */
     data class MoreInput(
         val editsSlides: Boolean,
-        val hasBackgroundMedia: Boolean,
         val animated: Boolean,
         val sceneEffects: List<ComposerSceneEffect>,
         val exports: List<ComposerOverflowEntry>,
@@ -72,7 +70,6 @@ object ComposerSceneTools {
         when (entry) {
             ComposerMoreEntry.ADD_SLIDE -> input.editsSlides
             ComposerMoreEntry.TIMING -> input.animated
-            ComposerMoreEntry.FRAME -> input.hasBackgroundMedia
             ComposerMoreEntry.OPENING_EFFECT -> ComposerSceneEffect.OPENING in input.sceneEffects
             ComposerMoreEntry.VISUAL_EFFECT -> ComposerSceneEffect.VISUAL in input.sceneEffects
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export in input.exports

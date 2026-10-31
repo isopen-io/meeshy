@@ -9,7 +9,6 @@ import org.junit.Test
 class ComposerSceneToolsTest {
     private fun more(
         editsSlides: Boolean = true,
-        hasBackgroundMedia: Boolean = false,
         animated: Boolean = false,
         sceneEffects: List<ComposerSceneEffect> = emptyList(),
         exports: List<ComposerOverflowEntry> = emptyList(),
@@ -20,7 +19,6 @@ class ComposerSceneToolsTest {
     ) = ComposerSceneTools.moreEntries(
         ComposerSceneTools.MoreInput(
             editsSlides = editsSlides,
-            hasBackgroundMedia = hasBackgroundMedia,
             animated = animated,
             sceneEffects = sceneEffects,
             exports = exports,
@@ -51,7 +49,6 @@ class ComposerSceneToolsTest {
     @Test
     fun `every entry is served in the order of the spec when it has an effect`() {
         val all = more(
-            hasBackgroundMedia = true,
             animated = true,
             sceneEffects = listOf(ComposerSceneEffect.OPENING, ComposerSceneEffect.VISUAL),
             exports = listOf(ComposerOverflowEntry.SAVE_TO_PHOTOS, ComposerOverflowEntry.SHARE),
@@ -63,7 +60,7 @@ class ComposerSceneToolsTest {
         assertThat(all).containsExactly(
             ComposerMoreEntry.PREVIEW, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND,
             ComposerMoreEntry.PICK_BACKGROUND, ComposerMoreEntry.REMOVE_BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING, ComposerMoreEntry.FRAME,
+            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING,
             ComposerMoreEntry.OPENING_EFFECT, ComposerMoreEntry.VISUAL_EFFECT, ComposerMoreEntry.CAPTION,
             ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE,
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE, ComposerMoreEntry.CLEAR_ALL,
@@ -115,9 +112,8 @@ class ComposerSceneToolsTest {
     }
 
     @Test
-    fun `the frame is only served over a background media, the timing only for an animated scene`() {
-        assertThat(more(hasBackgroundMedia = false)).doesNotContain(ComposerMoreEntry.FRAME)
-        assertThat(more(hasBackgroundMedia = true)).contains(ComposerMoreEntry.FRAME)
+    fun `the frame has left the overflow for Fond, Edit, Framing, and the timing is only for an animated scene`() {
+        assertThat(ComposerMoreEntry.entries.map { it.name }).doesNotContain("FRAME")
         assertThat(more(animated = false)).doesNotContain(ComposerMoreEntry.TIMING)
         assertThat(more(animated = true)).contains(ComposerMoreEntry.TIMING)
     }
@@ -162,7 +158,7 @@ class ComposerSceneToolsTest {
     @Test
     fun `a post or a reel writes one text beside the scene, so its slides offer no caption of their own`() {
         val base = ComposerSceneTools.MoreInput(
-            editsSlides = true, hasBackgroundMedia = false, animated = false, sceneEffects = emptyList(), exports = emptyList(),
+            editsSlides = true, animated = false, sceneEffects = emptyList(), exports = emptyList(),
         )
 
         assertThat(ComposerSceneTools.moreEntries(base)).contains(ComposerMoreEntry.CAPTION)

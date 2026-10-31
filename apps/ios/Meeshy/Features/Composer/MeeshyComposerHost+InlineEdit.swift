@@ -59,14 +59,14 @@ extension MeeshyComposerHost {
                          purpose: ComposerInlineEditPurpose = .modify) -> Bool {
         guard let famille = inlineFamily(of: id) else { return false }
         let memeFeuille = activeInlineEdit?.objectId == id && activeInlineEdit?.purpose == purpose
-        let gardee = memeFeuille ? activeInlineEdit?.openSection : nil
         guard let edition = ComposerInlineEditing.begin(
             objectId: id,
             family: famille,
             onSceneSurface: mountedComposerView == .scene,
-            requested: section ?? gardee,
+            requested: section,
             hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
-            purpose: purpose) else { return false }
+            purpose: purpose,
+            kept: memeFeuille ? activeInlineEdit : nil) else { return false }
         let nouvelle = activeInlineEdit?.objectId != id
         presentedPortal = nil
         openSceneEffect = nil

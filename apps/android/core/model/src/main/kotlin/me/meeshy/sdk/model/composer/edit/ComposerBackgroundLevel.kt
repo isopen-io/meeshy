@@ -23,6 +23,7 @@ object ComposerBackgroundLevel {
             ComposerEditTree.Offer.EDITOR -> editor
             ComposerEditTree.Offer.MEDIA_SOURCE -> mediaSource || camera
             ComposerEditTree.Offer.CAMERA -> camera
+            ComposerEditTree.Offer.IMAGE, ComposerEditTree.Offer.VIDEO, ComposerEditTree.Offer.TRIMMABLE, ComposerEditTree.Offer.LOOK -> false
         }
     }
 

@@ -112,6 +112,9 @@ function makePrisma(overrides: {
     userRelation: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    pairInteractionDay: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),

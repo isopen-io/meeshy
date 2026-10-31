@@ -10,6 +10,7 @@
  * Unified Participant model: all calls use participantId
  */
 
+import { noteAnsweredCall } from './relations/callInteractions.js';
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { MESSAGE_ATTACHMENT_ORDER } from './attachments/attachmentIncludes';
@@ -956,6 +957,8 @@ export class CallService {
     if (TERMINAL_STATUSES.includes(newStatus)) {
       await this.releaseActiveCallClaim(call.conversationId, callId);
     }
+
+    if (newStatus === CallStatus.active && !call.answeredAt) noteAnsweredCall(this.prisma, { callId });
 
     logger.info('Call status updated', { callId, from: call.status, to: newStatus, endReason });
 

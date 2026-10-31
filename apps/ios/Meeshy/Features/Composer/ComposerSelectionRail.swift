@@ -58,7 +58,7 @@ struct ComposerSelectionRail: View {
     }
 
     private func row(_ item: ComposerEditRailItem, in selection: ComposerSelectionColumn) -> some View {
-        let ouverte = ComposerEditRailItems.isOn(item, openSection: selection.openSection)
+        let ouverte = selection.isOn(item)
         return Button { selection.onItem(item) } label: {
             ComposerLabeledRailRow(symbol: ComposerEditRailCopy.symbol(item), label: ComposerEditRailCopy.label(item),
                                    isOn: ouverte, tint: ComposerSelectionPaint.tint(item))

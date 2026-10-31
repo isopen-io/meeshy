@@ -39,7 +39,9 @@ internal class Media3SceneTransformRunner(
             coroutineScope {
                 val finished = CompletableDeferred<Unit>()
                 val transformer = transformer(job, finished)
-                transformer.start(Media3SceneComposition.of(job), job.output.absolutePath)
+                val planned = SceneCompositionPlanner.of(job)
+                SceneExportLog.info(planned.describe(job.overlays.size))
+                transformer.start(Media3SceneComposition.of(job, planned), job.output.absolutePath)
                 val ticker = launch {
                     val holder = ProgressHolder()
                     while (true) {
@@ -75,6 +77,10 @@ internal class Media3SceneTransformRunner(
             .addListener(
                 object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        SceneExportLog.info(
+                            "rendu de ${exportResult.durationMs} ms : ${exportResult.videoFrameCount} images, ${exportResult.fileSizeBytes} octets, " +
+                                "vidéo ${exportResult.videoEncoderName}, son ${exportResult.audioEncoderName ?: "absent"}",
+                        )
                         finished.complete(Unit)
                     }
 

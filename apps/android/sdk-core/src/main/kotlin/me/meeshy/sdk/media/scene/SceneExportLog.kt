@@ -20,6 +20,11 @@ public object SceneExportLog {
         Log.w(TAG, "$step : ${describe(failure)}", failure)
     }
 
+    /** Ce que l'export remet au moteur et ce que le moteur rend : de quoi lire une recette sans débogueur. */
+    public fun info(message: String) {
+        Log.i(TAG, message)
+    }
+
     /** La chaîne des causes, de l'enveloppe à la racine : « IllegalStateException: calques ← IOException: disque plein ». */
     public fun describe(failure: Throwable): String =
         generateSequence(failure) { it.cause?.takeIf { cause -> cause !== it } }

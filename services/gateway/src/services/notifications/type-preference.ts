@@ -27,7 +27,8 @@ export function isNotificationTypeEnabledByPreference(
     case 'contact_accepted':
     case 'friend_request':
     case 'friend_accepted':
-    case 'contact_joined':    return prefs.contactRequestEnabled;
+    case 'contact_joined':
+    case 'relation_acquaintance': return prefs.contactRequestEnabled;
     case 'contact_recently_active': return prefs.contactActivityEnabled ?? true;
     case 'game_duo_invited':
     case 'game_duo_accepted':

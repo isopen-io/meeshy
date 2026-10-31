@@ -36,6 +36,8 @@ public class SceneExportCoordinator(
     private val nowMillis: () -> Long = System::currentTimeMillis,
     /** Ce qui arrête l'export, journalisé (#13986) : jamais un échec sans sa cause. */
     private val report: (Throwable) -> Unit = SceneExportLog::failed,
+    /** Relit la vidéo rendue avant de la remettre : un fichier qui ne montre pas sa scène échoue au lieu de s'enregistrer (#13986). */
+    private val proof: SceneExportProof = SceneExportProof.NONE,
 ) {
     private val mutableState = MutableStateFlow<SceneExportState>(SceneExportState.Idle)
     public val state: StateFlow<SceneExportState> = mutableState.asStateFlow()
@@ -68,6 +70,7 @@ public class SceneExportCoordinator(
                 deliverStill(destination, still, image)
             } else {
                 runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
+                proof.verify(job)
                 deliver(destination, output)
             }
         } catch (cancelled: CancellationException) {

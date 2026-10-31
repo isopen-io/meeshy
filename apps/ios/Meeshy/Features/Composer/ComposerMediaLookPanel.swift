@@ -14,7 +14,14 @@ import MeeshyUI
 struct ComposerMediaLookPanel: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
-    @State private var family: ComposerLookFamily = .filters
+    /// Les familles servies : toutes, ou celles d'une entrée du fond (Filtres :
+    /// filtres et effets de l'appel ; Cadres : les cadres).
+    var families: [ComposerLookFamily] = ComposerLookFamily.allCases
+    @State private var picked: ComposerLookFamily?
+
+    private var family: ComposerLookFamily {
+        picked.flatMap { families.contains($0) ? $0 : nil } ?? families.first ?? .filters
+    }
 
     /// **Choisir une case garde le reste du look** : filtre, effet et cadre se
     /// combinent, et le cadrage posé au viseur n'est jamais perdu.
@@ -27,7 +34,7 @@ struct ComposerMediaLookPanel: View {
         let courant = StoryMediaLookEditing.look(ofMedia: mediaId, in: viewModel)
         let regard = ComposerMediaLookMapping.photoLook(courant)
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            familyPicker
+            if families.count > 1 { familyPicker }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.smPlus) {
                     ForEach(ComposerLookStripRule.items(family), id: \.self) { item in
@@ -41,10 +48,10 @@ struct ComposerMediaLookPanel: View {
 
     private var familyPicker: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            ForEach(ComposerLookFamily.allCases, id: \.self) { famille in
+            ForEach(families, id: \.self) { famille in
                 let actif = famille == family
                 Button {
-                    family = famille
+                    picked = famille
                     HapticFeedback.light()
                 } label: {
                     Label(ComposerCaptureCopy.familyName(famille), systemImage: ComposerCaptureCopy.familySymbol(famille))

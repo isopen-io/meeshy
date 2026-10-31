@@ -9,6 +9,7 @@ import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendIntern
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { mayConsumePost } from './postConsumptionGate';
 import { creditPostEngagement } from '../../services/posts/postEngagementCredits';
+import { notePairInteraction } from '../../services/relations/pairInteractionRecorder';
 
 /** La tranche de `PostService` que le partage touche — rien d'autre n'est prêté. */
 type ShareService = Pick<PostService, 'sharePost' | 'shareWithTrackingLink'>;
@@ -133,6 +134,8 @@ export function registerShareRoutes(
           targetId: postId,
           targetOwnerId: post.authorId,
         });
+        // Les cercles (#13932) : partager le post de l'autre compte pour la paire.
+        notePairInteraction(prisma, { actorId: authContext.registeredUser.id, otherId: post.authorId, nature: 'share' });
       }
 
       return sendSuccess(reply, payload);

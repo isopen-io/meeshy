@@ -59,6 +59,8 @@ export enum NotificationTypeEnum {
   CONTACT_JOINED = 'contact_joined',
   /** Un ami ou un contact du carnet est revenu sur Meeshy — au plus une fois par 3 h et par personne (#8285). */
   CONTACT_RECENTLY_ACTIVE = 'contact_recently_active',
+  /** La Connaissance est née toute seule : chacun a assez échangé avec l'autre (#13932). Discrète, jamais une demande. */
+  RELATION_ACQUAINTANCE = 'relation_acquaintance',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -617,6 +619,18 @@ export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificat
   readonly userId: string;
 }
 
+/**
+ * Metadata pour relation_acquaintance (#13932) — la Connaissance née toute seule.
+ * `userId` est l'AUTRE personne : le toucher ouvre son profil. Aucun compte
+ * d'interactions ne voyage : la notification dit le résultat, pas la mesure.
+ */
+export interface RelationAcquaintanceNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly relationLevel: 'ACQUAINTANCE';
+  readonly origin: 'auto-acquaintance';
+}
+
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
 export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
 
@@ -696,6 +710,7 @@ export type NotificationMetadata =
   | LoginNewDeviceNotificationMetadata
   | ContactJoinedNotificationMetadata
   | ContactRecentlyActiveNotificationMetadata
+  | RelationAcquaintanceNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

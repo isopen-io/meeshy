@@ -95,10 +95,17 @@ private fun SceneFirstFrame(
     val chrome = editing.sceneControls
     val subject = state.selectionSubject
     val selection = state.selectionBar?.takeIf { subject == ComposerSelectionSubject.OBJECT && panel == null && typing == null && !armed }
-    val background = rememberSceneBackground(state, viewModel, sheet, doors, capture)?.takeIf { panel == null && typing == null && !armed }
     val openSheet = sheet.open?.takeIf(state::serves)
-    val root = if (subject == ComposerSelectionSubject.BACKGROUND) StoryEditingLevel.BACKGROUND else StoryEditingLevel.OBJECT_OPTIONS
+    val root = if (subject == ComposerSelectionSubject.BACKGROUND) StoryEditingLevel.Background else StoryEditingLevel.ObjectOptions
     val levels = rememberEditingLevels(root, root to state.selectedSceneObject, backEnabled = editing.editing && openSheet == null)
+    val background = rememberSceneBackground(state, viewModel, sheet, doors, capture) { levels.onPush(StoryEditingLevel.BackgroundEdit) }
+        ?.takeIf { panel == null && typing == null && !armed }
+    val tools = background?.let {
+        backgroundTools(state, viewModel, onBand = { tool -> levels.onPush(StoryEditingLevel.BackgroundBand(tool)) }) {
+            sheet.onOpen(StoryComposerSheet.BACKGROUND_DESCRIPTION)
+        }
+    }
+    val band = levels.backgroundBand(tools)
     val captureOffered = capture?.offeredOn(state, somethingOpen = panel != null || typing != null || openSheet != null) == true
     StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     val onSelectionAction = { bar: SceneSelectionBar, action: ComposerSelectionAction ->
@@ -106,11 +113,11 @@ private fun SceneFirstFrame(
     }
     val dialogs = rememberStoryOverflowDialogs(state, viewModel)
     val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen, capture)
-    val rails = storySceneRails(state, viewModel, more, SceneEdited(selection, background, onSelectionAction), morePanel, formatChevron, editing to levels)
+    val rails = storySceneRails(state, viewModel, more, SceneEdited(selection, background, onSelectionAction, tools), morePanel, formatChevron, editing to levels)
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = panel != null && typing == null,
+            reduced = (panel != null || band != null) && typing == null,
             scene = { modifier -> StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered) },
             top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
@@ -119,7 +126,11 @@ private fun SceneFirstFrame(
                     content = editing.rail,
                     tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
                     options = { selection?.let { bar -> StoryEditingLevels(levels, back = { SceneLevelBack(it) }) { SceneOptionColumn(bar) { action -> onSelectionAction(bar, action) } } } },
-                    background = { background?.let { StoryEditingLevels(levels, back = { SceneLevelBack(it) }, background = { SceneBackgroundColumn(it) }) {} } },
+                    background = {
+                        if (background != null && tools != null) {
+                            StoryEditingLevels(levels, back = { SceneLevelBack(it) }, background = { level -> BackgroundLevelContent(level, background, tools, wide = false) }) {}
+                        }
+                    },
                 )
             },
             panel = {
@@ -134,7 +145,7 @@ private fun SceneFirstFrame(
                         },
                         onCloseLocal = { onMorePanel(null) },
                     )
-                }
+                } ?: band?.let { tool -> ScenePanelSurface { BackgroundBand(tool, state, viewModel, comparison) } }
             },
             socle = {
                 if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication) { onMorePanel(StoryMorePanel.POST_TEXT) }
@@ -163,6 +174,7 @@ private fun SceneSheetContent(
 ) {
     when {
         open == StoryComposerSheet.BACKGROUND_SOURCE -> background?.let { BackgroundSourceSheet(it, onDone = sheet.onDismiss) }
+        open == StoryComposerSheet.BACKGROUND_DESCRIPTION -> BackgroundDescriptionSheet(state, viewModel, onDone = sheet.onDismiss)
         open.servesSelection -> StorySelectionSheet(open, state, viewModel, comparison, onDone = { sheet.onDismiss(); viewModel.onSceneBackgroundTap() })
         else -> sheet.content(open)
     }
@@ -176,7 +188,8 @@ private fun rememberSceneBackground(
     sheet: StorySheetSlot,
     doors: StoryComposerDoors,
     capture: StorySceneCapture?,
-): BackgroundEditing? = rememberBackgroundEditing(state, viewModel, sheet.onOpen, cameraServed = capture?.offer != null) { source, replacing ->
+    onEdit: () -> Unit,
+): BackgroundEditing? = rememberBackgroundEditing(state, viewModel, sheet.onOpen, cameraServed = capture?.offer != null, onEdit = onEdit) { source, replacing ->
     if (source == ComposerBackgroundSource.CAMERA) capture?.arm(replacingBackground = replacing) else doors.onReplaceBackground(source, replacing)
 }
 
@@ -188,26 +201,24 @@ private fun editedWord(state: StoryComposerUiState, editing: Boolean): String? {
     else familyWord(state.familyOf(ref))
 }
 
-/** Ce qui est en édition, pour les rails : la barre d'un objet posé, ou le niveau « Fond » du fond média. */
+/** Ce qui est en édition, pour les rails : la barre d'un objet posé, ou le niveau « Fond » du fond média et son « Modifier ». */
 private class SceneEdited(
     val selection: SceneSelectionBar?,
     val background: BackgroundEditing?,
     val onSelectionAction: (SceneSelectionBar, ComposerSelectionAction) -> Unit,
+    val tools: BackgroundTools? = null,
 )
 
-/** Les niveaux de la colonne en édition : le premier porte les options de l'objet ([objectOptions]) ou le niveau « Fond » ([background]). */
+/** Les niveaux de la colonne en édition : le premier porte les options de l'objet ([objectOptions]) ; ceux du fond se rendent par [background]. */
 @Composable
 private fun StoryEditingLevels(
     levels: EditingLevels<StoryEditingLevel>,
     back: @Composable (onBack: () -> Unit) -> Unit,
-    background: @Composable () -> Unit = {},
+    background: @Composable (StoryEditingLevel) -> Unit = {},
     objectOptions: @Composable () -> Unit,
 ) {
     EditingRailLevels(levels, back) { level ->
-        when (level) {
-            StoryEditingLevel.OBJECT_OPTIONS -> objectOptions()
-            StoryEditingLevel.BACKGROUND -> background()
-        }
+        if (level == StoryEditingLevel.ObjectOptions) objectOptions() else background(level)
     }
 }
 
@@ -310,6 +321,7 @@ private fun storySceneRails(
     val onSelectionAction = scene.onSelectionAction
     val edited = scene.selection?.takeIf { editing.editing }
     val background = scene.background?.takeIf { editing.editing }
+    val tools = scene.tools
     val doors = more.doors
     val sceneExport = more.sceneExport
     val onTool = rememberSceneToolAction(state, viewModel, doors, more.onMorePanel)
@@ -330,7 +342,8 @@ private fun storySceneRails(
             val back: @Composable (() -> Unit) -> Unit = { LabeledRailItem(MeeshyIcons.Back, stringResource(R.string.composer_editing_back), it) }
             when {
                 edited != null -> StoryEditingLevels(levels, back) { StoryEditingRail(edited) { action -> onSelectionAction(edited, action) } }
-                background != null -> StoryEditingLevels(levels, back, background = { StoryBackgroundRail(background) }) {}
+                background != null && tools != null ->
+                    StoryEditingLevels(levels, back, background = { level -> BackgroundLevelContent(level, background, tools, wide = true) }) {}
                 else -> StoryLeadingRail(model, doors.onClose, onTool, onEntry, onMediaSource)
             }
         },
@@ -390,7 +403,6 @@ private fun moreEntriesOf(state: StoryComposerUiState, sceneExport: SceneExportH
     ComposerSceneTools.moreEntries(
         ComposerSceneTools.MoreInput(
             editsSlides = !state.editing,
-            hasBackgroundMedia = state.selectedSlideSceneBackground != null,
             animated = state.sceneIsAnimated,
             sceneEffects = state.servedSceneEffects,
             exports = sceneExport.entries,
@@ -445,7 +457,6 @@ private fun rememberMoreEntryAction(
             ComposerMoreEntry.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
             ComposerMoreEntry.ANIMATION -> viewModel.onSceneReduce(StoryComposerSceneReducer::animationToggled)
             ComposerMoreEntry.TIMING -> viewModel.onBandToolSwipeUp(StoryToolMode.TIMELINE)
-            ComposerMoreEntry.FRAME -> viewModel.onSceneReduce(StoryComposerSelectionReducer::frameToggled)
             ComposerMoreEntry.OPENING_EFFECT -> viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, ComposerSceneEffect.OPENING) }
             ComposerMoreEntry.VISUAL_EFFECT -> viewModel.onSceneReduce { StoryComposerSelectionReducer.sceneEffectToggled(it, ComposerSceneEffect.VISUAL) }
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export?.let(more.sceneExport::start)

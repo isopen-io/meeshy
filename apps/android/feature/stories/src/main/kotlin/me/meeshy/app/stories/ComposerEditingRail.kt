@@ -170,7 +170,7 @@ private fun SceneOptionItem(action: ComposerSelectionAction, onClick: () -> Unit
     )
 }
 
-/** Une option de la colonne : un disque et son mot, une seule cible de toute sa largeur. */
+/** Une option de la colonne : un disque et son mot (sur deux lignes au besoin, jamais tronqué en un), une seule cible de toute sa largeur. */
 @Composable
 internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
     Column(
@@ -189,7 +189,7 @@ internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, on
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -197,9 +197,15 @@ internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, on
 
 /**
  * Les niveaux de la colonne en édition (#13956) : le premier porte les options de l'objet, ou le niveau « Fond » du fond
- * média sélectionné (#13973) ; les lots suivants y ajoutent les leurs.
+ * média sélectionné (#13973) ; « Modifier » du fond pose ses réglages par-dessus ([BackgroundEdit]), et un réglage sa bande
+ * au bas de la scène ([BackgroundBand], lot A-E2). Les lots suivants y ajoutent les leurs.
  */
-internal enum class StoryEditingLevel { OBJECT_OPTIONS, BACKGROUND }
+internal sealed interface StoryEditingLevel {
+    data object ObjectOptions : StoryEditingLevel
+    data object Background : StoryEditingLevel
+    data object BackgroundEdit : StoryEditingLevel
+    data class BackgroundBand(val tool: me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool) : StoryEditingLevel
+}
 
 /** La pile des niveaux de la colonne ([ComposerRailStack]) et ses deux gestes : poser un niveau plus fin, descendre d'un niveau. */
 internal class EditingLevels<L>(val stack: ComposerRailStack<L>, val onPush: (L) -> Unit, val onBack: () -> Unit)

@@ -44,6 +44,10 @@
     <string name="composer_column_text_frame">Cadrage du texte</string>
     <string name="composer_column_text_language">Langue du texte</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_edit_background_framing">Cadrage</string>
+    <string name="composer_edit_frames">Cadres</string>
+    <string name="composer_edit_loop">Boucle</string>
+    <string name="composer_edit_trim">Couper</string>
     <string name="composer_family_text">Texte</string>
     <string name="composer_frise_earlier">Plus tôt</string>
     <string name="composer_frise_empty">Posez un texte ou un sticker : chaque objet devient une piste.</string>

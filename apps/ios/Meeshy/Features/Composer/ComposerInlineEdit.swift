@@ -57,6 +57,13 @@ nonisolated enum ComposerInlineFamily: Equatable, Sendable {
         if case .background = self { return true }
         return false
     }
+
+    /// **« Modifier » se règle en rails superposés** (#13974) — N1, N2, N3 et
+    /// la feuille basse : le fond (I-E2) et l'image posée (I-E3). Les autres
+    /// familles gardent leurs sections jusqu'à leur lot.
+    var modifiesInLevels: Bool {
+        isBackground || self == .image
+    }
 }
 
 /// **L'édition en cours** — quel objet, de quelle famille, et quel sous-outil a
@@ -68,6 +75,10 @@ nonisolated struct ComposerInlineEdit: Equatable, Sendable {
     var openSection: ComposerObjectEditorSection?
     /// La feuille ouverte depuis la barre de la sélection (#13839, L5).
     var purpose: ComposerInlineEditPurpose = .modify
+    /// Sous « Modifier » en rails superposés (un fond, une image posée) :
+    /// l'entrée de N1 ouverte et le réglage de N3 (#13974, I-E2, I-E3). Ce
+    /// chemin remplace `openSection`.
+    var modifyPath: ComposerBackgroundModifyPath = .closed
 }
 
 /// **Quelle feuille de la sélection** : « Modifier » règle l'objet, « Temps »
@@ -143,15 +154,25 @@ nonisolated enum ComposerInlineEditing {
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
                       hasTrimmableSource: Bool,
-                      purpose: ComposerInlineEditPurpose = .modify) -> ComposerInlineEdit? {
+                      purpose: ComposerInlineEditPurpose = .modify,
+                      kept: ComposerInlineEdit? = nil) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
         let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
-        let ouverte = requested.flatMap { servies.contains($0) ? $0 : nil }
+        let ouverte = (requested ?? kept?.openSection).flatMap { servies.contains($0) ? $0 : nil }
         let parDefaut = purpose == .time ? chips(.time, family: family, served: servies).first : nil
-        return ComposerInlineEdit(objectId: objectId,
-                                  family: family,
-                                  openSection: ouverte ?? parDefaut,
-                                  purpose: purpose)
+        guard family.modifiesInLevels, purpose == .modify else {
+            return ComposerInlineEdit(objectId: objectId, family: family, openSection: ouverte ?? parDefaut,
+                                      purpose: purpose)
+        }
+        // « Modifier » d'un fond ou d'une image posée tient son CHEMIN, jamais
+        // une section (#13974, I-E2, I-E3) : la porte qui en nomme une ouvre
+        // l'entrée de N1 qui lui répond ; rouvrir le même objet garde où l'on
+        // était.
+        let demandee = ComposerBackgroundModify.entry(for: ouverte).map {
+            ComposerBackgroundModifyPath(entry: $0, adjustment: nil)
+        }
+        return ComposerInlineEdit(objectId: objectId, family: family, openSection: nil, purpose: purpose,
+                                  modifyPath: demandee ?? kept?.modifyPath ?? .closed)
     }
 
     /// **Les puces LIBELLÉES d'une feuille** (#13839, L5) : Modifier sert les

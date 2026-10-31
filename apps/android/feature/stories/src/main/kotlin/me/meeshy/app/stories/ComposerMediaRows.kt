@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,11 +50,8 @@ internal fun MediaPreviewRow(
     pending: List<PendingMediaUpload>,
     mediaBaseUrl: String?,
     backgroundMediaId: String?,
-    backgroundIsVideo: Boolean,
-    backgroundLoop: Boolean,
     onRemove: (String) -> Unit,
     onToggleBackground: (String) -> Unit,
-    onToggleBackgroundLoop: () -> Unit,
     selectedMediaId: String? = null,
     onSelect: ((String) -> Unit)? = null,
     placedMediaIds: Set<String> = emptySet(),
@@ -79,10 +75,6 @@ internal fun MediaPreviewRow(
                 onToggleBackground = { onToggleBackground(media.id) },
                 isPlaced = media.id in placedMediaIds,
                 onTogglePlaced = onTogglePlaced?.takeIf { !isBackground }?.let { toggle -> { toggle(media.id) } },
-                // The loop toggle appears only on the designated background VIDEO — the
-                // one media whose looping is authorable — so the control is never a no-op.
-                backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
-                onToggleBackgroundLoop = onToggleBackgroundLoop,
             )
         }
         items(pending, key = { it.cmid }) { upload ->
@@ -112,8 +104,6 @@ internal fun MediaThumbnail(
     pendingPhase: PendingUploadPhase = PendingUploadPhase.OFFLINE,
     isBackground: Boolean = false,
     onToggleBackground: (() -> Unit)? = null,
-    backgroundLoop: Boolean? = null,
-    onToggleBackgroundLoop: (() -> Unit)? = null,
     selected: Boolean = false,
     onSelect: (() -> Unit)? = null,
     isPlaced: Boolean = false,
@@ -156,17 +146,6 @@ internal fun MediaThumbnail(
                 modifier = Modifier.align(Alignment.TopStart),
                 role = Role.Switch,
                 onClickLabel = if (isPlaced) stringResource(R.string.story_canvas_action_leaveScene) else null,
-            )
-        }
-        if (backgroundLoop != null && onToggleBackgroundLoop != null) {
-            TileAction(
-                icon = Icons.Filled.Loop,
-                label = stringResource(
-                    if (backgroundLoop) R.string.stories_composer_background_loop_on else R.string.stories_composer_background_loop_off,
-                ),
-                active = backgroundLoop,
-                onClick = onToggleBackgroundLoop,
-                modifier = Modifier.align(Alignment.BottomEnd),
             )
         }
         if (isPending) {

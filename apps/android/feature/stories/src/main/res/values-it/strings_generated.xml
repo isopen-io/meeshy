@@ -44,6 +44,10 @@
     <string name="composer_column_text_frame">Cornice del testo</string>
     <string name="composer_column_text_language">Lingua del testo</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_edit_background_framing">Taglio</string>
+    <string name="composer_edit_frames">Cornici</string>
+    <string name="composer_edit_loop">Ciclo</string>
+    <string name="composer_edit_trim">Taglia</string>
     <string name="composer_family_text">Testo</string>
     <string name="composer_frise_earlier">Prima</string>
     <string name="composer_frise_empty">Aggiungi un testo o uno sticker: ogni oggetto diventa una traccia.</string>

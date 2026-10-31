@@ -84,7 +84,7 @@ class ComposerEditTreeTest {
         ComposerEditTree.shared.levels.flatMap { it.entries }.forEach { entry ->
             assertThat(entry.sfSymbol).isNotEmpty()
             assertThat(entry.material).isNotEmpty()
-            assertThat(entry.label).startsWith("composer.")
+            assertThat(entry.label).matches("(composer|story)\\.[A-Za-z.]+")
         }
     }
 }

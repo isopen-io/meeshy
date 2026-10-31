@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// **Un objet en édition prend le chrome** (#13957, #13974, spec R6,
 /// décisions du porteur).
@@ -88,6 +89,11 @@ nonisolated enum ComposerEditRailLevel: Equatable, Sendable {
     /// Posé par-dessus : les sous-outils de Modifier ou de Temps ; toucher l'un
     /// ouvre ses propriétés dans la feuille basse.
     case options(ComposerInlineEditPurpose)
+    /// N2 de Réglages ou d'Effets d'un fond : ses réglages ; toucher l'un
+    /// ouvre son curseur seul en bas (N3).
+    case backgroundAdjust(AdjustmentFamily)
+    /// N2 de Son d'un fond vidéo.
+    case backgroundSound
 }
 
 /// Ce qu'un « Retour » (OK de la feuille, Échap, ‹ du rail) fait, du haut de la
@@ -112,12 +118,13 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
     static let rest = ComposerEditRailStack(levels: [])
 
     /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond :
-    /// son niveau « Fond », puis celui de « Modifier ».
+    /// son niveau « Fond », puis celui de « Modifier », puis le N2 que son
+    /// chemin pose (`ComposerBackgroundModify.levels`).
     static func of(family: ComposerInlineFamily?, editing purpose: ComposerInlineEditPurpose?,
-                   typing: Bool) -> ComposerEditRailStack {
+                   typing: Bool, above: [ComposerEditRailLevel] = []) -> ComposerEditRailStack {
         guard let family, !typing else { return .rest }
         let base: [ComposerEditRailLevel] = [family.isBackground ? .background : .actions]
-        let dessus = purpose.map { [ComposerEditRailLevel.options($0)] } ?? []
+        let dessus = purpose.map { [ComposerEditRailLevel.options($0)] + above } ?? []
         return ComposerEditRailStack(levels: base + dessus)
     }
 
@@ -130,6 +137,8 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
         case .background:       return "background"
         case .options(.modify): return "options.modify"
         case .options(.time):   return "options.time"
+        case .backgroundAdjust(let famille): return "background.adjust.\(famille.rawValue)"
+        case .backgroundSound:  return "background.sound"
         }
     }
     var isEditing: Bool { !levels.isEmpty }
@@ -163,6 +172,12 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
     case section(ComposerObjectEditorSection)
     case extra(ComposerSelectionMediaExtra)
     case keyframes
+    /// Une entrée de N1 « Modifier » d'un fond.
+    case backgroundEntry(ComposerBackgroundModifyEntry)
+    /// Un réglage de N2 ; son curseur s'ouvre en bas.
+    case adjustment(AdjustmentKind)
+    /// Muet, l'interrupteur de N2 « Son ».
+    case mute
 
     var identifier: String {
         switch self {
@@ -172,6 +187,9 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
         case .section(let section): return section.identifier
         case .extra(let extra):     return extra.rawValue
         case .keyframes:            return "keyframes"
+        case .backgroundEntry(let entree): return "background.modify.\(entree.rawValue)"
+        case .adjustment(let kind): return "adjust.\(kind.rawValue)"
+        case .mute:                 return "mute"
         }
     }
 
@@ -179,7 +197,7 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
         switch self {
         case .action(let action):     return action.isDestructive
         case .background(let action): return ComposerBackgroundEdit.isDestructive(action)
-        case .back, .section, .extra, .keyframes: return false
+        case .back, .section, .extra, .keyframes, .backgroundEntry, .adjustment, .mute: return false
         }
     }
 }
@@ -193,15 +211,23 @@ nonisolated enum ComposerEditRailItems {
                       backgroundActions: [ComposerBackgroundEditAction] = [],
                       sections: [ComposerObjectEditorSection],
                       extras: [ComposerSelectionMediaExtra],
-                      keyframes: Bool) -> [ComposerEditRailItem] {
+                      keyframes: Bool,
+                      backgroundEntries: [ComposerBackgroundModifyEntry] = [],
+                      adjustments: [AdjustmentKind] = []) -> [ComposerEditRailItem] {
         switch level {
         case .actions:
             return actions.map(ComposerEditRailItem.action)
         case .background:
             return backgroundActions.map(ComposerEditRailItem.background)
+        case .options(.modify) where !backgroundEntries.isEmpty:
+            return [.back] + backgroundEntries.map(ComposerEditRailItem.backgroundEntry)
         case .options:
             return [.back] + sections.map(ComposerEditRailItem.section)
                 + extras.map(ComposerEditRailItem.extra) + (keyframes ? [.keyframes] : [])
+        case .backgroundAdjust:
+            return [.back] + adjustments.map(ComposerEditRailItem.adjustment)
+        case .backgroundSound:
+            return [.back, .mute]
         }
     }
 
