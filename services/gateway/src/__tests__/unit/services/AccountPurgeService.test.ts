@@ -266,6 +266,18 @@ describe('purgeAccountIsolatedData — liens de proximité', () => {
     expect(userRelation.rows.map((row) => row.id)).toEqual(['r3']);
     expect(summary.relationsDeleted).toBe(2);
   });
+
+  it('audit #13932 — efface aussi l\'agrégat des échanges par paire : qui a parlé à qui, jour par jour, ne survit pas au compte', async () => {
+    const pairInteractionDay = relationTable([
+      { id: 'd1', userLowId: USER_ID, userHighId: OTHER },
+      { id: 'd2', userLowId: THIRD, userHighId: USER_ID },
+      { id: 'd3', userLowId: THIRD, userHighId: OTHER },
+    ]);
+
+    await purgeAccountIsolatedData(fakePrisma({ pairInteractionDay }), USER_ID, NO_FILES);
+
+    expect(pairInteractionDay.rows.map((row) => row.id)).toEqual(['d3']);
+  });
 });
 
 /**

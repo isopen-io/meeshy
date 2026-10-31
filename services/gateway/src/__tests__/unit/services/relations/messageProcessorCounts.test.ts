@@ -42,4 +42,12 @@ describe('MessageProcessor — les messages comptent pour la paire', () => {
     expect((await run({ id: 'm2', messageType: 'audio', messageSource: 'user', sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
     expect((await run({ id: 'm3', messageType: 'text', messageSource: 'user', storyReplyToId: 's1', sender: { userId: ME } }))[0]).toMatchObject({ byLowStoryReply: 1 });
   });
+
+  it('audit — hors E2EE, un « vocal » DÉCLARÉ sans aucune piste audio n’est pas un vocal : le serveur sait le vérifier', async () => {
+    const days = await run({
+      id: 'm7', messageType: 'audio', messageSource: 'user', isEncrypted: false, encryptionMode: null, attachments: [], sender: { userId: ME },
+    });
+    expect(days[0]).toMatchObject({ byLowMessage: 1 });
+    expect(days[0]?.byLowAudio ?? 0).toBe(0);
+  });
 });
