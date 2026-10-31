@@ -968,12 +968,16 @@ async function runAuthorRail(colorScheme) {
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
 
-  /* ── « Partager » : le FICHIER composé (#13881) — l'image de la story rendue
-        par le moteur d'export, jamais la feuille d'envoi. `canShare` étant
-        absent (Chromium de bureau), la feuille du système refuse le fichier
-        et la livraison retombe sur l'ancre de téléchargement : le fichier
-        reçu est la COMPOSITION (`meeshy-story-<id>.png`), pas le média brut
-        qu'« Enregistrer » télécharge (`meeshy-m4.svg`). ── */
+  /* ── « Partager » : le FICHIER composé (#13881) — la story rendue par le
+        moteur d'export, jamais la feuille d'envoi. `canShare` étant absent
+        (Chromium de bureau), la feuille du système refuse le fichier et la
+        livraison retombe sur l'ancre de téléchargement : le fichier reçu est
+        la COMPOSITION, pas le média brut qu'« Enregistrer » télécharge
+        (`meeshy-m4.svg`). Depuis #13997/#14018, TOUTE story exportée porte au
+        moins la carte de fin Meeshy (due même sans identité d'auteur résolue,
+        `scene-export-branding.ts` : « jamais une image fixe ») : la
+        composition n'est donc plus jamais une image, toujours une vidéo —
+        `meeshy-story-<id>.mp4` ou `.webm` selon ce que le navigateur négocie. ── */
   await figer();
   const fichierPartage = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
   const partageOffert = await page.evaluate(() => {
@@ -992,8 +996,8 @@ async function runAuthorRail(colorScheme) {
   const livrePartage = await fichierPartage;
   const nomPartage = livrePartage === null ? null : livrePartage.suggestedFilename();
   check(
-    nomPartage === 'meeshy-story-st-mienne.png',
-    `${tag} : « Partager » doit LIVRER la story COMPOSÉE — reçu ${JSON.stringify(nomPartage)}`,
+    nomPartage !== null && /^meeshy-story-st-mienne\.(mp4|webm)$/.test(nomPartage),
+    `${tag} : « Partager » doit LIVRER la story COMPOSÉE EN VIDÉO (la carte de fin est due même sans auteur résolu, #13997) — reçu ${JSON.stringify(nomPartage)}`,
   );
   await page.waitForFunction(() => document.querySelector('[data-scene-export-tray] [data-scene-export-ready], [data-scene-export-tray] [role="progressbar"]') === null, undefined, { timeout: 4000 }).catch(() => {});
   if (feuilleSurPartage) {
