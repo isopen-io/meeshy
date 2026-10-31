@@ -14,12 +14,11 @@ import MeeshyUI
 /// La branche était vivante, l'objet invisible ; le contrôle existait sans
 /// être ALIMENTÉ.
 ///
-/// **Le canvas UIKit ne peut pas les rendre, et c'est structurel** : il n'a
-/// pas de couche audio (`Layers/` en compte six, aucune pour le son) et
-/// `manipulable` exclut `.audio` de ce qu'un geste peut saisir. La puce est
-/// donc une vue SwiftUI posée par-dessus — d'où le slot `objectOverlay`,
-/// qui borne à la carte SANS éteindre les touches du canvas, à la
-/// différence de celui du dessin.
+/// **La puce qu'aucun objet ne recouvre est une vue SwiftUI posée
+/// par-dessus** — d'où le slot `objectOverlay`, qui borne à la carte SANS
+/// éteindre les touches du canvas, à la différence de celui du dessin. Celle
+/// qu'un autre objet recouvre se peint dans le canvas, à son rang
+/// (`StoryAudioChipLayer`, #13901), et n'est donc pas ici.
 ///
 /// **Pas de puce pendant le dessin**, comme dans l'atelier : le calque de
 /// tracé capture la carte entière, et une puce qui resterait dessus
@@ -71,7 +70,9 @@ struct ComposerSceneSoundChips: View {
     /// le relâchement d'un geste sur un son qu'on vient de supprimer ne doit
     /// pas le faire revenir.
     private var foregroundSoundBindings: [Binding<StoryAudioPlayerObject>] {
-        SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
+        // Une puce qu'un objet recouvre se peint dans le canvas, à son rang
+        // (#13901) : la surcouche ne garde que celles qui n'ont rien au-dessus.
+        SceneAudioStageRule.overlaidAudios(in: slide.effects)
             .map { objet in
                 Binding<StoryAudioPlayerObject>(
                     get: {

@@ -164,7 +164,7 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// Le détail de post monte l'hôte canvas nu : il pose la couche lui-même.
     func test_thePostDetail_posesTheChipLayer_overItsCanvas() throws {
         XCTAssertTrue(try view("PostDetailView+Canvas.swift")
-            .contains("SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],"))
+            .contains("SceneSoundChipLayer(audios: renderedItem.storyEffects.map { SceneAudioStageRule.overlaidAudios(in: $0) } ?? [],"))
     }
 
     /// Le lecteur de story pose ses pastilles au-dessus de sa couche de gestes :
