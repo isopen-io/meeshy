@@ -56,6 +56,7 @@ export * from './socketio-events/conversation.js';
 export * from './socketio-events/participant.js';
 export * from './socketio-events/notification.js';
 export * from './socketio-events/friend-request.js';
+export * from './socketio-events/relation.js';
 export * from './socketio-events/attachment.js';
 export * from './socketio-events/reaction.js';
 export * from './socketio-events/social.js';

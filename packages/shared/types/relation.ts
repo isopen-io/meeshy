@@ -53,6 +53,30 @@ export const relationLevelIfAtLeast = (value: unknown, min: RelationLevel): Rela
   return compareRelationLevel(level, min) >= 0 ? level : null;
 };
 
+/**
+ * Les crans qui se DEMANDENT (#13933) : Connaissance, Ami, Proche, Sang. Public et
+ * Communauté ne se demandent pas (le premier est l'absence de lien, le second est
+ * calculé), Atome est réservé. Toute autre valeur est illisible, jamais un cran.
+ */
+export const RELATION_REQUEST_LEVELS = ['ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'] as const;
+
+export type RelationRequestLevel = (typeof RELATION_REQUEST_LEVELS)[number];
+
+export const parseRequestLevel = (value: unknown): RelationRequestLevel | null =>
+  (RELATION_REQUEST_LEVELS as readonly unknown[]).includes(value) ? (value as RelationRequestLevel) : null;
+
+/**
+ * Le seul cran qu'une demande peut viser depuis `level` : on monte cran par cran,
+ * on ne saute jamais une phase (RG-03). `null` au sommet.
+ */
+export const relationRungAfter = (level: RelationLevel): RelationRequestLevel | null => {
+  if (level === 'PUBLIC' || level === 'COMMUNITY') return 'ACQUAINTANCE';
+  if (level === 'ACQUAINTANCE') return 'FRIEND';
+  if (level === 'FRIEND') return 'CLOSE';
+  if (level === 'CLOSE') return 'BLOOD';
+  return null;
+};
+
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
 /**
