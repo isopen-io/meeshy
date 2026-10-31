@@ -29,6 +29,12 @@ public struct StoryExportIntroContent: Sendable {
     /// la carte d'identité de la visionneuse pose autour de l'avatar. `nil` ⇒ l'avatar nu,
     /// rendu historique.
     public let avatarRing: AvatarRingDesign?
+    /// La présence de l'auteur telle que le serveur l'a SERVIE (#13997), projetée par l'app.
+    /// Un point sur le bord de l'avatar ; `nil` ⇒ aucun point (pas ami, hors ligne, non servie).
+    public let presence: StoryExportPresence?
+    /// Le logo du cercle de l'auteur (🔥 Proche, 🩸 Sang), déjà résolu par `RelationExportBadge`,
+    /// peint à droite du nom. `nil` ⇒ rien — Ami et en dessous, sa propre story.
+    public let relationLogo: String?
 
     public init(displayName: String,
                 username: String,
@@ -37,7 +43,9 @@ public struct StoryExportIntroContent: Sendable {
                 moodEmoji: String? = nil,
                 moodMessage: String? = nil,
                 accentColorHex: String,
-                avatarRing: AvatarRingDesign? = nil) {
+                avatarRing: AvatarRingDesign? = nil,
+                presence: StoryExportPresence? = nil,
+                relationLogo: String? = nil) {
         self.displayName = displayName
         self.username = username
         self.avatar = avatar
@@ -46,6 +54,8 @@ public struct StoryExportIntroContent: Sendable {
         self.moodMessage = moodMessage
         self.accentColorHex = accentColorHex
         self.avatarRing = avatarRing
+        self.presence = presence
+        self.relationLogo = relationLogo
     }
 }
 
@@ -200,10 +210,14 @@ public enum StoryExportIntro {
         if let ring = content.avatarRing {
             drawRing(ring, in: avatarRect)
         }
+        if let presence = content.presence {
+            StoryExportIdentityBadges.drawPresenceDot(presence, avatarBox: avatarRect, in: cg)
+        }
 
         let nameSize = size.width * 0.058
         let handleSize = size.width * 0.036
-        drawCentred(content.displayName,
+        drawCentred(StoryExportIdentityBadges.nameLine(displayName: content.displayName,
+                                                       logo: content.relationLogo),
                     fontSize: nameSize, weight: .bold,
                     color: .white, alpha: 1,
                     y: avatarRect.maxY + nameSize * 0.9, in: size)

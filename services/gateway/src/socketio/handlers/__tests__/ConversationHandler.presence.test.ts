@@ -132,6 +132,7 @@ function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[], blockedByVi
       ),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: blockedByViewer }),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(
         acceptedFriendsOfViewer.map((friendId) => ({ senderId: friendId, receiverId: 'viewer' })),

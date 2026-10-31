@@ -19,7 +19,8 @@ import { GameBlockService } from '../services/game/GameBlockService';
 import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
 import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
-import { gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import { gatewayLocalMediaRenderer, gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import type { LocalMediaRenderer } from '../services/attachments/media-processing/local-render';
 import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
 import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
@@ -39,6 +40,7 @@ export class MeeshySocketIOHandler {
 
   private mediaReadyListener: { close(): Promise<void> } | null = null;
   private mediaPendingSweep: { close(): void } | null = null;
+  private localMediaRenderer: LocalMediaRenderer | null = null;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -92,6 +94,11 @@ export class MeeshySocketIOHandler {
     logger.info('✅ Socket.IO configuré et routes ajoutées');
   }
 
+  /** Le rendu de fond des médias (#13984) ; nul tant que la file est éteinte. */
+  getLocalMediaRenderer(): LocalMediaRenderer | null {
+    return this.localMediaRenderer;
+  }
+
   /**
    * Les trois chemins qui republient une pièce rendue ou traduite. Leurs
    * dépendances (file de livraison Redis, bail) ne se construisent que si l'un
@@ -118,6 +125,8 @@ export class MeeshySocketIOHandler {
     };
     if (listenerRedisUrl) {
       this.mediaReadyListener = startMediaReadyListener(mediaDeps, listenerRedisUrl);
+      // #13984 — sans worker qui bat, la porte tus rend ici, après sa réponse.
+      this.localMediaRenderer = gatewayLocalMediaRenderer(mediaDeps);
     }
     if (sweepOn) {
       this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);

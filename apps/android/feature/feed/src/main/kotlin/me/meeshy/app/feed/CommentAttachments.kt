@@ -26,10 +26,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +51,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
+import me.meeshy.ui.component.message.MessageComposerGlassAction
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -157,13 +158,13 @@ internal fun CommentAttachButton(enabled: Boolean, onPicked: (MediaUploadItem) -
         uri ?: return@rememberLauncherForActivityResult
         scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let(onPicked) }
     }
-    IconButton(
+    MessageComposerGlassAction(
+        icon = MeeshyIcons.PhotoFilled,
+        contentDescription = stringResource(R.string.feed_composer_attach_media),
         onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
         enabled = enabled,
-    ) {
-        Icon(MeeshyIcons.PhotoFilled, contentDescription = stringResource(R.string.feed_composer_attach_media),
-            tint = if (enabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted)
-    }
+        tint = MeeshyPalette.Indigo500,
+    )
 }
 
 /**
