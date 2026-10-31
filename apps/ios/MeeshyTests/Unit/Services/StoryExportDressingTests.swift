@@ -272,6 +272,25 @@ final class StoryExportRelationBadgeTests: XCTestCase {
         XCTAssertNil(StoryExportAuthor(group: group).presence)
     }
 
+    /// Le chemin que montent la feuille d'export et « Imager » : sans entrée vivante dans le
+    /// `PresenceManager`, la présence est celle que la passerelle a servie avec le groupe.
+    func test_served_authorUnknownToTheLiveMap_projectsThePresenceServedWithTheGroup() {
+        let group = StoryGroup(id: "u-\(UUID().uuidString)", username: "Grace", avatarColor: "6366F1", stories: [],
+                               authorPresence: UserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120)))
+
+        XCTAssertEqual(StoryExportAuthor.served(from: group).presence, .away)
+    }
+
+    /// Pas ami : la passerelle ne sert rien, et l'export ne fabrique aucune présence.
+    func test_served_nothingServedNorLive_paintsNoPresence() {
+        let group = StoryGroup(id: "u-\(UUID().uuidString)", username: "Grace", avatarColor: "6366F1", stories: [])
+
+        let author = StoryExportAuthor.served(from: group)
+
+        XCTAssertNil(author.presence)
+        XCTAssertNil(StoryExportAuthorIdentity.unresolved(author).presence)
+    }
+
     // MARK: Niveau de lien
 
     func test_servedLevel_injectedClose_reachesTheIntroAsTheFireLogo() async {

@@ -203,7 +203,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         XCTAssertTrue(canvas[headerCall.upperBound...].prefix(1600).contains("showExportShareSheet: $showExportShareSheet"))
         let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerSheets.swift")
         XCTAssertTrue(viewer.contains(".sheet(isPresented: $showExportShareSheet"))
-        XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))"))
+        XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, author: currentGroup.map { StoryExportAuthor.served(from: $0) }"))
         let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryExportShareSheet.swift")
         XCTAssertTrue(sheet.contains("languagePicker"), "La feuille garde le choix de la langue à graver.")
         XCTAssertTrue(sheet.contains("viewModel.startExport(story: story, author: author)"))

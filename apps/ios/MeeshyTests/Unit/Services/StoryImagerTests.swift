@@ -123,7 +123,7 @@ final class StoryImagerTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"))
         let start = try XCTUnwrap(header.range(of: "case .imager:"))
         let block = String(header[start.upperBound...].prefix(600))
-        XCTAssertTrue(block.contains("StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map(StoryExportAuthor.init(group:)))"))
+        XCTAssertTrue(block.contains("StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })"))
         XCTAssertTrue(block.contains("MessageCardExportMenu.imageLabel"), "le mot « Imager » est celui de la conversation")
     }
 
