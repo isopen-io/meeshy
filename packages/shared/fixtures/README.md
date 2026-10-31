@@ -13,9 +13,10 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 
 - Le tier média d'un appareil (bas / moyen / haut / pro) sur des entrées NEUTRES `{ memoryGB, cores, maxFps, hwAV1, hwHEVC, lowPower, thermal }` → `tier`. Aucune puce : la détection de puce, côté iOS, ne fait que PRODUIRE ces entrées. iOS le rejoue (`DeviceMediaTierVectorTests`, loi `DeviceMediaTier.classify`) ; Android le rejoue aussi (`DeviceMediaTierVectorsTest` dans `:core:model`, même loi `DeviceMediaTier.classify`, sur JVM nue) ; la jumelle web W10 (`apps/web/src/lib/device/capability-tier.ts`) le rejouera telle quelle.
 
-## `relation-export-badge.vectors.json` (#13997)
-
-- Le logo de cercle de l'intro d'une story exportée (`utils/relation-export-badge.ts`, `relationExportBadge`) : niveau EFFECTIF servi (brut) → emoji ou `null`. Seuil `minLevel` = Proche. iOS (`MeeshyUI`) et Android (`:core:model`) rejouent le fichier par chemin relatif, comme `device-tier-vectors.json`.
 ## `relation-access-cases.json` (#13927)
 
 - La loi d'accès des cercles `resolveRelationAccess` (`utils/relation-access.ts`) : `{ id, matrix, input, expected }`, **écrits à la main** — un oracle indépendant de la loi TS, jamais généré en l'exécutant. Rejoués par `__tests__/relation-access.test.ts`, puis par les miroirs Swift (`RelationAccess.swift`) et Kotlin (`RelationAccess.kt`) dans leurs sous-lots.
+
+## `relation-export-badge.vectors.json` (#13997)
+
+- Le logo de cercle de l'intro d'une story exportée (`utils/relation-export-badge.ts`, `relationExportBadge`) : niveau EFFECTIF servi (brut) → emoji ou `null`. Seuil `minLevel` = Proche. iOS (`MeeshySDK`, `RelationExportBadge.swift`) et Android (`:core:model`) rejouent le fichier par chemin relatif, comme `device-tier-vectors.json`.
