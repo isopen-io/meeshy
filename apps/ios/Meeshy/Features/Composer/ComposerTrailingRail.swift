@@ -5,6 +5,10 @@ import MeeshyUI
 /// **Le rail *trailing* — les CONTRÔLEURS de l'objet sélectionné** (#4063,
 /// planche rév. 27 § P4, loi 12).
 ///
+/// **Sur la scène, il ne paraît plus au repos** (#13839) : seulement quand un
+/// outil est ouvert ou un objet touché (`ComposerSceneSurface.trailingRailIsShown`).
+/// Défaire et rétablir ont quitté sa base pour le haut de la scène.
+///
 /// ## Ce qu'il porte, et pourquoi ce n'est pas une invention
 ///
 /// Exactement ce que l'appui long propose déjà sur un objet de la scène

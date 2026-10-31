@@ -13,58 +13,15 @@ import MeeshyUI
 @MainActor
 extension MeeshyComposerHost {
 
-    // MARK: - La barre haute : le (+) d'une nouvelle scène (#8713)
+    // MARK: - La nouvelle scène vit dans ⋯ (#13839)
+    //
+    // Le `(+)` de la barre haute est parti avec elle : « ⋯ › Ajouter une
+    // diapo » appelle `addSceneSlide()` (`MeeshyComposerHost+Rest.swift`).
 
-    /// **Le `(+)` prend la place de l'éclair** : un bouton rond de verre, au
-    /// gabarit de la croix et du `⋯` qu'il voisine.
-    var sceneAddSlideButton: AnyView {
-        AnyView(
-            Button {
-                // La scène naît sélectionnée et sa vignette paraît au rail
-                // (#5009) ; au plafond, le refus se DIT au lieu de se taire.
-                switch ComposerSceneAddition.outcome(canAddSlide: viewModel.canAddSlide) {
-                case .added:
-                    viewModel.addSlide()
-                    HapticFeedback.light()
-                case .refusedAtCap:
-                    HapticFeedback.error()
-                    FeedbackToastManager.shared.showError(ComposerSlideRailCopy.capReached)
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
-                    .frame(width: ComposerControlMetrics.visualDiameter,
-                           height: ComposerControlMetrics.visualDiameter)
-                    .contentShape(Circle())
-                    .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
-                    .frame(minWidth: ComposerRailGeometry.railWidth,
-                           minHeight: ComposerRailGeometry.railWidth)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(ComposerTrailingRailCopy.addSlide))
-        )
-    }
-
-    // MARK: - Le rail gauche : l'éclair puis le Cadre, après le lieu (#8713)
-
-    var sceneToggleEntries: [ComposerSceneToggleEntry] {
-        ComposerLeadingSceneToggles.served(animated: true,
-                                           frame: sceneHasBackgroundMedia)
-            .map { bouton in
-                switch bouton {
-                case .animated:
-                    return ComposerSceneToggleEntry(toggle: bouton, isOn: sceneIsAnimated) {
-                        toggleSceneAnimation()
-                    }
-                case .frame:
-                    return ComposerSceneToggleEntry(toggle: bouton, isOn: requestedSceneBand == .frame) {
-                        toggleFrameBand()
-                    }
-                }
-            }
-    }
+    // MARK: - L'éclair et le Cadre vivent dans ⋯ (#13839)
+    //
+    // « ⋯ › Animation » appelle `toggleSceneAnimation()` / `toggleSceneFrise()`,
+    // « ⋯ › Cadrage du fond » appelle `toggleFrameBand()`.
 
     // MARK: - Le rail droit : les options du moment (#8713, #8714)
 

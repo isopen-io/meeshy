@@ -90,20 +90,24 @@ final class ComposerToolFocusTests: XCTestCase {
         for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
             XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")
         }
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen)"),
-                      ".topBar doit répondre à l'outil par la règle")
+        // **Le repos se pose sur la scène** (#13839) : ✕, ↶ ↷ et la colonne
+        // demandent à `ComposerRestChrome`, nourrie de l'outil et de l'écriture.
+        XCTAssertTrue(surface.contains("ComposerRestChrome.State(toolIsOpen: toolIsOpen,"),
+                      "le chrome du repos doit répondre à l'outil par la règle")
         // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine.
         XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing)"),
                       ".description doit répondre à l'outil et au texte écrit par la règle")
         // Le rail droit répond AUSSI à l'écriture (#6131) — même règle.
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
+        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
                       ".trailingRail doit répondre à l'outil et à l'écriture par la règle")
         XCTAssertTrue(surface.contains("options: trailingOptions"),
                       "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
-        XCTAssertTrue(surface.contains("case .doors(let servies) = railMode else { return AnyView(EmptyView()) }"),
-                      "un outil ouvert vide le rail gauche : ses réglages vivent à droite")
-        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen, writesText: writesText),"),
-                      "l'édition du fond vide aussi les portes (#8847) — par la règle, pas par le seul mode du rail")
+        // L'édition du fond vide aussi les portes (#8847) : `toolIsOpen` est la
+        // règle (`ComposerToolFocus.toolIsOpen`), et la colonne la lit.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)"),
+                      "l'outil ouvert se lit de la règle, pas du seul mode du rail")
+        XCTAssertFalse(surface.contains("ComposerLeadingRail("),
+                       "le rail gauche à glyphes est revenu sur la scène (#13839)")
     }
 
     func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {

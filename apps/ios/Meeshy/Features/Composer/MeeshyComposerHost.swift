@@ -646,6 +646,9 @@ struct MeeshyComposerHost: View {
     /// seraient des contrôles inertes, et rien ne le signalerait.
     @State var sceneDescriptionEditingRequest = 0
 
+    /// « Tout effacer » demande confirmation depuis ⋯ (#13839).
+    @State var sceneClearAllAsked = false
+
     /// La hauteur RENDUE de la zone de saisie — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
     /// d'être recouvert.

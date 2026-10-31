@@ -127,6 +127,8 @@ struct ComposerInlineToolPanel: View {
 /// toute la hauteur.
 struct ComposerTrailingOptionsPlate<Content: View>: View {
     let plateauTint: Color
+    /// Le côté pris quand aucun objet n'est à laisser voir.
+    var preferredEdge: ComposerInlinePanelEdge = .top
     var holdsGesture: Bool = false
     /// Le cadre, dans le repère de la plaque, de ce qu'elle ne doit pas couvrir.
     var objectFrame: @MainActor (CGRect) -> CGRect? = { _ in nil }
@@ -143,7 +145,8 @@ struct ComposerTrailingOptionsPlate<Content: View>: View {
             let place = ComposerInlinePanelLayout.placement(object: objectFrame(geo.frame(in: .global)),
                                                             free: geo.size,
                                                             panelHeight: contentHeight,
-                                                            roomy: roomy)
+                                                            roomy: roomy,
+                                                            preferredEdge: preferredEdge)
             let cote = place.edge
             ScrollView(.vertical, showsIndicators: false) {
                 content()

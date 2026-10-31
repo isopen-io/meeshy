@@ -38,8 +38,9 @@ extension MeeshyComposerHost {
         HStack(spacing: MeeshySpacing.smPlus) {
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
-            if socleServesPostText { postTextButton }
-            if !socleHasNothingToPublish { publishButton }
+            // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
+            // qu'il n'y a rien à publier, et son toucher dit pourquoi.
+            if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
         }
         // Grand écran : la marge de la maquette iPad/Mac, alignée sur les rails.
         .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
@@ -49,37 +50,16 @@ extension MeeshyComposerHost {
         .padding(.bottom, MeeshySpacing.xxs)
     }
 
-    /// **Le texte du post, au socle.** Ce n'est pas un nouveau chemin : c'est la
-    /// PORTE `.content`, qui quitte la rangée basse
-    /// (`ComposerSceneFloatingRail.lowRow`) et garde son unique aiguillage,
-    /// `handleRailDoor`. Peinte seulement sous la scène d'un post — la surface
-    /// document écrit son corps en place.
-    ///
-    /// **Le format lu est celui que la flèche PUBLIERA** (`armedChoice`), pas
-    /// celui de la porte d'entrée : une story armée « Post » par le chevron publie
-    /// un post, et doit offrir le bouton pour en écrire le contenu.
+    /// **« ⋯ › Écrire le post »** (#13839) : la porte `.content`, servie sous la
+    /// scène d'un post. Le format lu est celui que la flèche PUBLIERA
+    /// (`armedChoice`) : une story armée « Post » doit offrir d'en écrire le corps.
     var socleServesPostText: Bool {
         mountedComposerView == .scene
             && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                         format: armedChoice.format,
                                         allowsCapture: profile.allowsCapture)
-                .contains(ComposerSceneFloatingRail.socleDoor)
+                .contains(.content)
     }
-
-    var postTextButton: some View {
-        Button {
-            handleRailDoor(ComposerSceneFloatingRail.socleDoor)
-        } label: {
-            Image(systemName: ComposerSceneFloatingRail.socleDoor.symbolName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
-        }
-        .accessibilityLabel(Text(ComposerRailCopy.label(ComposerSceneFloatingRail.socleDoor)))
-    }
-
 
     // **La pastille de son n'est pas au socle.**
     //
@@ -491,7 +471,7 @@ extension MeeshyComposerHost {
     /// nom pour un même fond de bouton proéminent à travers le composer.
     /// `.opacity` marque le refus du gate : un remplissage plein aurait l'air
     /// armé même quand rien ne peut partir.
-    func publishCapsule<Contenu: View>(_ contenu: Contenu) -> some View {
+    func publishCapsule<Contenu: View>(_ contenu: Contenu, chevron: ComposerPublishChevron? = nil) -> some View {
         // **L'indice de blocage se VOIT, il ne s'entend pas seulement.** Voir
         // `publishBlockedNotice`.
         //
@@ -502,19 +482,31 @@ extension MeeshyComposerHost {
         // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
         // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
         // texte — deux lignes en français, trois en allemand.
+        // Le chevron est HORS du gate de matière (#13839) : il choisit le type,
+        // il ne publie pas, et une scène vide peut déjà le choisir.
         VStack(alignment: .trailing, spacing: MeeshySpacing.xsPlus) {
             publishBlockedNotice
-            contenu
-                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-                .opacity(canPublishDocument ? 1 : 0.45)
-                .disabled(!canPublishDocument)
-                // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
-                // flèche perdrait son nom à l'instant même où elle devient
-                // compacte — le défaut que `StatusComposerView` a dû corriger,
-                // dans l'autre sens.
-                .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
-                .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
-                .accessibilityHint(publishArrowHint)
+            HStack(spacing: 0) {
+                contenu
+                    .disabled(!canPublishDocument)
+                    .overlay {
+                        ComposerPublishRefusalTapZone(isRefused: !canPublishDocument && !isPublishingDocument,
+                                                      reason: publishBlockedHint)
+                    }
+                if let chevron {
+                    chevron.disabled(!ComposerPublishMenuRule.chevronIsEnabled(isPublishing: isPublishingDocument))
+                }
+            }
+            .accessibilityElement(children: chevron == nil ? .combine : .contain)
+            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+            .opacity(canPublishDocument ? 1 : 0.45)
+            // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
+            // flèche perdrait son nom à l'instant même où elle devient
+            // compacte — le défaut que `StatusComposerView` a dû corriger,
+            // dans l'autre sens.
+            .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
+            .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+            .accessibilityHint(publishArrowHint)
         }
     }
 
@@ -578,32 +570,21 @@ extension MeeshyComposerHost {
     /// qui porte le gate.
     var publishButton: some View {
         reelOfferPresented(publishCapsule(
-            HStack(spacing: 0) {
-                Button {
-                    // Un post à une seule vidéo demande d'abord « Publier en
-                    // réel ? » ; tout le reste part directement.
-                    requestSoclePublish(armedChoice)
-                } label: {
-                    publishCapsuleLabel
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
-                                    ?? String(localized: "composer.socle.publish", bundle: .main))
-                if let entries = publishMenuEntries {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.35))
-                        .frame(width: 1, height: 20)
-                        .accessibilityHidden(true)
-                    ComposerPublishMenu(entries: entries, armed: armedChoice,
-                                        companionReelOffered: companionReelOffered,
-                                        onChoose: { chooseArmedPublish($0) }) {
-                        publishChevronLabel
-                    }
-                    .accessibilityLabel(ComposerPublishMenuCopy.title)
-                    .accessibilityHint(ComposerPublishMenuCopy.hint)
-                }
+            Button {
+                // Un post à une seule vidéo demande d'abord « Publier en
+                // réel ? » ; tout le reste part directement.
+                requestSoclePublish(armedChoice)
+            } label: {
+                publishCapsuleLabel
             }
-            .accessibilityElement(children: .contain)
+            .buttonStyle(.plain)
+            .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
+                                ?? String(localized: "composer.socle.publish", bundle: .main)),
+            chevron: publishMenuEntries.map { entries in
+                ComposerPublishChevron(entries: entries, armed: armedChoice,
+                                       companionReelOffered: companionReelOffered,
+                                       onChoose: { chooseArmedPublish($0) })
+            }
         ))
     }
 
@@ -622,15 +603,6 @@ extension MeeshyComposerHost {
         ComposerPublishMenuRule.companionReelOffered(entries: publishMenuEntries,
                                                      slideCount: viewModel.slides.count,
                                                      isRepost: intent.origin.repostedPostId != nil)
-    }
-
-    /// Le chevron — 44 pt de cible, comme la partie principale.
-    var publishChevronLabel: some View {
-        Image(systemName: "chevron.down")
-            .font(.footnote.weight(.bold))
-            .foregroundColor(.white)
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-            .contentShape(Rectangle())
     }
 
     /// **Les entrées du menu, ou `nil`** — la LECTURE de

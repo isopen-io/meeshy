@@ -5,6 +5,11 @@ import MeeshyUI
 /// **Le rail *leading* — les portes qui font ENTRER de la matière** (#4062,
 /// planche rév. 27 § P4, loi 12).
 ///
+/// **La scène ne le monte plus** (#13839) : ses portes sont devenues les cinq
+/// boutons ronds de la colonne du repos (`ComposerRestChrome`) et les entrées
+/// de ⋯ (`ComposerMoreMenuPolicy`). Le type reste pour les témoins de son
+/// défilement et de ses portes tant que son retrait n'est pas un lot à part.
+///
 /// ## Trois décisions, et aucune n'est un goût
 ///
 /// **1. `leading`, jamais « à gauche ».** En arabe — l'une des sept langues

@@ -1,6 +1,6 @@
 {
   "rules": {
-    "anyview": 96,
+    "anyview": 91,
     "app-grdb-import": 0,
     "async-after": 76,
     "autocapitalization": 0,
@@ -10,7 +10,7 @@
     "disable-autocorrection": 0,
     "environment-router": 12,
     "fixed-font": 754,
-    "foreground-color": 2396,
+    "foreground-color": 2395,
     "idiom": 0,
     "logger-subsystem": 0,
     "narrative-comment": 2455,

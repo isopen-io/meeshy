@@ -109,14 +109,17 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
     /// Et le second `XCTAssertFalse` garde l'autre moitié du lot : la capsule ne
     /// doit pas rester AUSSI en bas. Deux capsules pour un même objet seraient
     /// deux vocabulaires, et la seconde se lirait comme un second son.
-    func test_laPastilleDeScene_estMonteeUneSeuleFois() throws {
+    /// Depuis #13839, le retrait d'un son de fond passe par le menu du bouton
+    /// Son, posé une seule fois sur la scène — plus par une trace en tête.
+    func test_leRetraitDuSonDeFond_aUnSeulSite_leBoutonSon() throws {
         let surface = try source("ComposerSceneSurface.swift")
-        XCTAssertTrue(surface.contains("ComposerSceneSoundHeader("),
-                      "la surface scène ne monte pas l'en-tête : la capsule existe et ne se voit nulle part")
         XCTAssertFalse(surface.contains("ComposerAvatarSoundBadge"),
-                       "la capsule est restée en bas EN PLUS de l'en-tête — deux capsules pour un seul fond")
-        XCTAssertEqual(surface.components(separatedBy: "ComposerSceneSoundHeader(").count - 1, 1,
-                       "un seul montage : deux en-têtes se peindraient l'un sous l'autre")
+                       "une capsule est restée en bas — deux témoins pour un seul fond")
+        XCTAssertTrue(surface.contains("onDelete: onDeleteBackgroundSound"),
+                      "la surface ne relaie plus le retrait du son de fond à son repos")
+        let repos = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertEqual(repos.components(separatedBy: "ComposerSoundActionsMenu(").count - 1, 1,
+                       "un seul menu de retrait : deux se superposeraient")
     }
 
     /// **Le menu est PARTAGÉ, pas recopié.** Il était `private` à la surface

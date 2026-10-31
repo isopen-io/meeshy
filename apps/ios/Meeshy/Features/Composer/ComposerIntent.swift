@@ -762,3 +762,13 @@ nonisolated enum RepostTargeting {
         return RepostTarget(postId: reference, targetType: PostType(rawValue: brut))
     }
 }
+
+extension ComposerOrigin {
+    /// Republier ou modifier une publication n'ajoute pas de diapo (#13839).
+    var addsSlides: Bool {
+        switch self {
+        case .edit, .repost: return false
+        default: return true
+        }
+    }
+}

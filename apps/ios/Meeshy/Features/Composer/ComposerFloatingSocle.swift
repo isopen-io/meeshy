@@ -7,9 +7,9 @@ import SwiftUI
 // l'écran sous la scène. La maquette le pose en surimpression, sur fond verre,
 // le fond de la scène passant dessous.
 //
-// `safeAreaInset` et non `overlay` : la surimpression seule recouvrirait la
-// rangée d'outils du bas (`ComposerSceneSurface.lowToolRow`) et les réglages
-// d'un outil ouvert. L'encart RÉSERVE sa hauteur — la surface se met en page
+// `safeAreaInset` et non `overlay` : la surimpression seule recouvrirait les
+// réglages d'un outil ouvert (la rangée d'outils du bas est partie avec #13839 ;
+// la scène, elle, descend sous le socle, qui se pose dessus). L'encart RÉSERVE sa hauteur — la surface se met en page
 // au-dessus de lui — pendant que tout ce qui ignore la zone sûre (le fond du
 // plateau, la scène) continue sous le verre. Une seule mécanique pour les trois
 // surfaces (atelier, scène, document), sans qu'aucune ait à connaître le socle.

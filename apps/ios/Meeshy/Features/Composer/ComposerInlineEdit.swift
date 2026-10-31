@@ -254,11 +254,15 @@ nonisolated enum ComposerInlinePanelLayout {
     /// Le haut d'abord, s'il laisse l'objet entier ; sinon le côté qui le
     /// couvre moins (`edge`). Si les deux le couvrent, le panneau se RÉDUIT au
     /// côté qui a le plus de place hors de l'objet, et défile.
+    /// Sans objet à laisser voir, le panneau prend `preferredEdge` : le haut
+    /// par défaut, le bas quand le contrôle qui l'a déplié vit en bas (la barre
+    /// de dessin, #13839).
     static func placement(object: CGRect?, free: CGSize, panelHeight: CGFloat,
-                          roomy: Bool = false) -> ComposerInlinePanelPlacement {
+                          roomy: Bool = false,
+                          preferredEdge: ComposerInlinePanelEdge = .top) -> ComposerInlinePanelPlacement {
         let pleine = maxHeight(freeHeight: free.height)
         guard let object, !object.isNull, !object.isEmpty else {
-            return ComposerInlinePanelPlacement(edge: .top, maxHeight: pleine)
+            return ComposerInlinePanelPlacement(edge: preferredEdge, maxHeight: pleine)
         }
         let cote = edge(object: object, free: free, panelHeight: panelHeight, roomy: roomy)
         let cadre = frame(edge: cote, free: free, panelHeight: panelHeight, roomy: roomy)

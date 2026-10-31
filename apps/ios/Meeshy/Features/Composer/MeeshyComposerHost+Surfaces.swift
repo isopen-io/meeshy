@@ -282,39 +282,9 @@ extension MeeshyComposerHost {
     // une seule requête.
 
 
-    /// **Ce que chaque porte du rail PORTE DÉJÀ** (#4994).
-    ///
-    /// Le relevé est composé ICI parce que les deux magasins vivent ici : la
-    /// `StorySlide` pour ce qui se VOIT sur la scène, l'état du meuble pour ce
-    /// qui QUALIFIE la publication (le lieu, le fond, les personnes nommées).
-    /// La règle, elle, ne connaît ni l'un ni l'autre — c'est ce qui la rend
-    /// éprouvable sans monter une vue.
-    var railDoorBadges: [ComposerRailDoor: Int] {
-        ComposerRailDoorBadge.badges(
-            for: ComposerRailDoor.canonicalRail,
-            in: ComposerRailDoorBadge.matter(
-                slide: viewModel.currentSlide,
-                // **Le site UNIQUE, jamais une seconde dérivation** (#5007) :
-                // `composerHashtags` est déjà `ComposerHashtags.tags(in:
-                // documentText)`, et la feuille comme le sélecteur le lisent
-                // sans le recalculer.
-                hashtags: composerHashtags.count,
-                description: sceneDescriptionBinding.wrappedValue,
-                // **Le CORPS du post** (#4890) — `documentText`, jamais la
-                // description : en Post les deux textes sont distincts, et
-                // servir le même aux deux pastilles en allumerait deux pour un
-                // seul texte écrit.
-                content: documentText,
-                mentions: composerReferences.count,
-                hasDocumentLocation: documentLocation != nil))
-    }
-
     var sceneSurface: some View {
         ComposerSceneSurface(
             slideRailSlot: slideRailSlot,
-            format: selectedFormat,
-            overflowMenu: documentOverflowEntries.isEmpty
-                ? nil : AnyView(overflowMenu),
             onClose: onDismiss,
             slide: Binding(
                 get: { ComposerLookComparison.shown(viewModel.currentSlide, comparing: comparingLookObjectId) },
@@ -415,15 +385,7 @@ extension MeeshyComposerHost {
             // ses réglages REMPLACENT les portes (#8652) — sauf quand l'éditeur
             // plein écran est monté : c'est alors lui qui les porte.
             railMode: sceneRailMode,
-            // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
-            // ICI parce que les deux magasins vivent ici — la slide pour ce qui
-            // se voit, l'état du meuble pour ce qui qualifie la publication.
-            // La surface, elle, ne compte rien : elle relaie.
-            railBadges: railDoorBadges,
-            onRailDoor: { door in handleRailDoor(door) },
             onRailDoorLongPress: railDoorLongPress,
-            onRailToolControl: { control in handleRailToolControl(control) },
-            onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
             // seule qui ne peut pas être une porte. `BlankCanvasPasteStarter`
             // lit `\.storyPaste` lui-même (le meuble l'injecte déjà) et
@@ -439,8 +401,6 @@ extension MeeshyComposerHost {
                 // capsule EST un cercle.
                 .buttonBorderShape(.capsule)
             ),
-            // La maquette range COLLAGE entre STICKER et MENTION.
-            railSystemEntryAfter: .sticker,
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
@@ -460,8 +420,6 @@ extension MeeshyComposerHost {
             // les réglages de l'outil ouvert, ou ceux de l'objet touché.
             trailingOptions: sceneTrailingOptions,
             onTrailingOption: { handleSceneTrailingOption($0) },
-            // L'éclair et le Cadre, au rail gauche après le lieu (#8713).
-            sceneToggles: sceneToggleEntries,
             // **L'historique a quitté le socle** (#4586). La question posée est
             // la MÊME que celle que le socle posait — `ComposerHistoryService`
             // reste le juge unique de « cet écran sert-il l'historique ? » — et
@@ -515,8 +473,14 @@ extension MeeshyComposerHost {
             bandBackdrop: sceneBackdrop,
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
-            // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
-            topBarAccessory: sceneAddSlideButton,
+            // **Le repos posé sur la scène** (#13839) : ⋯ porte la nouvelle
+            // diapo, le Fond, l'Animation (éclair et Temps fondus), la Durée.
+            slideCount: viewModel.slides.count,
+            restTools: sceneRestTools,
+            onRestTool: { handleRestTool($0) },
+            moreMenu: sceneMoreMenu,
+            drawingBar: sceneDrawingBar,
+            sceneEffectIsOpen: activeSceneEffect != nil,
             onTimeButton: sceneIsAnimated ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
@@ -590,7 +554,11 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            descriptionPanel: sceneDescriptionPanel,
+            descriptionPanel: sceneDescriptionPanel.map { volet in
+                AnyView(volet.opacity(sceneLegendIsVisible ? 1 : 0)
+                    .allowsHitTesting(sceneLegendIsVisible)
+                    .accessibilityHidden(!sceneLegendIsVisible))
+            },
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.

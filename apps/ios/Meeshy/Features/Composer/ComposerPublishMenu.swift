@@ -108,6 +108,11 @@ nonisolated enum ComposerPublishMenuRule {
     /// principale de la capsule publie au format de la porte. `nil` quand il
     /// n'offrirait qu'un geste : une entrée unique sans sous-menu est une
     /// affordance sans choix (loi 4) — le mood, qui n'offre que lui-même.
+    /// **Le chevron CHOISIT, il ne publie pas** : il échappe au gate de matière
+    /// (une scène encore vide peut déjà devenir un post ou un réel, #13839) et
+    /// ne se fige que pendant l'envoi.
+    static func chevronIsEnabled(isPublishing: Bool) -> Bool { !isPublishing }
+
     static func menu(candidates: [ComposerFormat],
                      offered: [ComposerFormat],
                      carriesMoreThanText: Bool,
@@ -258,6 +263,17 @@ nonisolated enum ComposerPublishMenuCopy {
         String(localized: "composer.publish.menu.title", defaultValue: "Publier comme", bundle: .main)
     }
 
+    /// Le nom du chevron pour VoiceOver (#13839) : il CHOISIT le type, il ne
+    /// publie pas — « Publier comme » le faisait entendre comme un second Publier.
+    static var typeMenu: String {
+        String(localized: "composer.publish.typeMenu", defaultValue: "Type de publication", bundle: .main)
+    }
+
+    static var emptyReason: String {
+        String(localized: "composer.publish.emptyReason",
+               defaultValue: "Ajoutez quelque chose à la scène pour publier", bundle: .main)
+    }
+
     static var hint: String {
         String(localized: "composer.publish.menu.a11y.hint",
                defaultValue: "Ouvre le choix du format et de la disposition", bundle: .main)
@@ -360,5 +376,55 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     /// disposition. Toucher une entrée déjà cochée la réarme, rien d'autre.
     private func choosing(_ choice: ComposerPublishChoice, isChecked: Bool) -> Binding<Bool> {
         Binding(get: { isChecked }, set: { _ in onChoose(choice) })
+    }
+}
+
+/// **Le chevron posé dans la capsule Publier** (#13839) : le filet qui le
+/// sépare, le menu et son nom VoiceOver « Type de publication ». Un type
+/// concret, pour que la capsule le reçoive hors du gate de matière sans
+/// effacer son type.
+struct ComposerPublishChevron: View {
+    let entries: [ComposerPublishMenuRule.Entry]
+    let armed: ComposerPublishChoice
+    var companionReelOffered = false
+    let onChoose: (ComposerPublishChoice) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.white.opacity(0.35))
+                .frame(width: 1, height: 20)
+                .accessibilityHidden(true)
+            ComposerPublishMenu(entries: entries, armed: armed,
+                                companionReelOffered: companionReelOffered,
+                                onChoose: onChoose) {
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.bold))
+                    .foregroundColor(.white)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(ComposerPublishMenuCopy.typeMenu)
+            .accessibilityHint(ComposerPublishMenuCopy.hint)
+        }
+    }
+}
+
+/// Un Publier grisé n'est pas muet : le toucher dit la raison du refus, ou
+/// qu'il faut d'abord poser quelque chose sur la scène.
+struct ComposerPublishRefusalTapZone: View {
+    let isRefused: Bool
+    let reason: String
+
+    var body: some View {
+        if isRefused {
+            Color.clear
+                .contentShape(Capsule())
+                .onTapGesture {
+                    HapticFeedback.warning()
+                    FeedbackToastManager.shared.showError(reason.isEmpty ? ComposerPublishMenuCopy.emptyReason : reason)
+                }
+                .accessibilityHidden(true)
+        }
     }
 }

@@ -88,7 +88,7 @@ extension MeeshyComposerHost {
             ForEach(Array(documentOverflowEntries.enumerated()), id: \.offset) { entry in
                 let item = entry.element
                 Button(role: item == .clearAll ? .destructive : nil) {
-                    perform(item)
+                    if item.asksConfirmation { sceneClearAllAsked = true } else { perform(item) }
                 } label: {
                     Label(ComposerOverflowCopy.label(item),
                           systemImage: ComposerOverflowCopy.icon(item))
@@ -102,6 +102,11 @@ extension MeeshyComposerHost {
                        height: ComposerControlMetrics.visualDiameter)
                 // Teinté du plateau, comme la croix qu'il encadre (#8370).
                 .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
+        }
+        .confirmationDialog(ComposerMoreMenuCopy.clearAllConfirm, isPresented: $sceneClearAllAsked,
+                            titleVisibility: .visible) {
+            Button(ComposerOverflowCopy.label(.clearAll), role: .destructive) { perform(.clearAll) }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
     }
 

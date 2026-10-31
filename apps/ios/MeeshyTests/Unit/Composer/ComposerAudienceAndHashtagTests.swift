@@ -168,8 +168,10 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         // publication que sur les autres formats.
         XCTAssertEqual(ComposerRailDoor.hashtag.level(for: .post), .publication)
         XCTAssertFalse(ComposerRailDoor.hashtag.level(for: .post).appearsOnCanvas)
-        XCTAssertTrue(ComposerSceneFloatingRail.lowRow(from: [.hashtag], format: .post).contains(.hashtag))
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: [.hashtag], format: .post).contains(.hashtag))
+        XCTAssertTrue(ComposerMoreMenuPolicy.entries(.init(addsSlides: false, backgroundMedia: nil,
+                                                           offeredDoors: [.hashtag], offersPostBody: false,
+                                                           overflow: [])).contains(.hashtags))
+        XCTAssertEqual(ComposerRestChrome.tools(offered: [.hashtag]), [.more])
     }
 
     /// Elle a sa place dans l'ordre appris par les doigts, à côté de la mention

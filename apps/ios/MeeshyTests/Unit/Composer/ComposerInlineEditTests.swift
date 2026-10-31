@@ -382,6 +382,16 @@ final class ComposerInlineEditTests: XCTestCase {
                                                            panelHeight: 400).maxHeight, pleine)
     }
 
+    /// **Le dessin a sa barre EN BAS** (#13839, état D de la maquette) : sans
+    /// objet à laisser voir, la couleur, l'épaisseur et le lissage s'ouvrent
+    /// au-dessus de la barre qui les a dépliés, jamais en haut de la scène.
+    func test_placement_sansObjet_coteDemandeBas_ouvreEnBasPleineHauteur() {
+        let pleine = ComposerInlinePanelLayout.maxHeight(freeHeight: 700)
+        XCTAssertEqual(ComposerInlinePanelLayout.placement(object: nil, free: libre402.size, panelHeight: 120,
+                                                           preferredEdge: .bottom),
+                       ComposerInlinePanelPlacement(edge: .bottom, maxHeight: pleine))
+    }
+
     /// **Chaque famille posée a un cadre** — le texte, le sticker et la puce de
     /// son aussi, pas seulement le média du #9495. Le fond n'en a pas : il
     /// couvre la carte entière.

@@ -392,9 +392,9 @@ extension MeeshyComposerHost {
                 // est DÉPLIÉ : ouvrir le dessin laissait la zone basse VIDE
                 // jusqu'à ce qu'une bulle du rail soit tapée — un geste de plus
                 // avant le premier réglage, sur un écran qui vient précisément
-                // de libérer cette place. Le pinceau est le premier réglage de
-                // tout tracé ; le déplier d'emblée ne devine rien.
-                viewModel.setExpandedDrawingTool(.tool)
+                // de libérer cette place. Le pinceau est le premier réglage ; la
+                // scène le porte déjà dans sa barre de dessin (#13839).
+                if mountedComposerView != .scene { viewModel.setExpandedDrawingTool(.tool) }
             }
         case .text:
             // **Poser PUIS saisir SUR LA SCÈNE, dans le même geste** (« plutôt que

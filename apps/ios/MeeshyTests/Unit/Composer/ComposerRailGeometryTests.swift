@@ -244,8 +244,8 @@ final class ComposerRailGeometryTests: XCTestCase {
     func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
-        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
-                      "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
+        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayerrestChrome}"),
+                      "Le letterbox, la scène, le chrome et le repos sont quatre calques empilés, dans cet ordre.")
         XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
                       "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
         XCTAssertTrue(surface.contains("StorySlideRenderer.computeThumbHash(slide:slide,"),
@@ -255,11 +255,13 @@ final class ComposerRailGeometryTests: XCTestCase {
             return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
         }
         let scene = surface[debut.upperBound..<fin.lowerBound]
-        // `- chromeLift` : la barre haute MONTE dans la rangée de la Dynamic
-        // Island (« remonte encore le bouton X et … », 2026-09-27) — la scène
-        // la suit, elle reste dessous, jamais sous la croix.
-        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4-chromeLift)"),
-                      "La scène se pose sous la barre haute, jamais sous la croix (directive 2026-09-27).")
+        // **Le témoin INVERSE de « la scène se pose sous la barre haute »**
+        // (#13839) : plus de barre haute à réserver, la croix se pose SUR la
+        // scène. La scène descend même sous le socle, qui se pose dessus.
+        XCTAssertFalse(scene.contains("ComposerTopBar.height"),
+                       "La scène réserve encore la hauteur d'une barre haute qui n'existe plus.")
+        XCTAssertTrue(scene.contains(".ignoresSafeArea(.container,edges:.bottom)"),
+                      "La scène descend sous le socle (#13839).")
         XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
                       "Le clavier ne pousse pas la scène.")
         XCTAssertTrue(surface.contains(".statusBarHidden(true)"),
@@ -268,7 +270,7 @@ final class ComposerRailGeometryTests: XCTestCase {
                        "Aucun chrome ne se loge dans le calque de la scène.")
         XCTAssertFalse(surface.contains("pushesToThumb:true"),
                        "Aucun rail de la scène ne s'étire sur sa hauteur.")
-        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,separateButtons:true,"),
+        XCTAssertTrue(surface.contains("onRedo:historyIsOnTheScene?nil:onRedo,pushesToThumb:false,separateButtons:true,"),
                       "Le rail droit flotte sans ressort, en petits boutons séparés sans légende (directive 2026-09-27).")
     }
 

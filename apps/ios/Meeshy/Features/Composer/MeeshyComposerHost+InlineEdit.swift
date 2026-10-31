@@ -123,15 +123,16 @@ extension MeeshyComposerHost {
             onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
     }
 
-    /// **Les options du pinceau, à droite depuis le haut** (#9145) — la plaque
+    /// **Les options du pinceau, au-dessus de la barre de dessin** (#9145,
+    /// #13839 : la barre est en bas, son panneau s'ouvre contre elle) — la plaque
     /// de l'édition en place, avec le panneau d'options du SDK : le contrôleur
-    /// touché dans la colonne de droite s'y déplie, la scène ne remonte plus.
+    /// touché dans la barre s'y déplie, la scène ne remonte plus.
     var sceneDrawingOptionsPanel: AnyView? {
         guard ComposerFirstView.trailingPanelShowsDrawingOptions(
             drawing: viewModel.isDrawingActive,
             expandedTool: viewModel.drawingEditingMode.expandedTool != nil,
             strokeSelected: viewModel.drawingEditingMode.selectedStrokeId != nil) else { return nil }
-        return AnyView(ComposerTrailingOptionsPlate(plateauTint: tint.color) {
+        return AnyView(ComposerTrailingOptionsPlate(plateauTint: tint.color, preferredEdge: .bottom) {
             MeeshyToolOptionsPanel(viewModel: viewModel)
         })
     }

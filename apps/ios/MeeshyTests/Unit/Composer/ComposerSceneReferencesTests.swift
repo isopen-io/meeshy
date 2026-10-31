@@ -160,7 +160,7 @@ final class ComposerSceneReferencesTests: XCTestCase {
     /// CÂBLAGE : les deux vues rendent correctement ce qu'on leur donne.
     func test_neitherBandIsPaintedInThePlateauGround() throws {
         let surface = try source("ComposerSceneSurface.swift")
-        for montage in ["ComposerSceneSoundHeader(", "ComposerSceneReferenceFooter("] {
+        for montage in ["ComposerSceneReferenceFooter("] {
             guard let debut = surface.range(of: montage) else {
                 return XCTFail("\(montage) n'est plus monté")
             }
@@ -205,7 +205,7 @@ final class ComposerSceneReferencesTests: XCTestCase {
     /// aujourd'hui et écrite en dur redeviendrait fausse au premier autre ratio.
     func test_bothBandsTakeTheirLeadingEdgeFromTheSameMeasuredSource() throws {
         let surface = try source("ComposerSceneSurface.swift")
-        for montage in ["ComposerSceneSoundHeader(", "ComposerSceneReferenceFooter("] {
+        for montage in ["ComposerSceneReferenceFooter("] {
             guard let debut = surface.range(of: montage) else {
                 return XCTFail("\(montage) doit être monté")
             }

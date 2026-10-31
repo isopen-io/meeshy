@@ -143,3 +143,9 @@ Chaque lot se prouve ainsi : témoins XCTest rouges puis verts (`test_{méthode}
 - `MediaEditTool.split`, hors contrat.
 - Les surfaces mood et document gardent leur plateau. Le compositeur de story et le compositeur de post à scène adoptent la disposition.
 - Décuire un média que l'ancienne retouche a déjà cuit : c'est impossible.
+
+## Addendum du coordinateur (2026-10-30) : rétrocompatibilité du modèle non destructif (L2, #13840)
+
+- **Ce qui est publié, chaque lecteur déjà en circulation sait le peindre.** Les réglages que les lecteurs lisent déjà comme métadonnées (`StoryFilter`, réglages, rognage, découpe : iOS des stores, Android, web) restent des métadonnées, comme aujourd'hui. Ce qu'aucun lecteur actuel ne sait peindre (look et cadres de l'appel, effets de la retouche) se cuit dans les octets envoyés, à la publication seulement, pour que les lecteurs déjà publiés voient exactement ce que l'auteur a composé. Les textes, stickers, son et dessin restent des calques de la scène.
+- **Les réglages non destructifs vivent dans le BROUILLON** (et, s'ils voyagent avec la story pour permettre une recomposition, dans un champ optionnel). Le serveur doit l'accepter sans le valider strictement, et tout lecteur doit l'ignorer pour se fier au fichier cuit. Si ce champ part au serveur, vérifie que le schéma de la passerelle (packages/shared, routes stories/posts) ne le rejette pas et ne casse aucun ancien client. Sinon, garde-le local au brouillon.
+- **Le même modèle sera porté sur Android (#13841)** à partir de ce que L2 écrit. Décris donc le format (champs, valeurs, défauts, versions) dans la spec § 3, pour qu'Android le reproduise à l'identique.

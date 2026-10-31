@@ -4,6 +4,11 @@ import MeeshyUI
 
 // MARK: - La géographie des rails de la scène plein écran (#8713, #8714)
 //
+// **Close par #13839** : au repos, plus de rail gauche ni de colonne droite.
+// L'éclair et le Cadre vivent dans ⋯ (Animation, Cadrage du fond), le (+) dans
+// « ⋯ › Ajouter une diapo », défaire / rétablir en haut de la scène. La
+// colonne droite ci-dessous ne sert plus que l'outil ouvert et l'objet touché.
+//
 // > Directive porteur 2026-09-29 : « change l'emplacement de l'icône
 // > animé/éclair pour la mettre après la géolocalisation et mets à sa place le
 // > bouton (+) pour créer une nouvelle scène ; de même l'icône qui est au-dessus

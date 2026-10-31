@@ -205,7 +205,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var drawingWidth: CGFloat = 5
     /// Pinceau actif pour la capture en mode dessin flottant (`StrokeCaptureLayer`).
     /// La couleur et la largeur du pinceau réutilisent `drawingColor`/`drawingWidth`.
-    @Published var activeBrushTool: StrokeTool = .pen
+    @Published public var activeBrushTool: StrokeTool = .pen
     @Published var activeBrushSmoothing: StrokeSmoothing = .raw
     /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.

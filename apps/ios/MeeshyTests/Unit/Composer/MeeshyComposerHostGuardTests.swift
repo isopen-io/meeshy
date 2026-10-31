@@ -2384,8 +2384,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
         XCTAssertEqual(occurrences(of: compact("ComposerFormatFan("), in: code), 0,
                        "L'éventail du haut est retiré (#6502).")
+        // Depuis #13839, la flèche monte le menu par `ComposerPublishChevron`,
+        // qui le porte hors du gate de matière.
         XCTAssertEqual(
-            occurrences(of: compact("ComposerPublishMenu("), in: code), 1,
+            occurrences(of: compact("ComposerPublishChevron("), in: code), 1,
             "Le menu de publication est monté à UN seul endroit — la flèche du socle."
         )
     }

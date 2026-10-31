@@ -100,50 +100,24 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
 
     // MARK: - Les deux rangées
 
-    func test_sideRow_enStory_porteLesQuatreOutilsDeplaces() {
-        let gauche = ComposerSceneFloatingRail.sideRow(from: ComposerRailDoor.canonicalRail,
-                                                       format: .story)
-        for porte in outilsMobiles {
-            XCTAssertTrue(gauche.contains(porte), "\(porte.rawValue) manque au rail gauche en Story")
+    /// **Le témoin INVERSE des deux rangées** (#13839) : les outils qui
+    /// changeaient de côté selon le format vivent désormais dans ⋯, quel que
+    /// soit le format — le lieu, le hashtag et la mention ne quittent jamais
+    /// un chemin.
+    func test_lesOutilsMobiles_viventDansPlus_surChaqueFormat() {
+        for format in [ComposerFormat.story, .post, .reel] {
+            let portes = ComposerRailDoor.offered(served: Set(ComposerRailDoor.canonicalRail),
+                                                  format: format, allowsCapture: true)
+            let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
+                                                            offeredDoors: portes, offersPostBody: false,
+                                                            overflow: []))
+                .compactMap(\.door)
+            for porte in outilsMobiles where portes.contains(porte) {
+                XCTAssertTrue(plus.contains(porte), "\(format) : \(porte.rawValue) manque à ⋯")
+            }
+            let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
+            XCTAssertTrue(Set(colonne).isDisjoint(with: Set(outilsMobiles)), "\(format)")
         }
-    }
-
-    func test_lowRow_enPost_porteLesTroisOutilsDeplaces() {
-        let bas = ComposerSceneFloatingRail.lowRow(from: ComposerRailDoor.canonicalRail,
-                                                   format: .post)
-        for porte in outilsMobiles {
-            XCTAssertTrue(bas.contains(porte), "\(porte.rawValue) manque à la rangée du bas en Post")
-        }
-    }
-
-    /// La partition tient sur CHAQUE format — c'est la propriété qui empêche
-    /// qu'une porte se perde entre deux rangées ou s'y montre deux fois.
-    ///
-    /// **TROIS places depuis #8370** : la porte du corps du post a quitté la
-    /// rangée basse pour le SOCLE (directive porteur 2026-09-27). La partition
-    /// se compte donc sur le côté, le bas ET le socle — sans quoi elle
-    /// s'y perdrait sans que rien ne le dise.
-    func test_lesTroisPlacesFormentUnePartition_surChaqueFormat() {
-        for format in ComposerFormat.allComposable {
-            let toutes = ComposerRailDoor.canonicalRail
-            let gauche = ComposerSceneFloatingRail.sideRow(from: toutes, format: format)
-            let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: format)
-            let socle = toutes.filter { $0 == ComposerSceneFloatingRail.socleDoor
-                                        && !gauche.contains($0) }
-            XCTAssertEqual(gauche.count + bas.count + socle.count, toutes.count, "\(format)")
-            XCTAssertTrue(Set(gauche).isDisjoint(with: Set(bas)), "\(format)")
-            XCTAssertFalse(bas.contains(ComposerSceneFloatingRail.socleDoor),
-                           "\(format) : le corps du post ne se peint pas deux fois")
-            XCTAssertEqual(Set(gauche).union(bas).union(socle), Set(toutes), "\(format)")
-        }
-    }
-
-    /// **La bascule doit se VOIR** : les deux rangées d'une Story et celles d'un
-    /// Post ne peuvent pas être identiques, sinon la règle ne fait rien.
-    func test_laGeographieDunePostEtDuneStorySontDifferentes() {
-        let toutes = ComposerRailDoor.canonicalRail
-        XCTAssertNotEqual(ComposerSceneFloatingRail.sideRow(from: toutes, format: .story),
-                          ComposerSceneFloatingRail.sideRow(from: toutes, format: .post))
     }
 
     // MARK: - Ce que chaque format OFFRE

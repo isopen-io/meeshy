@@ -67,11 +67,17 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
         let rail = try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerTrailingRail.swift")
 
-        // Le `⋯` — le cas du porteur, sur ses DEUX sites de montage.
+        // Le `⋯` du DOCUMENT interroge ses entrées servies : un menu vide n'est
+        // pas monté. Celui de la SCÈNE (#13839) ne disparaît jamais — il porte
+        // Animation, Durée et Légende, servies en toute circonstance.
         XCTAssertEqual(
-            occurrences(of: "documentOverflowEntries.isEmpty", in: surfaces), 2,
-            "les deux montages du `⋯` interrogent les entrées servies : un menu vide n'est pas monté"
+            occurrences(of: "documentOverflowEntries.isEmpty", in: surfaces), 1,
+            "le montage du `⋯` du document interroge les entrées servies : un menu vide n'est pas monté"
         )
+        XCTAssertFalse(ComposerMoreMenuPolicy.entries(.init(addsSlides: false, backgroundMedia: nil,
+                                                            offeredDoors: [], offersPostBody: false,
+                                                            overflow: [])).isEmpty,
+                       "le ⋯ de la scène est toujours monté : il ne peut jamais s'ouvrir sur rien")
         // Annuler / rétablir — rien à défaire, rien à peindre.
         //
         // **La loi tient, l'EXPRESSION a changé** (#4586) : l'historique a quitté

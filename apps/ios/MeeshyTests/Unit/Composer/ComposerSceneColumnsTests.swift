@@ -22,9 +22,8 @@ final class ComposerSceneColumnsTests: XCTestCase {
     }
 
     func test_anchor_rangeeQuiPorteLeLieu_seRangeApresLeLieu() {
-        let story = ComposerSceneFloatingRail.sideRow(
-            from: ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors, format: .story, allowsCapture: true),
-            format: .story)
+        let story = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors, format: .story, allowsCapture: true)
+            .filter { $0.level(for: .story).appearsOnCanvas }
         XCTAssertTrue(story.contains(.place), "prémisse : en Story, le lieu vit à gauche")
         XCTAssertEqual(ComposerLeadingSceneToggles.anchor(in: story), .place)
     }

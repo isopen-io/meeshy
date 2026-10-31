@@ -93,35 +93,37 @@ final class ComposerSceneSurfaceTests: XCTestCase {
         }
     }
 
-    /// La surface de scène, elle, les porte — sinon les deux vues de rail
-    /// n'auraient toujours aucun site de montage.
-    func test_laSurfaceDeScene_monteLesDeuxRails() throws {
+    /// **Le témoin INVERSE de « la surface de scène monte les deux rails »**
+    /// (#13839, directive porteur du 2026-10-30). Le rail gauche à glyphes est
+    /// parti : le repos se pose SUR la scène par `ComposerSceneOverlayChrome`.
+    /// La colonne droite reste pour un outil ouvert ou un objet touché, le temps
+    /// que la barre d'actions de L5 la remplace.
+    func test_laSurfaceDeScene_poseLeReposSurLaScene_sansRailGauche() throws {
         let s = compact(try source("ComposerSceneSurface.swift"))
-        XCTAssertTrue(s.contains("ComposerLeadingRail("))
+        XCTAssertFalse(s.contains("ComposerLeadingRail("), "le rail gauche à glyphes est revenu sur la scène")
+        XCTAssertTrue(s.contains("ComposerSceneOverlayChrome("))
         XCTAssertTrue(s.contains("ComposerTrailingRail("))
     }
 
-    /// L'encastrement se lit de la RÈGLE, et `railsShown: true` DIT ce que
-    /// cette surface est — une scène a ses rails.
-    func test_laSurfaceDeScene_encastreParLaRegle() throws {
-        // La respiration de la carte est la marge de bord de la RÈGLE
-        // (`edgeMargin(roomy:)`, qui vaut `floatingInset` sur téléphone) —
-        // jamais un littéral.
+    /// **Le témoin INVERSE de l'encastrement** : plus de carte ni de couloir.
+    /// La scène est le plus grand 9:16 de la zone, et un panneau du bas la
+    /// RÉDUIT par une échelle — jamais par une marge qui relancerait la mise en
+    /// page du canvas.
+    func test_laSurfaceDeScene_neReserveAucunCouloir_etSeReduitParUneEchelle() throws {
         let code = compact(try source("ComposerSceneSurface.swift"))
-        XCTAssertTrue(code.contains("ComposerRailGeometry.edgeMargin(roomy:isRoomy)"))
-        XCTAssertTrue(code.contains(".padding(.horizontal,edge)"))
-        XCTAssertEqual(ComposerRailGeometry.edgeMargin(roomy: false),
-                       ComposerRailGeometry.sceneInset(railsShown: true),
-                       "Sur téléphone, la marge de bord EST l'encastrement de la scène.")
+        XCTAssertTrue(code.contains("ComposerSceneFit.frame(in:"))
+        XCTAssertTrue(code.contains("ComposerSceneFit.lift(scene:"))
+        XCTAssertTrue(code.contains(".scaleEffect(lift.scale"))
+        XCTAssertFalse(code.contains(".padding(.bottom,sceneLiftInset)"),
+                       "une marge basse relance la mise en page du canvas à chaque image du geste")
+        XCTAssertFalse(code.contains("ComposerTopBar.height"), "la scène ne réserve plus la barre haute")
     }
 
-    /// **La barre haute est PARTAGÉE, pas recopiée.** Deux copies auraient
-    /// divergé au premier ajustement — c'est la raison même de l'extraire
-    /// avant de séparer les surfaces.
-    func test_lesDeuxSurfaces_partagentLaBarreHaute() throws {
-        for fichier in ["ComposerSceneSurface.swift", "ComposerDocumentSurface.swift"] {
-            XCTAssertTrue(compact(try source(fichier)).contains("ComposerTopBar("),
-                          "\(fichier) doit CONSOMMER la barre, jamais la redessiner.")
-        }
+    /// **La barre haute reste au document, plus à la scène** : ✕, la rangée
+    /// des diapos et ↶ ↷ se posent sur la scène.
+    func test_laBarreHaute_resteAuDocument_quitteLaScene() throws {
+        XCTAssertTrue(compact(try source("ComposerDocumentSurface.swift")).contains("ComposerTopBar("))
+        XCTAssertFalse(compact(try source("ComposerSceneSurface.swift")).contains("ComposerTopBar("),
+                       "la barre haute est revenue au-dessus de la scène")
     }
 }

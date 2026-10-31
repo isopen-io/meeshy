@@ -557,6 +557,12 @@ nonisolated enum ComposerOverflowPolicy {
     }
 }
 
+nonisolated extension ComposerOverflowEntry {
+    /// La seule entrée destructrice demande confirmation, dans chaque ⋯ qui la
+    /// sert (#13839).
+    var asksConfirmation: Bool { self == .clearAll }
+}
+
 /// Libellés du `⋯`, résolus par le catalogue `.main` — même idiome que
 /// `ComposerFormatCopy`. Écrits ici plutôt qu'en littéraux dans la vue : un
 /// libellé posé en ligne échappe au cliquet de complétude et n'est jamais

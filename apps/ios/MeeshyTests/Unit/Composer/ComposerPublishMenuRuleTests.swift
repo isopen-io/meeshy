@@ -355,10 +355,28 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
     func test_laFleche_monteLeMenu() throws {
         let code = try hostCode()
         let fleche = try XCTUnwrap(bloc("var publishButton", dans: code))
-        XCTAssertTrue(compact(fleche).contains("ComposerPublishMenu("),
+        XCTAssertTrue(compact(fleche).contains("ComposerPublishChevron("),
                       "La flèche porte le menu : c'est là que l'auteur sait ce qu'il publie.")
         XCTAssertTrue(compact(fleche).contains("publishCapsule("),
                       "…dans l'habillage partagé, qui porte le gate.")
+    }
+
+    /// **Le chevron CHOISIT, il ne publie pas** (M2) : une scène encore vide
+    /// peut déjà devenir un post ou un réel (#13839, maquette état 1). Seul
+    /// l'envoi en cours le fige.
+    func test_leChevron_resteOuvert_quandPublierEstRefuse() {
+        XCTAssertTrue(ComposerPublishMenuRule.chevronIsEnabled(isPublishing: false))
+        XCTAssertFalse(ComposerPublishMenuRule.chevronIsEnabled(isPublishing: true))
+    }
+
+    func test_leChevron_echappeAuGateDeMatiere() throws {
+        let code = try hostCode()
+        let fleche = compact(try XCTUnwrap(bloc("var publishButton", dans: code)))
+        XCTAssertTrue(fleche.contains("chevron:publishMenuEntries.map"),
+                      "le chevron est encore DANS le contenu grisé : une scène vide ne peut pas choisir son type")
+        let habillage = compact(try XCTUnwrap(bloc("func publishCapsule<Contenu: View>", dans: code)))
+        XCTAssertTrue(habillage.contains(".disabled(!ComposerPublishMenuRule.chevronIsEnabled("),
+                      "le chevron hors du gate doit rester figé pendant l'envoi")
     }
 }
 

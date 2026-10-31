@@ -337,10 +337,18 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         // **La moitié « et nulle part ailleurs », désormais VÉRIFIABLE.** Les
         // deux surfaces consomment la barre ; qu'aucune ne nomme le rail est ce
         // qui garantit qu'il n'en existe qu'un.
+        // Depuis #13839, la scène ne monte plus la barre haute : elle relaie le
+        // MÊME slot à son chrome du repos (`ComposerSceneOverlayChrome`), qui
+        // le pose entre ✕ et ↶ ↷ dès deux diapos. Un seul rail, deux places.
+        let reposDeScene = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: reposDeScene), 0,
+                       "le chrome du repos redéclare un rail de slides au lieu de relayer le slot")
         for surface in ["ComposerDocumentSurface.swift", "ComposerSceneSurface.swift"] {
             let code = try source(surface)
-            XCTAssertTrue(code.contains("ComposerTopBar("),
-                "\(surface) doit CONSOMMER la barre — sinon cette garde ne dit rien de cette surface.")
+            let monteLeSlot = surface == "ComposerSceneSurface.swift"
+                ? code.contains("slideRow: slideRailSlot") : code.contains("ComposerTopBar(")
+            XCTAssertTrue(monteLeSlot,
+                "\(surface) doit RELAYER le rail injecté — sinon cette garde ne dit rien de cette surface.")
             // Là encore l'IDENTIFIANT, pas la sous-chaîne — et ici la nuance PORTE
             // l'architecture : les deux surfaces déclarent bien `slideRailSlot`,
             // un slot OPAQUE qu'elles relaient sans rien savoir du rail (une

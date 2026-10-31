@@ -4,6 +4,11 @@ import MeeshyUI
 /// **La géométrie des deux rails, et la largeur qu'ils laissent à la scène**
 /// (#4061, planche rév. 27 § P4).
 ///
+/// **Depuis #13839, la scène ne cède plus de couloir** : elle est le plus grand
+/// 9:16 de la zone sûre (`ComposerSceneFit`) et le repos se pose DESSUS
+/// (`ComposerSceneOverlayChrome`). Cette géométrie ne mesure plus que la
+/// colonne droite d'un outil ou d'un objet ouvert, et la surface document.
+///
 /// ## Pourquoi une règle, et pas un `.padding`
 ///
 /// Le nombre à poser n'est pas un goût de marge, c'est une CONSÉQUENCE : un rail
