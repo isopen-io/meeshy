@@ -99,4 +99,20 @@ describe('runRelationCatchUp — toutes les paires actives de la semaine glissan
     expect(report.cancelled).toBe(1);
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
   });
+
+  it('saute sans l’évaluer une paire déjà au moins Connaissance par une demande : rien ne peut y changer', async () => {
+    const friends = {
+      id: 'aa0000000000000000000098', userLowId: A, userHighId: B, grantedByLow: 'FRIEND', grantedByHigh: 'CLOSE',
+      levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'request', transitions: [],
+    };
+    const store = pairInteractionStore({ days: [qualifyingRow(A, B), qualifyingRow(C, D)], users, relations: [friends] });
+
+    const report = await runRelationCatchUp({ prisma: store.prisma, now: () => NOW });
+
+    expect(report).toMatchObject({ pairs: 2, skipped: 1, created: 1 });
+    expect(store.relations().map((r) => [r.userLowId, r.grantedByLow, r.grantedByHigh])).toEqual([
+      [A, 'FRIEND', 'CLOSE'],
+      [C, 'ACQUAINTANCE', 'ACQUAINTANCE'],
+    ]);
+  });
 });

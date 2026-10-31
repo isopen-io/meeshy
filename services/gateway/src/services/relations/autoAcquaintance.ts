@@ -72,7 +72,7 @@ async function loadWindow(deps: AutoAcquaintanceDeps, pair: { userLowId: string;
   return rows.map((row) => pairDayFromRow(row as Record<string, unknown>));
 }
 
-const isOwnAcquaintance = (row: { origin?: string | null; grantedByLow?: string | null; grantedByHigh?: string | null } | null): boolean =>
+export const isOwnAcquaintance = (row: { origin?: string | null; grantedByLow?: string | null; grantedByHigh?: string | null } | null): boolean =>
   row?.origin === 'auto-acquaintance' && row.grantedByLow === 'ACQUAINTANCE' && row.grantedByHigh === 'ACQUAINTANCE';
 
 async function cancelIfAutomatic<R extends 'blocked' | 'minor'>(
