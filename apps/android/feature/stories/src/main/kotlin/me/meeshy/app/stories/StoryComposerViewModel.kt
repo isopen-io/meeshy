@@ -701,7 +701,7 @@ class StoryComposerViewModel @Inject constructor(
         val alone = baked.copy(format = format, checkedFormats = emptyList())
         val language = resolvePublishLanguage()
         if (alone.variant.channel == ComposerPublishChannel.DOCUMENT) {
-            checkNotNull(publications).enqueueScene(alone, publishPlans(alone, language, alone.postSceneSlides), language)
+            checkNotNull(publications).enqueueScene(alone, publishPlans(alone, language, alone.postScenesWithBackdrops()), language)
             return emptyList()
         }
         return publishPlans(alone, language).mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }

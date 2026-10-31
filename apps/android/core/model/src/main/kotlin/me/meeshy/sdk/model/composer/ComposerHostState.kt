@@ -95,11 +95,12 @@ data class ComposerHostState(
         get() = ComposerFormatAvailability.verdicts(profile(reel = true).offeredFormats, offeredFormats, carriesMoreThanText)
 
     /**
-     * The layouts the menu offers for what is composed now — empty (no section) unless the post publishes a document of
-     * several scenes (#13863 R2): the control exists exactly where the publication carries its choice.
+     * The layouts the menu offers for what is composed now — empty (no section) unless a checked post publishes a document
+     * of several scenes (#13863 R2, #13921), even behind a story the scene follows: the control exists exactly where the
+     * publication carries its choice.
      */
     val layoutChoices: List<MosaicLayoutMode>
-        get() = ComposerFormatVariant.of(selectedFormat).layouts(sceneCount)
+        get() = publishedFormats.flatMap { ComposerFormatVariant.of(it).layouts(sceneCount) }.distinct()
 
     /** Only an offered layout can be armed; anything else leaves the state untouched. */
     fun chooseLayout(mode: MosaicLayoutMode): ComposerHostState = if (mode in layoutChoices) copy(layout = mode) else this

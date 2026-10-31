@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerMosaicChoice
 import me.meeshy.sdk.model.composer.ComposerPostTextPolicy
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -83,6 +84,25 @@ internal val StorySlide.composesPostScene: Boolean
 /** Les diapos que le post publie, dans l'ordre : ses scènes. */
 internal val StoryComposerUiState.postSceneSlides: List<StorySlide>
     get() = deck.slides.filter { it.composesPostScene }
+
+/**
+ * Les scènes que le post publie, chacune avec son FOND (#13921, miroir du document qu'iOS publie, `post-photo-scenes-2`) :
+ * là où la disposition voyage, le média que le plateau peint en fond d'une scène part comme son fond désigné. Sans cela, une
+ * scène faite d'une seule photo ne porte aucun objet, le post repart en galerie et la disposition choisie se perd.
+ */
+internal fun StoryComposerUiState.postScenesWithBackdrops(): List<StorySlide> {
+    val slides = postSceneSlides
+    if (ComposerMosaicChoice.offered(slides.size, format).isEmpty()) return slides
+    val known = attachments.mapTo(mutableSetOf()) { it.id } + pendingUploads.map { it.cmid }
+    return slides.map { slide -> slide.withBackdropDesignated(known) }
+}
+
+private fun StorySlide.withBackdropDesignated(known: Set<String>): StorySlide {
+    if (backgroundMediaId != null) return this
+    val posed = placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+    val backdrop = mediaIds.firstOrNull { it !in posed && it in known } ?: return this
+    return copy(backgroundMediaId = backdrop)
+}
 
 /** Une scène vierge, dans le format que l'hôte compose : abandonner ou publier ne change pas de format. */
 internal fun StoryComposerUiState.blankKeepingFormat(): StoryComposerUiState =
