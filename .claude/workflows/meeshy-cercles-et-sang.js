@@ -93,9 +93,17 @@ const LOTS_PAR_DEFAUT = [
     depend: [] },
   { cle: 'rel-loi-acces', chaine: 'serveur', jalon: 1, sensible: true,
     titre: 'Une seule loi dit ce qu\'un viewer peut voir ou faire d\'une personne selon leur cercle commun',
-    critere: "packages/shared/utils/relation-access.ts exporte resolveRelationAccess({ viewer, target, feature }) (niveau effectif = minimum des deux sens, blocage ⇒ rien, mineur ↔ majeur fail-closed) et la matrice niveau → feature lue d'une CONFIG (packages/shared/config/relation-levels.ts : libellés par clé i18n, icônes, seuils — abaissables sur staging) ; miroir Swift (MeeshySDK, Relations/RelationAccess.swift) et Kotlin (apps/android/core/model/.../relation/RelationAccess.kt) avec les MÊMES cas de témoins ; une garde (sur le modèle de presence-visibility-viewer-aware-guard.test.ts) interdit qu'un service réécrive la boucle de niveaux ; resolvePresenceVisibility devient une PROJECTION de cette loi sans changer de comportement à ce lot ; services/friendship.ts devient le site UNIQUE du niveau effectif (niveauEffectif / niveauxParmi) et les SIX copies locales de « amis acceptés » (PostFeedService, SocialEventsHandler, DuoService, contact-recently-active, contact-joined, profile-discoverability) le consomment",
+    critere: "packages/shared/utils/relation-access.ts exporte resolveRelationAccess({ viewer, target, feature }) (niveau effectif = minimum des deux sens, blocage ⇒ rien, mineur ↔ majeur fail-closed) et la matrice niveau → feature lue d'une CONFIG (packages/shared/config/relation-levels.ts : libellés par clé i18n, icônes, seuils — abaissables sur staging) ; les cas de témoins sont écrits dans un fichier de cas partagé (packages/shared/config/relation-access-cases.json) que les miroirs Swift et Kotlin rejouent (sous-lots @ios, @android) ; une garde (sur le modèle de presence-visibility-viewer-aware-guard.test.ts) interdit qu'un service réécrive la boucle de niveaux ; resolvePresenceVisibility devient une PROJECTION de cette loi sans changer de comportement à ce lot ; services/friendship.ts devient le site UNIQUE du niveau effectif (niveauEffectif / niveauxParmi) et les SIX copies locales de « amis acceptés » (PostFeedService, SocialEventsHandler, DuoService, contact-recently-active, contact-joined, profile-discoverability) le consomment",
     existe: "services/friendship.ts (62 l) amitieAcceptee (:16) / amisAcceptesParmi (:41), utilisée par 10 fichiers ; SIX copies locales à CONVERGER : PostFeedService.getFriendIds (:1036, cache Redis feed:friends:), SocialEventsHandler.getFriendIds (:115), DuoService.areFriends (:130), contact-recently-active.ts acceptedFriendIds (:133), contact-joined.ts acceptedFriendsOf (:119), profile-discoverability.ts acceptedFriendsAmong (:46) ; PresenceVisibilityService.acceptedFriendIds (:152) ; communauté : communityVisibility.ts doUsersShareCommunity (:57) ; blocage : utils/blocking.ts isBlockedBetween (:21) ; resolvePresenceVisibility (presence-visibility.ts:50) prend areConnected:boolean",
     depend: ['rel-modele'] },
+  { cle: 'rel-loi-acces@ios', chaine: 'ios', jalon: 1, issueDe: 'rel-loi-acces',
+    titre: 'Le SDK iOS porte le miroir de la loi d\'accès par cercle',
+    critere: "MeeshySDK Relations/RelationAccess.swift (RelationLevel, ordre, niveau effectif = minimum, blocage, mineur fail-closed) rejoue les cas de packages/shared/config/relation-access-cases.json en Swift Testing ; le miroir ne décide d'aucun accès, il sert à ne pas proposer une action que le serveur refusera ; preuve : sdk-tests.yml vert sur la PR",
+    existe: "FriendshipCache.swift (FriendshipStatus :5), FriendModels.swift ; aucun niveau", depend: ['rel-loi-acces'] },
+  { cle: 'rel-loi-acces@android', chaine: 'android', jalon: 1, issueDe: 'rel-loi-acces',
+    titre: 'Android porte le miroir de la loi d\'accès par cercle',
+    critere: "apps/android/core/model/.../relation/RelationAccess.kt rejoue les mêmes cas (relation-access-cases.json copié en ressource de test par la CI, ou lu depuis le dépôt) en tests JVM ; assembleDebug + testDebugUnitTest verts sur android.yml",
+    existe: "core/model/.../friend/UserRelationship.kt (FriendshipStatus :9), sdk-core/.../friend/UserRelationshipResolver.kt", depend: ['rel-loi-acces@ios'] },
   { cle: 'presence-ami-binaire', chaine: 'serveur', jalon: 1, sensible: true,
     titre: 'Un Ami voit seulement « en ligne » ou rien ; un Proche voit la présence détaillée',
     critere: "resolvePresenceVisibility (via resolveRelationAccess) rend pour un viewer de niveau effectif FRIEND : online:true quand la cible est en ligne, sinon RIEN (ni lastActiveAt, ni away/idle, ni « vu il y a ») ; CLOSE et au-dessus : la présence complète (règle 1/3/5) ; sous FRIEND : rien (directive 2026-08-25 inchangée) ; user:status, presence:snapshot, les routes users et conversations, et les sélections/tris (OnlineOnlyScope, servedOnline, mayOrderByRawPresence, servedOnlineFirst) restent alignés sur la valeur SERVIE — ce qui part À CÔTÉ (lastActiveAt voisin, colonnes de la ligne) est gardé ; contact_recently_active (#8285) inchangé ; ADR services/gateway/decisions/2026-10-31-*.md ; § « User Presence » du CLAUDE.md racine mis à jour ; garde presence-visibility-viewer-aware-guard.test.ts étendue ; témoins gateway : un Ami ne reçoit jamais lastActiveAt, ni dans la charge ni dans un champ voisin",
@@ -580,6 +588,18 @@ ${candidats.map(ligneDeLot).join('\n')}`,
   phase('Ouvrir')
   // -------------------------------------------------------------------------
   const aOuvrir = [...new Map([...aFaire, ...enPr, ...bloques].map((l) => [cleIssue(l), l])).values()].filter((l) => !numeros[cleIssue(l)])
+  const aInventorier = aFaire.filter((l) => numeros[cleIssue(l)] && verdicts.get(l.cle) && verdicts.get(l.cle).inventaire)
+  if (aInventorier.length) {
+    await agent(`${socle('serveur')}
+
+TA MISSION — ÉCRIRE L'INVENTAIRE DE L'EXISTANT DU TOUR ${tour} DANS CHAQUE ISSUE DE LOT. Mécanique, exact, sans rien reformuler.
+Pour chaque lot ci-dessous, UN commentaire sur son issue (REST : \`gh api -X POST repos/${GH}/issues/<n>/comments -F body=@<fichier>\`), titré
+« Inventaire de l'existant — cadrage du tour ${tour} (${DATE}, origin/${BASE} ${synchro.sha_dev || '?'}) », qui recopie les quatre rubriques ; sauf s'il existe déjà un
+commentaire de même titre (\`gh api repos/${GH}/issues/<n>/comments --jq '.[].body' | grep -c "cadrage du tour ${tour}"\`).
+
+${aInventorier.map((l) => `### ${l.cle} → #${numeros[cleIssue(l)]}\n${listeInventaire(verdicts.get(l.cle).inventaire)}`).join('\n\n')}`,
+      { label: `inventorier:tour-${tour}`, phase: 'Ouvrir', model: MODELE.mecanique, effort: 'low' })
+  }
   if (aOuvrir.length) {
     const ouverture = await agent(`${socle('serveur')}
 
@@ -627,7 +647,8 @@ ${aOuvrir.map((l) => `${ligneDeLot(l)}\n  INVENTAIRE :\n${listeInventaire((verdi
       return { cle: l.cle, issue: num, arret: `dépendance non livrée : ${amontRate.map((a) => a.cle).join(', ')}` }
     }
     const contrats = amont.filter((a) => a.contrat).map((a) => `- ${a.cle} (branche ${a.branche}${a.pr ? `, PR #${a.pr}` : ''}) : ${a.contrat}`).join('\n')
-    const dernierSousLot = estSousLot(l) && !LOTS_PAR_DEFAUT.some((x) => x.issueDe === l.issueDe && (x.depend || []).includes(l.cle))
+    // Une issue à plusieurs lots (le lot racine et ses `@chaîne`) ne se ferme qu'au DERNIER fusionné : chaque livraison vérifie ses frères.
+    const freres = LOTS_PAR_DEFAUT.filter((x) => x.cle !== l.cle && cleIssue(x) === cleIssue(l)).map((x) => x.cle)
 
     // ---- Développer
     const fait = await agent(`${socle(l.chaine)}
@@ -693,7 +714,7 @@ RELIS, dans cet ordre :
     if (revue) log(`${l.cle} : revue ${revue.verdict} — ${revue.defauts_trouves.length} défauts, ${revue.corriges} corrigés, ${revue.restants.length} restants`)
 
     // ---- Auditeur adversarial (lots sensibles et leurs sous-lots)
-    const sensible = l.sensible || (estSousLot(l) && LOTS_PAR_DEFAUT.some((x) => x.cle === l.issueDe && x.sensible))
+    const sensible = l.sensible || (estSousLot(l) && taille !== 'petit' && LOTS_PAR_DEFAUT.some((x) => x.cle === l.issueDe && x.sensible))
     let audit = null
     if (sensible) {
       audit = await agent(`${socle(l.chaine)}
@@ -736,10 +757,10 @@ REVUE : ${revue ? revue.verdict : '(aucune)'}${audit ? ` ; AUDIT : ${audit.verdi
 ${restants.length ? `RESTANTS (dits dans la PR) :\n${court(restants, 2000)}` : ''}
 1. \`cd ${repo} && git checkout ${br} && git fetch origin ${BASE}\` ; ${BASE} a avancé ⇒ \`git merge origin/${BASE}\` (jamais rebase), garde les DEUX apports.
 2. GATES COMPLETS de la plateforme. Rouge causé par le lot ⇒ corrige (TDD). Rouge préexistant ⇒ prouvé par le run CI de ${BASE}, dit dans la PR.
-3. \`git status --short\` sans artefact. Commit final : ${estSousLot(l) && !dernierSousLot ? `\`Refs #${num || 'n'}\` (un autre sous-lot de l'issue reste à livrer)` : `\`Closes #${num || 'n'}\` si la revue n'est pas « a-refaire » (sinon wip + Refs, et dis pourquoi)`}${l.chaine === 'ios' ? ' — le SUJET du commit de TÊTE porte « run test » (sinon commit vide `test(ios): … — run test`)' : ''}.
+3. \`git status --short\` sans artefact. Commit final : ${freres.length ? `l'issue #${num || 'n'} porte aussi les lots ${freres.join(', ')} — \`Closes #${num || 'n'}\` SEULEMENT si leurs PR sont toutes fusionnées (\`gh api "repos/${GH}/pulls?state=closed&per_page=50" --jq '.[] | select(.merged_at) | .head.ref' | grep lot/\`), sinon \`Refs #${num || 'n'}\`` : `\`Closes #${num || 'n'}\` si la revue n'est pas « a-refaire » (sinon wip + Refs, et dis pourquoi)`}${l.chaine === 'ios' ? ' — le SUJET du commit de TÊTE porte « run test » (sinon commit vide `test(ios): … — run test`)' : ''}.
 4. \`git push -u origin ${br}\` (4 essais réseau ; non fast-forward ⇒ fetch + merge, jamais rebase).
 5. LA PR (REST, voir GITHUB) : corps = ce qui était absent ; l'INVENTAIRE (étendu / modifié / non touché / créé et pourquoi) ; ce qui est livré fichier par
-   fichier ; routes et événements (fichier:ligne) ; témoins ; gates et chiffres ; rouge préexistant ; ${estSousLot(l) && !dernierSousLot ? `Refs #${num || 'n'}` : `Closes #${num || 'n'}`} ;
+   fichier ; routes et événements (fichier:ligne) ; témoins ; gates et chiffres ; rouge préexistant ; le même \`Closes\`/\`Refs\` que le commit ;
    dimensions mûres / restantes ; puis la ligne d'attribution des PR.
    ${AUTO_MERGE && !bloquantRestant ? `Puis ATTENDS LE VERT (verdict CI, voir GITHUB) et fusionne par \`gh api -X PUT repos/${GH}/pulls/<n>/merge -f merge_method=merge\` ; un rouge causé par le lot se corrige puis on recommence (une fois) ; un rouge préexistant se dit et n'empêche pas ; pas de vert dans le délai ⇒ PR ouverte, dis-le.` : 'NE FUSIONNE PAS.'}
 ${l.chaine === 'android' ? "   Android : le vert d'android.yml (assembleDebug + testDebugUnitTest) est EXIGÉ — sans lui, pas de fusion, même si les autres checks sont verts." : ''}
