@@ -64,6 +64,7 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
         const val BACKGROUND_MEDIA_REPLACE = "background.media.replace"
         const val BACKGROUND_MEDIA_EDIT = "background.media.edit"
         const val MEDIA_PLACED_EDIT = "media.placed.edit"
+        const val MEDIA_SOUND = "media.sound"
 
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -109,7 +110,7 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
                         Entry("frames", "composer.capture.rail.frames", "square.dashed", "CheckBoxBlank", Offer.LOOK, Opens.BAND),
                         Entry("adjust", "composer.object.editor.adjust", "slider.horizontal.3", "Tune", Offer.ALWAYS, Opens.BAND),
                         Entry("effects", "composer.object.editor.effects", "sparkles", "Sparkles", Offer.IMAGE, Opens.BAND),
-                        Entry("sound", "composer.rail.title.sound", "speaker.wave.2", "VolumeUp", Offer.VIDEO, Opens.BAND),
+                        Entry("sound", "composer.rail.title.sound", "speaker.wave.2", "VolumeUp", Offer.VIDEO, Opens.LEVEL, MEDIA_SOUND),
                         Entry("loop", "story.timeline.inspector.loop", "repeat", "Repeat", Offer.VIDEO, Opens.TOGGLE),
                         Entry("rotate", "composer.object.editor.rotate", "rotate.right", "RotateRight", Offer.ALWAYS, Opens.ACTION),
                         Entry("description", "composer.object.editor.altText", "text.below.photo", "TextFields", Offer.ALWAYS, Opens.SHEET),
@@ -126,7 +127,7 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
                         Entry("frames", "composer.capture.rail.frames", "square.dashed", "CheckBoxBlank", Offer.LOOK, Opens.BAND),
                         Entry("adjust", "composer.object.editor.adjust", "slider.horizontal.3", "Tune", Offer.ALWAYS, Opens.BAND),
                         Entry("effects", "composer.object.editor.effects", "sparkles", "Sparkles", Offer.IMAGE, Opens.BAND),
-                        Entry("sound", "composer.rail.title.sound", "speaker.wave.2", "VolumeUp", Offer.VIDEO, Opens.BAND),
+                        Entry("sound", "composer.rail.title.sound", "speaker.wave.2", "VolumeUp", Offer.VIDEO, Opens.LEVEL, MEDIA_SOUND),
                         Entry("rotate", "composer.object.editor.rotate", "rotate.right", "RotateRight", Offer.ALWAYS, Opens.ACTION),
                         Entry("description", "composer.object.editor.altText", "text.below.photo", "TextFields", Offer.ALWAYS, Opens.SHEET),
                         Entry("set-as-background", "story.canvas.action.setAsBackground", "photo.on.rectangle", "Wallpaper", Offer.ALWAYS, Opens.ACTION),
@@ -135,6 +136,15 @@ data class ComposerEditTree(val schemaVersion: Int, val levels: List<Level>) {
                             Offer.ALWAYS, Opens.ACTION,
                         ),
                         Entry("make-sticker", "composer.selection.makeSticker", "person.crop.square.badge.camera", "Emoji", Offer.IMAGE, Opens.ACTION),
+                    ),
+                ),
+                Level(
+                    id = MEDIA_SOUND,
+                    kind = Kind.RAIL,
+                    title = "composer.rail.title.sound",
+                    entries = listOf(
+                        Entry("volume", "composer.capture.sound.volume", "speaker.wave.3", "VolumeUp", Offer.ALWAYS, Opens.BAND),
+                        Entry("mute", "composer.object.editor.mute", "speaker.slash", "VolumeOff", Offer.ALWAYS, Opens.TOGGLE),
                     ),
                 ),
             ),

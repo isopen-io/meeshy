@@ -110,7 +110,8 @@ enum ComposerEditRailCopy {
         case .backgroundEntry(let entree):
             return ComposerBackgroundModify.entry(entree).map(ComposerEditTreeCopy.label) ?? entree.rawValue
         case .adjustment(let kind): return ComposerAdjustCopy.label(kind)
-        case .mute:                 return ComposerObjectEditorCopy.mute
+        case .volume:               return ComposerMediaSound.entry(.volume).map(ComposerEditTreeCopy.label) ?? ""
+        case .mute:                 return ComposerMediaSound.entry(.mute).map(ComposerEditTreeCopy.label) ?? ""
         }
     }
 
@@ -124,7 +125,8 @@ enum ComposerEditRailCopy {
         case .keyframes:            return "diamond"
         case .backgroundEntry(let entree): return ComposerBackgroundModify.entry(entree)?.sfSymbol ?? "questionmark"
         case .adjustment(let kind): return kind.icon
-        case .mute:                 return "speaker.slash"
+        case .volume:               return ComposerMediaSound.entry(.volume)?.sfSymbol ?? "speaker.wave.3"
+        case .mute:                 return ComposerMediaSound.entry(.mute)?.sfSymbol ?? "speaker.slash"
         }
     }
 

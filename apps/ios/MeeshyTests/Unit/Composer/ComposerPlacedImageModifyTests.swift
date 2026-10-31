@@ -112,29 +112,37 @@ final class ComposerPlacedImageModifyTests: XCTestCase {
         XCTAssertEqual(temps.modifyPath, .closed)
     }
 
-    func test_onlyTheBackgroundAndThePlacedImage_modifyInLevels() {
+    func test_onlyTheBackgroundAndThePlacedMedia_modifyInLevels() {
         XCTAssertTrue(ComposerInlineFamily.image.modifiesInLevels)
+        XCTAssertTrue(ComposerInlineFamily.video.modifiesInLevels, "la vidéo posée, lot I-E4")
         XCTAssertTrue(ComposerInlineFamily.background(isVideo: true).modifiesInLevels)
-        for famille in [ComposerInlineFamily.video, .text, .audio, .sticker, .place] {
+        for famille in [ComposerInlineFamily.text, .audio, .sticker, .place] {
             XCTAssertFalse(famille.modifiesInLevels, "\(famille) : son lot viendra")
         }
     }
 
     // MARK: - La pile et le rail
 
-    func test_theStack_ofAPlacedImage_isActionsModifyThenN2() {
+    func test_theStack_ofAPlacedImage_isItsFlatRailThenN2_neverAModifyLevel() {
         let pile = ComposerEditRailStack.of(family: .image, editing: .modify, typing: false,
                                             above: [.backgroundAdjust(.tone)])
-        XCTAssertEqual(pile.levels, [.actions, .options(.modify), .backgroundAdjust(.tone)])
-        XCTAssertEqual(pile.railBack(), .popLevel)
+        XCTAssertEqual(pile.levels, [.actions, .backgroundAdjust(.tone)], "aucun niveau « Modifier » (#14048)")
+        XCTAssertEqual(pile.railBack(), .popLevel, "Retour descend d'UN niveau")
+        XCTAssertEqual(ComposerEditRailStack.of(family: .image, editing: .modify, typing: false).railBack(),
+                       .leaveEditing)
     }
 
-    func test_railItems_N1_areTheEntries_neverTheOldSectionsNorExtras() {
-        let entrees = ComposerEditRailItems.items(for: .options(.modify), actions: [], sections: [.media(.adjust)],
-                                                  extras: [.setAsBackground], keyframes: false,
+    func test_railItems_areTheToolsFlat_thenDuplicateTimeRemove_neverModifyNorTheOldSections() {
+        let entrees = ComposerEditRailItems.items(for: .actions, actions: [.modify, .duplicate, .time, .remove],
+                                                  sections: [.media(.adjust)], extras: [.setAsBackground],
+                                                  keyframes: false,
                                                   backgroundEntries: [.crop, .setAsBackground, .makeSticker])
-        XCTAssertEqual(entrees, [.back, .backgroundEntry(.crop), .backgroundEntry(.setAsBackground),
-                                 .backgroundEntry(.makeSticker)])
+        XCTAssertEqual(entrees, [.backgroundEntry(.crop), .backgroundEntry(.setAsBackground),
+                                 .backgroundEntry(.makeSticker), .action(.duplicate), .action(.time),
+                                 .action(.remove)])
+        XCTAssertEqual(ComposerEditRailItems.items(for: .actions, actions: [.modify, .remove], sections: [],
+                                                   extras: [], keyframes: false),
+                       [.action(.modify), .action(.remove)], "une famille sans outils à plat garde Modifier")
     }
 
     func test_railWords_areThoseOfTheTree_andOfTheScene() {

@@ -90,16 +90,18 @@ final class ComposerSelectionChromeTests: XCTestCase {
 
     func test_stack_selectingAnObject_posesItsActions_anOptionPosesItsLevelOnTop() {
         XCTAssertEqual(ComposerEditRailStack.of(family: .image, editing: nil, typing: false).levels, [.actions])
-        XCTAssertEqual(ComposerEditRailStack.of(family: .image, editing: .modify, typing: false).levels,
+        XCTAssertEqual(ComposerEditRailStack.of(family: .sticker, editing: .modify, typing: false).levels,
                        [.actions, .options(.modify)])
+        XCTAssertEqual(ComposerEditRailStack.of(family: .image, editing: .modify, typing: false).levels,
+                       [.actions], "image et vidéo posées : outils à plat, aucun « Modifier » (#14048)")
         XCTAssertEqual(ComposerEditRailStack.of(family: .text, editing: .time, typing: false).top, .options(.time))
     }
 
-    func test_stack_theBackground_posesItsLevel_thenModifyOnTop() {
+    func test_stack_theBackground_posesItsFlatLevel_neverModifyOnTop() {
         XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false)
                         .levels, [.background])
         XCTAssertEqual(ComposerEditRailStack.of(family: .background(isVideo: true), editing: .modify,
-                                                typing: false).levels, [.background, .options(.modify)])
+                                                typing: false).levels, [.background])
     }
 
     func test_stack_nothingOrTyping_isTheRest() {
@@ -108,7 +110,7 @@ final class ComposerSelectionChromeTests: XCTestCase {
     }
 
     func test_back_closesThePropertiesFirst_thenOneLevelAtATime_thenTheEdition() {
-        let pile = ComposerEditRailStack.of(family: .image, editing: .modify, typing: false)
+        let pile = ComposerEditRailStack.of(family: .sticker, editing: .modify, typing: false)
         XCTAssertEqual(pile.back(propertiesAreOpen: true), .closeProperties, "OK referme la feuille, le niveau reste")
         XCTAssertEqual(pile.back(propertiesAreOpen: false), .popLevel)
         let base = ComposerEditRailStack.of(family: .image, editing: nil, typing: false)
@@ -117,9 +119,10 @@ final class ComposerSelectionChromeTests: XCTestCase {
     }
 
     func test_railBack_descendsOneLevel_withItsSheet() {
-        let pile = ComposerEditRailStack.of(family: .image, editing: .modify, typing: false)
+        let pile = ComposerEditRailStack.of(family: .sticker, editing: .modify, typing: false)
         XCTAssertEqual(pile.railBack(), .popLevel, "le ‹ du rail ne s'arrête pas à la feuille")
-        let fond = ComposerEditRailStack.of(family: .background(isVideo: false), editing: .modify, typing: false)
+        let fond = ComposerEditRailStack.of(family: .background(isVideo: false), editing: .modify, typing: false,
+                                            above: [.backgroundAdjust(.tone)])
         XCTAssertEqual(fond.railBack(), .popLevel, "‹ redescend au niveau « Fond »")
         let n0 = ComposerEditRailStack.of(family: .background(isVideo: false), editing: nil, typing: false)
         XCTAssertEqual(n0.railBack(), .leaveEditing, "le niveau « Fond » parti, la scène revient")

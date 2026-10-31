@@ -75,11 +75,11 @@ struct ComposerSceneSelectionRelay {
             extras: edition.map(mediaExtras(for:)) ?? [],
             keyframes: edition?.purpose == .time
                 && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated),
-            backgroundEntries: backgroundEntries(edition),
+            backgroundEntries: backgroundEntries(id: selection.id, family: selection.family),
             adjustments: backgroundAdjustments(niveau))
         guard !entrees.isEmpty else { return nil }
         return ComposerSelectionColumn(level: niveau, items: entrees, openSection: edition?.openSection,
-                                       lit: backgroundLit(edition), onItem: { performRailItem($0) })
+                                       lit: backgroundLit(id: selection.id, family: selection.family), onItem: { performRailItem($0) })
     }
 
     // MARK: - Sélectionner, désélectionner
@@ -163,7 +163,9 @@ struct ComposerSceneSelectionRelay {
         case .backgroundEntry(let entree):
             performBackgroundModify(entree, on: id)
         case .adjustment(let kind):
-            performBackgroundAdjustment(kind)
+            performBackgroundAdjustment(kind, on: id)
+        case .volume:
+            performBackgroundVolume(on: id)
         case .mute:
             host.viewModel.toggleMediaMute(id: id)
             HapticFeedback.light()
