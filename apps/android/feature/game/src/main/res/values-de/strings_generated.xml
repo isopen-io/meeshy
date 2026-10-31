@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Sichtbar für</string>
     <string name="game_concept_fact_week">Woche</string>
     <string name="game_concept_fact_week_points">Funken der Woche</string>
+    <string name="game_concept_fact_window">Zeitraum</string>
     <string name="game_concept_fact_yes">Ja</string>
     <string name="game_concept_fact_zone">Bereich</string>
     <string name="game_concept_flame_how">Eine Aktion pro Tag nährt sie; eine Hüterin wacht einen Tag über sie.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">Eine Herausforderung ist eine Stufe in einer Familie von Aktionen.</string>
     <string name="game_detail_earned">Erhalten</string>
     <string name="game_detail_earned_on">Erhalten am %1$s</string>
+    <string name="game_detail_elan_active">In diesen Tagen aktiv</string>
+    <string name="game_detail_elan_how">Jede Aktion lässt Funken sprühen. Mehrere aktive Familien lösen einen Schwung aus.</string>
+    <string name="game_detail_elan_idle">In diesen Tagen nicht aktiv</string>
+    <string name="game_detail_elan_points">bis zu %1$s pro Aktion</string>
+    <string name="game_detail_elan_what">Eine Familie fasst ähnliche Aktionen zusammen.</string>
     <string name="game_detail_fact_atlas_pending">Das sind die Sprachen, in denen noch eine Nachricht fehlt, gesendet oder erhalten.</string>
     <string name="game_detail_fact_atlas_stamps">Das sind die Sprachen, in denen du einen Stempel hast, von allen im Atlas.</string>
     <string name="game_detail_fact_badges_earned">So viele Medaillen hast du erhalten, von allen, die es gibt.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Zwanzig Gestalten: eine alle zehn Level bis 100, dann eine je hundert, und die Singularität ab 1000.</string>
     <string name="game_detail_fact_trophies">So viele Trophäen stehen in deinem Regal.</string>
     <string name="game_detail_fact_week_points">Das sind die Funken seit Montag. Jede Woche beginnen sie wieder bei null.</string>
+    <string name="game_detail_gives_label">Was es bringt</string>
     <string name="game_detail_locked">Noch nicht erhalten</string>
     <string name="game_detail_obtain_label">So bekommst du es</string>
     <string name="game_detail_open">%1$s: Details ansehen</string>
@@ -1137,6 +1144,15 @@
     <string name="progression_axis_tool_reaction_counts">Jede Reaktion auf eine Nachricht.</string>
     <string name="progression_axis_tool_sticker">Gesetzte Sticker</string>
     <string name="progression_axis_tool_sticker_counts">Jeder Sticker in einer gesendeten Nachricht.</string>
+    <string name="progression_elan_base">Schwung ×%1$d — %2$s über %3$d Tage</string>
+    <string name="progression_elan_effect">Deine nächsten Aktionen bringen %1$d-mal mehr.</string>
+    <string name="progression_elan_factor">Schwung ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d aktive Familien</string>
+    <string name="progression_elan_family_one">1 aktive Familie</string>
+    <string name="progression_elan_standing">, plus dein Bestand</string>
+    <string name="progression_elans_empty">Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken.</string>
+    <string name="progression_elans_hint">Halte eine weitere Familie gleichzeitig am Laufen, um den Multiplikator auszulösen.</string>
+    <string name="progression_elans_title">Dein Schwung</string>
     <string name="progression_family_comment">Kommentare</string>
     <string name="progression_family_content">Erstellte Inhalte</string>
     <string name="progression_family_conversation">Unterhaltungen</string>

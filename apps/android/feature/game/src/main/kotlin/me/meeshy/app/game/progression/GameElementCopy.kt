@@ -5,6 +5,7 @@ import java.util.Locale
 import me.meeshy.app.game.GameCopy
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.feature.game.R
+import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
@@ -63,6 +64,26 @@ internal data class GameElementTexts(
                     starsSpoken = null,
                     ladder = emptyList(),
                     facts = listOf(GameFactText(res.getString(R.string.game_concept_defis_name), RevealCopy.sectionName(res, detail.entry.section))),
+                )
+                is GameElementDetail.ElanFamily -> GameElementTexts(
+                    name = res.getString(familyTitle(detail.family)),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(R.string.game_detail_elan_what),
+                    howTitle = res.getString(R.string.game_detail_gives_label),
+                    how = res.getString(R.string.game_detail_elan_how),
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = listOfNotNull(
+                        detail.topPoints?.let {
+                            GameFactText(res.getString(R.string.game_concept_points_name), res.getString(R.string.game_detail_elan_points, count(it, locale)))
+                        },
+                        detail.windowDays?.let {
+                            GameFactText(res.getString(R.string.game_concept_fact_window), GameCopy.resolve(res, GameCopyLaws.days(it), locale))
+                        },
+                    ),
                 )
                 is GameElementDetail.Fact -> GameElementTexts(
                     name = GameCopy.resolve(res, detail.label, locale),

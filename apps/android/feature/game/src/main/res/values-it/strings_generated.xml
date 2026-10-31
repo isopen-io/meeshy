@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Visibile a</string>
     <string name="game_concept_fact_week">Settimana</string>
     <string name="game_concept_fact_week_points">Scintille della settimana</string>
+    <string name="game_concept_fact_window">Finestra</string>
     <string name="game_concept_fact_yes">Sì</string>
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_how">Un gesto al giorno la alimenta; una Lucerna la custodisce per un giorno.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">Una sfida è un gradino da superare in una famiglia di gesti.</string>
     <string name="game_detail_earned">Ottenuto</string>
     <string name="game_detail_earned_on">Ottenuto il %1$s</string>
+    <string name="game_detail_elan_active">Attiva in questi giorni</string>
+    <string name="game_detail_elan_how">Ogni gesto fa scaturire scintille. Più famiglie attive fanno scattare uno slancio.</string>
+    <string name="game_detail_elan_idle">Non attiva in questi giorni</string>
+    <string name="game_detail_elan_points">fino a %1$s per gesto</string>
+    <string name="game_detail_elan_what">Una famiglia riunisce gesti che si somigliano.</string>
     <string name="game_detail_fact_atlas_pending">Sono le lingue in cui manca ancora un messaggio, inviato o ricevuto.</string>
     <string name="game_detail_fact_atlas_stamps">Sono le lingue in cui hai un timbro, su tutte quelle dell’Atlante.</string>
     <string name="game_detail_fact_badges_earned">È il numero di medaglie ottenute, su tutte quelle che esistono.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Venti stati: uno ogni dieci livelli fino a 100, poi uno per centinaio, e la Singolarità da 1000.</string>
     <string name="game_detail_fact_trophies">È il numero di trofei sistemati sul tuo scaffale.</string>
     <string name="game_detail_fact_week_points">Sono le scintille guadagnate da lunedì. Ripartono da zero ogni settimana.</string>
+    <string name="game_detail_gives_label">Che cosa dà</string>
     <string name="game_detail_locked">Non ancora ottenuto</string>
     <string name="game_detail_obtain_label">Come ottenerlo</string>
     <string name="game_detail_open">%1$s: vedi i dettagli</string>
@@ -1140,6 +1147,15 @@
     <string name="progression_axis_tool_reaction_counts">Ogni reazione lasciata su un messaggio.</string>
     <string name="progression_axis_tool_sticker">Sticker inseriti</string>
     <string name="progression_axis_tool_sticker_counts">Ogni sticker inserito in un messaggio inviato.</string>
+    <string name="progression_elan_base">Slancio ×%1$d — %2$s su %3$d giorni</string>
+    <string name="progression_elan_effect">Le tue prossime azioni valgono %1$d volte di più.</string>
+    <string name="progression_elan_factor">Slancio ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d famiglie attive</string>
+    <string name="progression_elan_family_one">1 famiglia attiva</string>
+    <string name="progression_elan_standing">, più la tua base</string>
+    <string name="progression_elans_empty">Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica le tue scintille.</string>
+    <string name="progression_elans_hint">Porta avanti un’altra famiglia allo stesso tempo per attivare il moltiplicatore.</string>
+    <string name="progression_elans_title">I tuoi slanci</string>
     <string name="progression_family_comment">Commenti</string>
     <string name="progression_family_content">Contenuti creati</string>
     <string name="progression_family_conversation">Conversazioni</string>

@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Visible para</string>
     <string name="game_concept_fact_week">Semana</string>
     <string name="game_concept_fact_week_points">Chispas de la semana</string>
+    <string name="game_concept_fact_window">Ventana</string>
     <string name="game_concept_fact_yes">Sí</string>
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_how">Un gesto al día la mantiene; una Vela la guarda un día.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">Un desafío es un escalón que superar en una familia de gestos.</string>
     <string name="game_detail_earned">Conseguido</string>
     <string name="game_detail_earned_on">Conseguido el %1$s</string>
+    <string name="game_detail_elan_active">Activa estos días</string>
+    <string name="game_detail_elan_how">Cada gesto hace brotar chispas. Varias familias activas desatan un impulso.</string>
+    <string name="game_detail_elan_idle">No activa estos días</string>
+    <string name="game_detail_elan_points">hasta %1$s por gesto</string>
+    <string name="game_detail_elan_what">Una familia reúne gestos que se parecen.</string>
     <string name="game_detail_fact_atlas_pending">Son los idiomas en los que aún falta un mensaje, enviado o recibido.</string>
     <string name="game_detail_fact_atlas_stamps">Son los idiomas en los que tienes un sello, de todos los del Atlas.</string>
     <string name="game_detail_fact_badges_earned">Es el número de medallas conseguidas, de todas las que existen.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Veinte estados: uno cada diez niveles hasta 100, luego uno por centena, y la Singularidad desde 1000.</string>
     <string name="game_detail_fact_trophies">Es el número de trofeos colocados en tu estante.</string>
     <string name="game_detail_fact_week_points">Son las chispas ganadas desde el lunes. Vuelven a cero cada semana.</string>
+    <string name="game_detail_gives_label">Qué te da</string>
     <string name="game_detail_locked">Aún no conseguido</string>
     <string name="game_detail_obtain_label">Cómo conseguirlo</string>
     <string name="game_detail_open">%1$s: ver los detalles</string>
@@ -1140,6 +1147,15 @@
     <string name="progression_axis_tool_reaction_counts">Cada reacción puesta en un mensaje.</string>
     <string name="progression_axis_tool_sticker">Stickers colocados</string>
     <string name="progression_axis_tool_sticker_counts">Cada sticker colocado en un mensaje enviado.</string>
+    <string name="progression_elan_base">Impulso ×%1$d — %2$s en %3$d días</string>
+    <string name="progression_elan_effect">Tus próximas acciones valen %1$d veces más.</string>
+    <string name="progression_elan_factor">Impulso ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d familias activas</string>
+    <string name="progression_elan_family_one">1 familia activa</string>
+    <string name="progression_elan_standing">, más tu base</string>
+    <string name="progression_elans_empty">Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.</string>
+    <string name="progression_elans_hint">Mantén una familia más a la vez para activar el multiplicador.</string>
+    <string name="progression_elans_title">Tus impulsos</string>
     <string name="progression_family_comment">Comentarios</string>
     <string name="progression_family_content">Contenido creado</string>
     <string name="progression_family_conversation">Conversaciones</string>

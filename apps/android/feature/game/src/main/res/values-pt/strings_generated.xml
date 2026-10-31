@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Visível para</string>
     <string name="game_concept_fact_week">Semana</string>
     <string name="game_concept_fact_week_points">Faíscas da semana</string>
+    <string name="game_concept_fact_window">Janela</string>
     <string name="game_concept_fact_yes">Sim</string>
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_how">Um gesto por dia a mantém; uma Lamparina cuida dela por um dia.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">Um desafio é um patamar a vencer numa família de gestos.</string>
     <string name="game_detail_earned">Obtido</string>
     <string name="game_detail_earned_on">Obtido em %1$s</string>
+    <string name="game_detail_elan_active">Ativa nestes dias</string>
+    <string name="game_detail_elan_how">Cada gesto faz saltar faíscas. Várias famílias ativas acionam um impulso.</string>
+    <string name="game_detail_elan_idle">Não ativa nestes dias</string>
+    <string name="game_detail_elan_points">até %1$s por gesto</string>
+    <string name="game_detail_elan_what">Uma família reúne gestos parecidos.</string>
     <string name="game_detail_fact_atlas_pending">São os idiomas em que ainda falta uma mensagem, enviada ou recebida.</string>
     <string name="game_detail_fact_atlas_stamps">São os idiomas em que você tem um carimbo, de todos os do Atlas.</string>
     <string name="game_detail_fact_badges_earned">É o número de medalhas obtidas, entre todas as que existem.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Vinte estados: um a cada dez níveis até 100, depois um por centena, e a Singularidade a partir de 1000.</string>
     <string name="game_detail_fact_trophies">É o número de troféus arrumados na sua prateleira.</string>
     <string name="game_detail_fact_week_points">São as faíscas ganhas desde segunda-feira. Elas voltam a zero toda semana.</string>
+    <string name="game_detail_gives_label">O que isso dá</string>
     <string name="game_detail_locked">Ainda não obtido</string>
     <string name="game_detail_obtain_label">Como conseguir</string>
     <string name="game_detail_open">%1$s: ver os detalhes</string>
@@ -1140,6 +1147,15 @@
     <string name="progression_axis_tool_reaction_counts">Cada reação deixada em uma mensagem.</string>
     <string name="progression_axis_tool_sticker">Stickers colocados</string>
     <string name="progression_axis_tool_sticker_counts">Cada sticker colocado em uma mensagem enviada.</string>
+    <string name="progression_elan_base">Impulso ×%1$d — %2$s em %3$d dias</string>
+    <string name="progression_elan_effect">Suas próximas ações rendem %1$d vezes mais.</string>
+    <string name="progression_elan_factor">Impulso ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d famílias ativas</string>
+    <string name="progression_elan_family_one">1 família ativa</string>
+    <string name="progression_elan_standing">, mais sua base</string>
+    <string name="progression_elans_empty">Publique um story, um post, um reels ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica suas faíscas.</string>
+    <string name="progression_elans_hint">Mantenha mais uma família ao mesmo tempo para ativar o multiplicador.</string>
+    <string name="progression_elans_title">Seus impulsos</string>
     <string name="progression_family_comment">Comentários</string>
     <string name="progression_family_content">Conteúdo criado</string>
     <string name="progression_family_conversation">Conversas</string>

@@ -335,6 +335,8 @@ internal object GameStringIds {
         "game2_prestige_locked" to R.string.game2_prestige_locked,
         "game_state_elans_active" to R.string.game_state_elans_active,
         "game_state_elans_idle" to R.string.game_state_elans_idle,
+        "game_detail_elan_active" to R.string.game_detail_elan_active,
+        "game_detail_elan_idle" to R.string.game_detail_elan_idle,
         "game_concept_fact_tier" to R.string.game_concept_fact_tier,
         "game_concept_fact_next_level" to R.string.game_concept_fact_next_level,
         "game_fact_missing_for_level" to R.string.game_fact_missing_for_level,

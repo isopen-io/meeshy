@@ -320,5 +320,7 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     FactPrismHour("game_concept_fact_prism_hour", GameTextForm.Plain),
     TailwindName("game_rules_concept_tailwind_name", GameTextForm.Plain),
     StreakRecord("game_streak_record", GameTextForm.Plural),
+    DetailElanActive("game_detail_elan_active", GameTextForm.Plain),
+    DetailElanIdle("game_detail_elan_idle", GameTextForm.Plain),
     JoinedBySpace("", GameTextForm.Join),
 }

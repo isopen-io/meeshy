@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Visible to</string>
     <string name="game_concept_fact_week">Week</string>
     <string name="game_concept_fact_week_points">Sparks this week</string>
+    <string name="game_concept_fact_window">Window</string>
     <string name="game_concept_fact_yes">Yes</string>
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_how">One move a day tends it; a Vigil guards it for a day.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">A challenge is a tier to clear in a family of actions.</string>
     <string name="game_detail_earned">Earned</string>
     <string name="game_detail_earned_on">Earned on %1$s</string>
+    <string name="game_detail_elan_active">Active these days</string>
+    <string name="game_detail_elan_how">Each move makes sparks fly. Several active families set off momentum.</string>
+    <string name="game_detail_elan_idle">Not active these days</string>
+    <string name="game_detail_elan_points">up to %1$s per action</string>
+    <string name="game_detail_elan_what">A family groups actions that are alike.</string>
     <string name="game_detail_fact_atlas_pending">These are the languages still missing a message, sent or received.</string>
     <string name="game_detail_fact_atlas_stamps">These are the languages where you have a stamp, out of all in the Atlas.</string>
     <string name="game_detail_fact_badges_earned">This is how many medals you’ve won, out of all that exist.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Twenty phases: one every ten levels up to 100, then one per hundred, and Singularity from 1000.</string>
     <string name="game_detail_fact_trophies">This is how many trophies stand on your shelf.</string>
     <string name="game_detail_fact_week_points">These are the sparks earned since Monday. They start again from zero every week.</string>
+    <string name="game_detail_gives_label">What it gives</string>
     <string name="game_detail_locked">Not earned yet</string>
     <string name="game_detail_obtain_label">How to get it</string>
     <string name="game_detail_open">%1$s: see details</string>
@@ -1137,6 +1144,15 @@
     <string name="progression_axis_tool_reaction_counts">Every reaction left on a message.</string>
     <string name="progression_axis_tool_sticker">Stickers placed</string>
     <string name="progression_axis_tool_sticker_counts">Every sticker slipped into a sent message.</string>
+    <string name="progression_elan_base">Momentum ×%1$d — %2$s over %3$d days</string>
+    <string name="progression_elan_effect">Your next actions earn %1$d times more.</string>
+    <string name="progression_elan_factor">Momentum ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d active families</string>
+    <string name="progression_elan_family_one">1 active family</string>
+    <string name="progression_elan_standing">, plus your standing</string>
+    <string name="progression_elans_empty">Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks.</string>
+    <string name="progression_elans_hint">Keep one more family going at the same time to trigger the multiplier.</string>
+    <string name="progression_elans_title">Your momentum</string>
     <string name="progression_family_comment">Comments</string>
     <string name="progression_family_content">Content created</string>
     <string name="progression_family_conversation">Conversations</string>

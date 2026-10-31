@@ -100,6 +100,8 @@ fun ProgressionConceptScreen(
             when {
                 // TA LUMIÈRE (iOS `GameSparksHeadView`) : la poche en grand, le « depuis toujours » en petit.
                 sparks != null -> GameSparksHeadView(sparks, snapshot.game)
+                // UNE pièce, UN héros (iOS `ProgressionConceptPage.hero`, `.piece`) : elle REMPLACE le héros générique.
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
             }

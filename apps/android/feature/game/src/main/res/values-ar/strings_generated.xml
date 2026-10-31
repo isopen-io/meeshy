@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">مرئي لـ</string>
     <string name="game_concept_fact_week">الأسبوع</string>
     <string name="game_concept_fact_week_points">شرارات الأسبوع</string>
+    <string name="game_concept_fact_window">الفترة</string>
     <string name="game_concept_fact_yes">نعم</string>
     <string name="game_concept_fact_zone">المنطقة</string>
     <string name="game_concept_flame_how">إجراء واحد في اليوم يُبقيه متّقدًا؛ والقنديل يحرسه يومًا.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">التحدي درجة تتجاوزها في فئة من الإجراءات.</string>
     <string name="game_detail_earned">تم الحصول عليه</string>
     <string name="game_detail_earned_on">تم الحصول عليه في %1$s</string>
+    <string name="game_detail_elan_active">نشطة هذه الأيام</string>
+    <string name="game_detail_elan_how">كل إجراء يُطلق شرارات. عدة فئات نشطة تُشعل زخمًا.</string>
+    <string name="game_detail_elan_idle">غير نشطة هذه الأيام</string>
+    <string name="game_detail_elan_points">حتى %1$s لكل إجراء</string>
+    <string name="game_detail_elan_what">الفئة تجمع إجراءات متشابهة.</string>
     <string name="game_detail_fact_atlas_pending">هذه اللغات التي ما زالت تنقصها رسالة، مُرسلة أو مُستقبلة.</string>
     <string name="game_detail_fact_atlas_stamps">هذه اللغات التي لك فيها ختم، من كل لغات الأطلس.</string>
     <string name="game_detail_fact_badges_earned">هذا عدد الأوسمة التي حصلت عليها، من كل الموجودة.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">عشرون حالة: واحدة كل عشرة مستويات حتى 100، ثم واحدة لكل مئة، والتفرد من 1000.</string>
     <string name="game_detail_fact_trophies">هذا عدد الكؤوس على رفّك.</string>
     <string name="game_detail_fact_week_points">هذه الشرارات المكتسبة منذ الاثنين. تبدأ من الصفر كل أسبوع.</string>
+    <string name="game_detail_gives_label">ماذا يمنحك</string>
     <string name="game_detail_locked">لم تحصل عليه بعد</string>
     <string name="game_detail_obtain_label">كيف تحصل عليه</string>
     <string name="game_detail_open">%1$s: عرض التفاصيل</string>
@@ -1149,6 +1156,15 @@
     <string name="progression_axis_tool_reaction_counts">كل تفاعل تضعه على رسالة.</string>
     <string name="progression_axis_tool_sticker">ملصقات موضوعة</string>
     <string name="progression_axis_tool_sticker_counts">كل ملصق تضعه في رسالة مُرسَلة.</string>
+    <string name="progression_elan_base">الزخم ×%1$d — %2$s خلال %3$d يومًا</string>
+    <string name="progression_elan_effect">أفعالك القادمة تُكسبك %1$d أضعاف أكثر.</string>
+    <string name="progression_elan_factor">الزخم ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d فئات نشطة</string>
+    <string name="progression_elan_family_one">فئة واحدة نشطة</string>
+    <string name="progression_elan_standing">، بالإضافة إلى رصيدك الثابت</string>
+    <string name="progression_elans_empty">انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف شراراتك.</string>
+    <string name="progression_elans_hint">حافظ على عائلة إضافية في الوقت نفسه لتفعيل المضاعف.</string>
+    <string name="progression_elans_title">زخمك</string>
     <string name="progression_family_comment">التعليقات</string>
     <string name="progression_family_content">المحتوى المنتَج</string>
     <string name="progression_family_conversation">المحادثات</string>

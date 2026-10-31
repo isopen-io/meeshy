@@ -1,10 +1,14 @@
 package me.meeshy.app.game.progression
 
 import me.meeshy.sdk.model.game.GameText
+import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.engagement.AchievementEntry
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
 import me.meeshy.sdk.model.game.engagement.BadgeMaterialKey
+import me.meeshy.sdk.model.game.engagement.EngagementAxisFamily
+import me.meeshy.sdk.model.game.engagement.EngagementCatalog
+import me.meeshy.sdk.model.game.engagement.EngagementElanProgress
 import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
 import me.meeshy.sdk.model.game.engagement.EngagementAxisProgress
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
@@ -35,7 +39,7 @@ sealed interface GameElementStatus {
 
 /**
  * LES PRÉCISIONS D'UN ÉLÉMENT DU JEU (miroir de `GameElementDetail`, iOS) pour les familles que la Progression Android
- * ouvre en feuille : la médaille, le défi et la ligne de donnée. Une DONNÉE sans un mot : la feuille la fait parler.
+ * ouvre en feuille : la médaille, le défi, la famille d'élan et la ligne de donnée. Une DONNÉE sans un mot : la feuille la fait parler.
  */
 sealed interface GameElementDetail {
     val id: String
@@ -68,6 +72,22 @@ sealed interface GameElementDetail {
     data class Challenge(val entry: AchievementEntry, override val status: GameElementStatus) : GameElementDetail {
         override val id: String get() = "defi:${entry.key}"
         override val concept: ProgressionConcept get() = ProgressionConcept.Defis
+    }
+
+    /**
+     * Une famille d'élan (iOS `GameElementDetails.elanFamily`) : active ou non sur la fenêtre servie, ce qu'un de ses
+     * gestes rapporte au plus ([topPoints]) et la fenêtre ([windowDays]), quand ils se savent.
+     */
+    data class ElanFamily(
+        val family: EngagementAxisFamily,
+        val active: Boolean,
+        val topPoints: Int?,
+        val windowDays: Int?,
+    ) : GameElementDetail {
+        override val id: String get() = "elan:${family.name}"
+        override val concept: ProgressionConcept get() = ProgressionConcept.Elans
+        override val status: GameElementStatus
+            get() = GameElementStatus.Value(GameText(if (active) GameTextKey.DetailElanActive else GameTextKey.DetailElanIdle))
     }
 
     /**
@@ -121,6 +141,15 @@ object GameElementDetails {
             key = "${axis.axis.wire}:next",
         )
     }
+
+    /** Une famille d'élan : active ou non selon la fenêtre servie, le barème dérivé du catalogue, jamais recopié. */
+    fun elanFamily(family: EngagementAxisFamily, elan: EngagementElanProgress?): GameElementDetail.ElanFamily =
+        GameElementDetail.ElanFamily(
+            family = family,
+            active = elan?.activeFamilies?.contains(family) ?: false,
+            topPoints = EngagementCatalog.familyTopPoints[family],
+            windowDays = elan?.windowDays,
+        )
 
     /** Une ligne de donnée d'une fiche, dans SON concept : ce que son toucher ouvre. */
     fun fact(fact: FicheFact, concept: ProgressionConcept): GameElementDetail.Fact =

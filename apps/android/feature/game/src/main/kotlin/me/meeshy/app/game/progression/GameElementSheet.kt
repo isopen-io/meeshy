@@ -74,7 +74,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * LA FEUILLE DE PRÉCISIONS d'une médaille, d'un défi ou d'une ligne de donnée (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
+ * LA FEUILLE DE PRÉCISIONS d'une médaille, d'un défi, d'une famille d'élan ou d'une ligne de donnée (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
  * à son contenu, poignée visible ; elle se ferme en la glissant vers le bas, au toucher du voile ou par « Fermer ».
  * L'emblème entre en grand avec un ressort (un fondu sous « réduire les animations »), puis le nom, l'état, la jauge,
  * et pour une médaille ses étoiles, sa matière et pourquoi, ce qu'elle suit, la prochaine étoile et ses sept paliers.
@@ -188,7 +188,8 @@ private fun ElementEmblem(detail: GameElementDetail) {
             muted = tokens.textMuted,
             modifier = modifier,
         )
-        is GameElementDetail.Fact -> ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
+        is GameElementDetail.Fact, is GameElementDetail.ElanFamily ->
+            ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
     }
 }
 

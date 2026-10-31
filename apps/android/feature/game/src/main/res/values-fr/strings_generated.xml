@@ -431,6 +431,7 @@
     <string name="game_concept_fact_visible">Visible par</string>
     <string name="game_concept_fact_week">Semaine</string>
     <string name="game_concept_fact_week_points">Étincelles de la semaine</string>
+    <string name="game_concept_fact_window">Fenêtre</string>
     <string name="game_concept_fact_yes">Oui</string>
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_how">Un geste par jour l’entretient ; une Veilleuse la garde un jour.</string>
@@ -531,6 +532,11 @@
     <string name="game_detail_defi_what">Un défi est un palier à franchir dans une famille de gestes.</string>
     <string name="game_detail_earned">Obtenu</string>
     <string name="game_detail_earned_on">Obtenu le %1$s</string>
+    <string name="game_detail_elan_active">Active ces jours-ci</string>
+    <string name="game_detail_elan_how">Chaque geste fait jaillir des étincelles. Plusieurs familles actives déclenchent un élan.</string>
+    <string name="game_detail_elan_idle">Pas active ces jours-ci</string>
+    <string name="game_detail_elan_points">jusqu’à %1$s par geste</string>
+    <string name="game_detail_elan_what">Une famille regroupe des gestes qui se ressemblent.</string>
     <string name="game_detail_fact_atlas_pending">Ce sont les langues où il manque encore un message, envoyé ou reçu.</string>
     <string name="game_detail_fact_atlas_stamps">Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas.</string>
     <string name="game_detail_fact_badges_earned">C’est le nombre de médailles obtenues, sur toutes celles qui existent.</string>
@@ -575,6 +581,7 @@
     <string name="game_detail_fact_tier">Vingt états : un tous les dix niveaux jusqu’à 100, puis un par centaine, et la Singularité dès 1000.</string>
     <string name="game_detail_fact_trophies">C’est le nombre de trophées rangés sur ton étagère.</string>
     <string name="game_detail_fact_week_points">Ce sont les étincelles gagnées depuis lundi. Elles repartent de zéro chaque semaine.</string>
+    <string name="game_detail_gives_label">Ce que ça donne</string>
     <string name="game_detail_locked">Pas encore obtenu</string>
     <string name="game_detail_obtain_label">Comment l’obtenir</string>
     <string name="game_detail_open">%1$s : voir les précisions</string>
@@ -1140,6 +1147,15 @@
     <string name="progression_axis_tool_reaction_counts">Chaque réaction posée sur un message.</string>
     <string name="progression_axis_tool_sticker">Stickers posés</string>
     <string name="progression_axis_tool_sticker_counts">Chaque sticker glissé dans un message envoyé.</string>
+    <string name="progression_elan_base">Élan ×%1$d — %2$s sur %3$d jours</string>
+    <string name="progression_elan_effect">Tes prochains gestes rapportent %1$d fois plus.</string>
+    <string name="progression_elan_factor">Élan ×%1$d</string>
+    <string name="progression_elan_family_many">%1$d familles actives</string>
+    <string name="progression_elan_family_one">1 famille active</string>
+    <string name="progression_elan_standing">, plus ton assise</string>
+    <string name="progression_elans_empty">Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.</string>
+    <string name="progression_elans_hint">Tiens une famille de plus en même temps pour déclencher le multiplicateur.</string>
+    <string name="progression_elans_title">Tes élans</string>
     <string name="progression_family_comment">Commentaires</string>
     <string name="progression_family_content">Contenu produit</string>
     <string name="progression_family_conversation">Conversations</string>
