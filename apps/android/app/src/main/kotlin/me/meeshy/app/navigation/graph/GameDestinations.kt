@@ -18,6 +18,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
+import me.meeshy.app.game.notebook.GameNotebookScreen
 import me.meeshy.app.game.pages.AtlasScreen
 import me.meeshy.app.game.pages.GameSettingsScreen
 import me.meeshy.app.game.pages.LeagueScreen
@@ -46,6 +47,9 @@ object GameRoutes {
 
     const val SECTION_ARG = "section"
     const val SECTION = "progression/section/{$SECTION_ARG}"
+
+    /** La Chronique (iOS `Route.progressionNotebook`) : les étapes du jeu qui attendent leur photo. */
+    const val NOTEBOOK = "progression/notebook"
 
     const val RULES_ARG = "rules"
     const val RULES = "progression/rules/{$RULES_ARG}"
@@ -96,7 +100,17 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                 onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
                 onOpenSettings = { navController.navigate(GameRoutes.page(GamePage.Settings)) },
                 onOpenRules = { navController.navigate(GameRoutes.RULES_TOP) },
+                onOpenNotebook = { navController.navigate(GameRoutes.NOTEBOOK) },
             )
+        }
+        builder.composable(
+            route = GameRoutes.NOTEBOOK,
+            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
+            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
+            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
+            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
+        ) {
+            GameNotebookScreen(onBack = { navController.popBackStack() })
         }
         builder.composable(
             route = GameRoutes.PAGE,

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.door.notebook",
+          "androidName": "game_door_notebook",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.page_title",
+          "androidName": "game_notebook_page_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.empty",
+          "androidName": "game_notebook_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.catch_up",
+          "androidName": "game_notebook_catch_up",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.catch_up_locked",
+          "androidName": "game_notebook_catch_up_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.device_only",
+          "androidName": "game_notebook_device_only",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.start",
+          "androidName": "game_photo_kicker_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.rank",
+          "androidName": "game_photo_kicker_rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.tier",
+          "androidName": "game_photo_kicker_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.summit",
+          "androidName": "game_photo_kicker_summit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.new_lap",
+          "androidName": "game_photo_kicker_new_lap",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.meesh",
+          "androidName": "game_photo_kicker_meesh",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.treasury",
+          "androidName": "game_photo_kicker_treasury",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.flame",
+          "androidName": "game_photo_kicker_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.photo.kicker.prestige",
+          "androidName": "game2_photo_kicker_prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.start",
+          "androidName": "game_photo_title_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.tier",
+          "androidName": "game_photo_title_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.level_100",
+          "androidName": "game_photo_title_level_100",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.prestige",
+          "androidName": "game_photo_title_prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.meesh_first",
+          "androidName": "game_photo_title_meesh_first",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.meesh_number",
+          "androidName": "game_photo_title_meesh_number",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.meesh_number_edition",
+          "androidName": "game_photo_title_meesh_number_edition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.title.flame_days",
+          "androidName": "game_photo_title_flame_days",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

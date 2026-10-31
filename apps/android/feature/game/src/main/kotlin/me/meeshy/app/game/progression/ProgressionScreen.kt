@@ -23,7 +23,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * L'ÉCRAN « PROGRESSION » — la PREMIÈRE PAGE du jeu (iOS `ProgressionView`). Elle ne porte que des CARTES, une par
  * concept servi, dans l'ordre que [me.meeshy.sdk.model.game.progression.ProgressionConcepts] déclare pour tous les
  * clients ; dans l'en-tête, à droite du titre, le blason de rang et le compteur de Meeshes. La carte entière ouvre la
- * FICHE du concept. **Aucun geste du jeu ne vit dans la liste.** En dessous, « Comment ça marche » et Réglages, en lignes
+ * FICHE du concept. **Aucun geste du jeu ne vit dans la liste.** En dessous, « La Chronique », « Comment ça marche » et Réglages, en lignes
  * de la même forme ([ProgressionDoors]).
  *
  * Ce que l'écran REFUSE : peindre un spinner (squelette à froid, instantané sinon) ; voiler l'instantané hors ligne
@@ -35,6 +35,7 @@ fun ProgressionScreen(
     onOpenConcept: (ProgressionConcept) -> Unit,
     onOpenSettings: () -> Unit = {},
     onOpenRules: () -> Unit = {},
+    onOpenNotebook: () -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -74,20 +75,32 @@ fun ProgressionScreen(
                         )
                     }
                 }
-                ProgressionDoors(hasGame = snapshot.game != null, onOpenRules = onOpenRules, onOpenSettings = onOpenSettings)
+                ProgressionDoors(
+                    hasGame = snapshot.game != null,
+                    onOpenNotebook = onOpenNotebook,
+                    onOpenRules = onOpenRules,
+                    onOpenSettings = onOpenSettings,
+                )
             }
         }
     }
 }
 
 /**
- * Les PORTES du bas de la première page (iOS `ProgressionFrontList`) : « Comment ça marche » ouvre le carnet des règles,
- * puis Réglages. Le carnet ne s'offre qu'avec le bloc de jeu, comme sur iOS ; Réglages reste toujours atteignable.
+ * Les PORTES du bas de la première page (iOS `ProgressionFrontList`) : « La Chronique », puis « Comment ça marche » qui
+ * ouvre le carnet des règles, puis Réglages. La Chronique et le carnet ne s'offrent qu'avec le bloc de jeu, comme sur
+ * iOS ; Réglages reste toujours atteignable.
  */
 @Composable
-internal fun ProgressionDoors(hasGame: Boolean, onOpenRules: () -> Unit, onOpenSettings: () -> Unit) {
+internal fun ProgressionDoors(
+    hasGame: Boolean,
+    onOpenNotebook: () -> Unit,
+    onOpenRules: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         if (hasGame) {
+            GameDoorRow(icon = MeeshyIcons.Dictionary, title = stringResource(R.string.game_door_notebook), onOpen = onOpenNotebook)
             GameDoorRow(icon = MeeshyIcons.Info, title = stringResource(R.string.game_door_rules), onOpen = onOpenRules)
         }
         GameSettingsDoor(onOpenSettings)
