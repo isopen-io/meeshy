@@ -9,8 +9,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 
 /**
- * The platform player under [ChatAudioPlayer], reduced to what a voice note needs. Audio focus is
- * [ChatAudioPlayer]'s business, never the engine's.
+ * The platform player under [ChatAudioPlayer] and the message menu's [OverlayAudioPreview], reduced
+ * to what a voice note needs. Audio focus is the caller's business, never the engine's.
  */
 internal interface VoiceNoteEngine {
     val positionMs: Long
@@ -21,6 +21,7 @@ internal interface VoiceNoteEngine {
     fun start()
     fun pause()
     fun seekTo(positionMs: Long)
+    fun setSpeed(rate: Float)
     fun reset()
     fun release()
 }
@@ -46,6 +47,7 @@ internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
 
     override val positionMs: Long get() = player.currentPosition.coerceAtLeast(0L)
     override val durationMs: Long get() = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L
+    val speed: Float get() = player.playbackParameters.speed
 
     override fun listen(onPrepared: () -> Unit, onCompleted: () -> Unit, onError: () -> Unit) {
         player.addListener(object : Player.Listener {
@@ -84,6 +86,10 @@ internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
 
     override fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
+    }
+
+    override fun setSpeed(rate: Float) {
+        player.setPlaybackSpeed(rate)
     }
 
     override fun reset() {

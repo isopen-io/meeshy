@@ -111,6 +111,15 @@ class ExoVoiceNoteEngineTest {
     }
 
     @Test
+    fun `the speed chosen in the message menu reaches the player of a translated voice note`() {
+        val engine = loading(fixture("translated-voice-note.opus")).engine
+
+        engine.setSpeed(1.5f)
+
+        assertThat(engine.speed).isEqualTo(1.5f)
+    }
+
+    @Test
     fun `an original voice note in M4A is still prepared`() {
         val outcome = loading(fixture("original-voice-note.m4a")).outcome
 
