@@ -499,6 +499,10 @@ struct ComposerPublishRefusalTapZone: View {
 final class ComposerAtelierFanOut {
     private var pending: [ComposerPublishChoice] = []
 
+    /// `nonisolated` : un deinit isolé au MainActor plante xctest au démontage
+    /// sur iOS 18.4+/26 (Swift #85663) — gate `check-ios-isolated-deinits.sh`, #13971.
+    nonisolated deinit {}
+
     func hold(_ legs: [ComposerPublishChoice]) { pending = legs }
 
     /// Ce que la remise de l'atelier publie — vidé à chaque lecture.
