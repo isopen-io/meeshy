@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toPixelMap
+import androidx.activity.ComponentActivity
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.ViewGroup
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -41,7 +43,7 @@ import org.robolectric.annotation.GraphicsMode
 class ActivationInviteBandTest {
 
     @get:Rule
-    val compose = createComposeRule()
+    val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val invite = ActivationInvite(daysLeft = 19, missingEmail = true, missingPhone = false)
 
@@ -70,30 +72,51 @@ class ActivationInviteBandTest {
         assertThat(ActivationInviteBannerDefaults.containerColor(DarkMeeshyTokens).alpha).isEqualTo(1f)
     }
 
-    @Test
-    fun `nothing under the banner shows through it, in light and dark`() {
-        listOf(false, true).forEach { dark ->
-            compose.setContent {
-                MeeshyTheme(darkTheme = dark) {
-                    Box(Modifier.background(Color.Red)) {
-                        ActivationInviteBanner(
-                            invite = invite,
-                            title = "Validez votre compte",
-                            message = "Jours restants : 19",
-                            dismissLabel = "Plus tard",
-                            onOpen = {},
-                            onDismiss = {},
-                        )
-                    }
+    /** La vue Compose dessinee en logiciel, puis le pixel lu au point (x, y) du noeud [tag], en pixels du noeud. */
+    private fun pixel(tag: String, x: Float, y: (height: Float) -> Float): Color {
+        val bounds = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        val root = compose.activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        compose.runOnUiThread { root.draw(Canvas(bitmap)) }
+        return Color(bitmap.getPixel((bounds.left + x).toInt(), (bounds.top + y(bounds.height)).toInt()))
+    }
+
+    private fun showBannerOverRed(darkTheme: Boolean) {
+        compose.setContent {
+            MeeshyTheme(darkTheme = darkTheme) {
+                Box(Modifier.fillMaxSize().background(Color.Red)) {
+                    ActivationInviteBanner(
+                        invite = invite,
+                        title = "Validez votre compte",
+                        message = "Jours restants : 19",
+                        dismissLabel = "Plus tard",
+                        onOpen = {},
+                        onDismiss = {},
+                    )
                 }
             }
-            val pixels = compose.onNodeWithTag(ActivationInviteBannerDefaults.TEST_TAG).captureToImage().toPixelMap()
-            val painted = pixels[pixels.width / 2, 1]
-            val expected = ActivationInviteBannerDefaults.containerColor(if (dark) DarkMeeshyTokens else LightMeeshyTokens)
-            assertThat(abs(painted.red - expected.red)).isLessThan(0.02f)
-            assertThat(abs(painted.green - expected.green)).isLessThan(0.02f)
-            assertThat(abs(painted.blue - expected.blue)).isLessThan(0.02f)
         }
+        compose.waitForIdle()
+    }
+
+    private fun assertPainted(painted: Color, expected: Color) {
+        assertThat(abs(painted.red - expected.red)).isLessThan(0.02f)
+        assertThat(abs(painted.green - expected.green)).isLessThan(0.02f)
+        assertThat(abs(painted.blue - expected.blue)).isLessThan(0.02f)
+    }
+
+    @Test
+    fun `nothing under the banner shows through it in light`() {
+        showBannerOverRed(darkTheme = false)
+
+        assertPainted(pixel(ActivationInviteBannerDefaults.TEST_TAG, 4f) { it / 2 }, ActivationInviteBannerDefaults.containerColor(LightMeeshyTokens))
+    }
+
+    @Test
+    fun `nothing under the banner shows through it in dark`() {
+        showBannerOverRed(darkTheme = true)
+
+        assertPainted(pixel(ActivationInviteBannerDefaults.TEST_TAG, 4f) { it / 2 }, ActivationInviteBannerDefaults.containerColor(DarkMeeshyTokens))
     }
 
     @Test
@@ -116,11 +139,9 @@ class ActivationInviteBandTest {
     @Test
     fun `the band paints an opaque strip across the whole width, dark theme included`() {
         showBand(invite, darkTheme = true)
+        compose.waitForIdle()
 
-        val pixels = compose.onNodeWithTag(ActivationInviteBannerDefaults.BAND_TAG).captureToImage().toPixelMap()
-        val corner = pixels[1, 1]
-        assertThat(corner.alpha).isEqualTo(1f)
-        assertThat(corner.red - corner.blue).isLessThan(0.3f)
+        assertPainted(pixel(ActivationInviteBannerDefaults.BAND_TAG, 2f) { it / 2 }, DarkMeeshyTokens.backgroundPrimary)
     }
 
     @Test
