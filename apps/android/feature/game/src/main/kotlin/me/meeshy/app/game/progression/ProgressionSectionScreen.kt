@@ -53,7 +53,8 @@ data class SectionCount(val done: Int, val total: Int)
 /**
  * UNE PAGE DE SECTION (iOS `ProgressionSectionPage`) — Médailles, Défis ou Hauts faits. AUTONOME dans la pile : elle lit
  * sa propre progression, cache d'abord, et n'ajoute aucun spinner. La valeur de l'en-tête, à la teinte de la section,
- * dit ce qui est obtenu sur ce qui peut l'être ; chaque palier se touche et s'ouvre en grand, en consultation.
+ * dit ce qui est obtenu sur ce qui peut l'être ; une médaille ou un défi touché ouvre sa feuille de précisions, un haut
+ * fait sa révélation en consultation.
  * « Comprendre les badges » mène au carnet des règles ([onOpenBadgesGuide]).
  */
 @Composable
@@ -94,8 +95,8 @@ fun ProgressionSectionScreen(
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
             when (section) {
-                ProgressionSection.Badges -> BadgesSection(snapshot.progress, snapshot.game, hidden.hidden, onOpenBadgesGuide)
-                ProgressionSection.Defis -> ChallengesSection(snapshot.progress, snapshot.game, hidden.hidden)
+                ProgressionSection.Badges -> BadgesSection(snapshot.progress, onOpenBadgesGuide)
+                ProgressionSection.Defis -> ChallengesSection(snapshot.progress)
                 ProgressionSection.Succes -> AchievementList(snapshot.progress, snapshot.game, hidden.hidden)
             }
         }

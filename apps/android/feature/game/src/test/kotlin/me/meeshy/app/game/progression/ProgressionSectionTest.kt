@@ -7,7 +7,6 @@ import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
 import me.meeshy.sdk.model.game.engagement.EngagementMilestoneType
 import me.meeshy.sdk.model.game.engagement.EngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgressResolver
-import me.meeshy.sdk.model.game.engagement.EngagementReveal
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import org.junit.Test
 
@@ -72,17 +71,5 @@ class ProgressionSectionTest {
         assertThat(entry.guide.axis).isEqualTo(EngagementAxisKey.TEXT_MESSAGE)
         assertThat(entry.guide.next?.threshold).isEqualTo(50)
         assertThat(entry.guide.upcoming.first().threshold).isEqualTo(50)
-    }
-
-    @Test
-    fun `a challenge opens as a consultation of its composed tier, obtained or not`() {
-        val p = progress()
-        val entry = p.achievementSections.first().entries.first()
-
-        val request = ChallengeRequest.of(entry)
-
-        assertThat(request.reveal).isEqualTo(EngagementReveal.ComposedAchievement(entry.family, entry.tier))
-        assertThat(request.unlocked).isEqualTo(entry.unlocked)
-        assertThat(request.reachedAt).isEqualTo(entry.reachedAt)
     }
 }

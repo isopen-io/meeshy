@@ -1,7 +1,6 @@
 package me.meeshy.app.game.progression
 
 import me.meeshy.sdk.model.game.GameRarityEntry
-import me.meeshy.sdk.model.game.engagement.AchievementEntry
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
 import me.meeshy.sdk.model.game.engagement.BadgeMaterialKey
@@ -9,6 +8,7 @@ import me.meeshy.sdk.model.game.engagement.EngagementAchievementKey
 import me.meeshy.sdk.model.game.engagement.EngagementAchievementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementAxisFamily
 import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
+import me.meeshy.sdk.model.game.engagement.EngagementAxisProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementProgressResolver
 import me.meeshy.sdk.model.game.engagement.EngagementReveal
@@ -76,15 +76,6 @@ sealed interface AchievementHero {
     private data class Candidate(val at: Long, val iso: String, val title: RevealTitle, val reveal: EngagementReveal)
 }
 
-/**
- * Un palier de DÉFI se touche et s'ouvre en consultation, obtenu ou non : le doigt se pose sur la puce, la révélation
- * dit sa date ou ce qu'il demande (iOS ouvre ses précisions depuis la même puce).
- */
-object ChallengeRequest {
-    fun of(entry: AchievementEntry): ProgressionRevealRequest =
-        ProgressionRevealRequest(EngagementReveal.ComposedAchievement(entry.family, entry.tier), entry.reachedAt, entry.unlocked)
-}
-
 /** Une ligne de la liste des hauts faits : le succès nommé, sa rareté quand elle a le droit de se montrer, sa porte. */
 data class AchievementRow(val achievement: EngagementAchievementProgress, val rarity: GameRarityEntry?) {
     val request: ProgressionRevealRequest
@@ -100,7 +91,7 @@ data class AchievementRow(val achievement: EngagementAchievementProgress, val ra
 /**
  * UN BADGE DE L'ÉTAGÈRE (miroir de `GameBadgeShelfEntry`, iOS) : la médaille de SON axe à son plus haut palier gravé,
  * allumée quand le compteur la tient, en EMPREINTE quand une frappe l'a éteinte — avec ce qu'il manque pour la
- * rallumer. Un palier gravé ne se reprend jamais : la médaille se consulte comme OBTENUE, à sa date.
+ * rallumer. Elle s'ouvre en feuille de précisions ([GameElementDetails.badge]).
  */
 data class BadgeShelfEntry(
     val axis: EngagementAxisKey,
@@ -123,9 +114,6 @@ data class BadgeShelfEntry(
             return ((value - threshold).toDouble() / (next - threshold)).coerceIn(0.0, 1.0)
         }
 
-    val request: ProgressionRevealRequest
-        get() = ProgressionRevealRequest(EngagementReveal.Badge(axis.wire, threshold), reachedAt, unlocked = true)
-
     companion object {
         /** Les sept matières, du Cuivre au Prisme : les étoiles d'un badge se comptent sur elles. */
         val STARS_MAX: Int = GameBadgeTiers.materials.size
@@ -137,22 +125,24 @@ data class BadgeShelfGroup(val family: EngagementAxisFamily, val entries: List<B
 /** L'ÉTAGÈRE : les badges GAGNÉS, un par axe, rangés par famille dans l'ordre du catalogue ; ni axe ni famille vides. */
 object BadgeShelf {
     fun of(progress: EngagementProgress): List<BadgeShelfGroup> = progress.axesByFamily.mapNotNull { group ->
-        val entries = group.axes.mapNotNull { axis ->
-            val scale = axis.scale
-            val top = scale.tiers.filter { it.reached }.maxByOrNull { it.threshold } ?: return@mapNotNull null
-            BadgeShelfEntry(
-                axis = axis.axis,
-                threshold = top.threshold,
-                material = GameBadgeTiers.materialOfThreshold(top.threshold) ?: BadgeMaterialKey.PRISME,
-                lit = scale.value >= top.threshold,
-                missing = (top.threshold - scale.value).coerceAtLeast(0),
-                value = scale.value,
-                nextThreshold = scale.tiers.map { it.threshold }.filter { it > top.threshold }.minOrNull(),
-                stars = scale.reachedCount,
-                reachedAt = top.reachedAt,
-                guide = BadgeGuideResolver.resolve(axis),
-            )
-        }
-        entries.takeIf { it.isNotEmpty() }?.let { BadgeShelfGroup(group.family, it) }
+        group.axes.mapNotNull(::entryOf).takeIf { it.isNotEmpty() }?.let { BadgeShelfGroup(group.family, it) }
+    }
+
+    /** La médaille d'un axe à son plus haut palier gravé ; `null` pour un axe jamais gagné. */
+    fun entryOf(axis: EngagementAxisProgress): BadgeShelfEntry? {
+        val scale = axis.scale
+        val top = scale.tiers.filter { it.reached }.maxByOrNull { it.threshold } ?: return null
+        return BadgeShelfEntry(
+            axis = axis.axis,
+            threshold = top.threshold,
+            material = GameBadgeTiers.materialOfThreshold(top.threshold) ?: BadgeMaterialKey.PRISME,
+            lit = scale.value >= top.threshold,
+            missing = (top.threshold - scale.value).coerceAtLeast(0),
+            value = scale.value,
+            nextThreshold = scale.tiers.map { it.threshold }.filter { it > top.threshold }.minOrNull(),
+            stars = scale.reachedCount,
+            reachedAt = top.reachedAt,
+            guide = BadgeGuideResolver.resolve(axis),
+        )
     }
 }

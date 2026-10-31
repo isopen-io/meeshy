@@ -24,8 +24,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Toucher un badge ou un haut fait sur la fiche de son concept, ou une ligne de la liste des hauts faits, ouvre la
- * révélation en CONSULTATION : la date gravée (ou « à débloquer »), « Fermer », jamais « Voir ma progression ».
+ * Toucher un haut fait sur la fiche de son concept, ou une ligne de la liste des hauts faits, ouvre la
+ * révélation en CONSULTATION : la date gravée (ou « à débloquer »), « Fermer », jamais « Voir ma progression ». Une
+ * médaille ouvre, elle, sa feuille de précisions (`GameElementSheetComposeTest`).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -59,25 +60,6 @@ class ProgressionConsultationTest {
     private fun assertConsultation() {
         compose.onNodeWithText(context.getString(R.string.reveal_close)).assertExists()
         compose.onAllNodesWithText(context.getString(R.string.reveal_continue)).assertCountEquals(0)
-    }
-
-    @Test
-    fun `touching a medal of the shelf opens its tier as a consultation at its engraved date`() {
-        show(
-            ProgressionConcept.Badges,
-            progress(
-                counters = mapOf(EngagementAxisKey.TEXT_MESSAGE to 120),
-                milestones = listOf(
-                    ApiEngagementProgress.Milestone(EngagementMilestoneType.BADGE, "${EngagementAxisKey.TEXT_MESSAGE.wire}:100", "2026-10-03T08:00:00.000Z"),
-                ),
-            ),
-        )
-        compose.onAllNodesWithText(context.getString(R.string.reveal_close)).assertCountEquals(0)
-
-        compose.onNodeWithContentDescription(context.getString(R.string.progression_axis_content_text_message), substring = true).performClick()
-
-        assertConsultation()
-        assertRevealSays(context.getString(R.string.progression_obtained, "October 3, 2026"))
     }
 
     @Test
