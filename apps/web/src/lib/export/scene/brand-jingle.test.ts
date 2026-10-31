@@ -41,12 +41,16 @@ describe("la signature sonore de Meeshy (miroir de MeeshyBrandJingle Kotlin et S
     expect(rms(pcm, pcm.length - 48, pcm.length)).toBeLessThan(0.001);
   });
 
-  test('la première note est un La à 440 Hz : le signal passe par zéro au rythme de sa période', () => {
+  test("avant l'entrée de la deuxième note, le signal est la seule note A4 (échantillons-clés au rapport près)", () => {
     const pcm = brandIntroSamples();
-    const window = Array.from(pcm.slice(0, 4_800));
-    const rising = window.filter((sample, index) => index > 0 && (window[index - 1] ?? 0) < 0 && sample >= 0).length;
-    expect(rising).toBeGreaterThanOrEqual(8);
-    expect(rising).toBeLessThanOrEqual(11);
+    const note = (frame: number): number => {
+      const t = frame / 48_000;
+      const attack = t < 0.025 ? t / 0.025 : 1;
+      return (Math.sin(2 * Math.PI * 440 * t) + 0.126 * Math.sin(2 * Math.PI * 880 * t)) * attack * 0.5 ** (t / 0.62);
+    };
+    for (const [a, b] of [[300, 700], [1_000, 5_000], [9_000, 13_000]] as const) {
+      expect((pcm[a] ?? 0) / (pcm[b] ?? 1)).toBeCloseTo(note(a) / note(b), 3);
+    }
   });
 
   test('deux rendus donnent les mêmes échantillons, au bit près', () => {
