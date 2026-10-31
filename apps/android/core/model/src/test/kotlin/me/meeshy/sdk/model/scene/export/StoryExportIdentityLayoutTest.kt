@@ -40,6 +40,12 @@ class StoryExportIdentityLayoutTest {
     }
 
     @Test
+    fun `the painted suffix after the name is the circle logo alone, nothing below Close`() {
+        assertThat(layout(identity(badge = "🔥")).nameSuffix).isEqualTo(" 🔥")
+        assertThat(layout(identity(badge = null)).nameSuffix).isEmpty()
+    }
+
+    @Test
     fun `the avatar is centred and the mood row only exists with an emoji`() {
         val laid = layout(identity())
         assertThat(laid.avatarLeft + laid.avatarSide / 2f).isWithin(1e-3f).of(540f)
