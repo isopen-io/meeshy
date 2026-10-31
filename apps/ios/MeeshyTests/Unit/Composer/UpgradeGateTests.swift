@@ -275,4 +275,21 @@ final class UpgradeGateTests: XCTestCase {
             )
         }
     }
+
+    /// VoiceOver (#13954) : le titre, le message et le bouton « Mettre à jour »
+    /// sont lus ; seule l'icône décorative est muette. Pose le contrat par la
+    /// source — une icône non masquée ferait annoncer « flèche vers le haut »
+    /// avant le titre, et un titre masqué laisserait la porte sans nom.
+    func test_upgradeGateView_voiceOverLitLesTextesEtTaisLIcone() throws {
+        let texte = try source("Meeshy/Features/Composer/UpgradeGateView.swift")
+
+        XCTAssertTrue(texte.contains("\"upgradeGate.title\""), "le titre doit être une chaîne localisée lue")
+        XCTAssertTrue(texte.contains("\"upgradeGate.message\""), "le message doit être une chaîne localisée lue")
+        XCTAssertTrue(texte.contains("\"upgradeGate.action\""), "le bouton doit porter son libellé localisé")
+        XCTAssertEqual(
+            texte.components(separatedBy: ".accessibilityHidden(true)").count - 1, 1,
+            "une seule chose est muette : l'icône décorative — rien d'autre ne doit disparaître de VoiceOver"
+        )
+        XCTAssertTrue(texte.contains("Image(systemName: \"arrow.up.circle.fill\")"))
+    }
 }

@@ -433,6 +433,12 @@ final class UpgradeRequiredSocketPayloadTests: XCTestCase {
         XCTAssertNil(end, "ce n'est pas une fin de session invité")
         XCTAssertNil(MessageSocketManager.shared.socket, "le transport — et la reconnexion de Socket.IO — est démonté")
         XCTAssertFalse(MessageSocketManager.shared.hasPendingReconnect)
+
+        // La notification part sur la file principale : on attend son arrivée.
+        let posee = expectation(description: "porte posée")
+        let attente = center.addObserver(forName: .meeshyUpgradeRequired, object: nil, queue: nil) { _ in posee.fulfill() }
+        defer { center.removeObserver(attente) }
+        wait(for: [posee], timeout: 2)
         XCTAssertEqual(received.requirements.map(\.minVersion), ["2.0.0"])
     }
 

@@ -122,6 +122,19 @@ public struct UpgradeRequirement: Sendable, Equatable {
         }
         return UpgradeRequirement(minVersion: wire.minVersion ?? "", storeUrl: wire.storeUrl)
     }
+
+    /// La même rupture, portée par la socket (#13954) : `error { code:
+    /// "UPGRADE_REQUIRED", minVersion, storeUrl }` émis au handshake, avant la
+    /// coupure. Le code seul déclenche — un `minVersion` absent reste `""`,
+    /// comme un corps 426 illisible (fail-closed).
+    public static func fromSocketErrorPayload(_ data: [Any]) -> UpgradeRequirement? {
+        guard let payload = data.first as? [String: Any],
+              payload["code"] as? String == "UPGRADE_REQUIRED" else { return nil }
+        return UpgradeRequirement(
+            minVersion: payload["minVersion"] as? String ?? "",
+            storeUrl: payload["storeUrl"] as? String
+        )
+    }
 }
 
 public extension Notification.Name {
@@ -138,7 +151,7 @@ public extension UpgradeRequirement {
 
     /// Poste sur la file PRINCIPALE : les observateurs sont des vues SwiftUI,
     /// et le 426 arrive depuis la file réseau d'URLSession.
-    func post(via center: NotificationCenter = .default) {
+    public func post(via center: NotificationCenter = .default) {
         var userInfo: [String: String] = [Self.minVersionUserInfoKey: minVersion]
         if let storeUrl { userInfo[Self.storeUrlUserInfoKey] = storeUrl }
         DispatchQueue.main.async {
