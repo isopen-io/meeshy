@@ -32,7 +32,7 @@ class ProgressionDoorsComposeTest {
         var rules = 0
         var settings = 0
         compose.setContent {
-            MeeshyTheme { ProgressionDoors(hasGame = true, onOpenRules = { rules++ }, onOpenSettings = { settings++ }) }
+            MeeshyTheme { ProgressionDoors(hasGame = true, onOpenNotebook = {}, onOpenRules = { rules++ }, onOpenSettings = { settings++ }) }
         }
 
         compose.onNodeWithText(context.getString(R.string.game_door_rules)).assertHasClickAction().performClick()
@@ -47,7 +47,7 @@ class ProgressionDoorsComposeTest {
     fun `reglages reste la derniere porte et ouvre les reglages du jeu`() {
         var settings = 0
         compose.setContent {
-            MeeshyTheme { ProgressionDoors(hasGame = true, onOpenRules = {}, onOpenSettings = { settings++ }) }
+            MeeshyTheme { ProgressionDoors(hasGame = true, onOpenNotebook = {}, onOpenRules = {}, onOpenSettings = { settings++ }) }
         }
 
         compose.onNodeWithText(context.getString(R.string.game2_door_settings)).performClick()
@@ -58,7 +58,7 @@ class ProgressionDoorsComposeTest {
     @Test
     fun `sans bloc de jeu le carnet ne s offre pas`() {
         compose.setContent {
-            MeeshyTheme { ProgressionDoors(hasGame = false, onOpenRules = {}, onOpenSettings = {}) }
+            MeeshyTheme { ProgressionDoors(hasGame = false, onOpenNotebook = {}, onOpenRules = {}, onOpenSettings = {}) }
         }
 
         compose.onNodeWithText(context.getString(R.string.game_door_rules)).assertDoesNotExist()
