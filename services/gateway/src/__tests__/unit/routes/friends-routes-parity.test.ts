@@ -115,7 +115,7 @@ function makePrisma() {
       findMany: jest.fn().mockResolvedValue([DB_FRIEND_REQUEST]),
       count: jest.fn().mockResolvedValue(1),
       update: jest.fn().mockResolvedValue({ ...DB_FRIEND_REQUEST, status: 'accepted' }),
-      delete: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     notification: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue({}) },
     conversation: {

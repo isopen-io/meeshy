@@ -8,7 +8,9 @@
  *   l'erreur `P2002` de Prisma, c'est ce qui fait tomber un écrivain qui
  *   croirait la paire absente sans le vérifier ;
  * - le `where` d'un `updateMany` (donc la garde de concurrence optimiste) ;
- * - `transitions: { push }` sur le type composite.
+ * - `transitions: { push }` sur le type composite ;
+ * - le `where` d'un `update` ou d'un `deleteMany` de demande (statut compris) :
+ *   une écriture conditionnelle qui ne trouve plus sa ligne rend `P2025`.
  * Toute forme dont il ne sait rien JETTE, comme `findFirstHonouringWhere`.
  */
 import { matchesMongoWhere, type MongoDocument } from './mongo-where';
@@ -33,11 +35,16 @@ export function relationStore(seed: { friendRequests?: readonly Row[]; relations
       const found = state.friendRequests.find((r) => r.id === args.where.id);
       return Promise.resolve(found ? { ...found } : null);
     },
-    update: (args: { where: { id: string }; data: Row }): Promise<Row> => {
-      const found = state.friendRequests.find((r) => r.id === args.where.id);
-      if (!found) return Promise.reject(new Error('friendRequest.update: introuvable'));
+    update: (args: { where: Row & { id: string }; data: Row }): Promise<Row> => {
+      const found = state.friendRequests.find((r) => matchesMongoWhere(r, args.where));
+      if (!found) return Promise.reject(Object.assign(new Error('friendRequest.update: introuvable'), { code: 'P2025' }));
       Object.assign(found, args.data);
       return Promise.resolve({ ...found });
+    },
+    deleteMany: (args: { where: Row }): Promise<{ count: number }> => {
+      const before = state.friendRequests.length;
+      state.friendRequests = state.friendRequests.filter((r) => !matchesMongoWhere(r, args.where));
+      return Promise.resolve({ count: before - state.friendRequests.length });
     },
     delete: (args: { where: { id: string } }): Promise<Row> => {
       const index = state.friendRequests.findIndex((r) => r.id === args.where.id);

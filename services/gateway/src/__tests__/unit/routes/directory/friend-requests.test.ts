@@ -106,7 +106,7 @@ function prismaDouble(opts: Options = {}) {
       ),
       create: jest.fn<any>(async () => ({ id: FR_ID, senderId: MOI, receiverId: AUTRE, status: 'pending', sender: PARTIE, receiver: PARTIE })),
       update: jest.fn<any>(async () => ({ id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', sender: PARTIE, receiver: PARTIE })),
-      delete: jest.fn<any>(async () => ({})),
+      deleteMany: jest.fn<any>(async () => ({ count: 1 })),
       findMany: jest.fn<any>(async () => []),
     },
     conversation: {
@@ -257,7 +257,7 @@ describe("Un geste, un verbe — et l'acteur autorisé", () => {
     const res = await agir(app, 'cancel');
 
     expect(res.statusCode).toBe(404);
-    expect(prisma.friendRequest.delete).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.deleteMany).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -268,7 +268,7 @@ describe("Un geste, un verbe — et l'acteur autorisé", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.deleted).toBe(true);
-    expect(prisma.friendRequest.delete).toHaveBeenCalled();
+    expect(prisma.friendRequest.deleteMany).toHaveBeenCalled();
     await app.close();
   });
 

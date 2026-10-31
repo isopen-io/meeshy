@@ -326,54 +326,80 @@ export async function repondreDemande(
   }
 
   if (action === 'cancel' || action === 'dismiss') {
-    return { valeur: await retirerDemande(fastify, demande, acteurId) };
+    return retirerDemande(fastify, demande, acteurId);
   }
 
   if (demande.status !== 'pending') {
     return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
   }
 
-  return { valeur: await trancherDemande(fastify, request, demande, acteurId, action) };
+  return trancherDemande(fastify, request, demande, acteurId, action);
 }
 
 /**
- * Supprimer une demande ACCEPTÉE défait l'amitié (#13926) : `retirerDemande` ne
- * garde pas le statut avant de supprimer. Le lien repasse à PUBLIC des deux
- * côtés, en SILENCE (aucune notification de baisse), sauf si une AUTRE demande
- * acceptée relie encore la paire — `FriendRequest` n'a pas d'unique de paire.
- * Un échec ne fait jamais échouer la suppression, déjà committée : le
- * rattrapage est rejouable et la loi d'accès lit la demande à défaut de ligne.
+ * Supprimer une demande ACCEPTÉE défait l'amitié (#13926). Le lien repasse à
+ * PUBLIC des deux côtés, en SILENCE (aucune notification de baisse), sauf si
+ * une AUTRE demande acceptée relie encore la paire — `FriendRequest` n'a pas
+ * d'unique de paire.
+ *
+ * La rupture précède la suppression, et son échec LÈVE : une demande acceptée
+ * supprimée sur une rupture ratée laisserait une ligne FRIEND sans aucune
+ * demande, que le rattrapage (qui ne fait que monter) ne corrigerait jamais.
  */
 async function rompreLien(
   fastify: FastifyInstance,
-  demande: { senderId: string; receiverId: string }
+  demande: { id: string; senderId: string; receiverId: string }
 ): Promise<void> {
-  try {
-    const restante = await fastify.prisma.friendRequest.findFirst({
-      where: {
-        status: 'accepted',
-        OR: [
-          { senderId: demande.senderId, receiverId: demande.receiverId },
-          { senderId: demande.receiverId, receiverId: demande.senderId },
-        ],
-      },
-      select: { id: true },
-    });
-    if (restante) return;
-    await resetFriendship(fastify.prisma, { userA: demande.senderId, userB: demande.receiverId, at: new Date() });
-  } catch (error) {
-    logError(fastify.log, 'Error resetting user relation after friendship removal:', error);
-  }
+  const restante = await fastify.prisma.friendRequest.findFirst({
+    where: {
+      id: { not: demande.id },
+      status: 'accepted',
+      OR: [
+        { senderId: demande.senderId, receiverId: demande.receiverId },
+        { senderId: demande.receiverId, receiverId: demande.senderId },
+      ],
+    },
+    select: { id: true },
+  });
+  if (restante) return;
+  await resetFriendship(fastify.prisma, { userA: demande.senderId, userB: demande.receiverId, at: new Date() });
+}
+
+/**
+ * Le statut qui gouverne la rupture est celui de la ligne SUPPRIMÉE, jamais
+ * celui LU plus haut : une demande lue « pending » peut avoir été acceptée
+ * entre-temps. Une demande non acceptée ne porte aucun lien, elle part sous
+ * cette condition même ; si rien ne part, elle est acceptée (on rompt, puis on
+ * supprime) ou déjà partie.
+ */
+async function supprimerDemande(
+  fastify: FastifyInstance,
+  demande: { id: string; senderId: string; receiverId: string }
+): Promise<boolean> {
+  const sansLien = await fastify.prisma.friendRequest.deleteMany({
+    where: { id: demande.id, status: { not: 'accepted' } },
+  });
+  if (sansLien.count > 0) return true;
+
+  const acceptee = await fastify.prisma.friendRequest.findFirst({
+    where: { id: demande.id, status: 'accepted' },
+    select: { id: true },
+  });
+  if (!acceptee) return false;
+
+  await rompreLien(fastify, demande);
+  await fastify.prisma.friendRequest.deleteMany({ where: { id: demande.id } });
+  return true;
 }
 
 async function retirerDemande(
   fastify: FastifyInstance,
-  demande: { id: string; senderId: string; receiverId: string; status: string },
+  demande: { id: string; senderId: string; receiverId: string },
   acteurId: string
-): Promise<Record<string, unknown>> {
-  await fastify.prisma.friendRequest.delete({ where: { id: demande.id } });
-
-  if (demande.status === 'accepted') await rompreLien(fastify, demande);
+): Promise<Resultat<Record<string, unknown>>> {
+  if (!(await supprimerDemande(fastify, demande))) {
+    return { refus: { code: 404, message: 'Demande d\'ami non trouvee' } };
+  }
 
   const notifications = fastify.notificationService;
   if (notifications) {
@@ -398,8 +424,11 @@ async function retirerDemande(
     }
   }
 
-  return { id: demande.id, deleted: true, message: 'Demande d\'ami supprimee' };
+  return { valeur: { id: demande.id, deleted: true, message: 'Demande d\'ami supprimee' } };
 }
+
+const isRecordNotFound = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2025';
 
 async function trancherDemande(
   fastify: FastifyInstance,
@@ -407,9 +436,15 @@ async function trancherDemande(
   demande: { id: string; senderId: string; receiverId: string },
   acteurId: string,
   action: 'accept' | 'reject'
-): Promise<Record<string, unknown>> {
+): Promise<Resultat<Record<string, unknown>>> {
   const statut = action === 'accept' ? 'accepted' : 'rejected';
 
+  // L'écriture est CONDITIONNELLE : une demande lue en attente mais tranchée
+  // entre-temps dans l'AUTRE sens (refus contre acceptation) ne se réécrit
+  // pas, et aucun lien ne naît d'une demande déjà refusée. Le statut visé
+  // reste admis, pour que le rejeu d'une même réponse converge (`replayCost`).
+  // `respondedAt` date la réponse : le rattrapage du lien s'y fie, jamais à
+  // `updatedAt` que toute réécriture ultérieure déplace.
   const misAJour = await withMutationLog({
     request,
     fastify,
@@ -417,15 +452,22 @@ async function trancherDemande(
     kind: 'respondFriendRequest',
     replayCost: 'converges',
     op: () => fastify.prisma.friendRequest.update({
-      where: { id: demande.id },
-      data: { status: statut },
+      where: { id: demande.id, status: { in: ['pending', statut] } },
+      data: { status: statut, respondedAt: new Date() },
       include: INCLUDE_PARTIES,
     }),
     onDuplicate: (resultId) => fastify.prisma.friendRequest.findUnique({
       where: { id: resultId },
       include: INCLUDE_PARTIES,
     }),
+  }).catch((error: unknown) => {
+    if (isRecordNotFound(error)) return null;
+    throw error;
   });
+
+  if (!misAJour) {
+    return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
+  }
 
   const notifications = fastify.notificationService;
   if (notifications) {
@@ -456,7 +498,7 @@ async function trancherDemande(
     // Un REFUS ne crée pas d'amitié : la loi masque donc la présence de celui
     // qu'on vient d'éconduire, exactement comme avant la demande.
     const [refusee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
-    return refusee;
+    return { valeur: refusee };
   }
 
   try {
@@ -524,7 +566,7 @@ async function trancherDemande(
   // ACCEPTÉE et rend la présence du nouvel ami, sans cas particulier ici.
   const [acceptee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
 
-  return { ...acceptee, conversation };
+  return { valeur: { ...acceptee, conversation } };
 }
 
 /** La conversation directe des deux amis — créée si elle n'existe pas. */

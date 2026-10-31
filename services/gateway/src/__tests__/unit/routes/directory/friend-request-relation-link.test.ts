@@ -185,6 +185,29 @@ describe('[audit #13926] une amitié ne survit jamais à sa demande', () => {
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
   });
 
+  it('acceptation lue « pending » mais refusée entre-temps : le refus tient, aucun lien ne naît', async () => {
+    const { status, store } = await repondre({
+      action: 'accept',
+      demandes: [demande(FR_ID, 'rejected')],
+      lectureDemande: demande(FR_ID, 'pending'),
+    });
+
+    expect(status).toBe(404);
+    expect(store.friendRequests()[0]).toMatchObject({ status: 'rejected' });
+    expect(store.relations()).toHaveLength(0);
+  });
+
+  it('rupture dont l’écriture du lien échoue : la suppression échoue aussi, rien n’est supprimé', async () => {
+    const liens = relationStore({ relations: [lien('FRIEND', 'FRIEND')] });
+    const panne = { ...liens.prisma.userRelation, updateMany: jest.fn(async () => { throw new Error('mongo down'); }) };
+
+    const { status, store, notificationService } = await repondre({ action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], userRelation: panne });
+
+    expect(status).toBe(500);
+    expect(store.friendRequests()).toHaveLength(1);
+    expect(notificationService.emitFriendRequestCancelled).not.toHaveBeenCalled();
+  });
+
   it('accepter grave respondedAt : la date d’acceptation du rattrapage ne repose pas sur updatedAt', async () => {
     const { store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')] });
 
