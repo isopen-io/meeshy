@@ -23,7 +23,6 @@ import me.meeshy.sdk.model.mediacache.MediaPinTable
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -172,18 +171,6 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         }
     }
 
-    private fun copyExactly(input: InputStream, out: OutputStream, length: Long): Boolean {
-        val buffer = ByteArray(COPY_BUFFER_BYTES)
-        var copied = 0L
-        while (copied < length) {
-            val read = input.read(buffer, 0, minOf(buffer.size.toLong(), length - copied).toInt())
-            if (read < 0) return false
-            out.write(buffer, 0, read)
-            copied += read
-        }
-        return input.read() < 0
-    }
-
     override fun isFullyCached(category: MediaCacheCategory, key: String): Boolean {
         if (category != MediaCacheCategory.AUDIO && category != MediaCacheCategory.VIDEO) return false
         val cache = cacheFor(category)
@@ -211,7 +198,6 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
 
     public companion object {
         private const val PINS_REFRESH_MILLIS = 2_000L
-        private const val COPY_BUFFER_BYTES = 64 * 1024
 
         @Volatile
         private var instance: MeeshyMediaCache? = null
