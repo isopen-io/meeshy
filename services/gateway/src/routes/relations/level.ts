@@ -7,7 +7,7 @@ import { sendBadRequest, sendInternalError, sendSuccess, sendUnauthorized } from
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { isBlockedBetween } from '../../utils/blocking';
-import { niveauEffectif } from '../../services/friendship';
+import { niveauEffectifUniforme } from '../../services/friendship';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger.js';
 import type { AuthenticatedRequest } from '../users/types';
@@ -43,18 +43,29 @@ export const relationLevelJsonSchema = {
  *
  * ## Une seule loi
  *
- * Le niveau vient de `niveauEffectif` (`services/friendship.ts`), site unique ;
- * cette route ne compare aucun niveau. La forme est MINIMALE et ADDITIVE :
+ * Le niveau vient de `niveauEffectifUniforme` (`services/friendship.ts`), la
+ * loi de `niveauEffectif` lue sans que le lien décide des lectures ; cette
+ * route ne compare aucun niveau. La forme est MINIMALE et ADDITIVE :
  * `grantedByMe`, `since`, `progress`, `eligibleFor` viendront avec #13938.
  *
  * ## `PUBLIC` dit « pas de lien », et c'est tout
  *
  * Bloqué dans un sens ou dans l'autre, utilisateur inconnu, aucun lien : la même
- * réponse, par le même chemin de lecture. Les deux questions (blocage, niveau)
- * sont posées SANS condition l'une de l'autre, pour qu'un inconnu et un bloqué
- * ne se distinguent ni par le contenu ni par le nombre de requêtes — la route
- * n'est pas un oracle d'existence ni de blocage. Soi-même est refusé (400) :
- * il n'y a pas de lien avec soi, et le dire en `PUBLIC` serait faux.
+ * réponse, par le même chemin de lecture : blocage, ligne de lien et demande
+ * acceptée sont lus TOUS LES TROIS, en parallèle, sans condition l'un de
+ * l'autre — un inconnu et un bloqué (même lié de près) ne se distinguent ni
+ * par le contenu ni par le nombre de requêtes. La route n'est pas un oracle
+ * d'existence ni de blocage. Soi-même est refusé (400) : il n'y a pas de lien
+ * avec soi, et le dire en `PUBLIC` serait faux.
+ *
+ * ## L'identifiant est CANONIQUE avant toute question
+ *
+ * Un ObjectId s'écrit en hexadécimal de casse libre, et Mongo lit `ABC…` et
+ * `abc…` comme le même document. La clé de paire (`relationPairKey`) ordonne
+ * pourtant des CHAÎNES : une casse hostile inverse l'ordre, manque la ligne et
+ * retombe sur la demande acceptée — un lien BAISSÉ après l'amitié (RG-07) se
+ * relisait `FRIEND`, et son propre identifiant en majuscules échappait au 400.
+ * L'identifiant est donc ramené en minuscules, et c'est lui qui est servi.
  */
 export async function relationsLevelRoutes(fastify: FastifyInstance) {
   const parAppelant = createCustomRateLimiter(
@@ -94,14 +105,14 @@ export async function relationsLevelRoutes(fastify: FastifyInstance) {
     const moi = lecteurInscrit(request);
     if (!moi) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
 
-    const { userId } = request.params;
+    const userId = request.params.userId.toLowerCase();
     if (!isValidMongoId(userId)) return sendBadRequest(reply, 'Invalid user ID format');
     if (userId === moi) return sendBadRequest(reply, 'A relation level needs another person');
 
     try {
       const [bloque, niveau] = await Promise.all([
         isBlockedBetween(fastify.prisma, moi, userId),
-        niveauEffectif(fastify.prisma, moi, userId),
+        niveauEffectifUniforme(fastify.prisma, moi, userId),
       ]);
 
       const servi: RelationLevelResponse = { userId, effectiveLevel: bloque ? 'PUBLIC' : niveau };

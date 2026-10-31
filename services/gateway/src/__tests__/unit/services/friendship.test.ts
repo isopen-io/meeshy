@@ -15,7 +15,14 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
-import { amitieAcceptee, amisAcceptes, amisAcceptesParmi, niveauEffectif, niveauxParmi } from '../../../services/friendship';
+import {
+  amitieAcceptee,
+  amisAcceptes,
+  amisAcceptesParmi,
+  niveauEffectif,
+  niveauEffectifUniforme,
+  niveauxParmi,
+} from '../../../services/friendship';
 import { relationStore } from '../../helpers/user-relation-store';
 import { backfillFriendship } from '../../../services/relations/userRelationWriter';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
@@ -198,6 +205,61 @@ describe('niveauEffectif', () => {
     await expect(niveauEffectif(prisma as never, LOW, HIGH)).resolves.toBe('PUBLIC');
     await expect(niveauEffectif(prisma as never, LOW, LOW)).resolves.toBe('PUBLIC');
     await expect(niveauEffectif(prisma as never, '', HIGH)).resolves.toBe('PUBLIC');
+  });
+});
+
+describe('niveauEffectifUniforme — la MÊME loi, lue sans que le lien décide des lectures', () => {
+  const baisse = { actorId: LOW, from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date('2026-09-20T00:00:00.000Z') };
+  const mondes = {
+    'aucun lien': {},
+    'ami par la ligne': { relations: [relationRow()] },
+    'proche et sang': { relations: [relationRow({ grantedByLow: 'BLOOD', grantedByHigh: 'CLOSE' })] },
+    'à sens unique': { relations: [relationRow({ grantedByLow: 'BLOOD', grantedByHigh: 'PUBLIC' })] },
+    'repli sur la demande acceptée': { friendRequests: [acceptedRequest(HIGH, LOW)] },
+    'baisse postérieure à l\'acceptation': {
+      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND', transitions: [baisse] })],
+      friendRequests: [acceptedRequest(LOW, HIGH)],
+    },
+    'Connaissance née avant le rattrapage': {
+      relations: [relationRow({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })],
+      friendRequests: [acceptedRequest(LOW, HIGH)],
+    },
+    'proche baissé à ami après l\'acceptation': {
+      relations: [
+        relationRow({
+          grantedByLow: 'FRIEND',
+          grantedByHigh: 'CLOSE',
+          transitions: [{ ...baisse, from: 'CLOSE', to: 'FRIEND' }],
+        }),
+      ],
+      friendRequests: [acceptedRequest(LOW, HIGH)],
+    },
+  } as const;
+
+  it.each(Object.entries(mondes))('rend le niveau de niveauEffectif — %s', async (_nom, monde) => {
+    const attendu = await niveauEffectif(relationStore(monde).prisma as never, LOW, HIGH);
+    await expect(niveauEffectifUniforme(relationStore(monde).prisma as never, HIGH, LOW)).resolves.toBe(attendu);
+    await expect(niveauEffectifUniforme(relationStore(monde).prisma as never, LOW, HIGH)).resolves.toBe(attendu);
+  });
+
+  it.each(Object.entries(mondes))('lit la ligne ET la demande acceptée, une fois chacune — %s', async (_nom, monde) => {
+    const { prisma } = relationStore(monde);
+    const lien = jest.spyOn(prisma.userRelation, 'findUnique');
+    const acceptation = jest.spyOn(prisma.friendRequest, 'findFirst');
+
+    await niveauEffectifUniforme(prisma as never, LOW, HIGH);
+
+    expect(lien).toHaveBeenCalledTimes(1);
+    expect(acceptation).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne lit rien pour deux identifiants identiques ou vides, et rend PUBLIC', async () => {
+    const { prisma } = relationStore({ relations: [relationRow()] });
+    const lien = jest.spyOn(prisma.userRelation, 'findUnique');
+
+    await expect(niveauEffectifUniforme(prisma as never, LOW, LOW)).resolves.toBe('PUBLIC');
+    await expect(niveauEffectifUniforme(prisma as never, '', HIGH)).resolves.toBe('PUBLIC');
+    expect(lien).not.toHaveBeenCalled();
   });
 });
 
