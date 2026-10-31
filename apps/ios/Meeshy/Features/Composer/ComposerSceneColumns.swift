@@ -318,6 +318,7 @@ nonisolated enum ComposerSceneLift {
     /// bande — sur tout écran, elle se pose sous la scène (#13839, L6).
     static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool) -> Bool {
         switch lowZone {
+        case .properties:  return true
         case .toolOptions: return toolOptionsServed
         case .band:        return true
         case .nothing:     return false

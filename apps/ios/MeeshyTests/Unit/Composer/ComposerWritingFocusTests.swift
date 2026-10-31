@@ -172,7 +172,8 @@ final class ComposerWritingFocusTests: XCTestCase {
         XCTAssertTrue(hote.contains("writesPostBody:editsPostContent,"),
                       "la surface doit savoir QUEL texte on écrit")
         let surface = compact(try source("Meeshy/Features/Composer/ComposerSceneSurface.swift"))
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description,toolIsOpen:toolIsOpen,writing:writing)"),
+        // Le volet cède aussi à un objet sélectionné (#13957) : `sceneIsFocused`.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description,toolIsOpen:sceneIsFocused,writing:writing)"),
                       "le volet demande à la règle s'il survit à l'écriture du corps")
         XCTAssertTrue(surface.contains(
             ".animation(ComposerWritingExit.chromeAnimation(reduceMotion:reduceMotion,writesText:writesText),value:writesText)"),

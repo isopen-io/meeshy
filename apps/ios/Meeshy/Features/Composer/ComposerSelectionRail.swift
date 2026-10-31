@@ -2,14 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Le rail droit du grand écran, « SÉLECTION »** (#13839, L6, maquette validée).
+/// **Le rail « SÉLECTION » du grand écran** (#13839, L6 ; #13957, R6).
 ///
-/// Les actions de la barre de sélection (L5), composées par la MÊME loi (`ComposerSelectionActions`) et remises
-/// par le même relais : Modifier · Dupliquer · Temps, puis Retirer en rouge, à l'écart. Sans sélection, le
-/// rail reste en place et vide — la scène ne bouge pas quand on sélectionne. ↶ ↷ au pied, seulement avec un
-/// historique.
+/// Les options d'un objet sélectionné, composées par la MÊME loi (`ComposerSelectionActions`) et remises par le
+/// même relais : Modifier · Dupliquer · Temps, puis Retirer en rouge, à l'écart. Il prend la place du rail des
+/// outils, à gauche, tant que l'objet est sélectionné (`ComposerSelectionChrome.leadingRail`) ; à droite, il ne
+/// porte plus que ↶ ↷, au pied, seulement avec un historique — sa place reste, la scène ne bouge pas.
 struct ComposerSelectionRail: View {
-    let selection: ComposerSelectionBar?
+    let selection: ComposerSelectionColumn?
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
@@ -17,14 +17,7 @@ struct ComposerSelectionRail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(ComposerLabeledRailCopy.selection)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(ComposerFloatingRailInk.rest.opacity(0.6))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.top, MeeshySpacing.xs)
-                .accessibilityAddTraits(.isHeader)
+            if let selection { header(selection.level) }
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) { actions }
             }
@@ -40,27 +33,40 @@ struct ComposerSelectionRail: View {
         .accessibilityIdentifier("composer.rail.selection")
     }
 
+    private func header(_ level: ComposerEditRailLevel) -> some View {
+        Text(level == .actions ? ComposerLabeledRailCopy.selection : ComposerEditRailCopy.railLabel(level))
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(ComposerFloatingRailInk.rest.opacity(0.6))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.top, MeeshySpacing.xs)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     @ViewBuilder
     private var actions: some View {
         if let selection {
-            ForEach(selection.actions.filter { !$0.isDestructive }, id: \.self) { action in
-                item(action, in: selection)
+            ForEach(selection.items.filter { !$0.isDestructive }, id: \.self) { item in
+                row(item, in: selection)
             }
-            if let retirer = selection.actions.first(where: \.isDestructive) {
+            if let retirer = selection.items.first(where: \.isDestructive) {
                 Divider().overlay(ComposerFloatingRailInk.rest.opacity(0.2)).padding(.vertical, MeeshySpacing.xs)
-                item(retirer, in: selection)
+                row(retirer, in: selection)
             }
         }
     }
 
-    private func item(_ action: ComposerSelectionAction, in selection: ComposerSelectionBar) -> some View {
-        Button { selection.onAction(action) } label: {
-            ComposerLabeledRailRow(symbol: action.symbol, label: ComposerSelectionCopy.label(action),
-                                   tint: ComposerSelectionBarPaint.tint(action))
+    private func row(_ item: ComposerEditRailItem, in selection: ComposerSelectionColumn) -> some View {
+        let ouverte = ComposerEditRailItems.isOn(item, openSection: selection.openSection)
+        return Button { selection.onItem(item) } label: {
+            ComposerLabeledRailRow(symbol: ComposerEditRailCopy.symbol(item), label: ComposerEditRailCopy.label(item),
+                                   isOn: ouverte, tint: ComposerSelectionPaint.tint(item))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(ComposerSelectionCopy.label(action)))
-        .accessibilityIdentifier("composer.rail.selection.\(action.rawValue)")
+        .accessibilityLabel(Text(ComposerEditRailCopy.label(item)))
+        .accessibilityAddTraits(ouverte ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("composer.rail.selection.\(item.identifier)")
     }
 
     @ViewBuilder

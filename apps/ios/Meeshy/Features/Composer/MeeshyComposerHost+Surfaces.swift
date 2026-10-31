@@ -417,7 +417,7 @@ extension MeeshyComposerHost {
             // Le badge ne parle que du pré-envoi de l'objet (« Envoi 40 % », #13864, R5), qui ne retient rien.
             selectedItemId: sceneTypesInline ? nil : selectedSceneItemId,
             selectionBadge: ComposerSceneIntakeCopy.sendingBadge(for: selectedSceneItemPreUpload),
-            selectionBar: sceneSelectionRelay.bar,
+            selectionColumn: sceneSelectionRelay.column,
             intakeBlocks: sceneIntakeBlocks,
             intakeGhost: sceneIntakeGhost,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
@@ -502,7 +502,7 @@ extension MeeshyComposerHost {
             // post, par le même terme que le socle (`writesText`, #6132).
             writesText: writesText,
             writesPostBody: editsPostContent,
-            inlinePanel: sceneInlinePanel,
+            inlinePanel: sceneInlinePanel, propertiesSheet: sceneSelectionRelay.propertiesSheet,
             trailingFootFollowsOptions: sceneTrailingFootFollowsOptions,
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
@@ -926,7 +926,7 @@ extension MeeshyComposerHost {
         if let effet = activeSceneEffect {
             sceneEffectCarousel(effet)
         } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
-            let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
+            let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)
             socleNode
                 .opacity(servi ? 1 : 0)
                 .allowsHitTesting(servi)

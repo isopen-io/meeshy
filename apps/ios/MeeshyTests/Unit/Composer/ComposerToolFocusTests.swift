@@ -92,25 +92,32 @@ final class ComposerToolFocusTests: XCTestCase {
         // demandent à `ComposerRestChrome`, nourrie de l'outil et de l'écriture.
         XCTAssertTrue(surface.contains("ComposerRestChrome.State(toolIsOpen: toolIsOpen,"),
                       "le chrome du repos doit répondre à l'outil par la règle")
-        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine.
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing)"),
-                      ".description doit répondre à l'outil et au texte écrit par la règle")
+        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine ;
+        // elle cède aussi à un objet sélectionné (#13957), d'où `sceneIsFocused`.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: sceneIsFocused, writing: writing)"),
+                      ".description doit répondre à l'outil, à la sélection et au texte écrit par la règle")
         // Le rail droit répond AUSSI à l'écriture (#6131) — même règle.
         XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
                       ".trailingRail doit répondre à l'outil et à l'écriture par la règle")
         XCTAssertTrue(surface.contains("options: trailingOptions"),
                       "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
         // L'édition du fond vide aussi les portes (#8847) : `toolIsOpen` est la
-        // règle (`ComposerToolFocus.toolIsOpen`), et la colonne la lit.
-        XCTAssertTrue(surface.contains("ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)"),
+        // règle (`ComposerToolFocus.toolIsOpen`), et la colonne la lit. Une
+        // édition ouverte depuis le rail d'édition en est un NIVEAU, pas un
+        // outil (#13957) : la règle de la sélection le dit.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool,"),
                       "l'outil ouvert se lit de la règle, pas du seul mode du rail")
+        XCTAssertTrue(surface.contains("ComposerSelectionChrome.inlineEditOpensTool(")
+                        && surface.contains("editsInline: editsInline, objectIsSelected: selectionColumn != nil))"),
+                      "l'édition en place n'ouvre un outil que hors du rail d'édition")
         XCTAssertFalse(surface.contains("ComposerLeadingRail("),
                        "le rail gauche à glyphes est revenu sur la scène (#13839)")
     }
 
     func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(hote.contains("ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)"))
+        XCTAssertTrue(hote.contains("let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)"),
+                      "le socle cède à l'outil ET à l'édition (#13957)")
         XCTAssertTrue(hote.contains("railMode: sceneRailMode"),
                       "la surface et le socle lisent le MÊME mode")
         XCTAssertFalse(hote.contains("anchorsToDoor"))
@@ -162,8 +169,8 @@ final class ComposerToolFocusTests: XCTestCase {
     func test_10364_lesOptionsDuRailDroit_peignentLEncreBlanche() {
         XCTAssertEqual(ComposerTrailingColumnPaint(.exitTool).tint, ComposerFloatingRailInk.rest)
         XCTAssertTrue(ComposerSelectionAction.remove.isDestructive)
-        XCTAssertEqual(ComposerSelectionBarPaint.tint(.remove), MeeshyColors.error)
-        XCTAssertEqual(ComposerSelectionBarPaint.tint(.modify), ComposerFloatingRailInk.rest)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.remove), MeeshyColors.error)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.modify), ComposerFloatingRailInk.rest)
     }
 
     /// Le rail droit, le couloir de l'éditeur d'objet et la rangée d'outils du

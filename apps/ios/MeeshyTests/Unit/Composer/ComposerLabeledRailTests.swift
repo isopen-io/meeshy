@@ -101,8 +101,10 @@ final class ComposerLabeledRailTests: XCTestCase {
         let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
         XCTAssertTrue(surface.contains("onTool: { onRestTool?($0) }"), "le rail ouvre ce que la colonne ouvrait")
         XCTAssertTrue(surface.contains("onMore: rails.onMore"))
-        XCTAssertTrue(surface.contains("selection: ComposerSelectionRail(selection: selectionBar"),
-                      "le rail droit sert la barre de sélection de L5, par le même relais")
+        XCTAssertTrue(surface.contains("objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) }"),
+                      "les options de l'objet prennent la place du rail des outils, par le même relais (#13957)")
+        XCTAssertTrue(surface.contains("selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo)"),
+                      "le rail droit ne garde que l'historique")
         let feuille = try ComposerSceneArrangementTests.source("MeeshyComposerHost+AnchoredSheet.swift")
         XCTAssertTrue(feuille.contains(".frame(maxWidth: ComposerSceneArrangementRelay(host: host).sheetWidth)"),
                       "une feuille se pose dans la colonne de la scène, sans couvrir les rails")

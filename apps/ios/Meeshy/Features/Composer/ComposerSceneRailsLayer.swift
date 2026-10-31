@@ -10,14 +10,18 @@ import MeeshyUI
 struct ComposerSceneRailsLayer: View {
     let leading: ComposerLabeledRail
     let selection: ComposerSelectionRail
+    /// Un objet sélectionné (#13957, R6) : ses options prennent la place du rail des outils, à gauche, et le
+    /// rail droit ne garde que l'historique.
+    var objectSelection: ComposerSelectionRail?
     var selectionIsShown: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var slideRow: AnyView?
     var showsSlideRow: Bool = false
     let isServed: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            leading.frame(width: ComposerSceneArrangement.railWidth)
+            leadingRail.frame(width: ComposerSceneArrangement.railWidth)
             VStack(spacing: 0) {
                 if showsSlideRow, let slideRow { slideRow.frame(height: 44) }
                 Spacer(minLength: 0)
@@ -35,6 +39,19 @@ struct ComposerSceneRailsLayer: View {
         .allowsHitTesting(isServed)
         .accessibilityHidden(!isServed)
         .animation(.easeOut(duration: 0.18), value: isServed)
+        .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion), value: objectSelection != nil)
+    }
+
+    @ViewBuilder
+    private var leadingRail: some View {
+        ZStack {
+            switch ComposerSelectionChrome.leadingRail(objectIsSelected: objectSelection != nil) {
+            case .tools:
+                leading.transition(.opacity)
+            case .editing:
+                objectSelection.transition(.opacity)
+            }
+        }
     }
 }
 

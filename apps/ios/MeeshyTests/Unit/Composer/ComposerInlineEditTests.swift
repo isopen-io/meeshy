@@ -564,13 +564,18 @@ final class ComposerInlineEditTests: XCTestCase {
                       "la plaque d'options ne doit pas renvoyer le clavier de la saisie en ligne")
     }
 
-    /// Le cadre que la plaque évite est celui du texte EN SAISIE quand c'est lui
-    /// qu'on règle.
-    func test_panneau_lisLeCadreDuTexteEnSaisie() throws {
+    /// **Les propriétés ne couvrent plus rien : elles vivent EN BAS** (#13957,
+    /// #13974). La plaque qui évitait l'objet en haut à droite (#9495) n'a plus
+    /// d'objet à éviter : la scène se réduit au-dessus de la feuille basse, qui
+    /// ne renvoie pas davantage le clavier de la saisie en ligne.
+    func test_panneau_seLogeEnBas_sansRenvoyerLeClavier() throws {
         let code = try source("Meeshy/Features/Composer/ComposerInlineToolPanel.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("typing:viewModel.textEditingMode.activeTextId==edit.objectId"),
-                      "le panneau doit lire le texte là où le canvas le montre pendant la frappe")
+        XCTAssertTrue(code.contains("ComposerPropertiesSheetPlate(plateauTint:plateauTint,holdsGesture:planHoldsGesture)"),
+                      "les propriétés d'un objet se posent dans la feuille basse")
+        let debut = try XCTUnwrap(code.range(of: "structComposerPropertiesSheetPlate<"))
+        let fin = try XCTUnwrap(code.range(of: "structComposerTrailingOptionsPlate<", range: debut.upperBound..<code.endIndex))
+        XCTAssertTrue(code[debut.upperBound..<fin.lowerBound].contains(".scrollDismissesKeyboard(.never)"))
     }
 
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
