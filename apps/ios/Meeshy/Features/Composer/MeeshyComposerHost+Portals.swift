@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 import MeeshySDK
 import MeeshyUI
 
@@ -260,7 +261,7 @@ extension MeeshyComposerHost {
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared()
         )
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }

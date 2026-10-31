@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// **Un élément qui ENTRE dans la scène** (#13864, règle R5 de
 /// `docs/superpowers/specs/2026-10-31-un-seul-compositeur-design.md`).
@@ -34,6 +34,8 @@ nonisolated struct ComposerSceneIntake: Equatable, Sendable {
     let isOffline: Bool
     /// Le média fondera le fond de la scène : l'espace réservé la couvre.
     let foundsScene: Bool
+    /// La vignette de la photo qui entre, posée sur l'espace réservé (#13906).
+    var thumbnail: UIImage? = nil
 
     static func starting(kind: Kind, total: Int, isOffline: Bool, foundsScene: Bool,
                          id: UUID = UUID()) -> ComposerSceneIntake {
@@ -47,7 +49,18 @@ nonisolated struct ComposerSceneIntake: Equatable, Sendable {
     }
 
     func failing() -> ComposerSceneIntake {
-        with(.failed)
+        var echec = with(.failed)
+        echec.thumbnail = nil
+        return echec
+    }
+
+    /// La vignette n'entre que dans l'ajout qui l'a demandée, tant qu'il se
+    /// prépare ; la première arrivée reste.
+    func showing(_ image: UIImage, for id: UUID) -> ComposerSceneIntake {
+        guard id == self.id, isPreparing, thumbnail == nil else { return self }
+        var vu = self
+        vu.thumbnail = image
+        return vu
     }
 
     var isPreparing: Bool {
@@ -77,7 +90,8 @@ nonisolated struct ComposerSceneIntake: Equatable, Sendable {
     }
 
     private func with(_ phase: Phase) -> ComposerSceneIntake {
-        ComposerSceneIntake(id: id, kind: kind, phase: phase, isOffline: isOffline, foundsScene: foundsScene)
+        ComposerSceneIntake(id: id, kind: kind, phase: phase, isOffline: isOffline, foundsScene: foundsScene,
+                            thumbnail: thumbnail)
     }
 }
 

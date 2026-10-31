@@ -17,6 +17,7 @@ extension MeeshyComposerHost {
         guard let ajout = beginSceneIntake(.media, total: items.count,
                                            foundsScene: intakeFoundsScene(count: items.count),
                                            retry: { startPhotoLibraryIntake(items) }) else { return }
+        ComposerSceneIntakePreview.request(items.first, for: ajout, into: $sceneIntake)
         // Les médias sont ACCUMULÉS puis remis en une fois à
         // `ingestIntoDocument` : écrire dans la boucle rejouait la dérivation à
         // chaque item, sur un état différent (#4879).
@@ -26,6 +27,7 @@ extension MeeshyComposerHost {
             defer { advanceSceneIntake(ajout, done: rang + 1) }
             let declaredType = item.supportedContentTypes.first
             guard let url = await ComposerPhotoLibraryStaging.file(for: item, declaredType: declaredType) else { continue }
+            if rang == 0 { ComposerSceneIntakePreview.request(staged: url, of: item, for: ajout, into: $sceneIntake) }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
             // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
@@ -270,9 +272,12 @@ nonisolated enum ComposerImportedFileRoute: Equatable {
 /// du fil principal. Hors de `MeeshyComposerHost` : l'hôte ne porte pas la
 /// mise en fichier, il la consomme.
 enum ComposerPhotoLibraryStaging {
+    static func isVideo(_ item: PhotosPickerItem) -> Bool {
+        item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+    }
+
     static func file(for item: PhotosPickerItem, declaredType: UTType?) async -> URL? {
-        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-        if isVideo { return try? await PickedMedia.loadVideoFile(item) }
+        if isVideo(item) { return try? await PickedMedia.loadVideoFile(item) }
         guard let data = try? await PickedMedia.loadImageData(item) else { return nil }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(
             "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
