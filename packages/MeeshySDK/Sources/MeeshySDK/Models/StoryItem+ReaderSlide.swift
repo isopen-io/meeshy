@@ -109,6 +109,15 @@ extension StoryItem {
                    let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
                     medias[i].aspectRatio = Double(w) / Double(h)
                 }
+                // Adresse de l'asset (#13972), comme pour les pistes audio plus
+                // bas : l'exporteur ne reçoit qu'un slide et rapatrie chaque
+                // `mediaURL` avant de composer. Sans elle, une photo ou une
+                // vidéo publiée — posée ou en fond — sortait NOIRE d'« Enregistrer »
+                // et d'« Imager ». Le lecteur n'en dépend pas : son resolver keyé
+                // sur `postMediaId` passe avant (`StoryMediaLayerRules`).
+                if medias[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
+                    medias[i].mediaURL = url
+                }
             }
             effects.mediaObjects = medias
         }

@@ -233,7 +233,7 @@ internal fun PostDetailContent(
     onReact: (PostReactionPick) -> Unit,
     onBookmark: () -> Unit,
     onCommentNotice: suspend (CommentNotice) -> Unit,
-    commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice) },
+    commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice, support = post.commentCardSupport) },
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }

@@ -221,6 +221,7 @@
     <string name="stories_scene_export_failed">فشل التصدير. حاول مرة أخرى.</string>
     <string name="stories_scene_export_in_progress">جارٍ التصدير…</string>
     <string name="stories_scene_export_saved">تم الحفظ في مكتبة الصور</string>
+    <string name="stories_scene_export_shared">تمت المشاركة</string>
     <string name="stories_scene_frame_backdrop_black">أسود</string>
     <string name="stories_scene_frame_backdrop_blur">ضبابي</string>
     <string name="stories_scene_frame_backdrop_indigo">نيلي</string>

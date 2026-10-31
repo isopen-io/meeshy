@@ -60,6 +60,8 @@ internal fun MediaPreviewRow(
     onSelect: ((String) -> Unit)? = null,
     placedMediaIds: Set<String> = emptySet(),
     onTogglePlaced: ((String) -> Unit)? = null,
+    pendingPhase: (String) -> PendingUploadPhase = { PendingUploadPhase.OFFLINE },
+    onRetryPending: ((String) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -84,10 +86,13 @@ internal fun MediaPreviewRow(
             )
         }
         items(pending, key = { it.cmid }) { upload ->
+            val phase = pendingPhase(upload.cmid)
             MediaThumbnail(
                 model = remember(upload.cmid) { upload.item.previewModel },
                 isPending = true,
+                pendingPhase = phase,
                 onRemove = { onRemove(upload.cmid) },
+                onSelect = onRetryPending?.takeIf { phase == PendingUploadPhase.FAILED }?.let { retry -> { retry(upload.cmid) } },
             )
         }
     }
@@ -104,6 +109,7 @@ internal fun MediaThumbnail(
     model: Any?,
     isPending: Boolean,
     onRemove: () -> Unit,
+    pendingPhase: PendingUploadPhase = PendingUploadPhase.OFFLINE,
     isBackground: Boolean = false,
     onToggleBackground: (() -> Unit)? = null,
     backgroundLoop: Boolean? = null,
@@ -113,7 +119,7 @@ internal fun MediaThumbnail(
     isPlaced: Boolean = false,
     onTogglePlaced: (() -> Unit)? = null,
 ) {
-    val selectLabel = stringResource(R.string.composer_column_media_select)
+    val selectLabel = if (isPending) pendingPhase.label() else stringResource(R.string.composer_column_media_select)
     Box {
         AsyncImage(
             model = model,
@@ -171,7 +177,7 @@ internal fun MediaThumbnail(
                     .fillMaxWidth(),
             ) {
                 Text(
-                    text = stringResource(R.string.stories_composer_media_pending),
+                    text = pendingPhase.label(),
                     color = Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -228,3 +234,13 @@ private fun TileAction(
         }
     }
 }
+
+/** Ce que dit la vignette d'un média en file (#13959) : « Hors ligne » sans réseau, « Envoi… » quand il repart, sinon « Échec — Réessayer ». */
+@Composable
+internal fun PendingUploadPhase.label(): String = stringResource(
+    when (this) {
+        PendingUploadPhase.OFFLINE -> R.string.stories_composer_media_pending
+        PendingUploadPhase.SENDING -> R.string.story_composer_upload_resending
+        PendingUploadPhase.FAILED -> R.string.story_composer_upload_failed_retry
+    },
+)

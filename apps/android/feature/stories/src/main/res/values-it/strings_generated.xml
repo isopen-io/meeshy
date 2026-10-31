@@ -218,6 +218,7 @@
     <string name="stories_scene_export_failed">Esportazione non riuscita. Riprova.</string>
     <string name="stories_scene_export_in_progress">Esportazione in corso…</string>
     <string name="stories_scene_export_saved">Salvato in Foto</string>
+    <string name="stories_scene_export_shared">Condiviso</string>
     <string name="stories_scene_frame_backdrop_black">Nero</string>
     <string name="stories_scene_frame_backdrop_blur">Sfocato</string>
     <string name="stories_scene_frame_backdrop_indigo">Indaco</string>

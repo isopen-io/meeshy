@@ -3,9 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import { BUILTIN_BANNER_FRAME_PACKS, BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, appearanceNames, builtinBannerDesign, builtinBannerFrameDesign, builtinRingDesign } from './catalog';
 
 describe('le catalogue embarqué du décor de profil', () => {
-  test('vingt-trois contours et neuf bannières, tous lisibles par le contrat partagé', () => {
+  test('vingt-neuf contours et neuf bannières, tous lisibles par le contrat partagé', () => {
     expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items.map((item) => item.key)).slice(0, 9)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier', 'halo-or', 'prisme-vivant', 'onde']);
-    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(23);
+    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(29);
+    expect(BUILTIN_RING_PACKS.find((pack) => pack.slug === 'cadres-illustres')?.items.map((item) => item.decor?.reach)).toEqual([1.4, 1.4, 1.4, 1.4, 1.4, 1.4]);
     expect(BUILTIN_BANNER_PACKS.flatMap((pack) => pack.items.map((item) => item.key))).toEqual(['aurore', 'maille', 'constellation', 'art-deco', 'bogolan', 'topographie', 'aurore-vive', 'maree', 'braises']);
   });
 

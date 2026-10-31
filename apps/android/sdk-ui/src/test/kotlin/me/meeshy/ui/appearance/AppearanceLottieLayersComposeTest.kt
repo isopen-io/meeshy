@@ -87,6 +87,28 @@ class AppearanceLottieLayersComposeTest {
         assertThat(rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
     }
 
+    private val masque get() = checkNotNull(catalog.ring("cadres-illustres", "masque-felin"))
+
+    private fun modes(count: Int): List<androidx.compose.ui.semantics.SemanticsNode> {
+        rule.waitUntil(10_000) { rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes().size >= count }
+        return rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()
+    }
+
+    @Test fun `an illustrated frame (#13960) plays its back film and its front film, both overflowing the footprint`() {
+        host { Box(Modifier.offset(40.dp, 40.dp)) { AvatarRingLayer(masque, footprint = 50.dp, modifier = Modifier.size(50.dp)) { Box(Modifier.size(50.dp)) } } }
+        val nodes = modes(2)
+        assertThat(nodes).hasSize(2)
+        nodes.forEach { node ->
+            assertThat(node.config[LottiePlaybackModeKey]).isEqualTo(LottiePlaybackMode.Playing(loops = true))
+            with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(70f) }
+        }
+    }
+
+    @Test fun `an illustrated frame holds both films at their first frame under reduce motion`() {
+        host(reduceMotion = true) { AvatarRingLayer(masque, footprint = 50.dp) { Box(Modifier.size(50.dp)) } }
+        assertThat(modes(2).map { it.config[LottiePlaybackModeKey] }).containsExactly(LottiePlaybackMode.FirstFrame, LottiePlaybackMode.FirstFrame)
+    }
+
     @Test fun `an animated banner plays its layer without the host passing anything`() {
         host { BannerDesignView(maree, isDark = false, accentHex = "#6366F1", modifier = Modifier.width(300.dp)) }
         assertThat(mode()).isEqualTo(LottiePlaybackMode.Playing(loops = true))

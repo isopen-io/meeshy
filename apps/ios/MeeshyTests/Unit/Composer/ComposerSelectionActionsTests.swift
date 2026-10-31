@@ -217,18 +217,19 @@ final class ComposerSelectionActionsTests: XCTestCase {
 
     // MARK: - Le repos cède à la sélection
 
-    func test_restChrome_withASelection_hidesTheToolColumnAndKeepsTheTopRow() {
+    func test_restChrome_withASelection_hidesTheToolColumnAndClose_keepsTheHistory() {
         let etat = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
                                             bottomPanelIsOpen: false, timelineIsOpen: false, objectIsSelected: true)
         XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(etat), "les outils se retirent")
-        XCTAssertTrue(ComposerRestChrome.topRowIsShown(etat), "✕ et ↶ ↷ restent")
-        XCTAssertTrue(ComposerRestChrome.selectionBarIsShown(etat))
+        XCTAssertTrue(ComposerRestChrome.historyIsShown(etat), "↶ ↷ restent")
+        XCTAssertFalse(ComposerRestChrome.closeIsShown(etat), "✕ part avec la sélection (#13957)")
+        XCTAssertTrue(ComposerRestChrome.selectionColumnIsShown(etat))
     }
 
     func test_restChrome_atRest_showsNoSelectionBar() {
         let etat = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
                                             bottomPanelIsOpen: false, timelineIsOpen: false)
-        XCTAssertFalse(ComposerRestChrome.selectionBarIsShown(etat))
+        XCTAssertFalse(ComposerRestChrome.selectionColumnIsShown(etat))
         XCTAssertTrue(ComposerRestChrome.toolColumnIsShown(etat))
     }
 

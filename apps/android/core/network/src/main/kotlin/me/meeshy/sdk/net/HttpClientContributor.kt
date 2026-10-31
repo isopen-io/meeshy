@@ -37,6 +37,9 @@ private class FunctionContributor(
 object HttpPriority {
     /** Outermost: a response that outlives the session which asked for it is dropped (#13558). */
     const val SESSION_BOUNDARY = 50
+
+    /** Un morceau tus attend la réponse de la passerelle à sa mesure, jamais les 10 s par défaut (#13959). */
+    const val UPLOAD_TIMEOUTS = 60
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
 
@@ -83,6 +86,7 @@ internal fun builtInContributors(
     HttpClientContributor.of("session-boundary", HttpPriority.SESSION_BOUNDARY) {
         it.addInterceptor(SessionBoundaryInterceptor(transition))
     },
+    HttpClientContributor.of("upload-timeouts", HttpPriority.UPLOAD_TIMEOUTS) { it.addInterceptor(UploadTransferTimeoutInterceptor()) },
     HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
     HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
         it.addInterceptor(EndpointPolicyInterceptor())

@@ -173,8 +173,14 @@ struct ComposerSceneSurface: View {
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
     private var toolIsOpen: Bool {
-        ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)
+        ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool,
+                                     editsInline: ComposerSelectionChrome.inlineEditOpensTool(
+                                        editsInline: editsInline, objectIsSelected: selectionColumn != nil))
     }
+
+    /// **La scène est en focus** : un outil ouvert, ou un objet sélectionné
+    /// (#13957, R6) — les références et la légende cèdent aux deux.
+    private var sceneIsFocused: Bool { toolIsOpen || selectionColumn != nil }
 
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (vue `1c`).
@@ -185,9 +191,10 @@ struct ComposerSceneSurface: View {
     /// composer ici la mettrait hors de portée d'un témoin.
     var selectedItemId: String?
     var selectionBadge: String?
-    /// **La barre de la sélection** (#13839, L5), déjà composée par le meuble :
-    /// `nil` ⇒ rien de sélectionné, la colonne des outils reparaît.
-    var selectionBar: ComposerSelectionBar?
+    /// **Les options de l'objet sélectionné** (#13957, R6), déjà composées par
+    /// le meuble : `nil` ⇒ rien de sélectionné (ou le fond), la colonne des
+    /// outils, ✕ et Publier reparaissent.
+    var selectionColumn: ComposerSelectionColumn?
 
     // MARK: - L'élément qui entre (#13864, R5)
 
@@ -269,10 +276,12 @@ struct ComposerSceneSurface: View {
     /// **Et ce qu'il écrit est le CORPS du post** : le panneau du corps
     /// recouvre le volet de légende, qui sort alors de l'arbre.
     var writesPostBody: Bool = false
-    /// **Les options du sous-outil ouvert, à droite, depuis le haut** —
-    /// le panneau entier, déjà composé et placé (`ComposerInlineToolPanel`) ;
-    /// la surface le pose sur la scène libre, à côté de la colonne droite.
+    /// **Les options du PINCEAU**, contre la barre de dessin — le panneau
+    /// entier, déjà composé et placé ; la surface le pose sur la scène libre.
     var inlinePanel: AnyView?
+    /// **Les propriétés du sous-outil touché, EN BAS** (#13957, #13974) : la
+    /// scène se réduit au-dessus, rien ne la recouvre.
+    var propertiesSheet: AnyView?
     /// Le pied du rail droit suit-il ses sous-outils, sans ressort ?
     /// (`ComposerTrailingColumn.footFollowsOptions`)
     var trailingFootFollowsOptions: Bool = false
@@ -394,7 +403,7 @@ struct ComposerSceneSurface: View {
                                  cameraIsArmed: cameraStage != .off,
                                  bottomPanelIsOpen: band != nil || timelinePanel != nil || sceneEffectIsOpen,
                                  timelineIsOpen: timelinePanel != nil,
-                                 objectIsSelected: selectionBar != nil)
+                                 objectIsSelected: selectionColumn != nil)
     }
 
     /// La colonne droite ne sert plus le repos : ses effets de scène vivent
@@ -431,7 +440,8 @@ struct ComposerSceneSurface: View {
                                                       onDelete: onDeleteBackgroundSound,
                                                       onPromote: onPromoteBackgroundSound),
                                          pasteEntry: railSystemEntry),
-            selection: ComposerSelectionRail(selection: selectionBar, onUndo: onUndo, onRedo: onRedo),
+            selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo),
+            objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) },
             selectionIsShown: !trailingRailIsShown,
             slideRow: slideRailSlot,
             showsSlideRow: showsRailsSlideRow,
@@ -443,6 +453,9 @@ struct ComposerSceneSurface: View {
     /// réduite ne porte que ce qu'on édite.
     private var restChrome: some View {
         restChromeContent
+            // Le rail d'édition s'arrête au-dessus des propriétés : rien ne
+            // recouvre la feuille basse.
+            .padding(.bottom, propertiesSheet == nil ? 0 : lowerFloorsHeight)
             .opacity(restChromeServed ? 1 : 0)
             .allowsHitTesting(restChromeServed)
             .accessibilityHidden(!restChromeServed)
@@ -464,7 +477,7 @@ struct ComposerSceneSurface: View {
                                                 onDelete: onDeleteBackgroundSound,
                                                 onPromote: onPromoteBackgroundSound),
                                    pasteEntry: railSystemEntry,
-                                   selectionBar: selectionBar)
+                                   selection: selectionColumn)
     }
 
     /// **Le volet de description, borné à la CARTE.**
@@ -524,10 +537,14 @@ struct ComposerSceneSurface: View {
         ComposerWriting.resolve(editsSceneDescription: writesText, editsPostContent: writesPostBody)
     }
 
+    private var lowZone: ComposerLowZone {
+        ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band, properties: propertiesSheet != nil)
+    }
+
     private var sceneLiftInset: CGFloat {
         ComposerSceneLift.bottomInset(
             panelIsOpen: ComposerSceneLift.panelIsOpen(
-                lowZone: ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band),
+                lowZone: lowZone,
                 toolOptionsServed: toolOptions != nil),
             panelHeight: lowerFloorsHeight)
     }
@@ -578,6 +595,9 @@ struct ComposerSceneSurface: View {
         .adaptiveOnChange(of: toolIsOpen) { _, _ in
             UIAccessibility.post(notification: .layoutChanged, argument: nil)
         }
+        // **Sélectionner et désélectionner : un seul fondu** (#13957) — Fermer,
+        // la colonne et ses options s'échangent sans saut.
+        .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion), value: selectionColumn != nil)
         // **La barre de statut s'efface** : la croix et le `⋯` se posent
         // « un peu plus haut pour ne pas être sur la scène ».
         // Comme le lecteur de stories : la rangée de l'horloge rend sa hauteur,
@@ -810,6 +830,8 @@ struct ComposerSceneSurface: View {
                                                value: geo.size.height)
                     }
                 }
+                .animation(ComposerSelectionChrome.propertiesAnimation(reduceMotion: reduceMotion),
+                           value: propertiesSheet != nil)
         }
     }
 
@@ -820,7 +842,7 @@ struct ComposerSceneSurface: View {
             // mentions, juste sous la scène libre. Il CÈDE aux options d'un
             // outil, par `ComposerCanonicalZone`, jamais par un
             // `!toolIsOpen` écrit ici.
-            if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen), band == nil {
+            if ComposerCanonicalZone.isServed(.references, toolIsOpen: sceneIsFocused), band == nil {
                 ComposerSceneReferenceFooter(hashtags: sceneHashtags,
                                              references: sceneReferences,
                                              leadingInset: sceneCardLeading - railLaneLeading,
@@ -832,7 +854,9 @@ struct ComposerSceneSurface: View {
             // l'outil ouvert a la priorité sur le bas, et les deux ne
             // coexistent jamais. L'exclusion se lit sur `railMode`, par
             // `ComposerLowZone`, jamais sur la présence du panneau.
-            switch ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
+            switch lowZone {
+            case .properties:
+                if let propertiesSheet { propertiesFloor(propertiesSheet) }
             case .toolOptions:
                 // La marge des rails : les options d'un outil ne touchent pas
                 // le bord du verre.
@@ -955,11 +979,19 @@ struct ComposerSceneSurface: View {
             // la légende s'efface le temps du
             // dessin ou du Cadre, comme la barre canonique sous un panneau.
             if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage),
-               ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing), band == nil {
+               ComposerToolFocus.isShown(.description, toolIsOpen: sceneIsFocused, writing: writing), band == nil {
                 descriptionOverlay
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    /// **Les propriétés montent du bas avec la scène qui se réduit** (#13957) :
+    /// un seul mouvement, au ressort de `ComposerSelectionChrome.propertiesAnimation`,
+    /// sans glissement sous Réduire les animations. La bande, elle, s'insère
+    /// sans animation : son montage reste à part.
+    private func propertiesFloor(_ sheet: AnyView) -> some View {
+        sheet.transition(ComposerSelectionChrome.propertiesTransition(reduceMotion: reduceMotion))
     }
 
     private func bandView(_ ouverte: ComposerSceneBand) -> some View {

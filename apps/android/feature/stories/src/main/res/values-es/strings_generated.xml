@@ -218,6 +218,7 @@
     <string name="stories_scene_export_failed">La exportación ha fallado. Inténtalo de nuevo.</string>
     <string name="stories_scene_export_in_progress">Exportando…</string>
     <string name="stories_scene_export_saved">Guardado en Fotos</string>
+    <string name="stories_scene_export_shared">Compartido</string>
     <string name="stories_scene_frame_backdrop_black">Negro</string>
     <string name="stories_scene_frame_backdrop_blur">Desenfoque</string>
     <string name="stories_scene_frame_backdrop_indigo">Índigo</string>

@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Cornice Celtico",
       "description": "Treccia infinita e trischeli a spirale."
+    },
+    "cadres-illustres": {
+      "name": "Cornici illustrate",
+      "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Celtico",
     "celte-anime": "Celtico animato",
     "prisme-vivant": "Prisma vivo",
-    "onde": "Onda"
+    "onde": "Onda",
+    "masque-felin": "Maschera felina",
+    "toile-araignee": "Ragnatela",
+    "ailes-ange": "Ali d’angelo",
+    "cercle-runique": "Cerchio runico",
+    "griffes-os": "Artigli d’osso",
+    "ailes-demon": "Ali di demone"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",

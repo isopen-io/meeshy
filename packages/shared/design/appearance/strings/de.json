@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Bannerrahmen Keltisch",
       "description": "Endloses Flechtband und Triskelen."
+    },
+    "cadres-illustres": {
+      "name": "Illustrierte Rahmen",
+      "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Keltisch",
     "celte-anime": "Keltisch, animiert",
     "prisme-vivant": "Lebendiges Prisma",
-    "onde": "Welle"
+    "onde": "Welle",
+    "masque-felin": "Katzenmaske",
+    "toile-araignee": "Spinnennetz",
+    "ailes-ange": "Engelsflügel",
+    "cercle-runique": "Runenkreis",
+    "griffes-os": "Knochenkrallen",
+    "ailes-demon": "Dämonenflügel"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",

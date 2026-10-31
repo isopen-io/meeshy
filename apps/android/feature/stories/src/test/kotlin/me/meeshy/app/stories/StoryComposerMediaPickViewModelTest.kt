@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
@@ -52,15 +54,15 @@ class StoryComposerMediaPickViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val session: SessionRepository = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val queue: MediaUploadQueue = mockk(relaxed = true)
 
-    private fun viewModel(): StoryComposerViewModel {
+    private fun viewModel(network: NetworkMonitor? = null): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
         return StoryComposerViewModel(
             mockk<StoryRepository>(relaxed = true), session, media, queue,
             mockk<WorkManager>(relaxed = true), InMemoryStoryComposerDraftStore(), mockk<MediaBlobStore>(relaxed = true),
-            mockk<StoryDraftConfirmation>(relaxed = true),
+            mockk<StoryDraftConfirmation>(relaxed = true), network = network,
         )
     }
 
@@ -154,7 +156,7 @@ class StoryComposerMediaPickViewModelTest {
 
     @Test
     fun `offline the media waits on the scene and nothing is blocked`() = runTest {
-        val vm = viewModel()
+        val vm = viewModel(network = InMemoryNetworkMonitor(initialOnline = false))
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
         coEvery { queue.enqueue(any(), any(), any()) } returns "cmid_1"
 

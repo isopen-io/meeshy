@@ -217,6 +217,7 @@
     <string name="stories_scene_export_failed">Export failed. Try again.</string>
     <string name="stories_scene_export_in_progress">Exporting…</string>
     <string name="stories_scene_export_saved">Saved to Photos</string>
+    <string name="stories_scene_export_shared">Shared</string>
     <string name="stories_scene_frame_backdrop_black">Black</string>
     <string name="stories_scene_frame_backdrop_blur">Blur</string>
     <string name="stories_scene_frame_backdrop_indigo">Indigo</string>

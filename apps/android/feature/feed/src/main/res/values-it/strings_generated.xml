@@ -11,6 +11,9 @@
     <string name="feed_action_repost">Ripubblica</string>
     <string name="feed_action_share">Condividi</string>
     <string name="feed_action_view_profile">Vedi profilo</string>
+    <string name="feed_comment_card_folded">+%1$d risposte</string>
+    <string name="feed_comment_card_thread">Discussione dei commenti</string>
+    <string name="feed_comment_imagine">Crea immagine</string>
     <string name="feed_comments">Commenti</string>
     <string name="feed_composer_open_label">Condividi qualcosa</string>
     <string name="feed_delete_cancel">Annulla</string>

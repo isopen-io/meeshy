@@ -62,12 +62,14 @@ internal data class PlacedMediaFrame(
     val aspectRatio: Double? = null,
     val isVideo: Boolean = false,
     val pendingItem: MediaUploadItem? = null,
-    /** Hors ligne : le média attend sa file d'envoi, et la scène le dit (R5 de #13863). */
-    val isPending: Boolean = false,
+    /** Le média attend sa file d'envoi, et la scène dit pourquoi (R5 de #13863, #13959) ; `null` : il est envoyé. */
+    val pendingPhase: PendingUploadPhase? = null,
     /** Son filtre, son effet et son cadre de l'appel (#13841), peints AVANT son filtre de story ; `null` : aucun. */
     val mediaLook: StoryMediaLook? = null,
 ) {
     val key: String get() = placed.id
+
+    val isPending: Boolean get() = pendingPhase != null
 
     /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
     val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, placed.adjustments, isVideo)
@@ -104,7 +106,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                     model = if (isVideo) null else pending.item.previewModel,
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
-                    isPending = true,
+                    pendingPhase = pendingPhase(pending.cmid),
                     mediaLook = look,
                 )
             }
@@ -221,7 +223,7 @@ internal fun PlacedMediaLayer(
                 )
             }
         }
-        if (frame.isPending) IncomingWaitingBadge(Modifier.align(Alignment.BottomStart).padding(WAITING_INSET))
+        frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET)) }
     }
 }
 

@@ -4212,6 +4212,485 @@ enum AppearanceCatalogData {
           ]
         }
       ]
+    },
+    {
+      "slug": "cadres-illustres",
+      "order": 9,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "masque-felin",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#3B1F66",
+              "#140A24",
+              "#E2B04A",
+              "#FFE7A6",
+              "#FF2238"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.7 50A49.3 49.3 0 1 0 99.3 50 49.3 49.3 0 1 0 0.7 50ZM7.2 50A42.8 42.8 0 1 0 92.8 50 42.8 42.8 0 1 0 7.2 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.9
+              },
+              {
+                "d": "M37 4.6L43 1.2L45.6 7.6ZM63 4.6L57 1.2L54.4 7.6Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M50 1L52.6 4.4L50 7.8L47.4 4.4Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M10.16 27A46 46 0 0 1 19.22 15.82M80.78 15.82A46 46 0 0 1 89.84 27",
+                "color": 4,
+                "opacity": 0.95,
+                "width": 2.2
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "3a9eb7427fe1c7d3.json",
+              "bytes": 947,
+              "sha256": "3a9eb7427fe1c7d3d6668e60924eee9df1f77feb75d3054f9678b5d283573c53"
+            },
+            "front": {
+              "src": "04fdacd3b3baeb16.json",
+              "bytes": 13789,
+              "sha256": "04fdacd3b3baeb16b6bf3d7dd63f558e7b1daa516ae0ffa4be74e1cc157945af"
+            }
+          }
+        },
+        {
+          "key": "toile-araignee",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#4B5568",
+              "#0E1220",
+              "#E8EEF7",
+              "#C8323C"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 1,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.7 50A49.3 49.3 0 1 0 99.3 50 49.3 49.3 0 1 0 0.7 50ZM7.2 50A42.8 42.8 0 1 0 92.8 50 42.8 42.8 0 1 0 7.2 50Z",
+                "color": 2,
+                "opacity": 0.8,
+                "width": 0.6
+              },
+              {
+                "d": "M7.85 42.57L1.45 41.44M12.21 29.91L6.47 26.86M20.27 19.21L15.75 14.54M31.24 11.53L28.39 5.69M44.04 7.62L43.14 1.18",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 0.5
+              },
+              {
+                "d": "M5.68 42.19A45 45 0 0 1 43.74 5.44M3.52 41.8A47.2 47.2 0 0 1 43.43 3.26",
+                "color": 2,
+                "opacity": 0.75,
+                "width": 0.45
+              },
+              {
+                "d": "M50 3.2L51.5 4.8L50 6.6L48.5 4.8Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "1fd16cbcf0a17155.json",
+              "bytes": 952,
+              "sha256": "1fd16cbcf0a1715543ddd91e14e0b67a55aaabc9e2a2528e9313567ec73ad3fe"
+            },
+            "front": {
+              "src": "dbce7ad829a8ff3d.json",
+              "bytes": 30316,
+              "sha256": "dbce7ad829a8ff3d4121bbcd38e645afc680415e7f5e335f0eca7d8e437e4c26"
+            }
+          }
+        },
+        {
+          "key": "ailes-ange",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#E9B949",
+              "#9C6A17",
+              "#FFF3C2",
+              "#FFFFFF"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.45
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 0.95,
+                "width": 0.7
+              },
+              {
+                "d": "M50 5.8L50 2.2M61.44 7.31L62.37 3.83M72.1 11.72L73.9 8.6M81.25 18.75L83.8 16.2M88.28 27.9L91.4 26.1M92.69 38.56L96.17 37.63M94.2 50L97.8 50M92.69 61.44L96.17 62.37M88.28 72.1L91.4 73.9M81.25 81.25L83.8 83.8M72.1 88.28L73.9 91.4M61.44 92.69L62.37 96.17M50 94.2L50 97.8M38.56 92.69L37.63 96.17M27.9 88.28L26.1 91.4M18.75 81.25L16.2 83.8M11.72 72.1L8.6 73.9M7.31 61.44L3.83 62.37M5.8 50L2.2 50M7.31 38.56L3.83 37.63M11.72 27.9L8.6 26.1M18.75 18.75L16.2 16.2M27.9 11.72L26.1 8.6M38.56 7.31L37.63 3.83",
+                "color": 2,
+                "opacity": 0.85,
+                "width": 0.5
+              },
+              {
+                "d": "M50 6.6L48.19 4.04L50 1.4L51.81 4.04ZM93.4 50L95.96 48.19L98.6 50L95.96 51.81ZM50 93.4L51.81 95.96L50 98.6L48.19 95.96ZM6.6 50L4.04 51.81L1.4 50L4.04 48.19Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "fc93e6a04bbb1bec.json",
+              "bytes": 32622,
+              "sha256": "fc93e6a04bbb1beca8812473384e51b815705db1efd83af83947719a36db5bbb"
+            },
+            "front": {
+              "src": "a03aac7d7b944984.json",
+              "bytes": 5123,
+              "sha256": "a03aac7d7b944984f28af7f34b308361326091ba083d9ccdb6713f78950c5a18"
+            }
+          }
+        },
+        {
+          "key": "cercle-runique",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#08133A",
+              "#1D4ED8",
+              "#38C8FF",
+              "#C9F4FF"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.6,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.4 50A42.6 42.6 0 1 0 92.6 50 42.6 42.6 0 1 0 7.4 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 5.6L50 2.4M69.26 10L70.65 7.11M84.71 22.32L87.22 20.32M93.29 40.12L96.41 39.41M93.29 59.88L96.41 60.59M84.71 77.68L87.22 79.68M69.26 90L70.65 92.89M50 94.4L50 97.6M30.74 90L29.35 92.89M15.29 77.68L12.78 79.68M6.71 59.88L3.59 60.59M6.71 40.12L3.59 39.41M15.29 22.32L12.78 20.32M30.74 10L29.35 7.11",
+                "color": 3,
+                "opacity": 0.95,
+                "width": 0.9
+              },
+              {
+                "d": "M60.1 5.74L60.37 4.57M78.31 14.51L79.06 13.57M90.9 30.3L91.99 29.78M95.4 50L96.6 50M90.9 69.7L91.98 70.22M78.3 85.5L79.05 86.43M60.1 94.26L60.37 95.43M39.9 94.26L39.63 95.43M21.69 85.49L20.94 86.43M9.1 69.7L8.01 70.22M4.6 50L3.4 50M9.1 30.3L8.02 29.78M21.7 14.5L20.95 13.57M39.9 5.74L39.63 4.57",
+                "color": 2,
+                "opacity": 0.8,
+                "width": 1.4
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "cd2bdcb8d1d4c722.json",
+              "bytes": 1074,
+              "sha256": "cd2bdcb8d1d4c72243db6180fd84c23b14cb476c4ff44894fc03f7de35af78a4"
+            },
+            "front": {
+              "src": "1988db0bd7d4dd37.json",
+              "bytes": 25073,
+              "sha256": "1988db0bd7d4dd37978cb87b6476e53d65e3d17da09f5b4ae699767ab4aba895"
+            }
+          }
+        },
+        {
+          "key": "griffes-os",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#5B1A9E",
+              "#14081F",
+              "#A855F7",
+              "#F0E9DA",
+              "#E879F9"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 4,
+                "opacity": 0.9,
+                "width": 0.7
+              },
+              {
+                "d": "M82.25 79.04L86.12 82.52M66.26 90.24L68.21 95.06M33.74 90.24L31.79 95.06M17.75 79.04L13.88 82.52",
+                "color": 3,
+                "opacity": 1,
+                "width": 2.2
+              },
+              {
+                "d": "M56.98 5.95L57.41 3.18M70.25 10.26L71.52 7.77M81.54 18.46L83.52 16.48M89.74 29.75L92.23 28.48M94.05 43.02L96.82 42.59M94.05 56.98L96.82 57.41M89.74 70.25L92.23 71.52M81.54 81.54L83.52 83.52M70.25 89.74L71.52 92.23M56.98 94.05L57.41 96.82M43.02 94.05L42.59 96.82M29.75 89.74L28.48 92.23M18.46 81.54L16.48 83.52M10.26 70.25L7.77 71.52M5.95 56.98L3.18 57.41M5.95 43.02L3.18 42.59M10.26 29.75L7.77 28.48M18.46 18.46L16.48 16.48M29.75 10.26L28.48 7.77M43.02 5.95L42.59 3.18",
+                "color": 1,
+                "opacity": 0.7,
+                "width": 0.6
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "ea1979b682cf59e1.json",
+              "bytes": 10773,
+              "sha256": "ea1979b682cf59e138cc649a92d85683e78156c07b94dd7b476c19cc6804c30d"
+            },
+            "front": {
+              "src": "c22415459436e9ec.json",
+              "bytes": 27812,
+              "sha256": "c22415459436e9ec5c7041d5a7b159d7a0c7cf727c7d6faa1b869c536307ebeb"
+            }
+          }
+        },
+        {
+          "key": "ailes-demon",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#C06A2F",
+              "#5E2A12",
+              "#F6A866",
+              "#FF4D1A"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 1,
+                "width": 0.9
+              },
+              {
+                "d": "M58.51 7.24L59.44 2.53M74.22 13.75L76.89 9.76M86.25 25.78L90.24 23.11M92.76 41.49L97.47 40.56M92.76 58.51L97.47 59.44M86.25 74.22L90.24 76.89M74.22 86.25L76.89 90.24M58.51 92.76L59.44 97.47M41.49 92.76L40.56 97.47M25.78 86.25L23.11 90.24M13.75 74.22L9.76 76.89M7.24 58.51L2.53 59.44M7.24 41.49L2.53 40.56M13.75 25.78L9.76 23.11M25.78 13.75L23.11 9.76M41.49 7.24L40.56 2.53",
+                "color": 1,
+                "opacity": 0.75,
+                "width": 0.7
+              },
+              {
+                "d": "M50 93L52.09 95.95L50 99L47.91 95.95ZM50 7L47.91 4.05L50 1L52.09 4.05Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "57fc2eff0bdcfd5d.json",
+              "bytes": 12271,
+              "sha256": "57fc2eff0bdcfd5da5cd68b5adb4ffb9fef0071228aef84afb5d6d9dfeb1ad38"
+            },
+            "front": {
+              "src": "ce832a2e34cd4864.json",
+              "bytes": 14494,
+              "sha256": "ce832a2e34cd48642f164dfce4169db8e78bfb424756b18fc43c204674cd61e9"
+            }
+          }
+        }
+      ]
     }
   ],
   "bannerFrames": [
@@ -7886,6 +8365,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Cadre celte",
           "description": "Tresse sans fin et triskèles en spirale."
+        },
+        "cadres-illustres": {
+          "name": "Cadres illustrés",
+          "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
         }
       },
       "designs": {
@@ -7933,7 +8416,13 @@ enum AppearanceCatalogData {
         "celte": "Celte",
         "celte-anime": "Celte animé",
         "prisme-vivant": "Prisme vivant",
-        "onde": "Onde"
+        "onde": "Onde",
+        "masque-felin": "Masque félin",
+        "toile-araignee": "Toile d’araignée",
+        "ailes-ange": "Ailes d’ange",
+        "cercle-runique": "Cercle runique",
+        "griffes-os": "Griffes d’os",
+        "ailes-demon": "Ailes de démon"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -8069,6 +8558,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Celtic banner frame",
           "description": "Endless braid and spiral triskeles."
+        },
+        "cadres-illustres": {
+          "name": "Illustrated frames",
+          "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
         }
       },
       "designs": {
@@ -8116,7 +8609,13 @@ enum AppearanceCatalogData {
         "celte": "Celtic",
         "celte-anime": "Celtic, animated",
         "prisme-vivant": "Living prism",
-        "onde": "Ripple"
+        "onde": "Ripple",
+        "masque-felin": "Feline mask",
+        "toile-araignee": "Spider web",
+        "ailes-ange": "Angel wings",
+        "cercle-runique": "Runic circle",
+        "griffes-os": "Bone claws",
+        "ailes-demon": "Demon wings"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -8252,6 +8751,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Marco Celta",
           "description": "Trenza sin fin y trisqueles en espiral."
+        },
+        "cadres-illustres": {
+          "name": "Marcos ilustrados",
+          "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
         }
       },
       "designs": {
@@ -8299,7 +8802,13 @@ enum AppearanceCatalogData {
         "celte": "Celta",
         "celte-anime": "Celta animado",
         "prisme-vivant": "Prisma vivo",
-        "onde": "Onda"
+        "onde": "Onda",
+        "masque-felin": "Máscara felina",
+        "toile-araignee": "Telaraña",
+        "ailes-ange": "Alas de ángel",
+        "cercle-runique": "Círculo rúnico",
+        "griffes-os": "Garras de hueso",
+        "ailes-demon": "Alas de demonio"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -8435,6 +8944,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Moldura Celta",
           "description": "Trança sem fim e triskles em espiral."
+        },
+        "cadres-illustres": {
+          "name": "Molduras ilustradas",
+          "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
         }
       },
       "designs": {
@@ -8482,7 +8995,13 @@ enum AppearanceCatalogData {
         "celte": "Celta",
         "celte-anime": "Celta animado",
         "prisme-vivant": "Prisma vivo",
-        "onde": "Onda"
+        "onde": "Onda",
+        "masque-felin": "Máscara felina",
+        "toile-araignee": "Teia de aranha",
+        "ailes-ange": "Asas de anjo",
+        "cercle-runique": "Círculo rúnico",
+        "griffes-os": "Garras de osso",
+        "ailes-demon": "Asas de demônio"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -8618,6 +9137,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Bannerrahmen Keltisch",
           "description": "Endloses Flechtband und Triskelen."
+        },
+        "cadres-illustres": {
+          "name": "Illustrierte Rahmen",
+          "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
         }
       },
       "designs": {
@@ -8665,7 +9188,13 @@ enum AppearanceCatalogData {
         "celte": "Keltisch",
         "celte-anime": "Keltisch, animiert",
         "prisme-vivant": "Lebendiges Prisma",
-        "onde": "Welle"
+        "onde": "Welle",
+        "masque-felin": "Katzenmaske",
+        "toile-araignee": "Spinnennetz",
+        "ailes-ange": "Engelsflügel",
+        "cercle-runique": "Runenkreis",
+        "griffes-os": "Knochenkrallen",
+        "ailes-demon": "Dämonenflügel"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -8801,6 +9330,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "Cornice Celtico",
           "description": "Treccia infinita e trischeli a spirale."
+        },
+        "cadres-illustres": {
+          "name": "Cornici illustrate",
+          "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
         }
       },
       "designs": {
@@ -8848,7 +9381,13 @@ enum AppearanceCatalogData {
         "celte": "Celtico",
         "celte-anime": "Celtico animato",
         "prisme-vivant": "Prisma vivo",
-        "onde": "Onda"
+        "onde": "Onda",
+        "masque-felin": "Maschera felina",
+        "toile-araignee": "Ragnatela",
+        "ailes-ange": "Ali d’angelo",
+        "cercle-runique": "Cerchio runico",
+        "griffes-os": "Artigli d’osso",
+        "ailes-demon": "Ali di demone"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -8984,6 +9523,10 @@ enum AppearanceCatalogData {
         "cadres-celte": {
           "name": "إطار لافتة سلتي",
           "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+        },
+        "cadres-illustres": {
+          "name": "إطارات مرسومة",
+          "description": "ستة إطارات تتجاوز صورتك الرمزية: قناع تحمرّ عيناه، وشبكة وعنكبوتها، وجناحا ملاك، ودائرة رموز، ومخالب عظمية، وجناحا شيطان."
         }
       },
       "designs": {
@@ -9031,7 +9574,13 @@ enum AppearanceCatalogData {
         "celte": "سلتي",
         "celte-anime": "سلتي متحرك",
         "prisme-vivant": "منشور حيّ",
-        "onde": "تموّج"
+        "onde": "تموّج",
+        "masque-felin": "قناع سنّوري",
+        "toile-araignee": "شبكة عنكبوت",
+        "ailes-ange": "جناحا ملاك",
+        "cercle-runique": "دائرة الرموز",
+        "griffes-os": "مخالب العظم",
+        "ailes-demon": "جناحا شيطان"
       },
       "gamut": {
         "indigo": "نيلي ميشي",

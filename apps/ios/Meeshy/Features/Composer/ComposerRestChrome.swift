@@ -33,8 +33,8 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// Au repos : ✕ en haut à gauche, ↶ ↷ avec un historique, la rangée des diapos
 /// dès deux diapos, la colonne des six. Un outil ouvert, une frappe ou le
 /// viseur retirent tout ; un panneau du bas (fond, cadrage, effets, frise)
-/// retire la colonne et garde ✕. Une sélection remplace la colonne par la
-/// barre d'actions (L5).
+/// retire la colonne et garde ✕. Un objet sélectionné retire ✕ et remplace la
+/// colonne, au même endroit, par ses options d'édition (#13957, R6).
 nonisolated enum ComposerRestChrome {
 
     /// La marge entre la colonne d'outils et le bord droit de la scène.
@@ -46,8 +46,10 @@ nonisolated enum ComposerRestChrome {
         var cameraIsArmed: Bool
         var bottomPanelIsOpen: Bool
         var timelineIsOpen: Bool
-        /// Un élément est sélectionné (#13839, L5) : les outils se retirent,
-        /// la barre d'actions libellées paraît au-dessus de Public et Publier.
+        /// Un objet POSÉ est sélectionné (#13957) : ✕ et les outils se
+        /// retirent, ses options d'édition prennent la place de la colonne.
+        /// Ses propriétés ouvertes en bas ne sont pas un outil : la colonne
+        /// des options reste, pour passer de l'une à l'autre.
         var objectIsSelected: Bool = false
     }
 
@@ -69,6 +71,11 @@ nonisolated enum ComposerRestChrome {
         !state.toolIsOpen && !state.writesText && !state.cameraIsArmed
     }
 
+    /// Fermer cède à la sélection : on ne quitte pas le brouillon en éditant.
+    static func closeIsShown(_ state: State) -> Bool {
+        topRowIsShown(state) && !state.objectIsSelected
+    }
+
     static func historyIsShown(_ state: State) -> Bool {
         topRowIsShown(state) && !state.timelineIsOpen
     }
@@ -77,9 +84,9 @@ nonisolated enum ComposerRestChrome {
         topRowIsShown(state) && !state.bottomPanelIsOpen && !state.objectIsSelected
     }
 
-    /// La barre de la sélection vit où vivait la colonne : jamais pendant un
-    /// outil, une frappe, le viseur ou un panneau du bas.
-    static func selectionBarIsShown(_ state: State) -> Bool {
+    /// Les options de la sélection vivent où vit la colonne des outils : jamais
+    /// pendant un outil, une frappe, le viseur ou un panneau du bas.
+    static func selectionColumnIsShown(_ state: State) -> Bool {
         topRowIsShown(state) && !state.bottomPanelIsOpen && state.objectIsSelected
     }
 

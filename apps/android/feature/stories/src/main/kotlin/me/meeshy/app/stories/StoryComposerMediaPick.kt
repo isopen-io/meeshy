@@ -18,9 +18,11 @@ import me.meeshy.sdk.net.NetworkResult
 /**
  * Le chemin d'un choix de médias jusqu'à la scène (R4 et R5 de #13863) : chacun prend la place que [StoryComposerUploadReducer]
  * lui donne, son espace réservé se tient sur la scène pendant la préparation et l'envoi, et ✕ l'annule en rendant tout dans
- * la même image. Un échec ou un refus de la passerelle se met en file DURABLE derrière un espace réservé « en attente »
- * (#13417) — hors ligne, rien ne bloque ; une erreur qu'aucune file ne reprend garde les octets pour « Réessayer », et les
- * rend dès que ce nouvel essai n'a plus lieu (autre choix, composeur quitté). Un second choix pendant un envoi est ignoré.
+ * la même image. Chaque média suit SON issue (#13959) : reçu, il se pose aussitôt ; un échec ou un refus de la passerelle
+ * se met en file DURABLE derrière son espace réservé (#13417), qui dit « Hors ligne » sans réseau et sinon propose
+ * « Réessayer » ([StoryComposerPendingRetry] le relance, seul au retour du réseau) ; une erreur qu'aucune file ne reprend
+ * garde les octets pour « Réessayer », et les rend dès que ce nouvel essai n'a plus lieu (autre choix, composeur quitté).
+ * Un second choix pendant un envoi est ignoré.
  */
 internal class StoryComposerMediaPick(
     private val scope: CoroutineScope,
@@ -90,17 +92,9 @@ internal class StoryComposerMediaPick(
             val onProgress = { index: Int, sent: Long, total: Long ->
                 state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
             }
-            val result = uploader.upload(pick.items, onProgress)
+            val results = uploader.uploadEach(pick.items, onProgress)
             currentCoroutineContext().ensureActive()
-            when (result) {
-                is NetworkResult.Success -> { applyUploaded(result.data, pick.asBackground); pick.items.forEach(MediaIntake::release) }
-                is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) {
-                    pick.items.forEach(MediaIntake::release)
-                    state.update(StoryComposerUploadReducer::locationRefused)
-                } else {
-                    queueDurably(pick)
-                }
-            }
+            settle(pick, results)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {
@@ -112,19 +106,45 @@ internal class StoryComposerMediaPick(
         }
     }
 
-    private fun applyUploaded(uploaded: List<UploadedMedia>, asBackground: Boolean) {
-        state.update { StoryComposerUploadReducer.uploaded(it, uploaded, asBackground) }
-        if (uploaded.isNotEmpty()) record()
+    /**
+     * Each media of the pick takes its own outcome (#13959), in pick order: received, it lands; refused for its location, it
+     * is dropped and said; failed otherwise, it waits in the durable queue at its place — said « Hors ligne » only without
+     * network, else offered again (« Réessayer »). One failure never sends a received sibling back to the queue.
+     */
+    private suspend fun settle(pick: Pick, results: List<NetworkResult<List<UploadedMedia>>>) {
+        var said: String? = null
+        var changed = false
+        pick.items.forEachIndexed { index, item ->
+            when (val result = results.getOrNull(index)) {
+                is NetworkResult.Success -> {
+                    MediaIntake.release(item)
+                    if (result.data.isEmpty()) said = StoryComposerViewModel.MEDIA_UNUSABLE
+                    result.data.forEachIndexed { rank, media ->
+                        state.update { StoryComposerUploadReducer.landedAt(it, media, pick.asBackground, index.takeIf { rank == 0 }) }
+                        changed = true
+                    }
+                }
+                is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) {
+                    MediaIntake.release(item)
+                    said = StoryComposerUploadReducer.LOCATION_REFUSED
+                } else {
+                    queueDurably(item, index, pick.asBackground)
+                    changed = true
+                }
+                null -> {
+                    queueDurably(item, index, pick.asBackground)
+                    changed = true
+                }
+            }
+        }
+        state.update { settled -> StoryComposerUploadReducer.settled(settled).let { s -> said?.let { s.copy(errorMessage = it) } ?: s } }
+        if (changed) record()
     }
 
-    /** Any failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
-    private suspend fun queueDurably(pick: Pick) {
-        pick.items.forEachIndexed { index, item ->
-            val cmid = queue.enqueue(item, context = TusUploadContext.STORY)
-            state.update { StoryComposerUploadReducer.queued(it, cmid, item, pick.asBackground, index) }
-            record()
-        }
-        state.update(StoryComposerUploadReducer::settled)
+    /** A failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
+    private suspend fun queueDurably(item: MediaUploadItem, index: Int, asBackground: Boolean) {
+        val cmid = queue.enqueue(item, context = TusUploadContext.STORY)
+        state.update { StoryComposerUploadResolution.failed(StoryComposerUploadReducer.queued(it, cmid, item, asBackground, index), cmid) }
     }
 
     private fun releaseUnqueued(items: List<MediaUploadItem>) =

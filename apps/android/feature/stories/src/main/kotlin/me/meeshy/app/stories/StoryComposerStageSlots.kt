@@ -92,7 +92,9 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId) },
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, comparison.mediaId) {
+                    state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId)
+                },
                 placedMediaGestures = remember(viewModel) {
                     PlacedMediaGestures(
                         viewModel::onMediaPlacementMoved,
@@ -126,7 +128,9 @@ internal fun StoryComposerScene(
                     }
                 },
             )
-            if (state.selectedSlideBackdropIsPending) IncomingWaitingBadge(Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+            state.selectedSlideBackdropPendingPhase?.let { phase ->
+                IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+            }
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
@@ -231,6 +235,8 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
         placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
         onTogglePlaced = viewModel::onTogglePlacedMedia,
         onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
+        pendingPhase = state::pendingPhase,
+        onRetryPending = viewModel::onRetryPendingUpload,
     )
     ComposerMediaDescription(
         mediaIds = state.deck.selectedSlide.mediaIds,

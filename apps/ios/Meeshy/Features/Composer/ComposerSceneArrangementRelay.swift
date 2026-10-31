@@ -107,7 +107,7 @@ struct ComposerSceneArrangementRelay {
         case .closeSheet: closePanel()
         case .leaveViewfinder: host.disarmSceneCamera()
         case .endTool: host.handleRailExitTool()
-        case .deselect: host.sceneSelectionRelay.deselectSceneItem()
+        case .deselect: host.sceneSelectionRelay.goBack()
         case .close: host.requestComposerClose()
         }
     }

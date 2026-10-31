@@ -105,29 +105,13 @@ extension MeeshyComposerHost {
         UIAccessibility.post(notification: .announcement, argument: ComposerInlineEditCopy.left)
     }
 
-    /// Les options du sous-outil ouvert, remises à la surface : elle les pose à
-    /// droite de la scène, depuis le haut. Le DESSIN y passe d'abord (#9145) :
-    /// il capture le doigt sur toute la scène, comme il l'emporte sur la
-    /// colonne de droite (`ComposerTrailingColumn.focus`).
+    /// Les options du PINCEAU, remises à la surface (#9145) : le dessin
+    /// capture le doigt sur toute la scène, ses réglages se posent contre sa
+    /// barre. Les propriétés d'un objet, elles, vivent en bas
+    /// (`ComposerSceneSelectionRelay.propertiesSheet`).
     var sceneInlinePanel: AnyView? {
         if viewModel.isDrawingActive { return sceneDrawingOptionsPanel }
-        // Pendant la frappe, les options remplacent le CLAVIER (#13839, L4).
-        guard !sceneTypesInline else { return nil }
-        guard let edition = activeInlineEdit else { return nil }
-        let porteUnMedia: Bool
-        switch edition.family {
-        case .image, .video, .background: porteUnMedia = true
-        case .text, .audio, .sticker, .place: porteUnMedia = false
-        }
-        return AnyView(ComposerInlineToolPanel(
-            viewModel: viewModel,
-            edit: edition,
-            section: edition.openSection,
-            plateauTint: tint.color,
-            altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
-            header: sceneSelectionRelay.sheetHeader(for: edition),
-            onSelectObject: { beginInlineEdit($0, section: .plan, purpose: edition.purpose) },
-            onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
+        return nil
     }
 
     /// **Les options du pinceau, au-dessus de la barre de dessin** (#9145,

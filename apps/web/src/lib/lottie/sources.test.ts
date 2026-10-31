@@ -13,12 +13,15 @@ const declared = (): readonly Ref[] =>
     ...wallpapers.packs.flatMap((pack) => pack.designs as readonly unknown[]),
     ...banners.packs.flatMap((pack) => pack.designs as readonly unknown[]),
     ...rings.packs.flatMap((pack) => pack.rings as readonly unknown[]),
-  ].flatMap((item) => ((item as { lottie?: Ref }).lottie === undefined ? [] : [(item as { lottie: Ref }).lottie]));
+  ].flatMap((item) => {
+    const { lottie, decor } = item as { lottie?: Ref; decor?: { back?: Ref; front?: Ref } };
+    return [lottie, decor?.back, decor?.front].flatMap((ref) => (ref === undefined ? [] : [ref]));
+  });
 
 describe('les couches Lottie des packs intégrés (#10638)', () => {
-  test('toute couche déclarée par le catalogue intégré est embarquée et se lit', async () => {
+  test('toute couche déclarée par le catalogue intégré est embarquée et se lit — films des cadres illustrés compris (#13960)', async () => {
     const refs = declared();
-    expect(refs.length).toBeGreaterThanOrEqual(3);
+    expect(refs.length).toBeGreaterThanOrEqual(21);
     for (const ref of refs) {
       expect(BUILTIN_LOTTIE_SRCS).toContain(ref.src);
       const bytes = await lottieBytesLoader(ref, { origin: 'https://gate.test' })();

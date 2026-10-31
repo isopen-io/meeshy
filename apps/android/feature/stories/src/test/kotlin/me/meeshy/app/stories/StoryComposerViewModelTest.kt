@@ -30,6 +30,8 @@ import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
@@ -66,7 +68,7 @@ class StoryComposerViewModelTest {
     private val repo: StoryRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val uploadQueue: MediaUploadQueue = mockk(relaxed = true)
 
     private fun viewModel(
@@ -75,10 +77,15 @@ class StoryComposerViewModelTest {
         blobStore: MediaBlobStore = mockk(relaxed = true),
         confirmation: StoryDraftConfirmation = mockk(relaxed = true),
         fence: me.meeshy.sdk.session.AccountFence? = null,
+        network: NetworkMonitor? = null,
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation, accountFence = fence)
+        return StoryComposerViewModel(
+            repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation, accountFence = fence, network = network,
+        )
     }
+
+    private fun offlineViewModel(): StoryComposerViewModel = viewModel(network = InMemoryNetworkMonitor(initialOnline = false))
 
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
         NetworkResult.Failure(ApiError("offline", httpStatus = status))
@@ -668,7 +675,7 @@ class StoryComposerViewModelTest {
 
     @Test
     fun `a single offline pick is durably queued and staged as a pending attachment`() = runTest {
-        val vm = viewModel()
+        val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
 
@@ -685,7 +692,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `an offline-queued pick is tagged with the STORY TUS context, not the legacy MessageAttachment path`() =
         runTest {
-            val vm = viewModel()
+            val vm = offlineViewModel()
             val picked = item("clip.jpg")
             coEvery { media.upload(any(), any()) } returns offline()
             coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
@@ -712,12 +719,13 @@ class StoryComposerViewModelTest {
 
             coVerify(exactly = 1) { uploadQueue.enqueue(picked, TusUploadContext.STORY) }
             assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("cmid_heic")
-            assertThat(vm.state.value.errorMessage).isNull()
+            assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
+            assertThat(vm.state.value.canRetryMedia).isTrue()
         }
 
     @Test
     fun `a multi-item offline pick durably queues every item as its own pending upload`() = runTest {
-        val vm = viewModel()
+        val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
 
@@ -732,7 +740,7 @@ class StoryComposerViewModelTest {
 
     @Test
     fun `a second offline pick is appended as a second pending upload`() = runTest {
-        val vm = viewModel()
+        val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("first.jpg")))
@@ -747,7 +755,7 @@ class StoryComposerViewModelTest {
 
     @Test
     fun `an offline series is truncated to the free slides before being durably queued, and says so`() = runTest {
-        val vm = viewModel()
+        val vm = offlineViewModel()
         repeat(StorySlideDeck.MAX_SLIDES - 2) { vm.onAddSlide() }
         coEvery { media.upload(any(), any()) } returns offline()
         coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2", "up-3")

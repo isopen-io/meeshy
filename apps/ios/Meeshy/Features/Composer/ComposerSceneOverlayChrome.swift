@@ -30,29 +30,36 @@ struct ComposerSceneOverlayChrome: View {
     var moreMenu: AnyView?
     var sound = Sound()
     var pasteEntry: AnyView?
-    /// La barre d'un élément sélectionné (#13839, L5), en bas de la scène,
-    /// juste au-dessus de Public et Publier.
-    var selectionBar: ComposerSelectionBar?
+    /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
+    /// place de la colonne des outils, jamais une barre en plus.
+    var selection: ComposerSelectionColumn?
 
     @State private var press = ComposerRailDoorPress()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
             if ComposerRestChrome.topRowIsShown(state) { topRow.transition(.opacity) }
-            if ComposerRestChrome.toolColumnIsShown(state) {
-                toolColumn
-                    .padding(.trailing, ComposerRestChrome.toolColumnInnerMargin)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .transition(.opacity)
+            ZStack(alignment: .topTrailing) {
+                if ComposerRestChrome.toolColumnIsShown(state) {
+                    toolColumn.transition(.opacity)
+                }
+                if ComposerRestChrome.selectionColumnIsShown(state), let selection {
+                    // Un niveau posé par-dessus remplace celui du dessous : même
+                    // place, un seul mouvement.
+                    selection
+                        .id(ComposerEditRailStack.levelKey(selection.level))
+                        .transition(ComposerSelectionChrome.levelTransition(reduceMotion: reduceMotion))
+                }
             }
+            .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion),
+                       value: selection.map { ComposerEditRailStack.levelKey($0.level) })
+            .padding(.trailing, ComposerRestChrome.toolColumnInnerMargin)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             Spacer(minLength: 0)
-            if ComposerRestChrome.selectionBarIsShown(state), let selectionBar {
-                selectionBar
-                    .padding(.bottom, MeeshySpacing.sm)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
-        .animation(.easeOut(duration: 0.18), value: ComposerRestChrome.selectionBarIsShown(state))
+        .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion),
+                   value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.top, MeeshySpacing.xs)
     }
@@ -60,6 +67,9 @@ struct ComposerSceneOverlayChrome: View {
     private var topRow: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.sm) {
             roundButton(symbol: "xmark", label: ComposerDocumentCopy.close, id: "composer.close", action: onClose)
+                .opacity(ComposerRestChrome.closeIsShown(state) ? 1 : 0)
+                .allowsHitTesting(ComposerRestChrome.closeIsShown(state))
+                .accessibilityHidden(!ComposerRestChrome.closeIsShown(state))
             if ComposerRestChrome.showsSlideRow(slideCount: slideCount), let slideRow {
                 slideRow.frame(maxWidth: .infinity)
             } else {
@@ -179,6 +189,10 @@ struct ComposerSceneOverlayChrome: View {
 /// translucide et voile de 38 % avant.
 struct ComposerSceneRoundGlyph: View {
     let symbol: String
+    var tint: Color = .white
+    /// L'option dont les propriétés sont ouvertes : le verre prend la couleur
+    /// de la marque, comme la rangée surlignée du rail libellé.
+    var isOn: Bool = false
 
     static let size: CGFloat = 44
     static let veil: Double = 0.38
@@ -186,9 +200,11 @@ struct ComposerSceneRoundGlyph: View {
     var body: some View {
         Image(systemName: symbol)
             .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(isOn ? .white : tint)
             .frame(width: Self.size, height: Self.size)
-            .adaptiveGlass(in: Circle(), tint: Color.black.opacity(Self.veil), interactive: true)
+            .adaptiveGlass(in: Circle(),
+                           tint: isOn ? MeeshyColors.brandPrimary : Color.black.opacity(Self.veil),
+                           interactive: true)
             .contentShape(Circle())
     }
 }

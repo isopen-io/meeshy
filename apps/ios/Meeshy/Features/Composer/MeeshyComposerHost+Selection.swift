@@ -3,14 +3,16 @@ import UIKit
 import MeeshySDK
 import MeeshyUI
 
-// **La sélection d'un élément, côté meuble** (#13839, L5).
+// **La sélection d'un élément, côté meuble** (#13839, L5 ; #13957, #13974, R6).
 //
-// Toucher un élément le SÉLECTIONNE : le canvas l'encadre de pointillés, les
-// outils se retirent et la barre libellée paraît au-dessus de Public et Publier
-// — Modifier · Dupliquer · Temps · Retirer — et l'objet passe au premier plan
-// (#13918) : il n'y a pas d'action « Ordre ». La règle vit dans
-// `ComposerSelectionActions` ; ce fichier lui fournit l'état du meuble et relaie
-// chaque action vers la primitive qui existait déjà. Tant que rien n'est publié,
+// Toucher un élément le SÉLECTIONNE : le canvas l'encadre de pointillés, Fermer,
+// l'audience et Publier se retirent, et le rail des outils cède sa place au
+// rail d'édition — Modifier · Dupliquer · Temps · Retirer — puis, posés
+// par-dessus, les sous-outils de l'option touchée ; leurs propriétés s'ouvrent
+// en bas. L'objet passe au premier plan (#13918) : il n'y a pas d'action
+// « Ordre ». Les règles vivent dans `ComposerSelectionActions` et
+// `ComposerSelectionChrome` ; ce fichier leur fournit l'état du meuble et relaie
+// chaque entrée vers la primitive qui existait déjà. Tant que rien n'est publié,
 // tout reste mobile : aucune action n'aplatit la scène.
 @MainActor
 extension MeeshyComposerHost {
@@ -23,12 +25,22 @@ struct ComposerSceneSelectionRelay {
     let host: MeeshyComposerHost
 
 
-    /// L'élément sélectionné de la scène — `nil` pendant une édition, une
-    /// frappe, ou hors de la scène : la barre ne s'y pose pas.
+    /// L'élément qui prend le chrome — un objet posé dès sa sélection, le fond
+    /// seulement en édition ; `nil` pendant une frappe ou hors de la scène.
     var current: (id: String, family: ComposerInlineFamily)? {
-        guard host.mountedComposerView == .scene, host.inlineEdit == nil, !host.sceneTypesInline,
-              let id = host.selectedSceneItemId, let famille = host.inlineFamily(of: id) else { return nil }
+        guard host.mountedComposerView == .scene, !host.sceneTypesInline,
+              let id = host.selectedSceneItemId, let famille = host.inlineFamily(of: id),
+              ComposerSelectionChrome.ownsChrome(family: famille, isEditing: host.activeInlineEdit != nil,
+                                                 typing: false) else { return nil }
         return (id, famille)
+    }
+
+    /// **La pile des rails d'édition**, dérivée de la sélection et de
+    /// l'édition en place : jamais recopiée.
+    var stack: ComposerEditRailStack {
+        guard let selection = current else { return .rest }
+        return ComposerEditRailStack.of(family: selection.family, editing: host.activeInlineEdit?.purpose,
+                                        typing: host.sceneTypesInline)
     }
 
     /// Ce que l'élément admet, par la même règle que le menu d'appui long.
@@ -47,15 +59,24 @@ struct ComposerSceneSelectionRelay {
         StorySceneObjectPredicates.isLocked(slide: host.viewModel.currentSlide, id: id)
     }
 
-    /// **La barre, remise à la surface** — `nil` ⇒ aucune sélection, aucun
-    /// chrome (la colonne des outils reparaît).
-    var bar: ComposerSelectionBar? {
-        guard let selection = current else { return nil }
-        let offertes = offered(selection.id)
-        let actions = ComposerSelectionActions.served(family: selection.family, offered: offertes,
-                                                      isLocked: isLocked(selection.id))
-        guard !actions.isEmpty else { return nil }
-        return ComposerSelectionBar(actions: actions, onAction: { performSelectionAction($0) })
+    /// **Le niveau du haut de la pile, remis à la surface** — `nil` ⇒ rien en
+    /// édition : la colonne des outils, Fermer et Publier reparaissent.
+    var column: ComposerSelectionColumn? {
+        guard let selection = current, let niveau = stack.top else { return nil }
+        let edition = host.activeInlineEdit
+        let entrees = ComposerEditRailItems.items(
+            for: niveau,
+            actions: ComposerSelectionActions.served(family: selection.family, offered: offered(selection.id),
+                                                     isLocked: isLocked(selection.id)),
+            sections: edition.map { ComposerInlineEditing.chips($0.purpose, family: $0.family,
+                                                                served: host.inlineSections(for: $0.objectId,
+                                                                                            family: $0.family)) } ?? [],
+            extras: edition.map(mediaExtras(for:)) ?? [],
+            keyframes: edition?.purpose == .time
+                && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated))
+        guard !entrees.isEmpty else { return nil }
+        return ComposerSelectionColumn(level: niveau, items: entrees, openSection: edition?.openSection,
+                                       onItem: { performRailItem($0) })
     }
 
     // MARK: - Sélectionner, désélectionner
@@ -81,6 +102,26 @@ struct ComposerSceneSelectionRelay {
         UIAccessibility.post(notification: .announcement, argument: ComposerSelectionCopy.selected(famille))
     }
 
+    /// **Retour** : la feuille, puis un niveau à la fois, puis l'édition.
+    /// `rail` ⇒ le ‹ du rail, qui descend d'un niveau avec sa feuille.
+    func goBack(rail: Bool = false) {
+        let pile = stack
+        let issue = rail ? pile.railBack() : pile.back(propertiesAreOpen: host.activeInlineEdit?.openSection != nil)
+        switch issue {
+        case .closeProperties:
+            closeProperties()
+        case .popLevel:
+            host.inlineEdit = nil
+            host.comparingLookObjectId = nil
+            HapticFeedback.light()
+            UIAccessibility.post(notification: .announcement, argument: ComposerSelectionCopy.bar)
+        case .leaveEditing:
+            deselectSceneItem()
+        case .nothing:
+            break
+        }
+    }
+
     func deselectSceneItem() {
         guard host.selectedSceneItemId != nil || host.inlineEdit != nil else { return }
         host.inlineEdit = nil
@@ -90,15 +131,35 @@ struct ComposerSceneSelectionRelay {
         UIAccessibility.post(notification: .announcement, argument: ComposerSelectionCopy.deselected)
     }
 
-    // MARK: - Les actions de la barre
+    // MARK: - Les entrées du rail d'édition
 
-    func performSelectionAction(_ action: ComposerSelectionAction) {
+    func performRailItem(_ item: ComposerEditRailItem) {
         guard let id = host.selectedSceneItemId else { return }
+        switch item {
+        case .action(let action):
+            performSelectionAction(action, on: id)
+        case .back:
+            goBack(rail: true)
+        case .section(let section):
+            host.tapInlineSection(section)
+        case .extra(let extra):
+            performMediaExtra(extra, on: id)
+        case .keyframes:
+            host.toggleSceneFrise()
+        }
+    }
+
+    /// **Retirer termine l'édition** : l'objet parti, le rail des outils,
+    /// l'audience, Publier et Fermer reviennent — VoiceOver le dit.
+    func performSelectionAction(_ action: ComposerSelectionAction, on id: String) {
         switch action {
         case .modify:    modifySceneItem(id)
         case .duplicate: duplicateSceneItem(id)
         case .time:      host.beginInlineEdit(id, purpose: .time); HapticFeedback.light()
-        case .remove:    host.handleTrailingRailAction(.delete); HapticFeedback.medium()
+        case .remove:
+            host.handleTrailingRailAction(.delete)
+            HapticFeedback.medium()
+            deselectSceneItem()
         }
     }
 
@@ -182,27 +243,48 @@ struct ComposerSceneSelectionRelay {
         HapticFeedback.medium()
     }
 
-    /// **L'en-tête de la feuille Modifier ou Temps** : ses puces libellées, ses
-    /// compléments, et OK qui la referme en gardant la sélection.
-    func sheetHeader(for edition: ComposerInlineEdit) -> ComposerSelectionSheetHeader {
-        let temps = edition.purpose == .time
-        let puces = ComposerInlineEditing.chips(edition.purpose, family: edition.family,
-                                                served: host.inlineSections(for: edition.objectId, family: edition.family))
-        return ComposerSelectionSheetHeader(
-            title: ComposerSelectionCopy.label(temps ? .time : .modify),
-            chips: puces,
-            open: edition.openSection,
-            extras: mediaExtras(for: edition),
-            keyframes: temps && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated)
-                ? { host.toggleSceneFrise() } : nil,
-            onChip: { host.tapInlineSection($0) },
-            onExtra: { performMediaExtra($0, on: edition.objectId) },
-            onDone: { closeSheet() })
+    /// **L'en-tête de la feuille basse** : le réglage ouvert, et OK qui
+    /// referme le niveau — la feuille, jamais l'édition.
+    func propertiesHeader(for edition: ComposerInlineEdit) -> ComposerPropertiesHeader? {
+        guard let section = edition.openSection else { return nil }
+        return ComposerPropertiesHeader(title: ComposerObjectEditorCopy.entry(section),
+                                        onDone: { goBack() })
     }
 
-    /// La feuille se referme ; l'élément reste sélectionné, sa barre revient.
-    func closeSheet() {
-        host.inlineEdit = nil
+    /// **Les propriétés du sous-outil ouvert, EN BAS** (#13957, #13974) : la
+    /// scène se réduit au-dessus, rien ne la recouvre. `nil` tant qu'aucun
+    /// sous-outil n'est ouvert — le niveau du rail suffit — et pendant la
+    /// frappe, où les options remplacent le CLAVIER (#13839, L4).
+    var propertiesSheet: AnyView? {
+        guard !host.viewModel.isDrawingActive, !host.sceneTypesInline,
+              let edition = host.activeInlineEdit, edition.openSection != nil else { return nil }
+        let porteUnMedia: Bool
+        switch edition.family {
+        case .image, .video, .background: porteUnMedia = true
+        case .text, .audio, .sticker, .place: porteUnMedia = false
+        }
+        return AnyView(ComposerInlineToolPanel(
+            viewModel: host.viewModel,
+            edit: edition,
+            section: edition.openSection,
+            plateauTint: host.tint.color,
+            altText: porteUnMedia ? host.mediaAltBinding(for: edition.objectId) : nil,
+            header: propertiesHeader(for: edition),
+            onSelectObject: { host.beginInlineEdit($0, section: .plan, purpose: edition.purpose) },
+            onCompareLook: { host.comparingLookObjectId = $0 ? edition.objectId : nil }))
+    }
+
+    /// Audience et Publier, par la loi de la sélection : ni pendant un outil,
+    /// ni pendant une édition.
+    func publicationIsShown(toolOwnsScreen: Bool) -> Bool {
+        ComposerSelectionChrome.publicationIsShown(toolOwnsScreen: toolOwnsScreen, objectIsSelected: stack.isEditing)
+    }
+
+    /// La feuille se referme ; le niveau qui l'a ouverte reste posé.
+    func closeProperties() {
+        guard let edition = host.activeInlineEdit, edition.openSection != nil else { return }
+        host.inlineEdit = ComposerInlineEdit(objectId: edition.objectId, family: edition.family,
+                                             openSection: nil, purpose: edition.purpose)
         host.comparingLookObjectId = nil
         HapticFeedback.light()
     }

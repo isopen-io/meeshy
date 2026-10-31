@@ -68,8 +68,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Le compositeur entier, un élément sélectionné (#13836, état 3 de la maquette) : un cadre autour de l'élément, les
- * outils retirés, une seule barre d'actions libellées au-dessus de Public et Publier, et toucher la scène à vide la
- * referme. Le texte touché n'est pas écrit : c'est son Modifier qui l'écrit.
+ * outils cèdent leur place, dans la colonne, aux options de l'élément — Fermer, l'audience et Publier se retirent (#13956) —, et
+ * toucher la scène à vide rend tout. Le texte touché n'est pas écrit : c'est son Modifier qui l'écrit.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -136,7 +136,7 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `a touched sticker is framed, the tools step aside and one labelled bar sits above publish`() {
+    fun `a touched sticker is framed, and its options take the place of the tools while close and publish step aside`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -148,11 +148,11 @@ class ComposerSelectionActionBarTest {
         listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
         compose.onNodeWithText("Order").assertDoesNotExist()
         listOf("Text", "Media", "Sticker", "More options").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
-        compose.onNodeWithContentDescription("Close").assertExists()
+        compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         compose.onNodeWithContentDescription("Undo").assertExists()
-        val bar = compose.onNodeWithTag(SELECTION_BAR_TAG).getUnclippedBoundsInRoot()
-        val publish = compose.onNodeWithContentDescription("Publish story").getUnclippedBoundsInRoot()
-        assertThat(bar.bottom).isAtMost(publish.top)
+        compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
+        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
     }
 
     @Test
@@ -163,7 +163,7 @@ class ComposerSelectionActionBarTest {
 
         tapEmptyScene()
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
         compose.onNodeWithContentDescription("😀").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
         compose.onNodeWithContentDescription("Text").assertExists()
         assertThat(vm.state.value.selectedSceneObject).isNull()
@@ -183,7 +183,7 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("Finish writing").assertDoesNotExist()
         compose.onNodeWithText("Edit").performClick()
         compose.onNode(hasSetTextAction()).assertIsFocused()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
     }
 
     @Test
@@ -208,7 +208,7 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithText("Remove").performClick()
 
         assertThat(vm.state.value.deck.selectedSlide.stickers).isEmpty()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
         compose.onNodeWithContentDescription("Text").assertExists()
     }
 
@@ -222,7 +222,7 @@ class ComposerSelectionActionBarTest {
 
         compose.onNodeWithText("From 0.0 s to the end").assertExists()
         compose.onNodeWithContentDescription("Start").assertExists()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
     }
 
     @Test
@@ -374,14 +374,14 @@ class ComposerSelectionActionBarTest {
         vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
         show(vm)
         compose.onNodeWithText("Edit").performClick()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
 
         val text = vm.state.value.deck.selectedSlide.elements.single().id
         compose.runOnIdle { vm.onSceneReduce { StoryComposerSceneReducer.trackSelected(it, text) } }
         compose.waitForIdle()
         compose.runOnIdle { vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") } }
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
     }
 
     @Test

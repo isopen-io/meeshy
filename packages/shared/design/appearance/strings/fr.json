@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Cadre celte",
       "description": "Tresse sans fin et triskèles en spirale."
+    },
+    "cadres-illustres": {
+      "name": "Cadres illustrés",
+      "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Celte",
     "celte-anime": "Celte animé",
     "prisme-vivant": "Prisme vivant",
-    "onde": "Onde"
+    "onde": "Onde",
+    "masque-felin": "Masque félin",
+    "toile-araignee": "Toile d’araignée",
+    "ailes-ange": "Ailes d’ange",
+    "cercle-runique": "Cercle runique",
+    "griffes-os": "Griffes d’os",
+    "ailes-demon": "Ailes de démon"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",

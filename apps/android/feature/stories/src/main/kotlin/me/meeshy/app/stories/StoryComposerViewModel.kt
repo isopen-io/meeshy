@@ -23,6 +23,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostMentionInput
@@ -89,6 +91,7 @@ class StoryComposerViewModel @Inject constructor(
     private val lookOven: StoryLookOven? = null,
     private val publications: PublicationOutbox? = null,
     private val postDrafts: PostComposerDraftStore? = null,
+    private val network: NetworkMonitor? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -586,6 +589,20 @@ class StoryComposerViewModel @Inject constructor(
     private val buried = BuriedUploads()
     private val stickerImages = StickerImageUploads()
     private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, mediaUploader, mediaUploadQueue) { record() }
+    private val pendingRetry = StoryComposerPendingRetry(viewModelScope, _state, mediaUploader, ::onPendingUploadResolved).also {
+        it.watch(network?.isOnline ?: MutableStateFlow(true))
+    }
+
+    /** Un média en file REÇU pendant la composition (#13959) : il devient un média envoyé partout, et sa file durable se vide. */
+    private fun onPendingUploadResolved(cmid: String, media: UploadedMedia) {
+        val pending = _state.value.pendingUploads.firstOrNull { it.cmid == cmid }
+        _state.update { StoryComposerUploadResolution.resolved(it, cmid, media) }
+        if (pending == null) return
+        history = history.mapped { StoryComposerUploadResolution.resolvedSnapshot(it, cmid, media) }
+        MediaIntake.release(pending.item)
+        cancelDurableUpload(cmid)
+        record()
+    }
 
     private fun restore(snapshot: ComposerSnapshot) {
         val before = _state.value.pendingUploads
@@ -640,7 +657,10 @@ class StoryComposerViewModel @Inject constructor(
     fun onCancelMediaPick() = mediaPick.cancel()
 
     /** « Réessayer » après un échec : les mêmes octets repartent, vers la place que la scène leur donne maintenant. */
-    fun onRetryMediaPick() = mediaPick.retry()
+    fun onRetryMediaPick() = mediaPick.retry().also { pendingRetry.retryFailed() }
+
+    /** Toucher la vignette d'un média en file (#13959) : il repart maintenant. */
+    fun onRetryPendingUpload(cmid: String) = pendingRetry.retry(cmid)
 
     /**
      * Removes an attached or pending media before publishing; the UI clears at once. An offline placeholder's durable
