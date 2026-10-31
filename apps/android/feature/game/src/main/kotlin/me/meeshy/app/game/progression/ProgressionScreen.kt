@@ -1,5 +1,29 @@
 package me.meeshy.app.game.progression
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import me.meeshy.app.game.notebook.photoMomentTitle
+import me.meeshy.ui.component.game.GameBounceButton
+import me.meeshy.app.game.photo.GamePhotoCoordinator
+import me.meeshy.app.game.photo.GamePhotoFlowDialog
+import me.meeshy.sdk.model.game.photo.GamePhotoMoment
+import me.meeshy.sdk.model.game.photo.GamePhotoMoments
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
@@ -45,13 +69,23 @@ fun ProgressionScreen(
     onOpenConversations: () -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
     guideViewModel: ProgressionGuideViewModel = hiltViewModel(),
+    photos: GamePhotoCoordinator = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snapshot = state.snapshot
     val hidden = rememberGameHidden()
     val guide by guideViewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(snapshot?.game) { snapshot?.game?.let(guideViewModel::observe) }
-    val open = ProgressionGuideRoutes(onOpenConcept, onOpenConversations, onOpenNotebook)
+    val offers by photos.offers.collectAsStateWithLifecycle()
+    val taking by photos.active.collectAsStateWithLifecycle()
+    LaunchedEffect(snapshot?.game) {
+        snapshot?.game?.let {
+            guideViewModel.observe(it)
+            photos.observe(it)
+        }
+    }
+    val open = ProgressionGuideRoutes(onOpenConcept, onOpenConversations) { card ->
+        snapshot?.game?.let { GamePhotoMoments.ofCard(card, it) }?.let(photos::start)
+    }
 
     GamePageScaffold(
         title = stringResource(R.string.game_progression_title),
@@ -76,8 +110,19 @@ fun ProgressionScreen(
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                guide?.takeIf { snapshot.game != null }?.let { card ->
-                    ProgressionGuide(card, open, onDismiss = guideViewModel::dismiss, onSkipAll = guideViewModel::skipAll)
+                val game = snapshot.game
+                val card = guide?.takeIf { game != null }
+                val cardPhoto = game?.let { served -> card?.takeIf { it.photo }?.let { GamePhotoMoments.ofCard(it, served) } }
+                card?.let {
+                    ProgressionGuide(
+                        it, open,
+                        onDismiss = guideViewModel::dismiss,
+                        onSkipAll = guideViewModel::skipAll,
+                        onPhoto = cardPhoto?.let { moment -> { photos.start(moment) } },
+                    )
+                }
+                if (game != null) {
+                    offers.filterNot { it.id == cardPhoto?.id }.forEach { offer -> PhotoOfferRow(offer, onOpen = { photos.start(offer) }) }
                 }
                 snapshot.cards.forEachIndexed { index, card ->
                     key(card.concept) {
@@ -98,24 +143,53 @@ fun ProgressionScreen(
             }
         }
     }
+    taking?.let { moment -> GamePhotoFlowDialog(moment, photos.notebook, onClose = photos::close) }
 }
 
-/** Où mène le bouton d'une carte de Mee — la photo n'a pas d'atelier sur Android : elle ouvre La Chronique. */
+/** Une proposition de photo (iOS `ProgressionConceptRow` « Immortaliser ce moment ») : le moment en sous-titre. */
+@Composable
+internal fun PhotoOfferRow(moment: GamePhotoMoment, onOpen: () -> Unit) {
+    val tokens = MeeshyTheme.tokens
+    GameBounceButton(onClick = onOpen, modifier = Modifier.fillMaxWidth().testTag("$PHOTO_OFFER_TAG.${moment.id}")) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(tokens.backgroundSecondary)
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
+                .heightIn(min = 44.dp),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(MeeshyIcons.Camera, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.game_concept_photo_offer), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
+                Text(photoMomentTitle(moment.emblem), style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
+            }
+            Icon(MeeshyIcons.ChevronForward, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+internal const val PHOTO_OFFER_TAG = "game.photo.offer"
+
+/** Où mène le bouton d'une carte de Mee (iOS `ProgressionFrontList.act(on:)`) : une fiche, les conversations, ou l'atelier photo. */
 internal data class ProgressionGuideRoutes(
     val concept: (ProgressionConcept) -> Unit,
     val conversations: () -> Unit,
-    val notebook: () -> Unit,
+    /** Le déroulé photo du moment que la carte dit — la photo de départ pour l'étape du rang. */
+    val photo: (GuideCard) -> Unit,
 ) {
-    fun open(destination: GuideDestination) = when (destination) {
+    fun open(card: GuideCard) = when (val destination = card.destination) {
         is GuideDestination.Concept -> concept(destination.concept)
         GuideDestination.Conversations -> conversations()
-        GuideDestination.Photo -> notebook()
+        GuideDestination.Photo -> photo(card)
     }
 
     /** Le bouton d'une carte : l'écarter, PUIS ouvrir ce qu'elle vise (iOS `ProgressionFrontList.act(on:)`). */
     fun act(card: GuideCard, onDismiss: () -> Unit) {
         onDismiss()
-        open(card.destination)
+        open(card)
     }
 }
 
@@ -124,7 +198,13 @@ internal data class ProgressionGuideRoutes(
  * entière. Le bouton ferme la feuille, écarte la carte, puis ouvre ce qu'elle vise — dans cet ordre, comme iOS.
  */
 @Composable
-internal fun ProgressionGuide(card: GuideCard, routes: ProgressionGuideRoutes, onDismiss: () -> Unit, onSkipAll: () -> Unit) {
+internal fun ProgressionGuide(
+    card: GuideCard,
+    routes: ProgressionGuideRoutes,
+    onDismiss: () -> Unit,
+    onSkipAll: () -> Unit,
+    onPhoto: (() -> Unit)? = null,
+) {
     var sheet by rememberSaveable(card.key) { mutableStateOf(false) }
     ProgressionGuideLine(card, onOpen = { sheet = true })
     if (sheet) {
@@ -134,7 +214,7 @@ internal fun ProgressionGuide(card: GuideCard, routes: ProgressionGuideRoutes, o
             onAction = { routes.act(card, onDismiss) },
             onDismiss = onDismiss,
             onSkipAll = onSkipAll,
-            onPhoto = null,
+            onPhoto = onPhoto,
         )
     }
 }

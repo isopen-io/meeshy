@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.offer.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.selfie",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.card_only",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.gallery",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.scene.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.frame_trigger.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.frame_trigger.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.camera.denied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.camera.unsupported",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.camera.unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.tchak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.striking",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.preview",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.format.story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.format.square",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.keep",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.kept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.no_space",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.keep_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.saved",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.save_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.shared",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.notice.no_space_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.kept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.remove_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.photo_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.photo.offer",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
