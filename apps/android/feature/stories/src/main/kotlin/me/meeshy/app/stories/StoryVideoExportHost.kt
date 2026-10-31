@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -77,15 +79,27 @@ fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryI
     val viewModel: StoryVideoExportViewModel = hiltViewModel(key = key)
     val exportState by viewModel.state.collectAsStateWithLifecycle()
     val stage by viewModel.stage.collectAsStateWithLifecycle()
-    val failed = stringResource(R.string.stories_scene_export_failed)
-    val saved = stringResource(R.string.stories_scene_export_saved)
     val shareTitle = stringResource(R.string.stories_viewer_export_share)
     val currentScenes by rememberUpdatedState(scenes)
+    var outcome by remember { mutableStateOf<SceneExportOutcome?>(null) }
+    var lastRun by remember { mutableStateOf<SceneExportRun?>(null) }
+    val permissions = rememberPermissionFlow()
+
+    fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>) {
+        scope.launch {
+            // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
+            if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
+            outcome = null
+            lastRun = SceneExportRun(mode, shown)
+            viewModel.export(mode, shown)
+        }
+    }
 
     LaunchedEffect(exportState) {
-        when (val export = exportState) {
-            SceneExportState.Saved -> toast(context, saved).also { viewModel.acknowledge() }
-            SceneExportState.Failed -> toast(context, failed).also { viewModel.acknowledge() }
+        val export = exportState
+        SceneExportOutcome.of(export)?.let { outcome = it }
+        when (export) {
+            SceneExportState.Saved, SceneExportState.Failed -> viewModel.acknowledge()
             is SceneExportState.Ready -> {
                 shareVideo(context, File(export.path), shareTitle)
                 viewModel.handedOver()
@@ -100,22 +114,22 @@ fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryI
             SceneExportBand(
                 fraction = exportState.veilFraction,
                 onCancel = viewModel::cancel,
+                outcome = outcome,
+                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes) } },
+                onOutcomeShown = { outcome = null },
                 painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
             )
         }
     }
-    val permissions = rememberPermissionFlow()
     PermissionFlowHost(permissions)
 
     return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen ->
-        scope.launch {
-            val shown = (chosen ?: currentScenes()).takeIf { it.isNotEmpty() } ?: return@launch
-            // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
-            if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
-            viewModel.export(mode, shown)
-        }
+        (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }?.let { shown -> run(mode, shown) }
     }
 }
+
+/** Le dernier export lancé, que « Réessayer » relance tel quel : même sortie, mêmes scènes. */
+private class SceneExportRun(val mode: StoryExportMode, val scenes: List<Pair<StoryItem, StorySlideView>>)
 
 /** Au-delà d'une minute, Imager propose la longueur rendue depuis le début : chaque quart avec sa durée. */
 @Composable
@@ -155,8 +169,6 @@ internal fun ImagerLengthDialog(choices: List<ImagerLengthChoice>, onChoose: (Im
 }
 
 private const val SUBTITLE_ALPHA = 0.7f
-
-private fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
 /** Remet la vidéo, ou l'image d'une scène fixe, à la feuille de partage système, par le `FileProvider` de l'application. */
 private fun shareVideo(context: Context, file: File, chooserTitle: String) {

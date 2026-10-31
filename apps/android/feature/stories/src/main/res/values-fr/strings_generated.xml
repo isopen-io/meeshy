@@ -218,6 +218,7 @@
     <string name="stories_scene_export_failed">L\'export a échoué. Réessayez.</string>
     <string name="stories_scene_export_in_progress">Export en cours…</string>
     <string name="stories_scene_export_saved">Enregistré dans la photothèque</string>
+    <string name="stories_scene_export_shared">Partagé</string>
     <string name="stories_scene_frame_backdrop_black">Noir</string>
     <string name="stories_scene_frame_backdrop_blur">Flou</string>
     <string name="stories_scene_frame_backdrop_indigo">Indigo</string>
