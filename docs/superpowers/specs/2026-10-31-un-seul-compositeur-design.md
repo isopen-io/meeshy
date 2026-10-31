@@ -28,6 +28,8 @@ Tout le reste est identique : outils, rails, barre de frappe, sélection, feuill
 
 Un format refusé reste dans le menu, grisé, avec sa raison, comme aujourd'hui sur Android.
 
+**Le choix du format est composite, jamais exclusif** (décision porteur du 2026-10-31, #13919 Android, #13920 iOS) : au moment de publier, l'auteur coche un ou plusieurs formats parmi Story, Post et Réel, au moins un, et un seul geste les publie tous ; chaque format garde ses refus motivés. Quand le post est coché et qu'il porte plusieurs images ou scènes, le menu propose leur disposition comme iOS (`ComposerMosaicChoice`, #13921). La scène affichée suit le premier format coché ; le contenu ne bouge pas.
+
 ### R3. Post sans scène
 Un post qui ne porte que du texte, et aucun objet ni fond, se publie comme un post texte ordinaire, comme aujourd'hui sur le fil : la charge envoyée est rétrocompatible. Dès qu'un objet ou un fond existe, il se publie en scène. C'est le compositeur qui fait ce choix : l'utilisateur n'a rien à décider.
 
