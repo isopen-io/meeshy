@@ -13,8 +13,9 @@ import MeeshySDK
 /// la vitesse où l'on tape un pseudo.
 ///
 /// **L'ordre et l'étape sont `MentionSuggestionRule` / `MentionLookupRule`**
-/// (#7847) — la MÊME règle que `MentionComposerController` côté app : `@` et
-/// une lettre restent locaux, la deuxième lettre interroge l'annuaire, les
+/// (#7847, #14053) — la MÊME règle que `MentionComposerController` côté app :
+/// `@` et une lettre restent locaux, la deuxième lettre n'interroge l'annuaire
+/// que si aucun contact ne correspond, la troisième l'interroge toujours ; les
 /// suivantes affinent localement puis relancent la recherche sans vider ce
 /// qui est déjà affiché.
 @MainActor
@@ -33,6 +34,8 @@ final class MentionSuggestionsModel: ObservableObject {
     private let debounce: Duration
     private var contacts: [UserSearchResult] = []
     private var others: [UserSearchResult] = []
+    /// La requête à laquelle `others` RÉPOND (cf. `MentionSuggestionRule`).
+    private var othersQuery: String?
     private var query = ""
     private var didLoadContacts = false
     private var searchTask: Task<Void, Never>?
@@ -66,8 +69,9 @@ final class MentionSuggestionsModel: ObservableObject {
         searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         self.query = trimmed
-        guard MentionLookupRule.stage(for: trimmed) == .remote else {
+        guard MentionLookupRule.stage(for: trimmed, localMatchCount: localMatchCount(for: trimmed)) == .remote else {
             others = []
+            othersQuery = nil
             isSearching = false
             recompute()
             return
@@ -81,13 +85,21 @@ final class MentionSuggestionsModel: ObservableObject {
             guard let found = try? await self.userService.searchUsers(query: trimmed, limit: 20, offset: 0),
                   !Task.isCancelled else { return }
             self.others = found
+            self.othersQuery = trimmed
             self.recompute()
         }
     }
 
+    private func localMatchCount(for query: String) -> Int {
+        MentionSuggestionRule.localMatches(
+            contacts: contacts, participants: [], query: query,
+            excludingUserId: currentUserId, identity: MentionIdentity.init(userSearchResult:)
+        ).count
+    }
+
     private func recompute() {
         candidates = MentionSuggestionRule.ordered(
-            contacts: contacts, participants: [], others: others,
+            contacts: contacts, participants: [], others: others, othersQuery: othersQuery,
             query: query, excludingUserId: currentUserId,
             identity: MentionIdentity.init(userSearchResult:)
         )

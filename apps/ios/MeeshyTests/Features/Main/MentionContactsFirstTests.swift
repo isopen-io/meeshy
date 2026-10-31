@@ -2,9 +2,10 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// **#7847 — taper `@` montre d'abord ses contacts depuis le cache, puis
-/// cherche les autres au réseau dès la deuxième lettre.** La matrice de la
-/// directive porteur du 2026-09-24, compteur d'appels réseau à l'appui.
+/// **#7847, #14053 — taper `@` montre d'abord ses contacts depuis le cache,
+/// puis cherche les autres au réseau à la troisième lettre — dès la deuxième
+/// si aucun contact ni participant ne correspond.** La matrice des directives
+/// porteur du 2026-09-24 et du 2026-10-31, compteur d'appels réseau à l'appui.
 @MainActor
 final class MentionContactsFirstTests: XCTestCase {
 
@@ -118,38 +119,84 @@ final class MentionContactsFirstTests: XCTestCase {
         XCTAssertEqual(service.suggestionsCallCount, 0)
     }
 
-    // MARK: - 2 lettres → 1 appel, les autres APRÈS les locaux
+    // MARK: - 2 lettres → local s'il y a des correspondances locales, sinon 1 appel
 
-    func test_handleQuery_twoLetters_makesOneNetworkCall_andKeepsLocalsFirst() async {
+    func test_handleQuery_twoLetters_withLocalMatches_makesZeroNetworkCall() async {
         let contacts = MockMentionContacts(snapshot: [person("c1", "alba")])
         let (sut, service, _) = makeSUT(
             contacts: contacts,
             participants: [person("p1", "alain")],
-            remote: [suggestion("o1", "alex"), suggestion("c1", "alba"), suggestion("p1", "alain")]
+            remote: [suggestion("o1", "alex")]
         )
 
         sut.handleQuery(in: "@al")
-        await waitUntil { sut.suggestions.count == 3 }
+        await settle()
+
+        XCTAssertEqual(service.suggestionsCallCount, 0,
+                       "deux lettres que le cache local porte déjà : le réseau attend la troisième")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alba", "alain"])
+    }
+
+    func test_handleQuery_twoLetters_withoutLocalMatch_makesOneNetworkCall() async {
+        let (sut, service, _) = makeSUT(
+            contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+            participants: [person("p1", "bob")],
+            remote: [suggestion("o1", "alex")]
+        )
+
+        sut.handleQuery(in: "@al")
+        await waitUntil { sut.suggestions.count == 1 }
 
         XCTAssertEqual(service.suggestionsCallCount, 1)
         XCTAssertEqual(service.lastQuery, "al")
-        XCTAssertEqual(sut.suggestions.map(\.username), ["alba", "alain", "alex"],
-                       "contacts → participants → autres, sans doublon")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alex"])
     }
 
-    func test_handleQuery_twoLetters_inADraft_searchesTheDirectoryOnce() async {
+    // MARK: - 3 lettres → 1 appel, le serveur APRÈS les locaux, dans son ordre
+
+    func test_handleQuery_threeLetters_makesOneNetworkCall_andKeepsLocalsFirst() async {
+        let contacts = MockMentionContacts(snapshot: [person("c1", "alix")])
+        let (sut, service, _) = makeSUT(
+            contacts: contacts,
+            participants: [person("p1", "alissa")],
+            remote: [suggestion("o1", "alicia"), suggestion("c1", "alix"), suggestion("p1", "alissa")]
+        )
+
+        sut.handleQuery(in: "@ali")
+        await waitUntil { sut.suggestions.count == 3 }
+
+        XCTAssertEqual(service.suggestionsCallCount, 1)
+        XCTAssertEqual(service.lastQuery, "ali")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alix", "alissa", "alicia"],
+                       "contacts → participants → serveur, sans doublon")
+    }
+
+    /// Le serveur trouve aussi par prénom et nom : sa réponse se sert dans SON
+    /// ordre, sans être refiltrée par le pseudo ou le nom affiché.
+    func test_handleQuery_threeLetters_servesTheServerListInItsOrder_unfiltered() async {
+        let (sut, _, _) = makeSUT(
+            remote: [suggestion("o2", "zed"), suggestion("o1", "alicia"), suggestion("moi", "me")]
+        )
+
+        sut.handleQuery(in: "@ali")
+        await waitUntil { sut.suggestions.count == 2 }
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["zed", "alicia"], "jamais soi")
+    }
+
+    func test_handleQuery_threeLetters_inADraft_searchesTheDirectoryOnce() async {
         let (sut, service, annuaire) = makeSUT(
             context: .composerDraft,
             contacts: MockMentionContacts(snapshot: [person("c1", "alba")]),
-            directory: [UserSearchResult(id: "o1", username: "alex")]
+            directory: [UserSearchResult(id: "o1", username: "albert")]
         )
 
-        sut.handleQuery(in: "@al")
+        sut.handleQuery(in: "@alb")
         await waitUntil { sut.suggestions.count == 2 }
 
         XCTAssertEqual(annuaire.callCount, 1)
         XCTAssertEqual(service.suggestionsCallCount, 0)
-        XCTAssertEqual(sut.suggestions.map(\.username), ["alba", "alex"])
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alba", "albert"])
     }
 
     // MARK: - lettres suivantes → affinage local instantané + débounce
@@ -181,11 +228,9 @@ final class MentionContactsFirstTests: XCTestCase {
     /// Sans clignotement : la frappe suivante affine À L'INSTANT ce qui est
     /// déjà affiché, sans le vider pendant que la recherche est en vol.
     func test_handleQuery_refining_keepsKnownResultsWhileTheNextSearchIsPending() async {
-        let contacts = MockMentionContacts(snapshot: [person("c1", "alba")])
-        let (sut, _, _) = makeSUT(contacts: contacts,
-                                  remote: [suggestion("o1", "alex"), suggestion("o2", "alma")])
+        let (sut, _, _) = makeSUT(remote: [suggestion("o1", "alex"), suggestion("o2", "alma")])
         sut.handleQuery(in: "@al")
-        await waitUntil { sut.suggestions.count == 3 }
+        await waitUntil { sut.suggestions.count == 2 }
 
         sut.handleQuery(in: "@ale")
 
@@ -195,13 +240,25 @@ final class MentionContactsFirstTests: XCTestCase {
 
     func test_handleQuery_backToOneLetter_dropsTheOthers() async {
         let (sut, _, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "alba")]),
-                                  remote: [suggestion("o1", "alex")])
-        sut.handleQuery(in: "@al")
+                                  remote: [suggestion("o1", "albert")])
+        sut.handleQuery(in: "@alb")
         await waitUntil { sut.suggestions.count == 2 }
 
         sut.handleQuery(in: "@a")
 
         XCTAssertEqual(sut.suggestions.map(\.username), ["alba"], "une lettre : la liste redevient locale")
+    }
+
+    func test_handleQuery_backToTwoLetters_withALocalMatch_dropsTheOthers() async {
+        let (sut, _, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "alba")]),
+                                  remote: [suggestion("o1", "albert")])
+        sut.handleQuery(in: "@alb")
+        await waitUntil { sut.suggestions.count == 2 }
+
+        sut.handleQuery(in: "@al")
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alba"],
+                       "deux lettres qu'un contact porte : la liste redevient locale")
     }
 
     // MARK: - Participants vivants et soi

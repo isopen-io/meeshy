@@ -61,11 +61,34 @@ final class MentionSuggestionsModelTests: XCTestCase {
         XCTAssertEqual(search.callCount, 0)
     }
 
-    func test_update_twoLetters_searchesOnce_andAppendsOthersAfterContacts() async {
+    /// #14053 — deux lettres qui trouvent déjà un contact restent LOCALES.
+    func test_update_twoLetters_withAContactMatch_staysLocal_withoutNetwork() async {
         let (sut, search, _) = makeSUT(contacts: [user("c1", "alba")],
-                                       directory: [user("o1", "alex"), user("c1", "alba")])
+                                       directory: [user("o1", "alex")])
         await sut.loadContactsIfNeeded()
         sut.update(query: "al")
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(sut.candidates.map(\.id), ["c1"])
+        XCTAssertEqual(search.callCount, 0)
+    }
+
+    /// #14053 — deux lettres que personne ne porte en local : le réseau part dès la 2ᵉ lettre.
+    func test_update_twoLetters_withoutContactMatch_searchesOnce() async {
+        let (sut, search, _) = makeSUT(contacts: [user("c1", "zoe")],
+                                       directory: [user("o1", "alex")])
+        await sut.loadContactsIfNeeded()
+        sut.update(query: "al")
+        await waitUntil { sut.candidates.count == 1 }
+        XCTAssertEqual(sut.candidates.map(\.id), ["o1"])
+        XCTAssertEqual(search.callCount, 1)
+        XCTAssertEqual(search.lastQuery, "al")
+    }
+
+    func test_update_threeLetters_searchesOnce_andAppendsOthersAfterContacts() async {
+        let (sut, search, _) = makeSUT(contacts: [user("c1", "alba")],
+                                       directory: [user("o1", "albert"), user("c1", "alba")])
+        await sut.loadContactsIfNeeded()
+        sut.update(query: "alb")
         await waitUntil { sut.candidates.count == 2 }
         XCTAssertEqual(sut.candidates.map(\.id), ["c1", "o1"])
         XCTAssertEqual(search.callCount, 1)
