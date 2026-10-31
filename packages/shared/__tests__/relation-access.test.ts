@@ -115,10 +115,10 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['location.proximity', 'BLOOD'],
   ];
 
-  it.each(EXPECTED_MINIMUM)('%s s\'ouvre exactement à partir de %s', (feature, minimum) => {
+  it.each(EXPECTED_MINIMUM)('%s s\'ouvre exactement à partir de %s (consentement donné)', (feature, minimum) => {
     RELATION_LEVELS.forEach((level) => {
       const reached = RELATION_LEVELS.indexOf(level) >= RELATION_LEVELS.indexOf(minimum);
-      expect(access({ ...both(level), feature }).allowed).toBe(reached);
+      expect(access({ ...both(level), feature, consent: 'granted' }).allowed).toBe(reached);
     });
   });
 
@@ -177,15 +177,46 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
   const AGES: readonly RelationAgeClass[] = ['minor', 'adult', 'unknown'];
   const pairs = AGES.flatMap((viewerMinor) => AGES.map((targetMinor) => ({ viewerMinor, targetMinor })));
 
-  it.each(['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.history', 'location.proximity'] as const)(
-    '%s exige un CONSENTEMENT à tout âge, jamais un refus d\'âge',
-    (feature) => {
-      pairs.forEach((ages) => {
-        const result = access({ ...both('BLOOD'), feature, ...ages });
-        expect(result).toMatchObject({ allowed: true, reason: 'level', requiresConsent: true });
+  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
+
+  it.each(CONSENT_FEATURES)('%s s\'ouvre à tout âge une fois le consentement DONNÉ, jamais derrière un refus d\'âge', (feature) => {
+    pairs.forEach((ages) => {
+      const result = access({ ...both('BLOOD'), feature, ...ages, consent: 'granted' });
+      expect(result).toEqual({ allowed: true, effectiveLevel: 'BLOOD', reason: 'level', requiresConsent: true });
+    });
+  });
+
+  it.each(CONSENT_FEATURES)('%s reste FERMÉE à tout âge tant que le consentement n\'est pas donné : le plafond atteint n\'ouvre rien', (feature) => {
+    pairs.forEach((ages) => {
+      [{ consent: 'refused' as const }, { consent: 'unknown' as const }, {}].forEach((consent) => {
+        const result = access({ ...both('BLOOD'), feature, ...ages, ...consent });
+        expect(result).toEqual({ allowed: false, effectiveLevel: 'BLOOD', reason: 'consent', requiresConsent: true });
       });
-    },
-  );
+    });
+  });
+
+  it('un consentement illisible vaut un consentement absent (fail-closed)', () => {
+    const unreadable = { consent: 'yes' } as unknown as Pick<RelationAccessInput, 'consent'>;
+    expect(access({ ...both('BLOOD'), feature: 'location.live', ...unreadable }).allowed).toBe(false);
+  });
+
+  it('le consentement ne hausse pas le plafond : sous le niveau, la feature reste refusée pour le niveau', () => {
+    expect(access({ ...both('CLOSE'), feature: 'location.live', consent: 'granted' })).toEqual({
+      allowed: false,
+      effectiveLevel: 'CLOSE',
+      reason: 'level',
+      requiresConsent: false,
+    });
+  });
+
+  it('le consentement ne gouverne que les features qui le demandent', () => {
+    expect(access({ ...both('BLOOD'), feature: 'audience.blood', consent: 'refused' }).allowed).toBe(true);
+    expect(access({ ...both('FRIEND'), feature: 'presence.online' }).allowed).toBe(true);
+  });
+
+  it('soi-même lit sa propre position sans se demander son consentement', () => {
+    expect(access({ targetId: USER_A, feature: 'location.live' })).toMatchObject({ allowed: true, reason: 'self' });
+  });
 
   it('ne demande pas de consentement à une feature ordinaire', () => {
     expect(access({ ...both('BLOOD'), feature: 'audience.blood', viewerMinor: 'minor' }).requiresConsent).toBe(false);

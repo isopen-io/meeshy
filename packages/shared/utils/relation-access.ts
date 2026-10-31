@@ -17,14 +17,25 @@
  * 5. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
  *    ne l'est pas (majeur ou âge inconnu : fail-closed) ;
  * 6. sinon, le niveau effectif atteint-il le minimum de la feature ?
+ * 7. une feature à consentement ne s'ouvre que si `consent` vaut `'granted'` :
+ *    refusé, inconnu, absent ou illisible ⇒ `allowed: false, reason: 'consent'`.
  *
  * ## Les mineurs (décision porteur, 2026-10-31)
  *
  * L'âge déclaré fait foi et n'ouvre AUCUN refus d'âge : Sang, position et Bring
- * sont ouverts à tous, derrière un consentement refusable — la loi rend
- * `requiresConsent`, jamais `reason: 'minor'` (réservé à la Connaissance
- * automatique). Le client ne décide jamais d'un accès : le miroir (Swift,
- * Kotlin) sert à ne pas PROPOSER ce que le serveur refusera.
+ * sont ouverts à tous, derrière un consentement refusable — jamais
+ * `reason: 'minor'` (réservé à la Connaissance automatique). Le client ne
+ * décide jamais d'un accès : le miroir (Swift, Kotlin) sert à ne pas PROPOSER
+ * ce que le serveur refusera.
+ *
+ * ## Le consentement est une ENTRÉE, pas un drapeau à côté du verdict
+ *
+ * `allowed` est le verdict COMPLET : un consommateur qui ne lit que lui ne
+ * peut pas ouvrir la position, le Bring ou le talkie sans consentement.
+ * L'orchestrateur résout `consent` depuis `RelationFeatureSetting` ; la loi
+ * ne lit aucune table. `requiresConsent` dit seulement que le plafond est
+ * atteint ET que la feature passe par un consentement — de quoi proposer
+ * l'écran de consentement (`RELATION_CONSENT_REQUIRED`) quand `allowed` est faux.
  */
 
 import {
@@ -46,6 +57,9 @@ import {
 
 export type RelationAgeClass = DeclaredAgeClass;
 
+export const RELATION_CONSENTS = ['granted', 'refused', 'unknown'] as const;
+export type RelationConsent = (typeof RELATION_CONSENTS)[number];
+
 export type RelationAccessInput = {
   readonly viewerId: string;
   readonly targetId: string;
@@ -59,9 +73,11 @@ export type RelationAccessInput = {
   readonly targetMinor: RelationAgeClass;
   readonly viewerRole?: GlobalUserRoleType | null;
   readonly feature: RelationFeature;
+  /** Consentement résolu pour une feature qui en exige un ; absent = `'unknown'` (fermé). */
+  readonly consent?: RelationConsent;
 };
 
-export type RelationAccessReason = 'level' | 'blocked' | 'minor' | 'self' | 'role';
+export type RelationAccessReason = 'level' | 'blocked' | 'minor' | 'self' | 'role' | 'consent';
 
 export type RelationAccess = {
   readonly allowed: boolean;
@@ -111,5 +127,7 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
   }
 
   const reached = compareRelationLevel(level, RELATION_FEATURE_MIN_LEVEL[feature]) >= 0;
-  return verdict(reached, level, 'level', reached && RELATION_CONSENT_FEATURES.has(feature));
+  if (!reached || !RELATION_CONSENT_FEATURES.has(feature)) return verdict(reached, level, 'level');
+
+  return input.consent === 'granted' ? verdict(true, level, 'level', true) : verdict(false, level, 'consent', true);
 };

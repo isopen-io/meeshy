@@ -1,6 +1,6 @@
 {
-  "$comment": "Cas communs de la loi d'accès resolveRelationAccess (#13927, cercles de proximité). ÉCRITS À LA MAIN : un oracle indépendant de la loi TS, jamais généré en l'exécutant. Joués par packages/shared (vitest) puis par les miroirs Swift (MeeshySDK/.../Relations/RelationAccess.swift) et Kotlin (core/model/.../relation/RelationAccess.kt). `input` est l'entrée de resolveRelationAccess ; viewerRole est un rôle global (USER, MODERATOR, ADMIN, BIGBOSS) ; viewerMinor/targetMinor valent minor | adult | unknown ; `expected` la valeur rendue.",
-  "version": 1,
+  "$comment": "Cas communs de la loi d'accès resolveRelationAccess (#13927, cercles de proximité). ÉCRITS À LA MAIN : un oracle indépendant de la loi TS, jamais généré en l'exécutant. Joués par packages/shared (vitest) puis par les miroirs Swift (MeeshySDK/.../Relations/RelationAccess.swift) et Kotlin (core/model/.../relation/RelationAccess.kt). `input` est l'entrée de resolveRelationAccess ; viewerRole est un rôle global (USER, MODERATOR, ADMIN, BIGBOSS) ; viewerMinor/targetMinor valent minor | adult | unknown ; consent (granted | refused | unknown, absent = unknown) est le consentement résolu par l'orchestrateur depuis RelationFeatureSetting pour les features qui en exigent un — sans 'granted', allowed reste faux (reason consent) ; `expected` la valeur rendue.",
+  "version": 2,
   "cases": [
     {
       "id": "min-of-both-friend-close",
@@ -543,7 +543,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "talkie"
+        "feature": "talkie",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -587,7 +588,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "bring"
+        "feature": "bring",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -631,7 +633,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "listening.category"
+        "feature": "listening.category",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -675,7 +678,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "location.live"
+        "feature": "location.live",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -719,7 +723,8 @@
         "viewerMinor": "minor",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "location.live"
+        "feature": "location.live",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -741,7 +746,8 @@
         "viewerMinor": "minor",
         "targetMinor": "minor",
         "viewerRole": "USER",
-        "feature": "location.history"
+        "feature": "location.history",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -763,7 +769,8 @@
         "viewerMinor": "unknown",
         "targetMinor": "minor",
         "viewerRole": "USER",
-        "feature": "bring"
+        "feature": "bring",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -1137,7 +1144,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "location.proximity"
+        "feature": "location.proximity",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -1269,7 +1277,8 @@
         "viewerMinor": "adult",
         "targetMinor": "adult",
         "viewerRole": "USER",
-        "feature": "listening.title"
+        "feature": "listening.title",
+        "consent": "granted"
       },
       "expected": {
         "allowed": true,
@@ -1319,6 +1328,233 @@
         "allowed": false,
         "effectiveLevel": "PUBLIC",
         "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "blood-location-refused-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.live",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "blood-history-unknown-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.history",
+        "consent": "unknown"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "close-talkie-missing-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "talkie"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "friend-bring-refused-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "bring",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "minor-blood-proximity-missing-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.proximity"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "minor-minor-listening-title-refused-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "listening.title",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "close-listening-category-unknown-consent-stays-closed",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "listening.category",
+        "consent": "unknown"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "granted-consent-does-not-lift-the-level",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.live",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "refused-consent-ignored-by-ordinary-feature",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "audience.blood",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "self-reads-own-location-without-consent",
+      "matrix": "Consentement (fail-closed)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.live"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "self",
         "requiresConsent": false
       }
     }
