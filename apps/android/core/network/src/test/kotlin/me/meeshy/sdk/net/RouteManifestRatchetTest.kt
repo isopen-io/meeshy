@@ -81,8 +81,12 @@ class RouteManifestRatchetTest {
          * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
          * 207 : moins `POST /me/game/guide/seen` (#13885 : la ligne de Mee et sa feuille sur la première page
          * Progression), que porte `GameApi.markGuideSeen`.
+         * 201 : moins les six routes que `StickerPackApi` et `SharedTranslationApi` déclarent par les constantes du
+         * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
+         * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
+         * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
          */
-        const val TO_PORT_CEILING = 207
+        const val TO_PORT_CEILING = 201
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
