@@ -172,6 +172,7 @@ struct MeeshyComposerHost: View {
     /// lisent tous par `selectedFormat` / `armedChoice`. La disposition des
     /// scènes et le réel d'accompagnement voyagent avec lui.
     @State var formatState: ComposerFormatState
+    @State var atelierFanOut = ComposerAtelierFanOut()
 
     /// Le format que la PORTE a ouvert, gardé pour la bascule automatique vers
     /// le réel : désarmée, elle rend la porte (`ComposerReelAutoSwitch`).

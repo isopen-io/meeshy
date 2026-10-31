@@ -327,15 +327,12 @@ extension MeeshyComposerHost {
     /// Sous l'atelier, la flèche presse la télécommande en lui apportant le
     /// format ET l'audience choisis AU MOMENT DU GESTE : c'est l'atelier qui
     /// publie. L'audience voyage avec ses personnes nommées, jamais seule.
-    ///
-    /// Une STORY part par le canal de la SCÈNE, jamais par le brouillon :
-    /// `ComposerDocumentDraft` ne porte pas de slides. Un RÉEL part par le
-    /// document : le canal de la scène publie un post PAR SLIDE, et un réel de deux
-    /// photos y ferait deux posts.
+    /// Plusieurs formats cochés partent chacun par leur canal (#13920).
     func performSoclePublish(_ choice: ComposerPublishChoice) {
         // La frise ouverte rend ses pistes à la slide AVANT l'envoi :
         // sinon un timing réglé à l'instant partirait sans elle.
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
+        guard choice.legs.count == 1 else { return publishEachFormat(choice) }
         // Le texte du post ARMÉ depuis une scène part avec elle :
         // l'atelier publie le contenu de la slide, pas `documentText`.
         if let texte = ComposerPublishMenuRule.atelierCarriedPostText(
@@ -364,24 +361,9 @@ extension MeeshyComposerHost {
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
     /// il relaie.
     ///
-    /// ## L'accessibilité VOYAGE par ici
-    ///
-    /// La remise du meuble porte les deux cartes d'accessibilité du meuble :
-    /// l'éditeur de LÉGENDE (`documentMediaCaptions`) et l'éditeur de TEXTE
-    /// ALTERNATIF (`documentMediaAlts`). La greffe est câblée sur les DEUX bouches
-    /// du même entonnoir : ce site et la remise à l'ATELIER
-    /// (`MeeshyComposerHost+Surfaces`). Une seule des deux ferait partir une story
-    /// publiée depuis le socle sans l'une ni l'autre carte, silencieusement,
-    /// pendant que les deux champs s'affichent, se valident et se relisent à
-    /// l'écran.
-    ///
-    /// > **Un commentaire qui justifie une valeur PAR une absence se périme
-    /// > quand l'absence se comble — et il se périme en SILENCE**, puisque
-    /// > combler l'absence se fait ailleurs, dans le fichier qui ouvre la porte.
-    /// > La question à poser en ouvrant une porte de saisie n'est pas « où
-    /// > est-ce lu ? » mais « **quels sites remettent cette charge, et les
-    /// > ai-je TOUS visités ?** ». Ils étaient deux ; un seul avait la greffe.
-    ///
+    /// La remise porte les deux cartes d'accessibilité du meuble (légendes et
+    /// textes alternatifs), greffées sur les DEUX bouches du même entonnoir : ce
+    /// site et la remise à l'ATELIER (`MeeshyComposerHost+Surfaces`).
     /// `accessibilityCarryingComposerCaptions` est le site UNIQUE de la greffe : ce
     /// qui change ici est la BASE qu'on lui donne — `.empty`, parce que le meuble
     /// n'a pas de magasin d'atelier à relayer sur ce chemin, et c'est honnête.
@@ -598,10 +580,10 @@ extension MeeshyComposerHost {
                                 companionReelOffered: companionReelOffered)
     }
 
-    /// « Publier la story / le post / le réel » — le libellé que porte la table
-    /// unique des variantes (`ComposerFormatVariant`, #13864).
+    /// « Publier la story / le post / le réel », ou chacun des formats cochés
+    /// (#13920) : la capsule nomme ce qui part.
     var armedPublishTitle: String? {
-        ComposerFormatVariant.of(armedChoice.format).publishTitle(alsoAsReel: armedChoice.alsoAsReel)
+        ComposerPublishMenuCopy.publishTitle(for: armedChoice)
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** — la lecture de

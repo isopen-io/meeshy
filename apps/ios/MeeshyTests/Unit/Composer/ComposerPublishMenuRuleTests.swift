@@ -456,9 +456,10 @@ final class ComposerPublishAlsoAsReelTests: XCTestCase {
         XCTAssertEqual(ComposerPublishMenuRule.toggled(.story, armed: reel, companionReelOffered: true), storyEtReel)
     }
 
-    func test_toucherPost_armeLePostSeul() {
-        XCTAssertEqual(ComposerPublishMenuRule.toggled(.post, armed: storyEtReel, companionReelOffered: true),
-                       ComposerPublishChoice(format: .post, layout: nil))
+    /// #13920 — le choix est composite : toucher Post l'AJOUTE à la story et à son réel.
+    func test_toucherPost_ajouteLePost_alaStoryEtASonReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.post, armed: storyEtReel, companionReelOffered: true).formats,
+                       [.post, .story, .reel])
     }
 
     func test_sansOffre_toucherReel_armeLeReelSeul_commeAvant() {
@@ -570,5 +571,188 @@ final class ComposerPublishAlsoAsReelTests: XCTestCase {
         XCTAssertNil(StoryAlsoAsReelWire.flag(requested: true, type: .story, slideCount: 1, isRepost: true))
         XCTAssertNil(StoryAlsoAsReelWire.flag(requested: false, type: .story, slideCount: 1, isRepost: false),
                      "Sans la demande, la clé reste absente — le corps d'un ancien client.")
+    }
+}
+
+/// **#13920 — le choix du type de publication est COMPOSITE** (décision porteur :
+/// « le choix du type de post est composite et non exclusif »). L'auteur coche
+/// un ou plusieurs formats parmi Story, Post et Réel, et un seul geste les
+/// publie tous : une requête par format, chacun sous ses propres règles.
+@MainActor
+final class ComposerSeveralFormatsTests: XCTestCase {
+
+    private let story = ComposerPublishChoice(format: .story, layout: nil)
+    private let storyEtPost = ComposerPublishChoice(formats: [.story, .post], layout: nil)!
+
+    private func menu(offered: [ComposerFormat] = [.story, .post, .reel], slides: Int = 1)
+        -> [ComposerPublishMenuRule.Entry] {
+        ComposerPublishMenuRule.entries(candidates: [.story, .post, .reel], offered: offered,
+                                        carriesMoreThanText: true, slideCount: slides, layoutsTravel: true)
+    }
+
+    // MARK: - Cocher, décocher, jamais zéro
+
+    func test_cocherLePost_surUneStory_ajouteLePost() {
+        let coche = ComposerPublishMenuRule.toggled(.post, armed: story, companionReelOffered: false)
+        XCTAssertEqual(Set(coche.formats), [.story, .post], "Le choix est composite, pas exclusif.")
+    }
+
+    func test_decocherLePost_garderLaStory() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.post, armed: storyEtPost, companionReelOffered: false), story)
+    }
+
+    func test_decocherLeDernierFormat_neDecocheRien() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.story, armed: story, companionReelOffered: false), story,
+                       "Un choix publie toujours quelque chose : la dernière coche reste.")
+        XCTAssertNil(ComposerPublishChoice(formats: [], layout: nil))
+    }
+
+    func test_lesTroisFormats_seCochentEnsemble_quandLaStoryPeutPartirEnReel() {
+        let trois = ComposerPublishMenuRule.toggled(.reel, armed: storyEtPost, companionReelOffered: true)
+        XCTAssertEqual(trois.formats, [.post, .story, .reel], "Rangés dans l'ordre du menu.")
+    }
+
+    // MARK: - Chaque format garde ses règles
+
+    func test_unFormatRefuse_tombeSeul_lesAutresRestent() throws {
+        let postEtReel = ComposerPublishChoice(formats: [.post, .reel], layout: nil)!
+        let arme = ComposerPublishMenuRule.armed(chosen: postEtReel, defaultFormat: .story,
+                                                 entries: menu(offered: [.story, .post]))
+        XCTAssertEqual(arme.formats, [.post], "Le réel grisé ne part pas ; le post coché part.")
+        let entreeReel = try XCTUnwrap(menu(offered: [.story, .post]).first { $0.format == .reel })
+        XCTAssertEqual(entreeReel.isChoosable, false)
+        XCTAssertNotNil(entreeReel.reason, "Le format refusé reste au menu, grisé avec sa raison.")
+    }
+
+    func test_laDisposition_coche_lePost_etSAppliqueAuPost() {
+        let choisi = ComposerPublishMenuRule.choosingLayout(.hero, armed: story)
+        XCTAssertEqual(choisi.formats, [.post, .story])
+        XCTAssertEqual(choisi.layout, .hero)
+        XCTAssertEqual(choisi.legs.first { $0.format == .post }?.layout, .hero)
+        XCTAssertNil(choisi.legs.first { $0.format == .story }?.layout, "La disposition n'est qu'au post.")
+        XCTAssertNil(ComposerPublishMenuRule.toggled(.post, armed: choisi, companionReelOffered: false).layout,
+                     "Décocher le post retire sa disposition.")
+    }
+
+    func test_leMenuCoche_chaqueFormatChoisi() throws {
+        let entrees = menu(slides: 2)
+        let arme = ComposerPublishMenuRule.choosingLayout(.hero, armed: story)
+        let post = try XCTUnwrap(entrees.first { $0.format == .post })
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(post, armed: arme))
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(try XCTUnwrap(entrees.first { $0.format == .story }), armed: arme))
+        XCTAssertEqual(ComposerPublishMenuRule.checkedLayout(in: post, armed: arme), .hero)
+    }
+
+    // MARK: - Une requête par format
+
+    func test_unePublicationParFormat_laStoryEmporteSonReel() {
+        let trois = ComposerPublishChoice(formats: [.story, .post, .reel], layout: nil)!
+        XCTAssertEqual(trois.legs, [ComposerPublishChoice(format: .post, layout: nil),
+                                    ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)],
+                       "Le cas story + réel reste UNE requête, le réel accompagnant la story (#9476).")
+        let postEtReel = ComposerPublishChoice(formats: [.post, .reel], layout: nil)!
+        XCTAssertEqual(postEtReel.legs.map(\.format), [.post, .reel])
+    }
+
+    func test_chaquePublication_empruntesLeCanalDeSonFormat() {
+        let choisi = ComposerPublishMenuRule.choosingLayout(.hero, armed: story)
+        XCTAssertEqual(ComposerPublishMenuRule.dispatches(surface: .scene, choice: choisi),
+                       [.document(ComposerPublishChoice(format: .post, layout: .hero)),
+                        .atelier(.story, alsoAsReel: false)])
+    }
+
+    func test_leCasStoryEtReel_resteUneSeulePublication() {
+        let storyEtReel = ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)
+        XCTAssertEqual(storyEtReel.legs, [storyEtReel])
+        XCTAssertEqual(ComposerPublishMenuRule.dispatches(surface: .scene, choice: storyEtReel),
+                       [.atelier(.story, alsoAsReel: true)])
+    }
+
+    func test_lePlan_nommeLeFormatRefuseParSaGarde_etPublieLesAutres() {
+        let plan = ComposerSeveralFormats.plan(storyEtPost, surface: .scene, accepts: { $0 != .post })
+        XCTAssertEqual(plan.atelier, [story])
+        XCTAssertEqual(plan.refused, [.post])
+        XCTAssertTrue(plan.document.isEmpty)
+    }
+
+    func test_laRemiseDeLAtelier_publieChaqueFormatDuGeste() {
+        let file = ComposerPublishChoice(formats: [.post, .reel], layout: nil)!.legs
+        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: file, served: .post, alsoAsReel: false), file)
+        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: [], served: .story, alsoAsReel: true),
+                       [ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)],
+                       "Hors d'un geste composite, la remise publie son seul type, comme avant.")
+        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: file, served: .story, alsoAsReel: false),
+                       [story], "Une file qui ne commence pas par le type remis ne s'applique pas.")
+    }
+
+    func test_laFileDeLAtelier_seVideALaLecture() {
+        let file = ComposerAtelierFanOut()
+        file.hold(storyEtPost.legs)
+        XCTAssertEqual(file.take(served: .post, alsoAsReel: false).count, 2)
+        XCTAssertEqual(file.take(served: .post, alsoAsReel: false), [ComposerPublishChoice(format: .post, layout: nil)])
+    }
+
+    func test_leTexteDuPost_partAvecLePost_jamaisAvecLaStory() {
+        let slides = [StorySlide(id: "a", effects: StoryEffects()), StorySlide(id: "b", effects: StoryEffects())]
+        let legs = storyEtPost.legs
+        let duPost = ComposerSeveralFormats.slides(slides, for: legs[0], among: legs, postText: "Bonjour",
+                                                   currentSlideId: "b")
+        XCTAssertEqual(duPost.map(\.content), [nil, "Bonjour"])
+        let deLaStory = ComposerSeveralFormats.slides(slides, for: legs[1], among: legs, postText: "Bonjour",
+                                                      currentSlideId: "b")
+        XCTAssertEqual(deLaStory.map(\.content), [nil, nil])
+    }
+
+    // MARK: - La capsule nomme les formats cochés ; l'échec partiel dit lequel
+
+    func test_laCapsule_nommeChaqueFormatCoche() throws {
+        let deux = try XCTUnwrap(ComposerPublishMenuCopy.publishTitle(for: storyEtPost))
+        XCTAssertNotEqual(deux, ComposerPublishMenuCopy.publishTitle(.story))
+        XCTAssertNotEqual(deux, ComposerPublishMenuCopy.publishTitle(.post))
+        let trois = try XCTUnwrap(ComposerPublishMenuCopy.publishTitle(
+            for: ComposerPublishChoice(formats: [.story, .post, .reel], layout: nil)!))
+        XCTAssertNotEqual(trois, deux)
+        XCTAssertNotEqual(ComposerPublishMenuCopy.publishTitle(for: ComposerPublishChoice(formats: [.post, .reel],
+                                                                                         layout: nil)!), deux)
+    }
+
+    func test_lEchecPartiel_nommeLeFormatQuiNestPasParti() {
+        let phrase = ComposerPublishMenuCopy.partialFailure([.reel])
+        XCTAssertTrue(phrase.contains(ComposerFormatCopy.label(.reel)))
+        XCTAssertFalse(phrase.contains(ComposerFormatCopy.label(.post)))
+    }
+
+    // MARK: - Le geste et l'état
+
+    func test_letatDuFormat_garderToutLeChoix() {
+        let etat = ComposerFormatState.opening(.story).choosing(storyEtPost)
+        XCTAssertEqual(etat.choice, storyEtPost)
+        XCTAssertEqual(etat.format, .post, "Le premier format coché gouverne la scène.")
+    }
+
+    func test_laQuestionDuReel_neSePosePasSurUnChoixComposite() {
+        let video = ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/clip.mov"),
+                                          mimeType: "video/quicktime", durationMs: 12_000)
+        let entrees = [ComposerPublishMenuRule.Entry(format: .post, isChoosable: true, reason: nil, layouts: []),
+                       ComposerPublishMenuRule.Entry(format: .story, isChoosable: true, reason: nil, layouts: []),
+                       ComposerPublishMenuRule.Entry(format: .reel, isChoosable: true, reason: nil, layouts: [])]
+        let media = ComposerReelOfferRule.composedMedia(documentMedia: [video], bridgedSources: [],
+                                                        slides: [], slideImageIds: [])
+        XCTAssertTrue(ComposerReelOfferRule.offers(choice: ComposerPublishChoice(format: .post, layout: nil),
+                                                   menuEntries: entrees, origin: .feedComposer,
+                                                   formatChosenByAuthor: false, media: media))
+        XCTAssertFalse(ComposerReelOfferRule.offers(choice: storyEtPost, menuEntries: entrees, origin: .feedComposer,
+                                                    formatChosenByAuthor: false, media: media),
+                       "Deux formats cochés ont déjà répondu : rien à demander.")
+    }
+
+    func test_laPartiePrincipale_publieChaqueFormatParSonCanal() throws {
+        let code = try AppSourceGuard.composerHostSource()
+        let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compacte.contains("guardchoice.legs.count==1else{returnpublishEachFormat(choice)}"),
+                      "Plusieurs formats cochés partent tous au même geste.")
+        XCTAssertTrue(compacte.contains("letremises=atelierFanOut.take(served:targetType,")
+                          && compacte.contains("returnComposerSeveralFormats.relay(remises,"),
+                      "Le relais de l'atelier publie chaque format du geste.")
     }
 }

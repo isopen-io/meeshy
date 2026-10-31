@@ -58,29 +58,28 @@ extension MeeshyComposerHost {
             publishTrigger: publishTrigger,
             publishTargetType: selectedFormat.postType,
             // **La remise passe par le meuble, pour y GREFFER les légendes**
-            // (#4890, seconde moitié). Elle était transmise telle quelle, et
-            // `documentMediaCaptions` n'avait alors aucun lecteur : la légende
-            // saisie sur la scène d'un post mourait à la fermeture.
-            //
-            // Le meuble ne PUBLIE toujours pas — il n'appelle ni service, ni
-            // file, ni endpoint. Il complète la charge que l'atelier remet, avec
-            // la seule matière que l'atelier ne voit pas : sa propre carte de
-            // légendes. `accessibilityCarryingComposerCaptions` est le site
-            // UNIQUE de cette greffe.
+            // (#4890) : il ne publie pas, il complète la charge de l'atelier de
+            // sa carte de légendes (`accessibilityCarryingComposerCaptions`,
+            // site UNIQUE de la greffe).
             onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs,
                                         loadedAudioURLs, loadedStickerAnimations, originalLanguage,
                                         visibility, visibilityUserIds, draftId, references,
                                         accessibility, targetType in
-                // Un post ou un réel de M scènes part en UNE publication (#8520).
-                guard atelierHandOffStaysOnAtelier(targetType: targetType,
-                                                   sceneCount: slides.count) else { return false }
-                return onPublishAllInBackground(
-                    slides, slideImages, loadedImages, loadedVideoURLs,
-                    loadedAudioURLs, loadedStickerAnimations, originalLanguage,
-                    visibility, visibilityUserIds, draftId, references,
-                    accessibilityCarryingComposerCaptions(accessibility, slides: slides),
-                    targetType
-                )
+                // Une remise par format coché (#13920) ; un post ou un réel de M
+                // scènes part en UNE publication (#8520).
+                let remises = atelierFanOut.take(served: targetType, alsoAsReel: accessibility.alsoAsReel)
+                return ComposerSeveralFormats.relay(remises, staysOnAtelier: {
+                    atelierHandOffStaysOnAtelier(targetType: $0, sceneCount: slides.count)
+                }) { remise in
+                    let charge = ComposerSeveralFormats.slides(slides, for: remise, among: remises, postText: documentText,
+                                                               currentSlideId: viewModel.currentSlide.id)
+                    return onPublishAllInBackground(
+                        charge, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations,
+                        originalLanguage, visibility, visibilityUserIds, draftId, references,
+                        accessibilityCarryingComposerCaptions(accessibility, slides: charge)
+                            .carryingAlsoAsReel(remise.alsoAsReel),
+                        remise.format.postType)
+                }
             },
             onPreview: onPreview,
             onDismiss: onDismiss,

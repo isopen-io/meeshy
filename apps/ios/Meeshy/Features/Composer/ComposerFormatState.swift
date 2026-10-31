@@ -10,25 +10,21 @@ import MeeshySDK
 /// depuis le fil ne changeait donc ni la vue, ni les outils, ni ce que la flèche
 /// acceptait — seulement le mot écrit sur elle.
 ///
-/// Le chevron ÉCRIT désormais le format, et la disposition des scènes et le réel
-/// d'accompagnement voyagent avec lui : ce sont des réglages DU format, jamais un
-/// second format.
+/// Le chevron ÉCRIT désormais le format, et la disposition des scènes voyage
+/// avec lui. Les formats cochés ensemble (#13920) sont UN choix : le premier
+/// gouverne la scène, les autres partent avec lui au même geste.
 nonisolated struct ComposerFormatState: Equatable, Sendable {
 
-    let format: ComposerFormat
-    let layout: MosaicLayoutMode?
-    let alsoAsReel: Bool
+    let choice: ComposerPublishChoice
+
+    var format: ComposerFormat { choice.format }
 
     static func opening(_ format: ComposerFormat) -> ComposerFormatState {
-        ComposerFormatState(format: format, layout: nil, alsoAsReel: false)
+        ComposerFormatState(choice: ComposerPublishChoice(format: format, layout: nil))
     }
 
     func choosing(_ choice: ComposerPublishChoice) -> ComposerFormatState {
-        ComposerFormatState(format: choice.format, layout: choice.layout, alsoAsReel: choice.alsoAsReel)
-    }
-
-    var choice: ComposerPublishChoice {
-        ComposerPublishChoice(format: format, layout: layout, alsoAsReel: alsoAsReel)
+        ComposerFormatState(choice: choice)
     }
 
     /// Le format qui GOUVERNE — la vue, les rails, la garde de publication — une
