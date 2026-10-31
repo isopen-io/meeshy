@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { PreparedSceneExport } from './scene-export-assets';
-import { prepareBranding, withBranding, type BrandingDeps } from './scene-export-branding';
+import { brandPreparedScene, prepareBranding, withBranding, type BrandingDeps } from './scene-export-branding';
 import type { BrandingAuthor } from './scene-export-branding-identity';
 import { noRelationLevel } from './scene-export-branding-level';
 
@@ -102,5 +102,61 @@ describe('la scène posée dans son emballage', () => {
   test('la préparation reste la même : elle garde son nettoyage', async () => {
     const branding = await prepareBranding({ author: null, deps: depsWith(), signal });
     expect(withBranding(prepared, branding).dispose).toBe(prepared.dispose);
+  });
+});
+
+describe("l'emballage posé sur une story préparée, du port au contenu d'intro", () => {
+  const preparedWith = (onDispose: () => void) =>
+    ({
+      plan: { slides: [{ sceneIndex: 0, startMs: 0, durationMs: 6_000 }], totalMs: 6_000, still: true, sounds: [] },
+      assets: {},
+      videos: new Map(),
+      buffers: new Map(),
+      missing: [],
+      dispose: onDispose,
+    }) as unknown as PreparedSceneExport;
+
+  test("le niveau « CLOSE » servi par le port arrive jusqu'au contenu d'intro de la scène rendue : 🔥", async () => {
+    const branded = await brandPreparedScene({
+      prepared: preparedWith(() => undefined),
+      author: author(),
+      deps: depsWith({ relationLevel: async () => 'CLOSE' }),
+      signal,
+    });
+    expect(branded === 'cancelled' ? null : branded.branding?.identity?.circleBadge).toBe('🔥');
+  });
+
+  test("un export annulé pendant la préparation de l'emballage libère la scène préparée et se dit annulé", async () => {
+    const controller = new AbortController();
+    const disposed: string[] = [];
+    const branded = await brandPreparedScene({
+      prepared: preparedWith(() => disposed.push('scene')),
+      author: author(),
+      deps: depsWith({
+        relationLevel: async () => {
+          controller.abort();
+          return null;
+        },
+      }),
+      signal: controller.signal,
+    });
+    expect(branded).toBe('cancelled');
+    expect(disposed).toEqual(['scene']);
+  });
+
+  test("l'avatar et la bannière décodés pour l'emballage sont libérés avec la scène", async () => {
+    const closed: string[] = [];
+    const disposed: string[] = [];
+    const bitmap = (name: string) => ({ width: 10, height: 10, close: () => closed.push(name) }) as unknown as CanvasImageSource;
+    const branded = await brandPreparedScene({
+      prepared: preparedWith(() => disposed.push('scene')),
+      author: author({ bannerSrc: 'https://cdn/b.jpg' }),
+      deps: depsWith({ loadImage: async (src) => bitmap(src.endsWith('b.jpg') ? 'banner' : 'avatar') }),
+      signal,
+    });
+    if (branded === 'cancelled') throw new Error('attendu : une scène emballée');
+    branded.dispose();
+    expect(disposed).toEqual(['scene']);
+    expect([...closed].sort()).toEqual(['avatar', 'banner']);
   });
 });
