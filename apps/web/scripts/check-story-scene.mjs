@@ -52,10 +52,11 @@
  *     story d'autrui ; « Vues » ouvre la feuille (en-tête « 8 vues », trois
  *     lecteurs, story EN PAUSE, rail hors d'atteinte), Échap ferme LA FEUILLE
  *     — pas le lecteur, défaut mesuré sur le premier jet — et rend le focus
- *     à « Vues » ; « Partager » ouvre la feuille d'envoi commune (#8884), dont
+ *     à « Vues » ; « Envoyer » ouvre la feuille d'envoi commune (#8884), dont
  *     « Partager hors de Meeshy » appelle la feuille du système SYNCHRONEMENT au clic
  *     (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec l'adresse
- *     canonique ; « Enregistrer » pose l'anneau à SA place pendant
+ *     canonique ; « Partager » remet le FICHIER composé (#13881) sans ouvrir
+ *     cette feuille ; « Enregistrer » pose l'anneau à SA place pendant
  *     que « Partager » reste un bouton, puis LIVRE `meeshy-m4.svg` et le dit
  *     — premier jet mesuré : aucun téléchargement, aucun anneau, aucun mot.
  *     Aucun de ces gestes ne fait avancer la story.
@@ -940,16 +941,17 @@ async function runAuthorRail(colorScheme) {
     await page.waitForSelector('[data-story-action-rail] [data-story-action]', { timeout: 8000 });
   }
 
-  /* ── « Partager » : la feuille d'envoi commune (#8884), puis, par « Plus
+  /* ── « Envoyer » : la feuille d'envoi commune (#8884), puis, par « Plus
         d'options… » (« Partager hors de Meeshy » depuis #10948), la feuille du
-        système DANS le geste (D-48) ── */
+        système DANS le geste (D-48). Le lien vit ici depuis #13881 :
+        « Partager » remet désormais le FICHIER composé (ci-dessous). ── */
   await figer();
-  await page.evaluate(() => document.querySelector('[data-story-action="share"]')?.click());
+  await page.evaluate(() => document.querySelector('[data-story-action="forward"]')?.click());
   const feuilleEnvoi = await page
     .waitForSelector('[data-send-sheet-frame]', { timeout: 4000 })
     .then(() => true)
     .catch(() => false);
-  check(feuilleEnvoi, `${tag} : « Partager » doit ouvrir la feuille d'envoi commune`);
+  check(feuilleEnvoi, `${tag} : « Envoyer » doit ouvrir la feuille d'envoi commune`);
   const partage = await page.evaluate(() => {
     /* Visé par son IDENTIFIANT (`data-send-action="share-out"`), jamais par
        son libellé : l'écran de partage unique (#10948, planche validée #10949)
@@ -965,6 +967,39 @@ async function runAuthorRail(colorScheme) {
   );
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
+
+  /* ── « Partager » : le FICHIER composé (#13881) — l'image de la story rendue
+        par le moteur d'export, jamais la feuille d'envoi. `canShare` étant
+        absent (Chromium de bureau), la feuille du système refuse le fichier
+        et la livraison retombe sur l'ancre de téléchargement : le fichier
+        reçu est la COMPOSITION (`meeshy-story-<id>.png`), pas le média brut
+        qu'« Enregistrer » télécharge (`meeshy-m4.svg`). ── */
+  await figer();
+  const fichierPartage = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
+  const partageOffert = await page.evaluate(() => {
+    const bouton = document.querySelector('[data-story-action="share"]');
+    bouton?.click();
+    return bouton !== null;
+  });
+  const feuilleSurPartage = await page
+    .waitForSelector('[data-send-sheet-frame]', { timeout: 1500 })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    partageOffert && !feuilleSurPartage,
+    `${tag} : « Partager » remet le FICHIER composé, sans ouvrir la feuille d'envoi (#13881) — ${JSON.stringify({ partageOffert, feuilleSurPartage })}`,
+  );
+  const livrePartage = await fichierPartage;
+  const nomPartage = livrePartage === null ? null : livrePartage.suggestedFilename();
+  check(
+    nomPartage === 'meeshy-story-st-mienne.png',
+    `${tag} : « Partager » doit LIVRER la story COMPOSÉE — reçu ${JSON.stringify(nomPartage)}`,
+  );
+  await page.waitForFunction(() => document.querySelector('[data-scene-export-tray] [data-scene-export-ready], [data-scene-export-tray] [role="progressbar"]') === null, undefined, { timeout: 4000 }).catch(() => {});
+  if (feuilleSurPartage) {
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
+  }
 
   /* ── « Enregistrer » : l'anneau à SA place, puis le fichier livré et dit ── */
   await figer();
@@ -999,7 +1034,9 @@ async function runAuthorRail(colorScheme) {
   await page.waitForFunction(() => document.querySelector('[data-story-save-ring]') === null, undefined, { timeout: 3000 }).catch(() => {});
   const apresExport = await page.evaluate(() => ({
     enregistrer: document.querySelector('[data-story-action="save"]') !== null,
-    annonce: document.querySelector('p[role="status"]')?.textContent ?? '',
+    /* La région vivante du LECTEUR, pas celle du bandeau global des exports
+       (`[data-scene-export-tray]`), qui dit encore l'issue de « Partager ». */
+    annonce: [...document.querySelectorAll('p[role="status"]')].find((p) => p.closest('[data-scene-export-tray]') === null)?.textContent ?? '',
   }));
   check(
     apresExport.enregistrer && apresExport.annonce === 'Story enregistrée',
@@ -1010,7 +1047,7 @@ async function runAuthorRail(colorScheme) {
   check(fin.scene === 'st-mienne', `${tag} : aucun geste du rail ne doit faire avancer la story — ${JSON.stringify(fin)}`);
   check(pageErrors.length === 0, `${tag} erreurs de page : ${pageErrors.join(' | ')}`);
   await context.close();
-  return { rail, vuesCompte, titre: feuille.titre, lignes: feuille.lignes, partage, nom };
+  return { rail, vuesCompte, titre: feuille.titre, lignes: feuille.lignes, partage, nomPartage, nom };
 }
 
 /**
@@ -1068,5 +1105,5 @@ console.log(
     'carte 9:16 centrée dans le plateau aux deux tailles, bandes habillées), peint son placeholder AVANT « prêt », ' +
     'joue son son de fond au geste et le gèle à l\'appui, lit un texte posé dans une image seule, présente l\'image seule ' +
     'sans moteur, épingle sa durée sur la timeline, laisse le chemin v1 intact, et porte le rail AUTEUR complet (Vues en ' +
-    'pause, Échap qui ne ferme que la feuille, Partager dans le geste, Enregistrer qui livre) — clair et sombre identiques.',
+    'pause, Échap qui ne ferme que la feuille, Envoyer dont le partage part dans le geste, Partager qui livre la story composée, Enregistrer qui livre son média) — clair et sombre identiques.',
 );
