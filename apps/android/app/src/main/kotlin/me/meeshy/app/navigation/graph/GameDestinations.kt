@@ -49,6 +49,7 @@ object GameRoutes {
 
     const val RULES_ARG = "rules"
     const val RULES = "progression/rules/{$RULES_ARG}"
+    private const val RULES_TOP_ARG = "top"
 
     /** Le lien profond de la première page (iOS `RootView` : `progression`). */
     val PROGRESSION_DEEP_LINKS: List<String> = listOf("meeshy://$PROGRESSION")
@@ -63,6 +64,9 @@ object GameRoutes {
 
     /** Le carnet des règles ouvert à une section (iOS `Route.progressionRules`) : « Comprendre les médailles ». */
     fun rules(section: GameRulesSection): String = "$PROGRESSION/rules/${section.wire}"
+
+    /** « Comment ça marche » de la première page (iOS `onOpenRules(nil)`) : le carnet ouvert en haut, sans section visée. */
+    const val RULES_TOP: String = "$PROGRESSION/rules/$RULES_TOP_ARG"
 
     /** La route d'un écran du jeu ouvert par une entrée extérieure (notification) : [GameTarget]. */
     fun route(target: GameTarget): String = when (target) {
@@ -91,6 +95,7 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                 onBack = { navController.popBackStack() },
                 onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
                 onOpenSettings = { navController.navigate(GameRoutes.page(GamePage.Settings)) },
+                onOpenRules = { navController.navigate(GameRoutes.RULES_TOP) },
             )
         }
         builder.composable(

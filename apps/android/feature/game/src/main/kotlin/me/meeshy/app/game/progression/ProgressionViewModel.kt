@@ -25,6 +25,7 @@ import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameGlory
+import me.meeshy.sdk.model.game.GameUpdatedEvent
 import me.meeshy.sdk.model.game.SeasonMoment
 import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementMeeshProgress
@@ -34,6 +35,7 @@ import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.sdk.model.game.progression.ProgressionConceptModel
 import me.meeshy.sdk.model.game.progression.ProgressionFailure
 import me.meeshy.sdk.model.game.progression.ProgressionScreenPlan
+import me.meeshy.sdk.socket.MessageSocketManager
 
 /**
  * Ce que le blason et le compteur de l'en-tête disent : le rang servi et le solde de Meeshes. `null` ⇒ rien — un
@@ -49,6 +51,7 @@ data class ProgressionSnapshot(
     val game: GameBlock?,
     val cards: List<ProgressionConceptCard>,
     val standing: ProgressionStanding,
+    val gameRevision: Long? = null,
 )
 
 data class ProgressionUiState(
@@ -64,11 +67,13 @@ data class ProgressionUiState(
  *
  * Il ne calcule ni niveau, ni rang, ni prix, ni solde : chaque nombre est celui de la passerelle, dérivé par la loi
  * partagée ([EngagementProgressResolver], [ProgressionConceptModel]). Les gestes d'écriture (frapper, coffre,
- * Flamme) vivent dans les fiches, avec leur identifiant d'idempotence — ils ne sont pas dans cette itération.
+ * Flamme) vivent dans les fiches, avec leur identifiant d'idempotence. L'état changé sur un autre appareil
+ * (`game:updated`) se relit en silence tant que l'écran vit.
  */
 @HiltViewModel
 class ProgressionViewModel @Inject constructor(
     private val repository: EngagementProgressRepository,
+    private val messages: MessageSocketManager,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -94,6 +99,29 @@ class ProgressionViewModel @Inject constructor(
             isRefreshing = isRefreshing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ProgressionUiState())
+
+    init {
+        viewModelScope.launch { messages.gameUpdated.collect(::receive) }
+    }
+
+    /**
+     * `game:updated` (iOS `ProgressionViewModel.receive`) — une frappe, un gain, une reprise faits AILLEURS : la
+     * progression entière se relit derrière, en silence, sans rouvrir l'écran ni montrer le geste de tirer. Un état
+     * qui n'est pas plus récent que celui montré ne relit rien ; un événement sans révision (serveur antérieur) relit
+     * toujours. Une relecture qui échoue garde l'instantané : l'avis de coupure vient déjà de la synchronisation.
+     */
+    private suspend fun receive(event: GameUpdatedEvent) {
+        val incoming = event.gameRevision
+        val shown = state.value.snapshot?.gameRevision
+        if (incoming != null && shown != null && incoming <= shown) return
+        try {
+            repository.refresh()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (ignored: Exception) {
+            // L'instantané reste peint ; la synchronisation dit déjà la coupure.
+        }
+    }
 
     /** Tirer pour rafraîchir, ou « Réessayer » : force le réseau, le cache reste peint si la passerelle échoue. */
     fun refresh() {
@@ -126,6 +154,7 @@ class ProgressionViewModel @Inject constructor(
             game = game,
             cards = ProgressionConceptModel.cards(progress, game, System.currentTimeMillis(), moment),
             standing = ProgressionStanding(glory = game?.glory, meesh = progress.meesh),
+            gameRevision = payload.gameRevision,
         )
     }
 

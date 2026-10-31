@@ -435,6 +435,7 @@
     <string name="game_difficulty_gold">Goldener Akt</string>
     <string name="game_difficulty_hard">Akt III</string>
     <string name="game_difficulty_medium">Akt II</string>
+    <string name="game_door_rules">So funktioniert es</string>
     <string name="game_edition_gold">Gold</string>
     <string name="game_edition_prism">Prisma</string>
     <string name="game_edition_silver">Silber</string>
