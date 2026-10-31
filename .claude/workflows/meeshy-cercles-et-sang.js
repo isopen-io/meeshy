@@ -50,14 +50,18 @@ const LIVRER_MAIN = A.livrer_main === true
 // l'ouvre JAMAIS au public — il autorise seulement la recette à l'allumer pour la liste blanche de test.
 const FLAG_POSITION = A.flag_position === true
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
-const NUMEROS_ARGS = A.numeros && typeof A.numeros === 'object' ? A.numeros : {}
+// Les issues ouvertes le 2026-10-31 (milestone #215, chapeau #13925) ; `numeros` dans les args les complète.
+const NUMEROS_PAR_DEFAUT = { 'rel-modele': 13926, 'rel-loi-acces': 13927, 'presence-ami-binaire': 13928, 'notifs-cercles': 13929, 'jeu-suit-le-cercle': 13930, 'audiences-publications': 13931, 'rel-compteurs': 13932, 'rel-demandes': 13933, 'proche-sang-ecoute': 13934, 'proche-talkie': 13935, 'proche-bring': 13936, 'sang-position-historique': 13937, 'ui-cercles': 13938, 'ui-audience': 13939, 'ui-profil-cercles': 13940, 'sang-recette-reelle': 13941, 'conformite-cercles': 13942 }
+const NUMEROS_ARGS = { ...NUMEROS_PAR_DEFAUT, ...(A.numeros && typeof A.numeros === 'object' ? A.numeros : {}) }
+// Les décisions-produit ouvertes (spec § 8) : D-1 seuils Connaissance, D-2 audio en E2EE, D-3 Critical Alerts, D-4 PushToTalk, D-5 exception des anciens clients.
+const DECISIONS = { 'D-1': 13943, 'D-2': 13944, 'D-3': 13945, 'D-4': 13946, 'D-5': 13947, 'age': 13948, 'e2ee': 13949 }
 const SPEC = `${REPO_SPEC}/docs/superpowers/specs/2026-10-31-cercles-et-mode-sang-design.md`
 const XLSX = `${REPO_SPEC}/docs/specs/cercles/Meeshy_niveaux_features_regles.xlsx`
 const RECETTE = texte(A.recette, POSTE === 'cloud' ? '/home/user/.cache/meeshy-recette-cercles' : '/Users/smpceo/.cache/meeshy-recette-cercles')
 const SCRATCH = (chaine) => `${REPO[chaine]}/.cache/cercles-workflow`
 const GH = 'isopen-io/meeshy'
 const MILESTONE = 215
-const CHAPEAU = Number.isInteger(A.chapeau) ? A.chapeau : 0
+const CHAPEAU = Number.isInteger(A.chapeau) ? A.chapeau : 13925
 const SIM_NATIVE = texte(A.sim_native, '171765AF-36FD-45B1-9B9D-570E24C72E11')
 
 const M0 = A.modeles && typeof A.modeles === 'object' ? A.modeles : {}
@@ -556,7 +560,7 @@ Pour CHAQUE lot, dans le worktree de sa chaîne (${CHAINES.map((c) => `${c} → 
 1. Sinon rejoue les greps qui fondent « existe déjà », LIS les fichiers et rends l'INVENTAIRE : à étendre / à modifier / à ne pas toucher
    (fichier:ligne), et à créer — chaque création avec « pourquoi l'existant ne suffit pas » ; une création que l'existant couvre est REFUSÉE ici.
 2. Verdict : deja-livre (critère tenu, prouvé par le code et un témoin), tenu-ailleurs, a-faire, a-decouper (plus d'un jour — dis comment),
-   bloque-decision (une décision-produit ouverte de la spec § 8 le bloque : dis laquelle).
+   bloque-decision (une décision-produit ouverte de la spec § 8 le bloque SANS défaut applicable : dis laquelle — issues ${Object.entries(DECISIONS).map(([k, n]) => `${k} #${n}`).join(', ')} ; une décision qui a un défaut écrit en § 8 ne bloque pas : le défaut s'applique et se dit).
 3. fichiers_cibles, hors_budget (\`wc -l\` > 1000 : extraire avant d'ajouter), taille (petit = haiku ; developper = sonnet).
 4. COLLISIONS : deux lots d'une même chaîne sur un même fichier ⇒ l'ordre.
 

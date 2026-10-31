@@ -278,7 +278,7 @@ Ces écrans sont **iOS-référence** ; web et Android sont iso.
 
 ## 6. Lots et matrice cas × plateforme
 
-Chaque lot a **une** issue (milestone #215). Un lot multi-plateforme a un sous-lot par chaîne, sous la forme `<clé>@<chaîne>` dans le workflow : iOS d'abord, web et Android ensuite (iso). Les clés ci-dessous sont celles du workflow.
+Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acces` #13927, `presence-ami-binaire` #13928, `notifs-cercles` #13929, `jeu-suit-le-cercle` #13930, `audiences-publications` #13931, `rel-compteurs` #13932, `rel-demandes` #13933, `proche-sang-ecoute` #13934, `proche-talkie` #13935, `proche-bring` #13936, `sang-position-historique` #13937, `ui-cercles` #13938, `ui-audience` #13939, `ui-profil-cercles` #13940, `sang-recette-reelle` #13941, `conformite-cercles` #13942. Un lot multi-plateforme a un sous-lot par chaîne, sous la forme `<clé>@<chaîne>` dans le workflow : iOS d'abord, web et Android ensuite (iso). Les clés ci-dessous sont celles du workflow.
 
 **Jalon 1 — les cercles**
 
@@ -361,12 +361,12 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 
 ## 8. Décisions encore ouvertes (`décision-produit`, assignées au porteur)
 
-Chacune a son issue dans le milestone #215. Le défaut ci-dessous s'applique tant qu'elle n'est pas tranchée.
+Chacune a son issue dans le milestone #215. Liées : vérification d'âge #13948, talkie chiffré #13949. Issue chapeau : #13925. Le défaut ci-dessous s'applique tant qu'elle n'est pas tranchée.
 
 | # | Question | Défaut appliqué en attendant |
 |---|---|---|
-| D-1 | Seuils exacts de la Connaissance automatique (nombre, pondération, fenêtre) | 10 interactions par sens sur 90 jours glissants, dont ≥ 1 message, ≥ 1 like ou réaction, ≥ 1 vue de post et ≥ 1 audio |
-| D-2 | En E2EE, compter l'audio par le `messageType` déclaré par le client ? | on le compte (métadonnée déjà visible, jamais le clair), signalé comme déclaratif |
-| D-3 | Demander l'entitlement Critical Alerts pour le Bring ? | non : time-sensitive seulement, la limite du silencieux est dite |
-| D-4 | Demander l'entitlement PushToTalk ? | le chemin sans PTT (NSE + son) est livré d'abord ; PTT branché quand l'entitlement est accordé |
-| D-5 | Durée de l'exception de compatibilité des anciens clients (demande d'ami hors Connaissance) | jusqu'à zéro usage mesuré sur 30 jours, ou une version minimale |
+| D-1 (#13943) | Seuils exacts de la Connaissance automatique (nombre, pondération, fenêtre) | 10 interactions par sens sur 90 jours glissants, dont ≥ 1 message, ≥ 1 like ou réaction, ≥ 1 vue de post et ≥ 1 audio |
+| D-2 (#13944) | En E2EE, compter l'audio par le `messageType` déclaré par le client ? | on le compte (métadonnée déjà visible, jamais le clair), signalé comme déclaratif |
+| D-3 (#13945) | Demander l'entitlement Critical Alerts pour le Bring ? | non : time-sensitive seulement, la limite du silencieux est dite |
+| D-4 (#13946) | Demander l'entitlement PushToTalk ? | le chemin sans PTT (NSE + son) est livré d'abord ; PTT branché quand l'entitlement est accordé |
+| D-5 (#13947) | Durée de l'exception de compatibilité des anciens clients (demande d'ami hors Connaissance) | jusqu'à zéro usage mesuré sur 30 jours, ou une version minimale |
