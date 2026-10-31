@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_editing_announce">تحرير: %1$s</string>
+    <string name="composer_editing_done">العودة إلى أدوات المشهد</string>
+    <string name="composer_editing_back">رجوع</string>
+</resources>

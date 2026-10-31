@@ -38,8 +38,8 @@ private val BAR_HEIGHT = 56.dp
 private val BAR_VEIL = MeeshyMediaChromeColors.ScrimStrong
 
 /**
- * La barre d'actions de l'élément sélectionné (#13836, état 3 de la maquette), posée sur la scène juste au-dessus de
- * Public et Publier : une icône et un MOT par action, chacune une cible de toute la hauteur de la barre — Modifier,
+ * La barre d'actions du FOND sélectionné (#13836, état 3 de la maquette), posée sur la scène juste au-dessus de Public et
+ * Publier — un objet de la scène, lui, porte ses options dans la colonne des outils ([SceneOptionColumn], #13956) : une icône et un MOT par action, chacune une cible de toute la hauteur de la barre — Modifier,
  * Dupliquer, Temps, Retirer ; aucun Ordre, toucher un objet le fait passer devant (#13917). Retirer est en couleur d'alerte, et l'historique la défait. Le rail droit du grand
  * écran (#13837) sert la même liste, depuis la même loi.
  */

@@ -2,6 +2,8 @@ package me.meeshy.app.stories
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -21,6 +23,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.composer.ComposerPullDismiss
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -247,8 +250,9 @@ private fun SceneFirstStage(
         val framing = remember(sheetTop != null || reduced, frameWidth, frameHeight, overlap) {
             sceneFraming(sheetTop != null || reduced, frameWidth, frameHeight, overlap)
         }
-        val scale by animateFloatAsState(framing.scale, label = "sceneFirstScale")
-        val offsetY by animateFloatAsState(framing.offsetY, label = "sceneFirstOffset")
+        val reduceMotion = LocalReduceMotion.current
+        val scale by animateFloatAsState(framing.scale, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstScale")
+        val offsetY by animateFloatAsState(framing.offsetY, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffset")
         val reserve = if (reservesBelow) BELOW_RESERVE else 0.dp
         Box(
             modifier = Modifier
@@ -317,10 +321,16 @@ private fun BoxScope.AnchoredSheetHost(
     heights: MutableMap<StoryComposerSheet, Int>,
     content: @Composable (StoryComposerSheet) -> Unit,
 ) {
+    val reduceMotion = LocalReduceMotion.current
     AnimatedContent(
         targetState = sheet,
         transitionSpec = {
-            slideInVertically { it } togetherWith slideOutVertically { it } using SizeTransform(clip = false)
+            val slide = if (reduceMotion) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                slideInVertically(ComposerSceneMotion.spec()) { it } togetherWith slideOutVertically(ComposerSceneMotion.spec()) { it }
+            }
+            slide using SizeTransform(clip = false)
         },
         modifier = Modifier
             .align(Alignment.BottomCenter)

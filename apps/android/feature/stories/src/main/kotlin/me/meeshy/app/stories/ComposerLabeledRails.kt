@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -120,9 +121,8 @@ private fun LeadingRailTools(
 }
 
 /**
- * Le rail de la SÉLECTION (#13837) : son titre et les actions libellées de l'élément touché — la même liste que la barre
- * du petit écran (#13836), Retirer en couleur d'alerte — puis ↶ ↷ au pied. Sans sélection, le rail est vide ; l'historique
- * reste, seulement s'il existe (loi 4).
+ * Le rail droit (#13837) : ↶ ↷ au pied, seulement s'ils existent (loi 4), et au-dessus les actions du FOND quand il est
+ * sélectionné ; un objet de la scène, lui, porte ses options dans le rail gauche, à la place des outils (#13956).
  */
 @Composable
 internal fun ColumnScope.StoryTrailingRail(
@@ -136,18 +136,7 @@ internal fun ColumnScope.StoryTrailingRail(
         modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
-        bar?.let {
-            Text(
-                text = stringResource(R.string.composer_rail_selection),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
-            )
-            it.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
-        }
+        bar?.let { SelectionRailBlock(it, onAction) }
     }
     history?.let {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -155,6 +144,32 @@ internal fun ColumnScope.StoryTrailingRail(
             SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
         }
     }
+}
+
+/**
+ * Grand écran, un objet en édition (#13956) : le rail de ce qu'on ajoute cède sa place, au même endroit, au titre de la
+ * sélection et aux options de l'objet — Fermer et les outils reviennent à la désélection.
+ */
+@Composable
+internal fun StoryEditingRail(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
+    ) { SelectionRailBlock(bar, onAction) }
+}
+
+@Composable
+private fun SelectionRailBlock(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+    Text(
+        text = stringResource(R.string.composer_rail_selection),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White.copy(alpha = 0.6f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
+    )
+    bar.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
 }
 
 @Composable

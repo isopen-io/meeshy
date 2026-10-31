@@ -232,6 +232,8 @@ class ComposerIncomingMediaComposeTest {
         val waiting = string(me.meeshy.feature.stories.R.string.story_composer_incoming_waiting)
         assertThat(compose.onAllNodesWithText(waiting).fetchSemanticsNodes()).hasSize(2)
         assertThat(vm.state.value.isUploadingMedia).isFalse()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
+        compose.runOnIdle { vm.onSceneBackgroundTap() }
         compose.onNodeWithText("Publish story").assertExists()
     }
 

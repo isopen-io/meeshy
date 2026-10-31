@@ -1,18 +1,27 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
+import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. [onPickFiles] : l'appui
@@ -32,8 +41,9 @@ internal class StoryComposerDoors(
  * Le compositeur de story, la scène d'abord (#13834) — UNE disposition pour l'hôte et pour la route autonome
  * (republication, modification, audience d'onboarding) : la scène plein écran, ✕ et ↶↷ en haut, la rangée des diapos dès
  * deux, les six outils à droite, le panneau du geste en cours, puis la pastille d'audience et « Publier la story ▾ ». Un
- * objet touché retire les outils et pose sa seule barre d'actions libellées au-dessus de Publier (#13836) ; le pinceau en
- * main n'a que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
+ * objet touché met le compositeur en édition ([me.meeshy.sdk.model.composer.ComposerEditingChrome], #13956) : ✕,
+ * l'audience et Publier se retirent, et la colonne des outils porte, à la même place, ses options ; le pinceau en main n'a
+ * que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
  * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre. Quand la fenêtre a la place de deux rails
@@ -76,10 +86,11 @@ private fun SceneFirstFrame(
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
-    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive) && !armed
-    val tools = if (armed) emptyList() else ComposerSceneTools.toolsServed(objectFocused = state.selectedObjectControllers != null, drawing = state.isDrawingActive)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null)
+    val chrome = editing.sceneControls
     val selection = state.selectionBar?.takeIf { panel == null && typing == null && !armed }
     val openSheet = sheet.open?.takeIf(state::serves)
+    val levels = rememberEditingLevels(StoryEditingLevel.OBJECT_OPTIONS, state.selectedSceneObject, backEnabled = editing.editing && openSheet == null)
     val captureOffered = capture?.offeredOn(state, somethingOpen = panel != null || typing != null || openSheet != null) == true
     StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     val onSelectionAction = { bar: SceneSelectionBar, action: ComposerSelectionAction ->
@@ -87,54 +98,82 @@ private fun SceneFirstFrame(
     }
     val dialogs = rememberStoryOverflowDialogs(state, viewModel)
     val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen, capture)
-    val rails = storySceneRails(state, viewModel, more, selection, onSelectionAction, morePanel, formatChevron)
-    StorySceneFirstLayout(
-        onDismiss = doors.onClose,
-        reduced = panel != null && typing == null,
-        scene = { modifier -> StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered) },
-        top = {
-            SceneTopBar(
-                onClose = doors.onClose,
-                history = SceneHistory(state.canUndo, state.canRedo)
-                    .takeIf { chrome && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
-                onUndo = viewModel::onUndo,
-                onRedo = viewModel::onRedo,
-                showsClose = chrome,
-            )
-        },
-        strip = { if (chrome) StorySlideStrip(state, viewModel) },
-        trailing = { if (tools.isNotEmpty()) StorySceneTools(state, viewModel, more, tools) },
-        panel = {
-            panel?.let {
-                StoryComposerBottomPanel(
-                    panel = it,
-                    state = state,
-                    viewModel = viewModel,
-                    comparison = comparison,
-                    toolPanel = {
-                        StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
-                    },
-                    onCloseLocal = { onMorePanel(null) },
+    val rails = storySceneRails(state, viewModel, more, selection, onSelectionAction, morePanel, formatChevron, editing to levels)
+    Box(Modifier.fillMaxSize()) {
+        StorySceneFirstLayout(
+            onDismiss = doors.onClose,
+            reduced = panel != null && typing == null,
+            scene = { modifier -> StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered) },
+            top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
+            strip = { if (chrome) StorySlideStrip(state, viewModel) },
+            trailing = {
+                SceneRail(
+                    content = editing.rail,
+                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
+                    options = { selection?.let { bar -> StoryEditingLevels(levels, back = { SceneLevelBack(it) }) { SceneOptionColumn(bar) { action -> onSelectionAction(bar, action) } } } },
                 )
-            }
-        },
-        socle = {
-            selection?.let { bar ->
-                ComposerSelectionActionBar(
-                    bar = bar,
-                    onAction = { action -> onSelectionAction(bar, action) },
-                )
-            }
-            if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen) { onMorePanel(StoryMorePanel.POST_TEXT) }
-        },
-        sheet = openSheet,
-        onSheetDismiss = sheet.onDismiss,
-        sheetContent = { open ->
-            if (open.servesSelection) StorySelectionSheet(open, state, viewModel, comparison, onDone = sheet.onDismiss) else sheet.content(open)
-        },
-        typing = typing,
-        rails = rails,
-        incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
+            },
+            panel = {
+                panel?.let {
+                    StoryComposerBottomPanel(
+                        panel = it,
+                        state = state,
+                        viewModel = viewModel,
+                        comparison = comparison,
+                        toolPanel = {
+                            StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
+                        },
+                        onCloseLocal = { onMorePanel(null) },
+                    )
+                }
+            },
+            socle = {
+                selection?.takeIf { editing.backgroundBar }?.let { bar ->
+                    ComposerSelectionActionBar(
+                        bar = bar,
+                        onAction = { action -> onSelectionAction(bar, action) },
+                    )
+                }
+                if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication) { onMorePanel(StoryMorePanel.POST_TEXT) }
+            },
+            sheet = openSheet,
+            onSheetDismiss = sheet.onDismiss,
+            sheetContent = { open ->
+                if (open.servesSelection) StorySelectionSheet(open, state, viewModel, comparison, onDone = { sheet.onDismiss(); viewModel.onSceneBackgroundTap() }) else sheet.content(open)
+            },
+            typing = typing,
+            rails = rails,
+            incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
+        )
+        EditingAnnouncer(editing = state.selectedSceneObject?.takeIf { editing.editing }?.let(state::familyOf))
+    }
+}
+
+/** Les niveaux de la colonne en édition : le premier porte les options de l'objet ([objectOptions]). */
+@Composable
+private fun StoryEditingLevels(
+    levels: EditingLevels<StoryEditingLevel>,
+    back: @Composable (onBack: () -> Unit) -> Unit,
+    objectOptions: @Composable () -> Unit,
+) {
+    EditingRailLevels(levels, back) { level ->
+        when (level) {
+            StoryEditingLevel.OBJECT_OPTIONS -> objectOptions()
+        }
+    }
+}
+
+/** ✕ et ↶↷ ; en édition d'un objet (#13956), ✕ se retire et la barre garde sa hauteur, ↶↷ restent. */
+@Composable
+private fun StorySceneTop(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onClose: () -> Unit, editing: ComposerEditingChrome) {
+    SceneTopBar(
+        onClose = onClose,
+        history = SceneHistory(state.canUndo, state.canRedo)
+            .takeIf { editing.sceneControls && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
+        onUndo = viewModel::onUndo,
+        onRedo = viewModel::onRedo,
+        showsClose = editing.close,
+        keepsHeight = editing.sceneControls,
     )
 }
 
@@ -217,16 +256,20 @@ private fun storySceneRails(
     onSelectionAction: (SceneSelectionBar, ComposerSelectionAction) -> Unit,
     morePanel: StoryMorePanel?,
     formatChevron: (@Composable () -> Unit)?,
+    edition: Pair<ComposerEditingChrome, EditingLevels<StoryEditingLevel>>,
 ): StorySceneRails {
-    val chrome = ComposerSceneTools.showsSceneChrome(drawing = state.isDrawingActive) && more.capture?.armed != true
+    val (editing, levels) = edition
+    val chrome = editing.sceneControls
+    val edited = selection?.takeIf { editing.editing }
+    val background = selection?.takeIf { editing.backgroundBar }
     val doors = more.doors
     val sceneExport = more.sceneExport
     val onTool = rememberSceneToolAction(state, viewModel, doors, more.onMorePanel)
     val onEntry = rememberMoreEntryAction(state, viewModel, more)
     val onMediaSource = rememberMediaSourceAction(state, doors, more.onMorePanel, more.capture)
     val model = LeadingRailModel(
-        showsClose = chrome,
-        showsTools = chrome,
+        showsClose = editing.close,
+        showsTools = chrome && !editing.editing,
         activeTool = state.activeSceneTool(),
         openEntry = state.openMoreEntry(morePanel),
         moreEntries = moreEntriesOf(state, sceneExport),
@@ -235,19 +278,25 @@ private fun storySceneRails(
         cameraServed = more.cameraServed,
     )
     return StorySceneRails(
-        leading = { StoryLeadingRail(model, doors.onClose, onTool, onEntry, onMediaSource) },
+        leading = {
+            edited?.let { bar ->
+                StoryEditingLevels(levels, back = { LabeledRailItem(MeeshyIcons.Back, stringResource(R.string.composer_editing_back), it) }) {
+                    StoryEditingRail(bar) { action -> onSelectionAction(bar, action) }
+                }
+            } ?: StoryLeadingRail(model, doors.onClose, onTool, onEntry, onMediaSource)
+        },
         trailing = {
             StoryTrailingRail(
-                bar = selection,
+                bar = background,
                 history = SceneHistory(state.canUndo, state.canRedo)
                     .takeIf { chrome && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
-                onAction = { action -> selection?.let { onSelectionAction(it, action) } },
+                onAction = { action -> background?.let { onSelectionAction(it, action) } },
                 onUndo = viewModel::onUndo,
                 onRedo = viewModel::onRedo,
             )
         },
         socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
-        below = { if (chrome) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
+        below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
     )
 }
 
@@ -373,16 +422,21 @@ private fun StorySocle(
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
     onOpenSheet: (StoryComposerSheet) -> Unit,
+    publication: Boolean,
     onPostText: () -> Unit,
 ) {
-    ComposerSceneReferenceFooter(
-        hashtags = state.hashtags,
-        mentions = state.draft.mentions,
-        onHashtags = { onOpenSheet(StoryComposerSheet.HASHTAGS) },
-        onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
-    )
+    if (ComposerSceneReferences.isServed(state.hashtags, state.draft.mentions)) EditingChromeVisibility(publication) {
+        ComposerSceneReferenceFooter(
+            hashtags = state.hashtags,
+            mentions = state.draft.mentions,
+            onHashtags = { onOpenSheet(StoryComposerSheet.HASHTAGS) },
+            onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
+        )
+    }
     StorySocleNotice(state, viewModel::onRetryMediaPick)
-    StoryPublish(state, viewModel, doors, formatChevron, onPostText)
+    EditingChromeVisibility(publication) {
+        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) { StoryPublish(state, viewModel, doors, formatChevron, onPostText) }
+    }
 }
 
 @Composable

@@ -45,11 +45,8 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
  */
 object ComposerSceneTools {
 
+    /** Ce qui s'en retire — un objet en édition, le pinceau en main — est la loi de [ComposerEditingChrome] (#13956). */
     val column: List<ComposerSceneTool> = ComposerSceneTool.entries
-
-    /** Un objet touché ou le pinceau en main : les outils se retirent, la scène et ce qui agit sur l'objet restent. */
-    fun toolsServed(objectFocused: Boolean, drawing: Boolean): List<ComposerSceneTool> =
-        if (objectFocused || drawing) emptyList() else column
 
     /**
      * [editsSlides] : faux pendant la modification d'une story publiée, qui ne gagne pas de diapo. [sceneEffects] et
@@ -104,7 +101,4 @@ object ComposerSceneTools {
 
     /** Le chevron de Publier n'existe que s'il y a un autre format ou une disposition à choisir (route autonome : aucun). */
     fun showsFormatChevron(formats: Int, layouts: Int): Boolean = formats > 1 || layouts > 0
-
-    /** Le pinceau en main, la croix et le socle se retirent : la scène reste entière pour le trait. */
-    fun showsSceneChrome(drawing: Boolean): Boolean = !drawing
 }

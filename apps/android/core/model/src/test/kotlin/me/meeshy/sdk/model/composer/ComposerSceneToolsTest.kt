@@ -40,13 +40,6 @@ class ComposerSceneToolsTest {
     }
 
     @Test
-    fun `the tools step aside while an object is focused or the brush is held`() {
-        assertThat(ComposerSceneTools.toolsServed(objectFocused = false, drawing = false)).isEqualTo(ComposerSceneTools.column)
-        assertThat(ComposerSceneTools.toolsServed(objectFocused = true, drawing = false)).isEmpty()
-        assertThat(ComposerSceneTools.toolsServed(objectFocused = false, drawing = true)).isEmpty()
-    }
-
-    @Test
     fun `a bare scene's more menu holds what every scene can do, then nothing to export`() {
         assertThat(more()).containsExactly(
             ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
@@ -164,12 +157,6 @@ class ComposerSceneToolsTest {
         assertThat(ComposerSceneTools.showsFormatChevron(formats = 1, layouts = 0)).isFalse()
         assertThat(ComposerSceneTools.showsFormatChevron(formats = 3, layouts = 0)).isTrue()
         assertThat(ComposerSceneTools.showsFormatChevron(formats = 1, layouts = 5)).isTrue()
-    }
-
-    @Test
-    fun `the brush hides the close cross and the publish socle, the scene stays whole for the stroke`() {
-        assertThat(ComposerSceneTools.showsSceneChrome(drawing = false)).isTrue()
-        assertThat(ComposerSceneTools.showsSceneChrome(drawing = true)).isFalse()
     }
 
     @Test
