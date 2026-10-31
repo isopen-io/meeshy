@@ -56,6 +56,8 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.ui.component.media.MEDIA_TRIM_END_HANDLE_TAG
+import me.meeshy.ui.component.media.MEDIA_TRIM_START_HANDLE_TAG
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
@@ -241,6 +243,40 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("End").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "3.0 s"))
         compose.onNodeWithContentDescription("Text start time").assertDoesNotExist()
         compose.onNode(hasText("Video") and isSelected()).assertExists()
+    }
+
+    private fun withVoice(vm: StoryComposerViewModel, sourceSeconds: Float?) {
+        val voice = me.meeshy.sdk.model.StoryAudioPlayerObject(id = "a1", postMediaId = "pm", mediaURL = "https://cdn/a1.m4a", x = 0.5, y = 0.7)
+        val sources = sourceSeconds?.let { mapOf("a1" to it) }.orEmpty()
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { it.copy(audio = listOf(voice), soundSources = sources) })) }
+        vm.onSceneReduce { StoryComposerSelectionReducer.soundSelected(it, "a1") }
+    }
+
+    @Test
+    fun `Timing on a sound chip trims the sound too, beside its window, as on iOS`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNode(hasText("Sound") and isSelected()).assertExists()
+        compose.onNodeWithText("Trim").assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_END_HANDLE_TAG).assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
+    }
+
+    @Test
+    fun `a sound whose source length is unknown offers no trim in Timing, only its window`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = null)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertDoesNotExist()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
     }
 
     @Test

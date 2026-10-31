@@ -119,7 +119,8 @@ private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, 
 /**
  * Le Temps de l'objet posé (#13902, #13904) — texte, sticker, média, lieu ou pastille de son : sa famille, sa fenêtre en
  * début et fin (iOS `ComposerObjectTimingControls`), puis la frise du plan, où sa piste est surlignée et où toucher une
- * autre piste sélectionne son objet.
+ * autre piste sélectionne son objet. Une pastille de son dont la source est connue s'y rogne aussi (#13903) : iOS sert
+ * ROGNER au côté de la fenêtre pour l'audio (`ComposerObjectEditorRail.entries(.audio)`), le Modifier le garde aussi.
  */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
@@ -131,6 +132,10 @@ private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryCompose
             ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
                 viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
             }
+        }
+        state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
+            Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
+            SoundTrimSection(state, sound, viewModel)
         }
         Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
             StoryPlanFrise(state, viewModel)
