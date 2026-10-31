@@ -140,7 +140,7 @@ public data class RelationAccess(
             grantedByTarget: RelationLevel,
             sharesCommunity: Boolean,
         ): RelationLevel {
-            val granted = maxOf(grantedByViewer, grantedByTarget)
+            val granted = minOf(grantedByViewer, grantedByTarget)
             return if (granted == RelationLevel.PUBLIC && sharesCommunity) RelationLevel.COMMUNITY else granted
         }
 
