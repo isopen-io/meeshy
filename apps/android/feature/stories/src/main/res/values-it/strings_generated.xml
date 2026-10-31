@@ -44,6 +44,7 @@
     <string name="composer_column_text_frame">Cornice del testo</string>
     <string name="composer_column_text_language">Lingua del testo</string>
     <string name="composer_column_text_plan">TIMELINE</string>
+    <string name="composer_family_text">Testo</string>
     <string name="composer_frise_earlier">Prima</string>
     <string name="composer_frise_empty">Aggiungi un testo o uno sticker: ogni oggetto diventa una traccia.</string>
     <string name="composer_frise_entry">Entra qui</string>
@@ -54,6 +55,7 @@
     <string name="composer_frise_place">Luogo</string>
     <string name="composer_frise_ruler">Sposta la testina</string>
     <string name="composer_frise_sound">Suono</string>
+    <string name="composer_frise_video">Video</string>
     <string name="composer_object_editor_adjust_blur">Sfocatura</string>
     <string name="composer_object_editor_adjust_brightness">Luminosità</string>
     <string name="composer_object_editor_adjust_compare">Confronta</string>
@@ -71,6 +73,11 @@
     <string name="composer_object_editor_adjust_vignette">Vignettatura</string>
     <string name="composer_object_editor_effects_bloom">Bagliore</string>
     <string name="composer_object_editor_effects_grain">Grana</string>
+    <string name="composer_object_editor_end">Fine</string>
+    <string name="composer_object_editor_permanent">Visibile dall\'inizio alla fine</string>
+    <string name="composer_object_editor_start">Inizio</string>
+    <string name="composer_object_editor_window">Da %1$s a %2$s</string>
+    <string name="composer_object_editor_window_permanent">Da %1$s alla fine</string>
     <string name="composer_publish_as_post">Pubblica post</string>
     <string name="composer_publish_as_reel">Pubblica reel</string>
     <string name="composer_publish_as_story">Pubblica storia</string>

@@ -343,8 +343,11 @@ private val WAITING_BADGE_TOP = 112.dp
  */
 @Composable
 internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val names = state.sceneTrackNames
+    val words = SceneObjectFamily.entries.associateWith { familyWord(it) }
     SceneFrise(
         tracks = state.sceneTracks,
+        labels = names.mapValues { (_, track) -> track.name ?: words.getValue(track.family) },
         editableIds = state.sceneEditableTrackIds,
         selectedId = state.selectedSceneObject?.id,
         slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),

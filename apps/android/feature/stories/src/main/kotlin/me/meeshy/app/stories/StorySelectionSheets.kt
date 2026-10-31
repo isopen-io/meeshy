@@ -117,21 +117,19 @@ private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, 
 }
 
 /**
- * Le Temps de l'objet posé (#13902) — texte, sticker, média, lieu ou pastille de son : son départ et sa durée dans la slide,
- * puis la frise du plan, où toucher une piste sélectionne son objet.
+ * Le Temps de l'objet posé (#13902, #13904) — texte, sticker, média, lieu ou pastille de son : sa famille, sa fenêtre en
+ * début et fin (iOS `ComposerObjectTimingControls`), puis la frise du plan, où sa piste est surlignée et où toucher une
+ * autre piste sélectionne son objet.
  */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            val ref = state.selectedSceneObject
-            val timing = state.selectedObjectTiming
-            if (ref != null && timing != null) {
-                TimingCycleButtons(
-                    timing,
-                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.startCycled(it, ref) } },
-                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.durationCycled(it, ref) } },
-                )
+        val ref = state.selectedSceneObject
+        val window = state.selectedObjectWindow
+        val family = state.selectedObjectFamily
+        if (ref != null && window != null && family != null) {
+            ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
+                viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
             }
         }
         Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {

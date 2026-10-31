@@ -18,6 +18,8 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -48,6 +50,8 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerObjectTiming
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
@@ -210,16 +214,51 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `timing is offered in a still scene and opens the start and duration of the element`() {
+    fun `timing is offered in a still scene and opens the window of the element`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         show(vm)
 
         compose.onNodeWithText("Timing").performClick()
 
-        compose.onNodeWithContentDescription("Text start time").assertExists()
-        compose.onNodeWithContentDescription("Text visible duration").assertExists()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
         compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `Timing on a placed video says its family and window, never the text's words, and lights its own track`() {
+        val vm = viewModel()
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        vm.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, SceneObjectRef(ComposerObjectKind.MEDIA, "p"), ComposerObjectTiming(1.0, 3.0)) }
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNodeWithText("From 1.0 s to 3.0 s").assertExists()
+        compose.onNodeWithContentDescription("Start").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1.0 s"))
+        compose.onNodeWithContentDescription("End").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "3.0 s"))
+        compose.onNodeWithContentDescription("Text start time").assertDoesNotExist()
+        compose.onNode(hasText("Video") and isSelected()).assertExists()
+    }
+
+    @Test
+    fun `Timing on a place names it a place, and its permanent switch closes the window to the slide`() {
+        val vm = viewModel()
+        val place = me.meeshy.sdk.model.StoryLocationObject(id = "l1", place = me.meeshy.sdk.model.SharedPlace(latitude = 48.8, longitude = 2.3, name = "Paris"))
+        vm.onSceneReduce { it.copy(deck = it.deck.addPlaceToSelected(place)) }
+        vm.onSelectPlace("l1")
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithText("Place").assertExists()
+        compose.onNode(hasText("Paris") and isSelected()).assertExists()
+        compose.onNodeWithText("Visible from start to end").performSemanticsAction(SemanticsActions.OnClick)
+
+        val stored = vm.state.value.deck.selectedSlide.places.single()
+        assertThat(stored.duration).isEqualTo(vm.state.value.selectedSlideDurationSeconds)
+        compose.onNodeWithContentDescription("End").assertExists()
     }
 
     @Test
@@ -290,7 +329,7 @@ class ComposerSelectionActionBarTest {
         assertThat(vm.state.value.selectedMediaId).isEqualTo(slide.placedMedia.last().id)
         assertThat(slide.mediaIds).containsExactly("p")
         compose.onNodeWithText("Timing").performClick()
-        compose.onNodeWithContentDescription("Text start time").assertExists()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
     }
 
     @Test

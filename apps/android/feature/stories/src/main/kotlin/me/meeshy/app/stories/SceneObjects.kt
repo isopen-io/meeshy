@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
@@ -93,15 +94,29 @@ val StoryComposerUiState.sceneTracks: List<Plan2DTrack>
         val effects = StoryEffects(
             textObjects = slide.elements.map { it.toTextObject("") },
             stickerObjects = slide.stickers.map { it.toSticker() }.takeIf { it.isNotEmpty() },
+            mediaObjects = slide.placedMedia.map { it.toFriseObject(placedMediaIsVideo(it.id)) }.takeIf { it.isNotEmpty() },
             drawingStrokes = slide.strokes.takeIf { it.isNotEmpty() },
             audioPlayerObjects = slide.audio.takeIf { it.isNotEmpty() },
         )
-        return Plan2DLayout.tracks(effects, selectedSlideDurationSeconds)
+        return Plan2DLayout.tracks(effects, selectedSlideDurationSeconds, slide.places)
     }
 
-/** Les pistes dont la fenêtre se règle à la main : un texte, un sticker — le son et le fond se lisent seulement. */
+/** Un média posé tel que la frise le lit : sa fenêtre d'apparition, jamais la longueur que joue sa source (#13904). */
+private fun StoryPlacedMedia.toFriseObject(video: Boolean) = StoryMediaObject(
+    id = id,
+    postMediaId = mediaId,
+    mediaType = if (video) "video" else "image",
+    zIndex = zIndex,
+    startTime = timing.startSeconds.toDouble().takeIf { timing.isActive },
+    duration = timing.durationSeconds.toDouble().takeIf { timing.isTimed },
+)
+
+/**
+ * Les pistes dont la fenêtre se règle à la main : tout objet POSÉ — texte, média, sticker, lieu, pastille de son
+ * (#13904, iOS `sceneFriseTracks`). Le fond et le son d'ambiance se lisent seulement : ils durent la slide.
+ */
 val StoryComposerUiState.sceneEditableTrackIds: Set<String>
-    get() = deck.selectedSlide.let { slide -> slide.elements.map { it.id } + slide.stickers.map { it.id } }.toSet()
+    get() = StorySceneStack.order(deck.selectedSlide).map { it.id }.toSet()
 
 /**
  * L'objet [ref] est sur la pile de la scène avec au moins un autre, de quelque famille qu'il soit (#13852) : l'Ordre a un

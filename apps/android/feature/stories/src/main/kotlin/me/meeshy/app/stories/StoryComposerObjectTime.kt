@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerObjectTiming
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
@@ -44,6 +45,28 @@ internal object StoryComposerObjectTimeReducer {
         ComposerObjectKind.AUDIO -> StoryComposerSelectionReducer.soundDurationCycled(state, ref.id)
         ComposerObjectKind.MEDIA -> StoryComposerPlacedMediaReducer.windowed(state, ref.id) { it.cycledDuration() }
         ComposerObjectKind.PLACE -> placeWindowed(state, ref.id) { it.cycledDuration() }
+    }
+
+    /** La fenêtre réglée dans la feuille (début / fin), rangée en départ + durée ; permanent garde la durée ouverte. */
+    fun windowed(state: StoryComposerUiState, ref: SceneObjectRef, window: ComposerObjectTiming): StoryComposerUiState =
+        retimed(state, ref) {
+            StoryElementTiming((window.storedStartTime ?: 0.0).toFloat(), (window.storedDuration ?: 0.0).toFloat())
+        }
+
+    /** La fenêtre d'un objet posé, de quelque famille qu'il soit, réécrite par [change] ; inerte pour un objet absent. */
+    fun retimed(state: StoryComposerUiState, ref: SceneObjectRef, change: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
+        val slide = state.deck.selectedSlide
+        return when (ref.kind) {
+            ComposerObjectKind.TEXT ->
+                if (slide.elements.none { it.id == ref.id }) state
+                else state.copy(deck = state.deck.updateTextElement(ref.id) { it.copy(timing = change(it.timing)) })
+            ComposerObjectKind.STICKER ->
+                if (slide.stickers.none { it.id == ref.id }) state
+                else state.copy(deck = state.deck.updateSticker(ref.id) { it.copy(timing = change(it.timing)) })
+            ComposerObjectKind.AUDIO -> StoryComposerSelectionReducer.soundRetimed(state, ref.id, change)
+            ComposerObjectKind.MEDIA -> StoryComposerPlacedMediaReducer.windowed(state, ref.id, change)
+            ComposerObjectKind.PLACE -> placeWindowed(state, ref.id, change)
+        }
     }
 
     private fun placeWindowed(state: StoryComposerUiState, id: String, change: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
