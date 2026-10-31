@@ -48,7 +48,7 @@ describe('backfillUserRelations', () => {
     const second = await run(store);
 
     expect(store.relations()).toEqual(afterFirst);
-    expect(second).toMatchObject({ scanned: 3, created: 0, alreadyPresent: 3 });
+    expect(second).toMatchObject({ scanned: 3, created: 0, raised: 0, alreadyPresent: 3 });
   });
 
   it('ne baisse ni n’écrase une ligne déjà montée entre deux passes', async () => {
@@ -64,6 +64,40 @@ describe('backfillUserRelations', () => {
 
     expect(store.relations()).toHaveLength(1);
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'BLOOD', grantedByHigh: 'CLOSE', origin: 'request' });
+  });
+
+  it('relève à FRIEND une paire déjà liée plus bas (Connaissance née avant le rattrapage) : aucun ami ne recule', async () => {
+    const store = relationStore({
+      friendRequests: [request('1', A, B, 'accepted', T0)],
+      relations: [{
+        id: 'aa0000000000000000000009', userLowId: A, userHighId: B, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE',
+        origin: 'auto-acquaintance', transitions: [{ actorId: A, from: 'PUBLIC', to: 'ACQUAINTANCE', at: T0 }],
+      }],
+    });
+
+    const first = await run(store);
+    const afterFirst = store.relations();
+    const second = await run(store);
+
+    expect(first).toMatchObject({ raised: 1, created: 0 });
+    expect(afterFirst[0]).toMatchObject({ grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' });
+    expect(second).toMatchObject({ raised: 0, alreadyPresent: 1 });
+    expect(store.relations()).toEqual(afterFirst);
+  });
+
+  it('ne défait pas une baisse gravée par l’une des deux personnes', async () => {
+    const store = relationStore({
+      friendRequests: [request('1', A, B, 'accepted', T0)],
+      relations: [{
+        id: 'aa0000000000000000000009', userLowId: A, userHighId: B, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND',
+        origin: 'request', transitions: [{ actorId: A, from: 'FRIEND', to: 'ACQUAINTANCE', at: T0 }],
+      }],
+    });
+
+    const report = await run(store);
+
+    expect(report).toMatchObject({ raised: 0, alreadyPresent: 1 });
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' });
   });
 
   it('ignore pending, rejected et blocked : seule une demande ACCEPTÉE fait un ami', async () => {
@@ -113,13 +147,21 @@ describe('backfillUserRelations', () => {
   });
 
   it('à blanc (dryRun), compte sans rien écrire et dédoublonne quand même', async () => {
+    const below = {
+      id: 'aa0000000000000000000009', userLowId: A, userHighId: C, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE',
+      origin: 'auto-acquaintance', transitions: [],
+    };
     const store = relationStore({
-      friendRequests: [request('1', A, B, 'accepted', T0), request('2', B, A, 'accepted', T0), request('3', C, D, 'accepted', T0)],
+      friendRequests: [
+        request('1', A, B, 'accepted', T0), request('2', B, A, 'accepted', T0), request('3', C, D, 'accepted', T0),
+        request('4', A, C, 'accepted', T0),
+      ],
+      relations: [below],
     });
 
     const report = await run(store, { dryRun: true });
 
-    expect(store.relations()).toEqual([]);
-    expect(report).toMatchObject({ scanned: 3, created: 2, alreadyPresent: 1 });
+    expect(store.relations()).toEqual([below]);
+    expect(report).toMatchObject({ scanned: 4, created: 2, raised: 1, alreadyPresent: 1 });
   });
 });

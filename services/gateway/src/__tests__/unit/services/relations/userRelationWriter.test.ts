@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import {
-  createFriendshipIfAbsent,
+  backfillFriendship,
   recordFriendship,
   resetFriendship,
 } from '../../../../services/relations/userRelationWriter';
@@ -155,30 +155,66 @@ describe('resetFriendship — la rupture ramène les deux accords à PUBLIC, en 
   });
 });
 
-describe('createFriendshipIfAbsent — le rattrapage ne touche jamais une ligne existante', () => {
+describe('backfillFriendship — le rattrapage relève à FRIEND sans jamais baisser ni défaire une baisse', () => {
   it('crée FRIEND/FRIEND avec l’origine du rattrapage, daté de l’acceptation d’origine', async () => {
     const store = relationStore();
-    const outcome = await createFriendshipIfAbsent(store.prisma, { userA: HIGH, userB: LOW, at: NOW });
+    const outcome = await backfillFriendship(store.prisma, { userA: HIGH, userB: LOW, at: NOW });
 
     expect(outcome).toBe('created');
     expect(store.relations()[0]).toMatchObject({ origin: 'backfill-friend', levelSince: NOW, grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' });
   });
 
-  it('laisse intacte une ligne déjà présente, même plus haute ou rompue', async () => {
-    const higher = relationStore({ relations: [relation({ grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD' })] });
-    const broken = relationStore({ relations: [relation({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' })] });
+  it('laisse intacte une ligne déjà plus haute', async () => {
+    const store = relationStore({ relations: [relation({ grantedByLow: 'BLOOD', grantedByHigh: 'CLOSE' })] });
 
-    expect(await createFriendshipIfAbsent(higher.prisma, { userA: LOW, userB: HIGH, at: NOW })).toBe('unchanged');
-    expect(await createFriendshipIfAbsent(broken.prisma, { userA: LOW, userB: HIGH, at: NOW })).toBe('unchanged');
-    expect(higher.relations()[0]).toMatchObject({ grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD' });
-    expect(broken.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+    expect(await backfillFriendship(store.prisma, { userA: LOW, userB: HIGH, at: NOW })).toBe('unchanged');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'BLOOD', grantedByHigh: 'CLOSE', transitions: [] });
   });
 
-  it('prend la perte de course (P2002) pour une ligne déjà présente', async () => {
-    const store = relationStore({ relations: [relation()] });
-    const blind = { userRelation: { ...store.prisma.userRelation, findUnique: (async () => null) as never } };
+  it('relève à FRIEND une ligne née sous FRIEND sans baisse gravée : une demande acceptée se lit FRIEND', async () => {
+    const store = relationStore({
+      relations: [relation({
+        grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE', origin: 'auto-acquaintance',
+        transitions: [
+          { actorId: LOW, from: 'PUBLIC', to: 'ACQUAINTANCE', at: NOW },
+          { actorId: HIGH, from: 'PUBLIC', to: 'ACQUAINTANCE', at: NOW },
+        ],
+      })],
+    });
 
-    expect(await createFriendshipIfAbsent(blind, { userA: LOW, userB: HIGH, at: NOW })).toBe('unchanged');
+    expect(await backfillFriendship(store.prisma, { userA: LOW, userB: HIGH, at: LATER })).toBe('raised');
+    expect(store.relations()[0]).toMatchObject({
+      grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', origin: 'auto-acquaintance', levelSince: LATER,
+    });
+    expect(store.relations()[0].transitions).toHaveLength(4);
+  });
+
+  it('respecte une baisse gravée : le rattrapage ne défait pas un choix de la personne', async () => {
+    const lowered = relation({
+      grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND',
+      transitions: [{ actorId: LOW, from: 'FRIEND', to: 'ACQUAINTANCE', at: NOW }],
+    });
+    const store = relationStore({ relations: [lowered] });
+
+    expect(await backfillFriendship(store.prisma, { userA: LOW, userB: HIGH, at: LATER })).toBe('unchanged');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' });
+    expect(store.relations()[0].transitions).toHaveLength(1);
+  });
+
+  it('perd la course (P2002) et reprend sur la ligne gagnante sans la doubler', async () => {
+    const store = relationStore({ relations: [relation()] });
+    let first = true;
+    const blindOnce = {
+      userRelation: {
+        ...store.prisma.userRelation,
+        findUnique: (async (args: Parameters<typeof store.prisma.userRelation.findUnique>[0]) => {
+          if (first) { first = false; return null; }
+          return store.prisma.userRelation.findUnique(args);
+        }) as never,
+      },
+    };
+
+    expect(await backfillFriendship(blindOnce, { userA: LOW, userB: HIGH, at: NOW })).toBe('unchanged');
     expect(store.relations()).toHaveLength(1);
   });
 });

@@ -6,8 +6,10 @@
  *   font pas un ami. Une demande dont l'émetteur est le receveur est ignorée.
  * - Une paire portée par plusieurs lignes (A→B, B→A, doublons — `FriendRequest`
  *   n'a pas d'unique de paire) ne donne qu'UNE ligne de lien.
- * - Création seulement si la ligne MANQUE, jamais un écrasement : rejoué après
- *   une montée de niveau, il ne la défait pas. Deux passes donnent le même état.
+ * - Une demande acceptée se lit FRIEND : la ligne absente est créée, une ligne
+ *   née plus bas sans baisse gravée est RELEVÉE (`backfillFriendship`). Une
+ *   ligne plus haute ou portant une baisse gravée n'est jamais touchée. Deux
+ *   passes donnent le même état.
  * - La date d'entrée est celle de l'acceptation d'origine (`respondedAt`, à
  *   défaut `updatedAt`, à défaut `now`).
  *
@@ -18,7 +20,7 @@
  * et une sauvegarde vérifiée (#9223).
  */
 import { relationPairKey } from '@meeshy/shared/types/relation';
-import { createFriendshipIfAbsent, type UserRelationDb } from './userRelationWriter';
+import { backfillFriendship, friendshipBackfillPlan, type UserRelationDb } from './userRelationWriter';
 
 type AcceptedRequest = {
   readonly id: string;
@@ -50,11 +52,15 @@ export type UserRelationBackfillOptions = {
 export type UserRelationBackfillReport = {
   readonly scanned: number;
   readonly created: number;
+  readonly raised: number;
   readonly alreadyPresent: number;
   readonly skippedSelf: number;
 };
 
-type Outcome = 'created' | 'alreadyPresent' | 'skippedSelf';
+type Outcome = 'created' | 'raised' | 'alreadyPresent' | 'skippedSelf';
+
+const OUTCOME_OF_WRITE = { created: 'created', raised: 'raised', unchanged: 'alreadyPresent', ignored: 'skippedSelf' } as const;
+const OUTCOME_OF_PLAN = { create: 'created', raise: 'raised', keep: 'alreadyPresent' } as const;
 
 const DEFAULT_BATCH = 200;
 
@@ -69,18 +75,16 @@ export async function backfillUserRelations(
     if (row.senderId === row.receiverId) return 'skippedSelf';
     const at = row.respondedAt ?? row.updatedAt ?? options.now;
     if (!options.dryRun) {
-      return (await createFriendshipIfAbsent(db, { userA: row.senderId, userB: row.receiverId, at })) === 'created'
-        ? 'created'
-        : 'alreadyPresent';
+      return OUTCOME_OF_WRITE[await backfillFriendship(db, { userA: row.senderId, userB: row.receiverId, at })];
     }
     const pair = relationPairKey(row.senderId, row.receiverId);
     const key = `${pair.userLowId}:${pair.userHighId}`;
-    const present = seenInDryRun.has(key) || (await db.userRelation.findUnique({ where: { userLowId_userHighId: pair } })) !== null;
+    if (seenInDryRun.has(key)) return 'alreadyPresent';
     seenInDryRun.add(key);
-    return present ? 'alreadyPresent' : 'created';
+    return OUTCOME_OF_PLAN[friendshipBackfillPlan(await db.userRelation.findUnique({ where: { userLowId_userHighId: pair } }))];
   };
 
-  let report: UserRelationBackfillReport = { scanned: 0, created: 0, alreadyPresent: 0, skippedSelf: 0 };
+  let report: UserRelationBackfillReport = { scanned: 0, created: 0, raised: 0, alreadyPresent: 0, skippedSelf: 0 };
   let cursor: string | null = null;
   for (;;) {
     const rows: ReadonlyArray<AcceptedRequest> = await db.friendRequest.findMany({

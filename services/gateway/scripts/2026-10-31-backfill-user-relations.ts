@@ -4,9 +4,9 @@
  *
  * FAÇADE MINCE : la logique vit dans `src/services/relations/userRelationBackfill.ts`.
  *
- * `DRY_RUN=1` : compte sans rien écrire. Idempotent : rejoué, il ne crée que ce
- * qui manque et n'écrase JAMAIS une ligne existante (une montée de niveau
- * survit au rattrapage).
+ * `DRY_RUN=1` : compte sans rien écrire. Idempotent : rejoué, il ne change plus
+ * rien. Il crée la ligne qui manque, relève à FRIEND une ligne née plus bas, et
+ * ne baisse JAMAIS une ligne plus haute ni ne défait une baisse gravée.
  *
  * ⚠ À jouer APRÈS la migration d'index
  * `packages/shared/prisma/migrations/2026-10-31-user-relation-indexes.mongodb.js`
@@ -33,6 +33,7 @@ async function main(): Promise<void> {
     console.log('');
     console.log(`  demandes acceptées examinées : ${report.scanned}`);
     console.log(`  liens créés                  : ${report.created}`);
+    console.log(`  liens relevés à FRIEND       : ${report.raised}`);
     console.log(`  déjà présents (ou doublons)  : ${report.alreadyPresent}`);
     console.log(`  ignorées (auto-demande)      : ${report.skippedSelf}`);
     if (DRY_RUN) console.log("\nÀ blanc : rien n'a été écrit. Relancer sans DRY_RUN pour appliquer.");
