@@ -1,12 +1,14 @@
 import Foundation
 import MeeshySDK
 
-// MARK: - Fond › Modifier : N1, N2, N3 dans le bas (#13974, lot I-E2)
+// MARK: - Fond › Modifier, image posée › Modifier : N1, N2, N3 dans le bas
+// (#13974, lots I-E2 et I-E3)
 
-/// **Une entrée de N1 « Modifier » d'un fond image ou vidéo**, identifiée
-/// comme dans l'arbre partagé (`background.media.edit`) : Cadrage · Recadrer ·
-/// Couper · Filtres · Cadres · Réglages · Effets · Son · Boucle · Pivoter ·
-/// Description.
+/// **Une entrée de N1 « Modifier » d'un fond ou d'une image posée**,
+/// identifiée comme dans l'arbre partagé (`background.media.edit`,
+/// `media.placed.edit`) : Cadrage · Recadrer · Couper · Filtres · Cadres ·
+/// Réglages · Effets · Son · Boucle · Pivoter · Description, et pour un média
+/// posé Mettre en fond (ou Remplacer le fond) · Faire un sticker.
 nonisolated enum ComposerBackgroundModifyEntry: String, CaseIterable, Hashable, Sendable {
     case framing
     case crop
@@ -19,6 +21,18 @@ nonisolated enum ComposerBackgroundModifyEntry: String, CaseIterable, Hashable, 
     case loop
     case rotate
     case description
+    case setAsBackground = "set-as-background"
+    case replaceBackground = "replace-background"
+    case makeSticker = "make-sticker"
+}
+
+/// **Ce qu'un média posé peut devenir** : le fond d'une diapo qui n'en a pas
+/// (Mettre en fond), le fond à la place de l'ancien (Remplacer le fond), ou
+/// rien — l'objet ne l'admet pas.
+nonisolated enum ComposerPlacedBackgroundOffer: Equatable, Sendable {
+    case none
+    case set
+    case replace
 }
 
 /// Ce qu'une entrée de N1 OUVRE sur iOS : la feuille basse (une bande ou une
@@ -52,18 +66,48 @@ nonisolated enum ComposerBackgroundModify {
 
     static func served(isVideo: Bool, hasTrimmableSource: Bool,
                        tree: ComposerEditTree = .shared) -> [ComposerBackgroundModifyEntry] {
-        (tree.level(.backgroundMediaEdit)?.entries ?? []).compactMap { entree in
-            guard let modif = ComposerBackgroundModifyEntry(rawValue: entree.id), wiredOnIOS.contains(modif),
+        served(in: .backgroundMediaEdit, wired: wiredOnIOS, isVideo: isVideo,
+               hasTrimmableSource: hasTrimmableSource, tree: tree)
+    }
+
+    /// **N1 d'un média POSÉ** (I-E3) : l'arbre `media.placed.edit`, dans son
+    /// ordre. Mettre en fond et Remplacer le fond ne se servent jamais
+    /// ensemble — la diapo a un fond ou n'en a pas ; Faire un sticker attend
+    /// le détourage. Son reste à la vidéo posée (I-E4).
+    static func servedPlaced(isVideo: Bool, hasTrimmableSource: Bool,
+                             background: ComposerPlacedBackgroundOffer, makesSticker: Bool,
+                             tree: ComposerEditTree = .shared) -> [ComposerBackgroundModifyEntry] {
+        let cables = Set(ComposerBackgroundModifyEntry.allCases.filter { modif in
+            switch modif {
+            case .framing, .loop, .sound: return false
+            case .setAsBackground:        return background == .set
+            case .replaceBackground:      return background == .replace
+            case .makeSticker:            return makesSticker
+            case .crop, .trim, .filters, .frames, .adjust, .effects, .rotate, .description: return true
+            }
+        })
+        return served(in: .mediaPlacedEdit, wired: cables, isVideo: isVideo,
+                      hasTrimmableSource: hasTrimmableSource, tree: tree)
+    }
+
+    /// L'entrée de l'arbre : celle du fond, ou celle du média posé pour ce
+    /// que seul un média posé porte. Une entrée commune a les mêmes mots et
+    /// glyphes aux deux niveaux.
+    static func entry(_ modif: ComposerBackgroundModifyEntry,
+                      tree: ComposerEditTree = .shared) -> ComposerEditTree.Entry? {
+        tree.entry(modif.rawValue, in: .backgroundMediaEdit) ?? tree.entry(modif.rawValue, in: .mediaPlacedEdit)
+    }
+
+    private static func served(in level: ComposerEditTree.LevelID, wired: Set<ComposerBackgroundModifyEntry>,
+                               isVideo: Bool, hasTrimmableSource: Bool,
+                               tree: ComposerEditTree) -> [ComposerBackgroundModifyEntry] {
+        (tree.level(level)?.entries ?? []).compactMap { entree in
+            guard let modif = ComposerBackgroundModifyEntry(rawValue: entree.id), wired.contains(modif),
                   admits(entree.offer, isVideo: isVideo, hasTrimmableSource: hasTrimmableSource) else {
                 return nil
             }
             return modif
         }
-    }
-
-    static func entry(_ modif: ComposerBackgroundModifyEntry,
-                      tree: ComposerEditTree = .shared) -> ComposerEditTree.Entry? {
-        tree.entry(modif.rawValue, in: .backgroundMediaEdit)
     }
 
     static func opening(_ modif: ComposerBackgroundModifyEntry) -> ComposerBackgroundModifyOpening {
@@ -72,7 +116,7 @@ nonisolated enum ComposerBackgroundModify {
         case .adjust:                                                  return .level(.backgroundAdjust(.tone))
         case .effects:                                                 return .level(.backgroundAdjust(.effect))
         case .sound:                                                   return .level(.backgroundSound)
-        case .rotate, .loop:                                           return .action
+        case .rotate, .loop, .setAsBackground, .replaceBackground, .makeSticker: return .action
         }
     }
 

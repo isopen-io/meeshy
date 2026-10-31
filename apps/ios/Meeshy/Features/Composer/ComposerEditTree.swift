@@ -67,6 +67,7 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
         case backgroundMedia = "background.media"
         case backgroundMediaReplace = "background.media.replace"
         case backgroundMediaEdit = "background.media.edit"
+        case mediaPlacedEdit = "media.placed.edit"
     }
 
     let schemaVersion: Int
@@ -127,6 +128,32 @@ nonisolated extension ComposerEditTree {
                   material: "RotateRight", offer: .always, opens: .action),
             Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
                   material: "TextFields", offer: .always, opens: .sheet),
+        ]),
+        Level(id: "media.placed.edit", kind: .rail, title: "composer.selection.modify", entries: [
+            Entry(id: "crop", label: "composer.object.editor.crop", sfSymbol: "crop",
+                  material: "Crop", offer: .image, opens: .band),
+            Entry(id: "trim", label: "composer.capture.tool.trim", sfSymbol: "scissors",
+                  material: "Cut", offer: .trimmable, opens: .band),
+            Entry(id: "filters", label: "composer.object.editor.filter", sfSymbol: "camera.filters",
+                  material: "PhotoFilter", offer: .always, opens: .band),
+            Entry(id: "frames", label: "composer.capture.rail.frames", sfSymbol: "square.dashed",
+                  material: "CheckBoxBlank", offer: .look, opens: .band),
+            Entry(id: "adjust", label: "composer.object.editor.adjust", sfSymbol: "slider.horizontal.3",
+                  material: "Tune", offer: .always, opens: .band),
+            Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
+                  material: "Sparkles", offer: .image, opens: .band),
+            Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
+                  material: "VolumeUp", offer: .video, opens: .band),
+            Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
+                  material: "RotateRight", offer: .always, opens: .action),
+            Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
+                  material: "TextFields", offer: .always, opens: .sheet),
+            Entry(id: "set-as-background", label: "story.canvas.action.setAsBackground", sfSymbol: "photo.on.rectangle",
+                  material: "Wallpaper", offer: .always, opens: .action),
+            Entry(id: "replace-background", label: "story.canvas.action.replaceBackground",
+                  sfSymbol: "photo.on.rectangle.angled", material: "SwapHorizontal", offer: .always, opens: .action),
+            Entry(id: "make-sticker", label: "composer.selection.makeSticker",
+                  sfSymbol: "person.crop.square.badge.camera", material: "Emoji", offer: .image, opens: .action),
         ]),
     ])
 }

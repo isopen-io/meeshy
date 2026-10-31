@@ -103,6 +103,10 @@ enum ComposerEditRailCopy {
         case .section(let section): return ComposerObjectEditorCopy.entry(section)
         case .extra(let extra):     return ComposerSelectionCopy.label(extra)
         case .keyframes:            return ComposerSelectionCopy.keyframes
+        // Les deux clés de l'arbre vivent au catalogue de MeeshyUI, celui des
+        // actions de la scène qui disent les mêmes mots.
+        case .backgroundEntry(.setAsBackground):   return ComposerSelectionCopy.label(.setAsBackground)
+        case .backgroundEntry(.replaceBackground): return ComposerSelectionCopy.label(.replaceBackground)
         case .backgroundEntry(let entree):
             return ComposerBackgroundModify.entry(entree).map(ComposerEditTreeCopy.label) ?? entree.rawValue
         case .adjustment(let kind): return ComposerAdjustCopy.label(kind)

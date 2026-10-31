@@ -2,47 +2,57 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// **Fond › Modifier, en rails superposés** (#13974, lot I-E2, grammaire
-// d'édition § 1). N1 prend le rail à la place du niveau « Fond », N2 se pose
-// par-dessus (Réglages, Effets, Son), N3 et les bandes s'ouvrent en bas. Le
-// meuble ne garde que le CHEMIN (`ComposerInlineEdit.background`) ; la loi est
-// `ComposerBackgroundModify`, chaque entrée retombe sur l'écrivain qui existait.
+// **Fond › Modifier et image posée › Modifier, en rails superposés** (#13974,
+// lots I-E2 et I-E3, grammaire d'édition § 1). N1 prend le rail à la place du
+// niveau « Fond » ou de la sélection, N2 se pose par-dessus (Réglages, Effets,
+// Son), N3 et les bandes s'ouvrent en bas. Le meuble ne garde que le CHEMIN
+// (`ComposerInlineEdit.modifyPath`) ; la loi est `ComposerBackgroundModify`,
+// chaque entrée retombe sur l'écrivain qui existait.
 @MainActor
 extension ComposerSceneSelectionRelay {
 
-    /// Le chemin sous « Modifier » du fond sélectionné ; fermé ailleurs.
+    /// Le chemin sous « Modifier » du fond ou de l'image posée sélectionnés ;
+    /// fermé ailleurs.
     var backgroundModifyPath: ComposerBackgroundModifyPath {
-        guard let edition = host.activeInlineEdit, edition.family.isBackground, edition.purpose == .modify else {
+        guard let edition = host.activeInlineEdit, edition.family.modifiesInLevels, edition.purpose == .modify else {
             return .closed
         }
-        return edition.background
+        return edition.modifyPath
     }
 
     func setBackgroundModifyPath(_ path: ComposerBackgroundModifyPath) {
         guard var edition = host.inlineEdit else { return }
-        edition.background = path
+        edition.modifyPath = path
         host.inlineEdit = edition
     }
 
-    /// N1 de CE fond — vide hors de « Modifier » d'un fond.
+    /// N1 de CET objet — vide hors de « Modifier » d'un fond ou d'une image
+    /// posée.
     func backgroundEntries(_ edition: ComposerInlineEdit?) -> [ComposerBackgroundModifyEntry] {
-        guard let edition, edition.purpose == .modify, case .background(let video) = edition.family else { return [] }
-        return ComposerBackgroundModify.served(isVideo: video,
-                                               hasTrimmableSource: host.viewModel.sourceTrim(id: edition.objectId) != nil)
+        guard let edition, edition.purpose == .modify, edition.family.modifiesInLevels else { return [] }
+        let rognable = host.viewModel.sourceTrim(id: edition.objectId) != nil
+        guard !edition.family.isBackground else {
+            return ComposerBackgroundModify.served(isVideo: edition.family.isVideo, hasTrimmableSource: rognable)
+        }
+        let extras = mediaExtras(for: edition)
+        let fond: ComposerPlacedBackgroundOffer = extras.contains(.replaceBackground) ? .replace
+            : extras.contains(.setAsBackground) ? .set : .none
+        return ComposerBackgroundModify.servedPlaced(isVideo: edition.family.isVideo, hasTrimmableSource: rognable,
+                                                     background: fond, makesSticker: extras.contains(.makeSticker))
     }
 
-    /// Les réglages de N2 que ce fond peint.
+    /// Les réglages de N2 que cet objet peint.
     func backgroundAdjustments(_ level: ComposerEditRailLevel) -> [AdjustmentKind] {
         guard case .backgroundAdjust(let famille) = level,
-              case .background(let video)? = host.activeInlineEdit?.family else { return [] }
-        return ComposerBackgroundModify.adjustments(famille, isVideo: video)
+              let edition = host.activeInlineEdit, edition.family.modifiesInLevels else { return [] }
+        return ComposerBackgroundModify.adjustments(famille, isVideo: edition.family.isVideo)
     }
 
     /// Ce que le rail allume : l'entrée ouverte, le réglage dont le curseur est
     /// ouvert, Muet quand le son du fond est coupé.
     func backgroundLit(_ edition: ComposerInlineEdit?) -> Set<ComposerEditRailItem> {
-        guard let edition, edition.family.isBackground else { return [] }
-        let chemin = edition.background
+        guard let edition, edition.family.modifiesInLevels else { return [] }
+        let chemin = edition.modifyPath
         let entree = chemin.entry.map { [ComposerEditRailItem.backgroundEntry($0)] } ?? []
         let reglage = chemin.adjustment.map { [ComposerEditRailItem.adjustment($0)] } ?? []
         let muet = backgroundMedia(edition.objectId)?.isMuted == true ? [ComposerEditRailItem.mute] : []
@@ -55,6 +65,12 @@ extension ComposerSceneSelectionRelay {
             host.viewModel.rotateMedia(id: id)
         case .loop:
             break
+        case .setAsBackground, .replaceBackground:
+            performMediaExtra(.setAsBackground, on: id)
+            return
+        case .makeSticker:
+            performMediaExtra(.makeSticker, on: id)
+            return
         case .framing, .crop, .trim, .filters, .frames, .adjust, .effects, .sound, .description:
             setBackgroundModifyPath(ComposerBackgroundModify.tapped(entree, in: backgroundModifyPath))
             host.comparingLookObjectId = nil
@@ -97,6 +113,7 @@ extension ComposerSceneSelectionRelay {
         return ComposerBackgroundModifySheet(
             viewModel: host.viewModel,
             mediaId: edition.objectId,
+            isBackground: edition.family.isBackground,
             path: chemin,
             plateauTint: host.tint.color,
             header: ComposerPropertiesHeader(title: titre, onDone: { goBack() }),

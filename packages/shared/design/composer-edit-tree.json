@@ -1,5 +1,5 @@
 {
-  "$doc": "LA GRAMMAIRE D'ÉDITION DU COMPOSITEUR (spec docs/superpowers/specs/2026-10-31-grammaire-edition-compositeur.md, R6 de 2026-10-31-un-seul-compositeur-design.md, #13973 Android, #13974 iOS) — l'arbre UNIQUE des niveaux : chaque niveau nomme ses entrées dans l'ordre où elles se montrent, leur clé i18n (catalogue iOS), leur icône (SF Symbol et Material), ce qui les offre et ce qu'elles ouvrent. iOS le décode dans ComposerEditTree (apps/ios/Meeshy/Features/Composer/), Android dans :core:model composer/edit/ComposerEditTree.kt ; sur chaque plateforme un témoin exige que le fichier décodé soit égal à la valeur compilée. Un niveau « rail » se pose dans le rail des outils (N0) ou par-dessus (N1…N3) ; un niveau « sheet » est une feuille basse sans voile, la scène réduite au-dessus. offer : always (toujours), editor (un éditeur est monté pour cet objet), media-source (au moins une source de média est ouverte), camera (le viseur de la scène est disponible), image (le média est une image), video (le média est une vidéo), trimmable (une vidéo dont la durée de source est connue), look (le média reçoit les filtres et cadres de l'appel). opens : action (s'applique tout de suite), level (pose le niveau nommé par next), sheet (ouvre la feuille nommée par next), confirmation (demande confirmation avant d'agir), band (pose son réglage en bande au bas de la scène, le rail gardant le retour), toggle (un interrupteur, basculé dans le rail même). Une plateforme ne sert que les entrées dont l'effet est câblé chez elle (loi 4) ; les autres restent dans l'arbre, cible commune. Chaque lot de la spec y ajoute ses niveaux.",
+  "$doc": "LA GRAMMAIRE D'ÉDITION DU COMPOSITEUR (spec docs/superpowers/specs/2026-10-31-grammaire-edition-compositeur.md, R6 de 2026-10-31-un-seul-compositeur-design.md, #13973 Android, #13974 iOS) — l'arbre UNIQUE des niveaux : chaque niveau nomme ses entrées dans l'ordre où elles se montrent, leur clé i18n (catalogue iOS), leur icône (SF Symbol et Material), ce qui les offre et ce qu'elles ouvrent. iOS le décode dans ComposerEditTree (apps/ios/Meeshy/Features/Composer/), Android dans :core:model composer/edit/ComposerEditTree.kt ; sur chaque plateforme un témoin exige que le fichier décodé soit égal à la valeur compilée. Un niveau « rail » se pose dans le rail des outils (N0) ou par-dessus (N1…N3) ; un niveau « sheet » est une feuille basse sans voile, la scène réduite au-dessus. offer : always (toujours), editor (un éditeur est monté pour cet objet), media-source (au moins une source de média est ouverte), camera (le viseur de la scène est disponible), image (le média est une image), video (le média est une vidéo), trimmable (une vidéo dont la durée de source est connue), look (le média reçoit les filtres et cadres de l'appel). opens : action (s'applique tout de suite), level (pose le niveau nommé par next), sheet (ouvre la feuille nommée par next), confirmation (demande confirmation avant d'agir), band (pose son réglage en bande au bas de la scène, le rail gardant le retour), toggle (un interrupteur, basculé dans le rail même). Une plateforme ne sert que les entrées dont l'effet est câblé chez elle (loi 4) ; les autres restent dans l'arbre, cible commune. Chaque lot de la spec y ajoute ses niveaux. media.placed.edit est le « Modifier » d'une image ou d'une vidéo POSÉE : Mettre en fond et Remplacer le fond sont deux entrées, une plateforme n'en sert qu'une — la seconde quand la diapo a déjà un fond.",
   "schemaVersion": 1,
   "levels": [
     {
@@ -39,6 +39,25 @@
         { "id": "loop", "label": "story.timeline.inspector.loop", "sfSymbol": "repeat", "material": "Repeat", "offer": "video", "opens": "toggle" },
         { "id": "rotate", "label": "composer.object.editor.rotate", "sfSymbol": "rotate.right", "material": "RotateRight", "offer": "always", "opens": "action" },
         { "id": "description", "label": "composer.object.editor.altText", "sfSymbol": "text.below.photo", "material": "TextFields", "offer": "always", "opens": "sheet" }
+      ]
+    },
+    {
+      "id": "media.placed.edit",
+      "kind": "rail",
+      "title": "composer.selection.modify",
+      "entries": [
+        { "id": "crop", "label": "composer.object.editor.crop", "sfSymbol": "crop", "material": "Crop", "offer": "image", "opens": "band" },
+        { "id": "trim", "label": "composer.capture.tool.trim", "sfSymbol": "scissors", "material": "Cut", "offer": "trimmable", "opens": "band" },
+        { "id": "filters", "label": "composer.object.editor.filter", "sfSymbol": "camera.filters", "material": "PhotoFilter", "offer": "always", "opens": "band" },
+        { "id": "frames", "label": "composer.capture.rail.frames", "sfSymbol": "square.dashed", "material": "CheckBoxBlank", "offer": "look", "opens": "band" },
+        { "id": "adjust", "label": "composer.object.editor.adjust", "sfSymbol": "slider.horizontal.3", "material": "Tune", "offer": "always", "opens": "band" },
+        { "id": "effects", "label": "composer.object.editor.effects", "sfSymbol": "sparkles", "material": "Sparkles", "offer": "image", "opens": "band" },
+        { "id": "sound", "label": "composer.rail.title.sound", "sfSymbol": "speaker.wave.2", "material": "VolumeUp", "offer": "video", "opens": "band" },
+        { "id": "rotate", "label": "composer.object.editor.rotate", "sfSymbol": "rotate.right", "material": "RotateRight", "offer": "always", "opens": "action" },
+        { "id": "description", "label": "composer.object.editor.altText", "sfSymbol": "text.below.photo", "material": "TextFields", "offer": "always", "opens": "sheet" },
+        { "id": "set-as-background", "label": "story.canvas.action.setAsBackground", "sfSymbol": "photo.on.rectangle", "material": "Wallpaper", "offer": "always", "opens": "action" },
+        { "id": "replace-background", "label": "story.canvas.action.replaceBackground", "sfSymbol": "photo.on.rectangle.angled", "material": "SwapHorizontal", "offer": "always", "opens": "action" },
+        { "id": "make-sticker", "label": "composer.selection.makeSticker", "sfSymbol": "person.crop.square.badge.camera", "material": "Emoji", "offer": "image", "opens": "action" }
       ]
     }
   ]

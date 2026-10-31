@@ -164,9 +164,15 @@ final class ComposerInlineEditTests: XCTestCase {
 
     func test_begin_surLaScene_ouvreLaSectionDemandeeQuandElleEstServie() {
         XCTAssertEqual(
+            ComposerInlineEditing.begin(objectId: "vid", family: .video, onSceneSurface: true,
+                                        requested: .media(.adjust), hasTrimmableSource: false),
+            ComposerInlineEdit(objectId: "vid", family: .video, openSection: .media(.adjust)))
+        XCTAssertEqual(
             ComposerInlineEditing.begin(objectId: "img", family: .image, onSceneSurface: true,
                                         requested: .media(.filter), hasTrimmableSource: false),
-            ComposerInlineEdit(objectId: "img", family: .image, openSection: .media(.filter)))
+            ComposerInlineEdit(objectId: "img", family: .image, openSection: nil,
+                               modifyPath: ComposerBackgroundModifyPath(entry: .filters, adjustment: nil)),
+            "l'image posée ouvre l'entrée de N1 qui répond à la section (#13974, I-E3)")
     }
 
     func test_begin_sansSection_neMontreQueLesSousOutils() {

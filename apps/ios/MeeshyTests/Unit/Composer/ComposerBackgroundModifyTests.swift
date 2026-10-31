@@ -116,13 +116,13 @@ final class ComposerBackgroundModifyTests: XCTestCase {
             objectId: "bg", family: .background(isVideo: true), onSceneSurface: true,
             requested: .media(.trim), hasTrimmableSource: true))
         XCTAssertNil(rognage.openSection, "aucune section : le fond ne monte jamais l'ancien panneau")
-        XCTAssertEqual(rognage.background, ComposerBackgroundModifyPath(entry: .trim, adjustment: nil))
+        XCTAssertEqual(rognage.modifyPath, ComposerBackgroundModifyPath(entry: .trim, adjustment: nil))
         var reglant = rognage
-        reglant.background = ComposerBackgroundModifyPath(entry: .adjust, adjustment: .contrast)
+        reglant.modifyPath = ComposerBackgroundModifyPath(entry: .adjust, adjustment: .contrast)
         let rouvert = try XCTUnwrap(ComposerInlineEditing.begin(
             objectId: "bg", family: .background(isVideo: true), onSceneSurface: true,
             requested: nil, hasTrimmableSource: true, kept: reglant))
-        XCTAssertEqual(rouvert.background, reglant.background)
+        XCTAssertEqual(rouvert.modifyPath, reglant.modifyPath)
     }
 
     // MARK: - En direct

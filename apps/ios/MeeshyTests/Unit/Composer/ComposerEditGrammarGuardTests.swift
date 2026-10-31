@@ -8,6 +8,7 @@ import XCTest
 /// lot y ajoute sa famille.
 ///
 /// - I-E1 : le FOND image ou vidéo.
+/// - I-E3 : l'IMAGE posée.
 final class ComposerEditGrammarGuardTests: XCTestCase {
 
     private func composer(_ nom: String) throws -> String {
@@ -70,5 +71,17 @@ final class ComposerEditGrammarGuardTests: XCTestCase {
     func test_background_putOnScene_togglesThePlane_neverAZIndex() throws {
         let edition = try composer("MeeshyComposerHost+BackgroundEdit.swift")
         XCTAssertTrue(edition.contains("case.putOnScene:host.backgroundSourcesAreOpen=falsehost.viewModel.toggleBackground(id:id)selectSceneItem(id)"))
+    }
+
+    // MARK: - I-E3 : l'image posée
+
+    func test_placedImage_modifyIsTheLevelsOfTheTree_itsActionsGoThroughTheScene() throws {
+        let relais = try composer("MeeshyComposerHost+BackgroundModify.swift")
+        XCTAssertTrue(relais.contains("case.setAsBackground,.replaceBackground:performMediaExtra(.setAsBackground,on:id)"),
+                      "Mettre en fond passe par makeSceneBackground, qui retire l'ancien fond")
+        XCTAssertTrue(relais.contains("case.makeSticker:performMediaExtra(.makeSticker,on:id)"))
+        let selection = try composer("MeeshyComposerHost+Selection.swift")
+        XCTAssertTrue(selection.contains("case.mediaSheet:host.beginInlineEdit(id,purpose:.modify)"),
+                      "Modifier d'une image reste sur la scène")
     }
 }

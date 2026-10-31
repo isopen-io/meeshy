@@ -2,8 +2,9 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Ce que « Modifier » du fond ouvre EN BAS** (#13974, lot I-E2) : la bande
-/// du Cadrage (la `ComposerFrameBand` existante), ou la feuille basse de
+/// **Ce que « Modifier » du fond ou d'une image posée ouvre EN BAS** (#13974,
+/// lots I-E2 et I-E3) : la bande du Cadrage du fond (la `ComposerFrameBand`
+/// existante), ou la feuille basse de
 /// Recadrer, Couper, Filtres, Cadres, Description — et, sous Réglages ou
 /// Effets, le curseur SEUL du réglage touché (N3), avec Comparer et
 /// Réinitialiser. Chaque contenu est celui que l'édition en place montait
@@ -11,6 +12,7 @@ import MeeshyUI
 struct ComposerBackgroundModifySheet: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
+    var isBackground = true
     let path: ComposerBackgroundModifyPath
     let plateauTint: Color
     let header: ComposerPropertiesHeader
@@ -27,7 +29,7 @@ struct ComposerBackgroundModifySheet: View {
     }
 
     var body: some View {
-        if path.adjustment == nil, path.entry == .framing {
+        if path.adjustment == nil, path.entry == .framing, isBackground {
             ComposerFrameBand(fitMode: framing.fitMode, backdrop: framing.backdrop, plateauTint: plateauTint,
                               onPickFitMode: framing.onPickFitMode, onPickBackdrop: framing.onPickBackdrop)
                 .accessibilityIdentifier("composer.background.modify.framing")
@@ -63,7 +65,7 @@ struct ComposerBackgroundModifySheet: View {
                 ComposerMediaTrimBand(viewModel: viewModel, objectId: mediaId, source: source)
             }
         case .filters:
-            if let media { ComposerMediaFilterGrid(viewModel: viewModel, media: media, isBackground: true) }
+            if let media { ComposerMediaFilterGrid(viewModel: viewModel, media: media, isBackground: isBackground) }
             ComposerMediaLookPanel(viewModel: viewModel, mediaId: mediaId, families: [.filters, .effects])
         case .frames:
             ComposerMediaLookPanel(viewModel: viewModel, mediaId: mediaId, families: [.frames])
@@ -71,7 +73,8 @@ struct ComposerBackgroundModifySheet: View {
             if let altText {
                 MediaAltTextField(kind: .alt, text: altText.wrappedValue) { altText.wrappedValue = $0 }
             }
-        case .framing, .adjust, .effects, .sound, .loop, .rotate, nil:
+        case .framing, .adjust, .effects, .sound, .loop, .rotate, .setAsBackground, .replaceBackground,
+             .makeSticker, nil:
             EmptyView()
         }
     }
