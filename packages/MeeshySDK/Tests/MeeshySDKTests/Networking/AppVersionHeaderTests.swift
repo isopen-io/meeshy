@@ -351,3 +351,99 @@ final class AppVersionHeaderTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 }
+
+/// #13954 — la socket porte la MÊME rupture que le REST : le handshake refusé
+/// sous le plancher émet `error { code: "UPGRADE_REQUIRED", minVersion, storeUrl }`
+/// puis coupe le transport (`AuthHandler`). Sans ce mapping, le client reste
+/// en boucle de reconnexion sans jamais montrer « Mettre à jour Meeshy ».
+final class UpgradeRequiredSocketPayloadTests: XCTestCase {
+
+    /// Les sockets de cette suite s'arment contre le loopback, dont le sondage
+    /// tombe sous le sceau réseau : aucune ne joint un serveur.
+    override func invokeTest() {
+        SocketConfig.$loopbackOrigin.withValue(URL(string: "http://127.0.0.1:9")) { super.invokeTest() }
+    }
+
+    private final class Received: @unchecked Sendable {
+        var requirements: [UpgradeRequirement] = []
+    }
+
+    private func observe(_ center: NotificationCenter) -> (Received, NSObjectProtocol) {
+        let received = Received()
+        let token = center.addObserver(forName: .meeshyUpgradeRequired, object: nil, queue: nil) { note in
+            if let requirement = UpgradeRequirement(notification: note) {
+                received.requirements.append(requirement)
+            }
+        }
+        return (received, token)
+    }
+
+    // MARK: - La loi du payload
+
+    func test_fromSocketErrorPayload_upgradeRequired_lesDeuxChampsSontLus() {
+        let requirement = UpgradeRequirement.fromSocketErrorPayload([
+            ["code": "UPGRADE_REQUIRED", "minVersion": "2.0.0", "storeUrl": "https://apps.apple.com/app/id6760208591"],
+        ])
+
+        XCTAssertEqual(requirement?.minVersion, "2.0.0")
+        XCTAssertEqual(requirement?.storeUrl, "https://apps.apple.com/app/id6760208591")
+    }
+
+    func test_fromSocketErrorPayload_sansMinVersion_laRuptureTientQuand_meme() {
+        let requirement = UpgradeRequirement.fromSocketErrorPayload([["code": "UPGRADE_REQUIRED"]])
+
+        XCTAssertNotNil(requirement, "le code seul déclenche la rupture — fail-closed")
+        XCTAssertEqual(requirement?.minVersion, "")
+        XCTAssertNil(requirement?.storeUrl)
+    }
+
+    func test_fromSocketErrorPayload_autresCodes_neSontJamaisUneRupture() {
+        for code in ["SHARE_LINK_EXPIRED", "GUEST_ACCESS_REVOKED", "ACCOUNT_DELETED", "token_expired", ""] {
+            XCTAssertNil(
+                UpgradeRequirement.fromSocketErrorPayload([["code": code, "minVersion": "2.0.0"]]),
+                "code \(code) : ce n'est pas une rupture de version"
+            )
+        }
+    }
+
+    func test_fromSocketErrorPayload_payloadVideOuIllisible_rienNEstLu() {
+        XCTAssertNil(UpgradeRequirement.fromSocketErrorPayload([]))
+        XCTAssertNil(UpgradeRequirement.fromSocketErrorPayload(["UPGRADE_REQUIRED"]))
+        XCTAssertNil(UpgradeRequirement.fromSocketErrorPayload([["message": "Transport error"]]))
+    }
+
+    // MARK: - Le socket s'arrête et la porte se pose
+
+    func test_socketError_upgradeRequired_tearsTheTransportDownAndPostsTheRequirement() {
+        let center = NotificationCenter()
+        let (received, token) = observe(center)
+        defer {
+            center.removeObserver(token)
+            MessageSocketManager.shared.disconnect()
+        }
+        MessageSocketManager.shared.disconnect()
+        MessageSocketManager.shared.connectAnonymous(sessionToken: "anon_old_binary")
+        XCTAssertNotNil(MessageSocketManager.shared.socket, "précondition : un transport existe")
+
+        let end = MessageSocketManager.shared.handleSocketError(
+            [["message": "App version outdated - update the app", "code": "UPGRADE_REQUIRED", "minVersion": "2.0.0", "storeUrl": "https://apps.apple.com/app/id6760208591"]],
+            center: center
+        )
+
+        XCTAssertNil(end, "ce n'est pas une fin de session invité")
+        XCTAssertNil(MessageSocketManager.shared.socket, "le transport — et la reconnexion de Socket.IO — est démonté")
+        XCTAssertFalse(MessageSocketManager.shared.hasPendingReconnect)
+        XCTAssertEqual(received.requirements.map(\.minVersion), ["2.0.0"])
+    }
+
+    // MARK: - Le câblage
+
+    func test_socketError_upgradeRequiredEstLuAvantLesAutresCodes() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager+GuestSessionEnd.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("UpgradeRequirement.fromSocketErrorPayload(data)"))
+    }
+}
