@@ -831,6 +831,7 @@ struct FeedPostCard: View {
     var canSaveMedia: Bool {
         PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
+    var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
 
 
     // MARK: - Repost View

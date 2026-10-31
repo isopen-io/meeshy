@@ -89,6 +89,10 @@ final class StoryPhotoSaveService: ObservableObject {
     typealias ImagerLengthPick = @MainActor ([ImagerLengthChoice], @escaping @MainActor (ImagerQuarter) -> Void) -> Void
     private let pickImagerLength: ImagerLengthPick
 
+    /// L'image tirée du MP4 d'une scène fixe et muette (#13871) — `StoryExportStill`.
+    typealias StillFrame = @MainActor (URL) async -> URL?
+    private let stillFrame: StillFrame
+
     init(
         exporter: StoryVideoExportServiceProviding? = nil,
         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
@@ -99,9 +103,11 @@ final class StoryPhotoSaveService: ObservableObject {
         authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
         concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
         watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil,
-        pickImagerLength: ImagerLengthPick? = nil
+        pickImagerLength: ImagerLengthPick? = nil,
+        stillFrame: StillFrame? = nil
     ) {
         self.pickImagerLength = pickImagerLength ?? { ImagerLengthPresenter.present($0, choose: $1) }
+        self.stillFrame = stillFrame ?? { @MainActor video in await StoryExportStill.frame(ofVideoAt: video) }
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
         // défaut, résolus ici.
@@ -239,15 +245,78 @@ final class StoryPhotoSaveService: ObservableObject {
               dressing: .bareWork(author: post.savedWorkAuthorUsername))
     }
 
+    /// La scène ouverte dans la galerie d'une conversation — comme `save(scene:)`.
+    func image(scene: GallerySceneItem) {
+        let languages = preferredLanguages()
+        image(jobKey: scene.id,
+              slides: [scene.renderableSlide(preferredLanguages: languages)],
+              languages: languages,
+              stickerMedia: scene.carrier.media,
+              dressing: .bareWork(author: scene.authorUsername))
+    }
+
+    /// Une image n'a pas de longueur : une scène fixe et muette ne propose aucun quart.
     private func image(jobKey: String, slides: [StorySlide], languages: [String],
                        stickerMedia: [FeedMedia], dressing: StoryExportDressing) {
         let render: @MainActor (ImagerQuarter?) -> Void = { [weak self] quarter in
             self?.bakeThenSave(jobKey: jobKey, slides: ImagerLength.cut(slides, quarter: quarter),
                                languages: languages, stickerMedia: stickerMedia, dressing: dressing)
         }
-        let choices = StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides))
+        let choices = StoryExportStill.isStill(slides)
+            ? []
+            : StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides))
         guard !choices.isEmpty else { return render(nil) }
         pickImagerLength(choices) { render($0) }
+    }
+
+    // MARK: - Une scène fixe sort en image (#13871)
+
+    /// Ce que la feuille de partage annonce AVANT le rendu : une image ou une vidéo.
+    func exportsStill(story: StoryItem) -> Bool {
+        StoryExportStill.isStill([story.toRenderableSlide(preferredLanguages: exportLanguages(of: story))])
+    }
+
+    func exportsStill(post: FeedPost) -> Bool {
+        StoryExportStill.isStill(Self.renderableSlides(of: post, preferredLanguages: preferredLanguages()))
+    }
+
+    /// Ce que le rendu laisse : une vidéo, ou l'image d'une scène fixe et muette.
+    private struct RenderedWork {
+        let url: URL
+        let isStill: Bool
+
+        /// Une image entre dans Photos comme une PHOTO, une vidéo comme une vidéo.
+        func save(with photos: PhotoLibrarySaving) async throws {
+            if isStill {
+                try await photos.saveImageFile(at: url, moveFile: true)
+            } else {
+                try await photos.saveVideo(at: url)
+            }
+        }
+
+        var savedMessage: String {
+            isStill
+                ? String(localized: "story.mine.save.imageSuccess", defaultValue: "Image enregistrée dans Photos")
+                : String(localized: "story.mine.save.success", defaultValue: "Vidéo enregistrée dans Photos")
+        }
+    }
+
+    /// **Le seul aiguillage vidéo / image.** Une scène fixe et muette se rend en
+    /// une seconde, sans prélude ni carte de fin — une image ne se déroule pas —,
+    /// filigrane compris ; son image est tirée du MP4, qui ne reste pas.
+    private func render(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia],
+                        plan: StoryExportDressingPlan,
+                        onProgress: ((Double) -> Void)? = nil) async -> RenderedWork? {
+        guard StoryExportStill.isStill(slides), let slide = slides.first else {
+            return await bake(slides: slides, languages: languages, stickerMedia: stickerMedia,
+                              plan: plan, onProgress: onProgress).map { RenderedWork(url: $0, isStill: false) }
+        }
+        let still = StoryExportDressingPlan(intro: nil, appendsBrandOutro: false, watermarkHandle: plan.watermarkHandle)
+        guard let video = await bake(slides: [StoryExportStill.pinned(slide)], languages: languages,
+                                     stickerMedia: stickerMedia, plan: still, onProgress: onProgress) else { return nil }
+        let image = await stillFrame(video)
+        exporter.cleanupExport(at: video)
+        return image.map { RenderedWork(url: $0, isStill: true) }
     }
 
     /// **Le MP4 de la scène d'un post, rendu À LA DEMANDE pour la feuille de partage**
@@ -256,9 +325,9 @@ final class StoryPhotoSaveService: ObservableObject {
     /// L'appelant possède le fichier temporaire et le jette après usage.
     func renderSceneFile(of post: FeedPost) async -> URL? {
         let languages = preferredLanguages()
-        return await bake(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
-                          languages: languages, stickerMedia: post.media,
-                          plan: await dressings.plan(for: .bareWork(author: post.savedWorkAuthorUsername)))
+        return await render(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
+                            languages: languages, stickerMedia: post.media,
+                            plan: await dressings.plan(for: .bareWork(author: post.savedWorkAuthorUsername)))?.url
     }
 
     /// Le MP4 d'une story pour la feuille de partage (#9682) — le MÊME
@@ -269,9 +338,9 @@ final class StoryPhotoSaveService: ObservableObject {
     /// qui ne revient pas.
     func renderStoryFile(of story: StoryItem, author: StoryExportAuthor?) async -> URL? {
         let languages = exportLanguages(of: story)
-        return await bake(slides: [story.toRenderableSlide(preferredLanguages: languages)],
-                          languages: languages, stickerMedia: story.media,
-                          plan: await dressings.plan(for: .forStory(of: author, viewer: .current)))
+        return await render(slides: [story.toRenderableSlide(preferredLanguages: languages)],
+                            languages: languages, stickerMedia: story.media,
+                            plan: await dressings.plan(for: .forStory(of: author, viewer: .current)))?.url
     }
 
     /// **Le rendu d'une ou plusieurs slides en UN MP4** (#9681). Une slide : un
@@ -384,7 +453,7 @@ final class StoryPhotoSaveService: ObservableObject {
             // explicite. Rien à nettoyer ici : aucun MP4 n'existe encore, et
             // `cancel()` a déjà posé son toast.
             guard self.isCurrent(generation, for: storyId) else { return }
-            let url = await self.bake(
+            let work = await self.render(
                 slides: slides,
                 languages: languages,
                 stickerMedia: stickerMedia,
@@ -405,11 +474,11 @@ final class StoryPhotoSaveService: ObservableObject {
             // vérification et le `guard let url else` suivant : la valeur
             // reste valide pour ce dernier sans nouvelle vérification.
             guard self.isCurrent(generation, for: storyId) else {
-                if let url { self.exporter.cleanupExport(at: url) }
+                if let work { self.exporter.cleanupExport(at: work.url) }
                 return
             }
 
-            guard let url else {
+            guard let work else {
                 self.finish(storyId: storyId)
                 self.toasts.showError(String(
                     localized: "story.mine.save.failed",
@@ -424,9 +493,10 @@ final class StoryPhotoSaveService: ObservableObject {
             // `await`, sinon la fenêtre qu'on ferme resterait ouverte.
             self.uncancellableJobs.insert(storyId)
 
+            let url = work.url
             do {
-                try await self.photoSaver.saveVideo(at: url)
-                // Nouvelle suspension au-dessus (`await saveVideo`) : la
+                try await work.save(with: self.photoSaver)
+                // Nouvelle suspension au-dessus (l'écriture Photos) : la
                 // tentative a pu être annulée-puis-relancée PENDANT
                 // l'écriture Photos (la fenêtre que le round précédent de
                 // cette correction laissait passer). Le fichier temporaire
@@ -437,10 +507,7 @@ final class StoryPhotoSaveService: ObservableObject {
                 self.jobs[storyId] = 1
                 self.finish(storyId: storyId)
                 HapticFeedback.medium()
-                self.toasts.showSuccess(String(
-                    localized: "story.mine.save.success",
-                    defaultValue: "Vidéo enregistrée dans Photos"
-                ))
+                self.toasts.showSuccess(work.savedMessage)
             } catch {
                 Logger.stories.error(
                     "story save to photos failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")

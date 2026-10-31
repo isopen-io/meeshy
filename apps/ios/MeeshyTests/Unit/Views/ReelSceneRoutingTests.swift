@@ -336,7 +336,10 @@ final class ReelSceneRoutingTests: XCTestCase {
                                                                     accentColorHex: "6366F1")
                                         },
                                         watermark: { handle in handles.values.append(handle); return nil })
-        let story = StoryItem(id: "story-9681", content: "x", media: [], storyEffects: nil, createdAt: Date())
+        // Un texte borné : la story BOUGE, donc sort en vidéo habillée (#13871).
+        let story = StoryItem(id: "story-9681", content: "x", media: [],
+                              storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "x", duration: 5)]),
+                              createdAt: Date())
 
         sut.save(story: story, author: StoryExportAuthor(userId: "u-9681-auteur", name: "demo-test-staging"))
         for _ in 0..<200 where sut.progress(for: story.id) != nil { await Task.yield() }

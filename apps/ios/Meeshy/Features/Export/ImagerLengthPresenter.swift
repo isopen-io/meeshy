@@ -22,14 +22,9 @@ enum ImagerLengthPresenter {
                choice.quarter.rawValue, clock(choice.duration))
     }
 
+    /// Une durée MONTRÉE passe par `MediaFormat.duration` : chiffres de la locale.
     static func clock(_ seconds: TimeInterval) -> String {
-        let whole = Int(max(seconds, 0).rounded(.down))
-        let hours = whole / 3600
-        let minutes = whole % 3600 / 60
-        let rest = whole % 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, rest)
-            : String(format: "%d:%02d", minutes, rest)
+        MediaFormat.duration(seconds, style: .clockPromotingHours)
     }
 
     private static func present(_ choices: [ImagerLengthChoice],

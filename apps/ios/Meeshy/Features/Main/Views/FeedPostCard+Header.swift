@@ -208,21 +208,18 @@ extension FeedPostCard {
                 } label: {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
-                Button {
-                    if canSaveMedia {
-                        requestSaveMedia()
-                    } else {
+                PostSaveMenuItems(
+                    title: canSaveMedia
+                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                    systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark",
+                    save: {
+                        guard !canSaveMedia else { return requestSaveMedia() }
                         onBookmark?(post.id)
                         HapticFeedback.light()
-                    }
-                } label: {
-                    Label(
-                        canSaveMedia
-                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
-                    )
-                }
+                    },
+                    imager: imagerAction
+                )
                 if canListViewers {
                     PublicationViewersMenuButton { showViewersSheet = true }
                 }

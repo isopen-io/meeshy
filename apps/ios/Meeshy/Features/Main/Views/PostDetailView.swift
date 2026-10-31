@@ -518,34 +518,19 @@ struct PostDetailView: View {
             } label: {
                 Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
-            Button {
-                if canSaveMedia {
-                    requestSaveMedia()
-                } else {
-                    toggleDetailBookmark()
-                }
-            } label: {
-                // Le TITRE disait « Enregistrer » que le post soit déjà
-                // enregistré ou non — seule l'icône changeait. Dans un MENU,
-                // c'est le nom qui porte l'état : un lecteur d'écran y entend
-                // une liste de commandes, pas des interrupteurs, et
-                // « Enregistrer » sur un post déjà enregistré est faux
-                // (253i, #4266).
-                //
-                // La barre d'action de CE MÊME FICHIER fait varier son
-                // étiquette depuis toujours, avec ces deux clés exactes : le
-                // savoir était à trente lignes d'ici.
-                Label(
-                    canSaveMedia
-                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                        : (isPostBookmarked
-                            ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
-                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
-                    systemImage: canSaveMedia
-                        ? "arrow.down.to.line"
-                        : (isPostBookmarked ? "bookmark.fill" : "bookmark")
-                )
-            }
+            // Dans un MENU, c'est le NOM qui porte l'état du favori — un lecteur
+            // d'écran y entend des commandes, pas des interrupteurs (253i, #4266) ;
+            // la barre d'action de ce fichier varie sur ces mêmes clés.
+            PostSaveMenuItems(
+                title: canSaveMedia
+                    ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                    : (isPostBookmarked
+                        ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
+                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
+                systemImage: canSaveMedia ? "arrow.down.to.line" : (isPostBookmarked ? "bookmark.fill" : "bookmark"),
+                save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
+                imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
+            )
             if displayPost?.authorId == AuthManager.shared.currentUser?.id {
                 Button {
                     Task { await viewModel.pinPost(postId) }
