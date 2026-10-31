@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.game
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
 
 /*
@@ -53,16 +55,32 @@ public data class PhotoCatchUpStanding(
     }
 }
 
-/** L'emblème qu'une étape grave. */
+/** L'emblème qu'une étape grave — sérialisable : la Chronique le garde avec la photo (#13891). */
+@Serializable
 public sealed interface PhotoStepEmblem {
+    @Serializable @SerialName("start")
     public data object Start : PhotoStepEmblem
+
+    @Serializable @SerialName("rank")
     public data class Rank(val rank: GloryRank, val division: Int?) : PhotoStepEmblem
+
     /** `prestige` : le cycle où le palier est atteint ; `times` : combien de cycles l'ont atteint, celui-ci compris. */
+    @Serializable @SerialName("tier")
     public data class Tier(val tier: LevelTierKey, val level: Int, val prestige: Int, val times: Int) : PhotoStepEmblem
+
+    @Serializable @SerialName("level-100")
     public data object LevelHundred : PhotoStepEmblem
+
+    @Serializable @SerialName("prestige")
     public data class Prestige(val number: Int) : PhotoStepEmblem
+
+    @Serializable @SerialName("meesh")
     public data class Meesh(val number: Int, val edition: MeeshEdition) : PhotoStepEmblem
+
+    @Serializable @SerialName("treasury")
     public data class Treasury(val tier: TreasuryTierKey) : PhotoStepEmblem
+
+    @Serializable @SerialName("flame")
     public data class Flame(val form: FlameFormKey, val days: Int) : PhotoStepEmblem
 }
 
@@ -150,7 +168,11 @@ public object GamePhotoCatchUpLaw {
         return closed.count { it >= level } + if (count(standing.levelRecord) >= level) 1 else 0
     }
 
-    private fun rankStepId(rank: GloryRank, division: Int?): String = "rank:${wire(rank)}:${division ?: 0}"
+    /** L'identité d'une étape de RANG : `rank:<rang>:<division>`, `0` pour le Mythe. */
+    public fun rankStepId(rank: GloryRank, division: Int?): String = "rank:${wire(rank)}:${division ?: 0}"
+
+    /** L'identité d'une étape du TRÉSOR. */
+    public fun treasuryStepId(tier: TreasuryTierKey): String = "treasury:${wire(tier)}"
 
     private fun rankSteps(standing: PhotoCatchUpStanding): List<PhotoLawStep> {
         val ladder = GloryLaws.earnedRanks.flatMap { rank -> divisions.map { rank to it } } + (GloryRank.Mythe to null)
@@ -190,7 +212,7 @@ public object GamePhotoCatchUpLaw {
     private fun treasurySteps(standing: PhotoCatchUpStanding): List<PhotoLawStep> {
         val held = standing.treasuryTier?.ordinal ?: return emptyList()
         return TreasuryTierKey.entries.take(held + 1).map {
-            PhotoLawStep(PhotoTrack.Treasury, "treasury:${wire(it)}", PhotoStepEmblem.Treasury(it))
+            PhotoLawStep(PhotoTrack.Treasury, treasuryStepId(it), PhotoStepEmblem.Treasury(it))
         }
     }
 

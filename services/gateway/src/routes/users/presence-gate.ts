@@ -67,7 +67,7 @@ const missingEntryVisibility = (viewer: PresenceViewer): PresenceVisibility =>
   resolvePresenceVisibility({
     isSelf: false,
     viewerRole: viewer?.role ?? VIEWERLESS_STANDING,
-    areConnected: false,
+    relationLevel: 'PUBLIC',
     targetShowOnlineStatus: true,
     targetShowLastSeen: true,
     targetIsDeactivated: false,

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_composer_send">Envoyer</string>
+    <string name="comment_composer_emoji">Ajouter un emoji</string>
+</resources>

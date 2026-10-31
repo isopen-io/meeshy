@@ -19,6 +19,8 @@ import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { recordFriendship, resetFriendship } from '../../services/relations/userRelationWriter';
+import { getCacheStore } from '../../services/CacheStore';
+import { invalidateFeedFriends } from '../../services/posts/feedFriends';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
@@ -337,6 +339,21 @@ export async function repondreDemande(
 }
 
 /**
+ * Un lien vient de changer : les deux caches d'amis — l'audience temps réel du
+ * social (30 s, mémoire du process) et celle du fil (`feed:friends:`, 300 s) —
+ * ne se rafraîchissent pas seuls. Sans cela, une amitié acceptée à l'instant
+ * n'atteignait le fil que cinq minutes plus tard (#13927).
+ */
+async function oublierLesAmis(fastify: FastifyInstance, ids: ReadonlyArray<string>): Promise<void> {
+  ids.forEach((id) => fastify.socialEvents?.invalidateFriendsCache(id));
+  try {
+    await invalidateFeedFriends(getCacheStore(), ids);
+  } catch (error) {
+    logError(fastify.log, 'Error invalidating the feed friends cache:', error);
+  }
+}
+
+/**
  * Supprimer une demande ACCEPTÉE défait l'amitié (#13926). Le lien repasse à
  * PUBLIC des deux côtés, en SILENCE (aucune notification de baisse), sauf si
  * une AUTRE demande acceptée relie encore la paire — `FriendRequest` n'a pas
@@ -363,6 +380,7 @@ async function rompreLien(
   });
   if (restante) return;
   await resetFriendship(fastify.prisma, { userA: demande.senderId, userB: demande.receiverId, at: new Date() });
+  await oublierLesAmis(fastify, [demande.senderId, demande.receiverId]);
 }
 
 /**
@@ -514,8 +532,7 @@ async function trancherDemande(
     logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
   }
 
-  fastify.socialEvents?.invalidateFriendsCache(demande.senderId);
-  fastify.socialEvents?.invalidateFriendsCache(demande.receiverId);
+  await oublierLesAmis(fastify, [demande.senderId, demande.receiverId]);
 
   // Axe `social.friendship` (#5766) — **les DEUX parties sont créditées**, et
   // ce n'est pas une largesse : une amitié n'appartient à personne seul. Ne

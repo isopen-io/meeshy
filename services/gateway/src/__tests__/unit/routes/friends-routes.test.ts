@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@je
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
-
+jest.mock('../../../services/CacheStore', () => ({ ...(jest.requireActual('../../../services/CacheStore') as object), getCacheStore: () => ({ del: async () => undefined }) }));
 jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },

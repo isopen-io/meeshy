@@ -19,7 +19,8 @@ import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
 import type { MediaJobTarget } from '../../services/attachments/media-processing/jobs';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from '../../services/attachments/media-processing/queue';
-import { deferrableKinds, scheduleDeferred as scheduleMediaJob } from '../../services/attachments/media-processing/dispatch';
+import { planDeferral, scheduleDeferred as scheduleMediaJob } from '../../services/attachments/media-processing/dispatch';
+import type { LocalMediaRenderer } from '../../services/attachments/media-processing/local-render';
 import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
@@ -91,6 +92,12 @@ export type TusRoutesOptions = {
   readonly basePath?: string;
   /** #11264 — la file de médias ; absente : celle du processus (`MEDIA_QUEUE`), `null` : éteinte. */
   readonly mediaQueue?: MediaJobQueue | null;
+  /**
+   * #13984 — le rendu de fond de la passerelle, quand la file est allumée et
+   * qu'aucun worker ne bat ; absent : celui de `socketIOHandler`, lu à chaque
+   * envoi (il naît avec le temps réel, après l'enregistrement des routes).
+   */
+  readonly localMediaRenderer?: () => LocalMediaRenderer | null;
 };
 
 function getMaxFileSize(): number {
@@ -222,6 +229,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   // la construction du serveur TUS et les routes qui l'exposent.
   const uploadsPath = opts.basePath || DEFAULT_UPLOADS_PATH;
   const mediaQueue = opts.mediaQueue === undefined ? mediaJobQueueFromEnv() : opts.mediaQueue;
+  const localMediaRenderer = opts.localMediaRenderer
+    ?? (() => fastify.socketIOHandler?.getLocalMediaRenderer?.() ?? null);
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   // Référence conservée séparément (plutôt que lue depuis `tusServer` une
@@ -528,16 +537,18 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // APRÈS les gardes de chaque branche, jamais avant : un upload refusé ne
       // laisse derrière lui ni variante ni sortie de transcodage.
       // #11264 — ce qui est différé au worker de médias (file allumée seulement).
-      // Différé seulement quand un worker bat ; file muette ⇒ rendu ici.
-      const deferred = await deferrableKinds(mediaQueue, {
+      // #13984 — sans worker qui bat, la passerelle le rend APRÈS la réponse :
+      // le dernier PATCH n'attend plus que la ligne. Sans l'un ni l'autre ⇒ rendu ici.
+      const plan = await planDeferral(mediaQueue, localMediaRenderer(), {
         attachmentType,
         fileSize,
         compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
       });
+      const deferred = plan.kinds;
       const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
       // File muette : la pièce reste `pending`, le balayage du worker la reprend.
       const scheduleDeferred = (target: MediaJobTarget, id: string) =>
-        scheduleMediaJob({ queue: mediaQueue, target, recordId: id, kinds: deferred });
+        scheduleMediaJob({ queue: mediaQueue, local: plan.local, target, recordId: id, kinds: deferred });
       //
       // #11259 — un audio est normalisé en M4A ICI, après les gardes, comme
       // sur la porte multipart (`UploadProcessor.saveFile`) : AAC mono remuxé

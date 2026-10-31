@@ -57,11 +57,11 @@ import me.meeshy.sdk.model.composer.ComposerToolbarDoors
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerTrailingDoor
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMessageStateColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.component.message.meeshyComposerGlass
 import me.meeshy.ui.theme.MeeshyTheme
 
 /** La couleur d'état d'une protection (iOS `ComposerProtection.tint`) ; l'éphémère prend son encre en clair. */
@@ -85,15 +85,7 @@ internal fun composerIconTint(flags: Long): Color = when (val tint = ComposerToo
  * clair et le liseré liquide, sans second flou (iOS `adaptiveLiquidGlass` sur la plaque).
  */
 @Composable
-internal fun Modifier.composerInnerGlass(shape: Shape, tint: Color? = null): Modifier {
-    val dark = MeeshyTheme.isDark
-    val wash = Color.White.copy(alpha = if (dark) 0.08f else 0.5f)
-    return this
-        .clip(shape)
-        .background(wash, shape)
-        .then(if (tint != null) Modifier.background(tint.copy(alpha = if (dark) 0.35f else 0.25f), shape) else Modifier)
-        .border(1.dp, MeeshyGradients.liquidGlassRim(dark, tint != null), shape)
-}
+internal fun Modifier.composerInnerGlass(shape: Shape, tint: Color? = null): Modifier = meeshyComposerGlass(shape, tint)
 
 /**
  * La barre d'outils du haut de la plaque (iOS `ComposerToolbarStrip`) : à gauche les bascules

@@ -19,7 +19,7 @@ import type { GlobalUserRoleType } from '../types/role-types';
 const inputFor = (overrides: Partial<PresenceVisibilityInput> = {}): PresenceVisibilityInput => ({
   isSelf: false,
   viewerRole: 'USER' as GlobalUserRoleType,
-  areConnected: false,
+  relationLevel: 'PUBLIC',
   targetShowOnlineStatus: true,
   targetShowLastSeen: true,
   targetIsDeactivated: false,
@@ -38,11 +38,11 @@ describe('resolvePresenceVisibility — verrous de fuite de présence', () => {
 
   it('cache tout en cas de blocage (dans un sens ou l\'autre), même pour un privilégié', () => {
     expect(resolvePresenceVisibility(inputFor({ isBlockedEitherWay: true, viewerRole: 'BIGBOSS' as GlobalUserRoleType }))).toEqual(HIDDEN);
-    expect(resolvePresenceVisibility(inputFor({ isBlockedEitherWay: true, areConnected: true, targetShowOnlineStatus: true }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ isBlockedEitherWay: true, relationLevel: 'FRIEND', targetShowOnlineStatus: true }))).toEqual(HIDDEN);
   });
 
   it('la désactivation/blocage prime sur toute autre autorisation', () => {
-    expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, areConnected: true, viewerRole: 'ADMIN' as GlobalUserRoleType }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, relationLevel: 'FRIEND', viewerRole: 'ADMIN' as GlobalUserRoleType }))).toEqual(HIDDEN);
   });
 });
 
@@ -67,21 +67,21 @@ describe('resolvePresenceVisibility — accès privilégié (self / administrate
   });
 
   it('un privilégié voit la présence sans être connecté', () => {
-    expect(resolvePresenceVisibility(inputFor({ isSelf: true, areConnected: false }))).toEqual(FULL);
+    expect(resolvePresenceVisibility(inputFor({ isSelf: true, relationLevel: 'PUBLIC' }))).toEqual(FULL);
   });
 });
 
 describe('resolvePresenceVisibility — pair non privilégié : gating par relation', () => {
   it('cache tout à un inconnu (aucune connexion)', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'PUBLIC' }))).toEqual(HIDDEN);
   });
 
   it('autorise via connexion (amitié acceptée)', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: true }))).toEqual(FULL);
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND' }))).toEqual(FULL);
   });
 
   it('un co-participant de conversation qui n\'est pas ami ne voit RIEN — partager une conversation n\'est pas une relation', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'PUBLIC' }))).toEqual(HIDDEN);
   });
 
   it('un rôle non-admin (MODERATOR/AUDIT/ANALYST/AGENT) n\'est PAS privilégié', () => {
@@ -93,18 +93,18 @@ describe('resolvePresenceVisibility — pair non privilégié : gating par relat
 
 describe('resolvePresenceVisibility — respect des préférences de la cible pour un pair autorisé', () => {
   it('targetShowOnlineStatus=false ⇒ tout caché même pour un pair connecté', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: true, targetShowOnlineStatus: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND', targetShowOnlineStatus: false }))).toEqual(HIDDEN);
   });
 
   it('online visible mais last seen masqué quand targetShowLastSeen=false', () => {
     expect(
-      resolvePresenceVisibility(inputFor({ areConnected: true, targetShowOnlineStatus: true, targetShowLastSeen: false })),
+      resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND', targetShowOnlineStatus: true, targetShowLastSeen: false })),
     ).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
   it('online + last seen visibles quand les deux préférences sont actives', () => {
     expect(
-      resolvePresenceVisibility(inputFor({ areConnected: true, targetShowOnlineStatus: true, targetShowLastSeen: true })),
+      resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND', targetShowOnlineStatus: true, targetShowLastSeen: true })),
     ).toEqual(FULL);
   });
 });

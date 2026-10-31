@@ -62,6 +62,7 @@ function service(m: Monde) {
       findFirst: jest.fn(async ({ where }: { where?: MongoDocument }) =>
         m.users.find((row) => matchesMongoWhere(row as unknown as MongoDocument, where)) ?? null),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(async ({ where }: { where?: MongoDocument }) =>
         m.amities.filter((row) => matchesMongoWhere(row as unknown as MongoDocument, where))),

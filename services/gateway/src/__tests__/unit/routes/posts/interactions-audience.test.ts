@@ -89,6 +89,7 @@ function makePrisma(opts: { post?: unknown; isFriend?: boolean; isDirectContact?
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postImpression: { create: jest.fn<any>(), createMany: jest.fn<any>() },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.isFriend ? { id: 'fr-1' } : null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(opts.isDirectContact ? [{ conversationId: 'conv-1' }] : []),
@@ -246,6 +247,7 @@ function makeRedirectPrisma(byId: Record<string, unknown | null>) {
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postImpression: { create: jest.fn<any>(), createMany: jest.fn<any>() },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as any;

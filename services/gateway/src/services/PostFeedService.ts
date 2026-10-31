@@ -14,6 +14,7 @@ import {
   type ReelSeed,
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
+import { loadFeedFriendIds } from './posts/feedFriends';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
@@ -1033,32 +1034,8 @@ export class PostFeedService {
     }
   }
 
-  private async getFriendIds(userId: string): Promise<string[]> {
-    const cacheKey = `feed:friends:${userId}`;
-    if (this.cache) {
-      const cached = await this.cache.get(cacheKey).catch(() => null);
-      if (cached) return JSON.parse(cached) as string[];
-    }
-    try {
-      const friendRequests = await this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: userId },
-            { receiverId: userId },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-
-      const result = friendRequests.map((f) =>
-        f.senderId === userId ? f.receiverId : f.senderId
-      );
-      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-      return result;
-    } catch {
-      return [];
-    }
+  private getFriendIds(userId: string): Promise<string[]> {
+    return loadFeedFriendIds({ prisma: this.prisma, cache: this.cache, userId });
   }
 
   /// Stories : `isLikedByMe` suit la règle des listes (`likedFromReactions`,
