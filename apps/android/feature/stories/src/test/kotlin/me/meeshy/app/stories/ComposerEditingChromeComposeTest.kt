@@ -169,7 +169,6 @@ class ComposerEditingChromeComposeTest {
         compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
         compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         tools.forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
         val rail = compose.onNodeWithTag(EDITING_RAIL_TAG)
         rail.onChildren().assertCountEquals(options.size)
         options.forEach { compose.onNodeWithText(it).assertExists() }

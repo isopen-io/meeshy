@@ -59,6 +59,7 @@ internal val StorySlide.isBlankScene: Boolean
 internal class StorySceneCapture(
     val offer: SceneQuickCapture.Offer?,
     private val onCaptured: (CameraResult) -> Unit,
+    private val onCapturedBackground: ((CameraResult, String) -> Unit)? = null,
     val viewfinder: @Composable (StorySceneCapture, Modifier) -> Unit = { scene, modifier -> StorySceneViewfinder(scene, modifier) },
 ) {
     var armed: Boolean by mutableStateOf(false)
@@ -69,8 +70,13 @@ internal class StorySceneCapture(
     /** Le doigt qui a armé en tenant la scène, suivi jusqu'à sa levée et remis au viseur quand la caméra est liée. */
     val hold: SceneHoldRelay = SceneHoldRelay()
 
-    fun arm(films: Boolean = false) {
+    /** Le fond que la prise remplacera (« Fond › Remplacer › Prendre une photo », #13973), `null` : une prise ordinaire. */
+    var replacingBackground: String? by mutableStateOf(null)
+        private set
+
+    fun arm(films: Boolean = false, replacingBackground: String? = null) {
         val served = offer ?: return
+        this.replacingBackground = replacingBackground
         filmsOnArm = films && SceneQuickCapture.filmsOnHold(served)
         if (filmsOnArm) hold.began() else hold.clear()
         armed = true
@@ -78,13 +84,16 @@ internal class StorySceneCapture(
 
     fun disarm() {
         armed = false
+        replacingBackground = null
         filmsOnArm = false
         hold.clear()
     }
 
     fun deliver(result: CameraResult) {
+        val replacing = replacingBackground
         disarm()
-        onCaptured(result)
+        val background = onCapturedBackground
+        if (replacing != null && background != null) background(result, replacing) else onCaptured(result)
     }
 
     /** Le geste et sa ligne n'existent qu'au repos : scène vide, rien de sélectionné, aucun pinceau, texte ni panneau ouvert. */
@@ -117,12 +126,17 @@ internal fun rememberStorySceneCapture(opening: ComposerOpening, viewModel: Stor
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     return remember(opening, viewModel) {
-        StorySceneCapture(offer = SceneQuickCapture.offer(ComposerFormat.STORY, opening), onCaptured = { result ->
+        fun captured(result: CameraResult, replacing: String?) {
             scope.launch {
                 val item = withContext(NonCancellable + Dispatchers.IO) { context.capturedUploadItem(result) }
-                if (item != null) viewModel.onMediaPicked(listOf(item))
+                if (item != null) viewModel.onMediaPicked(listOf(item), asBackground = replacing != null, replacing = replacing)
             }
-        })
+        }
+        StorySceneCapture(
+            offer = SceneQuickCapture.offer(ComposerFormat.STORY, opening),
+            onCaptured = { result -> captured(result, replacing = null) },
+            onCapturedBackground = { result, replacing -> captured(result, replacing) },
+        )
     }
 }
 

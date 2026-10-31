@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -121,23 +122,16 @@ private fun LeadingRailTools(
 }
 
 /**
- * Le rail droit (#13837) : ↶ ↷ au pied, seulement s'ils existent (loi 4), et au-dessus les actions du FOND quand il est
- * sélectionné ; un objet de la scène, lui, porte ses options dans le rail gauche, à la place des outils (#13956).
+ * Le rail droit (#13837) : ↶ ↷ au pied, seulement s'ils existent (loi 4) ; un objet de la scène comme le fond média
+ * portent leurs options dans le rail gauche, à la place des outils (#13956, #13973).
  */
 @Composable
 internal fun ColumnScope.StoryTrailingRail(
-    bar: SceneSelectionBar?,
     history: SceneHistory?,
-    onAction: (ComposerSelectionAction) -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
-    ) {
-        bar?.let { SelectionRailBlock(it, onAction) }
-    }
+    Spacer(Modifier.weight(1f))
     history?.let {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)

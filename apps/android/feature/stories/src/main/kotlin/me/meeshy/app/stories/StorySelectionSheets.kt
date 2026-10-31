@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -56,7 +57,7 @@ internal fun StorySelectionSheet(
         }
         StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
-        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE, StoryComposerSheet.BACKGROUND_SOURCE -> Unit
     }
 }
 
@@ -69,6 +70,7 @@ internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = w
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
     StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
+    StoryComposerSheet.BACKGROUND_SOURCE -> selectionSubject == ComposerSelectionSubject.BACKGROUND
     StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
     StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
