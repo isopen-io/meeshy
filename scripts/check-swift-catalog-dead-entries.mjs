@@ -555,7 +555,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // ambiances de capture, que l'on installe et retire comme des packs). Le web les appelle ; iOS les lira dans
 // #13092 (PackStore apprend le domaine capture-frame). Entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur
 // MESURÉE le 2026-10-25 en CI (Gardes iOS, run 40238145750) et en local : exactement ces quatre entrées nouvelles.
-const BASELINE_DEAD_ENTRIES = 329;
+// 329 -> 330 (#13998, 2026-10-31) : `RelationsEndpoint.byUserId` (`GET /api/v1/relations/:userId`, le niveau
+// EFFECTIF du lien avec une personne, `niveauEffectif`). La passerelle le sert ; iOS le lira dans #13997 (intro
+// des stories exportées) puis #13938 (écrans de cercles). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur
+// MESURÉE le 2026-10-31 en local : exactement cette entrée nouvelle.
+const BASELINE_DEAD_ENTRIES = 330;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
