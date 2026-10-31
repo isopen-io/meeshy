@@ -1,0 +1,106 @@
+package me.meeshy.ui.appearance
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.media.LottiePlaybackMode
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.lottie.BundledPackFileReader
+import me.meeshy.ui.component.lottie.LottieLayerSource
+import me.meeshy.ui.component.lottie.LottiePlaybackModeKey
+import me.meeshy.ui.component.lottie.ProvideLottieLayerSource
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+
+/**
+ * #13952 — les couches animées du catalogue JOUENT sur Android : contour et bannière se lisent depuis les fichiers
+ * embarqués, jouent en boucle, se figent sous « Réduire les animations », et s'arrêtent hors écran.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class AppearanceLottieLayersComposeTest {
+    @get:Rule
+    val rule = createComposeRule()
+
+    private val assets = repositoryFile("sdk-core/src/main/assets")
+    private val catalog = AppearanceCatalog.decode(File(assets, "appearance-catalog.json").readText())
+    private val source = LottieLayerSource(BundledPackFileReader { path -> File(assets, path).inputStream() })
+    private val layer = SemanticsMatcher.keyIsDefined(LottiePlaybackModeKey)
+
+    private fun host(reduceMotion: Boolean = false, content: @Composable () -> Unit) {
+        rule.setContent {
+            CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
+                ProvideLottieLayerSource(source, content)
+            }
+        }
+    }
+
+    private fun mode(): LottiePlaybackMode {
+        rule.waitUntil(10_000) { rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        return rule.onNode(layer, useUnmergedTree = true).fetchSemanticsNode().config[LottiePlaybackModeKey]
+    }
+
+    private val onde get() = checkNotNull(catalog.ring("contours-animes", "onde"))
+    private val maree get() = checkNotNull(catalog.bannerDesign("bannieres-animees", "maree"))
+
+    @Test fun `an animated ring plays its layer in a loop`() {
+        host { AvatarRingLayer(onde, footprint = 48.dp, modifier = Modifier.size(48.dp)) { Box(Modifier.size(48.dp)) } }
+        assertThat(mode()).isEqualTo(LottiePlaybackMode.Playing(loops = true))
+    }
+
+    @Test fun `an animated ring holds its first frame under reduce motion`() {
+        host(reduceMotion = true) { AvatarRingLayer(onde, footprint = 48.dp) { Box(Modifier.size(48.dp)) } }
+        assertThat(mode()).isEqualTo(LottiePlaybackMode.FirstFrame)
+    }
+
+    @Test fun `a ring asked to stay still holds its first frame`() {
+        host { AvatarRingLayer(onde, footprint = 48.dp, animates = false) { Box(Modifier.size(48.dp)) } }
+        assertThat(mode()).isEqualTo(LottiePlaybackMode.FirstFrame)
+    }
+
+    @Test fun `an animated ring outside the window does not play`() {
+        host {
+            Box(Modifier.offset(x = 20_000.dp)) {
+                AvatarRingLayer(onde, footprint = 48.dp) { Box(Modifier.size(48.dp)) }
+            }
+        }
+        assertThat(mode()).isNotInstanceOf(LottiePlaybackMode.Playing::class.java)
+    }
+
+    @Test fun `a still ring mounts no layer`() {
+        val still = catalog.ringPacks.flatMap { it.rings }.first { it.lottie == null }
+        host { AvatarRingLayer(still, footprint = 48.dp) { Box(Modifier.size(48.dp)) } }
+        rule.waitForIdle()
+        assertThat(rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
+    }
+
+    @Test fun `an animated banner plays its layer without the host passing anything`() {
+        host { BannerDesignView(maree, isDark = false, accentHex = "#6366F1", modifier = Modifier.width(300.dp)) }
+        assertThat(mode()).isEqualTo(LottiePlaybackMode.Playing(loops = true))
+    }
+
+    @Test fun `an animated banner holds its first frame under reduce motion`() {
+        host(reduceMotion = true) { BannerDesignView(maree, isDark = true, accentHex = "#6366F1", modifier = Modifier.width(300.dp)) }
+        assertThat(mode()).isEqualTo(LottiePlaybackMode.FirstFrame)
+    }
+
+    private fun repositoryFile(relative: String): File {
+        val candidates = generateSequence(File(".").absoluteFile) { it.parentFile }.take(8).flatMap {
+            sequenceOf(File(it, relative), File(it, "apps/android/$relative"))
+        }
+        return checkNotNull(candidates.firstOrNull { it.exists() }) { "$relative introuvable depuis ${File(".").absolutePath}" }
+    }
+}

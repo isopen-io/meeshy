@@ -32,7 +32,7 @@ public fun BannerFrameView(
     design: BannerFrameDesign,
     modifier: Modifier = Modifier,
     animates: Boolean = true,
-    lottieLayer: BannerLottieLayer? = null,
+    lottieLayer: BannerLottieLayer? = PackBannerLottieLayer,
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
     val direction = LocalLayoutDirection.current
